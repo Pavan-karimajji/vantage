@@ -1331,7 +1331,7 @@ is scoped in the visualization spec §11.4 and scheduled in §8 below.
 
 ## 8. Staged roadmap
 
-Sixteen stages in five phases. Each stage is independently landable and leaves
+Twenty stages in five phases (C1 lands as three sub-stages). Each stage is independently landable and leaves
 the tree working; no stage requires the next one to be useful. Stage labels are
 referenced from plan.md and are the labels the **implementation plan**
 ([sim_implementation_plan.md](sim_implementation_plan.md)) executes against —
@@ -1353,7 +1353,8 @@ per-stage unit and system test cases. This table is the summary.
 |---|---|---|
 | **B1** | Renderer + `df/sim/layers/{common,aeb,bsd}.py` reproducing today's picture from a Scene. **Driven by pure replay of an already-`--export`ed `.mcap`** — those files already carry `df/aeb_outputs` and `df/bsd_outputs`, so no DLL is executed and no SIL binding is needed yet | The new path is visually equivalent to `viz.py`'s output on the same recording, and the Scene it builds matches a golden |
 | **B2** | Two-pass `Session` + `view/transport` — scrub, seek both ways, step, speed, loop | Backwards seek works on a 1200-tick session; `--step`'s forward-only caveat deleted from the docs |
-| **B3** | Interactive viewer shell: layer panel, inspector, viewport pan/zoom/presets, measure, snapshot PNG + video | Every item in visualization spec §4–§9 demonstrable on one BSD recording; tkinter popups + OpenCV window retired |
+| **B3** | Interactive viewer shell: layer panel, inspector, viewport pan/zoom/presets, measure, timeline | Every item in visualization spec §4–§8 demonstrable on one BSD recording |
+| **B4** | Capture: snapshot PNG **+ provenance sidecar**, print-quality snapshot, video export of a marked interval | Visualization spec §9; a snapshot is reproducible from its sidecar alone |
 
 ### Phase C — Contracts and content
 

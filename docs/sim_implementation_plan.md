@@ -33,7 +33,7 @@ Backlog entry: superproject `plan.md` item 25.
 
 ### Effort shape
 
-16 stages. A and B touch **no C++ and no DLL at all** — the entire viewer is
+20 stages (Phase C's first is split into three sub-stages). A and B touch **no C++ and no DLL at all** — the entire viewer is
 built and tested against recorded files. C is the only phase that changes
 production C++. E only deletes.
 
@@ -122,8 +122,7 @@ nothing extra and lets every `Pipeline`, `Runner`, `Session` and wiring-
 validation test run with **zero build dependency**. The ctypes path is exercised
 in `tests/integration/`, skipped when `df_sil.dll` is not built.
 
-*(This refines [sim_sil_contract.md](sim_sil_contract.md) §4.1 — record it there
-when S-C3 lands.)*
+*(Recorded in [sim_sil_contract.md](sim_sil_contract.md) §4.1.)*
 
 ### 3.3 Fixtures
 
@@ -144,7 +143,7 @@ work carries ("needs a human watching the window"):
 | ID | Check | When |
 |---|---|---|
 | MC-1 | The BEV *looks* right — labels legible, no collisions, colours readable | S-B1, S-B3 |
-| MC-2 | Live CARLA bridge still records correctly against a real server | S-C4 |
+| MC-2 | Live CARLA bridge still records correctly against a real server | S-C2 |
 | MC-3 | Foxglove Studio renders the exported scene | S-D1 |
 | MC-4 | The Qt shell feels responsive while scrubbing a long session | S-B3 |
 
@@ -441,7 +440,10 @@ Closes **D7**. Delivers the *scrolling* requirement.
 **The only phase that changes production C++.** Every C++ change is additive
 until Phase E.
 
-### S-C1 — `interfaces`: the ABI header and the manifest schema
+### S-C1a — `interfaces`: the ABI header and the manifest schema
+
+*(`S-C1a`/`S-C1b`/`S-C1c` are the three sub-stages of the architecture's single
+**C1**; they land separately because each is independently verifiable.)*
 
 - [ ] `interfaces/include/adas/adas_sil_abi.h` — `AdasPort`, `AdasPortSet`, the
       five exports (`sim_sil_contract.md` §3.1)
@@ -450,15 +452,15 @@ until Phase E.
 - [ ] `R-NAME-4` / `R-STYLE-1` headers on both
 
 **Tests**
-- [ ] `UT-C1-1` (gtest, `interfaces`) the header compiles as **C**, not just C++
+- [ ] `UT-C1a-1` (gtest, `interfaces`) the header compiles as **C**, not just C++
       (a `.c` translation unit including it)
-- [ ] `UT-C1-2` `ComponentManifest` round-trips in C++ and in Python
-- [ ] `ST-C1-1` `interfaces` builds clean; Python bindings generate
+- [ ] `UT-C1a-2` `ComponentManifest` round-trips in C++ and in Python
+- [ ] `ST-C1a-1` `interfaces` builds clean; Python bindings generate
 
 **Gate**
-- [ ] `ST-C1-1` green; nothing consumes the header yet (purely additive)
+- [ ] `ST-C1a-1` green; nothing consumes the header yet (purely additive)
 
-### S-C2 — `df_sil`: generic exports **alongside** `dfExec`
+### S-C1b — `df_sil`: generic exports **alongside** `dfExec`
 
 Both ABIs live and are tested against each other (`sim_sil_contract.md` §6).
 
@@ -471,26 +473,26 @@ Both ABIs live and are tested against each other (`sim_sil_contract.md` §6).
 - [ ] `try/catch(...)` on every new `extern "C"` body (rule 12)
 
 **Tests** — `modules/df/tests/unit/sil/`
-- [ ] `UT-C2-1` every existing `InterfaceCApiTest` assertion **mirrored** onto
+- [ ] `UT-C1b-1` every existing `InterfaceCApiTest` assertion **mirrored** onto
       the generic path, with identical expected values
-- [ ] `UT-C2-2` an unknown input port is ignored
-- [ ] `UT-C2-3` a required input that is absent behaves exactly as `valid == 0`
-- [ ] `UT-C2-4` an all-default (zero-byte) payload with `valid == 1` is accepted
+- [ ] `UT-C1b-2` an unknown input port is ignored
+- [ ] `UT-C1b-3` a required input that is absent behaves exactly as `valid == 0`
+- [ ] `UT-C1b-4` an all-default (zero-byte) payload with `valid == 1` is accepted
       — the regression from `df_sil_dll.md` §1 bug 2, re-asserted on the new path
-- [ ] `UT-C2-5` an undersized output buffer returns the **required size**
-- [ ] `UT-C2-6` embedded manifest == emitted `df_sil.ports.yaml`
-- [ ] `UT-C2-7` build with `bsd` **disabled** ⇒ no `bsd.*` port in either
-- [ ] `UT-C2-8` `descriptor_set` contains every `proto_type` the manifest names,
+- [ ] `UT-C1b-5` an undersized output buffer returns the **required size**
+- [ ] `UT-C1b-6` embedded manifest == emitted `df_sil.ports.yaml`
+- [ ] `UT-C1b-7` build with `bsd` **disabled** ⇒ no `bsd.*` port in either
+- [ ] `UT-C1b-8` `descriptor_set` contains every `proto_type` the manifest names,
       transitively
-- [ ] `ST-C2-1` **equivalence**: for a fixed sequence of inputs, `adasExec` and
+- [ ] `ST-C1b-1` **equivalence**: for a fixed sequence of inputs, `adasExec` and
       `dfExec` produce byte-identical outputs
-- [ ] `ST-C2-2` `sil_host` still builds and runs unchanged (it still calls
+- [ ] `ST-C1b-2` `sil_host` still builds and runs unchanged (it still calls
       `dfExec`)
 
 **Gate**
-- [ ] `ST-C2-1` green; GT-4 (`df_tests`) green at ≥ its prior count
+- [ ] `ST-C1b-1` green; GT-4 (`df_tests`) green at ≥ its prior count
 
-### S-C3 — `contracts/` — `SilComponent`, `Pipeline`
+### S-C1c — `contracts/` — `SilComponent`, `Pipeline`
 
 - [ ] `contracts/component.py` — the `SilComponent` Protocol plus
       `CtypesSilComponent` and `InProcessSilComponent` (§3.2)
@@ -503,38 +505,38 @@ Both ABIs live and are tested against each other (`sim_sil_contract.md` §6).
 - [ ] `modules/df/sim/pipelines/{df_only,algo_test_df}.yaml`
 
 **Tests**
-- [ ] `UT-C3-1` ABI version mismatch fails loudly at load, naming both versions
-- [ ] `UT-C3-2` manifest parse → ports discovered; no hardcoded port name in the
+- [ ] `UT-C1c-1` ABI version mismatch fails loudly at load, naming both versions
+- [ ] `UT-C1c-2` manifest parse → ports discovered; no hardcoded port name in the
       framework
-- [ ] `UT-C3-3` message classes built from `descriptor_set` alone, with
+- [ ] `UT-C1c-3` message classes built from `descriptor_set` alone, with
       `interfaces`' generated bindings **not importable** in the test env
-- [ ] `UT-C3-4` ports match by name regardless of order
-- [ ] `UT-C3-5` buffer grow-and-retry succeeds once and logs; a second failure
+- [ ] `UT-C1c-4` ports match by name regardless of order
+- [ ] `UT-C1c-5` buffer grow-and-retry succeeds once and logs; a second failure
       raises
-- [ ] `UT-C3-6` pipeline wiring: `proto_type` mismatch raises naming both ends
-- [ ] `UT-C3-7` missing required input raises naming the port
-- [ ] `UT-C3-8` a reference to a port nobody produces raises
-- [ ] `UT-C3-9` a forward reference (B feeding an earlier A) raises — no silent
+- [ ] `UT-C1c-6` pipeline wiring: `proto_type` mismatch raises naming both ends
+- [ ] `UT-C1c-7` missing required input raises naming the port
+- [ ] `UT-C1c-8` a reference to a port nobody produces raises
+- [ ] `UT-C1c-9` a forward reference (B feeding an earlier A) raises — no silent
       last-tick value
-- [ ] `UT-C3-10` `mode: measured` with the recording lacking that stage's outputs
+- [ ] `UT-C1c-10` `mode: measured` with the recording lacking that stage's outputs
       raises naming the missing topics
-- [ ] `UT-C3-11` `mode: measured` ignores that stage's inputs and injects
+- [ ] `UT-C1c-11` `mode: measured` ignores that stage's inputs and injects
       recorded outputs
-- [ ] `UT-C3-12` `mode: off` yields `valid == 0` downstream
-- [ ] `UT-C3-13` flipping `mode` does not require `impl:` to change
-- [ ] `UT-C3-14` components execute in declaration order, single-threaded
-- [ ] `ST-C3-1` resim **every** recording through `CtypesSilComponent` and
+- [ ] `UT-C1c-12` `mode: off` yields `valid == 0` downstream
+- [ ] `UT-C1c-13` flipping `mode` does not require `impl:` to change
+- [ ] `UT-C1c-14` components execute in declaration order, single-threaded
+- [ ] `ST-C1c-1` resim **every** recording through `CtypesSilComponent` and
       compare with the `dfExec` path — byte-identical (integration; skipped if
       `df_sil.dll` absent)
-- [ ] `ST-C3-2` the `algo_test_df` pipeline runs: everything `measured` except
+- [ ] `ST-C1c-2` the `algo_test_df` pipeline runs: everything `measured` except
       `df`
 
 **Gate**
-- [ ] `ST-C3-1` green over every recording — the generic path is proven
+- [ ] `ST-C1c-1` green over every recording — the generic path is proven
       equivalent before anything depends on it exclusively
 - [ ] GT-6 green — the framework imports no generated bindings
 
-### S-C4 — `sources/` — the production side
+### S-C2 — `sources/` — the production side
 
 Closes **D10** partly; implements `R-SIM-12`. Decomposes `carla_bridge.py`
 **by copy, not by move** — the original stays working until S-E1.
@@ -552,33 +554,33 @@ Closes **D10** partly; implements `R-SIM-12`. Decomposes `carla_bridge.py`
 - [ ] `app/cli.py` — `sim record`, `sim run`, `sim resim`
 
 **Tests**
-- [ ] `UT-C4-1` `frame_convert.to_ego_frame` — the existing sign conventions,
+- [ ] `UT-C2-1` `frame_convert.to_ego_frame` — the existing sign conventions,
       re-asserted (world→ego, right→left flip)
-- [ ] `UT-C4-2` `LaneAdvancer` heading ramp + yaw-rate averaging against a
+- [ ] `UT-C2-2` `LaneAdvancer` heading ramp + yaw-rate averaging against a
       **mocked** CARLA world — the technique already proven for the original
       (`df_carla_viz_plan.md` §5.1a)
-- [ ] `UT-C4-3` `_angle_diff_deg` across the ±180° seam
-- [ ] `UT-C4-4` `LateralProfile` phases incl. `raised_cosine` displacement =
+- [ ] `UT-C2-3` `_angle_diff_deg` across the ±180° seam
+- [ ] `UT-C2-4` `LateralProfile` phases incl. `raised_cosine` displacement =
       `rate * duration / 2`
-- [ ] `UT-C4-5` run manifest contains every declared field; hashes are stable
-- [ ] `UT-C4-6` the recorder's topic list equals the union of the pipeline's
+- [ ] `UT-C2-5` run manifest contains every declared field; hashes are stable
+- [ ] `UT-C2-6` the recorder's topic list equals the union of the pipeline's
       declared ports — **no port silently unrecorded** (`R-SIM-6`)
-- [ ] `UT-C4-7` `VehSig` is recorded (the determinism hole in recording doc §4
+- [ ] `UT-C2-7` `VehSig` is recorded (the determinism hole in recording doc §4
       is closed)
-- [ ] `UT-C4-8` provenance tags: mocked ports `mocked`, world truth `truth`,
+- [ ] `UT-C2-8` provenance tags: mocked ports `mocked`, world truth `truth`,
       component outputs `simulated`
-- [ ] `UT-C4-9` a resim against a recording whose port manifest differs is a
+- [ ] `UT-C2-9` a resim against a recording whose port manifest differs is a
       hard error; a differing library hash is a warning
-- [ ] `ST-C4-1` `sim record` on a synthetic source produces a recording that
+- [ ] `ST-C2-1` `sim record` on a synthetic source produces a recording that
       `sim resim` consumes with every stage `measured` except one
-- [ ] `ST-C4-2` `sim resim` reproduces byte-identical outputs across two runs
+- [ ] `ST-C2-2` `sim resim` reproduces byte-identical outputs across two runs
       (determinism)
 - [ ] `MC-2` a live CARLA run records correctly against a real server
 
 **Gate**
-- [ ] `ST-C4-2` green; `MC-2` recorded
+- [ ] `ST-C2-2` green; `MC-2` recorded
 
-### S-C5 — Scenario schema v2 + expectations
+### S-C3 — Scenario schema v2 + expectations
 
 Closes **D10**, **D11**.
 
@@ -591,19 +593,19 @@ Closes **D10**, **D11**.
 - [ ] Timeline renders expectation windows (visualization spec §7.3)
 
 **Tests**
-- [ ] `UT-C5-1` every v1 scenario loads through the upgrader and yields the same
+- [ ] `UT-C3-1` every v1 scenario loads through the upgrader and yields the same
       effective run configuration
-- [ ] `UT-C5-2` each predicate — `equals`/`always`/`during`/`whenever`,
+- [ ] `UT-C3-2` each predicate — `equals`/`always`/`during`/`whenever`,
       `becomes`+`within_s`+`of`, `never`, `at_least_s`/`at_most_s`, `count`,
       `between`, `monotonic` — passes on a crafted signal and **fails** on a
       crafted counter-signal (both directions, or the predicate is untested)
-- [ ] `UT-C5-3` a timing predicate without `within_s` is a **schema error**
-- [ ] `UT-C5-4` `marker.<name>` resolves; a missing marker names itself
-- [ ] `UT-C5-5` report lists actual value and actual time next to expected
-- [ ] `ST-C5-1` all 18 scenarios load under v2
-- [ ] `ST-C5-2` `sim check tests/carla_scenarios` runs headless, exits non-zero
+- [ ] `UT-C3-3` a timing predicate without `within_s` is a **schema error**
+- [ ] `UT-C3-4` `marker.<name>` resolves; a missing marker names itself
+- [ ] `UT-C3-5` report lists actual value and actual time next to expected
+- [ ] `ST-C3-1` all 18 scenarios load under v2
+- [ ] `ST-C3-2` `sim check tests/carla_scenarios` runs headless, exits non-zero
       on a deliberately broken expectation
-- [ ] `ST-C5-3` a scenario whose recording is missing is **skipped with a
+- [ ] `ST-C3-3` a scenario whose recording is missing is **skipped with a
       warning**, not failed
 
 **Gate**
@@ -613,22 +615,22 @@ Closes **D10**, **D11**.
       is worse than none)
 - [ ] The migration record lists every claim that **could not** be expressed
 
-### S-C6 — Viewer reads real calibration; kill the duplicates
+### S-C4 — Viewer reads real calibration; kill the duplicates
 
 - [ ] `SensorModel`/`ObjectModel` sourced from the project config for the BSD
       layers; `bsdviz.sensors`' `P3`/`P4`/`P5` and the
       `if project == "2w_base"` branch are no longer used by the live path
 
 **Tests**
-- [ ] `UT-C6-1` changing a `BSD_SENSOR_*` value in the project YAML changes the
+- [ ] `UT-C4-1` changing a `BSD_SENSOR_*` value in the project YAML changes the
       drawn FOV — asserted on the Scene, not by eye
-- [ ] `ST-C6-1` no sensor pose or class footprint literal remains in any Python
+- [ ] `ST-C4-1` no sensor pose or class footprint literal remains in any Python
       module on the live path (grep, as a test)
 
 **Gate**
-- [ ] `ST-C6-1` green
+- [ ] `ST-C4-1` green
 
-### S-C7 — The packed config bundle (OD-4)
+### S-C5 — The packed config bundle (OD-4)
 
 - [ ] Build copies `project.yaml` + `shared_config`'s `vehicle/ego_params.yaml`
       + `df_sil.ports.yaml` into `<build>/…/Release/config/` with `bundle.sha256`
@@ -639,21 +641,21 @@ Closes **D10**, **D11**.
 - [ ] `ProjectModel` prefers embedded → library → checkout, and the HUD says which
 
 **Tests**
-- [ ] `UT-C7-1` `adasInit(NULL)` resolves the bundle beside the library
-- [ ] `UT-C7-2` an explicit path always wins over the packed bundle
-- [ ] `UT-C7-3` explicit path whose project ≠ `manifest.project` → **warning**,
+- [ ] `UT-C5-1` `adasInit(NULL)` resolves the bundle beside the library
+- [ ] `UT-C5-2` an explicit path always wins over the packed bundle
+- [ ] `UT-C5-3` explicit path whose project ≠ `manifest.project` → **warning**,
       run proceeds
-- [ ] `UT-C7-4` `bundle.sha256` changes when any file in the bundle changes
-- [ ] `UT-C7-5` a recording with an embedded bundle renders with no checkout
+- [ ] `UT-C5-4` `bundle.sha256` changes when any file in the bundle changes
+- [ ] `UT-C5-5` a recording with an embedded bundle renders with no checkout
       present
-- [ ] `ST-C7-1` **the relocatability test**: copy the build output + `config/`
+- [ ] `ST-C5-1` **the relocatability test**: copy the build output + `config/`
       to a directory with no Conan cache and no repo checkout; `sil_host` and
       `sim resim` both run correctly (this closes `plan.md` item 19)
-- [ ] `ST-C7-2` the viewer's `ProjectModel.provenance` reports `embedded` for a
+- [ ] `ST-C5-2` the viewer's `ProjectModel.provenance` reports `embedded` for a
       post-C7 recording and `checkout` for a legacy one
 
 **Gate**
-- [ ] `ST-C7-1` green — item 19 closed with evidence
+- [ ] `ST-C5-1` green — item 19 closed with evidence
 
 ---
 
@@ -734,13 +736,13 @@ gate that proves the replacement works first.
 |---|---|---|---|
 | - [ ] `tools/carla/replay/viz.py` | 562 | `render/` + `df/sim/layers/` | S-B1, MC-1 |
 | - [ ] `tools/carla/replay/foxglove_stream.py` | 113 | `render/foxglove.py` | S-D1 |
-| - [ ] `tools/carla/replay/df_dll_sim_mcap.py` | 381 | `sim resim` | S-C3, S-C4 |
+| - [ ] `tools/carla/replay/df_dll_sim_mcap.py` | 381 | `sim resim` | S-C1c, S-C2 |
 | - [ ] `tools/carla/replay/requirements.txt` | — | `pyproject.toml` extras | S-A1 |
-| - [ ] `tools/carla/df_ctypes.py` | 104 | `contracts/component.py` | S-C3 |
-| - [ ] `tools/carla/mcap_recorder.py` | 99 | `io/mcap.py` + `sources/carla` | S-A4, S-C4 |
-| - [ ] `tools/carla/carla_bridge.py` | 983 | `sources/carla/**` | S-C4, MC-2 |
-| - [ ] `tools/carla/actor_behaviour.py` | 136 | `sources/carla/behaviour.py` | S-C4 |
-| - [ ] `tools/carla/frame_convert.py` | 61 | `sources/carla/frames.py` | S-C4 |
+| - [ ] `tools/carla/df_ctypes.py` | 104 | `contracts/component.py` | S-C1c |
+| - [ ] `tools/carla/mcap_recorder.py` | 99 | `io/mcap.py` + `sources/carla` | S-A4, S-C2 |
+| - [ ] `tools/carla/carla_bridge.py` | 983 | `sources/carla/**` | S-C2, MC-2 |
+| - [ ] `tools/carla/actor_behaviour.py` | 136 | `sources/carla/behaviour.py` | S-C2 |
+| - [ ] `tools/carla/frame_convert.py` | 61 | `sources/carla/frames.py` | S-C2 |
 | - [ ] `tools/carla/README.md`, `replay/README.md` | — | `modules/sim/README.md` | S-D3 |
 | - [ ] `scripts/df_sim_gui.py` + `sim_gui.bat` | 647 | `app/gui/` | S-D3 |
 | - [ ] `docs/bsd/py/bsdviz/{calib,egogeom,canvas,palette,frame,annotate,logs}.py` | ~440 | `model/`, `render/theme.py`, `render/matplotlib.py`, `scene/frames.py` | S-A2, S-A3, S-D2 |
@@ -785,7 +787,7 @@ gate that proves the replacement works first.
 - [ ] `scripts/check_invariants.py` wired to run all of GT-1..GT-7
 - [ ] `.claude` artifacts reviewed against the shipped code; any rule the code
       contradicts is fixed on one side
-- [ ] `plan.md` item 25 marked `[x]`; item 19 marked `[x]` (closed by S-C7);
+- [ ] `plan.md` item 25 marked `[x]`; item 19 marked `[x]` (closed by S-C5);
       item 4 re-scoped to the CarMaker codec
 
 **Tests**
@@ -804,20 +806,20 @@ gate that proves the replacement works first.
 | R3 | **Scrolling / time transport** | S-B2 | `UT-B2-2`, `ST-B2-1` |
 | R4 | **Snapshots** | S-B4 | `UT-B4-1`, `ST-B4-1` |
 | R5 | **Config-driven geometry per project** | S-A2, S-B1 | `UT-A2-1/2`, `ST-B1-2` |
-| R6 | Python↔C adaptability via protobuf | S-C1..S-C3 | `UT-C3-3`, `ST-C3-1` |
+| R6 | Python↔C adaptability via protobuf | S-C1a..S-C1c | `UT-C1c-3`, `ST-C1c-1` |
 | R7 | Scales to perception | S-D4 | `ST-D4-1` |
 | R8 | Visualization outside `df` | S-A1, S-E1 | GT-1, `ST-E1-3` |
 | R9 | GUI restructured | S-D3 | `UT-D3-1..4` |
-| R10 | `shared_config` = real runtime config only | S-C7 | `UT-C7-4`, R-SIM-9 |
-| R11 | Config packed with the DLL | S-C7 | `ST-C7-1` |
+| R10 | `shared_config` = real runtime config only | S-C5 | `UT-C5-4`, R-SIM-9 |
+| R11 | Config packed with the DLL | S-C5 | `ST-C5-1` |
 | R12 | `df` vs superproject clarity | — | architecture §5.8 |
-| R13 | `df`-alone resim | S-C3, S-C7 | `UT-C3-3`, `ST-C7-1` |
-| R14 | Any injection level, one concept | S-C3 | `UT-C3-10..13`, `ST-C3-2` |
-| R15 | Per-component measured/simulate (console model) | S-C3, S-D3 | `UT-C3-11`, `UT-D3-2` |
-| R16 | Two sides: produce vs execute | S-C4 | `ST-C4-1` |
-| R17 | Algo test = mock → mcap → isolate df | S-C4, S-C5 | `ST-C3-2`, `ST-C4-1` |
+| R13 | `df`-alone resim | S-C1c, S-C5 | `UT-C1c-3`, `ST-C5-1` |
+| R14 | Any injection level, one concept | S-C1c | `UT-C1c-10..13`, `ST-C1c-2` |
+| R15 | Per-component measured/simulate (console model) | S-C1c, S-D3 | `UT-C1c-11`, `UT-D3-2` |
+| R16 | Two sides: produce vs execute | S-C2 | `ST-C2-1` |
+| R17 | Algo test = mock → mcap → isolate df | S-C2, S-C3 | `ST-C1c-2`, `ST-C2-1` |
 | R18 | Change recording format easily | S-A4 | `UT-A4-7`, R-SIM-14 |
-| R19 | Add components easily | S-C3 | `UT-C3-2`, architecture §5.13 |
+| R19 | Add components easily | S-C1c | `UT-C1c-2`, architecture §5.13 |
 | R20 | Visualization constant regardless of origin | S-B1, S-D1 | `ST-B1-1`, R-SIM-13 |
 | R21 | CarMaker | plan.md item 4 | a codec, per §5.12 |
 | R22 | `df` cleaned up | S-E1 | `ST-E1-1..4` |
@@ -834,7 +836,7 @@ the stage named there.
 |---|---|
 | **Golden Scenes churn on every cosmetic change** | Goldens are Scenes, not pixels — geometry and tokens, so a theme edit does not touch them. `--update-goldens` diffs must be reviewed. |
 | **The parity gate is subjective** | `ST-B1-1` compares Scenes (objective); `MC-1` compares appearance (human, recorded). Both, not one. |
-| **`ST-C3-1` byte-equality fails for float reasons** | Compare parsed protobuf fields with an explicit tolerance policy decided *before* the first run, not after seeing a failure. |
+| **`ST-C1c-1` byte-equality fails for float reasons** | Compare parsed protobuf fields with an explicit tolerance policy decided *before* the first run, not after seeing a failure. |
 | **Qt learning cost** | The Scene keeps the renderer thin; `render/bev.py` is Qt-independent and testable headless, so only the shell is Qt. |
 | **Phase C touches production C++** | Every C++ change is additive until S-E2; both ABIs live and are tested against each other. |
 | **No CI** | The test command is the gate and is cited in each commit. Wiring CI is `plan.md` item 12, unblocked by this work. |
