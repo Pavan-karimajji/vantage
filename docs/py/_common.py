@@ -105,9 +105,14 @@ class Report:
         LOGS_DIR.mkdir(parents=True, exist_ok=True)
         stamp = _dt.date.today().isoformat()
         path = LOGS_DIR / f"{self.script_name}.{stamp}.log"
+        # Deliberately NO wall-clock in the body. The filename already carries
+        # the date, and a run whose results are unchanged must produce a
+        # byte-identical log -- otherwise every re-run shows a diff containing
+        # only its own timestamp, and a log diff that is usually noise is a log
+        # diff nobody reads. Same reasoning as P-4's golden files, and as
+        # UT-D2-3, which bans embedded timestamps in figure output.
         header = [
             f"# {self.script_name}",
-            f"# generated {_dt.datetime.now().isoformat(timespec='seconds')}",
             f"# platform  {sys.platform}",
             f"# python    {sys.version.split()[0]}",
             "",
