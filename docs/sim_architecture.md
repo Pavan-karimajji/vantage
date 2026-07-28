@@ -916,7 +916,7 @@ modules/sim/
     view/       viewport · transport · layers · inspector · timeline · measure ← NEW
     check/      expect · report                             ← NEW
     app/        cli · gui                                   ← was df_sim_gui.py
-  tests/  README.md  CLAUDE.md  pyproject.toml  sim_gui.bat
+  tests/  README.md  CLAUDE.md  pyproject.toml
 ```
 
 No `CMakeLists.txt` and no `build.bat` — it produces no compiled artifact,
@@ -950,7 +950,7 @@ shape `shared_config` uses. A consumer declares it in `conf/build.yml`
 | `docs/bsd/py/` figure content | **stays** | figure *content*; the driver moves onto the framework (D2) |
 | `docs/bsd/py/bsdviz/` | **splits** | generic half → `adas_sim.model`/`render`; BSD half → `df/sim/layers/bsd.py` |
 | `tools/carla/**` | **leaves** | → `adas_sim.sources.carla`, `contracts`, `sinks`, `render` |
-| `scripts/df_sim_gui.py`, `sim_gui.bat` | **leaves** | → `adas_sim.app.gui`, `modules/sim/sim_gui.bat` |
+| `scripts/df_sim_gui.py`, `sim_gui.bat` | **leaves** | → `adas_sim.app`, launched by the `vantage` console entry point — **not** a new `.bat`, which is Windows-only (`P-6`) |
 | **`sim/` — NEW** | | df's contribution to the framework |
 
 ```

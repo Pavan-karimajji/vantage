@@ -1,5 +1,5 @@
 # check_doc_invariants
-# generated 2026-07-28T15:02:42
+# generated 2026-07-28T15:07:38
 # platform  win32
 # python    3.14.6
 
@@ -24,7 +24,7 @@ ok    all 37 checklist rows name a stage
 
 DC-5  placement-map paths exist or are marked NEW
 -------------------------------------------------
-ok    placement map parsed; 3 paths claimed
+ok    placement map parsed; 2 paths claimed
 
 DC-6  work is on a feature branch
 ---------------------------------

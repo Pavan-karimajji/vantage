@@ -1280,106 +1280,227 @@ it (production uses AUTOSAR frozen parameters instead, `R-SIL-1`).
 
 ## 7. Phase D — Reach
 
+Phase D takes a working single-recording viewer and extends its reach: to a
+foreign viewer (`D1`), to print (`D2`), to the measured/simulated surface
+(`D3`), to a second component (`D4`), to a machine with no repo (`D5`), to a
+developer's own component (`D6`), to many recordings (`D7`), and finally to a
+named product (`D8`).
+
+**One boundary to fix before starting, because two stages here build GUI and it
+would otherwise be built twice:**
+
+| Stage | Owns | Does **not** own |
+|---|---|---|
+| `S-B3` | the **shell**: window, docks, panels, layer tree, inspector, timeline, plots | anything about pipelines or workspaces |
+| `S-D3` | the **pipeline panel** — per-stage measured/simulate, and the run manifest it produces | the window it lives in (that is `S-B3`'s) |
+| `S-D8` | **Vantage**: the product name, the Bench/Campaign workspaces, the start page, the command palette, the probe and console panels | any panel `S-B3` or `S-D3` already built |
+
+Read that as: `S-D3` adds **one dock** to an existing window, and `S-D8` adds
+**modes and a front door** around it. Neither builds a second GUI. A stage that
+finds itself creating a window has misread this table.
+
 ### S-D1 — Foxglove `SceneUpdate` + Scene-in-recording
 
-- [ ] `render/foxglove.py` — Scene → scene entities, one entity per layer
-- [ ] frame graph emitted once from the project model (the fix for the
-      transform-tree failure in `df_carla_viz_plan.md` §2)
-- [ ] `/scene` topic written into a session recording
+**Purpose.** Demonstrate `R-SIM-13` in a viewer we did not write: the same
+`Scene`, rendered by a foreign tool, looks like the same run. That is the claim
+"visualization is identical regardless of origin" actually being tested rather
+than argued from the Scene's shape.
+
+**Must not.** Let a Foxglove type reach `scene/`. The mapping is one-directional
+and lives entirely in `render/foxglove.py`; `Prim` must not grow a field that
+exists because a foreign schema wanted it.
+
+- [ ] `render/foxglove.py` — Scene to scene entities, **one entity per layer**,
+      so layer toggles work in the foreign viewer for free
+- [ ] Frame graph emitted **once** from the project model — the fix for the
+      transform-tree failure where entities referenced frames that were never
+      published and silently rendered at the origin
+- [ ] `/scene` topic written into a session recording, so a recording opened
+      cold shows the full spatial scene with no framework present
 
 **Tests**
-- [ ] `UT-D1-1` every prim type maps to a valid scene entity
+- [ ] `UT-D1-1` every prim type maps to a valid scene entity — a table-driven
+      test over the whole `Prim` union, so a new prim type fails here rather
+      than silently disappearing in a foreign viewer
 - [ ] `UT-D1-2` every entity's `frame_id` exists in the emitted frame graph —
       the stranding bug, asserted
+- [ ] `UT-D1-3` entity ordering is sorted, so two exports of one Scene are
+      byte-identical (`P-8`)
+- [ ] `UT-D1-4` no module under `scene/` imports or names a Foxglove type
 - [ ] `ST-D1-1` a written session recording opens in Foxglove Studio and shows
       the scene with working layer toggles and seek → `MC-3`
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-4`, `P-8` (entity ordering must be sorted or two exports of one scene differ)
-- [ ] naming §3 ticked — exposure: `N-2` (a Foxglove entity id is a `Layer.id`, unchanged -- `N-6`)
+- [ ] portability §3 ticked — exposure: `P-4`, `P-8` (entity ordering must be
+      sorted or two exports of one scene differ)
+- [ ] naming §3 ticked — exposure: `N-2` (a Foxglove entity id **is** a
+      `Layer.id`, unchanged — `N-6`: no translation table)
 - [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
-- [ ] `ST-D1-1` green — the interop claim (`R-SIM-13`: visualization is
-      identical regardless of origin) is demonstrated in a foreign viewer,
+- [ ] `ST-D1-1` green — the interop claim is demonstrated in a foreign viewer,
       not argued from the Scene's shape
+- [ ] `UT-D1-4` green — the boundary held in the direction that is easy to lose
 
-### S-D2 — matplotlib renderer + `bsdviz` figure driver migration
+### S-D2 — matplotlib renderer + figure-driver migration
+
+**Purpose.** Prove **one Scene, two renderers, one palette** (`D5`). A figure in
+a document and the live view must be the same picture in two media, not two
+drawings that happen to resemble each other.
+
+**Must not.** Let the figure driver reach into a provider or recompute geometry.
+It consumes the same `Scene` the viewer does; if a figure needs something the
+Scene lacks, the Scene is what changes.
 
 - [ ] `render/matplotlib.py` — `print` theme, vector output, the `bev_axes`
       furniture guarantee
-- [ ] `df_bsd_image_creation.py` driver rebuilt on the framework
+- [ ] The existing figure driver rebuilt on the framework
+- [ ] **Byte-stability of figures is explicit work, not luck.** Vector formats
+      embed a creation date and font paths by default; the writer must pin
+      metadata (`Date: None`), fix the font resolution, and set a deterministic
+      hash seed. Without this `ST-D2-1` fails intermittently and gets muted,
+      which is worse than not having it
 
 **Tests**
 - [ ] `UT-D2-1` the same Scene renders through both the raster and matplotlib
-      renderers with no provider change
-- [ ] `ST-D2-1` the BSD figure set regenerates and each figure is byte-stable
+      renderers **with no provider change**
+- [ ] `UT-D2-2` a style token resolves to the same semantic role in `print` as
+      in `dark`/`light` — a token that only exists in one theme fails here
+- [ ] `UT-D2-3` figure output carries no embedded timestamp or absolute font
+      path (`P-2`, `P-4`), asserted by scanning the produced file
+- [ ] `ST-D2-1` the figure set regenerates and each figure is **byte-stable**
       across two runs
 - [ ] `ST-D2-2` a figure and the live view of the same geometry use the same
-      token → same semantic appearance (**D5** closed)
+      token, therefore the same semantic appearance (**D5** closed)
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-4` (figure output must be byte-stable across platforms), `P-7` (matplotlib runs headless here)
-- [ ] naming §3 ticked — exposure: `N-6` (a figure label is the signal name, never a hand-typed caption)
+- [ ] portability §3 ticked — exposure: `P-4` (figure output must be byte-stable
+      across platforms), `P-7` (matplotlib runs headless here)
+- [ ] naming §3 ticked — exposure: `N-6` (a figure label is the signal name,
+      never a hand-typed caption)
 - [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
-- [ ] `ST-D2-1` + `ST-D2-2` green — one Scene, two renderers, one palette.
-      A figure that disagrees with the live view is `D5` reopening
+- [ ] `ST-D2-1` + `ST-D2-2` green — one Scene, two renderers, one palette. A
+      figure that disagrees with the live view is `D5` reopening
 
-### S-D3 — GUI on run manifests
+### S-D3 — The pipeline panel, and runs as manifests
 
-- [ ] `app/gui/` — component-agnostic, discovery-driven
-- [ ] Pipeline panel per visualization spec §13 (per-stage measured/simulate)
-- [ ] `modules/sim/sim_gui.bat`
+**Purpose.** Put `R-SIM-10`'s per-stage measured/simulate toggle on screen, and
+make every run expressible as a manifest the CLI accepts verbatim. This is the
+surface the whole two-field model exists to provide.
+
+**Must not.** Build a window. The shell is `S-B3`'s (see the phase table above);
+this stage adds **one dock** to it. And must not hand-write a `.bat` launcher:
+the GUI is a console entry point (`vantage = adas_sim.app:main`) so the launcher
+is generated per platform (`P-6`) — a `.bat` is Windows-only and would have to
+be replaced the day an Ubuntu machine appears.
+
+- [ ] `app/panels/pipeline.py` — the pipeline dock, per visualization spec §13:
+      one row per stage, `mode` toggle, `impl:` and overrides in a collapsed
+      expert row
+- [ ] Discovery-driven and component-agnostic: stages from the pipeline,
+      `impl:` choices from manifests on disk, `measured` availability from the
+      recording's topic index. **No component name anywhere** (`GT-1`)
+- [ ] Severed-chain auto-close surfaced with a one-line undo bar (detection is
+      `UT-C1c-16`'s; acting on it is this stage's — `R-SIM-10`)
+- [ ] `core/manifest.py` round-trip: the panel emits a run manifest, the CLI
+      consumes it unchanged, and the CLI can emit one the panel reopens
+- [ ] Console entry point in `pyproject.toml`; **no `.bat`, no `.sh`** written
+      by hand
 
 **Tests**
 - [ ] `UT-D3-1` discovery: stages from the pipeline, `impl:` choices from
       manifests on disk, `measured` availability from the recording topic index
-- [ ] `UT-D3-2` `measured` is disabled with a reason when the recording lacks
-      the topics
-- [ ] `UT-D3-3` a `measured` stage below a `simulate` stage is flagged
+- [ ] `UT-D3-2` `measured` is disabled **with a reason** when the recording
+      lacks the topics — the GUI does not offer a choice that would fail at load
+- [ ] `UT-D3-3` a severed chain is flagged in the panel and the orphan stage is
+      badged *"computed, not consumed"*
 - [ ] `UT-D3-4` the GUI builds a valid run manifest that the CLI accepts
-      verbatim
+      **verbatim**
+- [ ] `UT-D3-5` the reverse also holds: a manifest written by the CLI reopens in
+      the panel with every field intact — one format, two writers
+- [ ] `UT-D3-6` a run manifest contains **no absolute path** (`P-2`), so it can
+      be committed, shared and replayed on another machine
+- [ ] `UT-D3-7` the panel names no component or function (`GT-1` as a test)
 - [ ] `ST-D3-1` every run in this plan is launchable from the GUI with no
       hand-typed command
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-7`, `P-2` (a run manifest must not embed a machine path)
-- [ ] naming §3 ticked — exposure: `N-8` (the GUI surfaces the same messages the CLI raises -- one wording, not two), `N-9`
+- [ ] portability §3 ticked — exposure: `P-6` (entry point, never a `.bat`),
+      `P-7`, `P-2` (a run manifest must not embed a machine path)
+- [ ] naming §3 ticked — exposure: `N-8` (the GUI surfaces the same messages the
+      CLI raises — one wording, not two), `N-9`
 - [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
-- [ ] `UT-D3-4` + `ST-D3-1` green — the GUI produces manifests the CLI
-      accepts, which is what keeps them one engine (`R-SIM-16`) rather than
-      two paths that drift
+- [ ] `UT-D3-4` + `UT-D3-5` + `ST-D3-1` green — the GUI and the CLI exchange the
+      same artefact in both directions, which is what keeps them one engine
+      (`R-SIM-16`) rather than two paths that drift
 
 ### S-D4 — Perception readiness
 
-Gated on `perception-core` existing. Everything before it is additive.
+**Purpose.** The first two-component pipeline, and the first time `R-SIM-10`'s
+central invariant is demonstrated rather than asserted: a downstream component's
+entry is **byte-identical** whether its input came from ground truth, from a
+stand-in, or from a real upstream component.
 
-- [ ] `CameraModel` + `render/image_view.py` (project Scene prims onto a frame)
-- [ ] `ground_truth` and `perception` layer groups; `perception.error` derived
-- [ ] `sources/carla` emits camera/radar stimuli
+**Gating.** This stage needs a second real component. Until one exists it is
+**deferred, not skipped**: `UT-D4-1` and `UT-D4-2` are pure geometry and land
+now; `ST-D4-1` is written now and skips with a named reason. Writing the system
+test early is deliberate — it is the specification the second component is built
+against.
+
+**Must not.** Let the downstream component learn where its input came from. If
+anything in its entry path branches on the upstream stage's `mode` or `impl`,
+the invariant is already broken and no test after this will catch it.
+
+- [ ] `CameraModel` completed (declared in `S-A2`) + `render/image_view.py` —
+      project Scene prims onto a camera frame
+- [ ] `ground_truth` and `perception` layer groups; `perception.error` as a
+      **derived** group, marked (`R-SIM-7`)
+- [ ] A source emits camera/radar stimuli, declared through `emits()`
 
 **Tests**
 - [ ] `UT-D4-1` projection round-trips for a known intrinsic/extrinsic pair
 - [ ] `UT-D4-2` a `Box` with `height` projects to a 3D box; the BEV and image
-      views come from the same prim
+      views come from the **same prim**, so they cannot disagree
+- [ ] `UT-D4-3` a pixel-valued and a metre-valued field never share a bare name
+      (`N-4`) — the defect this rule exists for lives exactly here
 - [ ] `ST-D4-1` a two-component pipeline runs and ground truth vs perception is
-      visible side by side
+      visible side by side (skips with a named reason until a second component
+      exists)
+- [ ] `ST-D4-2` **the invariant**: the downstream component's input bytes are
+      identical across `truth` / stand-in / real-upstream, for the same
+      scenario — the test `R-SIM-10` was written for
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-8` (camera/projection maths must not introduce float time), `P-1`
-- [ ] naming §3 ticked — exposure: `N-4` (intrinsics and extrinsics are unit-suffixed; a pixel and a metre sharing a bare name is the defect this rule exists for)
+- [ ] portability §3 ticked — exposure: `P-8` (projection maths must not
+      introduce float time), `P-1`
+- [ ] naming §3 ticked — exposure: `N-4` (intrinsics and extrinsics are
+      unit-suffixed; a pixel and a metre sharing a bare name is the defect this
+      rule exists for)
 - [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
-- [ ] `ST-D4-1` green — two components in one pipeline, with the downstream
-      component's entry **byte-identical** to its single-component form
+- [ ] `ST-D4-1` + `ST-D4-2` green — two components in one pipeline, with the
+      downstream component's entry byte-identical to its single-component form
       (`R-SIM-10`'s central invariant, first demonstrated here)
 
-### S-D5 — Package the player (`adas-sim.exe`)
+### S-D5 — Package the player
+
+**Purpose.** Prove the player is **component-agnostic at build time** — it can
+ship before a component exists, and drive one that appears later as data. That
+is `FR-SIM-70`'s whole claim, and `ST-D5-2` is the only thing that can test it.
+
+**Must not.** Freeze a component, a proto binding or a config bundle into the
+binary. The plug-in import path stays external, or adding a function's layers
+means rebuilding the player — which would make the player a component's
+dependant, exactly inverting `R-SIM-1`.
+
+**Naming.** The binary is `vantage` (`FR-SIM-48`, `OD-5`); the package remains
+`adas-sim` and the CLI remains `sim`. Two delivery forms, one codebase.
+
 
 Turns the library into the application of arch §5.15. Windows only.
 
@@ -1420,6 +1541,16 @@ Turns the library into the application of arch §5.15. Windows only.
       and genuinely standalone, both demonstrated rather than argued
 
 ### S-D6 — Developer ergonomics: per-port overrides, `sim probe`, severed chain
+
+**Purpose.** Make the tool worth choosing over a private script. Everything here
+is what a developer reaches for at 18:00 while debugging their own component.
+
+**Must not.** Add a fifth override verb, an expression, or a scripting hook
+(`R-SIM-15`). The measured cost of an open grammar is in
+`docs/py/logs/FR_SIM_45_argument_binding_survey.*.log`: 5.8 authored config
+elements per `exec()` call, 21 for a realistic one. If four verbs prove
+insufficient the answer is a `stub:` stage — real code, in a file, reviewable.
+
 
 Closes `FR-SIM-44`, `FR-SIM-45`, `FR-SIM-46`. This is the stage that decides
 whether anyone writes a private player, so `GT-8` is measured here.
@@ -1493,6 +1624,17 @@ whether anyone writes a private player, so `GT-8` is measured here.
 
 ### S-D7 — Writers, exports, `sim convert`, `sim batch`
 
+**Purpose.** Close the codec table (readers already exist from `S-A4`), and add
+the two verbs that make scale expressible. `sim batch` is the largest single
+functional gap in the design today — `sim resim` runs exactly one recording.
+
+**Must not.** Let an export become a resim input. A CSV is lossy and terminal;
+it is refused **by capability** (`round_trips=False`), never by a naming
+convention someone will eventually work around. And `sim batch` must take the
+*same* pipeline file used interactively — if it needs a converted one, `R-SIM-16`
+is already broken.
+
+
 Closes `FR-SIM-52`, `NR-SIM-21`. Readers already exist (S-A4); this stage makes
 the codec table symmetric and adds the two verbs that scale it.
 
@@ -1543,7 +1685,20 @@ the codec table symmetric and adds the two verbs that scale it.
 - [ ] `UT-D7-5` + `ST-D7-2` + `ST-D7-3` green — an export can never be mistaken
       for a recording, and scale uses the developer's own file
 
-### S-D8 — **Vantage**: the shell, and the Bench / Campaign workspaces
+### S-D8 — **Vantage**: the workspaces, the front door, the product
+
+**Purpose.** Everything before this stage builds capability; this stage decides
+whether anyone meets it. Spec: [sim_player.md](sim_player.md).
+
+**Must not.** Build a window, a pipeline panel, an inspector or a plot — those
+are `S-B3`'s and `S-D3`'s (see the Phase D table). This stage adds **modes and a
+front door** around them. A stage that finds itself writing a dock has misread
+the split.
+
+Nor may the engine learn which workspace is open: `Bench`/`Campaign` are UI
+arrangements plus a permission set, and `UT-D8-9` asserts the tokens never leave
+`app/` — the same discipline `R-SIM-1` applies to function names.
+
 
 Closes `FR-SIM-47`, `FR-SIM-48`. Everything before this stage builds capability;
 this stage decides whether anyone meets it. Spec:
@@ -1651,7 +1806,7 @@ gate that proves the replacement works first.
 | - [ ] `tools/carla/actor_behaviour.py` | 136 | `sources/carla/behaviour.py` | S-C2 |
 | - [ ] `tools/carla/frame_convert.py` | 61 | `sources/carla/frames.py` | S-C2 |
 | - [ ] `tools/carla/README.md`, `replay/README.md` | — | `modules/sim/README.md` | S-D3 |
-| - [ ] `scripts/df_sim_gui.py` + `sim_gui.bat` | 647 | `app/gui/` | S-D3 |
+| - [ ] `scripts/df_sim_gui.py` + `sim_gui.bat` | 647 | `app/panels/pipeline.py` + the `vantage` entry point | S-D3, S-D8 |
 | - [ ] `docs/bsd/py/bsdviz/{calib,egogeom,canvas,palette,frame,annotate,logs}.py` | ~440 | `model/`, `render/theme.py`, `render/matplotlib.py`, `scene/frames.py` | S-A2, S-A3, S-D2 |
 | **Total removed** | **≈3,530** | | |
 
