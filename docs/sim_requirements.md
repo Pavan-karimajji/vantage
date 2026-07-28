@@ -23,7 +23,14 @@ Reading order for someone new: this file → `sim_architecture.md` →
 | **Origin** | when it was raised, and the verbatim phrasing where the exact words carry the meaning |
 | **Answered by** | the design section and/or rule that resolves it |
 | **Verified by** | the test that proves it, from the implementation plan |
-| **Status** | `frozen` (decided, not built) · `open` (still a question) · `parked` (deliberately not designed) |
+| **Status** | `frozen` (decided, not built) · `partial` (decided in outline, a named part undesigned) · `open` (still a question) · `parked` (deliberately not designed) |
+| **Priority** | `P0` the tool is not usable without it · `P1` a stated goal degrades without it · `P2` valuable, deferrable. **Unmarked means `P1`** |
+
+**Why a priority field exists.** An earlier version of this register had 54 rows,
+all `frozen`, all equally mandatory. That provides no guidance at the exact
+moment guidance is needed — when time runs short and something must give. The
+three levels are deliberately coarse; a finer scale would just move the
+argument rather than settle it.
 
 Verbatim quotes are kept **because the phrasing is the requirement** — "scrolling
 snapshots blah blah all that are needed" is a real instruction to enumerate the
@@ -72,7 +79,7 @@ perception-core existing).
 **Answered by.** `R-SIM-1`; `modules/sim` vs `modules/<name>/sim/` split
 (arch §5.7).
 **Verified by.** `GT-1` (a grep, re-run every stage), and `UT-A1-3` which
-asserts the check itself fails on a planted violation. **Status.** frozen.
+asserts the check itself fails on a planted violation. **Priority.** `P0` — the boundary that makes the framework reusable at all. **Status.** frozen.
 
 ---
 
@@ -265,7 +272,7 @@ minutes with no instructions, then explains `measured` vs `simulate`
 unprompted), `UT-D8-5` (control count in the default layout), `UT-D8-6`
 (a fully normal run shows no provenance, bundle or capability notice at
 all), `ST-D8-2` (three actions to a moving picture), `GT-8`.
-**Status.** frozen.
+**Priority.** `P0` — if it is not usable, nothing else in this register matters. **Status.** frozen.
 
 ### FR-SIM-49 — Naming conventions must be appropriate for debugging
 **Requirement.** The naming conventions are not only for tidiness — they must
@@ -617,7 +624,7 @@ from the manifest; the handoff to a platform team is itself the queue that
 causes private players. `impl: "legacy:<lib>"` keeps the wrapper concept for
 binaries that genuinely cannot carry a manifest.
 **Verified by.** `GT-8`, `GT-9`, `UT-D6-3`, `ST-D6-1`, `ST-D7-3`.
-**Status.** frozen.
+**Priority.** `P0` — one engine, two faces — the decision every other structure rests on. **Status.** frozen.
 
 ---
 
@@ -701,7 +708,13 @@ report, taking **the same pipeline file** used interactively (`R-SIM-16`), plus
 runs exactly one recording and there is no way to express *"run this over 500
 recordings"*. Storage and compute sizing for such a run is **not designed**
 (§10, parked until `sim batch` exists to size it).
-**Verified by.** `ST-D7-2`, `ST-D7-3`. **Status.** frozen.
+**Verified by.** `ST-D7-2`, `ST-D7-3`. **Priority.** `P0` — the project-scale
+face has no other reason to exist. **Status.** **`partial`** — the verb and the
+one-pipeline-file identity are designed; **throughput, storage and retention
+are not** (see `NR-SIM-22`, `NR-SIM-23`). Marked `frozen` until 2026-07-28,
+which was wrong: a requirement whose own text says a core part is undesigned
+is not frozen, and calling it so hides the gap from exactly the person
+planning around it.
 
 ---
 
@@ -776,7 +789,7 @@ developers and CI, and a packaged `adas-sim.exe` needing no repo, no Python and
 no Conan cache. **Windows first; Linux deliberately out of scope.**
 **Constraint it imposes:** a frozen executable must keep an **external plug-in
 import path**, or adding a function's layers would mean rebuilding the player.
-**Verified by.** `ST-D5-1`, `ST-D5-2`, `ST-D5-3`. **Status.** frozen.
+**Verified by.** `ST-D5-1`, `ST-D5-2`, `ST-D5-3`. **Priority.** `P0` — the deliverable itself. **Status.** frozen.
 
 ### NR-SIM-9 — A shipped player owes an explicit compatibility statement
 **Requirement.** Derived from `FR-SIM-70`: a library may shrug at an old input;
@@ -791,6 +804,76 @@ failure arriving by a different door.
 ---
 
 ## 8. Delivery & process
+
+### NR-SIM-22 — A component that crashes or hangs must not take the run with it
+**Requirement.** Derived, 2026-07-28, from a validation pass against the
+mass-scale goal: the design classified every error the framework can *observe*
+(`§5.14`) and none that it cannot. A segfault in a library loaded in-process
+takes the host with it, so an unattended run of 500 recordings would die on
+recording 3 and report nothing.
+**Answered by.** `R-SIM-19` + arch §5.18. Isolation is a property of the **face**
+— Bench in-process (a crash should be immediate, with a stack), Campaign one
+subprocess per recording (isolation at run granularity, zero per-tick cost),
+plus per-stage `mode: isolated` for bisecting. A **per-`exec()` timeout is
+required, not optional**: a hung library is as damaging as a crashing one and
+harder to diagnose, because the symptom is "still running". `fail` / `crash` /
+`timeout` are three outcomes that are never merged, because they send different
+people to investigate. Every crash records the five things `Open on Bench` needs
+to reproduce it in-process.
+**Verified by.** `UT-D7-7`, `UT-D7-8`, `ST-D7-5`, `ST-D7-6`.
+**Priority.** `P0` — without it the batch face cannot run unattended, which is
+the only way it is ever used. **Status.** frozen.
+
+### NR-SIM-23 — Throughput, storage and retention must be sized before the first campaign
+**Requirement.** Derived: `R-SIM-6` records **every stage's inputs and outputs**,
+and `NR-SIM-21` wants 500-recording runs. Nobody has multiplied those together.
+**Answered by.** **Nothing yet.** This is recorded as a requirement rather than
+left as an assumption so that it is visible in planning. What must be produced
+before the first real campaign: per-recording size at the current port set,
+wall-clock per resim, parallelism model for `sim batch -j`, and a retention
+policy (what is kept as a baseline, what is regenerable, what is deleted).
+**Verified by.** `ST-D7-7` — a measured campaign over the real recording set,
+with its numbers written into the implementation plan.
+**Priority.** `P1` — a campaign that fills a disk mid-run fails worse than one
+that was never started. **Status.** **`open`.**
+
+### NR-SIM-24 — A resim must be pinnable to a specific component build
+**Requirement.** Derived: run manifests record component build hashes
+(`R-SIM-6`), so a divergence can be *detected* — but nothing lets you re-run
+against the earlier build to confirm it. Detection without reproduction is half a
+regression workflow.
+**Answered by.** **Partially.** The recording embeds the hashes; what is missing
+is a way to point a pipeline at a stored artefact for that hash. The likely shape
+is a Conan package reference in `impl:` rather than a bare stem, which costs one
+resolver and no new concept — but it is not designed.
+**Verified by.** *(none yet — deliberately. Writing a test id here for work
+that has no design would make the register look covered when it is not.)*
+**Priority.** `P1`. **Status.** **`open`.**
+
+### CR-SIM-23 — A pipeline file must carry a schema version
+**Requirement.** Derived: scenarios have a v1-to-v2 upgrader; pipelines have no
+version field at all. The pipeline file is **the** artefact `R-SIM-16` says must
+survive everywhere — Bench to Campaign, GUI to CLI, developer to CI, and into
+every recording's manifest. It is the file most certain to outlive its format and
+the only one with no migration story.
+**Answered by.** `version:` as a required top-level key, an upgrader on the same
+shape as the scenario one, and a load error naming both versions when a file is
+newer than the reader. Unversioned files are treated as `v1`.
+**Verified by.** `UT-C1c-18`, `UT-C1c-19`.
+**Priority.** `P0` — cheap now, and the kind of thing that is never cheap later.
+**Status.** frozen.
+
+### NR-SIM-25 — Resim must actually run somewhere automatic
+**Requirement.** Derived: `R-SIM-5` says resim is *"deterministic and the only
+thing that goes in CI"*, and there is no CI (`plan.md` item 20). No stage in the
+implementation plan creates one, so as written the rule is unbuildable.
+**Answered by.** Stage `S-C6` — the **minimum** automatic gate: `sim check` over
+the scenario set on every push, nothing more. Deliberately minimal, because the
+broader CI question belongs to `plan.md` item 20 and this requirement only needs
+the resim half to be true.
+**Verified by.** `ST-C6-1`, `ST-C6-2`.
+**Priority.** `P1` — determinism nobody re-checks decays silently, which is the
+one failure mode a resim tool cannot tolerate. **Status.** frozen.
 
 ### NR-SIM-30 — Nothing is deleted before its replacement is proven
 **Requirement.** `df` must end up clean and neat, with the removal planned.
@@ -886,9 +969,12 @@ Recorded so that "we never thought about it" is never the explanation.
 | ID | Question | Where it is discussed |
 |---|---|---|
 | OQ-1 | One config bundle per component, or one per pipeline? | contract §9 |
-| OQ-2 | Multi-rate components — one tick grid with growing `ageS`, or something more? | recording §5 |
+| ~~OQ-2~~ | ~~Multi-rate components~~ — **closed 2026-07-28** by `R-SIM-18` / arch §5.17: declared period, derived base grid, ideal scheduler with jitter as an injected error model | arch §5.17 |
 | OQ-3 | Computed scenario anchors vs. constants with `from:` provenance | scenarios §9 |
 | OQ-4 | Fault-injection vocabulary beyond today's `roll_fault` | scenarios §9 |
 | OQ-5 | Data volume through ctypes at raw-sensor injection levels | arch §5.10 |
 | OQ-6 | Windowed `Session` for very long runs (36 000+ ticks) | recording §10 |
 | OQ-7 | Cross-machine / cross-compiler determinism | recording §10 |
+| OQ-8 | Campaign sizing — throughput, storage, retention (`NR-SIM-23`) | undesigned |
+| OQ-9 | Pinning a resim to a stored component build (`NR-SIM-24`) | undesigned |
+| OQ-10 | Are four override verbs enough? The closed list is the decision most likely to be wrong, and the escape hatch (a `stub:` stage) is heavier than the complaint that motivated `FR-SIM-45`. Watch it; do not pre-emptively widen it | `R-SIM-15` |

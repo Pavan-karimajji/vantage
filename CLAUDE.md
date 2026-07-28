@@ -19,7 +19,7 @@ requirements register** — read it when you need to know what was actually aske
 for; `docs/sim_architecture.md` is the master design;
 `docs/sim_implementation_plan.md` is the checkbox-tracked build order and is
 what an implementation session works from. Normative rules: root
-`.claude/rules/sim.md` (`R-SIM-1..17`).
+`.claude/rules/sim.md` (`R-SIM-1..19`).
 
 ## Local constraints
 

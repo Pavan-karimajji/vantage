@@ -18,7 +18,7 @@ a signature there is a contract** ·
 **[sim_portability.md](sim_portability.md) — read before writing any code;
 its `P-1`..`P-10` apply to every stage, and its §3 checklist is ticked per
 stage.**
-Normative rules: superproject `.claude/rules/sim.md` (`R-SIM-1..17`).
+Normative rules: superproject `.claude/rules/sim.md` (`R-SIM-1..19`).
 Backlog entry: superproject `plan.md` item 25.
 
 ---
@@ -102,7 +102,9 @@ A stage that breaks one is not done.
       own component checked out** gets a rendered run from a recording in
       **under 10 minutes**, editing nothing in `modules/sim`. Timed on a real
       newcomer, recorded with the date and the person's role — not asserted
-      (`R-SIM-16`, `FR-SIM-46`). This is the gate that decides whether anyone
+      (`R-SIM-16`, `FR-SIM-46`). **Owner: _______   Date run: _______
+      Measured: _______ min.** Blank fields at `S-E3` mean this was never
+      run, which is a different and worse outcome than a number over target. This is the gate that decides whether anyone
       writes a private player; no feature substitutes for it.
 - [ ] **GT-9 — no logic in the app layer.** `modules/sim/src/adas_sim/cli/` and
       `…/app/` contain argument parsing, layout and dispatch only. Every
@@ -222,6 +224,12 @@ worth demonstrating; it exists so that nothing later has to invent a name.
       api reference §2.1 and are **sorted before hashing** (`P-8`)
 - [ ] `core/logging.py` — the `Event` StrEnum (closed) and `log()` emitting one
       fixed-order line (`N-10`)
+- [ ] `cli/doctor.py` — **the first version of `sim doctor`** (`DG-3`),
+      reporting interpreter, install mode, platform, console encoding and line
+      endings. **Seeded here on purpose**: the diagnostic tool is most valuable
+      while the environment is least settled, and a `sim doctor` that only
+      arrives at `S-D6` would mean twenty stages built without it. It **grows**
+      one section per stage that adds something worth checking
 - [ ] Console UTF-8 reconfiguration at every entry point (`P-4`) — three lines,
       and the bug it prevents was already hit once in `docs/py/_common.py`
 - [ ] file headers on every `.py` per `R-STYLE-1`, `COMPONENT: SIM` (`R-NAME-6`)
@@ -603,6 +611,11 @@ possible at all. Closes **D7**; delivers the *scrolling* requirement
       advance-N as one cancellable job with progress, `review_mode` on stepping
       back, and `resume_options()` returning **exactly two named choices** so
       that silently continuing from a rewound tick is not representable
+- [ ] `cli/explain.py` — **the first version of `sim explain`** (`DG-2`), over
+      what exists now: a session, its topics, its layers, a `run_id`. Extended
+      at `S-C1c` (ports, schemas, producers) and `S-D6` (expectations, values).
+      Same reasoning as `sim doctor` in `S-A1` — the tool that explains names is
+      needed while names are being created, not after
 - [ ] Scene cache keyed by `(tick, layer_selection, theme)`, with a **stated
       bound** — an unbounded cache over a 36 000-tick session is `OQ-6` arriving
       early
@@ -991,6 +1004,11 @@ the claim is tested rather than asserted.
       retry on undersize
 - [ ] `contracts/pipeline.py` — `mode:` × `impl:`, wiring **per port**,
       load-time validation in the order given in api reference §3.3
+- [ ] `version:` as a required top-level key + an upgrader; unversioned files
+      are `v1` (`CR-SIM-23`)
+- [ ] `period_ns` read from each manifest; **base grid derived as the GCD** of
+      the declared periods; a period that is not an integer multiple is a load
+      error naming both numbers — never rounded (`R-SIM-18`)
 - [ ] `contracts/override.py` — the closed four-verb list (`R-SIM-15`)
 - [ ] Component pipeline files under `modules/<name>/sim/pipelines/`
 
@@ -1024,6 +1042,17 @@ the claim is tested rather than asserted.
       (`R-SIM-10`; the GUI's auto-close in S-D6 builds on this)
 - [ ] `UT-C1c-17` an override applies at a port and at a field path, and a verb
       outside the closed four is a **load error**, not a warning (`R-SIM-15`)
+- [ ] `UT-C1c-18` a pipeline file **carries a `version:`**, and one newer than
+      the reader is a load error naming **both** versions (`CR-SIM-23`)
+- [ ] `UT-C1c-19` an unversioned pipeline file is read as `v1` and upgraded, on
+      the same shape as the scenario upgrader — the pipeline is the artefact most
+      certain to outlive its format, and was the only one with no migration story
+- [ ] `UT-C1c-20` **rate**: with stages at 20 ms and 50 ms, the base grid is
+      10 ms; each stage executes only on its due ticks; a non-multiple period is
+      a load error naming both numbers (`R-SIM-18`)
+- [ ] `UT-C1c-21` a held port reads `updated=False` with an **exact** `age_s`
+      from integer nanoseconds, and the consumer still receives its **full port
+      set** — `R-SIM-10`'s invariant under multi-rate
 - [ ] `ST-C1c-1` resim **every** existing recording through
       `CtypesSilComponent` and compare with the positional path —
       byte-identical (integration; skips with a named reason if the library is
@@ -1275,6 +1304,44 @@ it (production uses AUTOSAR frozen parameters instead, `R-SIL-1`).
 - [ ] `UT-C5-5` green — the hash means the same thing on both platforms, which
       is what makes it usable as provenance at all
 
+
+### S-C6 — Resim in CI (the minimum automatic gate)
+
+**Purpose.** `R-SIM-5` says resim is *"deterministic and the only thing that
+goes in CI"* — and there is no CI. Until something re-runs it automatically,
+determinism decays silently, which is the one failure a resim tool cannot
+tolerate. Closes `NR-SIM-25`.
+
+**Must not.** Grow into a general CI design. That is `plan.md` item 20, it is
+larger than this module, and conflating them means neither lands. This stage
+delivers **one job**: run `sim check` over the scenario set on every push.
+
+- [ ] One pipeline definition running `python -m pytest modules/sim/tests -q`
+      and `sim check <scenario-set>`
+- [ ] `docs/py/run_all.py` in the same job — the design set is checked by the
+      same gate as the code (`GT-7`)
+- [ ] Artefacts retained on failure: the report, the run manifest, the `run_id`
+      (`N-9`) — a red build nobody can diagnose gets muted, and a muted gate is
+      worse than no gate
+- [ ] The job is **skipped, with a named reason, when no component library is
+      built** — so the repo stays green for a docs-only change
+
+**Tests**
+- [ ] `ST-C6-1` the job runs green on the current scenario set
+- [ ] `ST-C6-2` a **deliberately broken expectation** turns the job red, and the
+      failure message names the scenario, the signal and the expected/actual
+      pair — proving the gate can fail, which is the only property that matters
+
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-4`, `P-10` (the runner image must
+      carry every dependency; a Linux-unavailable one surfaces here first)
+- [ ] naming §3 ticked — exposure: `N-9` (the `run_id` must reach the CI log or
+      a failure cannot be joined to its artefacts)
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+
+**Gate**
+- [ ] `ST-C6-2` green — a gate that has never failed has never been shown to
+      work
 
 ---
 
@@ -1567,13 +1634,14 @@ whether anyone writes a private player, so `GT-8` is measured here.
       overridable, orphan stage flagged (`R-SIM-10`)
 - [ ] `app/gui/pipeline_panel.py` — the per-stage mode toggle performs the
       auto-close undoably and renders the *"computed, not consumed"* badge
-- [ ] `cli/explain.py` — **`sim explain <name>`**, the flagship debugging verb
-      (`DG-2`). Accepts a port, field, layer id, style token, codec name,
+- [ ] `cli/explain.py` — **complete `sim explain <name>`** (seeded `S-B2`,
+      extended `S-C1c`; this is the full form). Accepts a port, field, layer id, style token, codec name,
       run id or error code; prints kind, type+unit, producer stage and mode,
       origin tag, topic presence, schema, which layer draws it, which
       expectation asserts it, and its value at the current tick. Every line
       comes from something already in the system — no new index
-- [ ] `cli/doctor.py` — **`sim doctor`** (`DG-3`): interpreter and install
+- [ ] `cli/doctor.py` — **complete `sim doctor`** (seeded `S-A1`, grown per
+      stage; this is the full form) (`DG-3`): interpreter and install
       mode; which library each `impl:` stem resolves to **and by which
       pattern, listing every directory searched** (`P-5`); which config
       bundle each stage resolves, from where, its hash, **and whether the
@@ -1634,6 +1702,11 @@ convention someone will eventually work around. And `sim batch` must take the
 *same* pipeline file used interactively — if it needs a converted one, `R-SIM-16`
 is already broken.
 
+**And must not run a batch in-process.** `sim batch` isolates **per recording**
+(`R-SIM-19`): a segfault in a library under test would otherwise take the host
+with it, and an overnight run of 500 recordings would die on recording 3 and
+report nothing. Isolation at run granularity costs nothing per tick.
+
 
 Closes `FR-SIM-52`, `NR-SIM-21`. Readers already exist (S-A4); this stage makes
 the codec table symmetric and adds the two verbs that scale it.
@@ -1675,6 +1748,24 @@ the codec table symmetric and adds the two verbs that scale it.
       per recording; a failing recording does not abort the run
 - [ ] `ST-D7-3` the pipeline file used by `sim resim` runs **unmodified** under
       `sim batch` (`R-SIM-16` — the identity is the point)
+- [ ] `UT-D7-7` **a crashing stage is contained**: a stub that segfaults (or
+      exits non-zero) under `sim batch` marks that recording `crash`, captures
+      stderr and the last tick, and **the batch continues** (`R-SIM-19`)
+- [ ] `UT-D7-8` **a hung stage is contained**: a stub that never returns hits
+      its per-`exec()` timeout, is reported as `timeout` — **not** as `crash`
+      and not as `fail` — and the batch continues
+- [ ] `ST-D7-5` a batch of 20 recordings with **one deliberately crashing** and
+      **one deliberately hanging** produces a report with 18 normal outcomes and
+      those two distinctly classified; exit code reflects failure without
+      hiding the successes
+- [ ] `ST-D7-6` **a crash is reproducible**: the recorded recording + pipeline +
+      tick + `run_id` reproduce it in-process on Bench, where a debugger can
+      attach (`R-SIM-19`) — the loop that makes crashes get fixed rather than
+      retried
+- [ ] `ST-D7-7` **campaign sizing, measured** (`NR-SIM-23`): a real campaign over
+      the full recording set records per-recording size, wall-clock per resim,
+      and scaling with `-j`. **The numbers go in this document**, whatever they
+      are — this test exists to produce a fact, not to pass
 
 **Discipline** (every stage)
 - [ ] portability §3 ticked — exposure: `P-4` (an export written on two machines must be byte-identical or it is not evidence), `P-8` (sorted columns and topics)

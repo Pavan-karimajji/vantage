@@ -1,5 +1,5 @@
 # check_doc_invariants
-# generated 2026-07-28T15:11:13
+# generated 2026-07-28T15:24:49
 # platform  win32
 # python    3.14.6
 
@@ -36,6 +36,6 @@ ok    framework-owned scripts name no driving function
 
 DC-8  requirement ids are unique
 --------------------------------
-ok    all 55 requirement ids unique
+ok    all 60 requirement ids unique
 
 RESULT  pass

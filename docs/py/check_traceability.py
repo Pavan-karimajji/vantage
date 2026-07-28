@@ -84,6 +84,7 @@ def main() -> int:
 
     blocks = re.split(r"^### ", req_text, flags=re.M)[1:]
     unverified: list[str] = []
+    no_verifier_yet: list[str] = []
     for block in blocks:
         head = block.split("\n", 1)[0]
         m = re.match(r"((?:FR|NR|CR)-SIM-\d+[a-z]?)", head)
@@ -94,14 +95,26 @@ def main() -> int:
         for tid in sorted(cited):
             if tid not in defined:
                 rep.fail(f"{rid} cites {tid}, which the plan does not define")
-        parked = "**parked**" in block or "**Status.** parked" in block
-        if not cited and not parked:
+        # A requirement legitimately has no verifier when it is not yet
+        # decided (`open`) or deliberately not designed (`parked`). Anything
+        # else without one is a requirement nothing will ever prove.
+        deferred = any(m in block for m in
+                       ("**parked**", "**Status.** parked",
+                        "**`open`**", "**Status.** open", "`open`."))
+        if not cited and not deferred:
             unverified.append(rid)
+        elif not cited:
+            no_verifier_yet.append(rid)
     if unverified:
         for rid in unverified:
-            rep.fail(f"{rid} names no verifying test and is not marked parked")
+            rep.fail(f"{rid} names no verifying test and is not marked open or parked")
     else:
-        rep.ok("every non-parked requirement names at least one existing test")
+        rep.ok("every decided requirement names at least one existing test")
+    # Reported, never silent: an open requirement is a known hole, and a list
+    # of known holes that nobody prints is indistinguishable from no holes.
+    if no_verifier_yet:
+        rep.line(f"  {len(no_verifier_yet)} requirement(s) open/parked, verifier "
+                 f"not written yet: {', '.join(sorted(no_verifier_yet))}")
 
     # -- 2. every test belongs to a stage that exists ---------------------
     rep.heading("2. Test -> stage")

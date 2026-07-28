@@ -1679,6 +1679,116 @@ whole datapool. Useful, large, and not needed until someone asks.
 
 ---
 
+### 5.17 Rate — resolving `OQ-2` before it becomes expensive
+
+`OQ-2` asked whether multi-rate components need more than "one tick grid with a
+growing age". It is answered here rather than left open, because it is a
+**data-model** decision: `Tick`, `Session`, the recorder and every layer
+provider are shaped by it, and discovering the answer at `S-C1c` means reworking
+all four.
+
+Real chains are multi-rate — radar, camera and fusion do not tick together — so
+"they all tick at once" is not a simplification we get to keep.
+
+#### The three options, and why the middle one wins
+
+| | Model | Keeps `Session` an array? | Verdict |
+|---|---|---|---|
+| **A** | One grid, everything executes every tick | yes | **rejected** — forces every stage to the fastest rate, which is neither what the ECU does nor what the recording contains |
+| **B** | One **base grid**, per-stage **declared period**, scheduled execution | **yes** | **chosen** |
+| **C** | Event-driven, no grid, latest-value semantics | **no** | rejected — most general, but it destroys `Session[i]`, and with it O(1) seek and the whole two-pass model (§6.4) |
+
+C is what a real bus does, and that is exactly why it is wrong here: we are not
+a bus, we are a **deterministic re-execution** of one. Giving up the array to
+model a bus faithfully would cost the property the viewer is built on.
+
+#### B, stated precisely
+
+- **A stage declares its period** in its manifest — `period_ns`, beside its
+  ports (`R-SIM-4`). Rate becomes *discovered*, exactly like ports, rather than
+  assumed by the host.
+- **The base grid is derived**, not configured: the greatest common divisor of
+  the declared periods. A period that is not an integer multiple of the base is
+  a **load error naming both numbers** — there is no rounding, because a
+  rounded period accumulates into a drift that looks like an algorithm bug.
+- **A stage executes only on its due ticks.** On every other base tick its
+  outputs are **held**: `updated=False`, and `age_s` grows exactly, from integer
+  nanoseconds.
+- **A stage may declare a phase offset**, so two stages of equal period can be
+  ordered deliberately rather than by declaration accident.
+
+**The consumer contract does not change**, and that is the point: a stage always
+receives its full port set, with some values older than others — which is
+precisely what it sees in the vehicle. `R-SIM-10`'s invariant survives intact:
+*executed* and *injected* still produce the same port set, and a consumer still
+cannot tell which it got.
+
+#### What this buys, and the one thing it deliberately refuses
+
+Recording is unaffected in shape: a message is written **when produced**, so a
+slow topic is simply sparse — which every codec already handles, and which makes
+a recording's own message density the honest record of what ran.
+
+The refusal: **the scheduler is ideal.** Perfect periods, no jitter, no drift.
+That is not naivety, it is where the fidelity belongs — **jitter, latency and
+drop are sensor/bus *error models*** (`R-SIM-9`), injected per scenario and
+therefore *testable*, rather than ambient properties of the runner that would
+make every resim non-reproducible. A tool whose scheduler jitters cannot tell
+you whether your algorithm is sensitive to jitter; one with an ideal scheduler
+and an injectable jitter model can.
+
+---
+
+### 5.18 Fault containment — what happens when the component under test dies
+
+§5.14 classifies *errors the framework can observe*: a bad YAML, a version
+mismatch, an `adasExec` returning failure. It does not cover the failure most
+likely to actually occur when running native code under test:
+
+> **the component crashes the process, or hangs.**
+
+A segfault in a DLL loaded in-process takes the Python host with it. Today that
+would mean an overnight run of 500 recordings dies on recording 3 and reports
+nothing — which fails the mass-scale goal completely, and fails it silently.
+
+#### Isolation is a property of the *face*, not a global setting
+
+| | Default | Why |
+|---|---|---|
+| **Bench** (interactive, one run) | **in-process** | A crash should be immediate, with the stack, and a debugger attachable. Isolation here would hide what you are trying to see |
+| **Campaign / `sim batch`** | **one subprocess per recording** | A crash marks that recording and the batch continues. Isolation at *run* granularity, so the per-tick cost is zero |
+
+Plus an explicit `mode: isolated` per stage, for the interactive case where you
+are bisecting *which* stage crashes and want the others to survive.
+
+#### Three outcomes that must never be merged
+
+A run ends in exactly one of these, and a report that collapses them is a report
+that sends the wrong person to investigate:
+
+| Outcome | Means | Owner |
+|---|---|---|
+| `fail` | an expectation was not met | the algorithm |
+| `crash` | the process died — signal, or non-zero exit | the component's code |
+| `timeout` | `exec()` did not return within its declared budget | the component's code, but a *different* bug, and the more confusing one |
+
+A **per-`exec()` timeout** is required, not optional: a hung DLL is as damaging
+as a crashing one and much harder to diagnose, because the symptom is "the batch
+is still going".
+
+#### A crash must be reproducible, or it will not be fixed
+
+The batch records, for every crash: the recording, the pipeline, the last tick
+reached, the captured stderr, and the `run_id` (`N-9`). Those five are exactly
+what `Open on Bench` (`sim_player.md` §5) needs to reproduce it **in-process**,
+where a debugger can be attached.
+
+That round trip — *crash in Campaign, reproduce on Bench, fix, re-run Campaign* —
+is the loop that makes crashes get fixed rather than retried. Without it, a
+crash in a 500-run report is a line of text nobody can act on.
+
+---
+
 ## 6. How each defect closes
 
 | # | Defect | Closed by |
