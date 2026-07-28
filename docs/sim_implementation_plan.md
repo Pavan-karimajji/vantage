@@ -1025,7 +1025,16 @@ Nothing in `sources/` may name a driving function (`GT-1`).
 
 ### S-C3 — Scenario schema v2 + expectations
 
-Closes **D10**, **D11**.
+**Purpose.** Move a scenario's intent out of prose and into data. Closes
+**D10**, **D11**; builds `R-SIM-8`.
+
+**Must not.** Write an expectation that merely records today's behaviour. An
+expectation transcribed from a comment is checked against **what the comment
+claimed**, not against what the code currently does — otherwise the suite locks
+in the present including its bugs, and every later regression reads as a broken
+test rather than broken code. The migration record (this stage's gate) lists
+every claim that could **not** be expressed, which is the honest output of that
+review.
 
 - [ ] Schema v2 loader + **v1 upgrader** (`sim_scenarios_and_expectations.md` §3.2)
 - [ ] `sensor_models/`, `pipelines/`, `viewpoints.yaml` presets
