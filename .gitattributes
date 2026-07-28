@@ -1,0 +1,23 @@
+# Line endings — sim_portability.md P-4.
+#
+# Every text file in this module is LF in the repository AND LF in the working
+# tree, on Windows and on Linux alike. Without this, a global `core.autocrlf`
+# checks these files out as CRLF on Windows, and then:
+#
+#   - a committed log under docs/py/logs/ differs between a Windows and a Linux
+#     checkout by line ending alone, so the "committed output is the proof"
+#     discipline compares two different files;
+#   - a golden fixture regenerated on the other platform shows a whole-file
+#     diff, which trains people to ignore golden diffs;
+#   - bundle.sha256 (R-SIM-3a) would be platform-dependent, which is worse than
+#     not having a hash at all.
+#
+# `* text=auto eol=lf` normalises on commit and checks out LF everywhere.
+* text=auto eol=lf
+
+# Binary — never touched, never diffed as text.
+*.mcap  binary
+*.png   binary
+*.jpg   binary
+*.mp4   binary
+*.pdf   binary
