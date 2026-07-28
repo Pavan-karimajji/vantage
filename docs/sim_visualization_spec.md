@@ -390,6 +390,45 @@ belongs to an entity, that entity in the BEV. Clicking seeks.
 **Export**: any plot to PNG (via the print renderer, so it is publication-grade)
 or to CSV, both carrying the same provenance sidecar as a BEV snapshot (§9).
 
+### 7.5 Interaction-aware layers — without breaking provider purity
+
+The reference console lets a render context declare that it wants input:
+`MouseListener`, `KeyboardListener`, `WindowListener`. That is how a crosshair
+follows the pointer, and how clicking a raw detection opens its detail. Our
+providers, as specified so far, cannot do either — they are pure functions of a
+tick and would have no way to know where the pointer is.
+
+The resolution is **not** to hand a provider an event callback; that would put
+state and UI knowledge inside the one thing that must have neither. Instead the
+interaction *state* becomes an input:
+
+```python
+@dataclass(frozen=True)
+class Interaction:
+    cursor: Point2D | None      # in the layer's own frame, metres — not pixels
+    selection: tuple[str, ...]  # pick_ids currently selected
+    modifiers: frozenset[str]   # "shift", "ctrl", …
+    toggles: Mapping[str, bool] # per-layer switches the panel exposes
+```
+
+carried on `LayerCtx` (arch §5.3). A provider declares what it reacts to, so the
+panel knows to re-render it when that changes and not otherwise:
+
+```python
+@layer_provider(group="bsd", requires=[...], reacts_to=("cursor", "selection"))
+def bsd_measurement_aid(tick, ctx): ...
+```
+
+The provider stays a **pure function of `(tick, ctx)`** — same inputs, same
+layers — so Scene caching and golden tests are unaffected; the cache key simply
+includes the interaction state for layers that declare a dependency on it. A
+provider that declares nothing is never re-rendered on a mouse move, which is
+also what keeps interaction cheap.
+
+Cursor is delivered **in the layer's frame, in metres**. A provider that wanted
+pixels would be violating `R-SIM-2`; a provider that had to convert them itself
+would need the viewport, which it must not read.
+
 ## 8. Measurement
 
 - **Ruler** — click-drag between two points; shows distance, Δx, Δy and bearing.
@@ -601,6 +640,47 @@ availability from the recording's topic index. Nothing is hardcoded, and a new
 component appears without a GUI change — the same rule
 `df_sim_gui.py`'s dropdowns already follow today.
 
+## 13b. Workspaces — a component ships a default arrangement
+
+§11.1 makes panels dockable and layouts saveable *per user*. That is only half
+of it, and the reference measurement console shows the missing half: **the
+component ships a default arrangement as data**, so opening a recording for the
+first time gives a sensible workspace instead of an empty grid the user has to
+assemble.
+
+Its layout file is a tree of tabs, splitters and named views with ratios. Ours
+is the same idea in the schema language we already use:
+
+```yaml
+# modules/df/sim/workspace.yaml
+workspaces:
+  default:
+    tabs:
+      - name: "BSD"
+        split: {orientation: vertical, ratio: [1, 2]}
+        views:
+          - {panel: bev,      viewpoint: blindspot_l}
+          - {panel: timeline, signals: [df.bsd.outputs.left.warning,
+                                        df.bsd.outputs.right.warning,
+                                        derived.ttc]}
+      - name: "Approach"
+        views: [{panel: bev, viewpoint: forward}]
+```
+
+Rules:
+
+- **A workspace is a default, never a lock.** The user rearranges freely, and
+  their layout persists per (project, pipeline) and wins next time. `Reset
+  layout` returns to the shipped default.
+- **A workspace names panels and viewpoints, never geometry or colours** — it
+  composes things declared elsewhere (viewpoints §4.3, signals §7.4, layers).
+- **It lives with the component** (`modules/<name>/sim/workspace.yaml`), because
+  which arrangement is useful depends on the function — a rear-safety function
+  wants a blind-spot view and warning lanes; a forward function does not.
+  `R-SIM-1` holds: the framework reads the file, it does not know what `BSD` is.
+- **A missing workspace is not an error** — the framework falls back to a single
+  BEV plus the timeline.
+
 ## 14. Keymap
 
 | Key | Action | | Key | Action |
@@ -686,6 +766,9 @@ Everything a state-of-the-art ADAS debug BEV needs, with today's status.
 | 32 | **Plot panels — timeseries / xy / state / distribution** | ❌ | B3 |
 | 33 | **Dockable peer-panel grid; saveable layouts** | ❌ | B3 |
 | 34 | Plot export to PNG / CSV with provenance | ❌ | B4 |
+| 35 | **Component-shipped default workspaces** | ❌ | B3 |
+| 36 | **Interaction-aware layers (cursor / selection / toggles)** | ❌ | B3 |
+| 37 | **Config source override, per artifact kind, user-visible** | ❌ | C5 |
 
 Legend: ✅ works · ⚠ partial or worked around · ❌ absent.
 

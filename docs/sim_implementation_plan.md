@@ -403,6 +403,10 @@ Closes **D7**. Delivers the *scrolling* requirement.
 - [ ] `render/viewer.py` — the Qt window: BEV canvas + docks
 - [ ] `view/layers.py` — layer tree, groups, solo/mute, verbosity level, search,
       per-project persistence
+- [ ] `view/workspace.py` — read `modules/<name>/sim/workspace.yaml`; shipped
+      default, user override, reset (viz §13b)
+- [ ] `Interaction` on `LayerCtx` + `reacts_to=` on the provider decorator;
+      cache key includes interaction only for declaring layers (viz §7.5)
 - [ ] `view/inspector.py` — docked, declared fields, pin, multi-select,
       copy-as-text
 - [ ] `view/timeline.py` — signal lanes (one scale per lane), state lanes with
@@ -440,6 +444,15 @@ Closes **D7**. Delivers the *scrolling* requirement.
 - [ ] `UT-B3-9` playhead is shared — seeking in a plot moves the BEV and the
       timeline to the same tick
 - [ ] `UT-B3-10` panel grid: open/close/split/tab/float; a saved layout restores
+- [ ] `UT-B3-11` a component's `workspace.yaml` opens its declared tabs, splits
+      and ratios; a **missing** workspace falls back to BEV + timeline, no error
+- [ ] `UT-B3-12` the user's own layout wins over the shipped default, and
+      `Reset layout` returns to it
+- [ ] `UT-B3-13` a provider declaring `reacts_to=("cursor",)` receives the
+      cursor **in its own frame, in metres**, and re-renders on cursor change
+- [ ] `UT-B3-14` a provider declaring nothing is **not** re-rendered on a mouse
+      move — interaction stays cheap, and purity holds (same `(tick, ctx)` in,
+      same layers out)
 - [ ] `ST-B3-1` `sim render <recording> --at 7.3 --preset blindspot_l --out
       fig.png` produces a non-blank PNG headlessly
 - [ ] `MC-4` a human confirms scrubbing a long session feels responsive
@@ -651,6 +664,8 @@ Closes **D10**, **D11**.
       records the base hash **and** the override set
 - [ ] `UT-C5-7` an override never writes back to the authoring YAML, and a
       swept run reports provenance as a statement, not a project mismatch
+- [ ] `UT-C5-8` `--config-source` forces each of embedded / library / checkout /
+      explicit path, and the source actually used is reported every time
 - [ ] `ST-C3-1` all 18 scenarios load under v2
 - [ ] `ST-C3-2` `sim check tests/carla_scenarios` runs headless, exits non-zero
       on a deliberately broken expectation

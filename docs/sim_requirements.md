@@ -126,6 +126,35 @@ the one signal address space, see `NR-SIM-8`) and §11.1 (dockable peer-panel
 grid).
 **Verified by.** `UT-B3-6..10`, `UT-B4-3`. **Status.** frozen.
 
+### FR-SIM-15 — A component ships a default workspace
+**Requirement.** Opening a recording should give a sensible arrangement of
+panels, not an empty grid the user assembles by hand.
+**Origin.** 2026-07-28, inferred from the reference measurement console's
+visualization config, whose layout is a tree of tabs, splitters and named views
+with ratios. Our design had per-user saved layouts but no **component-shipped
+default** — half the mechanism.
+**Answered by.** viz §13b — `modules/<name>/sim/workspace.yaml`, composing
+panels + viewpoints + signals declared elsewhere. A default, never a lock; the
+user's own layout wins and `Reset layout` returns to it. `R-SIM-1` holds: the
+framework reads the file and does not know what the component is.
+**Verified by.** `UT-B3-11`, `UT-B3-12`. **Status.** frozen.
+
+### FR-SIM-16 — Layers may react to interaction, without becoming stateful
+**Requirement.** A layer must be able to follow the cursor or highlight a
+selection — a crosshair, a measurement aid, click-a-detection.
+**Origin.** 2026-07-28, inferred from the reference console, where a render
+context declares `MouseListener` / `KeyboardListener` / `WindowListener`. Our
+providers could not do either: they are pure functions of a tick with no way to
+know where the pointer is.
+**Answered by.** viz §7.5 + arch §5.3 — the interaction **state**
+(`cursor` in the layer's own frame in metres, `selection`, `modifiers`,
+`toggles`) is carried on `LayerCtx`, and a provider declares `reacts_to=`. Not
+an event callback, which would put UI state inside the one thing that must have
+none. The provider stays a pure function of `(tick, ctx)`, so caching and golden
+tests are unaffected — the cache key simply includes interaction for layers that
+declare a dependency on it.
+**Verified by.** `UT-B3-13`, `UT-B3-14`. **Status.** frozen.
+
 ### NR-SIM-1 — Visualization is constant regardless of data origin
 **Requirement.** The visualization concept must not change whether data comes
 from mcap, CarMaker, or anything else.
@@ -232,6 +261,18 @@ embedded in recordings. **Copied beside the DLL, never compiled into it** —
 baking it in would kill the edit-a-value-and-re-run calibration loop.
 **Verified by.** `UT-C5-1..5`, `ST-C5-1`. **Status.** frozen. **Reverses**
 plan.md item 19's 2026-07-22 decision — see §6.
+
+### FR-SIM-22 — The config source is overridable and always displayed
+**Requirement.** The embedded → library → checkout resolution order must be a
+default, not a lock.
+**Origin.** 2026-07-28, inferred from the reference console, which exposes
+exactly this as a per-artifact-kind user toggle (*use the description from the
+recording, or from disk*). An embedded bundle can be stale, and testing a new
+calibration against an old recording is a real workflow.
+**Answered by.** Arch §5.6 — `--config-source embedded|library|checkout|<path>`
+and a GUI dropdown; **whichever was used is always displayed**, because a silent
+override recreates the confusion the bundle exists to remove.
+**Verified by.** `UT-C5-8`. **Status.** frozen.
 
 ### CR-SIM-10 — `shared_config` and the bundle hold real runtime config only
 **Requirement.** `shared_config` is for realistic/real-time configuration.

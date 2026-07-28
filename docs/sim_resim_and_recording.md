@@ -342,6 +342,23 @@ The model this architecture assumes until evidence forces otherwise:
 Not designed: sub-tick interpolation, or a component whose rate is not an
 integer divisor of the grid.
 
+**Evidence from the reference stack, recorded rather than acted on.** Its
+components are not driven by a passed `dt` at all: a component subscribes to a
+**cycle-end event from a named data source** (`UdexClientPort::CycleEndEvent`,
+with a cycle id declared identically for the live device and the recorded one),
+and its execution is wired through explicit **control ports** — a `Doit` server
+port to run it and a `Done` client port to signal completion — separate from its
+data ports. That is the industrial answer to multi-rate and event-driven
+components, and it is more machinery than a single `adasExec(dt)` needs today.
+
+Two things worth taking from it now, at zero cost: the cycle id being *the same*
+for the live and the recorded source is precisely our
+executed-and-injected-are-indistinguishable invariant (`R-SIM-10`), expressed at
+the trigger level rather than the data level — which is a useful confirmation
+that the invariant is the right one. And if `OQ-2` ever forces a change, the
+shape to reach for is **a data-driven trigger plus explicit control ports**, not
+a cleverer `dt`.
+
 ---
 
 ## 6. The Session

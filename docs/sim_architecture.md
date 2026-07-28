@@ -478,9 +478,10 @@ def bsd_layers(tick: Tick, ctx: LayerCtx) -> Iterable[Layer]:
 
 @dataclass(frozen=True)
 class LayerCtx:
-    model:   ProjectModel   # resolved configuration — §5.5
-    history: HistoryView    # read-only window over earlier ticks
-    frames:  FrameTree      # static (from model) + dynamic (tick.pose) transforms
+    model:       ProjectModel   # resolved configuration — §5.5
+    history:     HistoryView    # read-only window over earlier ticks
+    frames:      FrameTree      # static (from model) + dynamic (tick.pose) transforms
+    interaction: Interaction    # cursor (in-frame, metres), selection, modifiers, toggles
 ```
 
 **`ctx` carries history, and that is not a weakening of the purity rule.** An
@@ -489,6 +490,14 @@ impossible to write — track history, a target's path, the ego trail the `world
 follow mode explicitly promises (viz §4.2), a velocity trace. Those are geometry
 and therefore belong to a layer provider; the alternative (a renderer that
 remembers) would put state in the one place that must not have it.
+
+`interaction` is the same idea applied to input (viz §7.5). The reference
+console lets a layer declare `MouseListener`/`KeyboardListener`; handing a
+provider an event callback would put UI state inside the one thing that must
+have none, so the interaction **state** is an input instead, and a provider
+declares `reacts_to=` so the cache knows when to re-render it. Cursor arrives in
+the layer's own frame in metres — a provider that needed pixels would be
+breaking `R-SIM-2`.
 
 `HistoryView` is **read-only and windowed**: a provider asks for the last *N*
 ticks or a time span, and cannot write, cannot reach forward, and cannot hold a
@@ -761,7 +770,16 @@ the DLL reads.
 
 `ProjectModel.load()` therefore resolves in this order: the recording's embedded
 bundle → the SUT library's `config/` bundle → the source checkout (development
-fallback, flagged in the HUD as unverified provenance). Until the bundle exists
+fallback, flagged in the HUD as unverified provenance).
+
+**That order is a default, not a lock.** The reference console exposes exactly
+this as a per-artifact-kind user toggle (*use the description from the
+recording, or from disk*), and it is right to: an embedded bundle can be stale,
+and testing a new calibration against an old recording is a real thing people
+need to do. So the source is overridable — `--config-source
+embedded|library|checkout|<path>` on the CLI, a dropdown in the GUI — and
+**whichever was used is always displayed**, because an override that is silent
+recreates the exact confusion the bundle exists to remove. Until the bundle exists
 (stage C5), only the third path is available and the divergence above is real —
 so the viewer states which source it used, from day one.
 
@@ -1426,6 +1444,37 @@ DLL it was not built against.
 The second is a *packaging* of the first, not a fork. Everything in the plan up
 to that point produces the library; one stage packages it. **Windows first;
 Linux is deliberately out of scope for now.**
+
+#### Checked against the reference console (2026-07-28)
+
+The reference measurement stack was examined directly — its shipped player
+folder and the per-component simulation configs several components carry. What
+it confirmed, what it changed, and the one place our design is deliberately
+different:
+
+**Confirmed, no change needed:**
+
+| Reference | Ours |
+|---|---|
+| Component is a plug-in DLL named by path with `$VARIABLE$` substitution | `impl: "dll:{build}/…"` |
+| Exposed ports alias an internal name to a pipeline-visible one | the port manifest *is* the alias table |
+| `MeasFreeze` wired as a service per component | port freezes, derived from the manifest (`R-SIM-6`) |
+| A cycle id declared **identically** for the live device and the recorded one | *executed and injected are indistinguishable* (`R-SIM-10`) — the same invariant, at the trigger level |
+| Player ships per-device plug-in libraries **and** per-device raw-view libraries | codecs (`io/`) and layer providers, both plugged in at run time (§5.15) |
+| Shipped tool lays out as `cfg/ · dll/ · ini/ · data/ · log/` | the S-D5 packaging shape |
+
+**Changed as a result:** component-shipped **workspaces** (viz §13b),
+**interaction-aware layers** (viz §7.5), and a **user-visible config-source
+override** (§5.6). Each closed a real gap.
+
+**Where ours is deliberately different, so it is not "fixed" later.** The
+reference maintains **two visualization configs — online and offline** — because
+some visualizers only exist offline (recorded images have no live counterpart).
+We do not, and must not: a layer declares `requires=[ports]`, so one declaration
+**degrades automatically** when a port is absent — a live run simply has no
+camera-overlay layer, with nothing to maintain and nothing to drift. Two
+hand-maintained variants of the same view is exactly the duplication class
+`D5` came from.
 
 #### The compatibility statement a shipped tool owes its users
 
