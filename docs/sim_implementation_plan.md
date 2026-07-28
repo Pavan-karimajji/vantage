@@ -165,6 +165,9 @@ Each is a checkbox with a date and the name of whoever looked.
       (`docs/shared_config_plan.md` §3.2/§3.3)
 - [ ] `tests/{unit,system,integration,fixtures}/` + `conftest.py`
 - [ ] `scripts/check_invariants.py` — implements GT-1, GT-2, GT-3, GT-6
+- [ ] `core/errors.py` — the three error classes of arch §5.14
+      (`AuthoringError` / `ProvenanceWarning` / `SimFault`); every message names
+      *what*, *where*, and *both ends* of a mismatch
 - [ ] file headers on every `.py` per `R-STYLE-1`, `COMPONENT: SIM` (`R-NAME-6`)
 
 **Tests**
@@ -173,6 +176,8 @@ Each is a checkbox with a date and the name of whoever looked.
       network, no window at import time)
 - [ ] `UT-A1-3` `check_invariants.py` passes on the empty tree, and **fails** on
       a deliberately planted `bsd` identifier (the check is tested, not trusted)
+- [ ] `UT-A1-4` each error class carries file/key/both-ends context and is
+      distinguishable by type — a provenance warning never raises (`NR-SIM-4`)
 - [ ] `ST-A1-1` `pip install -e modules/sim` then `python -c "import adas_sim"`
       from a directory outside the repo
 - [ ] `ST-A1-2` `conan editable add modules/sim` succeeds and `conan graph info`
@@ -232,8 +237,9 @@ Implements `R-SIM-2`. The central IR.
       `sensor:<id>`, `image:<cam>`
 - [ ] `scene/registry.py` — `@layer_provider`, `@inspector_fields`,
       `@timeline_signal`; discovery by import, duplicate id raises
-- [ ] `scene/codec.py` — Scene ⇄ bytes (protobuf or msgpack; protobuf preferred,
-      since a Foxglove `SceneUpdate` renderer wants a schema anyway)
+- [ ] `scene/codec.py` — Scene ⇄ bytes, **protobuf** (arch §5.3: field numbering
+      gives minor-version tolerance for free, and a Foxglove renderer wants the
+      schema anyway); `Scene.version` as `major.minor`
 - [ ] `render/theme.py` — the token table for `dark`/`light`/`print`/`forced`
 - [ ] `render/palette_check.py` — the six-check validator over each categorical
       set, per visualization spec §3.4
@@ -246,6 +252,10 @@ Implements `R-SIM-2`. The central IR.
 - [ ] `UT-A3-5` every token in the table resolves in **all four** themes
 - [ ] `UT-A3-6` registry: duplicate layer id raises naming both providers
 - [ ] `UT-A3-7` registry discovery finds a provider added by import alone
+- [ ] `UT-A3-8` a `Scene` written with a **higher minor** version still reads —
+      unknown fields are skipped, known ones survive (`NR-SIM-3`)
+- [ ] `UT-A3-9` a `Scene` written with a **higher major** version is **refused**
+      with its version named — never partially rendered
 - [ ] `ST-A3-1` `python -m adas_sim.render.palette_check` exits 0 for `dark` and
       `light`; every pair in the 6–8 ΔE band has a **named** secondary encoding
       in the table
@@ -385,6 +395,11 @@ Closes **D7**. Delivers the *scrolling* requirement.
       copy-as-text
 - [ ] `view/timeline.py` — signal lanes (one scale per lane), state lanes with
       labels, event markers, click-to-seek
+- [ ] `view/plots.py` — `timeseries` / `xy` / `state` / `distribution` panels
+      over the **same** `@timeline_signal` declarations (visualization spec §7.4)
+- [ ] `render/viewer.py` — a **dockable peer-panel grid**: BEV, camera, plots,
+      timeline, inspector, layers, pipeline are all panels; layouts saveable per
+      project (visualization spec §11.1)
 - [ ] `view/measure.py` — ruler with snap, range rings, cursor readout with frame
       name, persistent annotations
 - [ ] HUD + the stale/invalid banner (visualization spec §10)
@@ -401,6 +416,14 @@ Closes **D7**. Delivers the *scrolling* requirement.
       anchor within the threshold
 - [ ] `UT-B3-5` stale banner appears exactly when `valid == 0` or
       `ageS > <fn>_MAX_AGE_*`
+- [ ] `UT-B3-6` one `@timeline_signal` declaration feeds **both** the timeline
+      strip and a plot panel — declared once, no second registration
+- [ ] `UT-B3-7` a `timeseries` lane with two signals of different magnitude
+      creates **two lanes**; a single lane with two y-scales is rejected
+- [ ] `UT-B3-8` `xy` panel plots signal-vs-signal; colouring by a third works
+- [ ] `UT-B3-9` playhead is shared — seeking in a plot moves the BEV and the
+      timeline to the same tick
+- [ ] `UT-B3-10` panel grid: open/close/split/tab/float; a saved layout restores
 - [ ] `ST-B3-1` `sim render <recording> --at 7.3 --preset blindspot_l --out
       fig.png` produces a non-blank PNG headlessly
 - [ ] `MC-4` a human confirms scrubbing a long session feels responsive
@@ -415,6 +438,8 @@ Closes **D7**. Delivers the *scrolling* requirement.
       - [ ] selection + docked inspector
       - [ ] timeline signal + state lanes with markers
       - [ ] ruler, range rings, annotations
+      - [ ] plot panels (timeseries / xy / state / distribution), playhead-synced
+      - [ ] dockable peer-panel grid with a saveable layout
       - [ ] snapshot PNG **+ provenance sidecar**, and video export
 
 ### S-B4 — Capture with provenance
@@ -427,6 +452,7 @@ Closes **D7**. Delivers the *scrolling* requirement.
 - [ ] `UT-B4-1` sidecar contains every declared field; unknown provenance is
       recorded as `unknown`, never omitted
 - [ ] `UT-B4-2` video export of a marked interval yields the right frame count
+- [ ] `UT-B4-3` a plot exports to PNG and CSV, both with the provenance sidecar
 - [ ] `ST-B4-1` `sim render` twice at the same tick produces byte-identical PNGs
       (determinism of rendering)
 

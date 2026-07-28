@@ -18,6 +18,12 @@ sensor models.
 
 ## Design documents
 
+**What was actually asked for?**
+[`docs/sim_requirements.md`](docs/sim_requirements.md) — the master requirements
+register: every requirement, question and constraint from the design sessions,
+numbered, with the verbatim phrasing, what answers it and what proves it. When
+the design docs and the plan disagree, that file says what was asked.
+
 **Implementing?** Start at
 [`docs/sim_implementation_plan.md`](docs/sim_implementation_plan.md) — the
 normative, checkbox-tracked stage list with per-stage unit and system tests.
@@ -28,12 +34,13 @@ and §5.8 answers "where does this file go?".
 
 | Doc | Owns |
 |---|---|
+| **[sim_requirements.md](docs/sim_requirements.md)** | **the source** — 37 numbered requirements (`FR-`/`NR-`/`CR-SIM-n`), the decisions register, what is parked and why, open questions |
 | [sim_architecture.md](docs/sim_architecture.md) | vocabulary, the defect analysis, layers, the Scene IR, placement map, config bundle, pipeline depth, extension points |
 | [sim_sil_contract.md](docs/sim_sil_contract.md) | the Python↔C boundary: named port sets, component manifests, pipelines |
 | [sim_visualization_spec.md](docs/sim_visualization_spec.md) | the viewer: Scene primitives, BEV feature set, renderers, themes |
 | [sim_resim_and_recording.md](docs/sim_resim_and_recording.md) | sim / resim / replay, run manifests, determinism, recording model & codecs |
 | [sim_scenarios_and_expectations.md](docs/sim_scenarios_and_expectations.md) | scenario schema, sensor model, expectations-as-data, headless CI |
-| **[sim_implementation_plan.md](docs/sim_implementation_plan.md)** | **the executable plan** — 16 stages, checkboxes, unit + system tests, the `df` retirement inventory, traceability |
+| **[sim_implementation_plan.md](docs/sim_implementation_plan.md)** | **the executable plan** — 20 stages, checkboxes, unit + system tests, the `df` retirement inventory, traceability |
 
 Normative rules: superproject `.claude/rules/sim.md` (`R-SIM-1..14`).
 

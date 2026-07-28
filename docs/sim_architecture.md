@@ -401,6 +401,40 @@ Five properties are doing the work:
   against a stored reference. Rendering becomes reproducible, which is what
   makes document figures and live views provably identical.
 
+#### How the Scene evolves without breaking what already exists
+
+The Scene is serialized — into recordings (§5.11), into golden test fixtures,
+into a Foxglove stream. It is therefore a **wire format**, and it will gain
+fields. Without a stated evolution rule, a recording made today becomes
+unreadable next quarter and goldens churn for reasons nobody can reconstruct.
+
+`Scene` carries a `version` (`major.minor`), and the rule is:
+
+| Change | Version | Old reader sees |
+|---|---|---|
+| new optional field on a prim; new prim type; new style token; new layer | **minor** | ignores what it does not know, renders the rest |
+| a field removed, renamed, or given a new meaning; a unit changed | **major** | **refuses to render** and says why |
+
+Three consequences, all deliberate:
+
+- **`scene/codec.py` uses protobuf, not an ad-hoc encoding.** Protobuf's field
+  numbering gives the additive property for free — an unknown field is skipped
+  rather than fatal — and the same schema is what a Foxglove renderer wants
+  anyway. This is why §5.3's codec entry says protobuf is preferred.
+- **A major bump is a migration, not a flag day.** `scene/codec.py` carries a
+  reader for the previous major; a recording states the version it was written
+  with, and one that cannot be read is **refused with its version named**, never
+  half-rendered.
+- **Goldens record their Scene version.** A major bump requires regenerating
+  them, and that regeneration must appear in the diff with a justification —
+  the same discipline the implementation plan's §3.3 already sets.
+
+**Prefer adding over changing.** The primitive set is closed and deliberately
+small (viz §2) precisely so that a new need is usually met by a new *optional
+field* or a new *style token* — both minor — rather than by redefining
+something. A proposal that needs a major bump should be argued for on that
+basis.
+
 **A layer provider is the entire contribution a function makes to the viewer:**
 
 ```python
@@ -1215,6 +1249,28 @@ change. This is that table, and it is the acceptance test for the whole design.
 If a proposed change would force an entry in the right-hand column, the design
 has been violated — that is the check to apply in review, not a feeling about
 whether something "seems modular".
+
+### 5.14 Failure behaviour — fail at load, warn in the HUD, never substitute
+
+Fifteen places in these documents say something "raises naming both ends" or "is
+a warning, not silence". That is a single policy, stated here once so it is
+implemented once.
+
+| Class | Examples | Behaviour |
+|---|---|---|
+| **Authoring error** — the YAML, pipeline or scenario is wrong | port type mismatch, missing producer, forward reference, `mode: measured` without the recording's topics, a timing predicate with no `within_s`, an unknown style token | **detected at load, never at first tick.** Non-zero exit, message naming the file, the key, and *both ends* of any mismatch |
+| **Provenance warning** — the run can proceed but something is unverified | no config bundle, `provenance: unknown`, explicit config path whose project ≠ the built project, an output buffer that had to grow | run proceeds; surfaced in the **HUD and the run manifest**, not only in a log |
+| **Hard fault** — a bug, or a real failure | ABI version mismatch, `adasExec` returning 0, a codec that cannot decode, a `stub:` stage under a host that cannot run Python | **fails immediately and loudly.** Never degrades, never substitutes a default |
+
+The load-time rule is the load-bearing one: **every validation that can be done
+before tick 0 is done before tick 0.** A 1200-tick run that dies at tick 900
+because a port was misspelled has wasted the run and taught nothing.
+
+The never-substitute rule is the second: a missing config bundle is *reported*,
+not quietly replaced from the source checkout (`R-SIM-3a`); an unknown
+provenance is *reported*, not assumed to be `measured` (`R-SIM-12`). Silent
+substitution is how a viewer ends up confidently showing the wrong thing, which
+is the failure mode this whole architecture exists to prevent.
 
 ---
 

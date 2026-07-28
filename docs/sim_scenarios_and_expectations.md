@@ -11,6 +11,71 @@ and the feature-subfolder layout ([df_carla_scenario_layout.md](../../../docs/df
 
 ---
 
+## 0. Where scenarios live — and why this document is in `modules/sim`
+
+The reasonable question this document's own location provokes: **if the
+scenarios doc is in `sim`, should scenarios be created in `sim` too?**
+
+**No. The schema, the engine and the validation are `sim`'s; the *cases* belong
+to the component that owns their expectations.**
+
+| Thing | Home | Why |
+|---|---|---|
+| The **schema** (§3) — what fields exist, how they parse, the v1 upgrader | `modules/sim` | it is framework, identical for every component |
+| The **engine** — spawning, driving actors, lateral profiles, end conditions | `modules/sim` (`sources/<world>`) | framework; it does not know what is being tested |
+| The **expectation vocabulary** (§5) and its evaluator | `modules/sim` (`check/`) | framework |
+| **This document** | `modules/sim/docs` | it specifies the three above |
+| The **cases** — `bsd_mergein_vlat025.yaml` and its 17 siblings | `modules/df/tests/` | test data for the component under test |
+| **Sensor models, pipelines, viewpoints** | `modules/df/sim/` | that component's contribution |
+
+### Why the cases cannot live in `modules/sim`
+
+Not a preference — a constraint that a check would catch. A scenario's
+`expect:` block names **component ports**:
+
+```yaml
+- {signal: df.bsd.outputs.left.warning, becomes: NORMAL, within_s: 0.300, of: marker.zone_entry_s}
+```
+
+Putting that file under `modules/sim` puts the string `bsd` in the framework,
+which violates `R-SIM-1` and fails global gate `GT-1` on the next run. The rule
+that keeps the framework component-agnostic is the same rule that decides where
+a scenario lives.
+
+The reasoning also predates this rework and is unchanged:
+[df_carla_scenario_architecture.md](../../../docs/df_carla_scenario_architecture.md)
+§1 — *"binding code and test-case data change for different reasons and at
+different rates"*. That split is why 18 scenarios accumulated without rotting
+the bridge, and it is kept.
+
+### What `modules/sim` may hold that looks like a scenario
+
+- **Fixture scenarios for the framework's own tests**, under
+  `modules/sim/tests/fixtures/`. They exercise the schema and the engine, name
+  no function, and assert nothing about any component's behaviour.
+- Nothing else.
+
+### The trigger, if a scenario ever becomes genuinely shared
+
+Once `perception-core` exists, the same world — *"a target converges at
+0.25 m/s"* — may be wanted to test perception **and** `df`. At that point the
+world description is shared while the expectations are not. Three options exist,
+and none is built now:
+
+1. the scenario stays with one component and the other references it by path;
+2. the `scenario:` + `world:` blocks split into a shared case, with each
+   component keeping its own `expect:` overlay;
+3. a small **shared test-data module**, the way `shared_config` was created when
+   `ego_params.yaml` earned a second consumer.
+
+**Option 3 is the shape to reach for** if it comes to that — it is the
+precedent this repo already set, and it keeps `modules/sim` free of function
+names either way. **Trigger:** a second component genuinely needing the same
+world. Not before — the same two-consumer discipline `R-MATH-2` and
+`shared_config` both use.
+
+---
+
 ## 1. What is right today
 
 Worth stating first, because the schema change below is surgical rather than a

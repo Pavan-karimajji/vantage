@@ -269,7 +269,7 @@ except by existing.
 
 ---
 
-## 7. Selection, inspection, timeline
+## 7. Selection, inspection, timeline, plots
 
 ### 7.1 Selection
 
@@ -330,6 +330,45 @@ on colour alone.
 
 ---
 
+### 7.4 Plots — signals as a first-class, pluggable panel
+
+The timeline strip (§7.3) is a *transport companion*: time-indexed, always
+under the BEV, built for "when did this happen". It is **not** an analysis
+surface. Plotting one signal against another — `dist_y` vs `dist_x` for a
+trajectory, TTC vs closing speed, warning state vs ego speed — is a different
+job and gets its own panel type.
+
+**One declaration feeds both.** `@timeline_signal` is really a *signal*
+declaration: a component declares a signal once, in its own `sim/layers/`
+module, and it becomes available to the timeline strip **and** to every plot
+panel. Adding a plottable signal is therefore the same zero-framework-change
+operation as adding a layer (`R-SIM-1`).
+
+| Panel type | Shows | Typical use |
+|---|---|---|
+| `timeseries` | N signals vs time, **one scale per lane** | TTC, ego speed, `observable_fraction` |
+| `xy` | one signal vs another, optionally coloured by a third | a target's path in the ego frame; v vs a |
+| `state` | categorical bands with labels | warning state, scenario enum, `CompState` |
+| `distribution` | a signal's spread over a whole run | onset-time scatter across a scenario set |
+
+Rules, inherited unchanged from the project's charting method:
+
+- **Never two y-scales in one lane.** Two measures of different magnitude get
+  two lanes, or are indexed to a common base. This is the single most common
+  chart mistake and it is banned outright.
+- **`status.*` tokens stay reserved** — a warning band is the same colour
+  whichever function raised it, and never doubles as "series 4".
+- **Colour follows the signal, not its position** in the current selection.
+- A legend whenever a lane carries ≥ 2 series; up to four also direct-labelled
+  at their last point, so identity never depends on colour alone.
+
+**Everything is synced.** The playhead is shared across the BEV, the timeline
+and every plot. Hovering a plot point highlights that tick and, when the signal
+belongs to an entity, that entity in the BEV. Clicking seeks.
+
+**Export**: any plot to PNG (via the print renderer, so it is publication-grade)
+or to CSV, both carrying the same provenance sidecar as a BEV snapshot (§9).
+
 ## 8. Measurement
 
 - **Ruler** — click-drag between two points; shows distance, Δx, Δy and bearing.
@@ -389,12 +428,32 @@ Four, all thin adapters over one Scene.
 
 ### 11.1 Interactive viewer — the primary
 
+**The shell is a dockable panel grid, not "a BEV with extras".** BEV, camera
+view, plots, timeline, inspector, layer tree and the pipeline panel are all
+**peer panels**: any can be opened, closed, split, tabbed or floated, and a
+layout is saveable per project. That is what makes "plug in a camera view, a
+plot, or whatever comes next" a real property rather than a hope — a new panel
+type registers itself the way a layer provider or a signal does, and the shell
+does not change. Two BEV panels at different viewpoint presets, side by side,
+falls out of the same model (and is how an A/B diff is viewed).
+
 Toolkit decision is OD-1 in `sim_architecture.md` §10; the recommendation is Qt
-(PySide6). The renderer draws prims into a widget; the shell provides docks
+(PySide6), whose dock-widget model is precisely this. The renderer draws prims into a widget; the shell provides docks
 (layers, inspector), the scrub bar, the timeline strip, the menu and the
 keymap. Retires both the OpenCV window and the tkinter popups, and with them
 the two-event-loop pumping hack that `../../../docs/df_carla_viz_plan.md` §5.1c documents as
 "the one real gotcha".
+
+**Threading.** Pass 1 (building the `Session` — reading the recording, and in a
+resim executing the SUT) runs on a **worker thread**; the UI thread never blocks
+on it. Progress is reported and the tail is viewable while it fills, so a long
+recording is usable immediately rather than after a freeze. Pass 2 (rendering)
+runs on the UI thread and can afford to, because Scenes are cached and layer
+providers are pure. That purity also leaves per-tick parallelism available
+later without redesign — it is not needed now and is not built.
+
+Components themselves are never executed off that one worker: they are
+single-threaded by deliberate design (`sim_sil_contract.md` §4.2).
 
 Performance budget: 60 fps at 2000 prims; a scrub drag must stay interactive at
 1200 ticks. Achieved by rendering from the Scene rather than recomputing it —
@@ -603,6 +662,9 @@ Everything a state-of-the-art ADAS debug BEV needs, with today's status.
 | 29 | Headless render for docs/CI | ❌ | C3 |
 | 30 | **Pipeline panel: per-stage measured/simulate toggle** | ❌ | C2/D3 |
 | 31 | **Simulated-vs-recorded divergence lane + first differing tick** | ❌ | C2/D3 |
+| 32 | **Plot panels — timeseries / xy / state / distribution** | ❌ | B3 |
+| 33 | **Dockable peer-panel grid; saveable layouts** | ❌ | B3 |
+| 34 | Plot export to PNG / CSV with provenance | ❌ | B4 |
 
 Legend: ✅ works · ⚠ partial or worked around · ❌ absent.
 
