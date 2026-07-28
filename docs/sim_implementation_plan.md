@@ -9,8 +9,12 @@ Design set (read before starting a stage): [sim_architecture.md](sim_architectur
 (master) · [sim_sil_contract.md](sim_sil_contract.md) ·
 [sim_visualization_spec.md](sim_visualization_spec.md) ·
 [sim_resim_and_recording.md](sim_resim_and_recording.md) ·
-[sim_scenarios_and_expectations.md](sim_scenarios_and_expectations.md).
-Normative rules: superproject `.claude/rules/sim.md` (`R-SIM-1..14`).
+[sim_scenarios_and_expectations.md](sim_scenarios_and_expectations.md) ·
+[sim_player.md](sim_player.md) (the application) ·
+**[sim_portability.md](sim_portability.md) — read before writing any code;
+its `P-1`..`P-10` apply to every stage, and its §3 checklist is ticked per
+stage.**
+Normative rules: superproject `.claude/rules/sim.md` (`R-SIM-1..17`).
 Backlog entry: superproject `plan.md` item 25.
 
 ---
@@ -33,7 +37,7 @@ Backlog entry: superproject `plan.md` item 25.
 
 ### Effort shape
 
-21 stages (Phase C's first is split into three sub-stages). A and B touch **no C++ and no DLL at all** — the entire viewer is
+24 stages (Phase C's first is split into three sub-stages). A and B touch **no C++ and no DLL at all** — the entire viewer is
 built and tested against recorded files. C is the only phase that changes
 production C++. E only deletes.
 
@@ -90,6 +94,17 @@ A stage that breaks one is not done.
       (`R-SIM-11`).
 - [ ] **GT-7 — docs match code.** Any behaviour that contradicts a design doc
       is either a code bug or a doc bug; fix one, in the same commit.
+- [ ] **GT-8 — time to first picture, measured.** A developer with **only their
+      own component checked out** gets a rendered run from a recording in
+      **under 10 minutes**, editing nothing in `modules/sim`. Timed on a real
+      newcomer, recorded with the date and the person's role — not asserted
+      (`R-SIM-16`, `FR-SIM-46`). This is the gate that decides whether anyone
+      writes a private player; no feature substitutes for it.
+- [ ] **GT-9 — no logic in the app layer.** `modules/sim/src/adas_sim/cli/` and
+      `…/app/` contain argument parsing, layout and dispatch only. Every
+      capability is reachable in ≲3 lines from a plain script
+      (`Session.open`, `SilComponent`, a provider, a codec) — checked by a test
+      that imports each without touching the CLI (`R-SIM-16`).
 
 ---
 
@@ -146,8 +161,13 @@ work carries ("needs a human watching the window"):
 | MC-2 | Live CARLA bridge still records correctly against a real server | S-C2 |
 | MC-3 | Foxglove Studio renders the exported scene | S-D1 |
 | MC-4 | The Qt shell feels responsive while scrubbing a long session | S-B3 |
+| MC-5 | **The onboarding check** (`FR-SIM-47`) — a developer who has never seen the tool reaches a moving picture in **under two minutes**, unaided, and then explains `measured` vs `simulate` on the pipeline dock **unprompted**. If they cannot, the dock is wrong, not the developer | S-D8 |
 
 Each is a checkbox with a date and the name of whoever looked.
+
+`MC-5` additionally records the **number** (time to moving picture, and whether
+the explanation was correct), because it feeds `GT-8` and a remembered
+impression is not a measurement.
 
 ---
 
@@ -377,6 +397,11 @@ Closes **D7**. Delivers the *scrolling* requirement.
       recording); pass 2 is the renderer
 - [ ] `view/transport.py` — play/pause, step ±1/±10, speed 0.1×–8×, loop marks,
       goto, jump-to-event
+- [ ] `view/transport.py` — **the head** (`R-SIM-17`, arch §6.4): `head_tick`,
+      `is_at_head`; **advance-N** (50/100/200/custom) as one cancellable job with
+      progress; stepping backward sets `review_mode` and stops execution; resume
+      offers **skip-to-head** or **recompute-from-0** (the latter only when
+      `Session.deterministic`), and never a silent continue from a rewound tick
 - [ ] Scene cache keyed by `(tick, layer_selection, theme)`
 
 **Tests**
@@ -389,10 +414,23 @@ Closes **D7**. Delivers the *scrolling* requirement.
 - [ ] `UT-B2-5` cache invalidates on theme change, not on viewport change
 - [ ] `UT-B2-6` **time is exact**: `t_ns` accumulated over 10 000 ticks equals
       the sum of `dt_ns` with zero drift; `t_s` is derived and never fed back
+- [ ] `UT-B2-7` **stepping backward leaves execution mode**: `is_at_head` goes
+      false, `review_mode` true, and the SUT's `exec()` counter does not advance
+      on any further backward step or seek
+- [ ] `UT-B2-8` **resume offers exactly two choices**, and *recompute-from-0* is
+      unavailable when `Session.deterministic` is false (live sim), with a
+      reason string
+- [ ] `UT-B2-9` **no silent continue**: attempting to advance from a rewound
+      tick without choosing raises, rather than calling `exec()` with mismatched
+      state (`R-SIM-17`)
+- [ ] `UT-B2-10` advance-N arithmetic: 50/100/200/custom clamp at the end of the
+      recording; cancel at tick *k* leaves `head_tick == k`
 - [ ] `ST-B2-1` on a ≥1000-tick session, 100 random seeks all return correct data
 - [ ] `ST-B2-2` a full pass 1 over the largest existing recording completes
       within a stated budget, recorded as a number (not asserted as a limit
       until a baseline exists)
+- [ ] `ST-B2-3` **rewind → recompute-from-0 is exact**: recomputing to tick *N*
+      reproduces the original tick *N* byte-for-byte on a deterministic resim
 
 **Gate**
 - [ ] `UT-B2-2` + `ST-B2-1` green; the "forward only, no rewind" caveat is
@@ -501,7 +539,9 @@ until Phase E.
 **C1**; they land separately because each is independently verifiable.)*
 
 - [ ] `interfaces/include/adas/adas_sil_abi.h` — `AdasPort`, `AdasPortSet`, the
-      five exports (`sim_sil_contract.md` §3.1)
+      five exports (`sim_sil_contract.md` §3.1). **This is where `R-SIM-4` is
+      built**: ports are named and discovered, so adding a function adds a
+      manifest line and never an ABI parameter. `D1` closes here or nowhere
 - [ ] `interfaces/proto/Adas__Sil/component_manifest.proto` — `ComponentManifest`
       incl. `project`, `config_bundle_sha256`, `descriptor_set`
 - [ ] `R-NAME-4` / `R-STYLE-1` headers on both
@@ -642,7 +682,10 @@ Closes **D10**, **D11**.
 - [ ] Schema v2 loader + **v1 upgrader** (`sim_scenarios_and_expectations.md` §3.2)
 - [ ] `sensor_models/`, `pipelines/`, `viewpoints.yaml` presets
 - [ ] `check/expect.py` — the predicate vocabulary (§5.2), `markers:` with
-      `from:` provenance
+      `from:` provenance. **This is where `R-SIM-8` is built**: expectations
+      are data from one source, every timing predicate carries an explicit
+      `within_s`, and the same block drives the marker, `sim check` and the
+      report — never three copies
 - [ ] `check/report.py` — `report.md` / `report.json`
 - [ ] `app/cli.py` — `sim check`
 - [ ] Timeline renders expectation windows (visualization spec §7.3)
@@ -739,6 +782,11 @@ Closes **D10**, **D11**.
 - [ ] `ST-D1-1` a written session recording opens in Foxglove Studio and shows
       the scene with working layer toggles and seek → `MC-3`
 
+**Gate**
+- [ ] `ST-D1-1` green — the interop claim (`R-SIM-13`: visualization is
+      identical regardless of origin) is demonstrated in a foreign viewer,
+      not argued from the Scene's shape
+
 ### S-D2 — matplotlib renderer + `bsdviz` figure driver migration
 
 - [ ] `render/matplotlib.py` — `print` theme, vector output, the `bev_axes`
@@ -752,6 +800,10 @@ Closes **D10**, **D11**.
       across two runs
 - [ ] `ST-D2-2` a figure and the live view of the same geometry use the same
       token → same semantic appearance (**D5** closed)
+
+**Gate**
+- [ ] `ST-D2-1` + `ST-D2-2` green — one Scene, two renderers, one palette.
+      A figure that disagrees with the live view is `D5` reopening
 
 ### S-D3 — GUI on run manifests
 
@@ -770,6 +822,11 @@ Closes **D10**, **D11**.
 - [ ] `ST-D3-1` every run in this plan is launchable from the GUI with no
       hand-typed command
 
+**Gate**
+- [ ] `UT-D3-4` + `ST-D3-1` green — the GUI produces manifests the CLI
+      accepts, which is what keeps them one engine (`R-SIM-16`) rather than
+      two paths that drift
+
 ### S-D4 — Perception readiness
 
 Gated on `perception-core` existing. Everything before it is additive.
@@ -784,6 +841,11 @@ Gated on `perception-core` existing. Everything before it is additive.
       views come from the same prim
 - [ ] `ST-D4-1` a two-component pipeline runs and ground truth vs perception is
       visible side by side
+
+**Gate**
+- [ ] `ST-D4-1` green — two components in one pipeline, with the downstream
+      component's entry **byte-identical** to its single-component form
+      (`R-SIM-10`'s central invariant, first demonstrated here)
 
 ### S-D5 — Package the player (`adas-sim.exe`)
 
@@ -819,6 +881,174 @@ Turns the library into the application of arch §5.15. Windows only.
 **Gate**
 - [ ] `ST-D5-1` + `ST-D5-2` green — the player is genuinely component-agnostic
       and genuinely standalone, both demonstrated rather than argued
+
+### S-D6 — Developer ergonomics: per-port overrides, `sim probe`, severed chain
+
+Closes `FR-SIM-44`, `FR-SIM-45`, `FR-SIM-46`. This is the stage that decides
+whether anyone writes a private player, so `GT-8` is measured here.
+
+- [ ] `contracts/override.py` — the **closed** verb set `const` · `hold` ·
+      `offset` · `scale`, resolved at a port or a field path
+      (`egoDyn.vx`, `objects[*].pos_x`), applied between wiring and `exec()`
+- [ ] Overrides land in the run manifest; the affected topic is tagged
+      `origin: overridden` (`R-SIM-12`) and badged in the HUD (`R-SIM-15`)
+- [ ] `cli/probe.py` — `sim probe <lib>`: load, read `adasManifest`, print the
+      port set, types and schema names. **No mapping step, ever** (arch §5.16.1)
+- [ ] `contracts/pipeline.py` — **severed-chain detection**: a `measured` stage
+      between two `simulate` stages on one data path; auto-close on set,
+      overridable, orphan stage flagged (`R-SIM-10`)
+- [ ] `app/gui/pipeline_panel.py` — the per-stage mode toggle performs the
+      auto-close undoably and renders the *"computed, not consumed"* badge
+- [ ] `impl: "legacy:<lib>"` — **scope only**: the adapter's config shape is
+      specified, not implemented. No such binary exists yet; implementing it
+      before one does would be speculative
+
+**Tests**
+- [ ] `UT-D6-1` each of the four verbs applies correctly at a port and at a
+      field path; a fifth verb name is a **load error**, not a warning
+- [ ] `UT-D6-2` an override appears in the run manifest and tags its topic
+- [ ] `UT-D6-3` `sim probe` on `InProcessSilComponent` prints the same port set
+      the pipeline resolves — one source, no second description
+- [ ] `UT-D6-4` severed chain detected: `simulate → measured → simulate` on one
+      path is found; `off → measured → simulate` is **not** flagged
+- [ ] `UT-D6-5` auto-close flips only the intervening stages, and undo restores
+      the exact prior modes
+- [ ] `UT-D6-6` forcing the gap open is permitted and yields exactly one
+      orphan-stage warning naming the stage
+- [ ] `ST-D6-1` **day one, end to end**: a fresh component library with only a
+      manifest is probed, wired into a five-line pipeline, run against
+      `tiny.mcap`, and its outputs appear in a recording — **no edit anywhere in
+      `modules/sim`** (`FR-SIM-46`)
+- [ ] `ST-D6-2` a pipeline with overrides resims reproducibly: two runs produce
+      byte-identical outputs and identical manifests
+
+**Gate**
+- [ ] `ST-D6-1` green **and `GT-8` measured and recorded** — the number goes in
+      this document, whatever it is
+
+### S-D7 — Writers, exports, `sim convert`, `sim batch`
+
+Closes `FR-SIM-52`, `NR-SIM-21`. Readers already exist (S-A4); this stage makes
+the codec table symmetric and adds the two verbs that scale it.
+
+- [ ] `io/base.py` — the writer half of the codec protocol; capability flags
+      extended with `round_trips` and `write_only`
+- [ ] `io/mcap.py` — writer path (already partly present via the recorder)
+- [ ] `io/csv.py` — **write-only** export codec: port selection by manifest
+      name, one row per tick, one column per leaf field, `log_time_ns` plus
+      optional `tick_index`/`scenario_time_s`, `<port>.age_s` for multi-rate,
+      `#`-prefixed provenance preamble
+- [ ] `cli/convert.py` — `sim convert <in> <out>`, recording → recording, refused
+      when either side lacks `round_trips`
+- [ ] `cli/export.py` — `sim export <in> <out> --ports …`, honouring
+      `on_missing: error|blank|omit-column` (default `error`)
+- [ ] The loader **refuses an export as a resim input by capability**, naming
+      the file and the missing capability (`R-SIM-14`)
+- [ ] `cli/batch.py` — `sim batch <recordings…|glob|list.txt> --pipeline P
+      [--report] [-j N]`: the **same pipeline file** used interactively, one
+      report, per-recording pass/fail, continue-on-failure
+
+**Tests**
+- [ ] `UT-D7-1` a port selection exports exactly the named leaf columns, in
+      declared order
+- [ ] `UT-D7-2` `log_time_ns` in the export matches the recording tick-for-tick
+- [ ] `UT-D7-3` a held multi-rate value is distinguishable from a blank via
+      `age_s`; a missing port errors by default and blanks only when asked
+- [ ] `UT-D7-4` origin tags and override marks survive into the export header
+- [ ] `UT-D7-5` a `write_only` codec is **refused** as a resim input, naming the
+      capability
+- [ ] `UT-D7-6` `sim convert` round-trips `tiny.mcap` → other → back with
+      identical topics, schemas, provenance and message bytes
+- [ ] `ST-D7-1` `sim export` on a real recording opens in a spreadsheet and in
+      `pandas.read_csv` with the preamble skipped by its comment character
+- [ ] `ST-D7-2` `sim batch` over ≥20 recordings produces one report with a row
+      per recording; a failing recording does not abort the run
+- [ ] `ST-D7-3` the pipeline file used by `sim resim` runs **unmodified** under
+      `sim batch` (`R-SIM-16` — the identity is the point)
+
+**Gate**
+- [ ] `UT-D7-5` + `ST-D7-2` + `ST-D7-3` green — an export can never be mistaken
+      for a recording, and scale uses the developer's own file
+
+### S-D8 — **Vantage**: the shell, and the Bench / Campaign workspaces
+
+Closes `FR-SIM-47`, `FR-SIM-48`. Everything before this stage builds capability;
+this stage decides whether anyone meets it. Spec:
+[sim_player.md](sim_player.md).
+
+**Shell**
+- [ ] `app/shell/window.py` — one window, six regions (player §3): transport,
+      pipeline dock, centre panel grid, layers dock, timeline, status
+- [ ] `app/shell/workspace.py` — `Workspace` = a dock arrangement + a
+      permission set. **Switching does not reload the engine and does not touch
+      the open pipeline file** (`R-SIM-16` made visible in one gesture)
+- [ ] `app/shell/palette.py` — `Ctrl+K` command palette listing every action,
+      including those of closed docks. This is what lets `L-1` hold without
+      hiding features
+- [ ] `app/shell/startpage.py` — recent files, `Open recording…`,
+      `Probe a library…`, three shipped sample pipelines. **No form, ever**
+
+**Bench workspace**
+- [ ] Per-port override affordance in the pipeline dock; an overridden port is
+      amber **in every view it appears in** (`R-SIM-15`)
+- [ ] Mode toggle with visible severed-chain auto-close and a one-line undo bar
+      (`R-SIM-10`)
+- [ ] `app/panels/probe.py` — drop a library on the window, see its ports. The
+      day-one screen (arch §5.16.1)
+- [ ] `app/panels/console.py` — Python console with `session`, `pipeline`,
+      `scene` bound. The pressure valve that prevents a private fork (`GT-9`)
+
+**Campaign workspace**
+- [ ] Recording-set list + results table, driven by `sim batch` (S-D7)
+- [ ] **`Open on Bench`** on any result row — that recording, that pipeline,
+      at the failing tick. No conversion, no re-authoring
+- [ ] The equivalent `sim batch` invocation is shown and copyable
+- [ ] Locked: no overrides, no live mode toggles, no console; editing anything
+      offers to open it on the Bench
+
+**Lean limits, as code**
+- [ ] `L-1` ≤ 12 controls visible at rest in the default Bench layout
+- [ ] `L-2` ≤ 3 steps from launch to a moving picture
+- [ ] `L-3` ≤ 4 concepts required before first use; every other concept surfaces
+      **only when abnormal** — provenance when a port is not `simulated`, the
+      bundle when missing, codec capabilities inside a degrade error
+
+**Tests**
+- [ ] `UT-D8-1` switching workspace preserves the loaded `Session`, the pipeline
+      object **and the pipeline file's bytes** (asserted on the file, not the model)
+- [ ] `UT-D8-2` Campaign refuses an override and offers the Bench instead;
+      the refusal names the workspace, not a generic "not permitted"
+- [ ] `UT-D8-3` `Open on Bench` reconstructs recording + pipeline + tick, and
+      the reconstructed pipeline is **byte-identical** to the Campaign's
+- [ ] `UT-D8-4` the shown `sim batch` invocation, run verbatim, reproduces the
+      Campaign's result
+- [ ] `UT-D8-5` `L-1`: the default Bench layout exposes ≤ 12 enabled controls
+      (counted from the widget tree, offscreen)
+- [ ] `UT-D8-6` `L-3`: with a fully normal run, no provenance badge, bundle
+      warning or capability notice is present anywhere in the widget tree
+- [ ] `UT-D8-7` a pipeline with one unresolvable stage still renders the
+      resolvable ones, with the broken stage badged — degrade visibly, never
+      refuse to draw
+- [ ] `UT-D8-9` **the product and workspace names stay in `app/`**: no
+      `Vantage`/`Bench`/`Campaign` token anywhere in `adas_sim/` outside
+      `app/` (AST + text scan). The engine must not know which workspace is
+      open — the same discipline `GT-1` applies to function names
+      (`FR-SIM-48`)
+- [ ] `UT-D8-8` no failure message consists only of an identifier; every one
+      names expected, found and where it looked (§5.14's message contract),
+      asserted over a table of induced failures
+- [ ] `ST-D8-1` **portability**: the whole suite green on Linux with
+      `QT_QPA_PLATFORM=offscreen` and no component built, skipping exactly the
+      integration tests that need a library and naming why
+      ([sim_portability.md](sim_portability.md) §4)
+- [ ] `ST-D8-2` start page → open → play, driven programmatically, in ≤ 3 user
+      actions (`L-2`)
+- [ ] `MC-5` run and its **number recorded in this document**
+
+**Gate**
+- [ ] `UT-D8-1` + `UT-D8-3` + `ST-D8-1` green, **and `MC-5` recorded with its
+      measured time** — the workspace split is real only if one pipeline file
+      survives it, and the tool is lean only if a stranger proved it
 
 ---
 
@@ -868,6 +1098,12 @@ gate that proves the replacement works first.
 - [ ] `ST-E1-4` GT-4 — `df_tests` unchanged and green (this is a Python-only
       deletion, exactly as the 2026-07-13 relocation proved)
 
+**Gate**
+- [ ] `ST-E1-1..4` green **and every replacement stage named in the table above
+      already ticked** — `NR-SIM-30` is the rule this gate enforces: nothing is
+      deleted before its replacement is proven, and the table's right-hand
+      column is the proof obligation, checked row by row
+
 ### S-E2 — Retire the old ABI
 
 - [ ] `sil_host/main.cpp` moves to the generic ABI
@@ -880,6 +1116,11 @@ gate that proves the replacement works first.
 - [ ] `ST-E2-2` `sil_host` runs end to end on the generic ABI
 - [ ] `ST-E2-3` GT-4 green; `adasAbiVersion()` still `1` (adding functions never
       bumped it — the whole point)
+
+**Gate**
+- [ ] `ST-E2-1..3` green — the positional ABI is gone and `D1` cannot recur.
+      `adasAbiVersion()` still `1` after every function added since S-C1a is
+      the proof that adding a function never touched the ABI
 
 ### S-E3 — Final invariant gates
 
@@ -924,6 +1165,12 @@ gate that proves the replacement works first.
 | R22 | `df` cleaned up | S-E1 | `ST-E1-1..4` |
 | R23 | Everything thoroughly tested | S-E3 | `ST-E3-2` |
 | R24 | **A player application, not only a library** (`FR-SIM-70`) | S-D5 | `ST-D5-1`, `ST-D5-2` |
+| R25 | **Step-wise execution + the head** (`FR-SIM-17`) | S-B2 | `UT-B2-7..10`, `ST-B2-3` |
+| R26 | **Setting `sim` closes the chain** (`FR-SIM-44`) | S-D6 | `UT-D6-4..6` |
+| R27 | **Developer can tweak individual inputs** (`FR-SIM-45`) | S-D6 | `UT-D6-1/2`, `ST-D6-2` |
+| R28 | **One tool, not two; no onboarding handoff** (`FR-SIM-46`) | S-D6 | `GT-8`, `GT-9`, `ST-D6-1` |
+| R29 | **Writers + export dumps with port selection** (`FR-SIM-52`) | S-D7 | `UT-D7-1..5`, `ST-D7-1` |
+| R30 | **Mass-scale runs expressible** (`NR-SIM-21`) | S-D7 | `ST-D7-2`, `ST-D7-3` |
 
 Defects `D1`–`D11` (architecture §3) map through architecture §6; each closes at
 the stage named there.
@@ -941,3 +1188,8 @@ the stage named there.
 | **Phase C touches production C++** | Every C++ change is additive until S-E2; both ABIs live and are tested against each other. |
 | **No CI** | The test command is the gate and is cited in each commit. Wiring CI is `plan.md` item 12, unblocked by this work. |
 | **`modules/sim` unpublished** | Until `adas-sim` is published, a checkout is needed; that is the same interim state `interfaces` and `shared_config` already live in. |
+
+**Gate**
+- [ ] `ST-E3-1` + `ST-E3-2` green **and every global gate `GT-1..GT-9`
+      ticked** — including `GT-8`'s measured number, which is the only one a
+      green suite cannot substitute for

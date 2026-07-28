@@ -33,3 +33,7 @@ Thumbs.db
 *.mcap
 *.png
 *.mp4
+
+# Machine-local pointer to a reference tool installation (DC-2: no absolute
+# paths in the repo). See docs/py/_common.py:reference_tool_root().
+docs/py/reference_tool_path.txt

@@ -95,8 +95,10 @@ asker did not have the list.
 **Origin.** 2026-07-27: *"features of 2d bev also to be checked, scrolling
 snapshots, blah blah all that are needed"*, and *"I am not in a stage to put of
 this well, i think you can."*
-**Answered by.** viz §16 — the 34-row checklist, produced as the deliverable.
-**Verified by.** each row's own stage. **Status.** frozen.
+**Answered by.** viz §16 — the checklist, produced as the deliverable.
+**Verified by.** `DC-4` (every checklist row names the stage that delivers it,
+so no row can be quietly dropped) plus each row's own stage gate.
+**Status.** frozen.
 
 ### FR-SIM-12 — Time transport ("scrolling")
 **Requirement.** Scrub through a run.
@@ -233,6 +235,70 @@ resolver, five consumers (timeline, plots, HUD, expectations, diff). Raw port
 fields need no registration because the manifest declares their type; only
 computed signals register, with `@signal`. Anything plottable is assertable.
 **Verified by.** `UT-B3-6`, `UT-C3-6`. **Status.** frozen.
+
+### FR-SIM-47 — The UI and the concept must be lean, and not frightening
+**Requirement.** A developer looking at the tool should understand what to do,
+and not be put off by the apparent size of it.
+**Origin.** 2026-07-28: *"UI and concept should be so lean that developer by
+looking at it should understand what to do and not get scared whats all of
+this."*
+**Answered by.** [sim_player.md](sim_player.md) §2 and §6, which turn this into
+three measurable limits rather than a sentiment: **L-1** at most 12 controls
+visible at rest, **L-2** at most 3 steps from launch to a moving picture,
+**L-3** at most 4 concepts before first use (*recording, pipeline, stage,
+layer*). The design set contains roughly forty concepts; the other thirty-six
+are revealed **only when something is abnormal** — provenance tags appear when a
+port is not `simulated`, the config bundle appears when it is missing, codec
+capabilities appear inside the error a degrade produces. The rule is *a concept
+earns screen space by being wrong.*
+**Verified by.** `MC-5` (a newcomer reaches a moving picture in under two
+minutes with no instructions, then explains `measured` vs `simulate`
+unprompted), `UT-D8-5` (control count in the default layout), `UT-D8-6`
+(a fully normal run shows no provenance, bundle or capability notice at
+all), `ST-D8-2` (three actions to a moving picture), `GT-8`.
+**Status.** frozen.
+
+### FR-SIM-48 — Name the player and its two workspaces
+**Requirement.** Good names for the master player and for the two stages inside
+it — one for project-scale simulation, one for the developer.
+**Origin.** 2026-07-28: *"algo give good names for master player and also for 2
+stages inside that one one for sim (ltmts) and other for developer one (ltmb).
+or you are free to choose whatever type of segregation and naming is expected."*
+**Answered by.** [sim_player.md](sim_player.md) §1 — **Vantage** (the
+application), **Bench** (developer workspace, was `ltMB`), **Campaign**
+(project workspace, was `ltMTS`). Plain English on purpose: `R-SIM-16`'s claim
+is that these are two faces of one product, and two invented words would teach
+the opposite. The product name is deliberately **not** the module, package or
+import name — `modules/sim`, `adas-sim` and the `sim` CLI are unchanged, so a
+rename stays a marketing change rather than a refactor. A workspace is a mode
+of one window, switched with one key, **with the open pipeline file surviving
+the switch untouched**.
+**Verified by.** `UT-D8-9` (no product or workspace token anywhere in
+`adas_sim/` outside `app/`), `UT-D8-1` (the pipeline file's bytes survive a
+workspace switch), `GT-9`.
+**Status.** frozen.
+
+### FR-SIM-17 — Step-wise execution: play, pause, step, advance-N
+**Requirement.** Run the algorithm step-wise — start, pause, one step forward,
+one step backward (which stops the simulation, because backward is not
+applicable), and run-forward by a chosen count: 50, 100, 200 or custom.
+Reference: the measurement application's transport toolbar.
+**Origin.** 2026-07-28: *"speaking of running algorithm in step wise it would be
+good to have start, pause, one step forward, one step backward (this should stop
+simulation because backward isn't applicable), run too forward where he can
+choose 50,100,200, custom steps to advance the recording simulation steps."*
+**Answered by.** `R-SIM-17` + viz §5/§5.1/§5.2 + arch §6.4 *"The head"*. The
+asker's own caveat is the design: **backward is not the mirror of forward.**
+Forward calls `exec()`; backward would need to undo it, and the SUT holds state
+the ABI does not expose — so stepping back **leaves execution mode and enters
+review**, where everything already computed stays freely scrubbable via the
+two-pass Session. Resuming forward offers exactly two named choices — *skip to
+head* or *recompute from tick 0* (deterministic resim only) — and never the
+third one a naive implementation reaches for, silently continuing from the
+rewound position so the SUT sees tick 400's stimulus with tick 900's state.
+Advance-N runs as one cancellable job with progress. Snapshot-based true rewind
+(`adasSaveState`/`adasRestoreState`) is **parked** — no requirement needs it.
+**Verified by.** `UT-B2-7..10`, `ST-B2-3`. **Status.** frozen.
 
 ---
 
@@ -435,6 +501,83 @@ file cannot support; `mode: measured` against a recording lacking that stage's
 outputs is a **startup error**, never a partial injection.
 **Verified by.** `UT-C1c-10`, `UT-D3-2`. **Status.** frozen.
 
+### CR-SIM-22 — Expectations are data, from one source
+**Requirement.** A scenario's acceptance criteria must be machine-readable and
+exist exactly once — not restated in a comment, a test and a report.
+**Origin.** **Derived**, from defect `D11` (architecture §3): today a scenario's
+intent lives in prose at the top of its file, so nothing can check it, the
+timeline cannot mark it, and a report has to be written by hand. Nobody asked
+for this in words; it is the constraint that makes `NR-SIM-31`'s "thoroughly
+tested" mean anything for scenarios.
+**Answered by.** `R-SIM-8` — the `expect:` block is the single source, and the
+same block drives the timeline marker, the headless `sim check` and the report.
+Every timing predicate carries an explicit `within_s` (there is no default
+tolerance, because a silent default is how a timing test stops testing timing),
+and an anchor derived offline records `from:` provenance, matching the
+calibration discipline.
+**Verified by.** `UT-C3-2` (each predicate), `UT-C3-3`, `ST-C3-1`.
+**Status.** frozen.
+
+### FR-SIM-44 — Setting a stage to `sim` must close the chain automatically
+**Requirement.** On the UI where per-component measured/simulated is set,
+selecting two stages as simulated must not leave an intervening stage measured —
+the intervening stage should become simulated by itself.
+**Origin.** 2026-07-28: *"on the ui itself where I am setting which component
+should have meas and which should be sim, there itself if I set df and rsp as sim
+then em shouldnt get set as meas it should automatically be sim is what I mean.
+do you think its a wrong approach."*
+**Answered by.** Arch §5.10 *"The severed chain"* + `R-SIM-10`. **Not a wrong
+approach — it is right, with one refinement.** The mechanism stays as designed
+(execution never propagates upstream; the only check is per-port resolvability),
+but the *default* changes: a `measured` stage between two `simulate` stages is a
+**severed chain** — the upstream stage computes into nothing, so the toggle
+lies — and the GUI and loader close it by default. The override remains legal,
+because holding a downstream stage on known-good input while watching an
+upstream stage's divergence is a real setup; the orphaned stage is then badged
+*"computed, not consumed"*. Default correct, escape hatch visible, never silent.
+**Verified by.** `UT-D6-4`, `UT-D6-5`, `UT-D6-6`. **Status.** frozen.
+
+### FR-SIM-45 — A developer must be able to tweak individual inputs
+**Requirement.** The failure being designed against: developers could not
+flexibly tweak the inputs they wanted for a run, which is what drove them to
+private tooling.
+**Origin.** 2026-07-28: *"the problem we faced in previous firm is developer
+couldn't flexibly tweak the inputs he want to execute simulation, it could be
+players over configuration or something I dont know. but i dont want this tool to
+end up in this way."*
+**Answered by.** `R-SIM-15` + arch §5.10 *"Per-port overrides"* — `const`,
+`hold`, `offset`, `scale`, at a port or a field path, declared in the pipeline
+and recorded in the run manifest. **The verb list is closed**: the reference
+console's per-argument glob-and-substitute mapping rules are what an open
+expression grammar becomes, and that is the over-configuration this requirement
+names. If four verbs are insufficient the answer is a `stub:` stage — real
+code, in a file, reviewable — not a fifth verb.
+**Verified by.** `UT-D6-1`, `UT-D6-2`, `ST-D6-2`. **Status.** frozen.
+
+### FR-SIM-46 — One tool, not a developer tool and a project tool
+**Requirement.** Whether the project-scale player and the developer-facing
+DLL-resim/wiring tool are designed independently or as common tooling; and
+whether a new component should first be exercised through a DLL-wrapper mapping,
+then handed to a platform team for integration.
+**Origin.** 2026-07-28: *"Now I dont know if the player (for now lets name its as
+ltMTS) and ltMB (matchbox) should be independently designed or we can have a
+common tooling for this"*; *"the core aim is to ship everything as a single
+entity"*; *"tomorrow if a candidate designed new component with a dll … use ltmb
+tool dll wrapper concept to map the ports easily … once its clear later he will
+give requirement for sim guys to incorporate that component."*
+**Answered by.** Arch §5.16 — **one engine, two faces.** The two personas are
+real; two engines are not, because they would give two namespaces, two project
+schemas and a developer validating something other than what the project runs,
+destroying the batch face's audit value. The developer's pipeline file *is* the
+input to the mass run. On onboarding: the DLL-wrapper mapping step **must not
+exist for components we own** — `adasManifest` makes the port set discoverable
+(`sim probe`), and hand-mapping would create a second description free to drift
+from the manifest; the handoff to a platform team is itself the queue that
+causes private players. `impl: "legacy:<lib>"` keeps the wrapper concept for
+binaries that genuinely cannot carry a manifest.
+**Verified by.** `GT-8`, `GT-9`, `UT-D6-3`, `ST-D6-1`, `ST-D7-3`.
+**Status.** frozen.
+
 ---
 
 ## 6. Recording, formats and foreign simulators
@@ -465,7 +608,13 @@ be a test run with an exe right."*
 a normal test exe and writes its native results; `adas_sim.io.carmaker` converts
 them to a recording; everything downstream is unchanged. This is §5.11's point
 applied: production and consumption joined by a file.
-**Verified by.** plan.md item 4. **Status.** frozen.
+**Verified by.** the codec contract itself — `UT-A4-7` proves a new codec is
+~4 methods and that `Session`/viewer/expectations never learn a format exists,
+which is the whole of what CarMaker needs. **The CarMaker codec is designed,
+not scheduled**: no stage builds it, because no CarMaker results file exists
+to test against. **Status.** frozen (design); **deferred** (build) — trigger:
+the first results file landing in the repo, then one stage on the S-A4
+template.
 
 ### FR-SIM-51 — CarMaker closed loop
 **Requirement.** Component-level and full-chain simulation *inside* CarMaker.
@@ -477,6 +626,41 @@ single `SilComponent`, so a foreign host links one thing and gets whatever depth
 the pipeline YAML declares.
 **Status.** **parked** — not designed. Every run today is open-loop read-only by
 deliberate choice, and plan.md item 6 (actuation + arbiter) does not exist yet.
+
+### FR-SIM-52 — Writers and export dumps, with port selection and timestamps
+**Requirement.** Symmetrically with readers, writers that emit specific formats;
+for a given format the user chooses **which ports** are frozen into the output,
+with proper timestamping.
+**Origin.** 2026-07-28: *"we also need output export dump concept just like
+reader we also need writers that writes in specific formats, there also for
+suppose if its csv (just example) you should give which ports we want to freeze
+in the csv or mcap or whatever with proper timestamping."*
+**Answered by.** `R-SIM-14` (extended) + recording doc §7.1–7.3. Readers and
+writers are the same codec table, which makes `sim convert` a consequence rather
+than a feature. **A recording and an export are separated deliberately:** a
+recording round-trips and can be resimmed; an export (CSV, Parquet, mp4) is
+lossy and terminal, selects ports by their manifest names (`R-SIM-4` — no third
+vocabulary), flattens to one row per tick, and carries the recording's own
+`log_time_ns` timebase plus optional `tick_index`/`scenario_time_s`. Origin tags
+(`R-SIM-12`) and override marks (`R-SIM-15`) survive into the export header, a
+missing port is an error by default, and a held multi-rate value is
+distinguishable from a blank via `<port>.age_s`. A write-only codec is refused
+as a resim input by **capability**, not convention.
+**Verified by.** `UT-D7-1..5`, `ST-D7-1`. **Status.** frozen.
+
+### NR-SIM-21 — Mass-scale runs must be expressible
+**Requirement.** The project-scale face exists for auditing, reporting and
+mass-scale simulation.
+**Origin.** 2026-07-28: *"ltMTS is more at project level helping people to
+simulate at big scale that will help in auditing and reporting or even at mass
+scale simulation"*; *"what is lagging currently to attempt things at scale."*
+**Answered by.** `sim batch` (recording doc §9) over a folder/glob/list with one
+report, taking **the same pipeline file** used interactively (`R-SIM-16`), plus
+`sim convert`. **This is currently the largest functional gap** — `sim resim`
+runs exactly one recording and there is no way to express *"run this over 500
+recordings"*. Storage and compute sizing for such a run is **not designed**
+(§10, parked until `sim batch` exists to size it).
+**Verified by.** `ST-D7-2`, `ST-D7-3`. **Status.** frozen.
 
 ---
 
@@ -503,6 +687,8 @@ future adapter rather than a rewrite.*
 and what are all inside 1v-superproject. give me clarity."*
 **Answered by.** Arch §5.8 — the placement map, with a four-step decision rule
 and a table per repo.
+**Verified by.** `DC-5` (every path the map claims either exists or is marked
+NEW) and `GT-1`/`GT-6` (the boundary the map describes, enforced by grep).
 **Status.** frozen.
 
 ### FR-SIM-62 — A module's docs live with the module
@@ -514,7 +700,9 @@ accordingly what say?"*
 **Answered by.** Done. Placement rule refined in arch §5.8: **docs follow their
 module** (as `modules/df/docs/bsd/` already does); root `docs/` keeps what no
 single module owns. The test is *ownership*, not *audience*.
-**Status.** frozen.
+**Verified by.** `DC-1` (every internal link in `modules/sim/docs` resolves —
+a doc that moved and left a dangling reference has not really moved) and
+`ST-E1-3`. **Status.** frozen.
 
 ### FR-SIM-63 — Scenario **instances** stay with the component that owns their expectations
 **Requirement.** Should scenario creation be part of `sim` or part of `df`?
@@ -590,7 +778,8 @@ manual checks, a traceability matrix.
 **Origin.** 2026-07-28: *"also create feature branches and not main where we
 make all changes."*
 **Answered by.** `feat/sim-platform` in all five repos; `R-GIT-1`/`R-GIT-2`.
-**Status.** frozen.
+**Verified by.** `DC-6` — checked mechanically at every docs commit rather
+than remembered. **Status.** frozen.
 
 ### NR-SIM-32 — Promote decisions into the AI operational layer
 **Requirement.** Update the skills so the approach is state of the art.

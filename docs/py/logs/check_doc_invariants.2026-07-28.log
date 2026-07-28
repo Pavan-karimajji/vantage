@@ -1,0 +1,41 @@
+# check_doc_invariants
+# generated 2026-07-28T14:22:16
+# platform  win32
+# python    3.14.6
+
+Checking DC-1..DC-7 over the design set
+10 documents, 7 scripts
+
+DC-1  internal markdown links resolve
+-------------------------------------
+ok    all internal links resolve
+
+DC-2  no absolute machine path in a design document
+---------------------------------------------------
+ok    no absolute machine paths -- every instruction is portable
+
+DC-3  no organisation name
+--------------------------
+ok    no organisation names
+
+DC-4  every visualization feature-checklist row names a stage
+-------------------------------------------------------------
+ok    all 37 checklist rows name a stage
+
+DC-5  placement-map paths exist or are marked NEW
+-------------------------------------------------
+ok    placement map parsed; 3 paths claimed
+
+DC-6  work is on a feature branch
+---------------------------------
+ok    on feature branch 'feat/sim-platform'
+
+DC-7  no driving-function name in a framework-owned script
+----------------------------------------------------------
+ok    framework-owned scripts name no driving function
+
+DC-8  requirement ids are unique
+--------------------------------
+ok    all 54 requirement ids unique
+
+RESULT  pass

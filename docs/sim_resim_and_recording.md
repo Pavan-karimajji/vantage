@@ -413,6 +413,73 @@ The current `--export` flag — which exists purely to hand Foxglove a file it
 can scrub because the viewer cannot (D7) — is replaced by `--save session.mcap`,
 whose purpose is sharing rather than working around a missing feature.
 
+### 7.1 Writers are symmetric with readers
+
+`R-SIM-14` makes a format a codec of ~4 methods. That symmetry is the whole
+feature: **a format registered to be read is registered to be written** wherever
+its declared capabilities allow, so `sim convert` falls out of the codec table
+rather than being built. The reference toolchain's separate exporter components
+(one per destination format) are a consequence of not having this symmetry.
+
+```
+sim convert  run.mcap  run.mf4               # recording → recording, lossless
+sim export   run.mcap  ports.csv  --ports …  # recording → export, lossy
+```
+
+### 7.2 A recording and an export are different artifacts
+
+They are produced by the same machinery and must never be confused:
+
+| | **Recording** | **Export** |
+|---|---|---|
+| Round-trips | yes | no |
+| Accepted by `sim resim` | yes | **never** |
+| Content | every declared port (`R-SIM-6`) | an explicitly selected subset |
+| Schema | embedded / referenced | flattened, declared at export time |
+| Examples | mcap, MDF4, rosbag | CSV, Parquet, mp4, plot data |
+
+A codec that cannot round-trip registers **write-only**, so the loader refuses
+it by capability rather than by a naming convention someone will eventually
+work around.
+
+### 7.3 Selecting ports, and timestamping them
+
+An export names the ports it wants, by their manifest names (`R-SIM-4`) — the
+same tokens the pipeline and the layer panel use, so there is no third
+vocabulary to learn:
+
+```yaml
+export:
+  format: csv
+  ports:
+    - df.aeb.outputs                  # a whole port, flattened
+    - df.aeb.outputs.brake_request    # one field
+    - vdy.veh_dyn.vx
+    - perception-core.gen_object_list[0..9].pos_x   # explicit slot range
+  time:
+    column: log_time_ns               # the recording's timebase, R-SIM-14
+    also: [tick_index, scenario_time_s]
+  on_missing: error                   # error | blank | omit-column
+```
+
+Four properties this must hold to:
+
+- **One row per tick, one column per leaf field.** Multi-rate ports repeat their
+  last value and a `<port>.age_s` column states how stale it is — a blank cell
+  and a held value must be distinguishable (`OQ-2`).
+- **`log_time_ns` is the timebase**, identical to the recording's, so an export
+  and its source align tick-for-tick without a correlation step.
+- **Origin tags survive.** A `mocked` or `overridden` port (`R-SIM-12`,
+  `R-SIM-15`) is marked in the export's header block. An export is frequently
+  the thing that reaches a report, and evidence grade must travel with it.
+- **A missing port is an error by default**, naming the port and the recording.
+  Silently emitting a blank column is how a report ends up claiming a signal was
+  zero when it was absent.
+
+Exports carry the run manifest's hashes in a header block (CSV: `#`-prefixed
+preamble; columnar formats: file metadata), for the same reason recordings do —
+an artifact without provenance is not evidence.
+
 ---
 
 ## 8. Migration of existing recordings
@@ -446,7 +513,10 @@ them the way `carla_bridge.py --record` does today:
   sim record                    yes                no
   sim run                       optional           yes (live)
   sim resim                     optional           yes (from a recording)
+  sim batch                     optional           yes (N recordings)
   sim view / render             no                 no
+  sim convert / export          yes                no
+  sim probe                     no                 no
 ```
 
 ```
@@ -459,11 +529,23 @@ sim render <session|recording> --at <t|tick> --out fig.png [--preset NAME]
 sim check  <scenario-set> [--report report.md]         # headless expectations
 sim diff   <sessionA> <sessionB>
 sim list   scenarios | recordings | pipelines | ports <component>
+
+sim probe   <lib>                                      # port set from adasManifest —
+                                                       # a new component's day one (arch §5.16.1)
+sim batch   <recordings…|glob|list.txt> --pipeline P [--report report.md] [-j N]
+sim convert <in> <out>                                 # recording → recording
+sim export  <in> <out.csv> --ports … [--time …]        # recording → export (§7.2)
 ```
 
 One binary, subcommands by verb. Replaces two scripts with eleven flags between
 them, and — more importantly — gives the GUI a stable thing to call: a manifest
 plus a subcommand, rather than an argv line it has to assemble from checkboxes.
+
+`sim batch` is what makes the project-scale face possible (arch §5.16.2/§5.16.3)
+and is the largest single gap today: `sim resim` runs one recording, and there
+is currently no way to express *"run this over 500 recordings"*. It takes the
+same pipeline file a developer was using interactively — that identity is the
+point (`R-SIM-16`), not a convenience.
 
 ---
 

@@ -7,12 +7,17 @@ The simulation & visualization framework (`adas-sim`). Component-agnostic.
 Drives component SIL libraries against live or recorded stimuli, records runs,
 and renders them. Consumed by every component; owned by none.
 
-Design docs live here in `docs/`. `docs/sim_requirements.md` is the **master
+Design docs live here in `docs/`. `docs/sim_player.md` names the application
+(**Vantage**, with the **Bench** and **Campaign** workspaces) and specifies its
+window; `docs/sim_portability.md` is the Windows/Ubuntu contract every stage
+obeys. `docs/py/` holds frozen design evidence plus the checks that keep the
+documents consistent — run `python docs/py/run_all.py` before any docs commit.
+`docs/sim_requirements.md` is the **master
 requirements register** — read it when you need to know what was actually asked
 for; `docs/sim_architecture.md` is the master design;
 `docs/sim_implementation_plan.md` is the checkbox-tracked build order and is
 what an implementation session works from. Normative rules: root
-`.claude/rules/sim.md` (`R-SIM-1..14`).
+`.claude/rules/sim.md` (`R-SIM-1..17`).
 
 ## Local constraints
 

@@ -226,16 +226,23 @@ currently occupies the bottom strip of a canvas built for AEB.
 Enabled by the two-pass Session (`sim_architecture.md` §6.4). All of this is
 currently absent; `--step` is forward-only by construction.
 
-| Control | Behaviour |
-|---|---|
-| **Scrub bar** | full-width, one pixel ≈ one or more ticks; drag to seek anywhere, forwards or backwards, instantly |
-| Play / pause | `Space` |
-| Step | `←` / `→` one tick; `Shift` + arrow ten ticks |
-| Speed | `0.1×` … `8×`, plus "as fast as it renders" |
-| Loop | mark in/out on the scrub bar, `L` to loop the interval |
-| Jump to event | `[` / `]` to the previous/next event marker (§7) |
-| Goto | type a time or a tick index |
-| Live tail | during a live sim run the bar grows; releasing the head resumes tailing |
+Everything here is defined against **the head** — the furthest tick computed
+(`R-SIM-17`, arch §6.4). Behind the head the Session is immutable data; at the
+head, execution advances. The toolbar is split accordingly, and the split is
+visible rather than implied.
+
+| Control | Behaviour | Where |
+|---|---|---|
+| **Scrub bar** | full-width, one pixel ≈ one or more ticks; drag to seek anywhere, forwards or backwards, instantly | behind head |
+| Play / pause | `Space` | both |
+| Step forward | `→` one tick; `Shift`+`→` ten | both (executes at head) |
+| **Step backward** | `←` one tick — **leaves execution mode, enters review** (below) | behind head |
+| **Advance N** | run forward `50` / `100` / `200` / custom ticks as one job, with progress and **cancel** | at head |
+| Speed | `0.1×` … `8×`, plus "as fast as it renders" | both |
+| Loop | mark in/out on the scrub bar, `L` to loop the interval | behind head |
+| Jump to event | `[` / `]` to the previous/next event marker (§7) | behind head |
+| Goto | type a time or a tick index | behind head; ahead of head = advance-N to it |
+| Live tail | during a live sim run the bar grows; releasing the head resumes tailing | at head |
 
 Two properties that matter and are easy to lose:
 
@@ -244,6 +251,39 @@ Two properties that matter and are easy to lose:
 - **Toggling a layer or changing theme re-renders without re-executing**, for
   the same reason. This is what makes the layer panel feel like a real tool
   rather than a re-run.
+
+### 5.1 Backward is not the mirror of forward
+
+Forward calls `exec()`. Backward would have to **undo** it, and the SUT holds
+state the ABI does not expose. There is no inverse `exec()`, so stepping
+backward **stops execution and enters review** — everything already computed
+stays fully scrubbable, and nothing new is computed until the user returns to
+the head.
+
+The head is drawn on the scrub bar as a distinct marker, and the region ahead of
+it is visibly empty rather than merely grey — "not computed yet" and "computed,
+value zero" must never look alike.
+
+Resuming forward from behind the head presents exactly two buttons, both named:
+
+| Choice | Meaning | Available |
+|---|---|---|
+| **Skip to head** | resume where execution actually is | always |
+| **Recompute from 0** | re-run to this tick, exactly | deterministic resim only (`R-SIM-5`) |
+
+In a live **sim** the second is greyed with its reason on hover — the world is
+gone, so it cannot be re-driven. Silently continuing from a rewound position is
+never offered: it would feed tick 400's stimulus to tick 900's internal state
+and produce a plausible-looking fabricated run.
+
+### 5.2 Advance-N is a job, not a loop
+
+`50` / `100` / `200` / custom is the coarse-jump control the reference console
+puts on its toolbar, and it is what makes a 1200-tick recording navigable. It
+runs as **one cancellable job**: a progress indicator, a live tick counter, and
+`Esc` to stop at whatever tick has been reached — which then becomes the head.
+An expectation failing mid-advance (§7) does not abort it; it drops a marker and
+the run continues, because "show me the next 200 ticks" means exactly that.
 
 ---
 

@@ -1092,6 +1092,72 @@ consequences worth stating separately:
   exist, they are recordings like any other; only a format converter in
   `sources/` is new. The concept does not move.
 
+#### The severed chain — the one arrangement that lies
+
+`mode` is per stage, and the previous paragraphs are careful to say that
+execution never propagates upstream. That is true of the *mechanism* and
+insufficient as a *default*, because one arrangement is almost always a mistake:
+
+```
+rsp = simulate   →   em = measured   →   df = simulate
+                     ↑ rsp's output dies here
+                                          ↑ df's input never saw rsp
+```
+
+`rsp = simulate` here is a **lie**. Nothing it computes reaches anything: `em`
+is not executing, so it consumes nothing, and its recorded outputs are what `df`
+reads. The operator moved a toggle and the picture did not change — which is one
+of the more demoralising things a tool can do to someone.
+
+Note what this is *not*. It is not upstream propagation, and the common case is
+untouched: `rsp = off, em = measured, df = simulate` is pure function resim,
+with no hole and nothing to warn about, because `rsp` is not claiming to run.
+The anomaly is specifically **a `measured` stage between two `simulate` stages
+on one data path**.
+
+So the rule is stated on the gap, not on the direction (`R-SIM-10`):
+
+- **Default: close it.** Setting `rsp` and `df` to `simulate` flips `em` to
+  `simulate` too, in the GUI and in the loader, undoably.
+- **Allow the override.** Forcing `em` back to `measured` stays legal, because
+  one real setup needs it: *"I changed `rsp`, show me its divergence from the
+  recording, but hold `df` on known-good input so `df`'s behaviour does not move
+  underneath me."* Two panels, one run.
+- **Badge the lie.** The orphaned stage then reads *"computed, not consumed"* in
+  the pipeline panel, and headless runs warn at load.
+
+Forbidding it outright would delete the setup above; leaving it silent is how
+the toggle stops being believed. Default correct, escape hatch visible.
+
+#### Per-port overrides — what "tweak the inputs" actually means
+
+`mode` and `inputs:` repoint a *whole* port. That is not the knob a developer
+reaches for at 18:00 while debugging their own function; they want to pin one
+field and re-run. Without it, they write their own host — which is the outcome
+`R-SIM-16` exists to prevent, arriving through a side door.
+
+```yaml
+inputs:
+  objects: perception-core.gen_object_list
+  egoDyn:  measured:/vdy/veh_dyn
+  egoDyn.vx:       {const: 22.0}     # pin one field
+  egoDyn.yaw_rate: {hold: true}      # freeze at its first value
+  objects[*].pos_x: {offset: -1.5}   # shift every slot
+```
+
+**Four verbs — `const`, `hold`, `offset`, `scale` — and a hard stop there.**
+The temptation is an expression language, and it must be refused: the reference
+console's `ValueHandleRules` (glob patterns plus URI string-replacement rules
+per argument) is exactly what an open grammar becomes, and it is the mechanism
+behind the over-configuration complaint this design answers. If four verbs prove
+insufficient, the honest answer is a `stub:` stage — real code, in a real file,
+reviewable — not a fifth verb.
+
+An override is **declared, not smuggled**, on the same terms as a calibration
+override (§5.6): it lands in the run manifest, the HUD badges the port, and the
+topic carries `origin: overridden` so no report can mistake a pinned input for a
+measured one.
+
 #### What this requires of a recording
 
 A stage can be `measured` **only if the recording contains its output ports.**
@@ -1492,6 +1558,127 @@ architecture exists to prevent, arriving by a different door.
 
 ---
 
+### 5.16 One engine, two faces — and why there is not a second tool
+
+Two tools were proposed, split by persona and scale: a project-level one for
+mass runs, auditing and reporting, and a developer-level one that is permissive,
+adaptable and lets someone do whatever they want to their own DLL. The
+distinction between the two *users* is real. The conclusion that they need two
+*engines* does not follow, and this section records why — so the question does
+not get reopened in three months.
+
+#### The reference tool, mapped onto this design
+
+The reference resim/wiring console was examined concept by concept
+(2026-07-28, from its own shipped example projects):
+
+| Reference concept | Here | Same thing? |
+|---|---|---|
+| Component (a pipeline element DLL) | pipeline stage (§5.4) | yes |
+| DLL-wrapper component | `impl: "dll:…"` | yes — different binding method |
+| `bsig`/`rrec` readers, `bsig` writer | `io/` codecs (`R-SIM-14`) | yes |
+| Datapool signal URIs | topic / port namespace (`R-SIM-4`) | yes |
+| 2D viewer, signal plot, dashboard | renderers + plot panels (visualization spec §7.4, §11) | yes |
+| Integrated/external Python component | `stub:` stage | yes |
+| Machines — batch over a folder, playlists, combinators | **nothing** | **no — a real gap, §5.16.3** |
+
+Nearly everything maps. There is **exactly one** genuine architectural
+difference, and it is not a difference of tool:
+
+> The reference console binds to binaries that never agreed to be bound — it
+> recovers signatures from debug symbols, and a human then hand-writes every
+> argument's mapping. We own our components, so we mandate a manifest
+> (`R-SIM-4`) and **derive** the binding.
+
+That is a **stage adapter**, not a second product.
+
+#### 5.16.1 The developer's day one — no port mapping, no handoff
+
+The workflow proposed for a new component was: build the DLL, use a wrapper to
+map its ports, feed it from a reader, check the outputs — then later raise a
+requirement for a platform team to incorporate it into the project-level tool.
+The first, third and fourth steps are right. The other two must not exist here.
+
+**Why the mapping step must not exist.** The reference wrapper is verbose
+because the DLL is opaque; ours is not. A developer hand-mapping the ports of a
+component **they just wrote** pays that cost without having that problem — and
+the mapping becomes a *second* description of the port set, living in a project
+file, free to drift from the manifest. That drift is what `R-SIM-4` exists to
+prevent.
+
+**Why the handoff step is dangerous.** "Later, ask the platform team to
+incorporate it" puts a **queue between a developer and the platform**, and that
+queue is the single most reliable cause of privately-written players — the
+outcome this architecture is trying to avoid. With a manifest there is nothing
+to incorporate: the component is in the tool the moment it builds, because the
+tool discovers it exactly as `sim probe` did.
+
+```
+1. build the DLL on the generic ABI     ← the only integration work
+2. sim probe df_sil.dll                 ← prints the port set, read from the DLL
+3. reader → my stage → writer           ← a five-line pipeline
+4. sim run                              ← outputs in a recording, inspectable
+```
+
+**Where the wrapper concept does survive:** `impl: "legacy:<lib>"`, for binaries
+that genuinely cannot carry a manifest — supplier deliveries, prebuilt
+third-party libraries, anything predating the ABI. Per-argument wiring is real
+work there, and it is quarantined to those stages instead of being everyone's
+default.
+
+#### 5.16.2 Two faces over one engine
+
+| | **Developer face** | **Project face** |
+|---|---|---|
+| Shape | interactive, one run | batch, N recordings |
+| Posture | permissive — live poking, per-port overrides (§5.10), generic plots | locked — provenance-tagged, reproducible, reports |
+| Stance | *"let me try something"* | *"prove it, for the record"* |
+| Input | **the same pipeline YAML** | **the same pipeline YAML** + a scenario list and a mode matrix |
+
+Splitting the engine instead would produce two namespaces, two project schemas,
+the handoff queue above, and — fatally — **what the developer validated would
+not be what the project runs**, which destroys the audit value the project face
+exists for. The property worth protecting is that a developer's own debugging
+setup *is* the artifact that goes into the mass run; they add a list around it
+and re-express nothing. That is unavailable the moment the engines differ.
+
+Both faces may write the pipeline file directly, as the reference GUI does —
+a file that is hand-writable, GUI-writable and diffable, with **no window
+geometry inside it** (§5.16.4).
+
+#### 5.16.3 What is missing for scale, honestly
+
+Two capabilities the reference tool has and this design does not, both small on
+top of what already exists:
+
+- **`sim batch`** — run a pipeline over a folder or list of recordings,
+  headless, one report. This is the reference tool's playlist/folder machinery,
+  and it is how resim scales past one file. There is currently **no way to
+  express "run this over 500 recordings"**.
+- **`sim convert`** — recording → recording across formats, which the codec
+  table (`R-SIM-14`) already gives for free once readers and writers are
+  symmetric; only the verb was never named.
+
+Deliberately **parked**: the reference tool's generic signal explorer over the
+whole datapool. Useful, large, and not needed until someone asks.
+
+#### 5.16.4 What is deliberately not copied
+
+- **Window layout inside the project file.** In the reference tool's own
+  examples, over half of a 16 kB project file is dock geometry. It makes the
+  pipeline undiffable and unreviewable. Here: pipeline in git, window layout in
+  user state (visualization spec §13b).
+- **A component catalogue keyed by DLL path.** That is what produces an
+  `Unknown MO` entry — a config referencing a binary that is not there, with no
+  statement of what was expected. Here: keyed by component name, resolved
+  through the manifest, and a miss is a load error naming both ends (§5.14).
+- **Configuration spread across several independent surfaces.** The reference
+  console's blank-screen failure is diagnosable only by checking a config tree,
+  a component's properties and a data-source setting in turn. Here, one file per
+  run and one load-time validation pass.
+
+---
+
 ## 6. How each defect closes
 
 | # | Defect | Closed by |
@@ -1544,6 +1731,40 @@ Live **sim** cannot do pass 1 ahead of time — the world is producing stimuli a
 you watch. It therefore appends to the Session as it goes: you can seek
 backwards into what has already happened, and "live" is simply the tail. Same
 code, one flag.
+
+#### The head — why stepping backwards leaves execution mode
+
+Generalising that flag gives the concept the whole transport is defined against
+(`R-SIM-17`). The **head** is the furthest tick computed so far.
+
+| Where | What it is | What is possible |
+|---|---|---|
+| **behind** the head | immutable data | seek, scrub, step back, toggle layers, re-render — free, never re-executes |
+| **at** the head | live execution | run / pause, step forward, advance-N |
+
+This is why *step backward* is not the mirror of *step forward*. Forward calls
+`exec()`; backward would have to **undo** it, and the SUT holds state the ABI
+does not expose — filters, counters, hysteresis. There is no inverse `exec()`
+and there will not be one.
+
+So stepping backwards **leaves execution mode and enters review**, which is
+exactly right and costs nothing: everything already computed stays fully
+scrubbable. Resuming forward from behind the head then offers precisely two
+honest choices, both named in the UI:
+
+- **skip to head** — resume where execution actually is; or
+- **recompute from tick 0** — deterministic resim only (`R-SIM-5`), exact, and
+  cheap at these tick counts (a 1200-tick session is well under a second of
+  `exec()` calls).
+
+What is forbidden is the third option a naive implementation reaches for:
+silently continuing from the rewound position, so the SUT sees tick 400's
+stimulus with tick 900's internal state. That is a fabricated run that looks
+plausible — the failure mode this architecture is most concerned with.
+
+Periodic state snapshots would make true rewind-and-continue possible, and are
+**parked**: they need an ABI addition (`adasSaveState`/`adasRestoreState`) and
+no requirement asks for it. Recomputing from zero covers the case today.
 
 ---
 
@@ -1649,6 +1870,9 @@ per-stage unit and system test cases. This table is the summary.
 | **D3** | GUI on run manifests; `.claude` artifacts finalised | Every run is launchable from the GUI as a manifest; skills/workflows landed |
 | **D4** | Perception: sensor sources, `perception`/`ground_truth` layer groups, `CameraModel` + image-projection renderer | A pipeline with two components runs, and perception output vs ground truth is visible side by side |
 | **D5** | **Package the player** (§5.15): frozen Windows build, external plug-in import path, compatibility statement | The build opens a session recording on a machine with no repo, no Python, no Conan cache — and drives a component that did not exist when it was built |
+| **D6** | **Developer ergonomics** (§5.10, §5.16): per-port overrides, `sim probe`, severed-chain auto-close | A new component is probed, wired and run without one edit inside `modules/sim` — and `GT-8` is measured on a real newcomer |
+| **D7** | **Writers, exports, `sim convert`, `sim batch`** (§5.16.3, recording §7) | One pipeline file runs over a folder of recordings and produces a report; an export can never be fed back as a resim input |
+| **D8** | **Vantage** — the shell plus the *Bench* and *Campaign* workspaces ([sim_player.md](sim_player.md)) | A stranger reaches a moving picture in under two minutes unaided (`MC-5`), and one pipeline file survives a workspace switch byte-for-byte |
 
 ### Phase E — Retirement (the cleanup that makes `df` neat)
 
@@ -1771,6 +1995,33 @@ Raised and settled 2026-07-27, after OD-1..3. Reverses plan.md item 19's
 2026-07-22 "keep the pointer" decision. Full reasoning, the two additional
 defects it closes, and the bundle layout are in §5.6; the build/runtime work is
 stage C5. Recorded here so the decision list is complete.
+
+### OD-5 — Product and workspace naming — **CONFIRMED: Vantage / Bench / Campaign**
+
+Settled 2026-07-28, in answer to `FR-SIM-48`. **Vantage** is the application,
+**Bench** the developer workspace (working name `ltMB`), **Campaign** the
+project-scale workspace (working name `ltMTS`). Full reasoning:
+[sim_player.md](sim_player.md) §1.
+
+Three properties were required of the answer, and they are what rule out the
+alternatives:
+
+- **Plain English, not invented words.** `R-SIM-16`'s whole claim is that these
+  are two faces of one product. Two coined names would teach the opposite before
+  anyone read a document.
+- **The product name is not the code name.** `modules/sim`, `adas-sim` and the
+  `sim` CLI are unchanged, so renaming the product later is a marketing change
+  and not a refactor. Enforced by `UT-D8-9`.
+- **A workspace is a mode of one window**, switched with one key, with the open
+  pipeline file surviving the switch byte-for-byte (`UT-D8-1`). If the switch
+  had to convert anything, the two-engine design would have won by the back
+  door.
+
+Rejected: naming the CLI after the product (churn across every document for no
+gain); *Studio*/*Lab* for the developer face (both imply authoring, and this
+face analyses); *Fleet*/*Batch* for the project face (the first is about
+vehicles, the second about scheduling — neither carries "produces a report
+someone reads").
 
 ---
 
