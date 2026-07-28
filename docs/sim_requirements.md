@@ -487,6 +487,37 @@ scenarios in `modules/sim` would put function names in the framework and `GT-1`
 would fail. Full reasoning and the promotion trigger: scenarios doc §0.
 **Verified by.** `GT-1`. **Status.** frozen.
 
+### FR-SIM-70 — The outcome is a **player application**, not only a library
+**Requirement.** What this exercise is actually building is a measurement/resim
+player — porting/ingest, resim at any cut point, visualization, plotting — in
+the same class as the reference measurement/resim console, deliverable as a
+Windows executable.
+**Origin.** 2026-07-28: *"arent you trying to create some player which could be
+an executable (in win …) that has all of these feature of porting, resim,
+visualization and all like mts."* **Not covered before this** — the design
+described a library for developers with a repo and a Python environment, and
+never named the application or its users.
+**Answered by.** Arch §5.15. The architecture already makes it possible:
+`R-SIM-1` + `R-SIM-11` + `R-SIM-3a` + `R-SIM-14` + `R-SIM-13` together mean the
+player is **component-agnostic at build time** and can ship before any component
+exists, with components appearing at run time as data — the reference console's
+own model. Two delivery forms from one codebase: the `adas-sim` package for
+developers and CI, and a packaged `adas-sim.exe` needing no repo, no Python and
+no Conan cache. **Windows first; Linux deliberately out of scope.**
+**Constraint it imposes:** a frozen executable must keep an **external plug-in
+import path**, or adding a function's layers would mean rebuilding the player.
+**Verified by.** `ST-D5-1`, `ST-D5-2`, `ST-D5-3`. **Status.** frozen.
+
+### NR-SIM-9 — A shipped player owes an explicit compatibility statement
+**Requirement.** Derived from `FR-SIM-70`: a library may shrug at an old input;
+a distributed tool may not.
+**Answered by.** Arch §5.15 — the player declares and enforces the ABI
+generation, Scene major, recording-model version and manifest version it can
+open; anything outside is refused **with both numbers named**, per §5.14's
+hard-fault class. Half-opening an old recording is the silent-wrong-picture
+failure arriving by a different door.
+**Verified by.** `UT-D5-1`, `UT-D5-2`. **Status.** frozen.
+
 ---
 
 ## 8. Delivery & process

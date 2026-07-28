@@ -33,7 +33,7 @@ Backlog entry: superproject `plan.md` item 25.
 
 ### Effort shape
 
-20 stages (Phase C's first is split into three sub-stages). A and B touch **no C++ and no DLL at all** — the entire viewer is
+21 stages (Phase C's first is split into three sub-stages). A and B touch **no C++ and no DLL at all** — the entire viewer is
 built and tested against recorded files. C is the only phase that changes
 production C++. E only deletes.
 
@@ -770,6 +770,41 @@ Gated on `perception-core` existing. Everything before it is additive.
 - [ ] `ST-D4-1` a two-component pipeline runs and ground truth vs perception is
       visible side by side
 
+### S-D5 — Package the player (`adas-sim.exe`)
+
+Turns the library into the application of arch §5.15. Windows only.
+
+- [ ] One-folder frozen build (PyInstaller or equivalent) bundling CPython, Qt,
+      the framework, the renderers and the codecs
+- [ ] **External plug-in import path** — `--plugins <root>` (repeatable) plus
+      auto-discovery of a `sim/` folder beside a component library; providers
+      are imported from outside the bundle, so adding a function's layers never
+      rebuilds the player
+- [ ] `--version` prints the player version **and** its compatibility statement:
+      supported ABI generation, Scene major, recording-model and manifest
+      versions
+- [ ] Settings/layouts in `%LOCALAPPDATA%`, never inside the install or a repo
+- [ ] Open-a-recording entry point (argument, and drag-onto-exe)
+
+**Tests**
+- [ ] `UT-D5-1` an input outside a declared compatibility range is **refused
+      with both numbers named** (`NR-SIM-9`)
+- [ ] `UT-D5-2` `--version` reports every one of the four version fields
+- [ ] `UT-D5-3` the plug-in path imports providers from outside the bundle, and
+      two roots with a duplicate layer id raise naming both
+- [ ] `ST-D5-1` **the clean-machine test**: the frozen build opens a session
+      recording and renders it on a machine with **no repo, no Python, no Conan
+      cache and no component checkout**
+- [ ] `ST-D5-2` pointed at a component library + its `config/` bundle, the
+      player discovers its ports from the manifest and resims — **without that
+      component having existed when the player was built** (`FR-SIM-70`)
+- [ ] `ST-D5-3` a component's layer providers load from `--plugins` and draw,
+      with no framework rebuild
+
+**Gate**
+- [ ] `ST-D5-1` + `ST-D5-2` green — the player is genuinely component-agnostic
+      and genuinely standalone, both demonstrated rather than argued
+
 ---
 
 ## 8. Phase E — Retirement (what leaves `modules/df`)
@@ -873,6 +908,7 @@ gate that proves the replacement works first.
 | R21 | CarMaker | plan.md item 4 | a codec, per §5.12 |
 | R22 | `df` cleaned up | S-E1 | `ST-E1-1..4` |
 | R23 | Everything thoroughly tested | S-E3 | `ST-E3-2` |
+| R24 | **A player application, not only a library** (`FR-SIM-70`) | S-D5 | `ST-D5-1`, `ST-D5-2` |
 
 Defects `D1`–`D11` (architecture §3) map through architecture §6; each closes at
 the stage named there.

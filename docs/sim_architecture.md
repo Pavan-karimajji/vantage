@@ -1371,6 +1371,76 @@ provenance is *reported*, not assumed to be `measured` (`R-SIM-12`). Silent
 substitution is how a viewer ends up confidently showing the wrong thing, which
 is the failure mode this whole architecture exists to prevent.
 
+### 5.15 The player — this is an application, not only a library
+
+Read end to end, what §5.1–§5.14 describe is a **measurement/resim player**:
+open a recording, choose per stage what is taken from measurement and what is
+simulated, execute, watch it in a BEV, plot signals against each other, and
+check it against expectations. That is the same class of tool as the reference
+measurement/resim console, and it is worth saying so explicitly rather than
+letting it be an emergent property nobody named.
+
+#### It is already component-agnostic at build time — that was not an accident
+
+Four rules combine to something none of them says alone:
+
+| Rule | What it removes from the player's build |
+|---|---|
+| `R-SIM-1` | any component's name |
+| `R-SIM-11` | generated protobuf bindings — schemas come from the DLL's manifest |
+| `R-SIM-3a` | the config — it travels beside the DLL |
+| `R-SIM-14` | any specific file format — codecs are registered |
+| `R-SIM-13` | any world model — the viewer takes a `Session` |
+
+**So the player can be built and shipped without any component existing**, and a
+component appears at run time as data. That is exactly the model the reference
+console uses — the tool ships; the component simulation libraries are plugged
+in — and it is what makes this sustainable across `df`, `perception-core`, RSP
+and whatever follows.
+
+#### What ships, and what is plugged in
+
+| Ships **inside** the player | Plugged in **at run time** |
+|---|---|
+| the framework (`core`, `contracts`, `scene`, `view`, `check`) | component libraries (`*_sil.dll`) + their `config/` bundles |
+| the renderers and the format codecs | component `sim/` plug-ins — layers, pipelines, viewpoints, sensor models |
+| the CLI and the GUI shell | recordings, scenarios, expectation sets |
+| a bundled CPython + Qt runtime | — |
+
+**One consequence that constrains the packaging.** Component `sim/` content is
+Python. A frozen executable therefore **must keep an external plug-in import
+path** — it cannot bake in only what it was built with, or adding LCA's layers
+would mean rebuilding the player, which defeats the whole plug-in model. The
+player takes a plug-in root (a component checkout, or a folder beside a DLL),
+adds it to the import path at start-up, and discovers providers there exactly as
+an unfrozen run does. Same shape as the reference console loading a simulation
+DLL it was not built against.
+
+#### Two delivery forms, one codebase
+
+| Form | For | Needs |
+|---|---|---|
+| **`adas-sim` package** (Conan / importable) | algorithm developers, CI, scripting | the repo and a Python environment |
+| **`adas-sim.exe`** (packaged application) | integration and validation engineers, anyone reviewing a run | nothing — no repo, no Python, no Conan cache |
+
+The second is a *packaging* of the first, not a fork. Everything in the plan up
+to that point produces the library; one stage packages it. **Windows first;
+Linux is deliberately out of scope for now.**
+
+#### The compatibility statement a shipped tool owes its users
+
+A library can shrug at an old input; a shipped player cannot. It declares, and
+enforces, exactly what it reads:
+
+- **ABI generation** it can drive (`adasAbiVersion`);
+- **Scene major** it can render (§5.3);
+- **recording-model version** and **manifest version** it can open.
+
+Anything outside that range is refused with both numbers named — the authoring/
+hard-fault split of §5.14 applied to the product boundary. A player that
+half-opens an old recording is the silent-wrong-picture failure this whole
+architecture exists to prevent, arriving by a different door.
+
 ---
 
 ## 6. How each defect closes
@@ -1486,7 +1556,7 @@ is scoped in the visualization spec §11.4 and scheduled in §8 below.
 
 ## 8. Staged roadmap
 
-Twenty stages in five phases (C1 lands as three sub-stages). Each stage is independently landable and leaves
+Twenty-one stages in five phases (C1 lands as three sub-stages). Each stage is independently landable and leaves
 the tree working; no stage requires the next one to be useful. Stage labels are
 referenced from plan.md and are the labels the **implementation plan**
 ([sim_implementation_plan.md](sim_implementation_plan.md)) executes against —
@@ -1529,6 +1599,7 @@ per-stage unit and system test cases. This table is the summary.
 | **D2** | matplotlib renderer; `bsdviz` figure driver migrated onto the framework | The 53 BSD figures regenerate byte-stable from the shared framework; live view and figures use one palette |
 | **D3** | GUI on run manifests; `.claude` artifacts finalised | Every run is launchable from the GUI as a manifest; skills/workflows landed |
 | **D4** | Perception: sensor sources, `perception`/`ground_truth` layer groups, `CameraModel` + image-projection renderer | A pipeline with two components runs, and perception output vs ground truth is visible side by side |
+| **D5** | **Package the player** (§5.15): frozen Windows build, external plug-in import path, compatibility statement | The build opens a session recording on a machine with no repo, no Python, no Conan cache — and drives a component that did not exist when it was built |
 
 ### Phase E — Retirement (the cleanup that makes `df` neat)
 
