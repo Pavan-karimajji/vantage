@@ -206,7 +206,16 @@ the window, defeating the scrubbing requirement it exists to serve.
 **Answered by.** viz §11.1 — pass 1 on a worker with progress and a viewable
 tail; pass 2 on the UI thread, cheap because Scenes are cached and providers are
 pure. Per-tick parallelism is left available by that purity, not built.
-**Verified by.** `MC-4`, `ST-B2-2`. **Status.** frozen.
+**Verified by.** `UT-B3-15` (**pass 1 does not run on the GUI thread**, asserted
+on thread identity with a deliberately slow reader — not on elapsed time, which
+would pass on a fast machine with the bug present), `UT-B3-16` (a cancelled load
+leaves no partial `Session` reachable), `UT-B2-12` (the Scene cache respects a
+stated bound, so responsiveness does not decay into memory exhaustion on a long
+run), `ST-B2-2`, `MC-4`.
+*Strengthened 2026-07-28:* this previously rested on `MC-4` and `ST-B2-2` alone
+— a human saying it felt responsive, and a timing budget. Neither can fail when
+the work is on the wrong thread but the machine is fast, which is exactly how a
+threading defect reaches a slower machine. **Status.** frozen.
 
 ### NR-SIM-7 — The tick model must carry what the specs already promise
 **Requirement.** Derived from a 2026-07-28 critical re-read: four things the

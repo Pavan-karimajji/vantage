@@ -472,170 +472,251 @@ Scene, viewer and expectations are written against the model (`UT-A4-11`).
 ## 5. Phase B — The viewer, on pure replay
 
 **Still no C++ and no DLL.** Every stage here is driven by an already-exported
-`.mcap`, which already carries `df/aeb_outputs` and `df/bsd_outputs` — so this
-is *replay* in the §1 sense and the framework never needs a SIL binding yet.
+`.mcap` that already carries the component's output ports — so this is *replay*
+in the §1 sense, and the framework never needs a SIL binding yet.
+
+**That ordering is a design decision, not a convenience.** Building the viewer
+before the generic ABI exists means the only way to drive a component here would
+be a component-specific ctypes binding **inside the framework** — which is an
+`R-SIM-1` violation that would then have to be unpicked. Replay avoids needing
+one at all: by the time the framework talks to a library (`S-C1c`), the generic
+ABI already exists and the binding is component-agnostic by construction.
+
+Two consequences worth holding on to:
+
+- **Everything in Phase B is testable with no build.** A recording plus a golden
+  is the whole fixture set, which is why `GT-4` cannot regress here.
+- **The viewer's contract is fixed before its first real input arrives.** The
+  viewer renders a `Session` (`R-SIM-13`) and nothing else, and it is easiest to
+  keep that true while a `Session` is the only thing that exists.
 
 ### S-B1 — Layer providers + parity render
 
-Closes **D2**, **D5**. First stage that touches `modules/df` (adding, not
-removing).
+**Purpose.** Prove the Scene IR carries a real function's picture. Closes
+**D2**, **D5**. First stage that touches a component repo — **adding, never
+removing**.
 
-- [ ] `modules/df/sim/layers/common.py` — ego body, objects, grid/frame
-      furniture, HUD fields
-- [ ] `modules/df/sim/layers/aeb.py` — critical object, pre-warning state, TTC
-      readout (TTC is `derived.*`, display-only — no ProPort carries it)
-- [ ] `modules/df/sim/layers/bsd.py` — zone (marked `derived=True`, `R-SIM-7`),
-      warning band, unobservable `Heatmap`, per-object scenario tag, η readout
-- [ ] `modules/df/sim/viewpoints.yaml` — `forward`, `rear`, `blindspot_l/r`, `wide`
-- [ ] `render/bev.py` — the Qt-independent Scene→raster core (so it is testable
-      headless and reusable by the image renderer)
+**Must not.**
+- Import a renderer, `cv2`, `matplotlib` or Qt from any provider (`GT-2`).
+- **Recompute anything the SUT already produced** (`R-SIM-7`). If a ProPort
+  carries a warning state, draw *that* state. `UT-B1-6` proves it by feeding a
+  deliberately contradictory output and requiring the layer to show the
+  contradiction — a layer that "corrects" the SUT is a layer that hides bugs.
+- Delete or edit the existing viewer. Parity is demonstrated **against** it, and
+  it is removed only in `S-E1` (`NR-SIM-30`).
+
+- [ ] `modules/<name>/sim/layers/common.py` — ego body, objects, grid/frame
+      furniture, HUD fields (the component-generic half)
+- [ ] `modules/<name>/sim/layers/<fn>.py` — one file per function; each is the
+      *only* place that function's picture is described
+- [ ] Layers reconstructed from calibration rather than read from a port carry
+      `derived=True` and render with the `derived` style variant — a **marked**
+      stopgap, never a silent one (`R-SIM-7`)
+- [ ] `modules/<name>/sim/viewpoints.yaml` — named viewpoints as data
+- [ ] `render/bev.py` — the **Qt-independent** Scene-to-raster core, so it is
+      testable headless and reusable by the image renderer. Qt enters in `S-B3`
+      and never below this line
 - [ ] `view/viewport.py` — `Viewport`, follow modes, presets, zoom-about-cursor
 
 **Tests**
-- [ ] `UT-B1-1` `requires` gating — a Tick lacking `bsd.outputs` yields **no**
-      BSD layers and raises nothing
+- [ ] `UT-B1-1` `requires` gating — a Tick lacking a function's output yields
+      **no** layers for it and raises nothing
 - [ ] `UT-B1-2` provider purity — same `Tick` twice yields equal `Layer`s
-- [ ] `UT-B1-3` no provider module imports a renderer (AST scan; GT-2 as a test)
+- [ ] `UT-B1-3` no provider module imports a renderer (AST scan; `GT-2` as a
+      test, so the rule fails a run rather than a review)
 - [ ] `UT-B1-4` the ego layer's box equals `EgoModel`'s numbers — asserted by
-      changing the project and seeing the box change, not by a literal
-- [ ] `UT-B1-5` a `MOTORCYCLE` object draws a different footprint than a `CAR`
-- [ ] `UT-B1-6` BSD warning state is **read** from `BsdOutputs`: feeding a
-      contradictory `BsdOutputs` makes the layer show the contradictory value
-      (proves it is not recomputed — `R-SIM-7`)
+      **changing the project and seeing the box change**, not by comparing to a
+      literal, which would just restate the constant being tested
+- [ ] `UT-B1-5` two different object classes draw different footprints
+- [ ] `UT-B1-6` warning state is **read**, not recomputed: feeding a
+      contradictory output makes the layer show the contradictory value
+      (`R-SIM-7`)
 - [ ] `UT-B1-7` layers built from calibration reconstruction carry
       `derived=True` and render with the `derived` style variant
-- [ ] `UT-B1-8` padding-slot objects (`dist_x == 0 and dist_y == 0`) produce no
-      prims
-- [ ] `UT-B1-9` viewport: metre→pixel→metre round-trips; zoom about the cursor
-      keeps the cursor's world point fixed; scale clamps at `[0.5, 200]`
-- [ ] `UT-B1-10` renderer hit-test resolves to the prim actually drawn (the
-      `_hit_test_box` duplication is gone)
+- [ ] `UT-B1-8` padding slots in a fixed-size object list produce no prims — the
+      classic "50 objects at the origin" picture
+- [ ] `UT-B1-9` viewport: metre-pixel-metre round-trips; zoom about the cursor
+      keeps the cursor's world point fixed; scale clamps at its declared bounds
+- [ ] `UT-B1-10` renderer hit-test resolves to the prim actually drawn — one
+      hit-test path, not one per prim type
 - [ ] `UT-B1-11` a provider reads `age_s`/`valid` off a `PortValue` and a stale
-      port changes what it draws — the metadata survives the C boundary
-- [ ] `UT-B1-12` a **temporal** layer (ego trail) built from `ctx.history`
-      produces the right polyline, and the provider holds no state between calls
-      (call it twice out of order and get identical output)
-- [ ] `ST-B1-1` replay `bsd/bsd_curve_r172_passby` (exported) → the `Scene` for
-      every tick matches the golden
-- [ ] `ST-B1-2` the same replay with `--project 2w_base` produces a **different**
-      ego box and a different zone — configuration drives the picture (**D3**)
-- [ ] `ST-B1-3` headless render of 100 ticks raises nothing and produces
+      port changes what it draws — the metadata survives the boundary
+- [ ] `UT-B1-12` a **temporal** layer (an ego trail) built from `ctx.history`
+      produces the right polyline, and the provider holds no state between
+      calls: call it twice **out of order** and get identical output
 - [ ] `UT-B1-13` **a provider is pure**: called twice with the same `LayerCtx`
-      it returns equal layers, and holds no attribute that changed between
-      the calls (`R-SIM-2`)
+      it returns equal layers and holds no attribute that changed between the
+      calls (`R-SIM-2`)
+- [ ] `UT-B1-14` no two layer ids share a prefix (`N-3b`) — solo/mute selects by
+      id, and a prefix collision silently selects the wrong set
+- [ ] `ST-B1-1` replay an existing recording — the `Scene` for every tick matches
+      the golden
+- [ ] `ST-B1-2` the same replay under a **different project** produces a
+      different ego box and different geometry — configuration drives the
+      picture (**D3**), and this is the test that proves it end to end
+- [ ] `ST-B1-3` headless render of 100 ticks raises nothing and produces
       non-blank frames
-- [ ] `MC-1` a human confirms the rendered frame is equivalent to `viz.py`'s on
-      the same tick — recorded with date and name
+- [ ] `MC-1` a human confirms the rendered frame is equivalent to the existing
+      viewer's on the same tick — recorded with date and name
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-1`, `P-3` (a viewpoint or layer file referenced with the wrong case works here and fails on Ubuntu)
-- [ ] naming §3 ticked — exposure: `N-2` (layer ids are fully qualified and reach the layer panel, goldens and `sim explain`), `N-3b` (no layer id may be a prefix of another, or solo/mute selects the wrong set)
+- [ ] portability §3 ticked — exposure: `P-1`, `P-3` (a viewpoint or layer file
+      referenced with the wrong case works here and fails on Ubuntu)
+- [ ] naming §3 ticked — exposure: `N-2` (layer ids are fully qualified and
+      reach the layer panel, goldens and `sim explain`), `N-3b` (no layer id may
+      be a prefix of another, or solo/mute selects the wrong set)
 - [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
-- [ ] `ST-B1-1` + `MC-1` — parity proven before anything new is added.
-      **`viz.py` is NOT deleted here** (that is S-E1).
+- [ ] `ST-B1-1` + `MC-1` — parity proven before anything new is added. **The
+      existing viewer is NOT deleted here** (that is `S-E1`), because parity is
+      only meaningful while both exist
+- [ ] `ST-B1-2` green — otherwise `D3` is closed on paper only
 
 ### S-B2 — `Session` + time transport
 
-Closes **D7**. Delivers the *scrolling* requirement.
+**Purpose.** Split executing from viewing, which is what makes backwards seek
+possible at all. Closes **D7**; delivers the *scrolling* requirement
+(`FR-SIM-12`) and the head model (`R-SIM-17`, `FR-SIM-17`).
 
-- [ ] `core/tick.py` — `PortValue` (message + `age_s`/`valid`/`updated`/`origin`),
-      `Tick` with **integer `t_ns`/`dt_ns`** and `pose`; `t_s` derived (arch §5.2)
+**Must not.**
+- Accumulate time as a float. `t_ns` is an integer accumulated from `dt_ns`;
+  `t_s` is **derived and never fed back** (`P-8`). A float seconds accumulator
+  here is precisely what makes a resim non-reproducible, and it fails silently.
+- Let pass 2 mutate anything pass 1 produced. `Session` is immutable; that is
+  what makes 100 random seeks a cheap test rather than a flaky one.
+- Implement a backwards `exec()`. There is no inverse; see the head model.
+
+- [ ] `core/tick.py` — `PortValue` (message + `age_s`/`valid`/`updated`/
+      `origin`), `Tick` with **integer `t_ns`/`dt_ns`** and `pose`
+      (api reference §2.2)
 - [ ] `core/history.py` — `HistoryView`, a read-only windowed view over earlier
       ticks, and `FrameTree` composing static (model) + dynamic (`tick.pose`)
-      transforms — together these are `LayerCtx`
-- [ ] `core/session.py` — `Session`, `at(i)`, `seek_ns(t_ns)`, `events`
-- [ ] `core/runner.py` — pass 1 for the replay case (build Ticks from a
-      recording); pass 2 is the renderer
-- [ ] `view/transport.py` — play/pause, step ±1/±10, speed 0.1×–8×, loop marks,
-      goto, jump-to-event
-- [ ] `view/transport.py` — **the head** (`R-SIM-17`, arch §6.4): `head_tick`,
-      `is_at_head`; **advance-N** (50/100/200/custom) as one cancellable job with
-      progress; stepping backward sets `review_mode` and stops execution; resume
-      offers **skip-to-head** or **recompute-from-0** (the latter only when
-      `Session.deterministic`), and never a silent continue from a rewound tick
-- [ ] Scene cache keyed by `(tick, layer_selection, theme)`
+      transforms — together these are `LayerCtx`. **A windowed view, not the
+      whole session**: handing a provider the full history invites it to become
+      a second analysis engine
+- [ ] `core/session.py` — `Session`, `at(i)`, `seek_ns(t_ns)`, `events`,
+      `deterministic`
+- [ ] `core/runner.py` — pass 1 for the replay case; pass 2 is the renderer
+- [ ] `view/transport.py` — play/pause, step ±1/±10, speed, loop marks, goto,
+      jump-to-event, **and the head** (`R-SIM-17`): `head_tick`, `is_at_head`,
+      advance-N as one cancellable job with progress, `review_mode` on stepping
+      back, and `resume_options()` returning **exactly two named choices** so
+      that silently continuing from a rewound tick is not representable
+- [ ] Scene cache keyed by `(tick, layer_selection, theme)`, with a **stated
+      bound** — an unbounded cache over a 36 000-tick session is `OQ-6` arriving
+      early
 
 **Tests**
 - [ ] `UT-B2-1` `seek_time` maps a time to the correct tick at boundaries
 - [ ] `UT-B2-2` **backwards seek**: from tick N to tick 0 returns tick 0's exact
       data — the thing that is impossible today
 - [ ] `UT-B2-3` toggling a layer re-renders and does **not** re-run pass 1
-      (assert a pass-1 call counter is unchanged)
+      (assert a pass-1 call counter is unchanged) — the test that keeps the
+      layer panel feeling like a tool rather than a re-run
 - [ ] `UT-B2-4` speed/loop/step arithmetic at the ends (tick 0, tick N)
-- [ ] `UT-B2-5` cache invalidates on theme change, not on viewport change
+- [ ] `UT-B2-5` cache invalidates on theme change, **not** on viewport change
 - [ ] `UT-B2-6` **time is exact**: `t_ns` accumulated over 10 000 ticks equals
       the sum of `dt_ns` with zero drift; `t_s` is derived and never fed back
 - [ ] `UT-B2-7` **stepping backward leaves execution mode**: `is_at_head` goes
       false, `review_mode` true, and the SUT's `exec()` counter does not advance
       on any further backward step or seek
 - [ ] `UT-B2-8` **resume offers exactly two choices**, and *recompute-from-0* is
-      unavailable when `Session.deterministic` is false (live sim), with a
-      reason string
-- [ ] `UT-B2-9` **no silent continue**: attempting to advance from a rewound
-      tick without choosing raises, rather than calling `exec()` with mismatched
-      state (`R-SIM-17`)
-- [ ] `UT-B2-10` advance-N arithmetic: 50/100/200/custom clamp at the end of the
-      recording; cancel at tick *k* leaves `head_tick == k`
+      unavailable when `deterministic` is false, carrying its reason
+- [ ] `UT-B2-9` **no silent continue**: advancing from a rewound tick without
+      choosing raises, rather than calling `exec()` with mismatched state
+- [ ] `UT-B2-10` advance-N arithmetic: 50/100/200/custom clamp at the end;
+      cancel at tick *k* leaves `head_tick == k`
+- [ ] `UT-B2-11` `Session` is immutable: mutating a returned `Tick` or its
+      `ports` raises, so pass 2 cannot corrupt pass 1
+- [ ] `UT-B2-12` the Scene cache respects its bound and evicts least-recently-
+      used, measured on a session larger than the bound
 - [ ] `ST-B2-1` on a ≥1000-tick session, 100 random seeks all return correct data
 - [ ] `ST-B2-2` a full pass 1 over the largest existing recording completes
-      within a stated budget, recorded as a number (not asserted as a limit
-      until a baseline exists)
-- [ ] `ST-B2-3` **rewind → recompute-from-0 is exact**: recomputing to tick *N*
-      reproduces the original tick *N* byte-for-byte on a deterministic resim
+      within a stated budget, **recorded as a number** — not asserted as a limit
+      until a baseline exists
+- [ ] `ST-B2-3` **rewind then recompute-from-0 is exact**: recomputing to tick
+      *N* reproduces the original tick *N* byte-for-byte on a deterministic
+      resim
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-8` (integer `t_ns` throughout; a float seconds accumulator here is what makes resim non-reproducible)
-- [ ] naming §3 ticked — exposure: `N-7` (`Session`/`Tick`/`Transport` reprs are what a debugger shows during a seek bug), `N-10` (`tick=` on every line)
+- [ ] portability §3 ticked — exposure: `P-8` (integer `t_ns` throughout; a
+      float seconds accumulator here is what makes resim non-reproducible)
+- [ ] naming §3 ticked — exposure: `N-7` (`Session`/`Tick`/`Transport` reprs are
+      what a debugger shows during a seek bug), `N-10` (`tick=` on every line)
 - [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
 - [ ] `UT-B2-2` + `ST-B2-1` green; the "forward only, no rewind" caveat is
-      deleted from `df_dll_sim_mcap.py`'s docstring only in S-E1
+      deleted from the existing tool's docstring only in `S-E1`
+- [ ] `UT-B2-6` green — exact time is the precondition for every determinism
+      claim later in this plan, and it is cheapest to establish here
 
 ### S-B3 — Qt viewer shell
 
-- [ ] `render/viewer.py` — the Qt window: BEV canvas + docks
+**Purpose.** The interactive surface: docks, panels, layer tree, inspector,
+timeline, plots. Everything a developer touches, over the `Session` that `S-B2`
+made seekable.
+
+**Must not.**
+- **Run pass 1 on the GUI thread.** Building a `Session` blocks for as long as
+  the recording is long; doing it on the UI thread defeats the scrubbing this
+  phase exists to deliver, and the symptom (a frozen window) gets misread as a
+  performance problem rather than a threading one. Pass 1 runs on a worker;
+  results are handed back by signal; the GUI never blocks on it.
+- **Put logic in the shell** (`GT-9`). A panel arranges and dispatches; anything
+  it computes belongs in `core/`, `view/` or `check/` where it is testable
+  headless. The test for this is whether `ST-B3-1` can do it with no window.
+- Name a font family, write a settings path by hand, or assume a display
+  exists (`P-7`).
+
+- [ ] `render/viewer.py` — the Qt window; a **dockable peer-panel grid** where
+      BEV, camera, plots, timeline, inspector, layers and pipeline are all
+      panels, none privileged (visualization spec §11.1)
+- [ ] **Threading**: pass 1 on a `QThread`/worker, progress by signal,
+      cancellable; the Scene cache is read from the GUI thread only. One
+      documented ownership rule, stated in the module docstring
 - [ ] `view/layers.py` — layer tree, groups, solo/mute, verbosity level, search,
       per-project persistence
 - [ ] `view/workspace.py` — read `modules/<name>/sim/workspace.yaml`; shipped
-      default, user override, reset (viz §13b)
+      default, user override, reset (viz §13b). **A component's arrangement, not
+      an application mode** — Bench/Campaign arrive in `S-D8` and load this
 - [ ] `Interaction` on `LayerCtx` + `reacts_to=` on the provider decorator;
-      cache key includes interaction only for declaring layers (viz §7.5)
+      the cache key includes interaction **only for declaring layers**, so a
+      mouse move does not invalidate the whole scene (viz §7.5)
 - [ ] `view/inspector.py` — docked, declared fields, pin, multi-select,
       copy-as-text
 - [ ] `view/timeline.py` — signal lanes (one scale per lane), state lanes with
-      labels, event markers, click-to-seek
-- [ ] `view/signals.py` — the **one signal resolver** (visualization spec §7.4):
+      labels, event markers, bookmarks, click-to-seek
+- [ ] `view/signals.py` — the **one signal resolver** (viz §7.4):
       `<component>.<port>.<field>` · `source.*` · `truth.*` · `derived.*`. Raw
-      port fields resolve off the manifest with no registration; only computed
-      signals register with `@signal`
+      port fields resolve off the manifest with **no registration**; only
+      computed signals register with `@signal` (`NR-SIM-8`)
 - [ ] `view/plots.py` — `timeseries` / `xy` / `state` / `distribution` panels
       over that resolver
-- [ ] `render/viewer.py` — a **dockable peer-panel grid**: BEV, camera, plots,
-      timeline, inspector, layers, pipeline are all panels; layouts saveable per
-      project (visualization spec §11.1)
-- [ ] `view/measure.py` — ruler with snap, range rings, cursor readout with frame
-      name, persistent annotations
-- [ ] HUD + the stale/invalid banner (visualization spec §10)
-- [ ] `app/cli.py` — `sim view`, `sim render`
+- [ ] `view/measure.py` — ruler with snap, range rings, cursor readout carrying
+      the **frame name**, persistent annotations
+- [ ] HUD + the stale/invalid banner (viz §10)
+- [ ] `cli/view.py`, `cli/render.py` — argument parsing only. **Not
+      `app/cli.py`**: `app/` is the GUI and holds no logic (`GT-9`)
 
 **Tests**
 - [ ] `UT-B3-1` layer-tree state: group tri-state, solo/mute, persistence
       round-trips
 - [ ] `UT-B3-2` inspector resolves a `pick_id` to its provider's declared fields;
-      an entity that disappears is dropped, not shown stale
+      an entity that disappears is **dropped, not shown stale**
 - [ ] `UT-B3-3` timeline: a state lane emits an event marker at every transition
       and only there
-- [ ] `UT-B3-4` ruler distance/Δx/Δy/bearing correct; snap picks the nearest
+- [ ] `UT-B3-4` ruler distance/dx/dy/bearing correct; snap picks the nearest
       anchor within the threshold
-- [ ] `UT-B3-5` stale banner appears exactly when `valid == 0` or
-      `ageS > <fn>_MAX_AGE_*`
+- [ ] `UT-B3-5` stale banner appears exactly when `valid == 0` or the port's age
+      exceeds its declared maximum
 - [ ] `UT-B3-6` one signal string resolves identically for the timeline strip
       and a plot panel; a **raw port field needs no registration** at all
 - [ ] `UT-B3-7` a `timeseries` lane with two signals of different magnitude
-      creates **two lanes**; a single lane with two y-scales is rejected
+      creates **two lanes**; a single lane with two y-scales is rejected —
+      a dual-axis plot is the most reliable way to make two signals look
+      correlated when they are not
 - [ ] `UT-B3-8` `xy` panel plots signal-vs-signal; colouring by a third works
 - [ ] `UT-B3-9` playhead is shared — seeking in a plot moves the BEV and the
       timeline to the same tick
@@ -647,20 +728,33 @@ Closes **D7**. Delivers the *scrolling* requirement.
 - [ ] `UT-B3-13` a provider declaring `reacts_to=("cursor",)` receives the
       cursor **in its own frame, in metres**, and re-renders on cursor change
 - [ ] `UT-B3-14` a provider declaring nothing is **not** re-rendered on a mouse
-      move — interaction stays cheap, and purity holds (same `(tick, ctx)` in,
-      same layers out)
-- [ ] `ST-B3-1` `sim render <recording> --at 7.3 --preset blindspot_l --out
-      fig.png` produces a non-blank PNG headlessly
+      move — interaction stays cheap, and purity holds
+- [ ] `UT-B3-15` **pass 1 does not run on the GUI thread**: with a deliberately
+      slow reader, the window stays responsive and progress is reported;
+      asserted on thread identity, not on elapsed time
+- [ ] `UT-B3-16` cancelling a load leaves no partial `Session` reachable — a
+      half-built session rendered as if complete is a silent wrong picture
+- [ ] `UT-B3-17` no Qt module is imported by anything under `core/`, `model/`,
+      `scene/`, `contracts/`, `io/` or `check/` (`GT-9`, api reference §1)
+- [ ] `ST-B3-1` `sim render <recording> --at <t> --preset <name> --out fig.png`
+      produces a non-blank PNG **headlessly**
+- [ ] `ST-B3-2` the full panel set opens and renders under an offscreen
+      platform, on both platforms (`P-7`) — this is how the GUI is tested at all
 - [ ] `MC-4` a human confirms scrubbing a long session feels responsive
 - [ ] `MC-1` (repeat) a human confirms the full shell reads well
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-7` (every Qt rule: standard paths, no named font families, high-DPI policy set before the app object, offscreen must work)
-- [ ] naming §3 ticked — exposure: `N-3a` (panel and dock classes are where generic names like `manager`/`handler` appear first), `N-7`
+- [ ] portability §3 ticked — exposure: `P-7` (every Qt rule: standard paths, no
+      named font families, high-DPI policy set before the app object, offscreen
+      must work)
+- [ ] naming §3 ticked — exposure: `N-3a` (panel and dock classes are where
+      generic names like `manager`/`handler` appear first), `N-7`
 - [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
-- [ ] Every item in visualization spec §4–§9 demonstrable on one BSD recording,
+- [ ] `UT-B3-15` + `ST-B3-2` green — responsive by construction and testable
+      with no display, which is what makes every later GUI stage cheap
+- [ ] Every item in visualization spec §4–§9 demonstrable on one recording,
       ticked individually below:
       - [ ] pan / zoom / fit / presets / follow modes
       - [ ] scrub, step, speed, loop, jump-to-event
