@@ -11,6 +11,10 @@ Design set (read before starting a stage): [sim_architecture.md](sim_architectur
 [sim_resim_and_recording.md](sim_resim_and_recording.md) ·
 [sim_scenarios_and_expectations.md](sim_scenarios_and_expectations.md) ·
 [sim_player.md](sim_player.md) (the application) ·
+**[sim_api_reference.md](sim_api_reference.md) — the exact symbols to type;
+a signature there is a contract** ·
+[sim_naming_and_diagnostics.md](sim_naming_and_diagnostics.md) (`N-1..N-13`,
+`DG-1..DG-5`; its §3 checklist is ticked per stage) ·
 **[sim_portability.md](sim_portability.md) — read before writing any code;
 its `P-1`..`P-10` apply to every stage, and its §3 checklist is ticked per
 stage.**
@@ -199,6 +203,14 @@ impression is not a measurement.
 - [ ] `UT-A1-4` each error class carries file/key/both-ends context and is
       distinguishable by type — a provenance warning never raises (`NR-SIM-4`)
 - [ ] `ST-A1-1` `pip install -e modules/sim` then `python -c "import adas_sim"`
+- [ ] `UT-A1-5` **every public class reprs its own name** and no `repr` contains
+      `0x` (`N-7`) — the cheapest debugging feature in the system and the
+      easiest to skip
+- [ ] `UT-A1-6` **import direction**: `core`/`model`/`scene`/`contracts`/`io`/
+      `check` never import `render`, `cli` or `app` (module-graph scan,
+      api reference §1)
+- [ ] `UT-A1-7` `new_run_id` is stable for identical inputs and differs for any
+      single changed input (`N-9`) — the equality is itself diagnostic
       from a directory outside the repo
 - [ ] `ST-A1-2` `conan editable add modules/sim` succeeds and `conan graph info`
       resolves `adas-sim`
@@ -318,6 +330,10 @@ Implements `R-SIM-14`.
       (including `exports/`) loads; tick count > 0; no exception (skips if
       `modules/df` absent)
 - [ ] `ST-A4-2` read → write → read yields an identical topic/message set
+- [ ] `UT-A4-9` **no name is translated**: for a round-trip through every
+      registered codec, the set of topic and field names in the model is
+      unchanged (`N-6`). A codec forced to spell a name differently declares
+      the mapping as data, and `sim explain` prints it
 
 **Gate**
 - [ ] `ST-A4-1` green across every existing recording
@@ -375,6 +391,9 @@ removing).
 - [ ] `ST-B1-2` the same replay with `--project 2w_base` produces a **different**
       ego box and a different zone — configuration drives the picture (**D3**)
 - [ ] `ST-B1-3` headless render of 100 ticks raises nothing and produces
+- [ ] `UT-B1-13` **a provider is pure**: called twice with the same `LayerCtx`
+      it returns equal layers, and holds no attribute that changed between
+      the calls (`R-SIM-2`)
       non-blank frames
 - [ ] `MC-1` a human confirms the rendered frame is equivalent to `viz.py`'s on
       the same tick — recorded with date and name
@@ -521,6 +540,8 @@ Closes **D7**. Delivers the *scrolling* requirement.
 - [ ] `UT-B4-2` video export of a marked interval yields the right frame count
 - [ ] `UT-B4-3` a plot exports to PNG and CSV, both with the provenance sidecar
 - [ ] `ST-B4-1` `sim render` twice at the same tick produces byte-identical PNGs
+- [ ] `UT-B4-4` a snapshot sidecar carries the **same `run_id`** as its session
+      (`N-9`) — given any one artefact you can find the other five
       (determinism of rendering)
 
 **Gate**
@@ -582,6 +603,10 @@ Both ABIs live and are tested against each other (`sim_sil_contract.md` §6).
 - [ ] `ST-C1b-1` **equivalence**: for a fixed sequence of inputs, `adasExec` and
       `dfExec` produce byte-identical outputs
 - [ ] `ST-C1b-2` `sil_host` still builds and runs unchanged (it still calls
+- [ ] `UT-C1b-5` **one token, every layer** (`N-1`): the manifest's port tokens,
+      the `ENABLED_FUNCTIONS` list and the `src/component/` directory names
+      agree exactly; any disagreement fails naming all three. This is what
+      makes a single grep return the whole vertical slice
       `dfExec`)
 
 **Gate**
@@ -899,6 +924,20 @@ whether anyone writes a private player, so `GT-8` is measured here.
       overridable, orphan stage flagged (`R-SIM-10`)
 - [ ] `app/gui/pipeline_panel.py` — the per-stage mode toggle performs the
       auto-close undoably and renders the *"computed, not consumed"* badge
+- [ ] `cli/explain.py` — **`sim explain <name>`**, the flagship debugging verb
+      (`DG-2`). Accepts a port, field, layer id, style token, codec name,
+      run id or error code; prints kind, type+unit, producer stage and mode,
+      origin tag, topic presence, schema, which layer draws it, which
+      expectation asserts it, and its value at the current tick. Every line
+      comes from something already in the system — no new index
+- [ ] `cli/doctor.py` — **`sim doctor`** (`DG-3`): interpreter and install
+      mode; which library each `impl:` stem resolves to **and by which
+      pattern, listing every directory searched** (`P-5`); which config
+      bundle each stage resolves, from where, its hash, **and whether the
+      viewer and the SUT would agree** (`R-SIM-3a`); codec capabilities;
+      which cuts a recording supports; platform, line endings, console
+      encoding (`P-4`). Non-zero exit on anything that would break a run
+- [ ] `cli/list.py` — `sim list ports|topics|layers|signals` (`DG-1`)
 - [ ] `impl: "legacy:<lib>"` — **scope only**: the adapter's config shape is
       specified, not implemented. No such binary exists yet; implementing it
       before one does would be speculative
@@ -915,6 +954,12 @@ whether anyone writes a private player, so `GT-8` is measured here.
       the exact prior modes
 - [ ] `UT-D6-6` forcing the gap open is permitted and yields exactly one
       orphan-stage warning naming the stage
+- [ ] `UT-D6-7` `sim explain` resolves each of the six accepted name kinds,
+      and on an unknown name suggests a fuzzy match rather than failing
+      bare (`DG-2`, `N-8`)
+- [ ] `UT-D6-8` `sim doctor` exits non-zero on a broken stem, a bundle
+      mismatch and a missing codec capability — and each message names the
+      file (`DG-3`)
 - [ ] `ST-D6-1` **day one, end to end**: a fresh component library with only a
       manifest is probed, wired into a five-line pipeline, run against
       `tiny.mcap`, and its outputs appear in a recording — **no edit anywhere in
@@ -960,6 +1005,9 @@ the codec table symmetric and adds the two verbs that scale it.
 - [ ] `UT-D7-6` `sim convert` round-trips `tiny.mcap` → other → back with
       identical topics, schemas, provenance and message bytes
 - [ ] `ST-D7-1` `sim export` on a real recording opens in a spreadsheet and in
+- [ ] `ST-D7-4` an export header carries the `run_id`, the bundle hash and the
+      origin tags of every exported port (`N-9`, `R-SIM-12`) — an export
+      frequently becomes the thing a report quotes
       `pandas.read_csv` with the preamble skipped by its comment character
 - [ ] `ST-D7-2` `sim batch` over ≥20 recordings produces one report with a row
       per recording; a failing recording does not abort the run

@@ -9,8 +9,10 @@ and renders them. Consumed by every component; owned by none.
 
 Design docs live here in `docs/`. `docs/sim_player.md` names the application
 (**Vantage**, with the **Bench** and **Campaign** workspaces) and specifies its
-window; `docs/sim_portability.md` is the Windows/Ubuntu contract every stage
-obeys. `docs/py/` holds frozen design evidence plus the checks that keep the
+window; `docs/sim_api_reference.md` fixes the exact symbols to type;
+`docs/sim_naming_and_diagnostics.md` holds the naming-for-debugging rules
+(`N-1..N-13`) and the diagnostics contract; `docs/sim_portability.md` is the
+Windows/Ubuntu contract every stage obeys. `docs/py/` holds frozen design evidence plus the checks that keep the
 documents consistent — run `python docs/py/run_all.py` before any docs commit.
 `docs/sim_requirements.md` is the **master
 requirements register** — read it when you need to know what was actually asked

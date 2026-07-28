@@ -1,14 +1,14 @@
 # check_traceability
-# generated 2026-07-28T14:22:16
+# generated 2026-07-28T14:35:12
 # platform  win32
 # python    3.14.6
 
 Checking: requirements <-> tests <-> stages
-plan defines 215 test/gate ids across 26 stages, plus 8 document checks
+plan defines 223 test/gate ids across 26 stages, plus 8 document checks
 
 1. Requirement -> test
 ----------------------
-54 requirements in the register
+55 requirements in the register
 ok    every non-parked requirement names at least one existing test
 
 2. Test -> stage
@@ -21,8 +21,8 @@ ok    all 26 stages define tests and a gate
 
 4. Coverage summary
 -------------------
-tests defined in plan      223
-tests cited by a requirement 123
+tests defined in plan      231
+tests cited by a requirement 131
 tests not cited by any requirement 100  (fine -- stage gates cite them)
 
 RESULT  pass

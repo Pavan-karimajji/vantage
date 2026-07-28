@@ -1,5 +1,5 @@
 # check_rules_coverage
-# generated 2026-07-28T14:22:16
+# generated 2026-07-28T14:35:12
 # platform  win32
 # python    3.14.6
 
@@ -12,13 +12,13 @@ rule      in register  in plan  in design docs
 --------  -----------  -------  --------------
 R-SIM-1   yes          yes      yes
 R-SIM-2   NO           yes      yes
-R-SIM-3   yes          yes      NO
+R-SIM-3   yes          yes      yes
 R-SIM-3a  yes          yes      yes
 R-SIM-4   yes          yes      yes
 R-SIM-5   yes          NO       yes
 R-SIM-6   yes          yes      yes
 R-SIM-7   NO           yes      yes
-R-SIM-8   yes          yes      NO
+R-SIM-8   yes          yes      yes
 R-SIM-9   yes          yes      yes
 R-SIM-10  yes          yes      yes
 R-SIM-11  yes          yes      yes

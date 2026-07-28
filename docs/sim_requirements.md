@@ -258,6 +258,34 @@ unprompted), `UT-D8-5` (control count in the default layout), `UT-D8-6`
 all), `ST-D8-2` (three actions to a moving picture), `GT-8`.
 **Status.** frozen.
 
+### FR-SIM-49 — Naming conventions must be appropriate for debugging
+**Requirement.** The naming conventions are not only for tidiness — they must
+make debugging easier.
+**Origin.** 2026-07-28: *"naming conventions also should be also appropriate for
+debugging."*
+**Answered by.** [sim_naming_and_diagnostics.md](sim_naming_and_diagnostics.md)
+— `N-1..N-13` plus the diagnostics contract `DG-1..DG-5`. The premise it is
+derived from: a run passes through seven layers (world → codec → recording →
+wiring → SUT → provider → renderer), and the entire debugging task is deciding
+**which of the seven lied**. Every rule is chosen so one name answers that, and
+each is checked by **the isolation test** — paste the name alone into a message;
+can a colleague say what it is, who produced it and where to look? `objects`
+fails; `perception-core.gen_object_list` passes.
+
+The load-bearing ones: **one token in every layer** (`N-1`) so a single grep
+returns the whole vertical slice; **no translation tables** (`N-6`) so the log,
+the file and the column header cannot disagree; **every object reprs its own
+name** (`N-7`); **an error names expected, found, where it looked and a next
+action** (`N-8`), made mandatory by the exception constructor so a bad message
+is an author-time `TypeError`; **one `run_id` joins all six artefacts** (`N-9`);
+**a fixed, greppable log line with a closed `event=` vocabulary** (`N-10`).
+Diagnostics turn names into questions: **`sim explain <name>`** (`DG-2`) and
+**`sim doctor`** (`DG-3`), both of which read only what the system already
+knows — no new index to maintain.
+**Verified by.** `UT-A1-5` (repr), `UT-A1-7` (run id), `UT-C1b-5` (one token),
+`UT-A4-9` (no translation), `UT-B4-4` (correlation), `UT-D6-7`, `UT-D6-8`,
+`UT-D8-8` (message contract), `ST-D7-4`. **Status.** frozen.
+
 ### FR-SIM-48 — Name the player and its two workspaces
 **Requirement.** Good names for the master player and for the two stages inside
 it — one for project-scale simulation, one for the developer.
