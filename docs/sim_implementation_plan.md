@@ -1785,98 +1785,211 @@ this stage decides whether anyone meets it. Spec:
 
 ---
 
-## 8. Phase E — Retirement (what leaves `modules/df`)
+## 8. Phase E — Retirement (what leaves the component repos)
 
-**Nothing here starts until Phases A–D are ticked.** Each deletion has a named
-gate that proves the replacement works first.
+**Nothing here starts until Phases A–D are ticked.**
 
-### S-E1 — Delete `df`'s private tooling
+**Phase E's risk is a different shape from A–D's, and the gates reflect it.**
+A–D *add*: a mistake shows up as a failing test, on the thing you just wrote.
+E *removes*: a mistake shows up as **something that used to work being gone**,
+often noticed weeks later by someone who was not in the room. Three rules
+follow, and they are the whole of how this phase is run safely:
+
+- **One commit per deleted row.** Never a single "delete the old tooling"
+  commit. A row that turns out to have been load-bearing must be revertible
+  **without** reverting the other eleven.
+- **A row's gate is that its replacement is *proven*, not that it *exists*.**
+  The right-hand column of the S-E1 table is a proof obligation, checked row by
+  row (`NR-SIM-30`).
+- **Deleting the caller is not enough — something must call the replacement.**
+  A deletion suite that only asserts absence would pass with the new code never
+  invoked. `ST-E1-5` closes that.
+
+### S-E1 — Delete the components' private tooling
+
+**Purpose.** Leave each component holding only what it owns: `sim/` plug-ins,
+scenarios, recordings. The ≈3,530 lines below are the cost of every component
+having built its own viewer, and removing them is what makes `R-SIM-1` visible
+in the tree rather than only in a rule.
+
+**Must not.** Delete a row before the stage named in its `Gate` column is
+ticked. And must not batch the rows into one commit — see the phase preamble.
 
 **Delete** (gate: the named stage is green):
 
 | Path | Lines | Replaced by | Gate |
 |---|---|---|---|
-| - [ ] `tools/carla/replay/viz.py` | 562 | `render/` + `df/sim/layers/` | S-B1, MC-1 |
+| - [ ] `tools/carla/replay/viz.py` | 562 | `render/` + `<c>/sim/layers/` | S-B1, MC-1 |
 | - [ ] `tools/carla/replay/foxglove_stream.py` | 113 | `render/foxglove.py` | S-D1 |
 | - [ ] `tools/carla/replay/df_dll_sim_mcap.py` | 381 | `sim resim` | S-C1c, S-C2 |
 | - [ ] `tools/carla/replay/requirements.txt` | — | `pyproject.toml` extras | S-A1 |
 | - [ ] `tools/carla/df_ctypes.py` | 104 | `contracts/component.py` | S-C1c |
-| - [ ] `tools/carla/mcap_recorder.py` | 99 | `io/mcap.py` + `sources/carla` | S-A4, S-C2 |
-| - [ ] `tools/carla/carla_bridge.py` | 983 | `sources/carla/**` | S-C2, MC-2 |
-| - [ ] `tools/carla/actor_behaviour.py` | 136 | `sources/carla/behaviour.py` | S-C2 |
-| - [ ] `tools/carla/frame_convert.py` | 61 | `sources/carla/frames.py` | S-C2 |
+| - [ ] `tools/carla/mcap_recorder.py` | 99 | `io/mcap.py` + `sources/` | S-A4, S-C2 |
+| - [ ] `tools/carla/carla_bridge.py` | 983 | `sources/<world>/**` | S-C2, MC-2 |
+| - [ ] `tools/carla/actor_behaviour.py` | 136 | `sources/<world>/behaviour.py` | S-C2 |
+| - [ ] `tools/carla/frame_convert.py` | 61 | `sources/<world>/frames.py` | S-C2 |
 | - [ ] `tools/carla/README.md`, `replay/README.md` | — | `modules/sim/README.md` | S-D3 |
 | - [ ] `scripts/df_sim_gui.py` + `sim_gui.bat` | 647 | `app/panels/pipeline.py` + the `vantage` entry point | S-D3, S-D8 |
 | - [ ] `docs/bsd/py/bsdviz/{calib,egogeom,canvas,palette,frame,annotate,logs}.py` | ~440 | `model/`, `render/theme.py`, `render/matplotlib.py`, `scene/frames.py` | S-A2, S-A3, S-D2 |
 | **Total removed** | **≈3,530** | | |
 
-**Move into `modules/df/sim/`** (content, not framework):
-- [ ] `docs/bsd/py/bsdviz/{zone,coverage,sensors,lean,kinematics}.py` → the BSD
-      layer provider + figure content
-- [ ] `docs/bsd/py/bsdviz/check.py` → stays a figure-verification concern under
-      `docs/bsd/py/`
+**Move into `modules/<name>/sim/`** (content, not framework):
+- [ ] the function-specific figure modules → that function's layer provider +
+      figure content
+- [ ] the figure-verification module stays a docs concern, under `docs/`
 
 **Keep, untouched:**
 - [ ] `src/component/**`, `src/platform/**`, `src/project/**`, `include/`,
       `conf/`, `CMakeLists.txt`, all build machinery
-- [ ] `tests/unit|integration|fixtures` (gtest)
-- [ ] `tests/carla_scenarios/**`, `tests/carla_testruns/**`
-- [ ] `docs/bsd/{req,ref,images,logs}` and the figure content in `docs/bsd/py/`
+- [ ] the component's own gtest tree
+- [ ] scenarios and recorded test runs
+- [ ] the component's requirement/reference/image/log docs
 
 **Tests**
-- [ ] `ST-E1-1` nothing under `modules/df` imports `cv2`, `foxglove`, `mcap` or
-      `ctypes`
-- [ ] `ST-E1-2` no `sys.path.insert` into `docs/` anywhere (**D4** closed)
-- [ ] `ST-E1-3` `modules/df/tools/` no longer exists
-- [ ] `ST-E1-4` GT-4 — `df_tests` unchanged and green (this is a Python-only
-      deletion, exactly as the 2026-07-13 relocation proved)
+- [ ] `ST-E1-1` nothing under a component repo imports `cv2`, `foxglove`, `mcap`
+      or `ctypes` — the framework owns all four now
+- [ ] `ST-E1-2` no `sys.path.insert` into a `docs/` tree anywhere (**D4** closed)
+- [ ] `ST-E1-3` the component's `tools/` directory no longer exists
+- [ ] `ST-E1-4` `GT-4` — the component's own gtest suite unchanged and green.
+      This is a **Python-only** deletion; a C++ count that moves means a row was
+      not what it claimed to be
+- [ ] `ST-E1-5` **the replacement is exercised**: for each deleted row, the
+      named replacement is invoked by at least one passing test. Absence alone
+      would pass `ST-E1-1..4` with the new code never running
+- [ ] `ST-E1-6` **no dangling reference**: no doc, script, CI file or CLAUDE.md
+      names a deleted path (grep over the superproject, as a test) — `GT-7`,
+      applied to the one change most likely to strand a reference
+- [ ] `ST-E1-7` the git history shows **one commit per deleted row**, each
+      naming its gate stage — checked by a script over the branch, because the
+      revertibility this phase depends on is a property of the history, not of
+      the tree
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-2` (deleting the old tooling must not leave an absolute path in a doc that referenced it)
-- [ ] naming §3 ticked — exposure: `N-12` (after this stage a traceback path means exactly one layer; that is the point of the deletion)
+- [ ] portability §3 ticked — exposure: `P-2` (deleting the old tooling must not
+      leave an absolute path in a doc that referenced it)
+- [ ] naming §3 ticked — exposure: `N-12` (after this stage a traceback path
+      means exactly one layer; that is the point of the deletion)
 - [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
-- [ ] `ST-E1-1..4` green **and every replacement stage named in the table above
+- [ ] `ST-E1-1..7` green **and every replacement stage named in the table above
       already ticked** — `NR-SIM-30` is the rule this gate enforces: nothing is
       deleted before its replacement is proven, and the table's right-hand
       column is the proof obligation, checked row by row
 
-### S-E2 — Retire the old ABI
+### S-E2 — Retire the positional ABI
 
-- [ ] `sil_host/main.cpp` moves to the generic ABI
-- [ ] Delete `dfApiVersion`/`dfInit`/`dfExec`/`dfShutdown` from
-      `df_interface_c.h/.cpp`
-- [ ] `df_sil_dll.md` updated — rules 8 and 11 now resolved, recorded as such
+**Purpose.** Remove the ABI that grew a parameter pair per function, so `D1`
+cannot recur. This is the last C++ change in the plan.
+
+**Must not.** Remove the old exports and move the host in one step. **Order
+matters and is not negotiable:**
+
+1. move the host to the generic ABI, and prove it (`ST-E2-2`);
+2. *then* delete the positional exports (`ST-E2-1`).
+
+Doing both at once means a failure cannot be attributed to either, and the
+rollback is the whole stage rather than one commit.
+
+**Know who else calls it.** Removing an export is an ABI break for **any**
+consumer, inside this repo or not. The first task below is to find them; a
+consumer discovered after the deletion is a consumer discovered by an outage.
+
+- [ ] **Enumerate consumers** of the positional exports — this repo, sibling
+      repos, and any delivered binary — and record the list here before
+      deleting anything. An empty list is a fine answer; an unexamined one is
+      not
+- [ ] `sil_host` moves to the generic ABI **and is proven equivalent** before
+      any deletion
+- [ ] Delete the positional exports from the component's C interface
+- [ ] `df_sil_dll.md` updated — the rules this closes are recorded as resolved,
+      not silently dropped
 
 **Tests**
-- [ ] `ST-E2-1` no reference to the removed symbols anywhere
-- [ ] `ST-E2-2` `sil_host` runs end to end on the generic ABI
-- [ ] `ST-E2-3` GT-4 green; `adasAbiVersion()` still `1` (adding functions never
-      bumped it — the whole point)
+- [ ] `ST-E2-1` no reference to the removed symbols anywhere in the superproject
+      or its submodules
+- [ ] `ST-E2-2` the host runs end to end on the generic ABI, producing outputs
+      **byte-identical** to its pre-migration run on the same recording
+- [ ] `ST-E2-3` `GT-4` green; `adasAbiVersion()` still `1` — after every
+      function added since `S-C1a`. That constant is the entire evidence that
+      adding a function never touched the ABI, which is what `D1` was
+- [ ] `ST-E2-4` the consumer list above is empty, or every entry on it has been
+      migrated and named — the deletion is not gated on hope
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-5` (removing the positional exports must not break either platform's loader path)
-- [ ] naming §3 ticked — exposure: `N-1` (the old positional names disappear; nothing may keep a second spelling alive)
+- [ ] portability §3 ticked — exposure: `P-5` (removing the positional exports
+      must not break either platform's loader path)
+- [ ] naming §3 ticked — exposure: `N-1` (the old positional names disappear;
+      nothing may keep a second spelling alive)
 - [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
-- [ ] `ST-E2-1..3` green — the positional ABI is gone and `D1` cannot recur.
-      `adasAbiVersion()` still `1` after every function added since S-C1a is
-      the proof that adding a function never touched the ABI
+- [ ] `ST-E2-1..4` green — the positional ABI is gone, every consumer was known
+      before it went, and `adasAbiVersion()` still reading `1` proves the
+      replacement never had the defect the original did
 
 ### S-E3 — Final invariant gates
 
-- [ ] `scripts/check_invariants.py` wired to run all of GT-1..GT-7
+**Purpose.** Decide, mechanically, whether the system is done — against the
+requirements register rather than against an impression.
+
+**Must not.** Declare completion on a green test suite alone. A suite proves the
+tests pass; it does not prove the **requirements** are covered, that the docs
+still describe the code, or that a stranger can use the thing. Those are
+separate gates below, and two of them cannot be automated.
+
+- [ ] `scripts/check_invariants.py` wired to run every **automatable** gate:
+      `GT-1`, `GT-2`, `GT-3`, `GT-6`, `GT-9`. The others are named with why:
+      - `GT-4` / `GT-5` — external commands (`ctest`, `diff -q`), run by the
+        gate script but owned elsewhere
+      - `GT-7` — a review judgement (docs vs code), not a script
+      - **`GT-8` — a measured human number.** It cannot be automated, it cannot
+        be substituted by a green suite, and it is the one that decides whether
+        anyone actually uses this
+- [ ] `python docs/py/run_all.py` wired in as part of the same gate — the design
+      documents are checked by the same command that checks the code
 - [ ] `.claude` artifacts reviewed against the shipped code; any rule the code
-      contradicts is fixed on one side
-- [ ] `plan.md` item 25 marked `[x]`; item 19 marked `[x]` (closed by S-C5);
-      item 4 re-scoped to the CarMaker codec
+      contradicts is fixed **on one side**, in the same commit (`GT-7`)
+- [ ] Backlog updated: item 25 closed, item 19 closed (by `S-C5`), the CarMaker
+      codec re-scoped to its own trigger (`FR-SIM-50`)
+- [ ] **The requirements register is re-read end to end**, and every row's
+      `Verified by` is confirmed to name a test that now exists and passes
 
 **Tests**
 - [ ] `ST-E3-1` `check_invariants.py` exits 0
-- [ ] `ST-E3-2` the full suite — `pytest modules/sim/tests` + `ctest` on `df` —
-      green, with counts recorded
+- [ ] `ST-E3-2` the full suite — `pytest modules/sim/tests` + every component's
+      `ctest` — green, with counts recorded **in this document**
+- [ ] `ST-E3-3` **every requirement is covered by a passing test**: each
+      register row's `Verified by` ids are collected, run, and required to pass.
+      A requirement whose verifier is skipped is reported as **uncovered**, not
+      as passing — a skip is the most common way a requirement quietly stops
+      being verified
+- [ ] `ST-E3-4` `docs/py/run_all.py` green, including `check_traceability` and
+      `check_rules_coverage` — the design set and the code agree
+- [ ] `ST-E3-5` **the Linux exposure is stated, not assumed**: re-run `S-D8`'s
+      offscreen suite on a Linux machine if one exists. **If none exists, that
+      is recorded here as an open exposure with a date**, never silently
+      omitted ([sim_portability.md](sim_portability.md) §4). "We obeyed `P-1`
+      to `P-10`" is a claim; running the suite is evidence, and the difference
+      must be visible in this document
+
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: every `P-` rule, re-checked; this is the
+      last gate before the system is called done
+- [ ] naming §3 ticked — exposure: every `N-` rule; `DG-2`/`DG-3` must answer
+      for every name the system can produce
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+
+**Gate — the definition of done**
+- [ ] `ST-E3-1..4` green
+- [ ] **`GT-8` measured and its number written into this document**, whatever it
+      is. A number above the target is a finding to act on, not a reason to
+      delete the gate
+- [ ] `MC-1..MC-5` all recorded with a date and a name
+- [ ] Every checkbox in this document ticked, or explicitly struck with the
+      reason recorded next to it — an untouched checkbox at this point means
+      nobody looked, which is different from a decision
+
 
 ---
 

@@ -1,10 +1,10 @@
 # check_traceability
-# generated 2026-07-28T15:07:38
+# generated 2026-07-28T15:11:13
 # platform  win32
 # python    3.14.6
 
 Checking: requirements <-> tests <-> stages
-plan defines 261 test/gate ids across 26 stages, plus 8 document checks
+plan defines 268 test/gate ids across 26 stages, plus 8 document checks
 
 1. Requirement -> test
 ----------------------
@@ -17,7 +17,7 @@ ok    every stage-scoped test id maps to a declared stage
 
 2b. Test ids are unique
 -----------------------
-ok    all 204 test definitions unique
+ok    all 209 test definitions unique
 
 2c. Tests are filed under the stage they name
 ---------------------------------------------
@@ -29,8 +29,8 @@ ok    all 26 stages define tests and a gate
 
 4. Coverage summary
 -------------------
-tests defined in plan      269
+tests defined in plan      276
 tests cited by a requirement 136
-tests not cited by any requirement 133  (fine -- stage gates cite them)
+tests not cited by any requirement 140  (fine -- stage gates cite them)
 
 RESULT  pass
