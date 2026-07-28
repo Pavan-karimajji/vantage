@@ -725,174 +725,303 @@ The sidecar is written in the same call, or the capture fails.
 
 ## 6. Phase C — The SIL contract, the production side, the bundle
 
-**The only phase that changes production C++.** Every C++ change is additive
-until Phase E.
+**The only phase that changes production C++**, and therefore the only phase
+that can break a shipping component. Three properties hold throughout:
+
+- **Every C++ change is additive until Phase E.** The generic exports live
+  *beside* the positional ones and are tested against them; nothing is removed
+  until `S-E2`, gated on the new path being proven equivalent.
+- **`src/component/**` is never touched.** The new exports are a name-lookup
+  shim onto the existing body (`df_sil_dll.md` rule 9). If a stage here needs an
+  algorithm change, the stage is wrong.
+- **`GT-4` is re-checked after every commit in this phase**, not just at the
+  stage gate. A component's own test suite going from green to green is the only
+  evidence that "additive" was true.
+
+**Two platform traps this phase must avoid**, both of which an earlier draft of
+this plan walked into and which are the reason
+[sim_portability.md](sim_portability.md) exists:
+
+| Trap | Wrong | Right |
+|---|---|---|
+| Locating the library's own directory | `GetModuleFileNameW` — Windows-only, and it appears in the natural first draft of `adasInit(NULL)` | a one-function abstraction: `GetModuleFileNameW` on Windows, `dladdr` on Linux, declared in the contract doc and implemented once (`P-5`) |
+| The bundle's output path | `<build>/…/Release/config/` — `Release/` is a multi-config generator artefact that does not exist under Make/Ninja | `$<TARGET_FILE_DIR:…>/config/`, which is correct for every generator |
 
 ### S-C1a — `interfaces`: the ABI header and the manifest schema
 
 *(`S-C1a`/`S-C1b`/`S-C1c` are the three sub-stages of the architecture's single
 **C1**; they land separately because each is independently verifiable.)*
 
+**Purpose.** Define the generic ABI and the manifest that makes ports
+discoverable. **`D1` closes here or nowhere** — this is the stage that stops
+`dfExec` growing a parameter pair per function.
+
+**Must not.** Consume the header anywhere yet. This stage is purely additive:
+`interfaces` builds, nothing links against the new symbols, and no component
+changes. That is what makes it independently revertible.
+
 - [ ] `interfaces/include/adas/adas_sil_abi.h` — `AdasPort`, `AdasPortSet`, the
-      five exports (`sim_sil_contract.md` §3.1). **This is where `R-SIM-4` is
-      built**: ports are named and discovered, so adding a function adds a
-      manifest line and never an ABI parameter. `D1` closes here or nowhere
+      five exports (`sim_sil_contract.md` §3.1). **Where `R-SIM-4` is built**:
+      ports are named and discovered, so adding a function adds a manifest line,
+      never an ABI parameter and never a host edit
+      - **C, not C++**: no `bool`, no namespaces, no default arguments, no
+        `class`. Fixed-width integer types only (`int32_t`, `uint64_t`), and
+        `size_t` for buffer lengths
+      - **`cdecl` on both platforms.** No `__stdcall`, no `WINAPI`, no
+        `__declspec` outside a single export macro that expands to
+        `__attribute__((visibility("default")))` on GCC/Clang (`P-5`)
+      - Struct layout is explicit: no bitfields, no `#pragma pack`, and every
+        struct's size is asserted in a static assertion so a compiler change is
+        a build failure rather than a silent ABI break
 - [ ] `interfaces/proto/Adas__Sil/component_manifest.proto` — `ComponentManifest`
-      incl. `project`, `config_bundle_sha256`, `descriptor_set`
+      incl. `project`, `config_bundle_sha256`, `descriptor_set`, `abi_version`,
+      and per port: name, direction, `proto_type`, required/optional
+      - Field naming per `R-NAME-4`; port names per `N-1` — **the token chosen
+        here is the token every later layer reuses, and it is permanent**
 - [ ] `R-NAME-4` / `R-STYLE-1` headers on both
 
 **Tests**
-- [ ] `UT-C1a-1` (gtest, `interfaces`) the header compiles as **C**, not just C++
-      (a `.c` translation unit including it)
+- [ ] `UT-C1a-1` (gtest, `interfaces`) the header compiles as **C**, not just
+      C++ — a `.c` translation unit including it, built as C11
 - [ ] `UT-C1a-2` `ComponentManifest` round-trips in C++ and in Python
+- [ ] `UT-C1a-3` every struct's `sizeof` and member offsets match the static
+      assertions — an ABI break becomes a build failure, not a field that reads
+      as garbage at run time
+- [ ] `UT-C1a-4` the header contains no Windows-only type or calling convention
+      (text scan for `WINAPI`/`__stdcall`/`HANDLE`/`DWORD`) — `P-5` as a test,
+      because this header is the single hardest thing to change later
 - [ ] `ST-C1a-1` `interfaces` builds clean; Python bindings generate
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-5` (the ABI header must compile for both toolchains; no Windows-only types), `P-8` (integer time in the manifest)
-- [ ] naming §3 ticked — exposure: `N-1` (this stage fixes the port-name token that every later layer reuses -- an abbreviation chosen here is permanent), `N-11`
+- [ ] portability §3 ticked — exposure: `P-5` (the ABI header must compile for
+      both toolchains; no Windows-only types), `P-8` (integer time in the
+      manifest)
+- [ ] naming §3 ticked — exposure: `N-1` (this stage fixes the port-name token
+      that every later layer reuses — an abbreviation chosen here is
+      permanent), `N-11`
 - [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
-- [ ] `ST-C1a-1` green; nothing consumes the header yet (purely additive)
+- [ ] `ST-C1a-1` green; `UT-C1a-4` green; nothing consumes the header yet
+      (purely additive, and therefore revertible in one commit)
 
-### S-C1b — `df_sil`: generic exports **alongside** `dfExec`
+### S-C1b — the component library: generic exports **alongside** the positional ones
 
-Both ABIs live and are tested against each other (`sim_sil_contract.md` §6).
+**Purpose.** Make one real component speak the generic ABI, with both ABIs live
+and tested against each other (`sim_sil_contract.md` §6). This is the first
+stage that modifies a shipping artefact.
 
-- [ ] `adasAbiVersion/adasManifest/adasInit/adasExec/adasShutdown` in
-      `df_interface_c.cpp`, `adasExec` a **name-lookup shim onto the existing
-      body** — `src/component/**` untouched (`df_sil_dll.md` rule 9)
-- [ ] Manifest generator driven by `ENABLED_FUNCTIONS` (`R-VAR-5`); embeds the
-      `FileDescriptorSet`
-- [ ] `df_sil.ports.yaml` emitted beside the artefact **and** checked in
-- [ ] `try/catch(...)` on every new `extern "C"` body (rule 12)
+**Must not.** Touch `src/component/**`. `adasExec` is a **name-lookup shim onto
+the existing body** (`df_sil_dll.md` rule 9) — if this stage needs an algorithm
+change, the design is wrong, not the algorithm. And must not remove or alter the
+positional exports: `sil_host` still calls them, and `ST-C1b-2` proves it.
 
-**Tests** — `modules/df/tests/unit/sil/`
-- [ ] `UT-C1b-1` every existing `InterfaceCApiTest` assertion **mirrored** onto
+- [ ] `adasAbiVersion` / `adasManifest` / `adasInit` / `adasExec` /
+      `adasShutdown` in the component's `*_interface_c.cpp`, `adasExec`
+      dispatching **by port name** onto the existing implementation
+- [ ] Manifest generator driven by `ENABLED_FUNCTIONS` (`R-VAR-5`), embedding
+      the `FileDescriptorSet` — so the manifest **cannot drift from what was
+      compiled**, which is the whole reason it is generated rather than written
+- [ ] `<component>.ports.yaml` emitted beside the artefact **and** checked in,
+      so a port change shows up as a reviewable diff rather than a rebuild
+- [ ] `try/catch(...)` on every new `extern "C"` body (rule 12) — an exception
+      crossing the ABI boundary is undefined behaviour, and the generic path
+      doubles the number of places it could happen
+- [ ] Export visibility via the one macro from `S-C1a`; **no `.def` file**, which
+      would be a second, Windows-only source of truth for the export list
+
+**Tests** — in the component's own `tests/unit/sil/`
+- [ ] `UT-C1b-1` every existing positional-API test assertion **mirrored** onto
       the generic path, with identical expected values
-- [ ] `UT-C1b-2` an unknown input port is ignored
+- [ ] `UT-C1b-2` an unknown input port is ignored (forward compatibility: an
+      older library must tolerate a newer host offering extra ports)
 - [ ] `UT-C1b-3` a required input that is absent behaves exactly as `valid == 0`
 - [ ] `UT-C1b-4` an all-default (zero-byte) payload with `valid == 1` is accepted
       — the regression from `df_sil_dll.md` §1 bug 2, re-asserted on the new path
-- [ ] `UT-C1b-5` an undersized output buffer returns the **required size**
-- [ ] `UT-C1b-6` embedded manifest == emitted `df_sil.ports.yaml`
-- [ ] `UT-C1b-7` build with `bsd` **disabled** ⇒ no `bsd.*` port in either
+- [ ] `UT-C1b-5` an undersized output buffer returns the **required size** and
+      writes nothing — the caller retries once, and a second undersize is a bug
+- [ ] `UT-C1b-6` embedded manifest equals the emitted `<component>.ports.yaml`
+- [ ] `UT-C1b-7` a build with one function **disabled** yields no port for it in
+      either the manifest or the YAML (`R-VAR-5`: selection is compile-time)
 - [ ] `UT-C1b-8` `descriptor_set` contains every `proto_type` the manifest names,
-      transitively
-- [ ] `ST-C1b-1` **equivalence**: for a fixed sequence of inputs, `adasExec` and
-      `dfExec` produce byte-identical outputs
+      **transitively** — a host builds message classes from this alone, so a
+      missing nested type is a failure that only appears on another machine
 - [ ] `UT-C1b-9` **one token, every layer** (`N-1`): the manifest's port tokens,
       the `ENABLED_FUNCTIONS` list and the `src/component/` directory names
-      agree exactly; any disagreement fails naming all three. This is what
-      makes a single grep return the whole vertical slice
-- [ ] `ST-C1b-2` `sil_host` still builds and runs unchanged (it still calls
-      `dfExec`)
+      agree exactly; any disagreement fails naming all three. This is what makes
+      a single grep return the whole vertical slice
+- [ ] `UT-C1b-10` an exception thrown inside the implementation is caught at the
+      boundary and returned as a status, never propagated across `extern "C"`
+- [ ] `ST-C1b-1` **equivalence**: for a fixed sequence of inputs, the generic
+      and positional paths produce **byte-identical** outputs
+- [ ] `ST-C1b-2` `sil_host` still builds and runs unchanged (it still calls the
+      positional API)
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-5` (exports must be `cdecl` on both; no `__stdcall`), `P-3`
-- [ ] naming §3 ticked — exposure: `N-1` (the manifest is where one-token-every-layer becomes checkable -- `UT-C1b-9`), `N-4` (port fields carry units)
+- [ ] portability §3 ticked — exposure: `P-5` (exports are `cdecl` on both; no
+      `__stdcall`, no `.def`), `P-3`
+- [ ] naming §3 ticked — exposure: `N-1` (the manifest is where
+      one-token-every-layer becomes checkable — `UT-C1b-9`), `N-4` (port fields
+      carry units)
 - [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
-- [ ] `ST-C1b-1` green; GT-4 (`df_tests`) green at ≥ its prior count
+- [ ] `ST-C1b-1` green — the new path is proven equivalent **before** anything
+      depends on it, which is the precondition for `S-E2` ever removing the old
+      one
+- [ ] `GT-4` green at or above its prior count, checked **per commit** in this
+      stage, not only here
 
 ### S-C1c — `contracts/` — `SilComponent`, `Pipeline`
 
+**Purpose.** The Python side of the contract, and the wiring engine. After this
+stage the framework can drive any component that ships a manifest — including
+components that do not exist yet, which is `FR-SIM-70`'s claim.
+
+**Must not.** Import a generated protobuf binding, or name a component, a
+function or a port anywhere in the framework. `GT-6` and `GT-1` are both live
+here, and `UT-C1c-3` runs with the generated bindings made **unimportable** so
+the claim is tested rather than asserted.
+
 - [ ] `contracts/component.py` — the `SilComponent` Protocol plus
-      `CtypesSilComponent` and `InProcessSilComponent` (§3.2)
+      `CtypesSilComponent` and `InProcessSilComponent` (api reference §3.1)
+- [ ] `contracts/loader.py` — **`resolve_library`**, the single place the
+      framework consults the platform (`P-5`). `<stem>` expands to
+      `<stem>.dll` on Windows and `lib<stem>.so` / `<stem>.so` on Linux; a miss
+      names **every pattern tried and every directory searched** (`N-8`)
 - [ ] Proto class resolution from `descriptor_set` via `DescriptorPool` +
       `message_factory` — **no generated bindings imported** (`R-SIM-11`)
-- [ ] Per-handle port buffers (fixes the ctypes keepalive trap); grow-once-and-
+- [ ] Per-handle port buffers (fixes the ctypes keepalive trap: a buffer that is
+      garbage-collected while the DLL holds a pointer to it fails rarely and
+      unreproducibly, which is the worst failure mode available); grow-once-and-
       retry on undersize
-- [ ] `contracts/pipeline.py` — `mode:` (`simulate`/`measured`/`off`) × `impl:`
-      (`dll:`/`stub:`/`stubdll:`), wiring by port, load-time validation
-- [ ] `modules/df/sim/pipelines/{df_only,algo_test_df}.yaml`
+- [ ] `contracts/pipeline.py` — `mode:` × `impl:`, wiring **per port**,
+      load-time validation in the order given in api reference §3.3
+- [ ] `contracts/override.py` — the closed four-verb list (`R-SIM-15`)
+- [ ] Component pipeline files under `modules/<name>/sim/pipelines/`
 
 **Tests**
 - [ ] `UT-C1c-1` ABI version mismatch fails loudly at load, naming both versions
-- [ ] `UT-C1c-2` manifest parse → ports discovered; no hardcoded port name in the
-      framework
-- [ ] `UT-C1c-3` message classes built from `descriptor_set` alone, with
-      `interfaces`' generated bindings **not importable** in the test env
+- [ ] `UT-C1c-2` manifest parse yields discovered ports; **no hardcoded port
+      name anywhere in the framework** (grep, as a test)
+- [ ] `UT-C1c-3` message classes built from `descriptor_set` alone, with the
+      generated bindings **not importable** in the test environment
 - [ ] `UT-C1c-4` ports match by name regardless of order
 - [ ] `UT-C1c-5` buffer grow-and-retry succeeds once and logs; a second failure
       raises
 - [ ] `UT-C1c-6` pipeline wiring: `proto_type` mismatch raises naming both ends
 - [ ] `UT-C1c-7` missing required input raises naming the port
 - [ ] `UT-C1c-8` a reference to a port nobody produces raises
-- [ ] `UT-C1c-9` a forward reference (B feeding an earlier A) raises — no silent
-      last-tick value
-- [ ] `UT-C1c-10` `mode: measured` with the recording lacking that stage's outputs
-      raises naming the missing topics
+- [ ] `UT-C1c-9` a forward reference (B feeding an earlier A) raises — **no
+      silent last-tick value**, which would look like it worked
+- [ ] `UT-C1c-10` `mode: measured` with the recording lacking that stage's
+      outputs raises naming the missing topics
 - [ ] `UT-C1c-11` `mode: measured` ignores that stage's inputs and injects
       recorded outputs
 - [ ] `UT-C1c-12` `mode: off` yields `valid == 0` downstream
-- [ ] `UT-C1c-13` flipping `mode` does not require `impl:` to change
-- [ ] `UT-C1c-14` components execute in declaration order, single-threaded
-- [ ] `ST-C1c-1` resim **every** recording through `CtypesSilComponent` and
-      compare with the `dfExec` path — byte-identical (integration; skipped if
-      `df_sil.dll` absent)
-- [ ] `ST-C1c-2` the `algo_test_df` pipeline runs: everything `measured` except
-      `df`
+- [ ] `UT-C1c-13` flipping `mode` does not require `impl:` to change — the
+      toggle is reversible without re-authoring (`R-SIM-10`)
+- [ ] `UT-C1c-14` stages execute in declaration order, single-threaded; a
+      pipeline whose declaration order contradicts its wiring is a load error
+- [ ] `UT-C1c-15` `resolve_library` returns the right file for each platform
+      pattern (parametrised over both), and a miss names every candidate
+- [ ] `UT-C1c-16` **severed chain detected** — `simulate → measured → simulate`
+      on one path is found; `off → measured → simulate` is **not** flagged
+      (`R-SIM-10`; the GUI's auto-close in S-D6 builds on this)
+- [ ] `UT-C1c-17` an override applies at a port and at a field path, and a verb
+      outside the closed four is a **load error**, not a warning (`R-SIM-15`)
+- [ ] `ST-C1c-1` resim **every** existing recording through
+      `CtypesSilComponent` and compare with the positional path —
+      byte-identical (integration; skips with a named reason if the library is
+      not built)
+- [ ] `ST-C1c-2` an algo-test pipeline runs with everything `measured` except
+      one stage — the canonical shape of `R-SIM-12`
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-5` (**the** stage that owns `resolve_library`; every platform difference in the framework lives here and nowhere else), `P-2`
-- [ ] naming §3 ticked — exposure: `N-8` (wiring errors are the most-read messages in the system: expected, found, where it looked, next action), `N-5`
+- [ ] portability §3 ticked — exposure: `P-5` (**the** stage that owns
+      `resolve_library`; every platform difference in the framework lives here
+      and nowhere else), `P-2`
+- [ ] naming §3 ticked — exposure: `N-8` (wiring errors are the most-read
+      messages in the system: expected, found, where it looked, next action),
+      `N-5`
 - [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
 - [ ] `ST-C1c-1` green over every recording — the generic path is proven
       equivalent before anything depends on it exclusively
-- [ ] GT-6 green — the framework imports no generated bindings
+- [ ] `GT-6` green — the framework imports no generated bindings, tested by
+      making them unimportable rather than by inspection
 
 ### S-C2 — `sources/` — the production side
 
-Closes **D10** partly; implements `R-SIM-12`. Decomposes `carla_bridge.py`
-**by copy, not by move** — the original stays working until S-E1.
+**Purpose.** Separate *producing* a recording from *executing* one
+(`R-SIM-12`). Today one 983-line script does both, which is why it is 983 lines.
 
-- [ ] `sources/base.py` — `StimulusSource` Protocol; declares what it can emit
-- [ ] `sources/carla/` — connection, spawn, `LaneAdvancer`, `actor_behaviour`,
-      `frame_convert`, chase transform — the engine, verbatim in behaviour
-- [ ] `sources/carla/mocks.py` — CARLA→`GenObjectList`/`VehDyn` synthesis,
-      tagged `mocked`; ground truth tagged `truth`
-- [ ] `sources/carla/catalogue.yaml` — blueprint → classification/dimensions
-- [ ] `sources/synthetic.py` — scripted stimuli, no world model (test fuel)
-- [ ] `core/manifest.py` — the run manifest (recording doc §2)
-- [ ] Recorder derives its topic list from the pipeline's port manifests
-      (`R-SIM-6`) and writes **every stage's inputs and outputs**
-- [ ] `app/cli.py` — `sim record`, `sim run`, `sim resim`
+**Must not.** Move the existing bridge. This stage **decomposes by copy**: the
+original keeps working until `S-E1` deletes it, gated on this stage's tests.
+Nothing in `sources/` may name a driving function (`GT-1`).
+
+- [ ] `sources/base.py` — the `Source` Protocol; `emits()` declares what this
+      world can produce, so a pipeline asking for a level the source cannot
+      emit is a **startup error naming both ends** (`R-SIM-10`)
+- [ ] `sources/<world>/` — connection, spawn, lane advance, actor behaviour,
+      frame conversion, chase transform — the engine, **verbatim in behaviour**.
+      Behavioural equivalence is the point; tidiness is not
+- [ ] `sources/<world>/mocks.py` — world-model to port synthesis, tagged
+      `mocked`; ground truth tagged `truth` (`R-SIM-12`)
+- [ ] `sources/<world>/catalogue.yaml` — blueprint to classification/dimensions
+- [ ] `sources/synthetic.py` — scripted stimuli, no world model. **This is the
+      one every framework test uses**, so it must land with the others rather
+      than after them
+- [ ] `core/manifest.py` — the run manifest (recording doc §2), carrying the
+      `run_id` (`N-9`)
+- [ ] Recorder derives its topic list **from the pipeline's port manifests**
+      (`R-SIM-6`) and writes every stage's inputs *and* outputs — so "did we
+      record everything the SUT reads?" is true by construction rather than by
+      diligence
+- [ ] `cli/record.py`, `cli/run.py`, `cli/resim.py` — argument parsing only.
+      **Not `app/cli.py`**: `app/` is the GUI and holds no logic (`GT-9`), and
+      the package map is asserted by `UT-A1-9`
 
 **Tests**
-- [ ] `UT-C2-1` `frame_convert.to_ego_frame` — the existing sign conventions,
-      re-asserted (world→ego, right→left flip)
-- [ ] `UT-C2-2` `LaneAdvancer` heading ramp + yaw-rate averaging against a
-      **mocked** CARLA world — the technique already proven for the original
-      (`df_carla_viz_plan.md` §5.1a)
-- [ ] `UT-C2-3` `_angle_diff_deg` across the ±180° seam
-- [ ] `UT-C2-4` `LateralProfile` phases incl. `raised_cosine` displacement =
+- [ ] `UT-C2-1` frame conversion — the existing sign conventions, re-asserted
+      (world to ego, right-to-left flip, `R-COORD-1`)
+- [ ] `UT-C2-2` lane-advance heading ramp + yaw-rate averaging against a
+      **mocked** world — the technique already proven for the original
+- [ ] `UT-C2-3` angle difference across the ±180° seam
+- [ ] `UT-C2-4` lateral-profile phases incl. `raised_cosine` displacement =
       `rate * duration / 2`
 - [ ] `UT-C2-5` run manifest contains every declared field; hashes are stable
-- [ ] `UT-C2-6` the recorder's topic list equals the union of the pipeline's
-      declared ports — **no port silently unrecorded** (`R-SIM-6`)
-- [ ] `UT-C2-7` `VehSig` is recorded (the determinism hole in recording doc §4
-      is closed)
+- [ ] `UT-C2-6` the recorder's topic list **equals** the union of the pipeline's
+      declared ports — no port silently unrecorded (`R-SIM-6`)
+- [ ] `UT-C2-7` the previously-unrecorded ego-signal port is recorded — the
+      determinism hole in recording doc §4 is closed
 - [ ] `UT-C2-8` provenance tags: mocked ports `mocked`, world truth `truth`,
-      component outputs `simulated`
+      component outputs `simulated` (`R-SIM-12`)
 - [ ] `UT-C2-9` a resim against a recording whose port manifest differs is a
-      hard error; a differing library hash is a warning
-- [ ] `ST-C2-1` `sim record` on a synthetic source produces a recording that
+      **hard error**; a differing library hash is a **warning** — the two are
+      not the same severity and must not be merged
+- [ ] `UT-C2-10` `emits()` is honoured: a pipeline requesting a port this source
+      cannot produce fails at load naming the source and the port
+- [ ] `UT-C2-11` no module under `sources/` launches a process through a shell
+      or names an absolute path (`P-2`, `P-6`)
+- [ ] `ST-C2-1` `sim record` on the synthetic source produces a recording that
       `sim resim` consumes with every stage `measured` except one
 - [ ] `ST-C2-2` `sim resim` reproduces byte-identical outputs across two runs
-      (determinism)
-- [ ] `MC-2` a live CARLA run records correctly against a real server
+- [ ] `MC-2` a live run records correctly against a real world-model server
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-2` (a world-model client is the likeliest place an absolute path creeps in), `P-6` (never launch a simulator through a shell)
-- [ ] naming §3 ticked — exposure: `N-5` (a source's emitted names must state origin, not intent), `N-12` (`sources/` in a traceback must mean *the world* lied)
+- [ ] portability §3 ticked — exposure: `P-2` (a world-model client is the
+      likeliest place an absolute path creeps in), `P-6` (never launch a
+      simulator through a shell)
+- [ ] naming §3 ticked — exposure: `N-5` (a source's emitted names state origin,
+      not intent), `N-12` (`sources/` in a traceback must mean *the world* lied)
 - [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
-- [ ] `ST-C2-2` green; `MC-2` recorded
+- [ ] `ST-C2-2` green; `MC-2` recorded with a date and a name
+- [ ] The original bridge still runs — this stage copied, it did not move, and
+      `S-E1` is the only place anything is deleted (`NR-SIM-30`)
 
 ### S-C3 — Scenario schema v2 + expectations
 
@@ -906,7 +1035,7 @@ Closes **D10**, **D11**.
       `within_s`, and the same block drives the marker, `sim check` and the
       report — never three copies
 - [ ] `check/report.py` — `report.md` / `report.json`
-- [ ] `app/cli.py` — `sim check`
+- [ ] `cli/check.py` — `sim check` (argument parsing only, `GT-9`)
 - [ ] Timeline renders expectation windows (visualization spec §7.3)
 
 **Tests**
@@ -922,12 +1051,6 @@ Closes **D10**, **D11**.
 - [ ] `UT-C3-6` **one address space**: the same signal string resolves
       identically for a plot panel and for an `expect:` predicate; a raw port
       field needs no registration, a `derived.*` one does
-- [ ] `UT-C5-6` `run.overrides:` materialises a derived bundle; the manifest
-      records the base hash **and** the override set
-- [ ] `UT-C5-7` an override never writes back to the authoring YAML, and a
-      swept run reports provenance as a statement, not a project mismatch
-- [ ] `UT-C5-8` `--config-source` forces each of embedded / library / checkout /
-      explicit path, and the source actually used is reported every time
 - [ ] `ST-C3-1` all 18 scenarios load under v2
 - [ ] `ST-C3-2` `sim check tests/carla_scenarios` runs headless, exits non-zero
       on a deliberately broken expectation
@@ -948,55 +1071,107 @@ Closes **D10**, **D11**.
 
 ### S-C4 — Viewer reads real calibration; kill the duplicates
 
-- [ ] `SensorModel`/`ObjectModel` sourced from the project config for the BSD
-      layers; `bsdviz.sensors`' `P3`/`P4`/`P5` and the
-      `if project == "2w_base"` branch are no longer used by the live path
+**Purpose.** Delete the hand-maintained duplicate of calibration the DLL already
+reads. Small stage, disproportionate value: a duplicate that drifts produces a
+picture that disagrees with the algorithm while looking authoritative.
+
+**Must not.** Move any calibration into `shared_config` (`R-SIM-9`: those keys
+are already runtime calibration with one consumer). This stage **deletes a
+duplicate**; it does not relocate a source of truth.
+
+- [ ] `SensorModel`/`ObjectModel` sourced from the project config for the
+      component's layers; the hand-maintained pose constants and the
+      per-project `if` branch are no longer used by the live path
+- [ ] The duplicated constants are **deleted, not commented out** — a commented
+      constant is a duplicate that still reads as authoritative
 
 **Tests**
-- [ ] `UT-C4-1` changing a `BSD_SENSOR_*` value in the project YAML changes the
-      drawn FOV — asserted on the Scene, not by eye
+- [ ] `UT-C4-1` changing a sensor value in the project YAML changes the drawn
+      FOV — asserted **on the Scene**, not by eye
+- [ ] `UT-C4-2` the per-project branch is gone: two projects produce different
+      geometry through the same code path, with no conditional on project name
 - [ ] `ST-C4-1` no sensor pose or class footprint literal remains in any Python
-      module on the live path (grep, as a test)
+      module on the live path (grep, as a test — `GT-3`)
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-3` (this stage deletes a duplicate of real calibration keys; a case-only mismatch would silently resurrect it)
-- [ ] naming §3 ticked — exposure: `N-1` (the deletion is only safe because both spellings were the same token)
+- [ ] portability §3 ticked — exposure: `P-3` (this stage deletes a duplicate of
+      real calibration keys; a case-only mismatch would silently resurrect it)
+- [ ] naming §3 ticked — exposure: `N-1` (the deletion is only safe because both
+      spellings were the same token)
 - [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
-- [ ] `ST-C4-1` green
+- [ ] `ST-C4-1` green — and `UT-C4-1` green, because a grep proving the literal
+      is gone does not prove the replacement is wired to anything
 
 ### S-C5 — The packed config bundle (OD-4)
 
+**Purpose.** One atomic bundle per (project, build), beside the library, so the
+SUT and the viewer provably read the same bytes (`R-SIM-3a`). Closes
+`plan.md` item 19 with evidence.
+
+**Must not.** Compile configuration into the library — that would kill the
+edit-and-re-run calibration loop. Copied **beside** the artefact, never inside
+it (production uses AUTOSAR frozen parameters instead, `R-SIL-1`).
+
 - [ ] Build copies `project.yaml` + `shared_config`'s `vehicle/ego_params.yaml`
-      + `df_sil.ports.yaml` into `<build>/…/Release/config/` with `bundle.sha256`
-- [ ] `ParamLoader` reads a **directory**; `adasInit(NULL)` resolves
-      `<library_dir>/config/` via `GetModuleFileNameW`
+      + `<component>.ports.yaml` into **`$<TARGET_FILE_DIR:…>/config/`** with
+      `bundle.sha256`
+      - `$<TARGET_FILE_DIR>`, **not** a hand-written `…/Release/…` path:
+        `Release/` is a multi-config-generator artefact that does not exist
+        under Make or Ninja, so a hard-coded path builds on Windows and silently
+        writes to the wrong place on Linux
+- [ ] `ParamLoader` reads a **directory**, not a file
+- [ ] **`adasInit(NULL)` resolves `<library_dir>/config/`** — via a one-function
+      abstraction over `GetModuleFileNameW` (Windows) and `dladdr` (Linux),
+      declared in `sim_sil_contract.md` and implemented **once**. Calling the
+      Windows API directly is the natural first draft and is wrong (`P-5`)
+- [ ] `bundle.sha256` is computed over **UTF-8 bytes, `\n` newlines, sorted
+      POSIX-style relative paths** (`P-9`) — a bundle built on Windows and one
+      built on Linux must hash identically, or the "did the two readers agree?"
+      guarantee is itself platform-dependent, which is worse than not having it
 - [ ] `adasManifest()` reports `project` + `config_bundle_sha256`
 - [ ] Recorder embeds the bundle on `/meta/config_bundle`
-- [ ] `ProjectModel` prefers embedded → library → checkout, and the HUD says which
+- [ ] `ProjectModel` prefers explicit → embedded → library → checkout, and the
+      HUD **always says which** (`bundle_origin`)
 
 **Tests**
 - [ ] `UT-C5-1` `adasInit(NULL)` resolves the bundle beside the library
 - [ ] `UT-C5-2` an explicit path always wins over the packed bundle
-- [ ] `UT-C5-3` explicit path whose project ≠ `manifest.project` → **warning**,
-      run proceeds
-- [ ] `UT-C5-4` `bundle.sha256` changes when any file in the bundle changes
-- [ ] `UT-C5-5` a recording with an embedded bundle renders with no checkout
-      present
+- [ ] `UT-C5-3` explicit path whose project differs from `manifest.project` →
+      **`ProvenanceWarning`**, run proceeds (`R-SIM-3a`)
+- [ ] `UT-C5-4` `bundle.sha256` changes when any file in the bundle changes,
+      **including a case-only rename** (`P-3`)
+- [ ] `UT-C5-5` the hash is **platform-stable**: computed from a fixture with
+      mixed line endings and a shuffled directory iteration order, it is
+      unchanged (`P-9`)
+- [ ] `UT-C5-6` `run.overrides:` materialises a derived bundle; the manifest
+      records the base hash **and** the override set
+- [ ] `UT-C5-7` an override never writes back to the authoring YAML, and a swept
+      run reports provenance as a statement, not a project mismatch
+- [ ] `UT-C5-8` `--config-source` forces each of embedded / library / checkout /
+      explicit, and the source actually used is reported every time
+- [ ] `UT-C5-9` a recording with an embedded bundle renders with **no checkout
+      present** — the claim `R-SIM-3a` exists to make
 - [ ] `ST-C5-1` **the relocatability test**: copy the build output + `config/`
       to a directory with no Conan cache and no repo checkout; `sil_host` and
       `sim resim` both run correctly (this closes `plan.md` item 19)
-- [ ] `ST-C5-2` the viewer's `ProjectModel.provenance` reports `embedded` for a
-      post-C7 recording and `checkout` for a legacy one
+- [ ] `ST-C5-2` the viewer's `bundle_origin` reports `embedded` for a new
+      recording and `checkout` for a legacy one — the two readers agreeing by
+      coincidence is exactly what this reports on
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-9` (**the** stage that owns bundle hashing: UTF-8 bytes, `\n` newlines, sorted POSIX-style relative paths, or the hash is platform-dependent), `P-3`
-- [ ] naming §3 ticked — exposure: `N-9` (the bundle hash joins the recording, the HUD and the report)
+- [ ] portability §3 ticked — exposure: `P-9` (**the** stage that owns bundle
+      hashing), `P-5` (the library-directory lookup), `P-3`
+- [ ] naming §3 ticked — exposure: `N-9` (the bundle hash joins the recording,
+      the HUD and the report)
 - [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
 - [ ] `ST-C5-1` green — item 19 closed with evidence
+- [ ] `UT-C5-5` green — the hash means the same thing on both platforms, which
+      is what makes it usable as provenance at all
+
 
 ---
 
@@ -1182,8 +1357,11 @@ whether anyone writes a private player, so `GT-8` is measured here.
 - [ ] `UT-D6-2` an override appears in the run manifest and tags its topic
 - [ ] `UT-D6-3` `sim probe` on `InProcessSilComponent` prints the same port set
       the pipeline resolves — one source, no second description
-- [ ] `UT-D6-4` severed chain detected: `simulate → measured → simulate` on one
-      path is found; `off → measured → simulate` is **not** flagged
+- [ ] `UT-D6-4` the **GUI** acts on a severed chain: given the detection from
+      `UT-C1c-16`, setting a stage to `simulate` flips the intervening
+      stages and shows the undo bar. Detection is the loader's; **acting on
+      it is this stage's** — two tests, because a correct detector behind a
+      GUI that ignores it is exactly the silent toggle `R-SIM-10` bans
 - [ ] `UT-D6-5` auto-close flips only the intervening stages, and undo restores
       the exact prior modes
 - [ ] `UT-D6-6` forcing the gap open is permitted and yields exactly one

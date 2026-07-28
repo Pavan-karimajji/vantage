@@ -155,6 +155,35 @@ def main() -> int:
     if not dupes:
         rep.ok(f"all {len(seen)} test definitions unique")
 
+    # -- 2c. a test is defined under the stage its id names ---------------
+    # `UT-C5-6` sitting in S-C3's Tests block passes every other check here:
+    # the id is unique, and S-C5 exists so the id resolves. But S-C5's gate
+    # will never see it, and S-C3's gate covers a test about someone else's
+    # work. A misfiled test is a gate that silently covers nothing.
+    rep.heading("2c. Tests are filed under the stage they name")
+    misfiled = 0
+    current: str | None = None
+    in_tests = False
+    for line in plan_text.splitlines():
+        stripped = line.strip()
+        m_stage = re.match(r"^### (S-[A-E]\d[a-z]?)\b", stripped)
+        if m_stage:
+            current, in_tests = m_stage.group(1), False
+            continue
+        if stripped.startswith("**"):
+            in_tests = stripped.startswith("**Tests**")
+            continue
+        if not (in_tests and current):
+            continue
+        for m in re.finditer(r"- \[[ x]\] `(?:UT|ST)-([A-Z]\d[a-z]?)-\d+`", line):
+            owner = f"S-{m.group(1)}"
+            if owner != current:
+                rep.fail(f"{current} defines a test named for {owner}: "
+                         f"{line.strip()[:70]}")
+                misfiled += 1
+    if not misfiled:
+        rep.ok("every test is defined under the stage its id names")
+
     # -- 3. every stage has tests and a gate ------------------------------
     rep.heading("3. Stage -> tests + gate")
     sections = re.split(r"^### (?=S-[A-E]\d)", plan_text, flags=re.M)

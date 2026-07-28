@@ -563,7 +563,11 @@ lies — and the GUI and loader close it by default. The override remains legal,
 because holding a downstream stage on known-good input while watching an
 upstream stage's divergence is a real setup; the orphaned stage is then badged
 *"computed, not consumed"*. Default correct, escape hatch visible, never silent.
-**Verified by.** `UT-D6-4`, `UT-D6-5`, `UT-D6-6`. **Status.** frozen.
+**Verified by.** `UT-C1c-16` (the loader detects a severed chain),
+`UT-D6-4` (the GUI acts on it and offers undo), `UT-D6-5`, `UT-D6-6`.
+Two levels on purpose: a correct detector behind a GUI that ignores it
+is exactly the silent toggle this requirement exists to prevent.
+**Status.** frozen.
 
 ### FR-SIM-45 — A developer must be able to tweak individual inputs
 **Requirement.** The failure being designed against: developers could not
