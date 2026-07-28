@@ -122,7 +122,8 @@ be easily plugged into this one."* **Found missing during the 2026-07-28 audit**
 — only a timeline strip existed, which is a transport companion, not an analysis
 surface.
 **Answered by.** viz §7.4 (timeseries / xy / state / distribution panels over
-the same `@timeline_signal` declaration) and §11.1 (dockable peer-panel grid).
+the one signal address space, see `NR-SIM-8`) and §11.1 (dockable peer-panel
+grid).
 **Verified by.** `UT-B3-6..10`, `UT-B4-3`. **Status.** frozen.
 
 ### NR-SIM-1 — Visualization is constant regardless of data origin
@@ -175,6 +176,34 @@ the window, defeating the scrubbing requirement it exists to serve.
 tail; pass 2 on the UI thread, cheap because Scenes are cached and providers are
 pure. Per-tick parallelism is left available by that purity, not built.
 **Verified by.** `MC-4`, `ST-B2-2`. **Status.** frozen.
+
+### NR-SIM-7 — The tick model must carry what the specs already promise
+**Requirement.** Derived from a 2026-07-28 critical re-read: four things the
+design promised elsewhere were unimplementable against the `Tick` as modelled.
+**Answered by.** Arch §5.2 —
+(a) a port is a **`PortValue`** (message + `age_s` + `valid` + `updated` +
+`origin`), not a bare message, so the stale/invalid banner (`UT-B3-5`),
+multi-rate visibility and per-port provenance become possible;
+(b) time is **integer nanoseconds**, `t_s` derived for display, so the
+bit-identical-resim guarantee does not rest on float accumulation;
+(c) `Tick.pose` carries the **ego pose in world**, without which the `world`
+follow mode and every trajectory layer are unimplementable;
+(d) a layer provider receives **`LayerCtx`** (model + read-only windowed
+`history` + `frames`), without which trails and track history cannot be drawn —
+purity is preserved because history is an *input*, not accumulated state.
+**Verified by.** `UT-B1-11`, `UT-B1-12`, `UT-B2-6`, `UT-B3-5`.
+**Status.** frozen.
+
+### NR-SIM-8 — One signal address space
+**Requirement.** Derived: the design had a `@timeline_signal` decorator for the
+viewer and a `signal:` path grammar for expectations — two address spaces for
+one concept, which drift.
+**Answered by.** viz §7.4 — one grammar
+(`<component>.<port>.<field>` · `source.*` · `truth.*` · `derived.*`), one
+resolver, five consumers (timeline, plots, HUD, expectations, diff). Raw port
+fields need no registration because the manifest declares their type; only
+computed signals register, with `@signal`. Anything plottable is assertable.
+**Verified by.** `UT-B3-6`, `UT-C3-6`. **Status.** frozen.
 
 ---
 
@@ -235,6 +264,18 @@ blueprint→class catalogue in `sources/carla/catalogue.yaml`.
 > permanently local to `df`. The real defect was narrower: `bsdviz/sensors.py`'s
 > `P3`/`P4`/`P5` are a hand-maintained **duplicate** of those keys. Stage
 > **C4** just deletes the duplicate; `shared_config` gains nothing.
+
+### NR-SIM-6 — Calibration sweeps must not require a rebuild
+**Requirement.** Derived, and surfaced by reviewing OD-4 critically: if the
+config bundle is a build output, a parameter sweep — the core calibration
+workflow — would need N builds.
+**Answered by.** Arch §5.6 "Overrides and sweeps" — a run may declare
+`run.overrides:`; the framework materialises a derived bundle, hashes it, and
+records the base hash **plus the override set** in the manifest. Provenance
+stays a statement rather than a warning, and an A/B diff can attribute a
+difference to the parameter. Authoring homes untouched — an override is a run
+property, never an edit, and never writes back.
+**Verified by.** `UT-C5-6`, `UT-C5-7`. **Status.** frozen.
 
 ---
 

@@ -321,8 +321,8 @@ gain after scrubbing.
   expected windows drawn as translucent spans, so a pass/fail is visible rather
   than computed.
 - Click anywhere in the strip to seek; the playhead is shared with the scrub bar.
-- Which signals appear is declared by layer providers, so a function ships its
-  own lanes.
+- Any signal in the §7.4 address space can be lane'd; a function ships its own
+  computed ones with `@signal`.
 
 A legend is present whenever a lane carries two or more series; up to four
 series are also direct-labelled at their last point, so identity never depends
@@ -338,10 +338,31 @@ surface. Plotting one signal against another — `dist_y` vs `dist_x` for a
 trajectory, TTC vs closing speed, warning state vs ego speed — is a different
 job and gets its own panel type.
 
-**One declaration feeds both.** `@timeline_signal` is really a *signal*
-declaration: a component declares a signal once, in its own `sim/layers/`
-module, and it becomes available to the timeline strip **and** to every plot
-panel. Adding a plottable signal is therefore the same zero-framework-change
+**One address space, five consumers.** There is exactly one way to name a
+signal, and the timeline, plot panels, the HUD, `sim check`'s expectations and
+the A/B diff all resolve through it:
+
+```
+<component>.<port>.<field path>     df.bsd.outputs.left.warning      raw, no registration needed
+source.<port>.<field path>          source.veh_dyn.longitudinal.velocity
+truth.<name>.<field path>           truth.objects[0].dist_x
+derived.<name>                      derived.ttc                      computed, registered
+```
+
+**Raw port fields need no registration** — the manifest already declares the
+port and its `proto_type`, so the resolver walks the message. Only a *computed*
+signal (TTC, which no ProPort carries) is registered, with `@signal`:
+
+```python
+@signal("derived.ttc", unit="s")
+def _(tick, ctx): ...
+```
+
+An earlier draft had two mechanisms for one concept — a `@timeline_signal`
+decorator for the viewer and a `signal:` path grammar for expectations. Two
+address spaces for the same thing drift, and a signal you could plot but not
+assert on (or vice versa) is exactly the seam that would open. Adding a
+plottable, assertable signal is therefore the same zero-framework-change
 operation as adding a layer (`R-SIM-1`).
 
 | Panel type | Shows | Typical use |

@@ -34,7 +34,7 @@ and §5.8 answers "where does this file go?".
 
 | Doc | Owns |
 |---|---|
-| **[sim_requirements.md](docs/sim_requirements.md)** | **the source** — 37 numbered requirements (`FR-`/`NR-`/`CR-SIM-n`), the decisions register, what is parked and why, open questions |
+| **[sim_requirements.md](docs/sim_requirements.md)** | **the source** — 40 numbered requirements (`FR-`/`NR-`/`CR-SIM-n`), the decisions register, what is parked and why, open questions |
 | [sim_architecture.md](docs/sim_architecture.md) | vocabulary, the defect analysis, layers, the Scene IR, placement map, config bundle, pipeline depth, extension points |
 | [sim_sil_contract.md](docs/sim_sil_contract.md) | the Python↔C boundary: named port sets, component manifests, pipelines |
 | [sim_visualization_spec.md](docs/sim_visualization_spec.md) | the viewer: Scene primitives, BEV feature set, renderers, themes |

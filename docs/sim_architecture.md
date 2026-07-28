@@ -327,15 +327,49 @@ Each layer depends only downward. The two load-bearing interfaces are **L1↔L2*
 
 ```python
 @dataclass(frozen=True)
+class PortValue:
+    message: Message        # the parsed protobuf
+    age_s: float            # how stale this value is at this tick
+    valid: bool             # was anything received (never inferred from bytes)
+    updated: bool           # did its producer write it *this* tick
+    origin: Provenance      # measured | truth | mocked | simulated | unknown
+
+@dataclass(frozen=True)
 class Tick:
-    index: int                     # 0-based cycle number
-    t_s: float                     # elapsed time from run start
-    dt_s: float                    # gap since the previous tick
-    stimulus: Mapping[str, Message]    # port name -> parsed protobuf
-    observation: Mapping[str, Message] # port name -> parsed protobuf
-    truth: Mapping[str, Any]           # ground truth from the world model, if any
-    aux: Mapping[str, Any]             # camera frames, per-component status, timings
+    index: int                          # 0-based cycle number
+    t_ns: int                           # elapsed ns from run start — the authority
+    dt_ns: int                          # gap since the previous tick
+    pose: Pose2D                        # ego pose in the world frame at this tick
+    stimulus:   Mapping[str, PortValue] # port name -> value + metadata
+    observation: Mapping[str, PortValue]
+    truth: Mapping[str, Any]            # ground truth from the world model, if any
+    aux: Mapping[str, Any]              # camera frames, per-component timings
+
+    @property
+    def t_s(self) -> float: ...         # derived, for display only
 ```
+
+Three details in that shape are load-bearing, and each was found by checking the
+model against something the specs already promise:
+
+- **A port is a value *plus its metadata*, never a bare message.** `AdasPort`
+  carries `ageS`/`valid`/`updated` across the C boundary and an earlier draft of
+  this model threw them away — which would have made the stale/invalid banner
+  (viz §10) and its test `UT-B3-5` impossible to implement, and would have
+  hidden multi-rate behaviour (§5 of the recording doc) entirely. Carrying
+  `origin` here too is what lets the viewer show per-port provenance
+  (`R-SIM-12`) rather than only a run-level tag.
+- **Time is integer nanoseconds; `t_s` is a derived convenience.** The recording
+  is already `log_time_ns` (integer). Passing through `float` and back loses
+  exactness, and accumulating a float `elapsed_s` over tens of thousands of
+  ticks drifts — which would quietly undermine the bit-identical-resim guarantee
+  (`R-SIM-5`) that everything in CI rests on. Floats appear at the display
+  boundary and nowhere else.
+- **`pose` — the ego's pose in the world frame — is part of the tick.** Without
+  it the `world` follow mode (viz §4.2, "ego moves through it, trail drawn") and
+  every world-frame or trajectory layer are unimplementable. It is one small
+  struct and it is the only dynamic frame transform; the static ones
+  (sensor→ego, camera→ego) come from `ProjectModel`.
 
 Everything downstream reads a `Tick` and nothing else. `stimulus` and
 `observation` are keyed by **port name** (`"objects"`, `"aeb.outputs"`,
@@ -439,9 +473,30 @@ basis.
 
 ```python
 @layer_provider(group="bsd", requires=["bsd.outputs", "objects"])
-def bsd_layers(tick: Tick, model: ProjectModel) -> Iterable[Layer]:
+def bsd_layers(tick: Tick, ctx: LayerCtx) -> Iterable[Layer]:
     ...
+
+@dataclass(frozen=True)
+class LayerCtx:
+    model:   ProjectModel   # resolved configuration — §5.5
+    history: HistoryView    # read-only window over earlier ticks
+    frames:  FrameTree      # static (from model) + dynamic (tick.pose) transforms
 ```
+
+**`ctx` carries history, and that is not a weakening of the purity rule.** An
+earlier draft passed only `(tick, model)`, which made every *temporal* layer
+impossible to write — track history, a target's path, the ego trail the `world`
+follow mode explicitly promises (viz §4.2), a velocity trace. Those are geometry
+and therefore belong to a layer provider; the alternative (a renderer that
+remembers) would put state in the one place that must not have it.
+
+`HistoryView` is **read-only and windowed**: a provider asks for the last *N*
+ticks or a time span, and cannot write, cannot reach forward, and cannot hold a
+reference across calls. So a provider stays a pure function of its arguments —
+same inputs, same layers — which is what keeps Scene caching and golden tests
+sound (`R-SIM-2`). The rule "no state *between* ticks" is unchanged; what changes
+is that history is now an *input* rather than something a provider was tempted
+to accumulate.
 
 Discovered by import, exactly as `bsdviz`'s `@figure` registry is discovered
 today, and for the same stated reason (`R-VAR-2`: a missing central roster is
@@ -471,6 +526,17 @@ pipeline:
 Today's runs are the one-element case. Nothing about the runner, the recorder,
 the viewer or the GUI changes when the second element appears — which is the
 whole point of §7.
+
+**A pipeline is a DAG, not a chain.** Wiring is per port and names a producer,
+so one component can feed several (`perception-core.gen_object_list` reaching
+both `df` and, later, `planning`), and a component can draw inputs from several
+producers. The list order is a **declared topological order**, validated at load
+against the wiring — a stage referencing a producer that runs later is the
+forward-reference error, not a silent last-tick read. Stating this now costs
+nothing; discovering it after the runner assumes a chain costs a rewrite. A
+component may also appear more than once under distinct names
+(`perception.front`, `perception.rear`), since a stage's identity is its name,
+not its library.
 
 ### 5.5 The project model — L0, and the answer to D3
 
@@ -578,6 +644,39 @@ Two further defects found while checking this, both closed by the same change:
   `-DADAS_PROJECT`, but `--config-path` is free at run time. Passing
   `cus1/default.yaml` to a `base`-built DLL yields cus1 function calibration
   with base ego params — a combination that exists in no project.
+
+#### Overrides and sweeps — the calibration loop the bundle must not break
+
+Making the bundle a **build output** raises an obvious objection: calibration
+work is a *sweep* — run this scenario with `AEB_TTC_PRE_WARNING_THRESHOLD_S`
+from 0.8 to 1.4 in steps and see where the warning moves. If configuration only
+arrives via the build, every step is a rebuild, and the loop this design claims
+to protect is dead.
+
+It is not, because an explicit path always wins (§3.4 of the contract). But the
+mechanism must be *named*, or every sweep run reports a project-mismatch warning
+and the noise trains people to ignore warnings:
+
+```yaml
+run:
+  overrides:                              # declared, not smuggled
+    aeb.AEB_TTC_PRE_WARNING_THRESHOLD_S: 1.2
+```
+
+The framework materialises a derived bundle from the packed one plus the
+overrides, hashes it, and records **both** the base bundle's hash and the
+override set in the run manifest. Consequences:
+
+- provenance stays exact — a swept run is `bundle <hash> + 1 override`, which is
+  a *statement*, not a warning;
+- two swept runs differ in the manifest, so an A/B diff (§6.4) can attribute the
+  difference to the parameter rather than to "something changed";
+- `sim check` over a sweep produces one report row per value, which is the
+  actual output of a calibration session.
+
+Authoring homes are still untouched (`R-VAR-4`): an override is a **run
+property**, never an edit, and it never writes back. A value that survives a
+sweep gets promoted into the project YAML by a human, deliberately.
 
 #### The admission rule — real runtime configuration only
 

@@ -400,11 +400,13 @@ was invented; the prose already said all of it.
 
 ### 5.2 Vocabulary
 
-**Signal path** — `<component>.<port>.<field path>`, using the same port names
-the manifest declares ([sim_sil_contract.md](sim_sil_contract.md) §3.2). Also
-addressable: `source.*` (stimulus), `truth.*` (ground truth), and
-`derived.*` for viewer-computed quantities such as TTC, which no ProPort
-carries.
+**Signal path** — the **same address space the viewer uses**
+([sim_visualization_spec.md](sim_visualization_spec.md) §7.4), not a second
+grammar: `<component>.<port>.<field path>` using the port names the manifest
+declares, plus `source.*` (stimulus), `truth.*` (ground truth) and `derived.*`
+(computed, registered with `@signal`). One resolver serves the timeline, plot
+panels, the HUD, these expectations and the A/B diff — so anything you can plot
+you can assert on, and the reverse.
 
 **Predicates:**
 

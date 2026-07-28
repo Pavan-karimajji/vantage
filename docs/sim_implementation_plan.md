@@ -236,7 +236,7 @@ Implements `R-SIM-2`. The central IR.
 - [ ] `scene/frames.py` — the frame graph; `ego` default, `world`,
       `sensor:<id>`, `image:<cam>`
 - [ ] `scene/registry.py` — `@layer_provider`, `@inspector_fields`,
-      `@timeline_signal`; discovery by import, duplicate id raises
+      `@signal`; discovery by import, duplicate id raises
 - [ ] `scene/codec.py` — Scene ⇄ bytes, **protobuf** (arch §5.3: field numbering
       gives minor-version tolerance for free, and a Foxglove renderer wants the
       schema anyway); `Scene.version` as `major.minor`
@@ -345,6 +345,11 @@ removing).
       keeps the cursor's world point fixed; scale clamps at `[0.5, 200]`
 - [ ] `UT-B1-10` renderer hit-test resolves to the prim actually drawn (the
       `_hit_test_box` duplication is gone)
+- [ ] `UT-B1-11` a provider reads `age_s`/`valid` off a `PortValue` and a stale
+      port changes what it draws — the metadata survives the C boundary
+- [ ] `UT-B1-12` a **temporal** layer (ego trail) built from `ctx.history`
+      produces the right polyline, and the provider holds no state between calls
+      (call it twice out of order and get identical output)
 - [ ] `ST-B1-1` replay `bsd/bsd_curve_r172_passby` (exported) → the `Scene` for
       every tick matches the golden
 - [ ] `ST-B1-2` the same replay with `--project 2w_base` produces a **different**
@@ -362,7 +367,12 @@ removing).
 
 Closes **D7**. Delivers the *scrolling* requirement.
 
-- [ ] `core/session.py` — `Session`, `at(i)`, `seek_time(t)`, `events`
+- [ ] `core/tick.py` — `PortValue` (message + `age_s`/`valid`/`updated`/`origin`),
+      `Tick` with **integer `t_ns`/`dt_ns`** and `pose`; `t_s` derived (arch §5.2)
+- [ ] `core/history.py` — `HistoryView`, a read-only windowed view over earlier
+      ticks, and `FrameTree` composing static (model) + dynamic (`tick.pose`)
+      transforms — together these are `LayerCtx`
+- [ ] `core/session.py` — `Session`, `at(i)`, `seek_ns(t_ns)`, `events`
 - [ ] `core/runner.py` — pass 1 for the replay case (build Ticks from a
       recording); pass 2 is the renderer
 - [ ] `view/transport.py` — play/pause, step ±1/±10, speed 0.1×–8×, loop marks,
@@ -377,6 +387,8 @@ Closes **D7**. Delivers the *scrolling* requirement.
       (assert a pass-1 call counter is unchanged)
 - [ ] `UT-B2-4` speed/loop/step arithmetic at the ends (tick 0, tick N)
 - [ ] `UT-B2-5` cache invalidates on theme change, not on viewport change
+- [ ] `UT-B2-6` **time is exact**: `t_ns` accumulated over 10 000 ticks equals
+      the sum of `dt_ns` with zero drift; `t_s` is derived and never fed back
 - [ ] `ST-B2-1` on a ≥1000-tick session, 100 random seeks all return correct data
 - [ ] `ST-B2-2` a full pass 1 over the largest existing recording completes
       within a stated budget, recorded as a number (not asserted as a limit
@@ -395,8 +407,12 @@ Closes **D7**. Delivers the *scrolling* requirement.
       copy-as-text
 - [ ] `view/timeline.py` — signal lanes (one scale per lane), state lanes with
       labels, event markers, click-to-seek
+- [ ] `view/signals.py` — the **one signal resolver** (visualization spec §7.4):
+      `<component>.<port>.<field>` · `source.*` · `truth.*` · `derived.*`. Raw
+      port fields resolve off the manifest with no registration; only computed
+      signals register with `@signal`
 - [ ] `view/plots.py` — `timeseries` / `xy` / `state` / `distribution` panels
-      over the **same** `@timeline_signal` declarations (visualization spec §7.4)
+      over that resolver
 - [ ] `render/viewer.py` — a **dockable peer-panel grid**: BEV, camera, plots,
       timeline, inspector, layers, pipeline are all panels; layouts saveable per
       project (visualization spec §11.1)
@@ -416,8 +432,8 @@ Closes **D7**. Delivers the *scrolling* requirement.
       anchor within the threshold
 - [ ] `UT-B3-5` stale banner appears exactly when `valid == 0` or
       `ageS > <fn>_MAX_AGE_*`
-- [ ] `UT-B3-6` one `@timeline_signal` declaration feeds **both** the timeline
-      strip and a plot panel — declared once, no second registration
+- [ ] `UT-B3-6` one signal string resolves identically for the timeline strip
+      and a plot panel; a **raw port field needs no registration** at all
 - [ ] `UT-B3-7` a `timeseries` lane with two signals of different magnitude
       creates **two lanes**; a single lane with two y-scales is rejected
 - [ ] `UT-B3-8` `xy` panel plots signal-vs-signal; colouring by a third works
@@ -628,6 +644,13 @@ Closes **D10**, **D11**.
 - [ ] `UT-C3-3` a timing predicate without `within_s` is a **schema error**
 - [ ] `UT-C3-4` `marker.<name>` resolves; a missing marker names itself
 - [ ] `UT-C3-5` report lists actual value and actual time next to expected
+- [ ] `UT-C3-6` **one address space**: the same signal string resolves
+      identically for a plot panel and for an `expect:` predicate; a raw port
+      field needs no registration, a `derived.*` one does
+- [ ] `UT-C5-6` `run.overrides:` materialises a derived bundle; the manifest
+      records the base hash **and** the override set
+- [ ] `UT-C5-7` an override never writes back to the authoring YAML, and a
+      swept run reports provenance as a statement, not a project mismatch
 - [ ] `ST-C3-1` all 18 scenarios load under v2
 - [ ] `ST-C3-2` `sim check tests/carla_scenarios` runs headless, exits non-zero
       on a deliberately broken expectation
