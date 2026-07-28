@@ -181,143 +181,257 @@ impression is not a measurement.
 
 ### S-A1 — `modules/sim` package skeleton
 
-- [ ] `pyproject.toml` — package `adas-sim`, Python 3.12, core deps + extras (§1)
-- [ ] `src/adas_sim/` with `core/ contracts/ model/ io/ sources/ sinks/ scene/
-      render/ view/ check/ app/` and `__init__.py` carrying `__version__`
+**Purpose.** The tree, the packaging, the error taxonomy, the run id and the
+log line — everything every later stage imports. Nothing here has behaviour
+worth demonstrating; it exists so that nothing later has to invent a name.
+
+**Must not.** Import Qt, matplotlib, mcap or protobuf at package import time
+(`UT-A1-2`). The console resim path must install none of them.
+
+- [ ] `pyproject.toml` — package `adas-sim`, `requires-python = ">=3.12"`, core
+      deps + extras (§1). Entry point `sim = adas_sim.cli:main` — the launcher
+      is generated per platform rather than written by us (`P-6`)
+- [ ] `src/adas_sim/` with exactly these subpackages, matching
+      [sim_api_reference.md](sim_api_reference.md) §1 **byte for byte**:
+      `core/ model/ scene/ contracts/ io/ sources/ view/ render/ check/ cli/
+      app/`, each with `__init__.py`; root `__init__.py` carries `__version__`
+      - **`sinks/` is deliberately absent.** An earlier draft had it for
+        recording writers; `R-SIM-14` made readers and writers one symmetric
+        codec table, so writers live in `io/`. Two homes for one concept is
+        how `sim convert` would have become a feature instead of a consequence
+      - **`view/` holds transport and viewport state** — pure state, no
+        pixels. `render/` turns that state into output. Keeping them apart is
+        what lets `UT-B2-3` assert that a layer toggle re-renders without
+        re-executing
 - [ ] `conanfile.py` — `package_type = "unknown"`, no `settings`, data-only
       recipe following `shared_config`'s shape exactly
       (`docs/shared_config_plan.md` §3.2/§3.3)
 - [ ] `tests/{unit,system,integration,fixtures}/` + `conftest.py`
-- [ ] `scripts/check_invariants.py` — implements GT-1, GT-2, GT-3, GT-6
-- [ ] `core/errors.py` — the three error classes of arch §5.14
-      (`AuthoringError` / `ProvenanceWarning` / `SimFault`); every message names
-      *what*, *where*, and *both ends* of a mismatch
+- [ ] `scripts/check_invariants.py` — implements GT-1, GT-2, GT-3, GT-6, and
+      **is itself tested** by `UT-A1-3`
+- [ ] `core/errors.py` — the **closed** taxonomy of `DG-5` / api reference §9:
+      `AuthoringError` (exit 2) · `EnvironmentError_` (3) · `ContractError` (4)
+      · `InternalError` (70), all deriving `SimError`, whose constructor takes
+      **keyword-only `expected` / `found` / `where` / `hint`**. A message that
+      is only an identifier is therefore a `TypeError` at author time, not a
+      disappointment at run time (`N-8`)
+      - plus `ProvenanceWarning(Warning)` — **a warning, never an error**: a
+        project mismatch degrades and is shown, it does not stop a run
+        (`R-SIM-3a`)
+- [ ] `core/ids.py` — `new_run_id()` per `N-9`; the hashed inputs are listed in
+      api reference §2.1 and are **sorted before hashing** (`P-8`)
+- [ ] `core/logging.py` — the `Event` StrEnum (closed) and `log()` emitting one
+      fixed-order line (`N-10`)
+- [ ] Console UTF-8 reconfiguration at every entry point (`P-4`) — three lines,
+      and the bug it prevents was already hit once in `docs/py/_common.py`
 - [ ] file headers on every `.py` per `R-STYLE-1`, `COMPONENT: SIM` (`R-NAME-6`)
 
 **Tests**
 - [ ] `UT-A1-1` `import adas_sim` succeeds; `__version__` is a non-empty string
 - [ ] `UT-A1-2` every subpackage imports without side effects (no disk, no
-      network, no window at import time)
+      network, no window at import time) **and without importing Qt,
+      matplotlib, mcap or protobuf** — asserted on `sys.modules`
 - [ ] `UT-A1-3` `check_invariants.py` passes on the empty tree, and **fails** on
-      a deliberately planted `bsd` identifier (the check is tested, not trusted)
-- [ ] `UT-A1-4` each error class carries file/key/both-ends context and is
-      distinguishable by type — a provenance warning never raises (`NR-SIM-4`)
-- [ ] `ST-A1-1` `pip install -e modules/sim` then `python -c "import adas_sim"`
+      a deliberately planted function identifier (the check is tested, not
+      trusted)
+- [ ] `UT-A1-4` each error class carries `expected`/`found`/`where`, exposes its
+      `exit_code`, and is distinguishable by type; constructing one without the
+      keyword arguments raises `TypeError`; `ProvenanceWarning` is a `Warning`
+      and is not raisable as a `SimError`
 - [ ] `UT-A1-5` **every public class reprs its own name** and no `repr` contains
       `0x` (`N-7`) — the cheapest debugging feature in the system and the
       easiest to skip
 - [ ] `UT-A1-6` **import direction**: `core`/`model`/`scene`/`contracts`/`io`/
-      `check` never import `render`, `cli` or `app` (module-graph scan,
+      `check` never import `render`, `view`, `cli` or `app` (module-graph scan,
       api reference §1)
 - [ ] `UT-A1-7` `new_run_id` is stable for identical inputs and differs for any
       single changed input (`N-9`) — the equality is itself diagnostic
+- [ ] `UT-A1-8` `log()` emits one line with fields in the fixed order of `N-10`;
+      an `event` outside the closed enum is a `TypeError`; a multi-line `msg` is
+      flattened, never wrapped
+- [ ] `UT-A1-9` the subpackage set on disk **equals** api reference §1's list —
+      neither doc nor tree may drift alone
+- [ ] `ST-A1-1` `pip install -e modules/sim` then `python -c "import adas_sim"`
       from a directory outside the repo
 - [ ] `ST-A1-2` `conan editable add modules/sim` succeeds and `conan graph info`
       resolves `adas-sim`
 
+**Discipline** (every stage)
+- [ ] [sim_portability.md](sim_portability.md) §3 ticked — exposure here:
+      `P-2` (no absolute paths), `P-4` (console + file encoding), `P-6` (entry
+      point, not a `.bat`), `P-10` (every dep has a Linux wheel)
+- [ ] [sim_naming_and_diagnostics.md](sim_naming_and_diagnostics.md) §3 ticked —
+      exposure here: `N-3` (this stage names the modules; a generic name added
+      now is permanent), `N-7`, `N-8`, `N-10`
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+
 **Gate**
-- [ ] `pytest modules/sim/tests -q` green; GT-1..GT-3, GT-6 pass
+- [ ] `pytest modules/sim/tests -q` green; `GT-1..GT-3`, `GT-6` pass; and
+      `UT-A1-9` green — the tree and the API reference agree, which is the
+      cheapest moment to make that true and the most expensive to retrofit
 
 ### S-A2 — `model/` — configuration is the source of geometry
 
-Implements `R-SIM-3`, closes **D3**. Ports the generic half of
-`modules/df/docs/bsd/py/bsdviz/{calib,egogeom}.py`.
+**Purpose.** Every number that describes the physical world comes from resolved
+YAML, never a module constant. Implements `R-SIM-3`, closes **D3**. Ports the
+generic half of `modules/df/docs/bsd/py/bsdviz/{calib,egogeom}.py`.
 
-- [ ] `model/project.py` — `ProjectModel.load(project, source=...)`; resolution
-      order **embedded-bundle → library `config/` → source checkout**, exposing
-      `provenance` naming which was used (`R-SIM-3a`)
+**Must not.** Contain a single literal vehicle or sensor dimension (`GT-3`), and
+must not know the name of any driving function — sensor keys are parsed **by key
+shape**, never by their domain prefix, which is data (`GT-1`).
+
+- [ ] `model/project.py` — `ProjectModel.resolve(...)` (api reference §6).
+      Resolution order **explicit → embedded-in-recording → library `config/` →
+      source checkout**, and `bundle_origin` **always states which**
+      (`R-SIM-3a`). The failure this prevents: the viewer and the SUT reading
+      different files and agreeing only by coincidence
 - [ ] `model/ego.py` — `EgoModel`: `x_front = wheelbase + overhang_front`,
-      `x_rear = x_front - length`, `half_width = width/2`
-- [ ] `model/objects.py` — `ObjectModel.footprint(obj)` with the three-step
-      precedence (`geometry` → class table → declared fallback, the last marked
-      `assumed`)
-- [ ] `model/sensors.py` — `SensorModel` parsing `BSD_SENSOR_<i>_*` generically
-      (**by key shape, not by the `BSD_` prefix** — GT-1; the prefix is data)
-- [ ] `model/cameras.py` — `CameraModel` placeholder with the intrinsics/
-      extrinsics fields declared, unimplemented until S-D4
+      `x_rear = x_front - length`, `half_width = width/2`. Frame per `R-COORD-1`
+      (origin at rear-axle centre, +x forward, +y left)
+- [ ] `model/objects.py` — `ObjectModel.footprint(class_name)` with the
+      three-step precedence: per-object `geometry` → class table → declared
+      fallback. **The fallback sets `assumed_geometry=True`**, and `R-SIM-3`
+      requires it to be drawn in a style that makes it visibly a guess
+- [ ] `model/sensors.py` — `SensorModel`, parsing `<PREFIX>_SENSOR_<i>_<FIELD>`
+      **by key shape** (`UT-A2-9` plants a different prefix and expects it to
+      work unchanged)
+- [ ] `model/cameras.py` — `CameraModel`: intrinsics/extrinsics fields
+      **declared**, projection unimplemented until S-D4. Declaring the shape now
+      costs nothing and stops S-D4 from inventing it
+- [ ] Every `open`/`read_text` names `encoding="utf-8"` (`P-4`); every path is a
+      `Path` (`P-1`); every key comparison is exact, never case-folded (`P-3`)
 
 **Tests**
 - [ ] `UT-A2-1` `EgoModel.load("base")` → `x_front == 3.60`, `x_rear == -0.90`,
       `half_width == 0.90`
 - [ ] `UT-A2-2` `base`, `2w_base`, `cus1` each yield their own numbers and no
-      two are equal
-- [ ] `UT-A2-3` a missing key raises, and the message names the key and the file
+      two are equal — the `R-SIM-3` promise that switching project changes the
+      picture
+- [ ] `UT-A2-3` a missing key raises `AuthoringError` naming **the key and the
+      file**, not "KeyError"
 - [ ] `UT-A2-4` footprint precedence: with `geometry` present it wins; without,
-      the class table; without that, the fallback **and** `assumed is True`
-- [ ] `UT-A2-5` a `CAR` and a `MOTORCYCLE` resolve to different footprints
-- [ ] `UT-A2-6` `SensorModel` yields exactly `BSD_SENSOR_COUNT` sensors with
-      pose/FOV/range/side populated
-- [ ] `UT-A2-7` resolution order: with all three sources present the bundle
-      wins; `provenance` reports it
-- [ ] `UT-A2-8` unknown project raises naming the searched paths
+      the class table; without that, the fallback **and** `assumed_geometry`
+      is `True`
+- [ ] `UT-A2-5` two different object classes resolve to different footprints
+- [ ] `UT-A2-6` `SensorModel` yields exactly the declared sensor count with
+      pose/FOV/range/side populated; a **case-differing** key does **not**
+      resolve, on every platform (`P-3`)
+- [ ] `UT-A2-7` resolution order: with all four sources present, explicit wins;
+      with three, the embedded bundle wins; `bundle_origin` reports which
+- [ ] `UT-A2-8` unknown project raises naming **every searched path** (`N-8`)
+- [ ] `UT-A2-9` **prefix independence**: a fixture using a different key prefix
+      parses identically — proving the parser reads shape, not domain (`GT-1`)
+- [ ] `UT-A2-10` a project mismatch emits `ProvenanceWarning` and **still
+      resolves** — it degrades visibly, it does not stop a run (`R-SIM-3a`)
 - [ ] `ST-A2-1` **equivalence with the code being replaced** — for every project,
-      `EgoModel` and `SensorModel` values equal what `bsdviz.egogeom` /
-      `bsdviz.sensors` produce today (skipped if `modules/df` absent)
+      `EgoModel` and `SensorModel` values equal what the existing `bsdviz`
+      modules produce today (skipped, with a named reason, if `modules/df` is
+      absent)
+
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-1`, `P-3` (case-sensitive key and
+      file lookup is first exercised here), `P-4`
+- [ ] naming §3 ticked — exposure: `N-4` (every geometry value carries a unit
+      suffix; a bare `width` is the defect that produces a plausible wrong
+      picture), `N-8`
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
 - [ ] `ST-A2-1` green for all three projects — the replacement is provably
-      value-identical before anything depends on it
+      value-identical before anything depends on it. `UT-A2-9` green, because a
+      geometry layer that knows a function's name would pass every other test
+      here and still be wrong
 
 ### S-A3 — `scene/` types + `render/theme.py`
 
-Implements `R-SIM-2`. The central IR.
+**Purpose.** The central IR (`R-SIM-2`). Everything upstream produces `Scene`;
+everything downstream consumes it. Getting this wrong is the one mistake that
+cannot be localised later.
 
-- [ ] `scene/types.py` — frozen `Prim` subtypes (§2 of the visualization spec),
-      `Layer`, `Scene`; every prim carries `frame`, `style`, `pick_id`, `z`,
-      `alpha`
-- [ ] `scene/frames.py` — the frame graph; `ego` default, `world`,
-      `sensor:<id>`, `image:<cam>`
-- [ ] `scene/registry.py` — `@layer_provider`, `@inspector_fields`,
-      `@signal`; discovery by import, duplicate id raises
-- [ ] `scene/codec.py` — Scene ⇄ bytes, **protobuf** (arch §5.3: field numbering
+**Must not.** `scene/` imports nothing from `render/`, `view/`, `io/` or
+`sources/`. A `Prim` never carries a colour, a pixel coordinate or a viewport
+reference — only metres, a named frame and a **semantic** style token.
+
+- [ ] `scene/types.py` — frozen `Prim`, `Layer`, `Scene` per api reference §5
+      and visualization spec §2. Every prim carries `frame`, `style`, `pick_id`,
+      `z`, `alpha`. `width_px`/`offset_px` are **the only** pixel fields, and
+      exist because legibility is not physical (`R-SIM-2`)
+- [ ] `scene/frames.py` — the frame graph: `ego` (default, `R-COORD-1`),
+      `world`, `sensor:<id>`, `image:<cam>`. Composition is static (model) plus
+      dynamic (`tick.pose`)
+- [ ] `scene/registry.py` — `@layer_provider`, `@inspector_fields`, `@signal`;
+      discovery **by import**, so a component adds a layer by existing.
+      Duplicate id raises naming **both** providers (`N-8`)
+- [ ] `scene/codec.py` — Scene to bytes and back, **protobuf**: field numbering
       gives minor-version tolerance for free, and a Foxglove renderer wants the
-      schema anyway); `Scene.version` as `major.minor`
+      schema anyway. `Scene.version` is `major.minor`; additive is minor
 - [ ] `render/theme.py` — the token table for `dark`/`light`/`print`/`forced`
 - [ ] `render/palette_check.py` — the six-check validator over each categorical
-      set, per visualization spec §3.4
+      set (visualization spec §3.4), runnable as `python -m`
 
 **Tests**
 - [ ] `UT-A3-1` every prim type constructs and is immutable (assignment raises)
-- [ ] `UT-A3-2` `Scene` → bytes → `Scene` round-trips to an equal object
+- [ ] `UT-A3-2` `Scene` to bytes and back round-trips to an equal object
 - [ ] `UT-A3-3` a prim with no `frame` defaults to `ego`; an unknown frame raises
-- [ ] `UT-A3-4` an unknown style token raises — **no silent default colour**
+      naming the known frames
+- [ ] `UT-A3-4` an unknown style token raises — **no silent default colour**.
+      A silent default is how a debug layer ends up looking authoritative
 - [ ] `UT-A3-5` every token in the table resolves in **all four** themes
 - [ ] `UT-A3-6` registry: duplicate layer id raises naming both providers
 - [ ] `UT-A3-7` registry discovery finds a provider added by import alone
 - [ ] `UT-A3-8` a `Scene` written with a **higher minor** version still reads —
-      unknown fields are skipped, known ones survive (`NR-SIM-3`)
+      unknown fields skipped, known ones survive (`NR-SIM-3`)
 - [ ] `UT-A3-9` a `Scene` written with a **higher major** version is **refused**
-      with its version named — never partially rendered
+      with both versions named — never partially rendered
+- [ ] `UT-A3-10` `scene/` imports nothing from `render`/`view`/`io`/`sources`
+      (module scan) — the layering that makes `R-SIM-2` mechanical
+- [ ] `UT-A3-11` no `Prim` field accepts a colour value: constructing one with
+      a hex-literal style raises, because a hex string is not a semantic token
 - [ ] `ST-A3-1` `python -m adas_sim.render.palette_check` exits 0 for `dark` and
-      `light`; every pair in the 6–8 ΔE band has a **named** secondary encoding
-      in the table
+      `light`; every pair in the 6-8 dE band has a **named** secondary encoding
+
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-4` (the codec writes bytes; encoding
+      and newline must be explicit or goldens differ across platforms), `P-8`
+      (any prim ordering that reaches bytes is sorted)
+- [ ] naming §3 ticked — exposure: `N-2` (a `Layer.id` is fully qualified and
+      reaches the viewer, a log line and a golden), `N-3`, `N-8`
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
-- [ ] `ST-A3-1` green — the palette is validated by computation, not taste
+- [ ] `ST-A3-1` green — the palette is validated by computation, not taste; and
+      `UT-A3-10` + `UT-A3-11` green, because a `Scene` that *can* hold a colour
+      will eventually hold one
 
 ### S-A4 — `io/mcap` codec
 
-Implements `R-SIM-14`.
+**Purpose.** Prove `R-SIM-14`'s claim — a recording is a *model*, a format is a
+*codec* of ~4 methods — by building the first one and nothing else.
+
+**Must not.** Let any other module learn that mcap exists. `Session`, pipeline,
+Scene, viewer and expectations are written against the model (`UT-A4-11`).
 
 - [ ] `io/base.py` — `RecordingReader`/`RecordingWriter` Protocols,
-      `Capabilities`, `TopicInfo`, `Provenance` enum
-      (`measured|truth|mocked|simulated|unknown`)
-- [ ] `io/registry.py` — codec lookup by extension; unknown extension raises
-      naming the extension and the registered ones
-- [ ] `io/mcap.py` — the default codec; all four capabilities true
-- [ ] `io/legacy.py` — maps today's `df/gen_object_list`, `df/veh_dyn`,
-      `carla/chase_camera`, `df/aeb_outputs`, `df/bsd_outputs` onto the
-      namespaced names, and synthesises the missing `VehSig`
-      (recording doc §8)
-- [ ] `tests/fixtures/make_tiny_mcap.py` + the generated `tiny.mcap`
+      `Capabilities` (incl. `round_trips`, `write_only`), `TopicInfo`,
+      `Provenance` enum (`measured|truth|mocked|simulated|overridden|unknown`),
+      per api reference §4
+- [ ] `io/registry.py` — `register(ext, reader=, writer=)`, lookup by extension;
+      unknown extension raises naming **the extension and every registered one**
+- [ ] `io/mcap.py` — the default codec; all capabilities true
+- [ ] `io/legacy.py` — maps today's legacy topic names onto namespaced ones and
+      synthesises the missing `VehSig` (recording doc §8). **This is the one
+      sanctioned name translation** (`N-6`), declared as data and printed by
+      `sim explain`
+- [ ] `tests/fixtures/make_tiny_mcap.py` + the generated `tiny.mcap` — generated
+      by a checked-in script, never hand-crafted, so it can be regenerated
 
 **Tests**
-- [ ] `UT-A4-1` write N messages → read back identical `(topic, log_time, bytes)`
+- [ ] `UT-A4-1` write N messages, read back identical `(topic, log_time, bytes)`
 - [ ] `UT-A4-2` `topics()` returns schema and provenance for each
 - [ ] `UT-A4-3` meta blocks (`manifest`, `config_bundle`, `topic_provenance`)
       round-trip
 - [ ] `UT-A4-4` a recording with no meta loads with `provenance == unknown` and
-      does **not** raise
+      does **not** raise — it degrades and says so (`R-SIM-6`)
 - [ ] `UT-A4-5` legacy topic names map correctly; a legacy file reports
       `manifest: unknown`
 - [ ] `UT-A4-6` `capabilities` are declared and reported
@@ -326,17 +440,32 @@ Implements `R-SIM-14`.
       from 0 (recording doc §3.3)
 - [ ] `UT-A4-9` a tick missing one of its grouped messages is reported, not
       silently dropped
-- [ ] `ST-A4-1` **every** `.mcap` under `modules/df/tests/carla_testruns/`
-      (including `exports/`) loads; tick count > 0; no exception (skips if
-      `modules/df` absent)
-- [ ] `ST-A4-2` read → write → read yields an identical topic/message set
-- [ ] `UT-A4-9` **no name is translated**: for a round-trip through every
+- [ ] `UT-A4-10` **no name is translated**: for a round-trip through every
       registered codec, the set of topic and field names in the model is
-      unchanged (`N-6`). A codec forced to spell a name differently declares
-      the mapping as data, and `sim explain` prints it
+      unchanged (`N-6`). `io/legacy.py` is the declared exception and its
+      mapping is readable as data
+- [ ] `UT-A4-11` **no module outside `io/` names a format**: a scan for format
+      tokens across `core`/`model`/`scene`/`contracts`/`check` returns nothing
+      (`R-SIM-14`)
+- [ ] `UT-A4-12` two writes of the same messages produce **byte-identical**
+      files: topic order sorted, no wall-clock in the payload (`P-8`)
+- [ ] `ST-A4-1` **every** existing recording under the component's test-run
+      directories loads; tick count > 0; no exception (skips with a named
+      reason if that component is absent)
+- [ ] `ST-A4-2` read, write, read yields an identical topic/message set
+
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-4` (explicit newline on every write),
+      `P-8` (sorted topic order; integer `log_time_ns`, never a float), `P-1`
+- [ ] naming §3 ticked — exposure: `N-6` (this stage is where a translation
+      table would first be tempting), `N-2`, `N-8`
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
-- [ ] `ST-A4-1` green across every existing recording
+- [ ] `ST-A4-1` green across every existing recording, and `UT-A4-11` +
+      `UT-A4-12` green — nothing outside `io/` knows a format exists, and a
+      recording is reproducible byte for byte
+
 
 ---
 
@@ -398,6 +527,11 @@ removing).
 - [ ] `MC-1` a human confirms the rendered frame is equivalent to `viz.py`'s on
       the same tick — recorded with date and name
 
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-1`, `P-3` (a viewpoint or layer file referenced with the wrong case works here and fails on Ubuntu)
+- [ ] naming §3 ticked — exposure: `N-2` (layer ids are fully qualified and reach the layer panel, goldens and `sim explain`), `N-3b` (no layer id may be a prefix of another, or solo/mute selects the wrong set)
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+
 **Gate**
 - [ ] `ST-B1-1` + `MC-1` — parity proven before anything new is added.
       **`viz.py` is NOT deleted here** (that is S-E1).
@@ -450,6 +584,11 @@ Closes **D7**. Delivers the *scrolling* requirement.
       until a baseline exists)
 - [ ] `ST-B2-3` **rewind → recompute-from-0 is exact**: recomputing to tick *N*
       reproduces the original tick *N* byte-for-byte on a deterministic resim
+
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-8` (integer `t_ns` throughout; a float seconds accumulator here is what makes resim non-reproducible)
+- [ ] naming §3 ticked — exposure: `N-7` (`Session`/`Tick`/`Transport` reprs are what a debugger shows during a seek bug), `N-10` (`tick=` on every line)
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
 - [ ] `UT-B2-2` + `ST-B2-1` green; the "forward only, no rewind" caveat is
@@ -515,6 +654,11 @@ Closes **D7**. Delivers the *scrolling* requirement.
 - [ ] `MC-4` a human confirms scrubbing a long session feels responsive
 - [ ] `MC-1` (repeat) a human confirms the full shell reads well
 
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-7` (every Qt rule: standard paths, no named font families, high-DPI policy set before the app object, offscreen must work)
+- [ ] naming §3 ticked — exposure: `N-3a` (panel and dock classes are where generic names like `manager`/`handler` appear first), `N-7`
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+
 **Gate**
 - [ ] Every item in visualization spec §4–§9 demonstrable on one BSD recording,
       ticked individually below:
@@ -530,22 +674,52 @@ Closes **D7**. Delivers the *scrolling* requirement.
 
 ### S-B4 — Capture with provenance
 
-- [ ] `sinks/image.py`, `sinks/video.py`
-- [ ] snapshot sidecar `.json`: tick, `t_s`, project, scenario, pipeline,
-      component build hashes, viewport, active layers, theme
+**Purpose.** A picture that leaves the tool must carry enough to be believed.
+Closes `FR-SIM-13`.
+
+**Must not.** Write a PNG whose sidecar could be lost without anyone noticing.
+The sidecar is written in the same call, or the capture fails.
+
+- [ ] `render/capture.py` — `snapshot(session, tick, viewport, layers, out)`
+      writing `out.png` **and** `out.json` atomically (temp file, then rename;
+      a half-written pair is worse than none)
+- [ ] The sidecar carries: `run_id` (`N-9`), tick, `t_ns`, project,
+      `bundle_sha256` **and** `bundle_origin`, scenario, pipeline hash, every
+      component build hash, viewport, active layers, theme, Scene version, tool
+      version
+- [ ] `render/clip.py` — interval export to mp4, same sidecar, one per clip
+- [ ] `cli/render.py` — headless `sim render --at <t|tick> --out fig.png`,
+      working under an offscreen platform (`P-7`)
+- [ ] Print variant: same Scene, `print` theme, vector output where the renderer
+      supports it — one Scene, two renderers, never two drawing paths (`D5`)
 
 **Tests**
-- [ ] `UT-B4-1` sidecar contains every declared field; unknown provenance is
-      recorded as `unknown`, never omitted
-- [ ] `UT-B4-2` video export of a marked interval yields the right frame count
-- [ ] `UT-B4-3` a plot exports to PNG and CSV, both with the provenance sidecar
-- [ ] `ST-B4-1` `sim render` twice at the same tick produces byte-identical PNGs
+- [ ] `UT-B4-1` a snapshot writes exactly two files, and neither exists if the
+      other could not be written
+- [ ] `UT-B4-2` the sidecar contains every field listed above; a missing one
+      fails the test by name, not by count
+- [ ] `UT-B4-3` a plot panel captures with the same sidecar shape as the BEV —
+      one capture path, not one per panel type
 - [ ] `UT-B4-4` a snapshot sidecar carries the **same `run_id`** as its session
       (`N-9`) — given any one artefact you can find the other five
-      (determinism of rendering)
+- [ ] `UT-B4-5` `bundle_origin` is recorded, so a picture rendered from a
+      checkout is distinguishable from one rendered from the embedded bundle
+      (`R-SIM-3a`)
+- [ ] `ST-B4-1` `sim render` twice at the same tick produces byte-identical PNGs
+- [ ] `ST-B4-2` `sim render` works with **no display**, under an offscreen
+      platform, on both platforms (`P-7`)
+
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-7` (offscreen is the tested path, not
+      a fallback), `P-4`, `P-2`
+- [ ] naming §3 ticked — exposure: `N-9` (this is where the correlation id earns
+      its keep), `N-4` (sidecar fields carry units)
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
-- [ ] `ST-B4-1` green — a snapshot is reproducible evidence
+- [ ] `ST-B4-1` + `ST-B4-2` green — a snapshot is reproducible evidence, and it
+      is producible on a build machine with no screen
+
 
 ---
 
@@ -572,6 +746,11 @@ until Phase E.
       (a `.c` translation unit including it)
 - [ ] `UT-C1a-2` `ComponentManifest` round-trips in C++ and in Python
 - [ ] `ST-C1a-1` `interfaces` builds clean; Python bindings generate
+
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-5` (the ABI header must compile for both toolchains; no Windows-only types), `P-8` (integer time in the manifest)
+- [ ] naming §3 ticked — exposure: `N-1` (this stage fixes the port-name token that every later layer reuses -- an abbreviation chosen here is permanent), `N-11`
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
 - [ ] `ST-C1a-1` green; nothing consumes the header yet (purely additive)
@@ -602,12 +781,17 @@ Both ABIs live and are tested against each other (`sim_sil_contract.md` §6).
       transitively
 - [ ] `ST-C1b-1` **equivalence**: for a fixed sequence of inputs, `adasExec` and
       `dfExec` produce byte-identical outputs
-- [ ] `ST-C1b-2` `sil_host` still builds and runs unchanged (it still calls
-- [ ] `UT-C1b-5` **one token, every layer** (`N-1`): the manifest's port tokens,
+- [ ] `UT-C1b-9` **one token, every layer** (`N-1`): the manifest's port tokens,
       the `ENABLED_FUNCTIONS` list and the `src/component/` directory names
       agree exactly; any disagreement fails naming all three. This is what
       makes a single grep return the whole vertical slice
+- [ ] `ST-C1b-2` `sil_host` still builds and runs unchanged (it still calls
       `dfExec`)
+
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-5` (exports must be `cdecl` on both; no `__stdcall`), `P-3`
+- [ ] naming §3 ticked — exposure: `N-1` (the manifest is where one-token-every-layer becomes checkable -- `UT-C1b-9`), `N-4` (port fields carry units)
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
 - [ ] `ST-C1b-1` green; GT-4 (`df_tests`) green at ≥ its prior count
@@ -650,6 +834,11 @@ Both ABIs live and are tested against each other (`sim_sil_contract.md` §6).
       `df_sil.dll` absent)
 - [ ] `ST-C1c-2` the `algo_test_df` pipeline runs: everything `measured` except
       `df`
+
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-5` (**the** stage that owns `resolve_library`; every platform difference in the framework lives here and nowhere else), `P-2`
+- [ ] naming §3 ticked — exposure: `N-8` (wiring errors are the most-read messages in the system: expected, found, where it looked, next action), `N-5`
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
 - [ ] `ST-C1c-1` green over every recording — the generic path is proven
@@ -697,6 +886,11 @@ Closes **D10** partly; implements `R-SIM-12`. Decomposes `carla_bridge.py`
       (determinism)
 - [ ] `MC-2` a live CARLA run records correctly against a real server
 
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-2` (a world-model client is the likeliest place an absolute path creeps in), `P-6` (never launch a simulator through a shell)
+- [ ] naming §3 ticked — exposure: `N-5` (a source's emitted names must state origin, not intent), `N-12` (`sources/` in a traceback must mean *the world* lied)
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+
 **Gate**
 - [ ] `ST-C2-2` green; `MC-2` recorded
 
@@ -740,6 +934,11 @@ Closes **D10**, **D11**.
 - [ ] `ST-C3-3` a scenario whose recording is missing is **skipped with a
       warning**, not failed
 
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-4` (scenario YAML read as UTF-8; report written with explicit newline or two machines produce different reports), `P-3`
+- [ ] naming §3 ticked — exposure: `N-2` (an `expect:` path is the one address space, fully qualified), `N-4` (`within_s` is a unit-suffixed name for a reason)
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+
 **Gate**
 - [ ] All 18 scenarios have `expect:` blocks **transcribed from their existing
       comment blocks**, each reviewed against the comment's claim before being
@@ -758,6 +957,11 @@ Closes **D10**, **D11**.
       drawn FOV — asserted on the Scene, not by eye
 - [ ] `ST-C4-1` no sensor pose or class footprint literal remains in any Python
       module on the live path (grep, as a test)
+
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-3` (this stage deletes a duplicate of real calibration keys; a case-only mismatch would silently resurrect it)
+- [ ] naming §3 ticked — exposure: `N-1` (the deletion is only safe because both spellings were the same token)
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
 - [ ] `ST-C4-1` green
@@ -786,6 +990,11 @@ Closes **D10**, **D11**.
 - [ ] `ST-C5-2` the viewer's `ProjectModel.provenance` reports `embedded` for a
       post-C7 recording and `checkout` for a legacy one
 
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-9` (**the** stage that owns bundle hashing: UTF-8 bytes, `\n` newlines, sorted POSIX-style relative paths, or the hash is platform-dependent), `P-3`
+- [ ] naming §3 ticked — exposure: `N-9` (the bundle hash joins the recording, the HUD and the report)
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+
 **Gate**
 - [ ] `ST-C5-1` green — item 19 closed with evidence
 
@@ -807,6 +1016,11 @@ Closes **D10**, **D11**.
 - [ ] `ST-D1-1` a written session recording opens in Foxglove Studio and shows
       the scene with working layer toggles and seek → `MC-3`
 
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-4`, `P-8` (entity ordering must be sorted or two exports of one scene differ)
+- [ ] naming §3 ticked — exposure: `N-2` (a Foxglove entity id is a `Layer.id`, unchanged -- `N-6`)
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+
 **Gate**
 - [ ] `ST-D1-1` green — the interop claim (`R-SIM-13`: visualization is
       identical regardless of origin) is demonstrated in a foreign viewer,
@@ -825,6 +1039,11 @@ Closes **D10**, **D11**.
       across two runs
 - [ ] `ST-D2-2` a figure and the live view of the same geometry use the same
       token → same semantic appearance (**D5** closed)
+
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-4` (figure output must be byte-stable across platforms), `P-7` (matplotlib runs headless here)
+- [ ] naming §3 ticked — exposure: `N-6` (a figure label is the signal name, never a hand-typed caption)
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
 - [ ] `ST-D2-1` + `ST-D2-2` green — one Scene, two renderers, one palette.
@@ -847,6 +1066,11 @@ Closes **D10**, **D11**.
 - [ ] `ST-D3-1` every run in this plan is launchable from the GUI with no
       hand-typed command
 
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-7`, `P-2` (a run manifest must not embed a machine path)
+- [ ] naming §3 ticked — exposure: `N-8` (the GUI surfaces the same messages the CLI raises -- one wording, not two), `N-9`
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+
 **Gate**
 - [ ] `UT-D3-4` + `ST-D3-1` green — the GUI produces manifests the CLI
       accepts, which is what keeps them one engine (`R-SIM-16`) rather than
@@ -866,6 +1090,11 @@ Gated on `perception-core` existing. Everything before it is additive.
       views come from the same prim
 - [ ] `ST-D4-1` a two-component pipeline runs and ground truth vs perception is
       visible side by side
+
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-8` (camera/projection maths must not introduce float time), `P-1`
+- [ ] naming §3 ticked — exposure: `N-4` (intrinsics and extrinsics are unit-suffixed; a pixel and a metre sharing a bare name is the defect this rule exists for)
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
 - [ ] `ST-D4-1` green — two components in one pipeline, with the downstream
@@ -902,6 +1131,11 @@ Turns the library into the application of arch §5.15. Windows only.
       component having existed when the player was built** (`FR-SIM-70`)
 - [ ] `ST-D5-3` a component's layer providers load from `--plugins` and draw,
       with no framework rebuild
+
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-6`, `P-7`, `P-10` (packaging is where a Linux-unavailable dependency finally bites; §4's bring-up table is the checklist)
+- [ ] naming §3 ticked — exposure: `N-9` (`--version` prints the compatibility statement; a shipped binary must identify itself)
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
 - [ ] `ST-D5-1` + `ST-D5-2` green — the player is genuinely component-agnostic
@@ -967,6 +1201,11 @@ whether anyone writes a private player, so `GT-8` is measured here.
 - [ ] `ST-D6-2` a pipeline with overrides resims reproducibly: two runs produce
       byte-identical outputs and identical manifests
 
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-5` (`sim probe` and `sim doctor` are the tools that *explain* library resolution, so they must exercise every pattern), `P-2`
+- [ ] naming §3 ticked — exposure: `N-1`/`N-6` (`sim explain` only works because one name means one thing everywhere -- this stage is where that pays off), `N-8`
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+
 **Gate**
 - [ ] `ST-D6-1` green **and `GT-8` measured and recorded** — the number goes in
       this document, whatever it is
@@ -1013,6 +1252,11 @@ the codec table symmetric and adds the two verbs that scale it.
       per recording; a failing recording does not abort the run
 - [ ] `ST-D7-3` the pipeline file used by `sim resim` runs **unmodified** under
       `sim batch` (`R-SIM-16` — the identity is the point)
+
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-4` (an export written on two machines must be byte-identical or it is not evidence), `P-8` (sorted columns and topics)
+- [ ] naming §3 ticked — exposure: `N-2`/`N-4` (a column header is a fully qualified, unit-suffixed name -- the export is often what a report quotes), `N-9`
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
 - [ ] `UT-D7-5` + `ST-D7-2` + `ST-D7-3` green — an export can never be mistaken
@@ -1093,6 +1337,11 @@ this stage decides whether anyone meets it. Spec:
       actions (`L-2`)
 - [ ] `MC-5` run and its **number recorded in this document**
 
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-7` (the whole Qt rule set), `P-3`, `P-2` (workspace state goes to the OS config location, never a written-out path)
+- [ ] naming §3 ticked — exposure: `N-3a` (shell/panel classes attract generic names), `N-7`, `N-8` (`UT-D8-8` is the message contract, tested over induced failures)
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+
 **Gate**
 - [ ] `UT-D8-1` + `UT-D8-3` + `ST-D8-1` green, **and `MC-5` recorded with its
       measured time** — the workspace split is real only if one pipeline file
@@ -1146,6 +1395,11 @@ gate that proves the replacement works first.
 - [ ] `ST-E1-4` GT-4 — `df_tests` unchanged and green (this is a Python-only
       deletion, exactly as the 2026-07-13 relocation proved)
 
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-2` (deleting the old tooling must not leave an absolute path in a doc that referenced it)
+- [ ] naming §3 ticked — exposure: `N-12` (after this stage a traceback path means exactly one layer; that is the point of the deletion)
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+
 **Gate**
 - [ ] `ST-E1-1..4` green **and every replacement stage named in the table above
       already ticked** — `NR-SIM-30` is the rule this gate enforces: nothing is
@@ -1164,6 +1418,11 @@ gate that proves the replacement works first.
 - [ ] `ST-E2-2` `sil_host` runs end to end on the generic ABI
 - [ ] `ST-E2-3` GT-4 green; `adasAbiVersion()` still `1` (adding functions never
       bumped it — the whole point)
+
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-5` (removing the positional exports must not break either platform's loader path)
+- [ ] naming §3 ticked — exposure: `N-1` (the old positional names disappear; nothing may keep a second spelling alive)
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
 - [ ] `ST-E2-1..3` green — the positional ABI is gone and `D1` cannot recur.
@@ -1236,6 +1495,11 @@ the stage named there.
 | **Phase C touches production C++** | Every C++ change is additive until S-E2; both ABIs live and are tested against each other. |
 | **No CI** | The test command is the gate and is cited in each commit. Wiring CI is `plan.md` item 12, unblocked by this work. |
 | **`modules/sim` unpublished** | Until `adas-sim` is published, a checkout is needed; that is the same interim state `interfaces` and `shared_config` already live in. |
+
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: every `P-` rule, re-checked -- this is the last gate before the system is called done
+- [ ] naming §3 ticked — exposure: every `N-` rule, re-checked; `DG-2`/`DG-3` must answer for every name the system can produce
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
 - [ ] `ST-E3-1` + `ST-E3-2` green **and every global gate `GT-1..GT-9`

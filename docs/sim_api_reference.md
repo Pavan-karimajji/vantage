@@ -39,6 +39,7 @@ modules/sim/src/adas_sim/
 ├── contracts/     SilComponent, Pipeline, ports, overrides, loader
 ├── io/            format codecs: read + write                     (R-SIM-14)
 ├── sources/       world-model clients                             (R-SIM-14)
+├── view/          transport + viewport STATE -- no pixels         (R-SIM-17)
 ├── render/        theme, raster, matplotlib, foxglove             (R-SIM-2)
 ├── check/         expectations, report                            (R-SIM-8)
 ├── cli/           argument parsing only                           (GT-9)
@@ -46,7 +47,16 @@ modules/sim/src/adas_sim/
 ```
 
 `app/` and `cli/` contain **no logic** (`GT-9`). `core/`, `model/`, `scene/`,
-`contracts/`, `io/`, `check/` never import `render/`, `cli/` or `app/`.
+`contracts/`, `io/`, `check/` never import `view/`, `render/`, `cli/` or
+`app/`.
+
+**There is deliberately no `sinks/`.** An early draft had one for recording
+writers; `R-SIM-14` made readers and writers one symmetric codec table, so
+writers live in `io/`. Two homes for one concept is how `sim convert` would
+have become a feature instead of a consequence.
+
+**`view/` is state, `render/` is pixels.** Keeping them apart is what lets
+`UT-B2-3` assert that toggling a layer re-renders without re-executing.
 
 Enforced by `UT-A1-6` (import-direction test over the module graph).
 
@@ -118,7 +128,10 @@ class Session:
     def __repr__(self) -> str: ...
 ```
 
-### 2.4 `core/transport.py` — the head (`R-SIM-17`)
+### 2.4 `view/transport.py` — the head (`R-SIM-17`)
+
+*(In `view/`, not `core/`: transport is view state. `core/` must stay
+importable by a headless resim that has no cursor.)*
 
 ```python
 class Transport:
@@ -415,6 +428,12 @@ class AuthoringError(SimError):    exit_code = 2   # the YAML is wrong
 class EnvironmentError_(SimError): exit_code = 3   # a library/bundle is missing
 class ContractError(SimError):     exit_code = 4   # ABI/manifest mismatch
 class InternalError(SimError):     exit_code = 70  # a framework bug
+
+class ProvenanceWarning(Warning):
+    """A WARNING, never an error. A project mismatch, a missing bundle or an
+    unknown-provenance recording degrades visibly and the run continues
+    (`R-SIM-3a`, `R-SIM-6`). Raising here would make the honest path the
+    inconvenient one, which is how people start suppressing warnings."""
 ```
 
 Anything uncaught is `internal` **by definition** — failing to classify is the

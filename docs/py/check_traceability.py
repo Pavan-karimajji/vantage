@@ -119,6 +119,42 @@ def main() -> int:
     else:
         rep.ok("every stage-scoped test id maps to a declared stage")
 
+    # -- 2b. no test id is defined twice ----------------------------------
+    # This bit twice while the plan was being granularised: a test appended to
+    # a stage reused a number already present further up, and both readings
+    # looked correct in isolation. A duplicate id silently merges two
+    # obligations into one, so a requirement citing it may be verified by the
+    # wrong test. Mechanical from here on -- same lesson as DC-8.
+    # A test is *defined* by a bullet inside a stage's **Tests** block. The same
+    # id appearing in a **Gate** block is a citation and is expected -- scoping
+    # to the Tests block is what makes the difference, and getting that wrong
+    # was this check's own first bug.
+    rep.heading("2b. Test ids are unique")
+    seen: dict[str, int] = {}
+    dupes = 0
+    lines = plan_text.splitlines()
+    in_tests = False
+    for n, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith("**"):
+            in_tests = stripped.startswith("**Tests**")
+            continue
+        if stripped.startswith("### ") or stripped.startswith("## "):
+            in_tests = False
+            continue
+        if not in_tests:
+            continue
+        for m in re.finditer(r"- \[[ x]\] `((?:UT|ST)-[A-Z]\d[a-z]?-\d+)`", line):
+            tid = m.group(1)
+            if tid in seen:
+                rep.fail(f"{tid} defined twice in a Tests block: "
+                         f"lines {seen[tid]} and {n}")
+                dupes += 1
+            else:
+                seen[tid] = n
+    if not dupes:
+        rep.ok(f"all {len(seen)} test definitions unique")
+
     # -- 3. every stage has tests and a gate ------------------------------
     rep.heading("3. Stage -> tests + gate")
     sections = re.split(r"^### (?=S-[A-E]\d)", plan_text, flags=re.M)

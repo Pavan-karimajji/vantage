@@ -682,6 +682,19 @@ component appears without a GUI change — the same rule
 
 ## 13b. Workspaces — a component ships a default arrangement
 
+> **Two different things share the word "workspace"; keep them apart.**
+>
+> | Term | Meaning | Owner | Defined in |
+> |---|---|---|---|
+> | **Workspace** (this section) | a component's default *panel arrangement*, shipped as data | the component | `modules/<name>/sim/workspace.yaml` |
+> | **Bench / Campaign** | the application's two *modes* — one run interactive vs. many runs reported | the framework | [sim_player.md](sim_player.md) §1, §4, §5 |
+>
+> They compose rather than compete: **Bench and Campaign each load the
+> component's workspace as their starting arrangement**, then apply their own
+> permission set (Bench permissive, Campaign locked). A component never knows
+> which mode it was opened in — the same discipline `R-SIM-1` applies to
+> function names, applied to workspaces (`UT-D8-9`).
+
 §11.1 makes panels dockable and layouts saveable *per user*. That is only half
 of it, and the reference measurement console shows the missing half: **the
 component ships a default arrangement as data**, so opening a recording for the

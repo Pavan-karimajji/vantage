@@ -282,8 +282,8 @@ is an author-time `TypeError`; **one `run_id` joins all six artefacts** (`N-9`);
 Diagnostics turn names into questions: **`sim explain <name>`** (`DG-2`) and
 **`sim doctor`** (`DG-3`), both of which read only what the system already
 knows — no new index to maintain.
-**Verified by.** `UT-A1-5` (repr), `UT-A1-7` (run id), `UT-C1b-5` (one token),
-`UT-A4-9` (no translation), `UT-B4-4` (correlation), `UT-D6-7`, `UT-D6-8`,
+**Verified by.** `UT-A1-5` (repr), `UT-A1-7` (run id), `UT-C1b-9` (one token),
+`UT-A4-10` (no translation), `UT-B4-4` (correlation), `UT-D6-7`, `UT-D6-8`,
 `UT-D8-8` (message contract), `ST-D7-4`. **Status.** frozen.
 
 ### FR-SIM-48 — Name the player and its two workspaces
