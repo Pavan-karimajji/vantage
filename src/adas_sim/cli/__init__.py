@@ -12,7 +12,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from adas_sim.cli import doctor
+from adas_sim.cli import doctor, explain
 from adas_sim.core.console import reconfigure_console_utf8
 
 
@@ -23,8 +23,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="sim")
     subparsers = parser.add_subparsers(dest="verb", required=True)
     subparsers.add_parser("doctor", help="report the environment (DG-3)")
+    subparsers.add_parser("explain", help="explain any name in the system (DG-2)", add_help=False)
 
     args, remainder = parser.parse_known_args(argv)
     if args.verb == "doctor":
         return doctor.run(remainder)
-    return 1  # unreachable: "doctor" is the only registered verb so far
+    if args.verb == "explain":
+        return explain.run(remainder)
+    return 1  # unreachable: every registered verb is dispatched above

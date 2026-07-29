@@ -726,7 +726,184 @@ Two consequences worth holding on to:
   viewer renders a `Session` (`R-SIM-13`) and nothing else, and it is easiest to
   keep that true while a `Session` is the only thing that exists.
 
+**Finding — build order within Phase B is `S-B2` then `S-B1`, not as
+numbered.** `S-B1`'s own tests (`UT-B1-1`, `UT-B1-2`, `UT-B1-11`, `UT-B1-12`,
+`UT-B1-13`) require `Tick` and `LayerCtx` (= `HistoryView` + `FrameTree`),
+which are `S-B2`'s deliverables (`core/tick.py`, `core/history.py`) —
+`LayerProvider.__call__(self, ctx: LayerCtx)` cannot even type-check before
+they exist. `S-B2`, in turn, has no dependency back on `S-B1` at all: `Tick`/
+`Session`/`Runner`/`Transport` operate purely on raw recording data from
+`io/`, never on a `Scene` or a layer provider. Confirmed with the user before
+writing any code (the same weight as `S-A3`'s `Prim`/`Layer` finding, not
+something to pick silently) — built `S-B2` first, `S-B1` next. The stage
+**labels** stay as numbered (`S-B1`/`S-B2` are stable citations, per §0); only
+the build order and this document's section order below are swapped.
+
+### S-B2 — `Session` + time transport
+
+**Status: DONE — implemented and verified 2026-07-29.**
+`pytest modules/sim/tests -q`: **101 passed** (82 from Phase A + 19 new).
+`scripts/check_invariants.py`: clean. `python docs/py/run_all.py`: green.
+Built *before* `S-B1` in this document's own order (see the finding just
+above `S-B1`/`S-B2` in this section). `ST-B2-2` ran for real against the
+largest recording under `modules/df/tests/carla_testruns/`
+(`bsd_ego_lane_exit.mcap`, 276 ticks, 0.195 s — a number, not a threshold, no
+baseline exists yet). Several real findings below, including two more GT-1
+self-violations (this document's own reference examples keep being the
+trap) and one genuine bug caught only by manually running the CLI, not by
+any unit test.
+
+**Purpose.** Split executing from viewing, which is what makes backwards seek
+possible at all. Closes **D7**; delivers the *scrolling* requirement
+(`FR-SIM-12`) and the head model (`R-SIM-17`, `FR-SIM-17`).
+
+**Must not.**
+- Accumulate time as a float. `t_ns` is an integer accumulated from `dt_ns`;
+  `t_s` is **derived and never fed back** (`P-8`). A float seconds accumulator
+  here is precisely what makes a resim non-reproducible, and it fails silently.
+- Let pass 2 mutate anything pass 1 produced. `Session` is immutable; that is
+  what makes 100 random seeks a cheap test rather than a flaky one.
+- Implement a backwards `exec()`. There is no inverse; see the head model.
+
+- [x] `core/tick.py` — `PortValue` (message + `age_s`/`valid`/`updated`/
+      `origin`), `Tick` with **integer `t_ns`/`dt_ns`** and `pose`
+      (api reference §2.2).
+      **Finding (contract, resolved without a user check — the plan's own
+      checklist line names api reference explicitly):** `sim_architecture.md`
+      §5.3's own `Tick` sketch splits ports into three mappings
+      (`stimulus`/`observation`/`truth`) instead of api reference's unified
+      `ports: Mapping[str, PortValue]` + `.port(name)`. Implemented the
+      unified shape, per this line's own "(api reference §2.2)" citation —
+      the same precedence rule `S-A4`'s `io/base.py` used. No information is
+      lost: `PortValue.origin` already carries the measured/truth/mocked/
+      simulated/overridden tag the three-way split existed to express.
+      **Finding:** api reference's own `Origin` literal has five values, no
+      `"unknown"` — but `io.base.Provenance` has six (added at `S-A4` for
+      exactly the no-meta-recording case, `R-SIM-6`). Extended `Origin` to
+      six values too, mirroring `Provenance`, rather than fabricating a
+      specific origin tag for a `Tick` built from a no-meta recording.
+      **Finding:** a second `GT-1` self-violation, again a copied doc
+      example (`"df.aeb.outputs"` in `PortValue.name`'s own comment) —
+      caught by `check_invariants.py`, paraphrased to `"<component>.<port>"`
+- [x] `core/history.py` — `HistoryView`, a read-only windowed view over earlier
+      ticks, and `FrameTree` composing static (model) + dynamic (`tick.pose`)
+      transforms — together these are `LayerCtx`. **A windowed view, not the
+      whole session**: handing a provider the full history invites it to become
+      a second analysis engine.
+      **Scoped:** `FrameTree` implements `ego`<->`world` only (fully
+      resolvable from `tick.pose` alone). `sensor:<id>`/`image:<cam>`
+      composition needs a static pose that is not generically available
+      (`model/project.py`'s own `S-A2` scoping: real sensor/camera poses are
+      calibration owned by the consuming component) — extended once a
+      component's own layer provider (`S-B1`) supplies one
+- [x] `core/session.py` — `Session`, `at(i)`, `seek_ns(t_ns)`, `events`,
+      `deterministic`.
+      **Finding:** api reference's own `Session` sketch types
+      `events: Sequence[Event]` without qualifying which `Event` — but
+      `core/logging.py` already has one (the closed log-line vocabulary,
+      `N-10`, from `S-A1`). A timeline marker (a state transition, a
+      bookmark) is a different concept from a log event; naming both
+      classes `Event` is exactly the collision `N-3` bans. Named the new one
+      `SessionEvent`
+- [x] `core/runner.py` — pass 1 for the replay case; pass 2 is the renderer.
+      Pass 1 groups raw `(topic, log_time_ns, bytes)` triples into `Tick`s
+      via `io.base.group_by_log_time` (`S-A4`'s own `UT-A4-9` helper),
+      decoding each payload against its topic's embedded schema when one
+      exists (`decode_message`, the same dynamic-`FileDescriptorSet`
+      technique `scene/codec.py` uses, R-SIM-11). `SceneCache` is pass 2's
+      bounded, LRU-evicting memo, keyed by `(tick_index, layer_selection,
+      theme)` -- never viewport (`UT-B2-5`)
+- [x] `view/transport.py` — play/pause, step ±1/±10, speed, loop marks, goto,
+      jump-to-event, **and the head** (`R-SIM-17`): `head_tick`, `is_at_head`,
+      advance-N as one cancellable job with progress, `review_mode` on stepping
+      back, and `resume_options()` returning **exactly two named choices** so
+      that silently continuing from a rewound tick is not representable
+- [x] `cli/explain.py` — **the first version of `sim explain`** (`DG-2`), over
+      what exists now: a session, its topics, its layers, a `run_id`. Extended
+      at `S-C1c` (ports, schemas, producers) and `S-D6` (expectations, values).
+      Same reasoning as `sim doctor` in `S-A1` — the tool that explains names is
+      needed while names are being created, not after.
+      Facts live in `core/explain.py` (`GT-9`: `cli/` stays argument-parsing
+      only), same split as `S-A1`'s `sim doctor`/`core/diagnostics.py`
+- [x] Scene cache keyed by `(tick, layer_selection, theme)`, with a **stated
+      bound** — an unbounded cache over a 36 000-tick session is `OQ-6` arriving
+      early. (`core/runner.SceneCache`, above.)
+      **Finding — a real bug, caught only by manually running the CLI, not by
+      any unit test:** `cli explain` failed with "no registered extension"
+      even though `io/mcap.py` plainly registers `.mcap`, because nothing on
+      the import path from `cli` to `io.registry` ever imports
+      `adas_sim.io.mcap` -- every earlier manual smoke test in this session
+      had papered over the gap by importing it by hand first. Fixed with a
+      **lazy** codec-loading map in `io/registry.py`
+      (`_BUILTIN_CODEC_MODULES`): `reader_for`/`writer_for` import the
+      built-in module for an extension on first lookup, so `import
+      adas_sim.io` still never imports `mcap` (`UT-A1-2` stays green) while
+      the CLI actually works. The same fix uncovered a second regression:
+      `core/runner.py`'s module-level `google.protobuf` import was pulled in
+      transitively through `cli.explain` -> `core.runner`, also breaking
+      `UT-A1-2` -- moved the import inside `decode_message()`, since only
+      decoding an actual schema needs it
+
+**Tests**
+- [x] `UT-B2-1` `seek_time` maps a time to the correct tick at boundaries
+- [x] `UT-B2-2` **backwards seek**: from tick N to tick 0 returns tick 0's exact
+      data — the thing that is impossible today
+- [x] `UT-B2-3` toggling a layer re-renders and does **not** re-run pass 1
+      (assert a pass-1 call counter is unchanged) — the test that keeps the
+      layer panel feeling like a tool rather than a re-run
+- [x] `UT-B2-4` speed/loop/step arithmetic at the ends (tick 0, tick N)
+- [x] `UT-B2-5` cache invalidates on theme change, **not** on viewport change
+- [x] `UT-B2-6` **time is exact**: `t_ns` accumulated over 10 000 ticks equals
+      the sum of `dt_ns` with zero drift; `t_s` is derived and never fed back
+- [x] `UT-B2-7` **stepping backward leaves execution mode**: `is_at_head` goes
+      false, `review_mode` true, and the SUT's `exec()` counter does not advance
+      on any further backward step or seek
+- [x] `UT-B2-8` **resume offers exactly two choices**, and *recompute-from-0* is
+      unavailable when `deterministic` is false, carrying its reason
+- [x] `UT-B2-9` **no silent continue**: advancing from a rewound tick without
+      choosing raises, rather than calling `exec()` with mismatched state
+- [x] `UT-B2-10` advance-N arithmetic: 50/100/200/custom clamp at the end;
+      cancel at tick *k* leaves `head_tick == k`
+- [x] `UT-B2-11` `Session` is immutable: mutating a returned `Tick` or its
+      `ports` raises, so pass 2 cannot corrupt pass 1
+- [x] `UT-B2-12` the Scene cache respects its bound and evicts least-recently-
+      used, measured on a session larger than the bound
+- [x] `ST-B2-1` on a ≥1000-tick session, 100 random seeks all return correct data
+- [x] `ST-B2-2` a full pass 1 over the largest existing recording completes
+      within a stated budget, **recorded as a number** — not asserted as a limit
+      until a baseline exists. Ran for real: `bsd_ego_lane_exit.mcap`, 276
+      ticks, 0.195s
+- [x] `ST-B2-3` **rewind then recompute-from-0 is exact**: recomputing to tick
+      *N* reproduces the original tick *N* byte-for-byte on a deterministic
+      resim.
+      **Finding — scoped honestly, not asserted beyond what Phase B can
+      prove:** in Phase B there is no real SUT execution (no C++, no DLL) —
+      `Session.ticks` is pre-built once and never mutated, so a naive
+      `session.at(150) == session.at(150)` assertion would pass trivially
+      even with a broken `Transport`. Implemented instead as: the exec
+      stand-in's **visited-position sequence** is identical, in order,
+      across the pre-rewind pass and the post-`RECOMPUTE_FROM_ZERO` pass.
+      The stronger claim — recomputed tick *data* is byte-identical — needs
+      a real pipeline that can produce new data per run, which is `S-C1+`
+
+**Discipline** (every stage)
+- [x] portability §3 ticked — exposure: `P-8` (integer `t_ns` throughout; a
+      float seconds accumulator here is what makes resim non-reproducible)
+- [x] naming §3 ticked — exposure: `N-7` (`Session`/`Tick`/`Transport` reprs are
+      what a debugger shows during a seek bug), `N-10` (`tick=` on every line)
+- [x] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked (`GT-4`/`GT-8`
+      still not applicable — no C++ touched, no viewer exists)
+
+**Gate**
+- [x] `UT-B2-2` + `ST-B2-1` green; the "forward only, no rewind" caveat is
+      deleted from the existing tool's docstring only in `S-E1`
+- [x] `UT-B2-6` green — exact time is the precondition for every determinism
+      claim later in this plan, and it is cheapest to establish here
+
 ### S-B1 — Layer providers + parity render
+
+**Status: NOT STARTED.** Next stage — see the reorder finding above `S-B2`.
+Now unblocked: `Tick`/`LayerCtx`/`HistoryView`/`FrameTree` all exist (`S-B2`).
 
 **Purpose.** Prove the Scene IR carries a real function's picture. Closes
 **D2**, **D5**. First stage that touches a component repo — **adding, never
@@ -808,90 +985,6 @@ removing**.
       existing viewer is NOT deleted here** (that is `S-E1`), because parity is
       only meaningful while both exist
 - [ ] `ST-B1-2` green — otherwise `D3` is closed on paper only
-
-### S-B2 — `Session` + time transport
-
-**Purpose.** Split executing from viewing, which is what makes backwards seek
-possible at all. Closes **D7**; delivers the *scrolling* requirement
-(`FR-SIM-12`) and the head model (`R-SIM-17`, `FR-SIM-17`).
-
-**Must not.**
-- Accumulate time as a float. `t_ns` is an integer accumulated from `dt_ns`;
-  `t_s` is **derived and never fed back** (`P-8`). A float seconds accumulator
-  here is precisely what makes a resim non-reproducible, and it fails silently.
-- Let pass 2 mutate anything pass 1 produced. `Session` is immutable; that is
-  what makes 100 random seeks a cheap test rather than a flaky one.
-- Implement a backwards `exec()`. There is no inverse; see the head model.
-
-- [ ] `core/tick.py` — `PortValue` (message + `age_s`/`valid`/`updated`/
-      `origin`), `Tick` with **integer `t_ns`/`dt_ns`** and `pose`
-      (api reference §2.2)
-- [ ] `core/history.py` — `HistoryView`, a read-only windowed view over earlier
-      ticks, and `FrameTree` composing static (model) + dynamic (`tick.pose`)
-      transforms — together these are `LayerCtx`. **A windowed view, not the
-      whole session**: handing a provider the full history invites it to become
-      a second analysis engine
-- [ ] `core/session.py` — `Session`, `at(i)`, `seek_ns(t_ns)`, `events`,
-      `deterministic`
-- [ ] `core/runner.py` — pass 1 for the replay case; pass 2 is the renderer
-- [ ] `view/transport.py` — play/pause, step ±1/±10, speed, loop marks, goto,
-      jump-to-event, **and the head** (`R-SIM-17`): `head_tick`, `is_at_head`,
-      advance-N as one cancellable job with progress, `review_mode` on stepping
-      back, and `resume_options()` returning **exactly two named choices** so
-      that silently continuing from a rewound tick is not representable
-- [ ] `cli/explain.py` — **the first version of `sim explain`** (`DG-2`), over
-      what exists now: a session, its topics, its layers, a `run_id`. Extended
-      at `S-C1c` (ports, schemas, producers) and `S-D6` (expectations, values).
-      Same reasoning as `sim doctor` in `S-A1` — the tool that explains names is
-      needed while names are being created, not after
-- [ ] Scene cache keyed by `(tick, layer_selection, theme)`, with a **stated
-      bound** — an unbounded cache over a 36 000-tick session is `OQ-6` arriving
-      early
-
-**Tests**
-- [ ] `UT-B2-1` `seek_time` maps a time to the correct tick at boundaries
-- [ ] `UT-B2-2` **backwards seek**: from tick N to tick 0 returns tick 0's exact
-      data — the thing that is impossible today
-- [ ] `UT-B2-3` toggling a layer re-renders and does **not** re-run pass 1
-      (assert a pass-1 call counter is unchanged) — the test that keeps the
-      layer panel feeling like a tool rather than a re-run
-- [ ] `UT-B2-4` speed/loop/step arithmetic at the ends (tick 0, tick N)
-- [ ] `UT-B2-5` cache invalidates on theme change, **not** on viewport change
-- [ ] `UT-B2-6` **time is exact**: `t_ns` accumulated over 10 000 ticks equals
-      the sum of `dt_ns` with zero drift; `t_s` is derived and never fed back
-- [ ] `UT-B2-7` **stepping backward leaves execution mode**: `is_at_head` goes
-      false, `review_mode` true, and the SUT's `exec()` counter does not advance
-      on any further backward step or seek
-- [ ] `UT-B2-8` **resume offers exactly two choices**, and *recompute-from-0* is
-      unavailable when `deterministic` is false, carrying its reason
-- [ ] `UT-B2-9` **no silent continue**: advancing from a rewound tick without
-      choosing raises, rather than calling `exec()` with mismatched state
-- [ ] `UT-B2-10` advance-N arithmetic: 50/100/200/custom clamp at the end;
-      cancel at tick *k* leaves `head_tick == k`
-- [ ] `UT-B2-11` `Session` is immutable: mutating a returned `Tick` or its
-      `ports` raises, so pass 2 cannot corrupt pass 1
-- [ ] `UT-B2-12` the Scene cache respects its bound and evicts least-recently-
-      used, measured on a session larger than the bound
-- [ ] `ST-B2-1` on a ≥1000-tick session, 100 random seeks all return correct data
-- [ ] `ST-B2-2` a full pass 1 over the largest existing recording completes
-      within a stated budget, **recorded as a number** — not asserted as a limit
-      until a baseline exists
-- [ ] `ST-B2-3` **rewind then recompute-from-0 is exact**: recomputing to tick
-      *N* reproduces the original tick *N* byte-for-byte on a deterministic
-      resim
-
-**Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-8` (integer `t_ns` throughout; a
-      float seconds accumulator here is what makes resim non-reproducible)
-- [ ] naming §3 ticked — exposure: `N-7` (`Session`/`Tick`/`Transport` reprs are
-      what a debugger shows during a seek bug), `N-10` (`tick=` on every line)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
-
-**Gate**
-- [ ] `UT-B2-2` + `ST-B2-1` green; the "forward only, no rewind" caveat is
-      deleted from the existing tool's docstring only in `S-E1`
-- [ ] `UT-B2-6` green — exact time is the precondition for every determinism
-      claim later in this plan, and it is cheapest to establish here
 
 ### S-B3 — Qt viewer shell
 

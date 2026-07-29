@@ -11,6 +11,7 @@ exists (R-SIM-14).
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 from typing import Callable
 
@@ -23,6 +24,22 @@ from adas_sim.io.base import RecordingReader, RecordingWriter
 #: `open(path, meta, topics)` is an explicit Protocol method instead.
 _READERS: dict[str, Callable[[Path], RecordingReader]] = {}
 _WRITERS: dict[str, Callable[[], RecordingWriter]] = {}
+
+#: extension -> the built-in module that registers it, imported lazily on
+#: first lookup. `import adas_sim.io` (or anything under it) must not import
+#: `mcap` (`UT-A1-2`: no subpackage pulls in a heavy dependency at import
+#: time) -- found by `cli explain` genuinely failing to resolve `.mcap` until
+#: something had imported `adas_sim.io.mcap` by hand, which every earlier
+#: manual smoke test happened to do itself, masking the gap. `reader_for`/
+#: `writer_for` are the one place this framework actually needs a codec, so
+#: they are the one place it is loaded.
+_BUILTIN_CODEC_MODULES = {".mcap": "adas_sim.io.mcap"}
+
+
+def _load_builtin(ext: str) -> None:
+    module_name = _BUILTIN_CODEC_MODULES.get(ext)
+    if module_name is not None and ext not in _READERS and ext not in _WRITERS:
+        importlib.import_module(module_name)
 
 
 def register(
@@ -39,10 +56,11 @@ def register(
 
 
 def _registered_extensions() -> list[str]:
-    return sorted(set(_READERS) | set(_WRITERS))
+    return sorted(set(_READERS) | set(_WRITERS) | set(_BUILTIN_CODEC_MODULES))
 
 
 def reader_for(path: Path) -> RecordingReader:
+    _load_builtin(path.suffix)
     factory = _READERS.get(path.suffix)
     if factory is None:
         raise AuthoringError(
@@ -53,6 +71,7 @@ def reader_for(path: Path) -> RecordingReader:
 
 
 def writer_for(path: Path) -> RecordingWriter:
+    _load_builtin(path.suffix)
     factory = _WRITERS.get(path.suffix)
     if factory is None:
         if path.suffix in _READERS:
