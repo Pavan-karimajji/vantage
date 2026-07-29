@@ -447,6 +447,22 @@ touched files (`ego.py`, `project.py`, `sensors.py`) — the same discipline
 
 ### S-A3 — `scene/` types + `render/theme.py`
 
+**Status: DONE — implemented and verified 2026-07-29.**
+`pytest modules/sim/tests -q`: **67 passed** (41 from S-A1/A2 + 26 new).
+`scripts/check_invariants.py`: clean. `python docs/py/run_all.py`: green.
+The biggest single finding of any stage so far: **`sim_api_reference.md` §5's
+`Prim`/`Layer` contract itself was wrong** (narrower than the two docs that
+actually specify this IR) — resolved with the user before writing code, not
+after. See the `Prim`/`Layer` bullet below and §5's own correction note.
+Three more findings: a real protobuf precision bug caught by `UT-A3-2` itself
+(not reasoned in advance); two more GT-1 self-violations (this module keeps
+finding them in its own prose, same shape as S-A2's); and `status.*` turned
+out not to be a gated categorical set after all. Colour values for
+`object.classification.*`/`status.*` are reused verbatim from this session's
+own validated data-visualization reference palette (`render/theme.py`'s own
+module docstring records the provenance) rather than re-derived from
+scratch.
+
 **Purpose.** The central IR (`R-SIM-2`). Everything upstream produces `Scene`;
 everything downstream consumes it. Getting this wrong is the one mistake that
 cannot be localised later.
@@ -455,54 +471,114 @@ cannot be localised later.
 `sources/`. A `Prim` never carries a colour, a pixel coordinate or a viewport
 reference — only metres, a named frame and a **semantic** style token.
 
-- [ ] `scene/types.py` — frozen `Prim`, `Layer`, `Scene` per api reference §5
+- [x] `scene/types.py` — frozen `Prim`, `Layer`, `Scene` per api reference §5
       and visualization spec §2. Every prim carries `frame`, `style`, `pick_id`,
       `z`, `alpha`. `width_px`/`offset_px` are **the only** pixel fields, and
-      exist because legibility is not physical (`R-SIM-2`)
-- [ ] `scene/frames.py` — the frame graph: `ego` (default, `R-COORD-1`),
+      exist because legibility is not physical (`R-SIM-2`).
+      **Finding, resolved before writing code:** api reference §5's own `Prim`
+      (7 kinds, generic `coords: tuple[float, ...]`, no `pick_id`/`z`/`alpha`)
+      contradicted `sim_visualization_spec.md` §2 and `sim_architecture.md`
+      §5.3 (the master doc), both specifying an 11-kind catalogue
+      (`Polyline/Polygon/Box/Circle/Ellipse/Points/Arrow/Text/Grid/Heatmap/Image`)
+      that api reference's shape cannot even represent (a `Heatmap`'s 2D array,
+      an `Image`'s bytes). Checked with the user rather than picked silently;
+      confirmed the richer catalogue, implemented as **one** `Prim` dataclass
+      with a closed `kind: Literal[...]` and per-kind fields defaulting to
+      `None` (matching `sim_architecture.md`'s own sketch: "one of: Polyline
+      Polygon Box Circle Points Text Arrow Grid Heatmap Image"), not 11
+      subclasses — this is also what lets `UT-B1-10` (later) hit-test through
+      one path. Api reference §5 corrected in the same commit (`GT-7`)
+- [x] `scene/frames.py` — the frame graph: `ego` (default, `R-COORD-1`),
       `world`, `sensor:<id>`, `image:<cam>`. Composition is static (model) plus
-      dynamic (`tick.pose`)
-- [ ] `scene/registry.py` — `@layer_provider`, `@inspector_fields`, `@signal`;
+      dynamic (`tick.pose`).
+      **Scoped:** only name validation (`is_known_frame`/`known_frame_kinds`)
+      is implemented. The dynamic half — composing a static model pose with
+      `tick.pose` into an actual transform — needs `core/tick.py`'s `Tick`,
+      which does not exist until `S-B2`; nothing in `UT-A3-*` requires it yet
+- [x] `scene/registry.py` — `@layer_provider`, `@inspector_fields`, `@signal`;
       discovery **by import**, so a component adds a layer by existing.
       Duplicate id raises naming **both** providers (`N-8`)
-- [ ] `scene/codec.py` — Scene to bytes and back, **protobuf**: field numbering
+- [x] `scene/codec.py` — Scene to bytes and back, **protobuf**: field numbering
       gives minor-version tolerance for free, and a Foxglove renderer wants the
-      schema anyway. `Scene.version` is `major.minor`; additive is minor
-- [ ] `render/theme.py` — the token table for `dark`/`light`/`print`/`forced`
-- [ ] `render/palette_check.py` — the six-check validator over each categorical
-      set (visualization spec §3.4), runnable as `python -m`
+      schema anyway. `Scene.version` is `major.minor`; additive is minor.
+      **No `.proto` file, no `protoc`/`grpcio-tools`** (neither is on this
+      machine and adding one is a new build-time dependency, `P-10`): the
+      schema is built once at import time straight from
+      `google.protobuf.descriptor_pb2` into a private `DescriptorPool` — the
+      same "no generated bindings required" principle `R-SIM-11` states for a
+      component's own messages, applied to the framework's IR. Proto2 syntax
+      (not proto3): proto3's `optional` needs a synthetic one-field oneof per
+      field for presence-tracking, which is exactly what a ~40-field hand-built
+      descriptor should not have to reconstruct by hand; proto2's `optional`
+      gives real `HasField` presence natively, and this schema is internal to
+      `modules/sim`, never a cross-component `interfaces` contract.
+      **Finding (caught by `UT-A3-2` failing, not reasoned in advance):** every
+      real-valued field was first typed `TYPE_FLOAT` (protobuf's 32-bit single
+      precision) against a 64-bit Python `float` — round-tripping a plain
+      `0.1` came back as `~0.10000000149011612`. Fixed to `TYPE_DOUBLE`
+      throughout
+- [x] `render/theme.py` — the token table for `dark`/`light`/`print`/`forced`.
+      36 tokens across the framework-owned namespaces only (`frame.* ego.*
+      object.* status.* sensor.* truth.* measure.*`) — a component's own
+      `<fn>.*` tokens are registered from its own `modules/<name>/sim/` at
+      `S-B1` (`R-SIM-1`). **Finding:** an early docstring draft named a
+      concrete example token from a driving function's own namespace, which
+      `check_invariants.py` correctly flagged as a second `GT-1`
+      self-violation (same shape as the one found in `S-A2`) — paraphrased
+      without the example
+- [x] `render/palette_check.py` — the six-check validator over each categorical
+      set (visualization spec §3.4), runnable as `python -m`. Ported from this
+      session's own data-visualization skill's `validate_palette.py` (same
+      OKLCH math, same Machado-Oliveira-Fernandes CVD simulation, same
+      thresholds — the skill's reference palette is also where
+      `object.classification.*`'s and `status.*`'s hex values come from), plus
+      one addition: any categorical pair in the 6-8 ΔE floor band must have a
+      **named** secondary encoding recorded in `render/theme.py`, checked by
+      `check_named_secondary_encoding`, or it fails rather than merely warns.
+      **Finding:** `status.*` is **not** a six-check-gated categorical set —
+      re-reading `sim_visualization_spec.md` §3.4, its three named examples are
+      "object classifications, function namespaces, timeline signal lanes",
+      and status is validated by convention (contrast, distinctness from the
+      series colours) in the reference palette this session's colours are
+      drawn from, never by the OKLCH lightness-band/CVD gate. Tried gating it
+      first; it failed the lightness band, chroma floor and normal-vision
+      floor outright (`warning`/`serious` sit 13.6 ΔE apart, below the 15
+      floor) — removed from `CATEGORICAL_SETS` rather than reshuffled to force
+      a pass, since forcing it would mean picking status colours for OKLCH
+      banding instead of for the red/amber/green convention they need to carry
 
 **Tests**
-- [ ] `UT-A3-1` every prim type constructs and is immutable (assignment raises)
-- [ ] `UT-A3-2` `Scene` to bytes and back round-trips to an equal object
-- [ ] `UT-A3-3` a prim with no `frame` defaults to `ego`; an unknown frame raises
+- [x] `UT-A3-1` every prim type constructs and is immutable (assignment raises)
+- [x] `UT-A3-2` `Scene` to bytes and back round-trips to an equal object
+- [x] `UT-A3-3` a prim with no `frame` defaults to `ego`; an unknown frame raises
       naming the known frames
-- [ ] `UT-A3-4` an unknown style token raises — **no silent default colour**.
+- [x] `UT-A3-4` an unknown style token raises — **no silent default colour**.
       A silent default is how a debug layer ends up looking authoritative
-- [ ] `UT-A3-5` every token in the table resolves in **all four** themes
-- [ ] `UT-A3-6` registry: duplicate layer id raises naming both providers
-- [ ] `UT-A3-7` registry discovery finds a provider added by import alone
-- [ ] `UT-A3-8` a `Scene` written with a **higher minor** version still reads —
+- [x] `UT-A3-5` every token in the table resolves in **all four** themes
+- [x] `UT-A3-6` registry: duplicate layer id raises naming both providers
+- [x] `UT-A3-7` registry discovery finds a provider added by import alone
+- [x] `UT-A3-8` a `Scene` written with a **higher minor** version still reads —
       unknown fields skipped, known ones survive (`NR-SIM-3`)
-- [ ] `UT-A3-9` a `Scene` written with a **higher major** version is **refused**
+- [x] `UT-A3-9` a `Scene` written with a **higher major** version is **refused**
       with both versions named — never partially rendered
-- [ ] `UT-A3-10` `scene/` imports nothing from `render`/`view`/`io`/`sources`
+- [x] `UT-A3-10` `scene/` imports nothing from `render`/`view`/`io`/`sources`
       (module scan) — the layering that makes `R-SIM-2` mechanical
-- [ ] `UT-A3-11` no `Prim` field accepts a colour value: constructing one with
+- [x] `UT-A3-11` no `Prim` field accepts a colour value: constructing one with
       a hex-literal style raises, because a hex string is not a semantic token
-- [ ] `ST-A3-1` `python -m adas_sim.render.palette_check` exits 0 for `dark` and
+- [x] `ST-A3-1` `python -m adas_sim.render.palette_check` exits 0 for `dark` and
       `light`; every pair in the 6-8 dE band has a **named** secondary encoding
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-4` (the codec writes bytes; encoding
+- [x] portability §3 ticked — exposure: `P-4` (the codec writes bytes; encoding
       and newline must be explicit or goldens differ across platforms), `P-8`
       (any prim ordering that reaches bytes is sorted)
-- [ ] naming §3 ticked — exposure: `N-2` (a `Layer.id` is fully qualified and
+- [x] naming §3 ticked — exposure: `N-2` (a `Layer.id` is fully qualified and
       reaches the viewer, a log line and a golden), `N-3`, `N-8`
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [x] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked (`GT-4`/`GT-8`
+      still not applicable — no C++ touched, no viewer exists)
 
 **Gate**
-- [ ] `ST-A3-1` green — the palette is validated by computation, not taste; and
+- [x] `ST-A3-1` green — the palette is validated by computation, not taste; and
       `UT-A3-10` + `UT-A3-11` green, because a `Scene` that *can* hold a colour
       will eventually hold one
 

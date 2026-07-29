@@ -311,22 +311,58 @@ round_trips=False` — which is how an export can never be fed back (`UT-D7-5`).
 
 ## 5. `scene/` — geometry, never pixels (`R-SIM-2`)
 
+**Corrected at `S-A3`** (`sim_implementation_plan.md`'s own finding, `GT-7`):
+this section previously showed a narrower 7-kind `Prim` with a generic
+`coords: tuple[float, ...]` and no `pick_id`/`z`/`alpha` — which cannot
+represent a `Heatmap` (a 2D array) or `Image` (bytes) at all. The shape
+below is what `sim_visualization_spec.md` §2 and `sim_architecture.md` §5.3
+(the master design doc) both specified and what is actually implemented in
+`scene/types.py`.
+
 ```python
+PrimKind = Literal[
+    "polyline", "polygon", "box", "circle", "ellipse",
+    "points", "arrow", "text", "grid", "heatmap", "image",
+]                                   # closed set (sim_visualization_spec.md §2)
+
 @dataclass(frozen=True, slots=True)
 class Prim:
-    kind: Literal["point","polyline","polygon","box","arc","text","image_ref"]
-    coords: tuple[float, ...]      # METRES, in `frame`
-    frame: str = "ego"             # `R-COORD-1`
-    style: str = ""                # SEMANTIC token: "zone.entry" -- never a colour
-    text: str | None = None
-    width_px: float | None = None  # the ONE pixel exception: line weight
+    kind: PrimKind
+    # -- universal --
+    frame: str = "ego"              # `R-COORD-1`
+    style: str = ""                 # SEMANTIC token: "zone.entry" -- never a colour
+    pick_id: str | None = None
+    z: int = 0
+    alpha: float = 1.0
+    width_px: float | None = None   # the ONE pixel exception: line weight
     offset_px: tuple[float, float] | None = None   # and label offset
+    # -- everything below is `None` unless `kind` uses it; all METRES/RADIANS --
+    points_m: tuple[tuple[float, float], ...] | None = None   # polyline/polygon/points
+    closed: bool = False                                      # polyline
+    filled: bool = True                                        # polygon
+    hatch: str | None = None                                   # polygon
+    marker: str | None = None                                  # points
+    cx_m: float | None = None; cy_m: float | None = None       # box/circle/ellipse
+    length_m: float | None = None; width_m: float | None = None; height_m: float | None = None   # box
+    yaw_rad: float | None = None                               # box, ellipse
+    r_m: float | None = None                                   # circle
+    a_m: float | None = None; b_m: float | None = None         # ellipse
+    x_m: float | None = None; y_m: float | None = None         # arrow, text
+    dx_m: float | None = None; dy_m: float | None = None       # arrow
+    text: str | None = None; anchor: str | None = None         # text
+    spacing_m: float | None = None; extent_m: float | None = None   # grid
+    x0_m: float | None = None; y0_m: float | None = None
+    cell_dx_m: float | None = None; cell_dy_m: float | None = None
+    values: tuple[tuple[float, ...], ...] | None = None        # heatmap
+    data: bytes | None = None; format: str | None = None       # image
 
 @dataclass(frozen=True, slots=True)
 class Layer:
     id: str                        # "df.aeb.corridor" -- fully qualified (`N-2`)
     group: str
-    prims: tuple[Prim, ...]
+    prims: tuple[Prim, ...] = ()
+    label: str = ""                 # human text for the layer panel
+    z: int = 0                      # draw order within the scene
     level: int = 1                 # 1 always-on .. 3 internal debug
     default_on: bool = True
     derived: bool = False          # `R-SIM-7` stopgap marker
