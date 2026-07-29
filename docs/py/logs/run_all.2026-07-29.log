@@ -1,0 +1,14 @@
+# run_all
+# platform  win32
+# python    3.12.10
+
+Design-set checks and surveys
+kind    script                                result
+------  ------------------------------------  ------  --
+check   check_doc_invariants.py               pass    ok
+check   check_traceability.py                 pass    ok
+check   check_rules_coverage.py               pass    ok
+survey  FR_SIM_46_reference_tool_survey.py    pass    ok
+survey  FR_SIM_45_argument_binding_survey.py  pass    ok
+
+All checks pass. Surveys that skipped did so because the artefact they inspect is not on this machine, which is not a failure (docs/py/README.md).

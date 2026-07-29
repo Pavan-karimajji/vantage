@@ -82,6 +82,15 @@ A stage that breaks one is not done.
 - [ ] **GT-1 — no function names in the framework.**
       `grep -rniE '\b(aeb|bsd|lca|acc|ldw|lka)\b' modules/sim/src` returns
       nothing (`R-SIM-1`).
+      **Finding (S-A1):** this literal command has a word-boundary gap --
+      `\b` treats `_` as a word character, so it does **not** match a banned
+      token embedded in a snake_case/ALL_CAPS identifier (`BSD_SENSOR_0_...`,
+      exactly `R-NAME-3`'s own calibration-key shape). Verified:
+      `grep -niE '\bbsd\b'` misses a file containing only
+      `BSD_ZONE_WIDTH_M = 2.0`. `scripts/check_invariants.py`'s `check_gt1`
+      uses an alnum lookaround instead so the underscore-prefixed case is
+      caught; run that script, not the literal grep above, when checking this
+      gate by hand.
 - [ ] **GT-2 — no renderer in a layer provider.** No
       `cv2`/`matplotlib`/`PySide6`/`foxglove` import under any
       `modules/*/sim/layers/` (`R-SIM-2`).
@@ -183,6 +192,16 @@ impression is not a measurement.
 
 ### S-A1 — `modules/sim` package skeleton
 
+**Status: DONE — implemented and verified 2026-07-29.**
+`pytest modules/sim/tests -q`: **25 passed**. `python docs/py/run_all.py`:
+green. `scripts/check_invariants.py`: clean (GT-1, GT-2, GT-3, GT-6). Two
+findings below (GT-1's grep gap; a stale `CLAUDE.md` claim), no behaviour
+change to anything outside `modules/sim`. Env: `py -3.12` (not the `python` on
+`PATH`, which resolves to 3.14 — the exact trap §1 warns about); dependencies
+installed into a dedicated `modules/sim/.venv`, not the global interpreter
+(user's choice, not the global site-packages, so nothing outside this module
+was touched).
+
 **Purpose.** The tree, the packaging, the error taxonomy, the run id and the
 log line — everything every later stage imports. Nothing here has behaviour
 worth demonstrating; it exists so that nothing later has to invent a name.
@@ -190,10 +209,10 @@ worth demonstrating; it exists so that nothing later has to invent a name.
 **Must not.** Import Qt, matplotlib, mcap or protobuf at package import time
 (`UT-A1-2`). The console resim path must install none of them.
 
-- [ ] `pyproject.toml` — package `adas-sim`, `requires-python = ">=3.12"`, core
+- [x] `pyproject.toml` — package `adas-sim`, `requires-python = ">=3.12"`, core
       deps + extras (§1). Entry point `sim = adas_sim.cli:main` — the launcher
       is generated per platform rather than written by us (`P-6`)
-- [ ] `src/adas_sim/` with exactly these subpackages, matching
+- [x] `src/adas_sim/` with exactly these subpackages, matching
       [sim_api_reference.md](sim_api_reference.md) §1 **byte for byte**:
       `core/ model/ scene/ contracts/ io/ sources/ view/ render/ check/ cli/
       app/`, each with `__init__.py`; root `__init__.py` carries `__version__`
@@ -205,13 +224,35 @@ worth demonstrating; it exists so that nothing later has to invent a name.
         pixels. `render/` turns that state into output. Keeping them apart is
         what lets `UT-B2-3` assert that a layer toggle re-renders without
         re-executing
-- [ ] `conanfile.py` — `package_type = "unknown"`, no `settings`, data-only
+- [x] `conanfile.py` — `package_type = "unknown"`, no `settings`, data-only
       recipe following `shared_config`'s shape exactly
-      (`docs/shared_config_plan.md` §3.2/§3.3)
-- [ ] `tests/{unit,system,integration,fixtures}/` + `conftest.py`
-- [ ] `scripts/check_invariants.py` — implements GT-1, GT-2, GT-3, GT-6, and
-      **is itself tested** by `UT-A1-3`
-- [ ] `core/errors.py` — the **closed** taxonomy of `DG-5` / api reference §9:
+      (`docs/shared_config_plan.md` §3.2/§3.3) — copied byte-identical
+      (`diff -q` against `modules/shared_config/conanfile.py` is silent, `GT-5`)
+      **Finding:** making this conanfile actually load/build required a minimal
+      `CMakeLists.txt` (`project(adas-sim LANGUAGES NONE)`, no `install()`),
+      a `VERSION` file and `conf/build.yml` (`recipe.type: unknown`,
+      `variants.base: {}`) — none of which S-A1's checklist names individually,
+      because the byte-identical recipe's `set_name()`/`set_version()`/
+      `build()` read them unconditionally, even for `package_type: unknown`.
+      `modules/sim/CLAUDE.md` currently says *"No compiled artifact, so no
+      CMakeLists.txt/build.bat — same shape as shared_config"*, but
+      `shared_config` itself was reshaped 2026-07-20 (its own `conf/build.yml`
+      comment) to **add** a real `CMakeLists.txt`/`build.bat` for exactly this
+      reason — the CLAUDE.md line describes shared_config's *pre*-reshape
+      shape and is now stale. `build.bat`/`build.sh`/`scripts/build.py`/
+      `scripts/build_gui.py`/`.clang-format` were **not** added here: S-A1
+      doesn't call for them and `sim` has no CMake build a developer would
+      launch via `build.bat <part> <platform>` (nothing compiles). Whether
+      `R-BUILD-1..6`'s "byte-identical everywhere" should extend those files to
+      a pure-Python component too is an open question for a maintainer to
+      decide, not assumed here.
+- [x] `tests/{unit,system,integration,fixtures}/` + `conftest.py`
+- [x] `scripts/check_invariants.py` — implements GT-1, GT-2, GT-3, GT-6, and
+      **is itself tested** by `UT-A1-3`. **Finding:** GT-1's own literal grep
+      (§2 above) has a word-boundary gap on underscore-joined identifiers;
+      `check_gt1` here uses an alnum lookaround instead so it actually catches
+      `BSD_SENSOR_0_...`-shaped leaks
+- [x] `core/errors.py` — the **closed** taxonomy of `DG-5` / api reference §9:
       `AuthoringError` (exit 2) · `EnvironmentError_` (3) · `ContractError` (4)
       · `InternalError` (70), all deriving `SimError`, whose constructor takes
       **keyword-only `expected` / `found` / `where` / `hint`**. A message that
@@ -220,61 +261,66 @@ worth demonstrating; it exists so that nothing later has to invent a name.
       - plus `ProvenanceWarning(Warning)` — **a warning, never an error**: a
         project mismatch degrades and is shown, it does not stop a run
         (`R-SIM-3a`)
-- [ ] `core/ids.py` — `new_run_id()` per `N-9`; the hashed inputs are listed in
+- [x] `core/ids.py` — `new_run_id()` per `N-9`; the hashed inputs are listed in
       api reference §2.1 and are **sorted before hashing** (`P-8`)
-- [ ] `core/logging.py` — the `Event` StrEnum (closed) and `log()` emitting one
+- [x] `core/logging.py` — the `Event` StrEnum (closed) and `log()` emitting one
       fixed-order line (`N-10`)
-- [ ] `cli/doctor.py` — **the first version of `sim doctor`** (`DG-3`),
+- [x] `cli/doctor.py` — **the first version of `sim doctor`** (`DG-3`),
       reporting interpreter, install mode, platform, console encoding and line
       endings. **Seeded here on purpose**: the diagnostic tool is most valuable
       while the environment is least settled, and a `sim doctor` that only
       arrives at `S-D6` would mean twenty stages built without it. It **grows**
-      one section per stage that adds something worth checking
-- [ ] Console UTF-8 reconfiguration at every entry point (`P-4`) — three lines,
+      one section per stage that adds something worth checking. (The facts
+      themselves live in `core/diagnostics.py`, not `cli/`, per `GT-9`.)
+- [x] Console UTF-8 reconfiguration at every entry point (`P-4`) — three lines,
       and the bug it prevents was already hit once in `docs/py/_common.py`
-- [ ] file headers on every `.py` per `R-STYLE-1`, `COMPONENT: SIM` (`R-NAME-6`)
+      (`core/console.py`, called once from `cli/__init__.py:main`)
+- [x] file headers on every `.py` per `R-STYLE-1`, `COMPONENT: SIM` (`R-NAME-6`)
 
 **Tests**
-- [ ] `UT-A1-1` `import adas_sim` succeeds; `__version__` is a non-empty string
-- [ ] `UT-A1-2` every subpackage imports without side effects (no disk, no
+- [x] `UT-A1-1` `import adas_sim` succeeds; `__version__` is a non-empty string
+- [x] `UT-A1-2` every subpackage imports without side effects (no disk, no
       network, no window at import time) **and without importing Qt,
       matplotlib, mcap or protobuf** — asserted on `sys.modules`
-- [ ] `UT-A1-3` `check_invariants.py` passes on the empty tree, and **fails** on
+- [x] `UT-A1-3` `check_invariants.py` passes on the empty tree, and **fails** on
       a deliberately planted function identifier (the check is tested, not
       trusted)
-- [ ] `UT-A1-4` each error class carries `expected`/`found`/`where`, exposes its
+- [x] `UT-A1-4` each error class carries `expected`/`found`/`where`, exposes its
       `exit_code`, and is distinguishable by type; constructing one without the
       keyword arguments raises `TypeError`; `ProvenanceWarning` is a `Warning`
       and is not raisable as a `SimError`
-- [ ] `UT-A1-5` **every public class reprs its own name** and no `repr` contains
+- [x] `UT-A1-5` **every public class reprs its own name** and no `repr` contains
       `0x` (`N-7`) — the cheapest debugging feature in the system and the
       easiest to skip
-- [ ] `UT-A1-6` **import direction**: `core`/`model`/`scene`/`contracts`/`io`/
+- [x] `UT-A1-6` **import direction**: `core`/`model`/`scene`/`contracts`/`io`/
       `check` never import `render`, `view`, `cli` or `app` (module-graph scan,
       api reference §1)
-- [ ] `UT-A1-7` `new_run_id` is stable for identical inputs and differs for any
+- [x] `UT-A1-7` `new_run_id` is stable for identical inputs and differs for any
       single changed input (`N-9`) — the equality is itself diagnostic
-- [ ] `UT-A1-8` `log()` emits one line with fields in the fixed order of `N-10`;
+- [x] `UT-A1-8` `log()` emits one line with fields in the fixed order of `N-10`;
       an `event` outside the closed enum is a `TypeError`; a multi-line `msg` is
       flattened, never wrapped
-- [ ] `UT-A1-9` the subpackage set on disk **equals** api reference §1's list —
+- [x] `UT-A1-9` the subpackage set on disk **equals** api reference §1's list —
       neither doc nor tree may drift alone
-- [ ] `ST-A1-1` `pip install -e modules/sim` then `python -c "import adas_sim"`
-      from a directory outside the repo
-- [ ] `ST-A1-2` `conan editable add modules/sim` succeeds and `conan graph info`
-      resolves `adas-sim`
+- [x] `ST-A1-1` `pip install -e modules/sim` then `python -c "import adas_sim"`
+      from a directory outside the repo (run against `modules/sim/.venv`)
+- [x] `ST-A1-2` `conan editable add modules/sim` succeeds and `conan graph info`
+      resolves `adas-sim` (verified live and via the system test; `adas-sim`
+      left registered editable afterward, alongside `df`/`vdy`/`mathlib`/
+      `shared_config`)
 
 **Discipline** (every stage)
-- [ ] [sim_portability.md](sim_portability.md) §3 ticked — exposure here:
+- [x] [sim_portability.md](sim_portability.md) §3 ticked — exposure here:
       `P-2` (no absolute paths), `P-4` (console + file encoding), `P-6` (entry
       point, not a `.bat`), `P-10` (every dep has a Linux wheel)
-- [ ] [sim_naming_and_diagnostics.md](sim_naming_and_diagnostics.md) §3 ticked —
+- [x] [sim_naming_and_diagnostics.md](sim_naming_and_diagnostics.md) §3 ticked —
       exposure here: `N-3` (this stage names the modules; a generic name added
       now is permanent), `N-7`, `N-8`, `N-10`
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [x] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked (`GT-4`/`GT-8`
+      not applicable yet — no C++ touched, no viewer exists)
 
 **Gate**
-- [ ] `pytest modules/sim/tests -q` green; `GT-1..GT-3`, `GT-6` pass; and
+- [x] `pytest modules/sim/tests -q` green (25 passed); `GT-1..GT-3`, `GT-6` pass; and
       `UT-A1-9` green — the tree and the API reference agree, which is the
       cheapest moment to make that true and the most expensive to retrofit
 

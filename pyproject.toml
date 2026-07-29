@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "adas-sim"
+version = "0.1.0"
+description = "Simulation & visualization framework (Vantage) - component-agnostic, drives SIL libraries against live or recorded stimuli."
+requires-python = ">=3.12"
+dependencies = [
+    "pyyaml>=6",
+    "protobuf>=4.25",
+    "mcap>=1.0",
+    "mcap-protobuf-support>=0.5",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+viewer = ["PySide6>=6.6"]
+figures = ["matplotlib>=3.8"]
+foxglove = ["foxglove-sdk>=0.25"]
+dev = ["pytest>=8", "pytest-cov"]
+
+[project.scripts]
+# The launcher is generated per platform by the installer, not written by us
+# (sim_portability.md P-6).
+sim = "adas_sim.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

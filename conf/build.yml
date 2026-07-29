@@ -1,0 +1,20 @@
+# Per-project x per-part toolchain/platform mapping for this component.
+#
+# adas-sim is a pure Python framework (S-A1, docs/sim_implementation_plan.md):
+# no settings, no compiled artifact. package_type "unknown" collapses
+# os/arch/compiler/build_type out of the package_id (conanfile.py's
+# package_id() calls self.info.clear() for this type), same shape as
+# modules/shared_config (docs/shared_config_plan.md). resdirs is empty: unlike
+# shared_config there is no projects/ resource directory to expose here.
+#
+# variants.base must exist even though it carries nothing yet: conanfile.py's
+# requirements()/build_requirements()/build() all resolve
+# variants[<project>] unconditionally for the default "base" project option
+# (R-VAR-2), so an empty base: {} is load-bearing, not a placeholder.
+
+recipe:
+  type: unknown
+  resdirs: []
+
+variants:
+  base: {}
