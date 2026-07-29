@@ -22,11 +22,23 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from adas_sim.core.history import FrameTree, HistoryView, LayerCtx
 from adas_sim.core.session import Session
 from adas_sim.core.tick import Pose2D, PortValue, Tick
 from adas_sim.io.base import Provenance, group_by_log_time
 from adas_sim.io.legacy import LegacyRecordingReader
 from adas_sim.io.registry import reader_for
+from adas_sim.model.project import ProjectModel
+from adas_sim.scene.registry import registered_providers
+from adas_sim.scene.types import Scene
+
+
+class LoadCancelled(Exception):
+    """Raised by `build_session_from_recording` when `is_cancelled()` turns
+    true mid-load -- cooperative cancellation for `S-B3`'s worker thread
+    (`UT-B3-16`). Deliberately not part of `core/errors.py`'s closed
+    `SimError` taxonomy: a user-requested cancel is normal control flow, not
+    a diagnostic."""
 
 #: Provenance values (io/) map 1:1 onto Origin values (core/tick.py) -- both
 #: carry "unknown" for the same reason (R-SIM-6).
@@ -88,6 +100,8 @@ def build_session_from_recording(
     codec: str | None = None,
     deterministic: bool = True,
     pose_of: Callable[[dict[str, PortValue]], Pose2D] | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
+    is_cancelled: Callable[[], bool] | None = None,
 ) -> Session:
     """Pass 1: read `path` (via `io.registry.reader_for`, `codec` unused
     today -- `reader_for` dispatches on extension already, kept for a future
@@ -97,6 +111,12 @@ def build_session_from_recording(
     pose port is generic (R-SIM-1), so the default is the coordinate origin
     for every tick -- correct behaviour is supplied by whichever stage first
     needs a real trajectory (S-B1's own ego layer, or later).
+
+    `on_progress`/`is_cancelled` are `S-B3`'s worker-thread hooks (`UT-B3-15`,
+    `UT-B3-16`): called once per tick, from whatever thread this function
+    runs on. Raising `LoadCancelled` mid-loop -- rather than returning a
+    partial `Session` -- is deliberate: a half-built session rendered as if
+    complete is a silent wrong picture (`UT-B3-16`'s own reasoning).
     """
     del codec  # reserved, not yet a second resolution axis (see docstring)
     # Always wrapped: legacy topic remapping is a no-op on a modern recording
@@ -111,6 +131,9 @@ def build_session_from_recording(
         ticks: list[Tick] = []
         previous_t_ns: int | None = None
         for index, (t_ns, payloads, _missing) in enumerate(groups):
+            if is_cancelled is not None and is_cancelled():
+                raise LoadCancelled()
+
             dt_ns = 0 if previous_t_ns is None else t_ns - previous_t_ns
             previous_t_ns = t_ns
 
@@ -124,6 +147,8 @@ def build_session_from_recording(
 
             pose = pose_of(ports) if pose_of is not None else Pose2D(x_m=0.0, y_m=0.0, yaw_rad=0.0)
             ticks.append(Tick(index=index, t_ns=t_ns, dt_ns=dt_ns, ports=ports, pose=pose))
+            if on_progress is not None:
+                on_progress(index + 1, len(groups))
 
         return Session(
             run_id=manifest.run_id or "unknown",
@@ -134,6 +159,28 @@ def build_session_from_recording(
         )
     finally:
         reader.close()
+
+
+def build_scene(session: Session, tick_index: int, *, project: str = "base") -> Scene:
+    """Pass 2a: assemble one tick's `Scene` from every currently-registered
+    layer provider (`scene/registry.py`) -- discovery by import, never a
+    hardcoded provider list (`R-SIM-1`). Whoever composes the running app
+    (a CLI, the viewer, a test) is responsible for importing the component
+    `sim/layers/*.py` modules that should contribute; this function only
+    calls whatever is registered at the time.
+
+    Independent of theme and layer selection -- both are applied later, at
+    render time (`render/bev.py`) -- which is why `SceneCache` (below) keys
+    on them without this function needing either.
+    """
+    index = tick_index if tick_index >= 0 else len(session) + tick_index
+    ctx = LayerCtx(
+        model=ProjectModel.resolve(project=project),
+        history=HistoryView(_ticks=tuple(session.ticks[: index + 1])),
+        frames=FrameTree(session.at(index).pose),
+    )
+    layers = [layer for entry in registered_providers().values() for layer in entry.func(ctx)]
+    return Scene(t_s=session.at(index).t_s, layers=tuple(layers))
 
 
 class SceneCache:

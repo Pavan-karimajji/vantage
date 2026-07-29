@@ -902,9 +902,9 @@ possible at all. Closes **D7**; delivers the *scrolling* requirement
 
 ### S-B1 — Layer providers + parity render
 
-**Status: code DONE, `MC-1` OPEN — implemented and verified 2026-07-29,
-awaiting a human's parity confirmation** (see `MC-1` below — this is the one
-checkbox in the whole plan that cannot be self-certified). A first pair of
+**Status: DONE — `MC-1` closed 2026-07-29** (see `MC-1` below; Owner: Pavan
+Karimajji, Result: Pass, with a non-blocking follow-up on warning-label
+spacing). A first pair of
 renders went out for that look and came back with three findings, addressed
 in the **correction round** below the checklist — the trail fix is the
 significant one. `pytest modules/sim/tests -q`: **125 passed** (101 from
@@ -1076,18 +1076,18 @@ above):**
       picture (**D3**), and this is the test that proves it end to end
 - [x] `ST-B1-3` headless render of 100 ticks raises nothing and produces
       non-blank frames
-- [ ] `MC-1` a human confirms the rendered frame is equivalent to the existing
+- [x] `MC-1` a human confirms the rendered frame is equivalent to the existing
       viewer's on the same tick — recorded with date and name.
-      **Owner: _______ Date: _______ Result: _______.** Renders sent for
+      **Owner: Pavan Karimajji Date: 2026-07-29 Result: Pass.** Renders sent for
       review: tick 0 (no object) and tick 162 (right-side `NORMAL` warning
       correctly paired with a right-side object) of the same recording ST-B1-1's
       golden uses, `base` project, `dark` theme. **First pair reviewed
       2026-07-29 — findings triaged in the correction round above; a second
       pair (grid labels visible, no fabricated trail) went out after the
-      fix**, still awaiting the actual human confirmation this checkbox
-      requires. Blank fields here mean this was never actually looked at by a
-      person, which is a different and worse outcome than a documented "does
-      not match" — same reasoning as `GT-8`'s own blank-fields warning
+      fix, reviewed 2026-07-29 — parity confirmed.** Follow-up noted, not a
+      blocker: the per-side `OFF`/`NORMAL` warning labels sit close enough to
+      the ego status line to crowd at this zoom level — worth a spacing look
+      next time `bsd.warning` is touched.
 
 **Correction round (2026-07-29) — human review of the first `MC-1` renders.**
 Three points came back from actually looking at the tick-0 and tick-162
@@ -1146,10 +1146,10 @@ already required, or a new idea" rather than built blind:
       applicable, no packaged player exists)
 
 **Gate**
-- [ ] `ST-B1-1` + `MC-1` — parity proven before anything new is added. **The
+- [x] `ST-B1-1` + `MC-1` — parity proven before anything new is added. **The
       existing viewer is NOT deleted here** (that is `S-E1`), because parity is
       only meaningful while both exist.
-      `ST-B1-1` is green; **the gate as a whole is open until `MC-1` is run**
+      `ST-B1-1` is green; `MC-1` is closed (Pass, 2026-07-29) — gate closed
 - [x] `ST-B1-2` green — otherwise `D3` is closed on paper only
 
 ### S-B3 — Qt viewer shell
@@ -1157,6 +1157,22 @@ already required, or a new idea" rather than built blind:
 **Purpose.** The interactive surface: docks, panels, layer tree, inspector,
 timeline, plots. Everything a developer touches, over the `Session` that `S-B2`
 made seekable.
+
+**Status: Slice 1 (foundation) DONE 2026-07-29 — window + threading + one
+peer panel.** This stage is large enough to land incrementally rather than in
+one pass: Slice 1 is `render/viewer.py`'s `MainWindow` + `_SessionLoadWorker`
+(pass 1 on a `QThread`, progress/cancel by signal) + `BevPanel`, plus
+`core/runner.py` gained the `on_progress`/`is_cancelled` hooks pass 1 needed
+and `build_scene()` (discovery-based Scene assembly via
+`scene/registry.registered_providers()` — the piece `S-B1`'s own golden
+generator prototyped as a hardcoded `df`-specific tuple, promoted here to a
+generic, `R-SIM-1`-clean form any component can use). `pytest modules\sim\tests
+-q`: **131 passed** (125 from `S-B2`/`S-B1` + 6 new). `scripts\check_invariants.py`
+and `python docs/py/run_all.py`: both clean. Layer tree, inspector, timeline,
+signals, plots, measure and workspace loading are separate, not-yet-started
+slices of this same stage; none of them change `MainWindow`'s shape
+(visualization spec §11.1's own "a new panel type registers itself... the
+shell does not change").
 
 **Must not.**
 - **Run pass 1 on the GUI thread.** Building a `Session` blocks for as long as
@@ -1170,10 +1186,13 @@ made seekable.
 - Name a font family, write a settings path by hand, or assume a display
   exists (`P-7`).
 
-- [ ] `render/viewer.py` — the Qt window; a **dockable peer-panel grid** where
+- [x] `render/viewer.py` — the Qt window; a **dockable peer-panel grid** where
       BEV, camera, plots, timeline, inspector, layers and pipeline are all
-      panels, none privileged (visualization spec §11.1)
-- [ ] **Threading**: pass 1 on a `QThread`/worker, progress by signal,
+      panels, none privileged (visualization spec §11.1). **Scoped to Slice
+      1: only `BevPanel` exists so far** — camera/plots/timeline/inspector/
+      layers/pipeline dock in as their own slices, with no change to
+      `MainWindow`'s shape
+- [x] **Threading**: pass 1 on a `QThread`/worker, progress by signal,
       cancellable; the Scene cache is read from the GUI thread only. One
       documented ownership rule, stated in the module docstring
 - [ ] `view/layers.py` — layer tree, groups, solo/mute, verbosity level, search,
@@ -1229,17 +1248,21 @@ made seekable.
       cursor **in its own frame, in metres**, and re-renders on cursor change
 - [ ] `UT-B3-14` a provider declaring nothing is **not** re-rendered on a mouse
       move — interaction stays cheap, and purity holds
-- [ ] `UT-B3-15` **pass 1 does not run on the GUI thread**: with a deliberately
+- [x] `UT-B3-15` **pass 1 does not run on the GUI thread**: with a deliberately
       slow reader, the window stays responsive and progress is reported;
       asserted on thread identity, not on elapsed time
-- [ ] `UT-B3-16` cancelling a load leaves no partial `Session` reachable — a
+- [x] `UT-B3-16` cancelling a load leaves no partial `Session` reachable — a
       half-built session rendered as if complete is a silent wrong picture
-- [ ] `UT-B3-17` no Qt module is imported by anything under `core/`, `model/`,
+- [x] `UT-B3-17` no Qt module is imported by anything under `core/`, `model/`,
       `scene/`, `contracts/`, `io/` or `check/` (`GT-9`, api reference §1)
 - [ ] `ST-B3-1` `sim render <recording> --at <t> --preset <name> --out fig.png`
       produces a non-blank PNG **headlessly**
 - [ ] `ST-B3-2` the full panel set opens and renders under an offscreen
-      platform, on both platforms (`P-7`) — this is how the GUI is tested at all
+      platform, on both platforms (`P-7`) — this is how the GUI is tested at all.
+      **Scoped precursor landed in Slice 1**
+      (`tests/system/test_b3_offscreen_smoke.py`): window + `BevPanel` +
+      threading construct and render a real frame offscreen end to end; the
+      full claim (every panel) waits on the remaining panels
 - [ ] `MC-4` a human confirms scrubbing a long session feels responsive
 - [ ] `MC-1` (repeat) a human confirms the full shell reads well
 
