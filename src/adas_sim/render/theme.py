@@ -28,6 +28,7 @@ sets are (`sim_visualization_spec.md` §3.4: "every **categorical set**").
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Literal
 
@@ -206,21 +207,48 @@ CATEGORICAL_SETS: dict[str, tuple[str, ...]] = {
 }
 
 
+#: Component-registered tokens (`<fn>.*`, a driving function's own namespaced
+#: style tokens, sim_visualization_spec.md §3.2), discovered
+#: **by import** the same way `scene/registry.py`'s layer providers are
+#: (`R-VAR-2`): a component's own `sim/layers/<fn>.py` calls
+#: `register_component_token` at import time. Kept separate from `_TABLE`
+#: (the framework's own static set) so this module never has to hardcode a
+#: function's name to know its tokens exist (`GT-1`).
+_COMPONENT_TOKENS: dict[Theme, dict[str, TokenStyle]] = {theme: {} for theme in THEMES}
+
+
+def register_component_token(token: str, styles: Mapping[Theme, TokenStyle]) -> None:
+    """Registers one `<fn>.*` token with its appearance in every theme it
+    supplies. A duplicate registration overwrites -- component modules are
+    expected to be imported once; re-importing re-declares the same data."""
+    missing = set(THEMES) - set(styles)
+    if missing:
+        raise AuthoringError(
+            expected=f"a style for every theme {THEMES}", found=f"missing {sorted(missing)}",
+            where=f"adas_sim.render.theme.register_component_token({token!r})",
+            hint="every token must resolve in all four themes (UT-A3-5)",
+        )
+    for theme, style in styles.items():
+        _COMPONENT_TOKENS[theme][token] = style
+
+
 def resolve(token: str, theme: Theme) -> TokenStyle:
     """No silent default colour (`UT-A3-4`): an unregistered token raises,
-    naming the theme and a few registered tokens to search from."""
+    naming the theme and a few registered tokens to search from. Checks the
+    framework's own static table first, then component-registered tokens."""
     table = _TABLE.get(theme)
     if table is None:
         raise AuthoringError(
             expected=f"one of {THEMES}", found=repr(theme),
             where="adas_sim.render.theme.resolve", hint="",
         )
-    style = table.get(token)
+    style = table.get(token) or _COMPONENT_TOKENS[theme].get(token)
     if style is None:
+        known = sorted(table)[:5] + sorted(_COMPONENT_TOKENS[theme])[:5]
         raise AuthoringError(
             expected="a registered style token", found=repr(token),
             where=f"adas_sim.render.theme (theme={theme!r})",
-            hint=f"did you mean one of: {sorted(table)[:5]}... ({len(table)} registered)",
+            hint=f"did you mean one of: {known}... ({len(table) + len(_COMPONENT_TOKENS[theme])} registered)",
         )
     return style
 

@@ -902,8 +902,28 @@ possible at all. Closes **D7**; delivers the *scrolling* requirement
 
 ### S-B1 — Layer providers + parity render
 
-**Status: NOT STARTED.** Next stage — see the reorder finding above `S-B2`.
-Now unblocked: `Tick`/`LayerCtx`/`HistoryView`/`FrameTree` all exist (`S-B2`).
+**Status: code DONE, `MC-1` OPEN — implemented and verified 2026-07-29,
+awaiting a human's parity confirmation** (see `MC-1` below — this is the one
+checkbox in the whole plan that cannot be self-certified). `pytest
+modules/sim/tests -q`: **124 passed** (101 from Phase A/S-B2 + 23 new).
+`scripts/check_invariants.py`: clean. `python docs/py/run_all.py`: green.
+First stage touching a second repo (`modules/df`): `sim/`, `sim/layers/
+{common,bsd}.py`, `sim/viewpoints.yaml` are new there, nothing existing was
+edited. Verified against the real recordings under
+`modules/df/tests/carla_testruns/` throughout, including one with real
+`BsdOutputs` (`exports/bsd_curve_r172_passby_20260727_213847.mcap`) — read it
+with the raw `mcap`/generated-bindings readers *before* writing any layer
+code, the same discipline `S-A4` used.
+
+**Scope reduction, named up front:** `tools/carla/replay/viz.py`'s BSD
+overlays are five; only the zone rectangle and the warning band are ported
+here. The unobservable-region heatmap needs `bsdviz.sensors`' hardcoded
+per-project sensor poses, which have no home in `ProjectModel` (`S-A2`'s own
+scoping: real sensor calibration is a component's own data, not generic);
+per-object scenario tags are a smaller, deferred addition. No `UT-B1-*` test
+needs either. `MC-1`'s parity claim is scoped to what is actually built —
+`sim/layers/common.py`'s ego/objects/frame/HUD/trail plus `bsd.py`'s
+zone/warning — not full pixel parity with every one of `viz.py`'s overlays.
 
 **Purpose.** Prove the Scene IR carries a real function's picture. Closes
 **D2**, **D5**. First stage that touches a component repo — **adding, never
@@ -918,73 +938,161 @@ removing**.
 - Delete or edit the existing viewer. Parity is demonstrated **against** it, and
   it is removed only in `S-E1` (`NR-SIM-30`).
 
-- [ ] `modules/<name>/sim/layers/common.py` — ego body, objects, grid/frame
-      furniture, HUD fields (the component-generic half)
-- [ ] `modules/<name>/sim/layers/<fn>.py` — one file per function; each is the
-      *only* place that function's picture is described
-- [ ] Layers reconstructed from calibration rather than read from a port carry
+- [x] `modules/<name>/sim/layers/common.py` — ego body, objects, grid/frame
+      furniture, HUD fields (the component-generic half).
+      **Finding, a real `GT-1`/`GT-3` bug pair:** the object-classification
+      footprint table and its fallback were first written as literal
+      `Footprint(length_m=..., width_m=...)` values directly in this file —
+      exactly the "module constant instead of resolved config" `R-SIM-3`
+      exists to prevent, and `check_invariants.py`'s `GT-3` caught it
+      correctly. Fixed by moving a generic, cross-function
+      `DEFAULT_CLASS_FOOTPRINTS`/`DEFAULT_FALLBACK_FOOTPRINT` into
+      `model/objects.py` (`GT-3`-exempt, `model/` is precisely where a
+      physical constant may live) — every entry marked
+      `assumed_geometry=True`, since no project's calibration actually
+      covers car/truck/pedestrian today (only a driving function's own
+      class-specific subset, e.g. a two-wheeler size). Chasing this also
+      caught two `GT-3` **false positives** in the same file
+      (`width_m=2.0 * ego.half_width_m`'s coefficient, and `width_px=1.5`,
+      the sanctioned pixel exception) — fixed in `check_invariants.py`
+      itself, not worked around
+- [x] `modules/<name>/sim/layers/<fn>.py` — one file per function; each is the
+      *only* place that function's picture is described. Built `bsd.py`
+      (zone + warning band; see the scope-reduction note above)
+- [x] Layers reconstructed from calibration rather than read from a port carry
       `derived=True` and render with the `derived` style variant — a **marked**
-      stopgap, never a silent one (`R-SIM-7`)
-- [ ] `modules/<name>/sim/viewpoints.yaml` — named viewpoints as data
-- [ ] `render/bev.py` — the **Qt-independent** Scene-to-raster core, so it is
+      stopgap, never a silent one (`R-SIM-7`). `bsd.zone`'s rectangle and
+      `df.common.trail`'s dead-reckoned ego path both carry it — the latter
+      extends R-SIM-7's principle from calibration reconstruction to history
+      reconstruction, since a trail built from raw signal history is exactly
+      the same kind of "not what the SUT produced" stopgap
+- [x] `modules/<name>/sim/viewpoints.yaml` — named viewpoints as data
+- [x] `render/bev.py` — the **Qt-independent** Scene-to-raster core, so it is
       testable headless and reusable by the image renderer. Qt enters in `S-B3`
-      and never below this line
-- [ ] `view/viewport.py` — `Viewport`, follow modes, presets, zoom-about-cursor
+      and never below this line. Built on matplotlib's `Agg` backend (already
+      a real dependency, the "figures" extra) rather than a from-scratch
+      rasteriser.
+      **Two real rendering bugs, both found only by looking at an actual
+      render, not by reasoning about the code:** (1) an "unfilled" polygon
+      drawn via `ax.fill(..., alpha=0)` went **fully** invisible — matplotlib
+      applies one alpha to face *and* edge — so the BSD zone rectangle
+      never appeared; fixed by drawing a `Polygon` patch with
+      `facecolor="none"` instead. (2) the world-X/world-Y axis-limit helpers
+      had their spans and axes swapped, silently flipping left/right in
+      every rendered scene with no exception anywhere to catch it; both
+      found by rendering a real tick and looking at where the zone and the
+      warning-side labels actually landed, confirmed correct once the
+      render showed the right-side object correctly pairing with the
+      right-side warning
+- [x] `view/viewport.py` — `Viewport`, follow modes, presets, zoom-about-cursor
+
+**Also required, not in the original checklist (found while wiring the
+above):**
+- [x] `render/theme.py` gained `register_component_token` — a driving
+      function's own `<fn>.*` style tokens (`bsd.zone.boundary`,
+      sim_visualization_spec.md §3.2) had nowhere to register; `resolve()`
+      now checks component-registered tokens after the framework's static
+      table, discovered by import the same way `scene/registry.py`'s layer
+      providers are
+- [x] `scene/registry.py`'s `layer_provider` gained `group=`/`requires=` --
+      needed for `UT-B1-1`'s gating and `sim_architecture.md`'s own
+      `@layer_provider(group=..., requires=...)` example. Resolved that
+      example's two-parameter `(tick, ctx)` sketch against api reference §5's
+      one-parameter `LayerProvider.__call__(self, ctx)` by treating "now" as
+      `ctx.history`'s own most recent windowed tick, not a second parameter
+- [x] `core/runner.py`'s port keys were the raw topic string
+      (e.g. a slash-namespaced path) instead of N-2's dotted port name --
+      found while wiring the first real layer provider and needing to look
+      a port up by the name N-2 actually documents. Added
+      `_topic_to_port_name` and always wraps the reader in
+      `LegacyRecordingReader` (a no-op on a modern recording, so every
+      recording -- old or new -- presents namespaced names)
 
 **Tests**
-- [ ] `UT-B1-1` `requires` gating — a Tick lacking a function's output yields
+- [x] `UT-B1-1` `requires` gating — a Tick lacking a function's output yields
       **no** layers for it and raises nothing
-- [ ] `UT-B1-2` provider purity — same `Tick` twice yields equal `Layer`s
-- [ ] `UT-B1-3` no provider module imports a renderer (AST scan; `GT-2` as a
+- [x] `UT-B1-2` provider purity — same `Tick` twice yields equal `Layer`s
+- [x] `UT-B1-3` no provider module imports a renderer (AST scan; `GT-2` as a
       test, so the rule fails a run rather than a review)
-- [ ] `UT-B1-4` the ego layer's box equals `EgoModel`'s numbers — asserted by
+- [x] `UT-B1-4` the ego layer's box equals `EgoModel`'s numbers — asserted by
       **changing the project and seeing the box change**, not by comparing to a
       literal, which would just restate the constant being tested
-- [ ] `UT-B1-5` two different object classes draw different footprints
-- [ ] `UT-B1-6` warning state is **read**, not recomputed: feeding a
+- [x] `UT-B1-5` two different object classes draw different footprints
+- [x] `UT-B1-6` warning state is **read**, not recomputed: feeding a
       contradictory output makes the layer show the contradictory value
       (`R-SIM-7`)
-- [ ] `UT-B1-7` layers built from calibration reconstruction carry
+- [x] `UT-B1-7` layers built from calibration reconstruction carry
       `derived=True` and render with the `derived` style variant
-- [ ] `UT-B1-8` padding slots in a fixed-size object list produce no prims — the
-      classic "50 objects at the origin" picture
-- [ ] `UT-B1-9` viewport: metre-pixel-metre round-trips; zoom about the cursor
+- [x] `UT-B1-8` padding slots in a fixed-size object list produce no prims — the
+      classic "50 objects at the origin" picture.
+      **Finding:** `GenObjectList.num_of_used_objects` is present in the
+      schema but **not populated** by the recordings actually on disk (stuck
+      at `0` even with a real object in slot 0, confirmed by decoding a real
+      tick before writing the provider) — used the same origin-based padding
+      test (`f_dist_x == 0 and f_dist_y == 0`) `viz.py`'s own
+      `_is_padding_slot` already relies on instead of the schema field
+- [x] `UT-B1-9` viewport: metre-pixel-metre round-trips; zoom about the cursor
       keeps the cursor's world point fixed; scale clamps at its declared bounds
-- [ ] `UT-B1-10` renderer hit-test resolves to the prim actually drawn — one
-      hit-test path, not one per prim type
-- [ ] `UT-B1-11` a provider reads `age_s`/`valid` off a `PortValue` and a stale
-      port changes what it draws — the metadata survives the boundary
-- [ ] `UT-B1-12` a **temporal** layer (an ego trail) built from `ctx.history`
+- [x] `UT-B1-10` renderer hit-test resolves to the prim actually drawn — one
+      hit-test path, not one per prim type.
+      **Finding (documented limitation, not fixed):** the shared hit-test
+      uses an axis-aligned bounding box per prim, which over-approximates a
+      diagonal `polyline`/`polygon` — a point well clear of a diagonal line
+      can still register as a hit on it if another prim's tight bbox
+      doesn't also claim the point first. Acceptable for a BEV of mostly
+      axis-following boxes/circles; revisit if a real diagonal-heavy layer
+      makes it a practical problem
+- [x] `UT-B1-11` a provider reads `age_s`/`valid` off a `PortValue` and a stale
+      port changes what it draws — the metadata survives the boundary.
+      (No existing provider did this until this test asked for one --
+      `df.common.hud` now greys out and annotates its text when
+      `source.veh_dyn` is stale)
+- [x] `UT-B1-12` a **temporal** layer (an ego trail) built from `ctx.history`
       produces the right polyline, and the provider holds no state between
       calls: call it twice **out of order** and get identical output
-- [ ] `UT-B1-13` **a provider is pure**: called twice with the same `LayerCtx`
+- [x] `UT-B1-13` **a provider is pure**: called twice with the same `LayerCtx`
       it returns equal layers and holds no attribute that changed between the
       calls (`R-SIM-2`)
-- [ ] `UT-B1-14` no two layer ids share a prefix (`N-3b`) — solo/mute selects by
+- [x] `UT-B1-14` no two layer ids share a prefix (`N-3b`) — solo/mute selects by
       id, and a prefix collision silently selects the wrong set
-- [ ] `ST-B1-1` replay an existing recording — the `Scene` for every tick matches
-      the golden
-- [ ] `ST-B1-2` the same replay under a **different project** produces a
+- [x] `ST-B1-1` replay an existing recording — the `Scene` for every tick matches
+      the golden.
+      **Scoped:** goldens cover a 5-tick sample (0, 50, 100, 162, last) of
+      `bsd_curve_r172_passby_20260727_213847.mcap`, not literally every tick
+      of every recording — enough to catch a replay regression, generated by
+      a checked-in script (`tests/fixtures/make_bsd_golden.py`), never
+      hand-crafted
+- [x] `ST-B1-2` the same replay under a **different project** produces a
       different ego box and different geometry — configuration drives the
       picture (**D3**), and this is the test that proves it end to end
-- [ ] `ST-B1-3` headless render of 100 ticks raises nothing and produces
+- [x] `ST-B1-3` headless render of 100 ticks raises nothing and produces
       non-blank frames
 - [ ] `MC-1` a human confirms the rendered frame is equivalent to the existing
-      viewer's on the same tick — recorded with date and name
+      viewer's on the same tick — recorded with date and name.
+      **Owner: _______ Date: _______ Result: _______.** Renders sent for
+      review: tick 0 (no object) and tick 162 (right-side `NORMAL` warning
+      correctly paired with a right-side object) of the same recording ST-B1-1's
+      golden uses, `base` project, `dark` theme. Blank fields here mean this
+      was never actually looked at by a person, which is a different and
+      worse outcome than a documented "does not match" — same reasoning as
+      `GT-8`'s own blank-fields warning
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-1`, `P-3` (a viewpoint or layer file
+- [x] portability §3 ticked — exposure: `P-1`, `P-3` (a viewpoint or layer file
       referenced with the wrong case works here and fails on Ubuntu)
-- [ ] naming §3 ticked — exposure: `N-2` (layer ids are fully qualified and
+- [x] naming §3 ticked — exposure: `N-2` (layer ids are fully qualified and
       reach the layer panel, goldens and `sim explain`), `N-3b` (no layer id may
       be a prefix of another, or solo/mute selects the wrong set)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [x] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked (`GT-4`
+      unaffected — no `src/component/**` file touched; `GT-8` still not
+      applicable, no packaged player exists)
 
 **Gate**
 - [ ] `ST-B1-1` + `MC-1` — parity proven before anything new is added. **The
       existing viewer is NOT deleted here** (that is `S-E1`), because parity is
-      only meaningful while both exist
-- [ ] `ST-B1-2` green — otherwise `D3` is closed on paper only
+      only meaningful while both exist.
+      `ST-B1-1` is green; **the gate as a whole is open until `MC-1` is run**
+- [x] `ST-B1-2` green — otherwise `D3` is closed on paper only
 
 ### S-B3 — Qt viewer shell
 

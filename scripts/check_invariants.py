@@ -40,9 +40,17 @@ _RENDERER_IMPORTS = ("cv2", "matplotlib", "PySide6", "foxglove")
 
 # GT-3: a literal vehicle/sensor dimension, outside model/. Heuristic: a float
 # literal assigned to a name carrying a dimension word -- real geometry always
-# comes from resolved YAML (R-SIM-3), never a module constant.
+# comes from resolved YAML (R-SIM-3), never a module constant. Two refinements,
+# both found as false positives against modules/df/sim/layers/common.py:
+#   - `(?!\w*_px)` excludes width_px/offset_px -- R-SIM-2's one sanctioned
+#     pixel exception (legibility, not physics; never meant to come from YAML).
+#   - the trailing `(?!\s*[*+\-/%])\s*[,)\n]` excludes a number that is itself
+#     an operand of an expression (`width_m=2.0 * ego.half_width_m`), where
+#     the "2.0" is a coefficient on a calibration-derived value, not a literal
+#     dimension standing alone.
 _DIMENSION_ASSIGNMENT = re.compile(
-    r"\b(width|length|height|wheelbase|overhang|half_width|range_m|fov)\w*\s*[:=]\s*-?\d+\.\d+"
+    r"\b(width|length|height|wheelbase|overhang|half_width|range_m|fov)(?!\w*_px)\w*\s*[:=]\s*-?\d+\.\d+"
+    r"(?!\s*[*+\-/%])\s*[,)\n]"
 )
 
 # GT-6: the framework may not import a component or generated protobuf bindings.

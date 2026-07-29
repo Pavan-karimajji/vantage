@@ -25,11 +25,23 @@ from typing import Any
 from adas_sim.core.session import Session
 from adas_sim.core.tick import Pose2D, PortValue, Tick
 from adas_sim.io.base import Provenance, group_by_log_time
+from adas_sim.io.legacy import LegacyRecordingReader
 from adas_sim.io.registry import reader_for
 
 #: Provenance values (io/) map 1:1 onto Origin values (core/tick.py) -- both
 #: carry "unknown" for the same reason (R-SIM-6).
 _PROVENANCE_TO_ORIGIN = {p.value: p.value for p in Provenance}
+
+
+def _topic_to_port_name(topic: str) -> str:
+    """A slash-namespaced topic -> its dotted port/signal name (N-2's
+    topic/port-name pairing: a topic and its signal name are the same path,
+    spelled with `/` versus `.`) -- strip the leading slash, dot-join the
+    remaining segments. `Tick.ports` is keyed by this, not the raw topic
+    string, so a layer provider's `tick.port(name)` matches the name N-2
+    documents rather than a codec-specific spelling.
+    """
+    return ".".join(topic.strip("/").split("/"))
 
 
 def decode_message(schema_bytes: bytes, schema_name: str, payload: bytes) -> Any:
@@ -87,7 +99,10 @@ def build_session_from_recording(
     needs a real trajectory (S-B1's own ego layer, or later).
     """
     del codec  # reserved, not yet a second resolution axis (see docstring)
-    reader = reader_for(path)
+    # Always wrapped: legacy topic remapping is a no-op on a modern recording
+    # (io/legacy.py's own docstring), so every recording -- old or new --
+    # presents namespaced names to the rest of the framework.
+    reader = LegacyRecordingReader(reader_for(path))
     try:
         topics = reader.topics()
         manifest = reader.meta()
@@ -104,7 +119,8 @@ def build_session_from_recording(
                 info = topics[topic]
                 message = decode_message(info.schema_bytes, info.schema_name, payload)
                 origin = _PROVENANCE_TO_ORIGIN.get(info.provenance.value, "unknown")
-                ports[topic] = PortValue(name=topic, message=message, origin=origin)
+                port_name = _topic_to_port_name(topic)
+                ports[port_name] = PortValue(name=port_name, message=message, origin=origin)
 
             pose = pose_of(ports) if pose_of is not None else Pose2D(x_m=0.0, y_m=0.0, yaw_rad=0.0)
             ticks.append(Tick(index=index, t_ns=t_ns, dt_ns=dt_ns, ports=ports, pose=pose))

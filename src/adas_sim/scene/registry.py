@@ -13,7 +13,8 @@ layers).
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+import functools
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 
@@ -26,6 +27,8 @@ class LayerProviderEntry:
     func: Callable[..., object]
     module: str
     qualname: str
+    group: str = ""
+    requires: tuple[str, ...] = ()
 
     def __repr__(self) -> str:
         return f"<LayerProviderEntry {self.id!r} from {self.module}.{self.qualname}>"
@@ -36,10 +39,24 @@ _INSPECTOR_FIELDS: dict[Callable[..., object], tuple[str, ...]] = {}
 _SIGNALS: dict[str, Callable[..., object]] = {}
 
 
-def layer_provider(layer_id: str) -> Callable[[Callable[..., object]], Callable[..., object]]:
+def layer_provider(
+    layer_id: str, *, group: str = "", requires: Sequence[str] = ()
+) -> Callable[[Callable[..., object]], Callable[..., object]]:
     """Registers `func` under `layer_id`. A duplicate id raises naming
     **both** providers (`N-8`) -- the failure this prevents is two
-    components silently drawing over the same layer id."""
+    components silently drawing over the same layer id.
+
+    `requires`, when given, **gates** the call: a `Tick` lacking one of these
+    ports yields no layers and raises nothing (`UT-B1-1`) -- the wrapped
+    function is never even called, so its body may assume every required
+    port is present and call `Tick.port(name)` (which otherwise raises)
+    without a guard of its own. The current tick is `ctx.history`'s own most
+    recent entry (`sim_api_reference.md` §5's `LayerProvider` takes one
+    argument, `ctx`; `sim_architecture.md`'s own example sketch shows a
+    second, separate `tick` parameter -- resolved by treating "now" as
+    history's last windowed tick rather than adding a second parameter,
+    since a windowed view "over ticks up to now" already has one).
+    """
 
     def decorator(func: Callable[..., object]) -> Callable[..., object]:
         existing = _PROVIDERS.get(layer_id)
@@ -51,10 +68,23 @@ def layer_provider(layer_id: str) -> Callable[[Callable[..., object]], Callable[
                 hint=f"rename one of the two providers ({existing.module}.{existing.qualname} "
                      f"and {func.__module__}.{func.__qualname__})",
             )
+
+        if requires:
+            @functools.wraps(func)
+            def gated(ctx, *args, **kwargs):
+                current = ctx.history.last(1)
+                if not current or not all(name in current[-1].ports for name in requires):
+                    return ()
+                return func(ctx, *args, **kwargs)
+            registered_func = gated
+        else:
+            registered_func = func
+
         _PROVIDERS[layer_id] = LayerProviderEntry(
-            id=layer_id, func=func, module=func.__module__, qualname=func.__qualname__
+            id=layer_id, func=registered_func, module=func.__module__, qualname=func.__qualname__,
+            group=group, requires=tuple(requires),
         )
-        return func
+        return registered_func
 
     return decorator
 
