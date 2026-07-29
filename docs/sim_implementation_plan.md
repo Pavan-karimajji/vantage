@@ -904,8 +904,11 @@ possible at all. Closes **D7**; delivers the *scrolling* requirement
 
 **Status: code DONE, `MC-1` OPEN — implemented and verified 2026-07-29,
 awaiting a human's parity confirmation** (see `MC-1` below — this is the one
-checkbox in the whole plan that cannot be self-certified). `pytest
-modules/sim/tests -q`: **124 passed** (101 from Phase A/S-B2 + 23 new).
+checkbox in the whole plan that cannot be self-certified). A first pair of
+renders went out for that look and came back with three findings, addressed
+in the **correction round** below the checklist — the trail fix is the
+significant one. `pytest modules/sim/tests -q`: **125 passed** (101 from
+Phase A/S-B2 + 24 new, after the correction round's own added test).
 `scripts/check_invariants.py`: clean. `python docs/py/run_all.py`: green.
 First stage touching a second repo (`modules/df`): `sim/`, `sim/layers/
 {common,bsd}.py`, `sim/viewpoints.yaml` are new there, nothing existing was
@@ -961,11 +964,12 @@ removing**.
       (zone + warning band; see the scope-reduction note above)
 - [x] Layers reconstructed from calibration rather than read from a port carry
       `derived=True` and render with the `derived` style variant — a **marked**
-      stopgap, never a silent one (`R-SIM-7`). `bsd.zone`'s rectangle and
-      `df.common.trail`'s dead-reckoned ego path both carry it — the latter
-      extends R-SIM-7's principle from calibration reconstruction to history
-      reconstruction, since a trail built from raw signal history is exactly
-      the same kind of "not what the SUT produced" stopgap
+      stopgap, never a silent one (`R-SIM-7`). `bsd.zone`'s rectangle carries
+      it. **`df.common.trail` originally carried it too, on the reasoning
+      that a history reconstruction is the same kind of stopgap as a
+      calibration one — that reasoning was wrong and the trail's actual
+      problem was worse than a missing marker; see the correction round
+      below.**
 - [x] `modules/<name>/sim/viewpoints.yaml` — named viewpoints as data
 - [x] `render/bev.py` — the **Qt-independent** Scene-to-raster core, so it is
       testable headless and reusable by the image renderer. Qt enters in `S-B3`
@@ -1049,7 +1053,12 @@ above):**
       `source.veh_dyn` is stale)
 - [x] `UT-B1-12` a **temporal** layer (an ego trail) built from `ctx.history`
       produces the right polyline, and the provider holds no state between
-      calls: call it twice **out of order** and get identical output
+      calls: call it twice **out of order** and get identical output.
+      **Rewritten in the correction round** (see below) to build ticks from
+      explicit, varying `Pose2D` values instead of dead-reckoned `veh_dyn`,
+      since the fixed `trail_layer` no longer reads `veh_dyn` at all. A new
+      test, `test_ego_trail_with_no_real_pose_source_draws_nothing`, locks in
+      the degenerate case (every tick's pose identical -> no prims)
 - [x] `UT-B1-13` **a provider is pure**: called twice with the same `LayerCtx`
       it returns equal layers and holds no attribute that changed between the
       calls (`R-SIM-2`)
@@ -1072,10 +1081,55 @@ above):**
       **Owner: _______ Date: _______ Result: _______.** Renders sent for
       review: tick 0 (no object) and tick 162 (right-side `NORMAL` warning
       correctly paired with a right-side object) of the same recording ST-B1-1's
-      golden uses, `base` project, `dark` theme. Blank fields here mean this
-      was never actually looked at by a person, which is a different and
-      worse outcome than a documented "does not match" — same reasoning as
-      `GT-8`'s own blank-fields warning
+      golden uses, `base` project, `dark` theme. **First pair reviewed
+      2026-07-29 — findings triaged in the correction round above; a second
+      pair (grid labels visible, no fabricated trail) went out after the
+      fix**, still awaiting the actual human confirmation this checkbox
+      requires. Blank fields here mean this was never actually looked at by a
+      person, which is a different and worse outcome than a documented "does
+      not match" — same reasoning as `GT-8`'s own blank-fields warning
+
+**Correction round (2026-07-29) — human review of the first `MC-1` renders.**
+Three points came back from actually looking at the tick-0 and tick-162
+images sent for `MC-1`, triaged one at a time against "is this a real gap
+already required, or a new idea" rather than built blind:
+
+1. **No coordinate/distance references on the grid.** A real gap, not scope
+   creep — `sim_visualization_spec.md` §3.2 already declared the
+   `frame.grid_label` token (`frame.* origin, axis, grid, grid_label,
+   scale_legend`); `frame_layer` just never emitted it as prims. **Fixed:**
+   `frame_layer` now adds a `text` prim every `spacing_m` along both axes, in
+   both directions, styled `frame.grid_label`, matching
+   `tools/carla/replay/viz.py`'s own `f"{dist_x:.0f}m"` convention.
+2. **An ego "front" marker** (a roof/triangle shape on the body box, so
+   heading reads at a glance). Checked every doc this plan cites for BEV
+   content (`sim_visualization_spec.md`, `sim_requirements.md`) — no such
+   requirement exists anywhere; a new idea, not a missed one. **Deferred**
+   (user's own call, 2026-07-29) to a later BEV-polish pass (`S-B3`/`S-B4`);
+   `df.common.ego` still draws the plain asymmetric box (`UT-B1-4`).
+3. **The white ego-trail curve, and where it comes from.** The significant
+   one: `df.common.trail` was dead-reckoning `veh_dyn`'s `vx`/`yaw_rate` over
+   the history window (`x += vx·cos(yaw)·dt`, `yaw += yaw_rate·dt`) to draw a
+   path — an **estimate** built on an assumption (no side-slip) the SUT never
+   asserted, justified at the time as "extending `R-SIM-7`'s calibration-
+   reconstruction allowance to history." That framing was wrong: `R-SIM-7`
+   sanctions a deterministic transform of a fixed constant or of a value some
+   port/world model already produced — never integrating a noisy
+   time-varying signal into information nobody emitted. A visualization
+   layer renders what happened; it does not compute what might have.
+   **`R-SIM-7`'s wording was tightened** to close this loophole explicitly
+   rather than leave it implied. **Fixed:** `trail_layer` now draws
+   `ctx.frames.to_ego(tick.pose.x_m, tick.pose.y_m)` for each windowed tick —
+   a pure coordinate-frame transform of `Tick.pose` (real ego-in-world data,
+   whatever produced it) — no longer reads `source.veh_dyn` and no longer
+   carries `derived=True` (it is a transform, not a calibration-
+   reconstruction stopgap). Today's real recordings carry no ego
+   ground-truth pose (`Tick.pose` defaults to the coordinate origin for
+   every tick, `core/runner.py`), so the fixed layer honestly draws **no
+   trail at all** for them rather than a fabricated curve — a flat dot
+   pretending to be a trail would be worse than no trail. Golden fixtures
+   regenerated: `df.common.trail` is absent from every golden `Scene` now,
+   and `df.common.frame` grew from 6 to 46 prims (the new grid labels).
 
 **Discipline** (every stage)
 - [x] portability §3 ticked — exposure: `P-1`, `P-3` (a viewpoint or layer file

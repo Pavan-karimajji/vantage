@@ -98,7 +98,8 @@ def _bsd_outputs(left_warning: int = 0, right_warning: int = 0):
 
 
 def _make_tick(index: int, *, veh_dyn=None, gen_object_list=None, bsd_outputs=None,
-               veh_dyn_valid: bool = True, veh_dyn_age_s: float = 0.0, dt_ns: int = 50_000_000) -> Tick:
+               veh_dyn_valid: bool = True, veh_dyn_age_s: float = 0.0, dt_ns: int = 50_000_000,
+               pose: Pose2D = _POSE) -> Tick:
     ports = {}
     if veh_dyn is not None:
         ports["source.veh_dyn"] = PortValue(
@@ -109,7 +110,7 @@ def _make_tick(index: int, *, veh_dyn=None, gen_object_list=None, bsd_outputs=No
         ports["source.gen_object_list"] = PortValue(name="source.gen_object_list", message=gen_object_list, origin="measured")
     if bsd_outputs is not None:
         ports["df.bsd.outputs"] = PortValue(name="df.bsd.outputs", message=bsd_outputs, origin="simulated")
-    return Tick(index=index, t_ns=index * dt_ns, dt_ns=dt_ns if index else 0, ports=ports, pose=_POSE)
+    return Tick(index=index, t_ns=index * dt_ns, dt_ns=dt_ns if index else 0, ports=ports, pose=pose)
 
 
 def _ctx(ticks: tuple[Tick, ...], *, project: str = "base") -> LayerCtx:
@@ -206,8 +207,13 @@ def test_stale_port_changes_what_the_hud_draws():
 
 def test_ego_trail_out_of_order_calls_give_identical_output():
     """UT-B1-12: a temporal layer, but the provider holds no state between
-    calls."""
-    ticks = tuple(_make_tick(i, veh_dyn=_veh_dyn(vx=20.0, yaw_rate=0.05)) for i in range(10))
+    calls. Poses are varied directly and explicitly here (standing in for
+    real ego-in-world data, e.g. a world model's ground truth) -- never
+    dead-reckoned from `veh_dyn`, which `trail_layer` no longer reads at all
+    (R-SIM-7: a layer may transform data a port/world model already
+    produced, never estimate new information by integrating one over time)."""
+    poses = tuple(Pose2D(x_m=float(i), y_m=0.0, yaw_rad=0.0) for i in range(10))
+    ticks = tuple(_make_tick(i, pose=poses[i]) for i in range(10))
     ctx = _ctx(ticks)
     first = common.trail_layer(ctx)
     # Call again "out of order" (a second, later call) -- purity means the
@@ -215,6 +221,17 @@ def test_ego_trail_out_of_order_calls_give_identical_output():
     third = common.trail_layer(_ctx(ticks))
     second = common.trail_layer(ctx)
     assert first == second == third
+    assert len(first[0].prims[0].points_m) == 10
+
+
+def test_ego_trail_with_no_real_pose_source_draws_nothing():
+    """A recording with no ego-position ground truth (every tick's pose is
+    the coordinate-origin default -- this component's own legacy recordings
+    carry none) transforms to the same point at every tick; drawing that as
+    a trail would be a fabricated flat line, so the layer draws nothing."""
+    ticks = tuple(_make_tick(i) for i in range(10))  # default pose at every tick
+    ctx = _ctx(ticks)
+    assert common.trail_layer(ctx) == ()
 
 
 def test_provider_is_pure_no_attribute_changes_between_calls():
