@@ -1098,9 +1098,13 @@ already required, or a new idea" rather than built blind:
    creep — `sim_visualization_spec.md` §3.2 already declared the
    `frame.grid_label` token (`frame.* origin, axis, grid, grid_label,
    scale_legend`); `frame_layer` just never emitted it as prims. **Fixed:**
-   `frame_layer` now adds a `text` prim every `spacing_m` along both axes, in
-   both directions, styled `frame.grid_label`, matching
-   `tools/carla/replay/viz.py`'s own `f"{dist_x:.0f}m"` convention.
+   `frame_layer` now adds a `text` prim styled `frame.grid_label` along both
+   axes, in both directions. **Refined once more on user feedback:** `+x`
+   (longitudinal) stays at the grid's own 10m spacing, but `+y` (lateral)
+   labels every 5m instead — there just isn't much to see off to the side
+   (BSD/lane scale, not highway scale), so 10m reads as too coarse there.
+   Labels are bare numbers (`"10"`, not `"10m"`) — the axis is metres
+   throughout, stated once rather than repeated on every tick.
 2. **An ego "front" marker** (a roof/triangle shape on the body box, so
    heading reads at a glance). Checked every doc this plan cites for BEV
    content (`sim_visualization_spec.md`, `sim_requirements.md`) — no such
