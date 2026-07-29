@@ -326,6 +326,15 @@ worth demonstrating; it exists so that nothing later has to invent a name.
 
 ### S-A2 — `model/` — configuration is the source of geometry
 
+**Status: DONE — implemented and verified 2026-07-29.**
+`pytest modules/sim/tests -q`: **41 passed** (25 from S-A1 + 16 new).
+`scripts/check_invariants.py`: clean. `python docs/py/run_all.py`: green.
+Three findings below (a GT-1 self-violation caught and fixed; a `bundle_origin`
+literal missing its own "explicit" tier; `ST-A2-1`'s `SensorModel` half has no
+real baseline to compare against) and one deliberate scope cut
+(`ProjectModel.footprint`/`.sensor`/`.camera` deferred — see `model/project.py`'s
+module docstring).
+
 **Purpose.** Every number that describes the physical world comes from resolved
 YAML, never a module constant. Implements `R-SIM-3`, closes **D3**. Ports the
 generic half of `modules/df/docs/bsd/py/bsdviz/{calib,egogeom}.py`.
@@ -333,65 +342,105 @@ generic half of `modules/df/docs/bsd/py/bsdviz/{calib,egogeom}.py`.
 **Must not.** Contain a single literal vehicle or sensor dimension (`GT-3`), and
 must not know the name of any driving function — sensor keys are parsed **by key
 shape**, never by their domain prefix, which is data (`GT-1`).
+**Finding:** this line is easy to satisfy in code and still violate in
+*prose* — an early draft of `model/ego.py`'s own docstring explained the port
+by naming the source module's path and "BSD zone-geometry", which
+`check_invariants.py` correctly flagged (`GT-1` bans the string everywhere in
+`modules/sim/src`, comments included, "a grep is the enforcement" with no
+carve-out). Fixed by paraphrasing without naming the function in all three
+touched files (`ego.py`, `project.py`, `sensors.py`) — the same discipline
+`N-1`/`N-6` ask of code now holds for comments too.
 
-- [ ] `model/project.py` — `ProjectModel.resolve(...)` (api reference §6).
+- [x] `model/project.py` — `ProjectModel.resolve(...)` (api reference §6).
       Resolution order **explicit → embedded-in-recording → library `config/` →
       source checkout**, and `bundle_origin` **always states which**
       (`R-SIM-3a`). The failure this prevents: the viewer and the SUT reading
-      different files and agreeing only by coincidence
-- [ ] `model/ego.py` — `EgoModel`: `x_front = wheelbase + overhang_front`,
+      different files and agreeing only by coincidence.
+      **Finding:** api reference §6 types `bundle_origin` as
+      `Literal["embedded", "library", "checkout"]` — three values for four
+      tiers, omitting "explicit" even though `resolve()`'s own docstring and
+      `UT-A2-7` require reporting it as the winner. Added `"explicit"` as a
+      fourth literal (`model/project.py`'s `BundleOrigin`); without it
+      `bundle_origin` cannot make `UT-A2-7`'s own claim true.
+      **Deferred:** `.footprint()`/`.sensor()`/`.camera()` are not
+      implemented on `ProjectModel` — there is no generic, cross-component
+      calibration source for class-footprint/sensor data today (`R-SIM-9`:
+      real sensor poses and class footprints are calibration **owned by the
+      consuming component**). `model/objects.py`/`model/sensors.py` below are
+      the reusable, component-agnostic primitives a component's own `S-B1`
+      layer-provider code calls with its own resolved calibration; wiring a
+      generic path onto `ProjectModel` needs a concrete data source that does
+      not exist yet, so it was not invented. Revisit once a component
+      actually calls these from `S-B1`
+- [x] `model/ego.py` — `EgoModel`: `x_front = wheelbase + overhang_front`,
       `x_rear = x_front - length`, `half_width = width/2`. Frame per `R-COORD-1`
       (origin at rear-axle centre, +x forward, +y left)
-- [ ] `model/objects.py` — `ObjectModel.footprint(class_name)` with the
+- [x] `model/objects.py` — `ObjectModel.footprint(class_name)` with the
       three-step precedence: per-object `geometry` → class table → declared
       fallback. **The fallback sets `assumed_geometry=True`**, and `R-SIM-3`
-      requires it to be drawn in a style that makes it visibly a guess
-- [ ] `model/sensors.py` — `SensorModel`, parsing `<PREFIX>_SENSOR_<i>_<FIELD>`
+      requires it to be drawn in a style that makes it visibly a guess.
+      Enforced even if the caller constructs the fallback without it —
+      `ObjectModel.__init__` coerces it, so a caller cannot accidentally make
+      a fallback that claims to be measured
+- [x] `model/sensors.py` — `SensorModel`, parsing `<PREFIX>_SENSOR_<i>_<FIELD>`
       **by key shape** (`UT-A2-9` plants a different prefix and expects it to
-      work unchanged)
-- [ ] `model/cameras.py` — `CameraModel`: intrinsics/extrinsics fields
+      work unchanged). Field names keep the source key's **exact case**
+      (`P-3`) — lower-casing them, the first draft's shortcut, would let
+      `SIDE` and `Side` silently collide into one field
+- [x] `model/cameras.py` — `CameraModel`: intrinsics/extrinsics fields
       **declared**, projection unimplemented until S-D4. Declaring the shape now
       costs nothing and stops S-D4 from inventing it
-- [ ] Every `open`/`read_text` names `encoding="utf-8"` (`P-4`); every path is a
+- [x] Every `open`/`read_text` names `encoding="utf-8"` (`P-4`); every path is a
       `Path` (`P-1`); every key comparison is exact, never case-folded (`P-3`)
 
 **Tests**
-- [ ] `UT-A2-1` `EgoModel.load("base")` → `x_front == 3.60`, `x_rear == -0.90`,
-      `half_width == 0.90`
-- [ ] `UT-A2-2` `base`, `2w_base`, `cus1` each yield their own numbers and no
+- [x] `UT-A2-1` `EgoModel.load("base")` → `x_front == 3.60`, `x_rear == -0.90`,
+      `half_width == 0.90` (via `pytest.approx` — `3.6 - 4.5 == -0.9` is
+      `False` in plain IEEE-754 float arithmetic, `-0.8999999999999999`; an
+      exact `==` as literally written would have been a flaky test, not a
+      correct one)
+- [x] `UT-A2-2` `base`, `2w_base`, `cus1` each yield their own numbers and no
       two are equal — the `R-SIM-3` promise that switching project changes the
       picture
-- [ ] `UT-A2-3` a missing key raises `AuthoringError` naming **the key and the
+- [x] `UT-A2-3` a missing key raises `AuthoringError` naming **the key and the
       file**, not "KeyError"
-- [ ] `UT-A2-4` footprint precedence: with `geometry` present it wins; without,
+- [x] `UT-A2-4` footprint precedence: with `geometry` present it wins; without,
       the class table; without that, the fallback **and** `assumed_geometry`
       is `True`
-- [ ] `UT-A2-5` two different object classes resolve to different footprints
-- [ ] `UT-A2-6` `SensorModel` yields exactly the declared sensor count with
+- [x] `UT-A2-5` two different object classes resolve to different footprints
+- [x] `UT-A2-6` `SensorModel` yields exactly the declared sensor count with
       pose/FOV/range/side populated; a **case-differing** key does **not**
       resolve, on every platform (`P-3`)
-- [ ] `UT-A2-7` resolution order: with all four sources present, explicit wins;
+- [x] `UT-A2-7` resolution order: with all four sources present, explicit wins;
       with three, the embedded bundle wins; `bundle_origin` reports which
-- [ ] `UT-A2-8` unknown project raises naming **every searched path** (`N-8`)
-- [ ] `UT-A2-9` **prefix independence**: a fixture using a different key prefix
+- [x] `UT-A2-8` unknown project raises naming **every searched path** (`N-8`)
+- [x] `UT-A2-9` **prefix independence**: a fixture using a different key prefix
       parses identically — proving the parser reads shape, not domain (`GT-1`)
-- [ ] `UT-A2-10` a project mismatch emits `ProvenanceWarning` and **still
+- [x] `UT-A2-10` a project mismatch emits `ProvenanceWarning` and **still
       resolves** — it degrades visibly, it does not stop a run (`R-SIM-3a`)
-- [ ] `ST-A2-1` **equivalence with the code being replaced** — for every project,
+- [x] `ST-A2-1` **equivalence with the code being replaced** — for every project,
       `EgoModel` and `SensorModel` values equal what the existing `bsdviz`
       modules produce today (skipped, with a named reason, if `modules/df` is
-      absent)
+      absent). **Finding:** only `EgoModel` has a real baseline. The existing
+      viz layer's sensor module (`bsdviz/sensors.py`) has no YAML-driven
+      counterpart to compare against — its five nominal poses are hardcoded
+      Stage-2 design constants used for coverage validation, never read from
+      a project's own sensor-calibration keys. `ST-A2-1` as implemented
+      equivalence-tests `EgoModel` only, for all three projects; comparing
+      `SensorModel` against unrelated hardcoded poses would produce a pass or
+      fail that means nothing
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-1`, `P-3` (case-sensitive key and
+- [x] portability §3 ticked — exposure: `P-1`, `P-3` (case-sensitive key and
       file lookup is first exercised here), `P-4`
-- [ ] naming §3 ticked — exposure: `N-4` (every geometry value carries a unit
+- [x] naming §3 ticked — exposure: `N-4` (every geometry value carries a unit
       suffix; a bare `width` is the defect that produces a plausible wrong
       picture), `N-8`
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [x] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked (`GT-4`/`GT-8`
+      still not applicable — no C++ touched, no viewer exists)
 
 **Gate**
-- [ ] `ST-A2-1` green for all three projects — the replacement is provably
+- [x] `ST-A2-1` green for all three projects — the replacement is provably
       value-identical before anything depends on it. `UT-A2-9` green, because a
       geometry layer that knows a function's name would pass every other test
       here and still be wrong
