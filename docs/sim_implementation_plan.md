@@ -1166,13 +1166,27 @@ one pass: Slice 1 is `render/viewer.py`'s `MainWindow` + `_SessionLoadWorker`
 and `build_scene()` (discovery-based Scene assembly via
 `scene/registry.registered_providers()` — the piece `S-B1`'s own golden
 generator prototyped as a hardcoded `df`-specific tuple, promoted here to a
-generic, `R-SIM-1`-clean form any component can use). `pytest modules\sim\tests
--q`: **131 passed** (125 from `S-B2`/`S-B1` + 6 new). `scripts\check_invariants.py`
-and `python docs/py/run_all.py`: both clean. Layer tree, inspector, timeline,
-signals, plots, measure and workspace loading are separate, not-yet-started
-slices of this same stage; none of them change `MainWindow`'s shape
-(visualization spec §11.1's own "a new panel type registers itself... the
-shell does not change").
+generic, `R-SIM-1`-clean form any component can use).
+
+**Slice 2 (layer tree) DONE 2026-07-29.** `view/layers.py`'s `LayerTreeState`
+— groups, per-layer visibility, solo/mute, per-group verbosity level, search,
+and a plain `to_dict()`/`load_dict()`/`save()`/`load()` persistence surface —
+is pure state, no Qt, no pixels (`UT-B3-17`'s own layering, extended). A
+`LayersPanel` `QDockWidget` in `render/viewer.py` is a thin Qt view over it
+(tri-state checkboxes, a search box, `Alt`+click to solo); `MainWindow.render_tick`
+now applies the panel's real `visible_layer_ids()` to `render_scene` — Scene
+assembly itself stays cached ignoring layer selection, so toggling a layer
+re-renders without re-running pass 1 *or* pass 2a. **Not yet wired: disk
+persistence's actual location** (`QStandardPaths.AppConfigLocation`, `P-7`) —
+`LayerTreeState.save()`/`.load()` work against any path today; `MainWindow`
+does not yet call them. `pytest modules\sim\tests -q`: **141 passed** (131
+from Slice 1 + 10 new). `scripts\check_invariants.py` and
+`python docs/py/run_all.py`: both clean.
+
+Inspector, timeline, signals, plots, measure and workspace loading are
+separate, not-yet-started slices of this same stage; none of them change
+`MainWindow`'s shape (visualization spec §11.1's own "a new panel type
+registers itself... the shell does not change").
 
 **Must not.**
 - **Run pass 1 on the GUI thread.** Building a `Session` blocks for as long as
@@ -1188,15 +1202,16 @@ shell does not change").
 
 - [x] `render/viewer.py` — the Qt window; a **dockable peer-panel grid** where
       BEV, camera, plots, timeline, inspector, layers and pipeline are all
-      panels, none privileged (visualization spec §11.1). **Scoped to Slice
-      1: only `BevPanel` exists so far** — camera/plots/timeline/inspector/
-      layers/pipeline dock in as their own slices, with no change to
-      `MainWindow`'s shape
+      panels, none privileged (visualization spec §11.1). **`BevPanel` +
+      `LayersPanel` exist so far** — camera/plots/timeline/inspector/pipeline
+      dock in as their own slices, with no change to `MainWindow`'s shape
 - [x] **Threading**: pass 1 on a `QThread`/worker, progress by signal,
       cancellable; the Scene cache is read from the GUI thread only. One
       documented ownership rule, stated in the module docstring
-- [ ] `view/layers.py` — layer tree, groups, solo/mute, verbosity level, search,
-      per-project persistence
+- [x] `view/layers.py` — layer tree, groups, solo/mute, verbosity level, search,
+      per-project persistence. **Persistence is the state class's own
+      `save()`/`load()` against a caller-given path** — `MainWindow` calling
+      it against `QStandardPaths.AppConfigLocation` is not yet wired
 - [ ] `view/workspace.py` — read `modules/<name>/sim/workspace.yaml`; shipped
       default, user override, reset (viz §13b). **A component's arrangement, not
       an application mode** — Bench/Campaign arrive in `S-D8` and load this
@@ -1220,7 +1235,7 @@ shell does not change").
       `app/cli.py`**: `app/` is the GUI and holds no logic (`GT-9`)
 
 **Tests**
-- [ ] `UT-B3-1` layer-tree state: group tri-state, solo/mute, persistence
+- [x] `UT-B3-1` layer-tree state: group tri-state, solo/mute, persistence
       round-trips
 - [ ] `UT-B3-2` inspector resolves a `pick_id` to its provider's declared fields;
       an entity that disappears is **dropped, not shown stale**

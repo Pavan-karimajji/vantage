@@ -17,11 +17,13 @@ queued connection across threads), the `SceneCache` and every panel are
 built and read from the GUI thread only -- pass 2 (Scene assembly +
 rasterising) is cheap and pure, so it can afford to.
 
-**Scope of this slice.** Only the window, the threading model and one peer
-panel (BEV) exist here. Layer tree, inspector, timeline, signals, plots,
-measure and workspace loading are later slices of the same stage; none of
-them change this module's shape (`sim_visualization_spec.md` §11.1's own
-"a new panel type registers itself... the shell does not change").
+**Scope so far.** Slice 1 built the window, the threading model and the BEV
+panel. Slice 2 adds the layers dock, a thin Qt view over
+`view.layers.LayerTreeState` (every decision -- tri-state, solo/mute, search,
+verbosity -- lives there, never here, `GT-9`). Inspector, timeline, signals,
+plots, measure and workspace loading remain later slices; none of them
+change this module's shape (`sim_visualization_spec.md` §11.1's own "a new
+panel type registers itself... the shell does not change").
 """
 
 from __future__ import annotations
@@ -35,7 +37,15 @@ from adas_sim.core.runner import LoadCancelled, SceneCache, build_scene, build_s
 from adas_sim.core.session import Session
 from adas_sim.render.bev import render_scene
 from adas_sim.render.theme import Theme
+from adas_sim.scene.types import Layer
+from adas_sim.view.layers import LayerTreeState
 from adas_sim.view.viewport import Viewport
+
+_CHECK_STATES = {
+    "on": QtCore.Qt.CheckState.Checked,
+    "off": QtCore.Qt.CheckState.Unchecked,
+    "mixed": QtCore.Qt.CheckState.PartiallyChecked,
+}
 
 
 def set_high_dpi_policy() -> None:
@@ -106,6 +116,90 @@ class BevPanel(QtWidgets.QDockWidget):
         return self._label.pixmap()
 
 
+class LayersPanel(QtWidgets.QDockWidget):
+    """The layer tree (`sim_visualization_spec.md` §6): groups with a
+    tri-state checkbox, layers with a plain one, a search box, and
+    `Alt`+click on a group to solo it. Every decision is a call into
+    `state` (`view/layers.py`); this class only arranges the tree and
+    dispatches clicks (`GT-9`)."""
+
+    changed = QtCore.Signal()
+
+    def __init__(self, state: LayerTreeState, parent: QtWidgets.QWidget | None = None) -> None:
+        super().__init__("Layers", parent)
+        self.state = state
+        self._updating = False
+
+        container = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(container)
+        layout.setContentsMargins(4, 4, 4, 4)
+
+        self._search_box = QtWidgets.QLineEdit()
+        self._search_box.setPlaceholderText("search layers...")
+        self._search_box.textChanged.connect(self._on_search_changed)
+        layout.addWidget(self._search_box)
+
+        self._tree = QtWidgets.QTreeWidget()
+        self._tree.setHeaderHidden(True)
+        self._tree.itemChanged.connect(self._on_item_changed)
+        self._tree.itemClicked.connect(self._on_item_clicked)
+        layout.addWidget(self._tree)
+
+        self.setWidget(container)
+
+    def sync_from_scene(self, layers: tuple[Layer, ...]) -> None:
+        self.state.sync(layers)
+        self._rebuild()
+
+    def _rebuild(self) -> None:
+        self._updating = True
+        self._tree.clear()
+        for group in self.state.groups():
+            title = f"{group} (solo)" if self.state.solo_group == group else group
+            group_item = QtWidgets.QTreeWidgetItem([title])
+            group_item.setData(0, QtCore.Qt.ItemDataRole.UserRole, ("group", group))
+            group_item.setFlags(group_item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
+            group_item.setCheckState(0, _CHECK_STATES[self.state.group_state(group)])
+            self._tree.addTopLevelItem(group_item)
+            for info in self.state.layers_in_group(group):
+                if not self.state.matches_search(info.id):
+                    continue
+                layer_item = QtWidgets.QTreeWidgetItem([info.label])
+                layer_item.setData(0, QtCore.Qt.ItemDataRole.UserRole, ("layer", info.id))
+                layer_item.setFlags(layer_item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
+                checked = QtCore.Qt.CheckState.Checked if self.state.is_visible(info.id) \
+                    else QtCore.Qt.CheckState.Unchecked
+                layer_item.setCheckState(0, checked)
+                group_item.addChild(layer_item)
+        self._tree.expandAll()
+        self._updating = False
+
+    def _on_item_changed(self, item: QtWidgets.QTreeWidgetItem, _column: int) -> None:
+        if self._updating:
+            return
+        kind, key = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
+        checked = item.checkState(0) == QtCore.Qt.CheckState.Checked
+        if kind == "layer":
+            self.state.set_visible(key, checked)
+        else:
+            self.state.set_group_visible(key, checked)
+        self._rebuild()
+        self.changed.emit()
+
+    def _on_item_clicked(self, item: QtWidgets.QTreeWidgetItem, _column: int) -> None:
+        kind, key = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
+        if kind != "group":
+            return
+        if QtWidgets.QApplication.keyboardModifiers() & QtCore.Qt.KeyboardModifier.AltModifier:
+            self.state.toggle_solo(key)
+            self._rebuild()
+            self.changed.emit()
+
+    def _on_search_changed(self, text: str) -> None:
+        self.state.set_search(text)
+        self._rebuild()
+
+
 class MainWindow(QtWidgets.QMainWindow):
     """Vantage's window (`sim_player.md` names the application). A
     **dockable peer-panel grid** (`sim_visualization_spec.md` §11.1) -- today
@@ -119,9 +213,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self._project = project
         self._session: Session | None = None
         self._scene_cache: SceneCache | None = None
+        self._current_tick = 0
 
         self.bev = BevPanel(self)
         self.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, self.bev)
+
+        self.layers_state = LayerTreeState()
+        self.layers_panel = LayersPanel(self.layers_state, self)
+        self.addDockWidget(QtCore.Qt.DockWidgetArea.LeftDockWidgetArea, self.layers_panel)
+        self.layers_panel.changed.connect(lambda: self.render_tick(self._current_tick))
 
         self._thread = QtCore.QThread(self)
         self._worker = _SessionLoadWorker(recording)
@@ -167,9 +267,16 @@ class MainWindow(QtWidgets.QMainWindow):
         return build_scene(self._session, tick_index, project=self._project)
 
     def render_tick(self, tick_index: int) -> None:
-        """GUI-thread only: reads `_scene_cache`, never re-runs pass 1."""
+        """GUI-thread only: reads `_scene_cache`, never re-runs pass 1.
+        Scene assembly is cached ignoring layer selection (`build_scene`
+        needs neither, `core/runner.py`'s own docstring); the layers panel's
+        choice is applied only at rasterising, which is why toggling a layer
+        re-renders without re-running pass 1 *or* pass 2a."""
         if self._session is None or self._scene_cache is None:
             return
+        self._current_tick = tick_index
         scene = self._scene_cache.get(tick_index, frozenset(), self.bev.theme)
-        frame = render_scene(scene, self.bev.viewport, self.bev.theme)
+        self.layers_panel.sync_from_scene(scene.layers)
+        layer_selection = self.layers_state.visible_layer_ids()
+        frame = render_scene(scene, self.bev.viewport, self.bev.theme, layer_selection)
         self.bev.show_frame(frame)

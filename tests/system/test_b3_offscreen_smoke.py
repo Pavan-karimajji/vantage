@@ -102,3 +102,31 @@ def test_window_loads_and_renders_a_non_blank_frame_offscreen(tmp_path):
     pixmap = window.bev.pixmap()
     assert pixmap is not None and not pixmap.isNull()
     assert pixmap.width() > 0 and pixmap.height() > 0
+
+
+def test_layers_panel_populates_and_toggling_changes_the_frame(tmp_path):
+    """The layers dock (Slice 2) end to end: it discovers the one layer this
+    recording's Scene carries, and hiding it actually changes what the BEV
+    panel shows -- not just what `LayerTreeState` reports."""
+    recording = tmp_path / "test_b3.mcap"
+    _write_synthetic_recording(recording)
+
+    set_high_dpi_policy()
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    window = MainWindow(recording)
+    _pump_until_loaded(window)
+    assert window.session is not None
+
+    assert "test" in window.layers_state.groups()
+    assert window.layers_state.is_visible("test.b3.ego") is True
+    image_shown = window.bev.pixmap().toImage()
+
+    window.layers_state.set_group_visible("test", False)
+    window.render_tick(0)
+    image_hidden = window.bev.pixmap().toImage()
+    assert image_hidden != image_shown, "hiding the only layer did not change the rendered frame"
+
+    window.layers_state.set_group_visible("test", True)
+    window.render_tick(0)
+    image_restored = window.bev.pixmap().toImage()
+    assert image_restored == image_shown, "re-showing the layer did not restore the original frame"
