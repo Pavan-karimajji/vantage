@@ -31,6 +31,8 @@ import pytest
 pytest.importorskip("PySide6")
 from PySide6 import QtCore, QtWidgets  # noqa: E402
 
+QtCore.QStandardPaths.setTestModeEnabled(True)  # P-7: never touch the real user profile in tests
+
 from adas_sim.io.base import ComponentBuildInfo, Provenance, RunManifest, TopicInfo  # noqa: E402
 from adas_sim.io.registry import writer_for  # noqa: E402
 import adas_sim.io.mcap  # noqa: E402,F401 -- registers the ".mcap" codec

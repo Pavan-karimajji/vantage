@@ -18,11 +18,21 @@ built and read from the GUI thread only -- pass 2 (Scene assembly +
 rasterising) is cheap and pure, so it can afford to.
 
 **Scope so far.** Slice 1 built the window, the threading model and the BEV
-panel. Slice 2 adds the layers dock, a thin Qt view over
+panel. Slice 2 added the layers dock, a thin Qt view over
 `view.layers.LayerTreeState` (every decision -- tri-state, solo/mute, search,
-verbosity -- lives there, never here, `GT-9`). Inspector, timeline, signals,
-plots, measure and workspace loading remain later slices; none of them
-change this module's shape (`sim_visualization_spec.md` §11.1's own "a new
+verbosity -- lives there, never here, `GT-9`). **Slice 3 closes two pieces of
+persistence debt (`P-7`):** the dockable panel grid itself -- open/close (each
+dock's own `toggleViewAction()` in the View menu), split/tab/float (native
+`QMainWindow`/`QDockWidget` mechanics, nothing to wrap) and a **saved layout,
+per project** (`sim_visualization_spec.md` §11.1) via `saveState()`/
+`restoreState()` -- plus wiring `LayerTreeState`'s already-built `save()`/
+`load()` (Slice 2) to a real location, **per (project, pipeline)** (§6: a
+function's layer overrides persist per project + pipeline, so re-opening a
+recording of that function restores its layer choices). Both locations
+resolve through `QStandardPaths.AppConfigLocation`, never a hand-written
+`%LOCALAPPDATA%`/`~/.config` path. Inspector, timeline, signals, plots,
+measure and component-shipped `workspace.yaml` loading remain later slices;
+none of them change this module's shape (`sim_visualization_spec.md` §11.1's own "a new
 panel type registers itself... the shell does not change").
 """
 
@@ -53,6 +63,26 @@ def set_high_dpi_policy() -> None:
     QtGui.QGuiApplication.setHighDpiScaleFactorRoundingPolicy(
         QtCore.Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
+
+
+def _config_root() -> Path:
+    """P-7: `QStandardPaths.AppConfigLocation` -- never `%LOCALAPPDATA%` or
+    `~/.config` written by hand. Tests redirect this with
+    `QStandardPaths.setTestModeEnabled(True)` rather than monkeypatching."""
+    base = QtCore.QStandardPaths.writableLocation(
+        QtCore.QStandardPaths.StandardLocation.AppConfigLocation
+    )
+    return Path(base) / "adas-sim"
+
+
+def layers_state_path(project: str, pipeline: str) -> Path:
+    """Per (project, pipeline) -- `sim_visualization_spec.md` §6."""
+    return _config_root() / "layers" / f"{project}.{pipeline}.json"
+
+
+def layout_path(project: str) -> Path:
+    """Per project only -- §11.1: "a layout is saveable per project"."""
+    return _config_root() / "layout" / f"{project}.bin"
 
 
 class _SessionLoadWorker(QtCore.QObject):
@@ -100,6 +130,7 @@ class BevPanel(QtWidgets.QDockWidget):
 
     def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__("BEV", parent)
+        self.setObjectName("dock.bev")  # stable id `saveState()`/`restoreState()` match on
         self._label = QtWidgets.QLabel()
         self._label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.setWidget(self._label)
@@ -127,6 +158,7 @@ class LayersPanel(QtWidgets.QDockWidget):
 
     def __init__(self, state: LayerTreeState, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__("Layers", parent)
+        self.setObjectName("dock.layers")  # stable id `saveState()`/`restoreState()` match on
         self.state = state
         self._updating = False
 
@@ -221,7 +253,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.layers_state = LayerTreeState()
         self.layers_panel = LayersPanel(self.layers_state, self)
         self.addDockWidget(QtCore.Qt.DockWidgetArea.LeftDockWidgetArea, self.layers_panel)
-        self.layers_panel.changed.connect(lambda: self.render_tick(self._current_tick))
+        self.layers_panel.changed.connect(self._on_layers_changed)
+
+        view_menu = self.menuBar().addMenu("&View")
+        view_menu.addAction(self.bev.toggleViewAction())
+        view_menu.addAction(self.layers_panel.toggleViewAction())
+
+        self.restore_layout()
 
         self._thread = QtCore.QThread(self)
         self._worker = _SessionLoadWorker(recording)
@@ -240,6 +278,24 @@ class MainWindow(QtWidgets.QMainWindow):
     def request_cancel_load(self) -> None:
         self._worker.request_cancel()
 
+    def save_layout(self) -> None:
+        """The dock grid's arrangement -- open/close, split, tab, float --
+        per project (§11.1). `saveState()` matches docks by `objectName()`,
+        which is why `BevPanel`/`LayersPanel` set one."""
+        path = layout_path(self._project)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(bytes(self.saveState()))
+
+    def restore_layout(self) -> bool:
+        path = layout_path(self._project)
+        if not path.is_file():
+            return False
+        return self.restoreState(QtCore.QByteArray(path.read_bytes()))
+
+    def closeEvent(self, event: QtGui.QCloseEvent) -> None:  # noqa: N802 -- Qt override
+        self.save_layout()
+        super().closeEvent(event)
+
     def _stop_thread(self) -> None:
         self._thread.quit()
         self._thread.wait()
@@ -251,8 +307,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self._session = session
         self._scene_cache = SceneCache(self._build_scene_for_cache)
         self._stop_thread()
+        self.layers_state.load(layers_state_path(self._project, session.meta.pipeline))
         self.statusBar().showMessage(f"loaded {session.name} -- {len(session)} ticks", 5000)
         self.render_tick(0)
+
+    def _on_layers_changed(self) -> None:
+        self.render_tick(self._current_tick)
+        if self._session is not None:
+            self.layers_state.save(layers_state_path(self._project, self._session.meta.pipeline))
 
     def _on_cancelled(self) -> None:
         self._stop_thread()

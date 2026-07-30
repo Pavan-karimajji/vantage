@@ -1183,6 +1183,32 @@ does not yet call them. `pytest modules\sim\tests -q`: **141 passed** (131
 from Slice 1 + 10 new). `scripts\check_invariants.py` and
 `python docs/py/run_all.py`: both clean.
 
+**Slice 3 (panel grid + persistence wiring) DONE 2026-07-30.** Closes both
+pieces of debt Slice 2 left open. **Persistence wiring:** `render/viewer.py`
+gained `_config_root()`/`layers_state_path(project, pipeline)`/
+`layout_path(project)`, all resolving through
+`QStandardPaths.AppConfigLocation` (`P-7`) — `MainWindow._on_loaded` now
+calls `layers_state.load()` once the session's `pipeline` is known, and
+`_on_layers_changed` (the `LayersPanel.changed` handler) saves it back, so a
+function's layer choices really do restore per (project, pipeline) (§6), not
+just round-trip in memory (`UT-B3-1`). **Panel grid:** open/close needed no
+new state — each dock's own `toggleViewAction()` in a new View menu reopens
+what its close button hid; split/tab/float are native
+`QMainWindow`/`QDockWidget` mechanics once a dock carries a stable
+`objectName()` (`dock.bev`/`dock.layers`, added for this). What Slice 2 left
+open — an actual saved-layout location — is `MainWindow.save_layout()`/
+`restore_layout()`: `saveState()`/`restoreState()` against `layout_path`,
+saved on `closeEvent` and restored at construction, **per project** (§11.1)
+rather than per pipeline (a layout is a workspace concern, not a run
+concern). `pytest modules\sim\tests -q`: **146 passed** (141 from Slice 2 +
+5 new, `tests/system/test_b3_panel_layout.py`, closing `UT-B3-10`).
+`scripts\check_invariants.py` and `python docs/py/run_all.py`: both clean.
+**Finding:** a `QDockWidget`'s `isVisible()` reflects the whole ancestor
+chain, not just its own show/hide state — the offscreen system tests call
+`window.show()` for exactly this reason (the existing Slice 1/2 tests never
+needed to, since they only read pixels off `BevPanel`, never a dock's own
+visibility flag).
+
 Inspector, timeline, signals, plots, measure and workspace loading are
 separate, not-yet-started slices of this same stage; none of them change
 `MainWindow`'s shape (visualization spec §11.1's own "a new panel type
@@ -1210,8 +1236,9 @@ registers itself... the shell does not change").
       documented ownership rule, stated in the module docstring
 - [x] `view/layers.py` — layer tree, groups, solo/mute, verbosity level, search,
       per-project persistence. **Persistence is the state class's own
-      `save()`/`load()` against a caller-given path** — `MainWindow` calling
-      it against `QStandardPaths.AppConfigLocation` is not yet wired
+      `save()`/`load()` against a caller-given path** — `MainWindow` now
+      wires it against `QStandardPaths.AppConfigLocation`, per (project,
+      pipeline) (Slice 3)
 - [ ] `view/workspace.py` — read `modules/<name>/sim/workspace.yaml`; shipped
       default, user override, reset (viz §13b). **A component's arrangement, not
       an application mode** — Bench/Campaign arrive in `S-D8` and load this
@@ -1254,7 +1281,7 @@ registers itself... the shell does not change").
 - [ ] `UT-B3-8` `xy` panel plots signal-vs-signal; colouring by a third works
 - [ ] `UT-B3-9` playhead is shared — seeking in a plot moves the BEV and the
       timeline to the same tick
-- [ ] `UT-B3-10` panel grid: open/close/split/tab/float; a saved layout restores
+- [x] `UT-B3-10` panel grid: open/close/split/tab/float; a saved layout restores
 - [ ] `UT-B3-11` a component's `workspace.yaml` opens its declared tabs, splits
       and ratios; a **missing** workspace falls back to BEV + timeline, no error
 - [ ] `UT-B3-12` the user's own layout wins over the shipped default, and
