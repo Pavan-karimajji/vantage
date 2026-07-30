@@ -1406,10 +1406,40 @@ modules\sim\tests -q`: **238 passed** (213 from Slice 7b + 25 new: 10 in
 system/test_b3_timeline_strip.py`, closing `UT-B3-3`).
 `scripts\check_invariants.py` and `python docs/py/run_all.py`: both clean.
 
-Plots and measure remain later slices, and workspace loading (deferred
-earlier pending a real panel to fall back to) is now unblocked; none of
-this changes `MainWindow`'s shape (visualization spec §11.1's own "a new
-panel type registers itself... the shell does not change").
+**Slice 9 (workspace loading) DONE 2026-07-30.** §13b's component-shipped
+default arrangement. `view/workspace.py` is pure parsing (`Workspace`/
+`WorkspaceTab`/`WorkspaceSplit`/`WorkspaceView`, no Qt, no disk IO of its
+own initiative -- `load_workspace` reads a path it's handed,
+`parse_workspace` works on an already-loaded `dict` so a test never needs
+a real file). **A real scope boundary, named in `Workspace`'s own
+docstring rather than hidden:** `MainWindow`'s dock grid is one
+`BevPanel`/`TimelineStrip`/etc. each (Slices 1-8) -- a genuine second tab
+with its *own* `BevPanel` at a different viewpoint needs tab-switching
+shell architecture none of those slices built. `Workspace.tabs` parses and
+validates every tab faithfully; only `tabs[0]`'s views apply to the
+existing singleton panels (`bev`'s `viewpoint` against `DEFAULT_PRESETS`,
+`timeline`'s `signals` added uniformly as **signal** lanes -- the
+schema's own example (§13b) mixes a warning and `derived.ttc` under one
+flat `signals:` list with no kind declared, and guessing from a resolved
+value's Python type would silently misclassify a protobuf enum, which
+decodes as `int`, as numeric). `UT-B3-12`'s "shipped default" is captured
+once, `bytes(self.saveState())`, **before** `restore_layout()` overlays
+any user-saved state -- `Reset Layout` restores exactly those bytes, never
+a re-derivation that could drift from what was actually shipped at
+construction. A malformed `workspace.yaml` still raises (`AuthoringError`,
+naming the available workspace names) -- only a **missing** one falls
+back silently, matching §13b's own "the framework falls back" wording
+precisely rather than a loader that treats every failure the same way.
+`pytest modules\sim\tests -q`: **253 passed** (238 from Slice 8 + 15 new: 8
+in `test_b3_workspace.py`, 7 in `tests/system/test_b3_workspace_wiring.py`,
+closing `UT-B3-12`; `UT-B3-11` gets a scoped precursor, see its own
+checklist note above). `scripts\check_invariants.py` and `python
+docs/py/run_all.py`: both clean.
+
+Plots and measure remain later, not-yet-started slices of this same
+stage; none of this changes `MainWindow`'s shape (visualization spec
+§11.1's own "a new panel type registers itself... the shell does not
+change").
 
 **Must not.**
 - **Run pass 1 on the GUI thread.** Building a `Session` blocks for as long as
@@ -1436,9 +1466,13 @@ panel type registers itself... the shell does not change").
       `save()`/`load()` against a caller-given path** — `MainWindow` now
       wires it against `QStandardPaths.AppConfigLocation`, per (project,
       pipeline) (Slice 3)
-- [ ] `view/workspace.py` — read `modules/<name>/sim/workspace.yaml`; shipped
+- [x] `view/workspace.py` — read `modules/<name>/sim/workspace.yaml`; shipped
       default, user override, reset (viz §13b). **A component's arrangement, not
-      an application mode** — Bench/Campaign arrive in `S-D8` and load this
+      an application mode** — Bench/Campaign arrive in `S-D8` and load this.
+      **Scoped:** parses every tab faithfully, but only `tabs[0]` is applied
+      to `MainWindow`'s panels — a true second tab (its own `BevPanel` at a
+      different viewpoint) needs tab-switching shell architecture this
+      slice does not build (`view/workspace.py`'s own docstring)
 - [x] `Interaction` on `LayerCtx` + `reacts_to=` on the provider decorator;
       the cache key includes interaction **only for declaring layers**, so a
       mouse move does not invalidate the whole scene (viz §7.5)
@@ -1492,8 +1526,14 @@ panel type registers itself... the shell does not change").
       timeline to the same tick
 - [x] `UT-B3-10` panel grid: open/close/split/tab/float; a saved layout restores
 - [ ] `UT-B3-11` a component's `workspace.yaml` opens its declared tabs, splits
-      and ratios; a **missing** workspace falls back to BEV + timeline, no error
-- [ ] `UT-B3-12` the user's own layout wins over the shipped default, and
+      and ratios; a **missing** workspace falls back to BEV + timeline, no error.
+      **Scoped precursor landed in Slice 9** (`tests/unit/test_b3_workspace.py`,
+      `tests/system/test_b3_workspace_wiring.py`): parsing every tab/split/
+      ratio, the missing-file fallback, and applying `tabs[0]`'s views (BEV
+      viewpoint, timeline signals) to real panels are all proven; "opens its
+      declared **tabs**" (plural, as distinct arrangements) waits on
+      tab-switching shell architecture (`view/workspace.py`'s own docstring)
+- [x] `UT-B3-12` the user's own layout wins over the shipped default, and
       `Reset layout` returns to it
 - [x] `UT-B3-13` a provider declaring `reacts_to=("cursor",)` receives the
       cursor **in its own frame, in metres**, and re-renders on cursor change

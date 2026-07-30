@@ -70,9 +70,21 @@ make the strip the render loop's own bottleneck -- and `render/timeline.py`
 rasterises with zero-margin per-lane axes (`fig.add_axes`, the same trick
 `render/bev.py`'s single axes uses) so click-to-seek's pixel-to-tick
 inverse is exact, not approximate. `[`/`]` jump to the nearest state-lane
-transition or bookmark. Plots and measure remain later slices; none of this
-changes the module's shape (`sim_visualization_spec.md` §11.1's own "a new
-panel type registers itself... the shell does not change").
+transition or bookmark. **Slice 9 applies `view/workspace.Workspace`**
+(§13b): `MainWindow` takes an optional `workspace_path`, resolved to a
+component's `workspace.yaml` or `default_workspace()` (bev + timeline) if
+missing -- a malformed file still raises, only a missing one falls back.
+Only `tabs[0]` reaches this single-arrangement shell (`bev`'s `viewpoint`
+against `DEFAULT_PRESETS`, `timeline`'s `signals` as signal lanes,
+uniformly -- the schema does not declare state vs. signal, and guessing
+from a resolved value's type would silently misclassify a protobuf enum);
+`Workspace.tabs[1:]` parse and validate but nothing applies them yet, a
+gap `view/workspace.py`'s own docstring names rather than hides. `View >
+Reset Layout` restores `_default_layout_state`, captured once before any
+user-saved state is overlaid, byte for byte. Plots and measure remain
+later slices; none of this changes the module's shape
+(`sim_visualization_spec.md` §11.1's own "a new panel type registers
+itself... the shell does not change").
 """
 
 from __future__ import annotations
@@ -99,6 +111,7 @@ from adas_sim.view.layers import LayerTreeState
 from adas_sim.view.timeline import TimelineState, event_markers
 from adas_sim.view.transport import Transport
 from adas_sim.view.viewport import DEFAULT_PRESETS, Viewport
+from adas_sim.view.workspace import default_workspace, load_workspace
 
 _CHECK_STATES = {
     "on": QtCore.Qt.CheckState.Checked,
@@ -591,10 +604,17 @@ class MainWindow(QtWidgets.QMainWindow):
     alongside it as later slices land."""
 
     def __init__(self, recording: Path, *, project: str = "base",
+                 workspace_path: Path | None = None,
                  parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Vantage")
         self._project = project
+        # §13b: "a missing workspace is not an error" -- the caller decides
+        # what "missing" means by handing (or not handing) a path; a
+        # malformed file, unlike a missing one, still raises (a workspace.yaml
+        # authoring bug is not the same failure mode as none existing).
+        self.workspace = load_workspace(workspace_path) if workspace_path is not None \
+            and workspace_path.is_file() else default_workspace()
         self._session: Session | None = None
         self._scene_cache: SceneCache | None = None
         self._current_tick = 0
@@ -611,6 +631,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.bev.clicked.connect(self._on_bev_clicked)
         self.bev.dragged.connect(self._on_bev_dragged)
         self.bev.zoomed.connect(self._on_bev_zoomed)
+        self._apply_workspace_viewpoint()
 
         self.layers_state = LayerTreeState()
         self.layers_panel = LayersPanel(self.layers_state, self)
@@ -665,6 +686,13 @@ class MainWindow(QtWidgets.QMainWindow):
             functools.partial(self._on_add_timeline_lane, is_state=True))
         timeline_menu.addAction("Add bookmark at cursor").triggered.connect(self._on_add_bookmark)
 
+        view_menu.addSeparator()
+        view_menu.addAction("Reset Layout").triggered.connect(self._on_reset_layout)
+
+        # `UT-B3-12`'s "shipped default": captured once, right here, before
+        # any user-saved state is overlaid -- "Reset Layout" restores
+        # exactly this, byte for byte, never a re-derivation that could drift.
+        self._default_layout_state = bytes(self.saveState())
         self.restore_layout()
 
         self._thread = QtCore.QThread(self)
@@ -727,6 +755,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.transport_bar.bind(self.transport)
         self._timeline_series_cache.clear()  # stale values from a previous session, if any
         self.timeline_strip._head_tick = self.transport.head_tick
+        self._apply_workspace_timeline_signals()
         self.statusBar().showMessage(f"loaded {session.name} -- {len(session)} ticks", 5000)
         self.render_tick(0)
 
@@ -972,10 +1001,53 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _on_jump_to_preset(self, preset_name: str) -> None:
         """`1`…`9` (§4.4): the framework's own generic presets
-        (`DEFAULT_PRESETS`), positionally assigned in sorted order. A
-        component's own named presets (`viewpoints.yaml`) are `view/
-        workspace.py`'s job -- this is the fallback every component starts
-        from, same framing as `DEFAULT_PRESETS`'s own docstring."""
+        (`DEFAULT_PRESETS`), positionally assigned in sorted order --
+        `DEFAULT_PRESETS`'s own docstring names these "the fallback every
+        component starts from". A component's own named presets
+        (`modules/<name>/sim/viewpoints.yaml`, §4.3) are not loaded by
+        `view/workspace.py` either (Slice 9's own documented gap, see
+        `Workspace`'s docstring) -- `_apply_workspace_viewpoint` below can
+        only resolve a `viewpoint:` name that happens to also be one of
+        these."""
         preset = DEFAULT_PRESETS[preset_name]
         self.bev.viewport = dataclasses.replace(preset, size_px=self.bev.viewport.size_px)
         self.render_tick(self._current_tick)
+
+    def _apply_workspace_viewpoint(self) -> None:
+        """`self.workspace.tabs[0]`'s `bev` view, if it names a `viewpoint`
+        `DEFAULT_PRESETS` actually has (see `_on_jump_to_preset`'s own
+        note on what is and is not resolvable yet). No matching tab, view
+        or preset is silently fine -- the BEV already has a working default
+        viewport from its own constructor."""
+        if not self.workspace.tabs:
+            return
+        for view in self.workspace.tabs[0].views:
+            if view.panel == "bev" and view.viewpoint in DEFAULT_PRESETS:
+                preset = DEFAULT_PRESETS[view.viewpoint]
+                self.bev.viewport = dataclasses.replace(preset, size_px=self.bev.viewport.size_px)
+                return
+
+    def _apply_workspace_timeline_signals(self) -> None:
+        """`self.workspace.tabs[0]`'s `timeline` view's `signals`, added as
+        signal lanes once a session exists to resolve them against.
+        **Uniformly signal lanes, never state lanes** -- `workspace.yaml`'s
+        schema (§13b's own example mixes a warning and `derived.ttc` under
+        one flat `signals:` list) does not declare which is which, and
+        guessing from the resolved value's Python type would silently
+        misclassify a protobuf enum (decodes as `int`) as numeric. A state
+        lane is one menu action away (`Timeline > Add state lane...`)."""
+        if self._session is None or not self.workspace.tabs:
+            return
+        for view in self.workspace.tabs[0].views:
+            if view.panel != "timeline":
+                continue
+            for address in view.signals:
+                if address not in self._timeline_series_cache:
+                    self._timeline_series_cache[address] = self._session.signal(address, project=self._project)
+                self.timeline_state.add_signal_lane(address)
+
+    def _on_reset_layout(self) -> None:
+        """`UT-B3-12`: returns exactly to the bytes captured in `__init__`
+        before any user-saved state was overlaid -- not a re-derivation,
+        which could drift from what was actually shipped."""
+        self.restoreState(QtCore.QByteArray(self._default_layout_state))
