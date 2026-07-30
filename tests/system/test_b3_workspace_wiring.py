@@ -147,8 +147,8 @@ def test_a_workspace_timeline_signal_is_added_as_a_lane(tmp_path):
 
     window = _open_window(recording, workspace_path=ws_path)
     assert window.timeline_state.signal_lanes() == ("test.marker",)
-    assert "test.marker" in window._timeline_series_cache
-    assert len(window._timeline_series_cache["test.marker"]) == _TICK_COUNT
+    assert "test.marker" in window._signal_series_cache
+    assert len(window._signal_series_cache["test.marker"]) == _TICK_COUNT
 
 
 def test_reset_layout_returns_to_the_shipped_default(tmp_path):

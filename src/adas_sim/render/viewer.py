@@ -65,7 +65,7 @@ right for a live SUT ("head" is "where execution is now") but wrong for
 opening a recording for review, so `_on_loaded` calls `goto(0)` before
 binding. **Slice 8 adds `TimelineStrip`** (§7.3), synced with the same
 `Transport`: `Session.signal()` (Slice 6) is resolved once per lane-add and
-cached (`_timeline_series_cache`) -- an O(ticks) pass on every render would
+cached (`_signal_series_cache`) -- an O(ticks) pass on every render would
 make the strip the render loop's own bottleneck -- and `render/timeline.py`
 rasterises with zero-margin per-lane axes (`fig.add_axes`, the same trick
 `render/bev.py`'s single axes uses) so click-to-seek's pixel-to-tick
@@ -81,8 +81,19 @@ from a resolved value's type would silently misclassify a protobuf enum);
 `Workspace.tabs[1:]` parse and validate but nothing applies them yet, a
 gap `view/workspace.py`'s own docstring names rather than hides. `View >
 Reset Layout` restores `_default_layout_state`, captured once before any
-user-saved state is overlaid, byte for byte. Plots and measure remain
-later slices; none of this changes the module's shape
+user-saved state is overlaid, byte for byte. **Slice 10 adds `PlotPanel`**
+(§7.4) -- unlike `TimelineStrip` (one, fixed), a user opens *several*
+(`Plots` menu, `_on_add_plot`), each its own `PlotState`
+(`timeseries`/`xy`/`state`/`distribution`). `timeseries`/`state` reuse
+`render/timeline.render_timeline` directly (one rendering path, not two,
+for lanes that look identical whether they live in the strip or a plot)
+and so inherit its exact click-to-seek; `xy`/`distribution` get their own
+`render/plots.py` functions and a plain, non-interactive label -- their
+axes are scaled to the data, not a fixed range, so the same exact inverse
+does not carry over. `_signal_series_cache` (renamed from
+`_timeline_series_cache`) is shared by the strip and every plot panel, so
+the same address requested by both never resolves twice. Measure remains
+a later slice; none of this changes the module's shape
 (`sim_visualization_spec.md` §11.1's own "a new panel type registers
 itself... the shell does not change").
 """
@@ -103,11 +114,13 @@ from adas_sim.core.runner import (
 )
 from adas_sim.core.session import Session
 from adas_sim.render.bev import hit_test, render_scene, scene_bounds_m
+from adas_sim.render.plots import render_distribution, render_xy
 from adas_sim.render.theme import Theme
 from adas_sim.render.timeline import px_to_tick, render_timeline
 from adas_sim.scene.types import Layer, Scene
 from adas_sim.view.inspector import InspectorState, copy_as_text
 from adas_sim.view.layers import LayerTreeState
+from adas_sim.view.plots import PlotState
 from adas_sim.view.timeline import TimelineState, event_markers
 from adas_sim.view.transport import Transport
 from adas_sim.view.viewport import DEFAULT_PRESETS, Viewport
@@ -597,6 +610,62 @@ class TimelineStrip(QtWidgets.QDockWidget):
         self.seek_requested.emit(px_to_tick(x, self.size_px, self._head_tick))
 
 
+#: Fixed, same simplification `_TIMELINE_SIZE_PX` already makes.
+_PLOT_SIZE_PX = (500, 300)
+
+
+def _numeric_series(series: tuple) -> tuple:
+    """`xy`/`distribution` (`render/plots.py`) plot real numbers -- a
+    resolved value that isn't one (raw bytes with no schema, a protobuf
+    sub-message with no field path given) is dropped rather than handed to
+    matplotlib, which would not crash but would draw silent garbage.
+    `bool` is excluded even though it is technically `int` (`True`/`False`
+    are not points on a numeric axis)."""
+    return tuple((t, v) for t, v in series if isinstance(v, (int, float)) and not isinstance(v, bool))
+
+
+class PlotPanel(QtWidgets.QDockWidget):
+    """One plot panel (`sim_visualization_spec.md` §7.4) -- unlike the one
+    fixed `TimelineStrip`, a user opens **several** of these
+    (`MainWindow._on_add_plot`), each with its own `PlotState`.
+    `timeseries`/`state` reuse `_ClickableImageLabel` for click-to-seek,
+    the same exact pixel-to-tick inverse `TimelineStrip` has (`§7.3`'s
+    lane drawing, shared via `render/timeline.render_timeline`); `xy`/
+    `distribution` use a plain, non-interactive `QLabel` -- their axes are
+    scaled to the data, not click-seekable (`render/plots.py`'s own
+    docstring)."""
+
+    seek_requested = QtCore.Signal(int)
+
+    def __init__(self, state: PlotState, panel_id: int, parent: QtWidgets.QWidget | None = None) -> None:
+        super().__init__(f"Plot: {state.kind} #{panel_id}", parent)
+        self.setObjectName(f"dock.plot.{panel_id}")
+        self.state = state
+        self.size_px = _PLOT_SIZE_PX
+        self._head_tick = 0
+        if state.kind in ("timeseries", "state"):
+            label = _ClickableImageLabel()
+            label.clicked.connect(self._on_clicked)
+            self._label = label
+        else:
+            self._label = QtWidgets.QLabel()
+        self._label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.setWidget(self._label)
+
+    def show_frame(self, frame: np.ndarray) -> None:
+        frame = np.ascontiguousarray(frame)
+        height, width, _channels = frame.shape
+        image = QtGui.QImage(frame.data, width, height, width * 3, QtGui.QImage.Format.Format_RGB888)
+        self._label.setPixmap(QtGui.QPixmap.fromImage(image))
+
+    def pixmap(self) -> QtGui.QPixmap:
+        return self._label.pixmap()
+
+    def _on_clicked(self, x: float, y: float, modifiers: QtCore.Qt.KeyboardModifiers) -> None:
+        del y, modifiers
+        self.seek_requested.emit(px_to_tick(x, self.size_px, self._head_tick))
+
+
 class MainWindow(QtWidgets.QMainWindow):
     """Vantage's window (`sim_player.md` names the application). A
     **dockable peer-panel grid** (`sim_visualization_spec.md` §11.1) -- today
@@ -646,11 +715,16 @@ class MainWindow(QtWidgets.QMainWindow):
         #: address -> resolved (tick_index, value) series -- resolved once
         #: per lane-add, never per render (`Session.signal` is an O(ticks)
         #: pass; re-resolving on every tick, e.g. during playback, would
-        #: make the strip the render loop's actual bottleneck).
-        self._timeline_series_cache: dict[str, tuple] = {}
+        #: make the strip/a plot panel the render loop's actual bottleneck).
+        #: Shared between `TimelineStrip` and every `PlotPanel` -- the same
+        #: address requested by both never resolves twice (`NR-SIM-8`: one
+        #: resolver, five consumers, extended to "one cache").
+        self._signal_series_cache: dict[str, tuple] = {}
         self.timeline_strip = TimelineStrip(self.timeline_state, self)
         self.addDockWidget(QtCore.Qt.DockWidgetArea.BottomDockWidgetArea, self.timeline_strip)
         self.timeline_strip.seek_requested.connect(self._on_timeline_seek)
+
+        self.plot_panels: list[PlotPanel] = []
 
         self._clear_selection_shortcut = QtGui.QShortcut(QtGui.QKeySequence("Esc"), self)
         self._clear_selection_shortcut.activated.connect(self._on_clear_selection)
@@ -685,6 +759,11 @@ class MainWindow(QtWidgets.QMainWindow):
         timeline_menu.addAction("Add state lane...").triggered.connect(
             functools.partial(self._on_add_timeline_lane, is_state=True))
         timeline_menu.addAction("Add bookmark at cursor").triggered.connect(self._on_add_bookmark)
+
+        plots_menu = self.menuBar().addMenu("&Plots")
+        for kind in ("timeseries", "xy", "state", "distribution"):
+            plots_menu.addAction(f"Add {kind} plot...").triggered.connect(
+                functools.partial(self._on_add_plot, kind))
 
         view_menu.addSeparator()
         view_menu.addAction("Reset Layout").triggered.connect(self._on_reset_layout)
@@ -753,7 +832,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.transport = Transport(session, self._advance_for_transport, head_tick=len(session) - 1)
         self.transport.goto(0)
         self.transport_bar.bind(self.transport)
-        self._timeline_series_cache.clear()  # stale values from a previous session, if any
+        self._signal_series_cache.clear()  # stale values from a previous session, if any
         self.timeline_strip._head_tick = self.transport.head_tick
         self._apply_workspace_timeline_signals()
         self.statusBar().showMessage(f"loaded {session.name} -- {len(session)} ticks", 5000)
@@ -862,6 +941,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.inspector_panel.sync(visible_scene, self._selection)
         self._rerender_timeline()
+        self._rerender_plots()
 
     def _rerender_timeline(self) -> None:
         """Redraws the strip at the current playhead -- cheap: every
@@ -869,10 +949,10 @@ class MainWindow(QtWidgets.QMainWindow):
         so this is rasterising, not re-resolving (§7.3's "synced strip")."""
         if self.transport is None:
             return
-        signal_data = {addr: self._timeline_series_cache[addr] for addr in self.timeline_state.signal_lanes()
-                       if addr in self._timeline_series_cache}
-        state_data = {addr: self._timeline_series_cache[addr] for addr in self.timeline_state.state_lanes()
-                      if addr in self._timeline_series_cache}
+        signal_data = {addr: self._signal_series_cache[addr] for addr in self.timeline_state.signal_lanes()
+                       if addr in self._signal_series_cache}
+        state_data = {addr: self._signal_series_cache[addr] for addr in self.timeline_state.state_lanes()
+                      if addr in self._signal_series_cache}
         markers = {addr: event_markers(series) for addr, series in state_data.items()}
         bookmark_ticks = tuple(b.tick_index for b in self.timeline_state.bookmarks())
         self.timeline_strip._head_tick = self.transport.head_tick
@@ -899,7 +979,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         if not ok or not address:
             return
-        self._timeline_series_cache[address] = self._session.signal(address, project=self._project)
+        self._signal_series_cache[address] = self._session.signal(address, project=self._project)
         self.timeline_state.add_state_lane(address) if is_state else self.timeline_state.add_signal_lane(address)
         self._rerender_timeline()
 
@@ -915,11 +995,88 @@ class MainWindow(QtWidgets.QMainWindow):
         all_markers = [
             marker
             for addr in self.timeline_state.state_lanes()
-            for marker in event_markers(self._timeline_series_cache.get(addr, ()))
+            for marker in event_markers(self._signal_series_cache.get(addr, ()))
         ]
         target = self.timeline_state.jump_to_event(self.transport.cursor, direction, all_markers)
         if target is not None:
             self._on_timeline_seek(target)
+
+    def _ensure_signal_cached(self, address: str) -> None:
+        if self._session is not None and address not in self._signal_series_cache:
+            self._signal_series_cache[address] = self._session.signal(address, project=self._project)
+
+    def _on_add_plot(self, kind: str) -> None:
+        """A user opens **several** plot panels (`§7.4`), unlike the one
+        fixed timeline strip -- one dialog collects a comma-separated
+        address list, its meaning depending on `kind`
+        (`view/plots.PlotState`'s own kind-gating: lanes for `timeseries`/
+        `state`, exactly x[,y[,color]] for `xy`, one address for
+        `distribution`)."""
+        if self._session is None:
+            return
+        prompts = {
+            "timeseries": "Comma-separated signal addresses (one lane each):",
+            "state": "Comma-separated state addresses (one lane each):",
+            "xy": "x_address,y_address[,color_address]:",
+            "distribution": "One signal address:",
+        }
+        text, ok = QtWidgets.QInputDialog.getText(self, f"Add {kind} plot", prompts[kind])
+        if not ok:
+            return
+        addresses = [a.strip() for a in text.split(",") if a.strip()]
+        if not addresses or (kind == "xy" and len(addresses) < 2):
+            return
+        state = PlotState(kind)
+        if kind in ("timeseries", "state"):
+            for address in addresses:
+                self._ensure_signal_cached(address)
+                state.add_lane(address)
+        elif kind == "xy":
+            for address in addresses[:3]:
+                self._ensure_signal_cached(address)
+            state.set_xy(addresses[0], addresses[1], addresses[2] if len(addresses) > 2 else None)
+        else:  # distribution
+            self._ensure_signal_cached(addresses[0])
+            state.set_distribution(addresses[0])
+
+        panel = PlotPanel(state, len(self.plot_panels) + 1, self)
+        self.addDockWidget(QtCore.Qt.DockWidgetArea.BottomDockWidgetArea, panel)
+        panel.seek_requested.connect(self._on_timeline_seek)
+        self.plot_panels.append(panel)
+        self._rerender_plot(panel)
+
+    def _rerender_plot(self, panel: PlotPanel) -> None:
+        if self.transport is None:
+            return
+        panel._head_tick = self.transport.head_tick
+        state = panel.state
+        if state.kind in ("timeseries", "state"):
+            signal_data: dict[str, tuple] = {}
+            state_data: dict[str, tuple] = {}
+            target = signal_data if state.kind == "timeseries" else state_data
+            for address in state.lanes():
+                target[address] = self._signal_series_cache.get(address, ())
+            markers = {addr: event_markers(series) for addr, series in state_data.items()}
+            frame = render_timeline(
+                signal_series=signal_data, state_series=state_data, markers=markers,
+                bookmark_ticks=(), current_tick=self.transport.cursor,
+                head_tick=self.transport.head_tick, size_px=panel.size_px,
+            )
+        elif state.kind == "xy":
+            x_series = _numeric_series(self._signal_series_cache.get(state.x, ()))
+            y_series = _numeric_series(self._signal_series_cache.get(state.y, ()))
+            color_series = _numeric_series(self._signal_series_cache[state.color]) if state.color else None
+            frame = render_xy(x_series, y_series, color_series, self.transport.cursor, panel.size_px)
+        else:  # distribution
+            series = self._signal_series_cache.get(state.address, ())
+            values = tuple(v for _, v in _numeric_series(series))
+            current = dict(_numeric_series(series)).get(self.transport.cursor)
+            frame = render_distribution(values, current, panel.size_px)
+        panel.show_frame(frame)
+
+    def _rerender_plots(self) -> None:
+        for panel in self.plot_panels:
+            self._rerender_plot(panel)
 
     def _on_bev_clicked(self, x: float, y: float, modifiers: QtCore.Qt.KeyboardModifiers) -> None:
         """§7.1: click to select, `Ctrl`+click to toggle membership. Hit-tests
@@ -1042,8 +1199,8 @@ class MainWindow(QtWidgets.QMainWindow):
             if view.panel != "timeline":
                 continue
             for address in view.signals:
-                if address not in self._timeline_series_cache:
-                    self._timeline_series_cache[address] = self._session.signal(address, project=self._project)
+                if address not in self._signal_series_cache:
+                    self._signal_series_cache[address] = self._session.signal(address, project=self._project)
                 self.timeline_state.add_signal_lane(address)
 
     def _on_reset_layout(self) -> None:

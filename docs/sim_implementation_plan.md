@@ -1436,10 +1436,43 @@ closing `UT-B3-12`; `UT-B3-11` gets a scoped precursor, see its own
 checklist note above). `scripts\check_invariants.py` and `python
 docs/py/run_all.py`: both clean.
 
-Plots and measure remain later, not-yet-started slices of this same
-stage; none of this changes `MainWindow`'s shape (visualization spec
-§11.1's own "a new panel type registers itself... the shell does not
-change").
+**Slice 10 (plot panels) DONE 2026-07-30.** §7.4's pluggable analysis
+surface -- `timeseries` / `xy` / `state` / `distribution`. `view/plots.py`'s
+`PlotState` is kind-gated at construction (`add_lane` only for
+`timeseries`/`state`, `set_xy` only for `xy`, `set_distribution` only for
+`distribution` -- each raises `AuthoringError` naming the mismatch, so a
+caller cannot build a nonsensical panel). **`timeseries`/`state` reuse
+`render/timeline.render_timeline` directly, not a second implementation**
+-- a plot's lanes are drawn exactly like the strip's, which is what "one
+address space... timeline, plot panels..." (`NR-SIM-8`) means as a
+*rendering* claim, not just a resolver one; they inherit its exact
+click-to-seek for free. `xy`/`render_plots.render_xy` pairs two series by
+tick index (both resolved from the same session, so their indices already
+match), optionally colours by a third, and highlights the current tick's
+own point; `distribution` histograms a signal's values over the whole
+session (a scenario-*set* distribution is Campaign territory, `S-D`, out
+of a single `Session`'s scope, not built here). Neither has a time axis,
+so neither is click-seekable -- a real, documented gap
+(`render/plots.py`'s own docstring), not silently missing. `MainWindow`
+gained `_numeric_series` (drops a non-numeric resolved value -- raw bytes
+with no schema, a sub-message with no field path -- rather than handing
+it to matplotlib, which would not crash but would draw silent garbage);
+**found by a test, not by design review**: the first `xy`/`distribution`
+wiring used `_signal_series_cache` unfiltered and only `distribution`
+happened to filter, an inconsistency a real matplotlib warning (`Glyph ...
+missing`, from plotting raw bytes as if numeric) surfaced immediately.
+`_signal_series_cache` (renamed from `_timeline_series_cache`, Slice 8) is
+now genuinely shared -- closing `UT-B3-6` for real: the same address added
+to both the strip and a plot resolves to the literal same cached tuple
+(`is`, not just `==`). `pytest modules\sim\tests -q`: **277 passed** (253
+from Slice 9 + 24 new: 9 in `test_b3_plots.py`, 7 in
+`test_b3_plots_render.py`, 9 in `tests/system/test_b3_plots_wiring.py`,
+closing `UT-B3-6`/`UT-B3-7`/`UT-B3-8`/`UT-B3-9`). `scripts\check_invariants.py`
+and `python docs/py/run_all.py`: both clean.
+
+Measure remains a later, not-yet-started slice of this same stage; none of
+this changes `MainWindow`'s shape (visualization spec §11.1's own "a new
+panel type registers itself... the shell does not change").
 
 **Must not.**
 - **Run pass 1 on the GUI thread.** Building a `Session` blocks for as long as
@@ -1490,7 +1523,7 @@ change").
       same resolver headless; `core/` is where both can depend on it in the
       normal direction rather than `check/` importing something named
       `view/`
-- [ ] `view/plots.py` — `timeseries` / `xy` / `state` / `distribution` panels
+- [x] `view/plots.py` — `timeseries` / `xy` / `state` / `distribution` panels
       over that resolver
 - [ ] `view/measure.py` — ruler with snap, range rings, cursor readout carrying
       the **frame name**, persistent annotations
@@ -1509,20 +1542,19 @@ change").
       anchor within the threshold
 - [ ] `UT-B3-5` stale banner appears exactly when `valid == 0` or the port's age
       exceeds its declared maximum
-- [ ] `UT-B3-6` one signal string resolves identically for the timeline strip
+- [x] `UT-B3-6` one signal string resolves identically for the timeline strip
       and a plot panel; a **raw port field needs no registration** at all.
-      **Scoped precursor landed in Slice 6** (`tests/unit/test_b3_signals.py`):
-      the resolver itself, and "no registration for a raw field", both
-      proven directly against `core/signals.resolve_tick`/`resolve_series`.
-      `view/timeline.py` (Slice 8) now calls `Session.signal` too, the same
-      one call every consumer uses (`NR-SIM-8`); the "identically for X and
-      Y" half still waits on `view/plots.py` existing to compare against
-- [ ] `UT-B3-7` a `timeseries` lane with two signals of different magnitude
+      Closed in Slice 10: `_signal_series_cache` is shared by `TimelineStrip`
+      and every `PlotPanel`, so the same address resolves to the literal
+      same cached tuple (`is`, not just `==`) for both
+- [x] `UT-B3-7` a `timeseries` lane with two signals of different magnitude
       creates **two lanes**; a single lane with two y-scales is rejected —
       a dual-axis plot is the most reliable way to make two signals look
-      correlated when they are not
-- [ ] `UT-B3-8` `xy` panel plots signal-vs-signal; colouring by a third works
-- [ ] `UT-B3-9` playhead is shared — seeking in a plot moves the BEV and the
+      correlated when they are not. `PlotState.add_lane` never merges two
+      addresses into one lane, same as `TimelineState` — the mistake this
+      bans is not representable, not merely rejected at run time
+- [x] `UT-B3-8` `xy` panel plots signal-vs-signal; colouring by a third works
+- [x] `UT-B3-9` playhead is shared — seeking in a plot moves the BEV and the
       timeline to the same tick
 - [x] `UT-B3-10` panel grid: open/close/split/tab/float; a saved layout restores
 - [ ] `UT-B3-11` a component's `workspace.yaml` opens its declared tabs, splits

@@ -102,7 +102,7 @@ def test_add_signal_lane_via_the_menu_dialog_resolves_and_caches(tmp_path, monke
     window._on_add_timeline_lane(is_state=False)
 
     assert window.timeline_state.signal_lanes() == ("test.state",)
-    assert window._timeline_series_cache["test.state"] == tuple(
+    assert window._signal_series_cache["test.state"] == tuple(
         (i, _STATE_BY_TICK[i]) for i in range(_TICK_COUNT)
     )
 
