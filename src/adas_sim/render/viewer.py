@@ -50,11 +50,22 @@ mode, jump to a `DEFAULT_PRESETS` entry) since they need the current Scene
 or session, which `BevPanel` itself does not hold. Follow mode is real,
 cyclable `Viewport` state with **no rendering effect yet** -- a documented
 gap, not an oversight (see `_on_cycle_follow_mode`'s own docstring).
-Timeline, plots and measure remain later slices; the scrub bar
-(`view/transport.py`'s `Transport`, already built and tested in `S-B2`,
-still unwired to any panel) is next. None of this changes the module's
-shape (`sim_visualization_spec.md` §11.1's own "a new panel type registers
-itself... the shell does not change").
+**Slice 7b wires `Transport` (§5) into `TransportBar`**, a fixed toolbar,
+not a dock (§11.1 lists the scrub bar alongside "the menu and the keymap",
+not the panels a user rearranges). `Transport` itself (`view/transport.py`)
+was already built and fully tested in `S-B2`; this slice is the Qt binding
+-- play/pause/step/speed/loop/goto, `Space`/`←`/`→`/`Shift+→`/`L`, and a
+`QTimer` whose interval is recomputed every tick from that tick's own
+`dt_ns / speed` (ticks need not be equally spaced). `head_tick` is pinned
+to the session's last tick at load (the whole recording is already in
+memory, so nothing is ever actually "advanced" -- `_advance_for_transport`
+exists only to satisfy `Transport`'s constructor and is provably
+unreachable); `Transport.__init__` starts `cursor` at `head_tick`, which is
+right for a live SUT ("head" is "where execution is now") but wrong for
+opening a recording for review, so `_on_loaded` calls `goto(0)` before
+binding. Timeline, plots and measure remain later slices; none of this
+changes the module's shape (`sim_visualization_spec.md` §11.1's own "a new
+panel type registers itself... the shell does not change").
 """
 
 from __future__ import annotations
@@ -77,6 +88,7 @@ from adas_sim.render.theme import Theme
 from adas_sim.scene.types import Layer, Scene
 from adas_sim.view.inspector import InspectorState, copy_as_text
 from adas_sim.view.layers import LayerTreeState
+from adas_sim.view.transport import Transport
 from adas_sim.view.viewport import DEFAULT_PRESETS, Viewport
 
 _CHECK_STATES = {
@@ -395,6 +407,132 @@ class InspectorPanel(QtWidgets.QDockWidget):
             QtWidgets.QApplication.clipboard().setText(copy_as_text(entry))
 
 
+#: `0.1x` .. `8x` (`sim_visualization_spec.md` §5's own table); "as fast as
+#: it renders" is what `_MAX_SPEED` already means once the render loop, not
+#: the timer interval, is the bottleneck -- no separate mode needed for it.
+_SPEEDS = (0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0)
+
+
+class TransportBar(QtWidgets.QToolBar):
+    """The scrub bar (`sim_visualization_spec.md` §5) -- framework chrome,
+    not a peer dock: §11.1 lists "the scrub bar, the timeline strip, the
+    menu and the keymap" separately from the docks a user rearranges, so
+    this is a fixed, non-floatable, non-closable toolbar rather than a
+    `QDockWidget`.
+
+    Owns no `Transport` of its own -- `bind()` attaches one once a session
+    has loaded (nothing is scrubbable before that); every action here reads
+    and mutates the bound `Transport` directly and emits `changed`, which
+    is `MainWindow`'s cue to re-render and re-sync (`GT-9`: this class
+    arranges and dispatches, `view/transport.Transport` already holds every
+    decision -- head/review-mode, clamping, resume-eligibility)."""
+
+    changed = QtCore.Signal()
+
+    def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
+        super().__init__("Transport", parent)
+        self.setObjectName("toolbar.transport")
+        self.setMovable(False)
+        self.setFloatable(False)
+        self._transport: Transport | None = None
+        self._updating = False
+
+        style = self.style()
+        self._play_action = self.addAction(
+            style.standardIcon(QtWidgets.QStyle.StandardPixmap.SP_MediaPlay), "Play/pause")
+        self._play_action.triggered.connect(self.toggle_play_pause)
+        self.addAction(
+            style.standardIcon(QtWidgets.QStyle.StandardPixmap.SP_MediaSkipBackward), "Step back",
+        ).triggered.connect(lambda: self.step(-1))
+        self.addAction(
+            style.standardIcon(QtWidgets.QStyle.StandardPixmap.SP_MediaSkipForward), "Step forward",
+        ).triggered.connect(lambda: self.step(1))
+
+        self._slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self._slider.setMinimum(0)
+        self._slider.valueChanged.connect(self._on_slider_moved)
+        self.addWidget(self._slider)
+
+        self._tick_label = QtWidgets.QLabel("tick 0/0")
+        self.addWidget(self._tick_label)
+
+        self._speed_box = QtWidgets.QComboBox()
+        for speed in _SPEEDS:
+            self._speed_box.addItem(f"{speed:g}x", speed)
+        self._speed_box.setCurrentIndex(_SPEEDS.index(1.0))
+        self._speed_box.currentIndexChanged.connect(self._on_speed_changed)
+        self.addWidget(self._speed_box)
+
+        self.addAction("Loop start").triggered.connect(self._on_set_loop_start)
+        self.addAction("Loop end").triggered.connect(self._on_set_loop_end)
+        self._loop_action = self.addAction("Loop")
+        self._loop_action.setCheckable(True)
+
+    def bind(self, transport: Transport) -> None:
+        self._transport = transport
+        self.sync()
+
+    @property
+    def loop_active(self) -> bool:
+        return self._loop_action.isChecked()
+
+    def sync(self) -> None:
+        """Reflects the bound `Transport`'s current state. Blocks the
+        slider's own signal while setting it, so a programmatic sync can
+        never recurse into `_on_slider_moved` (which would re-`goto()` and
+        re-emit `changed`)."""
+        if self._transport is None:
+            return
+        self._updating = True
+        self._slider.setMaximum(max(0, self._transport.head_tick))
+        self._slider.setValue(self._transport.cursor)
+        self._updating = False
+        self._tick_label.setText(f"tick {self._transport.cursor}/{self._transport.head_tick}")
+        icon = QtWidgets.QStyle.StandardPixmap.SP_MediaPause if self._transport.playing \
+            else QtWidgets.QStyle.StandardPixmap.SP_MediaPlay
+        self._play_action.setIcon(self.style().standardIcon(icon))
+
+    def toggle_play_pause(self) -> None:
+        if self._transport is None:
+            return
+        self._transport.pause() if self._transport.playing else self._transport.play()
+        self.sync()
+        self.changed.emit()
+
+    def step(self, n: int) -> None:
+        if self._transport is None:
+            return
+        self._transport.step_forward(n) if n > 0 else self._transport.step_back(-n)
+        self.sync()
+        self.changed.emit()
+
+    def toggle_loop(self) -> None:
+        self._loop_action.setChecked(not self._loop_action.isChecked())
+
+    def _on_slider_moved(self, value: int) -> None:
+        if self._updating or self._transport is None:
+            return
+        self._transport.goto(value)
+        self.sync()
+        self.changed.emit()
+
+    def _on_speed_changed(self, index: int) -> None:
+        if self._transport is not None:
+            self._transport.speed = self._speed_box.itemData(index)
+
+    def _on_set_loop_start(self) -> None:
+        if self._transport is None:
+            return
+        end = self._transport.loop_marks[1] if self._transport.loop_marks else self._transport.cursor
+        self._transport.loop_marks = (self._transport.cursor, max(end, self._transport.cursor))
+
+    def _on_set_loop_end(self) -> None:
+        if self._transport is None:
+            return
+        start = self._transport.loop_marks[0] if self._transport.loop_marks else self._transport.cursor
+        self._transport.loop_marks = (min(start, self._transport.cursor), self._transport.cursor)
+
+
 class MainWindow(QtWidgets.QMainWindow):
     """Vantage's window (`sim_player.md` names the application). A
     **dockable peer-panel grid** (`sim_visualization_spec.md` §11.1) -- today
@@ -413,6 +551,9 @@ class MainWindow(QtWidgets.QMainWindow):
         #: pick_ids (`sim_visualization_spec.md` §7.1) -- persists across
         #: ticks by construction: nothing here is tick-indexed.
         self._selection: frozenset[str] = frozenset()
+        self.transport: Transport | None = None
+        self._playback_timer = QtCore.QTimer(self)
+        self._playback_timer.timeout.connect(self._on_playback_tick)
 
         self.bev = BevPanel(self)
         self.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, self.bev)
@@ -432,12 +573,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self._clear_selection_shortcut = QtGui.QShortcut(QtGui.QKeySequence("Esc"), self)
         self._clear_selection_shortcut.activated.connect(self._on_clear_selection)
 
-        self._viewport_shortcuts: list[QtGui.QShortcut] = []
-        self._add_viewport_shortcut("F", self._on_fit_to_content)
-        self._add_viewport_shortcut("0", self._on_reset_viewport)
-        self._add_viewport_shortcut("R", self._on_cycle_follow_mode)
+        self.transport_bar = TransportBar(self)
+        self.addToolBar(QtCore.Qt.ToolBarArea.BottomToolBarArea, self.transport_bar)
+        self.transport_bar.changed.connect(self._on_transport_changed)
+
+        self._shortcuts: list[QtGui.QShortcut] = []
+        self._add_shortcut("F", self._on_fit_to_content)
+        self._add_shortcut("0", self._on_reset_viewport)
+        self._add_shortcut("R", self._on_cycle_follow_mode)
         for digit, preset_name in enumerate(sorted(DEFAULT_PRESETS), start=1):
-            self._add_viewport_shortcut(str(digit), functools.partial(self._on_jump_to_preset, preset_name))
+            self._add_shortcut(str(digit), functools.partial(self._on_jump_to_preset, preset_name))
+        self._add_shortcut("Space", self.transport_bar.toggle_play_pause)
+        self._add_shortcut("Right", functools.partial(self.transport_bar.step, 1))
+        self._add_shortcut("Left", functools.partial(self.transport_bar.step, -1))
+        self._add_shortcut("Shift+Right", functools.partial(self.transport_bar.step, 10))
+        self._add_shortcut("L", self.transport_bar.toggle_loop)
 
         view_menu = self.menuBar().addMenu("&View")
         view_menu.addAction(self.bev.toggleViewAction())
@@ -493,8 +643,70 @@ class MainWindow(QtWidgets.QMainWindow):
         self._scene_cache = SceneCache(self._build_scene_for_cache, build_reactive=self._build_reactive_for_cache)
         self._stop_thread()
         self.layers_state.load(layers_state_path(self._project, session.meta.pipeline))
+        # head_tick pinned to the last tick: the whole recording is already
+        # loaded (pass 1 already ran), so there is nothing left to "execute"
+        # -- `_advance_for_transport` exists only to satisfy Transport's
+        # contract and is provably never called (see its own docstring).
+        # `Transport.__init__` starts `cursor` at `head_tick` (right, for a
+        # live SUT: "head" is "where execution is now") -- explicitly
+        # `goto(0)` so a freshly opened recording starts at its beginning,
+        # matching `render_tick(0)` below, not its end.
+        self.transport = Transport(session, self._advance_for_transport, head_tick=len(session) - 1)
+        self.transport.goto(0)
+        self.transport_bar.bind(self.transport)
         self.statusBar().showMessage(f"loaded {session.name} -- {len(session)} ticks", 5000)
         self.render_tick(0)
+
+    def _advance_for_transport(self, n: int, on_progress: Callable[[int, int], None], cancel: object) -> int:
+        """`Transport`'s stand-in for a real SUT's `exec()` loop
+        (`view/transport.py`'s own docstring) -- unreachable here: `goto`/
+        `step_forward` only call it for a target beyond `head_tick`, and
+        `head_tick` is pinned to `len(session) - 1` in `_on_loaded`, so no
+        target can ever exceed it. Kept only because `Transport.__init__`
+        requires a callable."""
+        del on_progress, cancel
+        return min((self.transport.head_tick if self.transport else 0) + n, len(self._session) - 1)
+
+    def _on_transport_changed(self) -> None:
+        """`TransportBar.changed` -- a step, a slider drag, or play/pause
+        toggling. `TransportBar` already re-synced its own widgets before
+        emitting; this only has to render the new cursor and keep the
+        playback timer's interval matching the tick it is now sitting on."""
+        if self.transport is None:
+            return
+        self.render_tick(self.transport.cursor)
+        self._sync_playback_timer()
+
+    def _sync_playback_timer(self) -> None:
+        """Restarted on every tick (not just on play/pause) because ticks
+        need not be equally spaced -- the next interval is always this
+        tick's own `dt_ns`, divided by the current speed."""
+        if self.transport is None or self._session is None:
+            self._playback_timer.stop()
+            return
+        if not self.transport.playing:
+            self._playback_timer.stop()
+            return
+        if self.transport.cursor >= self.transport.head_tick:
+            self.transport.pause()  # reached the end -- auto-pause, not a dead "still playing" state
+            self.transport_bar.sync()
+            self._playback_timer.stop()
+            return
+        dt_ns = self._session.at(self.transport.cursor).dt_ns or 50_000_000
+        interval_ms = max(1, round((dt_ns / 1e6) / max(self.transport.speed, 0.01)))
+        self._playback_timer.start(interval_ms)
+
+    def _on_playback_tick(self) -> None:
+        if self.transport is None:
+            return
+        marks = self.transport.loop_marks
+        if marks is not None and self.transport_bar.loop_active and self.transport.cursor >= marks[1]:
+            self.transport.goto(marks[0])
+        else:
+            self.transport.step_forward(1)
+        self.transport_bar.sync()
+        self.render_tick(self.transport.cursor)
+        self._sync_playback_timer()
 
     def _on_layers_changed(self) -> None:
         self.render_tick(self._current_tick)
@@ -573,10 +785,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self._selection = frozenset()
         self.render_tick(self._current_tick)
 
-    def _add_viewport_shortcut(self, key: str, slot: Callable[[], None]) -> None:
+    def _add_shortcut(self, key: str, slot: Callable[[], None]) -> None:
         shortcut = QtGui.QShortcut(QtGui.QKeySequence(key), self)
         shortcut.activated.connect(slot)
-        self._viewport_shortcuts.append(shortcut)
+        self._shortcuts.append(shortcut)
 
     def _on_bev_dragged(self, from_x: float, from_y: float, to_x: float, to_y: float) -> None:
         """§4.4: drag to pan. `_ClickableImageLabel` already tells apart a

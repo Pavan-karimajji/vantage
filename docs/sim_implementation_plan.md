@@ -1350,6 +1350,37 @@ noted rather than fixed retroactively across the other five files.
 `tests/system/test_b3_viewport_controls.py`). `scripts\check_invariants.py`
 and `python docs/py/run_all.py`: both clean.
 
+**Slice 7b (scrub bar) DONE 2026-07-30.** §5's transport toolbar.
+`view/transport.Transport` (`S-B2`, `R-SIM-17`) was already fully built and
+tested -- head/review-mode, clamping, resume-eligibility, advance-N-as-a-
+job -- with nothing in `render/viewer.py` using it; this slice is the Qt
+binding, not new state-machine logic. `TransportBar` is a fixed, non-
+floatable `QToolBar` (§11.1 lists the scrub bar next to "the menu and the
+keymap", not the docks a user rearranges), with `Space`/`←`/`→`/`Shift+→`/
+`L` shortcuts alongside its buttons/slider/speed box/loop-mark actions. A
+`QTimer` drives playback, restarted every tick (not just on play/pause)
+from that tick's own `dt_ns / speed` -- ticks need not be equally spaced.
+**Two real bugs, both found by a test, not by reasoning about the code:**
+(1) `Transport.__init__` starts `cursor` at `head_tick` -- correct for a
+live SUT ("head" is "where execution is now"), wrong for opening a
+recording for review, where `head_tick` is pinned to the *last* tick
+(everything is already loaded) and the user wants to start at the
+*first*. Every new test failed with `cursor == 9` instead of `0` on a
+10-tick fixture; fixed with an explicit `transport.goto(0)` in `_on_loaded`
+before `bind()`. (2) The loop test's own comments had the tick direction
+backwards (`_on_playback_tick` only ever steps forward or jumps to the
+in-mark; there is no "step backward during playback") -- the test's
+assumption was wrong, not the code, caught by working through the actual
+call sequence rather than trusting the comment. `head_tick` pinned to the
+last tick also makes `Transport`'s own review-mode-forbidden guard
+(`_require_not_review_mode`) **provably unreachable** in this viewer today
+(there is never a target beyond `head_tick` to require permission for) --
+correct and inert, not broken; it earns its keep once a live/resim
+consumer with a real `head_tick` that moves exists. `pytest
+modules\sim\tests -q`: **213 passed** (203 from Slice 7a + 10 new,
+`tests/system/test_b3_transport_bar.py`). `scripts\check_invariants.py` and
+`python docs/py/run_all.py`: both clean.
+
 Timeline, plots, measure and workspace loading are separate, not-yet-started
 slices of this same stage; none of them change
 `MainWindow`'s shape (visualization spec §11.1's own "a new panel type
