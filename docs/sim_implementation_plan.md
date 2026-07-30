@@ -1381,10 +1381,35 @@ modules\sim\tests -q`: **213 passed** (203 from Slice 7a + 10 new,
 `tests/system/test_b3_transport_bar.py`). `scripts\check_invariants.py` and
 `python docs/py/run_all.py`: both clean.
 
-Timeline, plots, measure and workspace loading are separate, not-yet-started
-slices of this same stage; none of them change
-`MainWindow`'s shape (visualization spec §11.1's own "a new panel type
-registers itself... the shell does not change").
+**Slice 8 (timeline strip) DONE 2026-07-30.** §7.3's synced signal strip.
+`view/timeline.py` (`TimelineState`, `event_markers`) is pure state, no
+Qt -- `event_markers` fires a marker exactly where consecutive `(tick,
+value)` pairs from a `core/signals.resolve_series` result differ
+(`UT-B3-3`), and `add_signal_lane`/`add_state_lane` never merge two
+addresses into one lane (§7.3's "never two y-scales in one lane" is
+therefore not a rule to check, but a shape the state class cannot
+represent). `render/timeline.py` renders lanes with **zero-margin,
+per-lane axes** (`fig.add_axes`, not `plt.subplots`'s default margins or
+`tight_layout()`, which are data-dependent) so `px_to_tick` -- click-to-
+seek's other half in `TimelineStrip` -- is an *exact* inverse of what was
+drawn, the same "one path" reasoning `render/bev.py`'s `hit_test` already
+uses for the BEV, rather than a documented approximation. `MainWindow`
+resolves a lane's series **once**, on add (`_on_add_timeline_lane`, behind
+a `QInputDialog` prompting for a `NR-SIM-8` address), and caches it --
+`Session.signal` is an O(ticks) pass, so re-resolving on every
+`render_tick` (every single tick during playback) would have made the
+strip the render loop's own bottleneck; only the raster is redone per
+tick. `[`/`]` (§5's own "jump to event") walk `TimelineState.jump_to_event`
+over every state lane's markers plus bookmarks. `pytest
+modules\sim\tests -q`: **238 passed** (213 from Slice 7b + 25 new: 10 in
+`test_b3_timeline.py`, 7 in `test_b3_timeline_render.py`, 8 in `tests/
+system/test_b3_timeline_strip.py`, closing `UT-B3-3`).
+`scripts\check_invariants.py` and `python docs/py/run_all.py`: both clean.
+
+Plots and measure remain later slices, and workspace loading (deferred
+earlier pending a real panel to fall back to) is now unblocked; none of
+this changes `MainWindow`'s shape (visualization spec §11.1's own "a new
+panel type registers itself... the shell does not change").
 
 **Must not.**
 - **Run pass 1 on the GUI thread.** Building a `Session` blocks for as long as
@@ -1419,7 +1444,7 @@ registers itself... the shell does not change").
       mouse move does not invalidate the whole scene (viz §7.5)
 - [x] `view/inspector.py` — docked, declared fields, pin, multi-select,
       copy-as-text
-- [ ] `view/timeline.py` — signal lanes (one scale per lane), state lanes with
+- [x] `view/timeline.py` — signal lanes (one scale per lane), state lanes with
       labels, event markers, bookmarks, click-to-seek
 - [x] `view/signals.py` — the **one signal resolver** (viz §7.4):
       `<component>.<port>.<field>` · `source.*` · `truth.*` · `derived.*`. Raw
@@ -1444,7 +1469,7 @@ registers itself... the shell does not change").
       round-trips
 - [x] `UT-B3-2` inspector resolves a `pick_id` to its provider's declared fields;
       an entity that disappears is **dropped, not shown stale**
-- [ ] `UT-B3-3` timeline: a state lane emits an event marker at every transition
+- [x] `UT-B3-3` timeline: a state lane emits an event marker at every transition
       and only there
 - [ ] `UT-B3-4` ruler distance/dx/dy/bearing correct; snap picks the nearest
       anchor within the threshold
@@ -1454,9 +1479,10 @@ registers itself... the shell does not change").
       and a plot panel; a **raw port field needs no registration** at all.
       **Scoped precursor landed in Slice 6** (`tests/unit/test_b3_signals.py`):
       the resolver itself, and "no registration for a raw field", both
-      proven directly against `core/signals.resolve_tick`/`resolve_series`;
-      the "identically for X and Y" half waits on `view/timeline.py`/
-      `view/plots.py` existing to compare
+      proven directly against `core/signals.resolve_tick`/`resolve_series`.
+      `view/timeline.py` (Slice 8) now calls `Session.signal` too, the same
+      one call every consumer uses (`NR-SIM-8`); the "identically for X and
+      Y" half still waits on `view/plots.py` existing to compare against
 - [ ] `UT-B3-7` a `timeseries` lane with two signals of different magnitude
       creates **two lanes**; a single lane with two y-scales is rejected —
       a dual-axis plot is the most reliable way to make two signals look

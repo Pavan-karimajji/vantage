@@ -63,7 +63,14 @@ exists only to satisfy `Transport`'s constructor and is provably
 unreachable); `Transport.__init__` starts `cursor` at `head_tick`, which is
 right for a live SUT ("head" is "where execution is now") but wrong for
 opening a recording for review, so `_on_loaded` calls `goto(0)` before
-binding. Timeline, plots and measure remain later slices; none of this
+binding. **Slice 8 adds `TimelineStrip`** (§7.3), synced with the same
+`Transport`: `Session.signal()` (Slice 6) is resolved once per lane-add and
+cached (`_timeline_series_cache`) -- an O(ticks) pass on every render would
+make the strip the render loop's own bottleneck -- and `render/timeline.py`
+rasterises with zero-margin per-lane axes (`fig.add_axes`, the same trick
+`render/bev.py`'s single axes uses) so click-to-seek's pixel-to-tick
+inverse is exact, not approximate. `[`/`]` jump to the nearest state-lane
+transition or bookmark. Plots and measure remain later slices; none of this
 changes the module's shape (`sim_visualization_spec.md` §11.1's own "a new
 panel type registers itself... the shell does not change").
 """
@@ -85,9 +92,11 @@ from adas_sim.core.runner import (
 from adas_sim.core.session import Session
 from adas_sim.render.bev import hit_test, render_scene, scene_bounds_m
 from adas_sim.render.theme import Theme
+from adas_sim.render.timeline import px_to_tick, render_timeline
 from adas_sim.scene.types import Layer, Scene
 from adas_sim.view.inspector import InspectorState, copy_as_text
 from adas_sim.view.layers import LayerTreeState
+from adas_sim.view.timeline import TimelineState, event_markers
 from adas_sim.view.transport import Transport
 from adas_sim.view.viewport import DEFAULT_PRESETS, Viewport
 
@@ -533,6 +542,48 @@ class TransportBar(QtWidgets.QToolBar):
         self._transport.loop_marks = (min(start, self._transport.cursor), self._transport.cursor)
 
 
+#: Fixed, not the widget's real size -- same simplification `BevPanel.viewport`
+#: already makes (`Viewport.size_px` is not yet synced to a live resize either,
+#: Slice 7a's own documented gap); a later slice fixes both together.
+_TIMELINE_SIZE_PX = (900, 160)
+
+
+class TimelineStrip(QtWidgets.QDockWidget):
+    """The synced signal strip (`sim_visualization_spec.md` §7.3), always
+    under the BEV. Reuses `_ClickableImageLabel` for click-to-seek (its
+    `dragged`/`zoomed` signals are simply not connected to anything here --
+    a strip is seek-only, no pan/zoom of its own). Resolution, lane
+    bookkeeping and event-marker detection all live in `view/timeline.py`/
+    `core/signals.py`; this class only rasterises (`render/timeline.py`)
+    and dispatches a click to a tick index (`GT-9`)."""
+
+    seek_requested = QtCore.Signal(int)
+
+    def __init__(self, state: TimelineState, parent: QtWidgets.QWidget | None = None) -> None:
+        super().__init__("Timeline", parent)
+        self.setObjectName("dock.timeline")
+        self.state = state
+        self.size_px = _TIMELINE_SIZE_PX
+        self._head_tick = 0  # set by MainWindow before every render, from Transport.head_tick
+        self._label = _ClickableImageLabel()
+        self._label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self._label.clicked.connect(self._on_clicked)
+        self.setWidget(self._label)
+
+    def show_frame(self, frame: np.ndarray) -> None:
+        frame = np.ascontiguousarray(frame)
+        height, width, _channels = frame.shape
+        image = QtGui.QImage(frame.data, width, height, width * 3, QtGui.QImage.Format.Format_RGB888)
+        self._label.setPixmap(QtGui.QPixmap.fromImage(image))
+
+    def pixmap(self) -> QtGui.QPixmap:
+        return self._label.pixmap()
+
+    def _on_clicked(self, x: float, y: float, modifiers: QtCore.Qt.KeyboardModifiers) -> None:
+        del y, modifiers
+        self.seek_requested.emit(px_to_tick(x, self.size_px, self._head_tick))
+
+
 class MainWindow(QtWidgets.QMainWindow):
     """Vantage's window (`sim_player.md` names the application). A
     **dockable peer-panel grid** (`sim_visualization_spec.md` §11.1) -- today
@@ -570,6 +621,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.inspector_panel = InspectorPanel(self.inspector_state, self)
         self.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, self.inspector_panel)
 
+        self.timeline_state = TimelineState()
+        #: address -> resolved (tick_index, value) series -- resolved once
+        #: per lane-add, never per render (`Session.signal` is an O(ticks)
+        #: pass; re-resolving on every tick, e.g. during playback, would
+        #: make the strip the render loop's actual bottleneck).
+        self._timeline_series_cache: dict[str, tuple] = {}
+        self.timeline_strip = TimelineStrip(self.timeline_state, self)
+        self.addDockWidget(QtCore.Qt.DockWidgetArea.BottomDockWidgetArea, self.timeline_strip)
+        self.timeline_strip.seek_requested.connect(self._on_timeline_seek)
+
         self._clear_selection_shortcut = QtGui.QShortcut(QtGui.QKeySequence("Esc"), self)
         self._clear_selection_shortcut.activated.connect(self._on_clear_selection)
 
@@ -588,11 +649,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self._add_shortcut("Left", functools.partial(self.transport_bar.step, -1))
         self._add_shortcut("Shift+Right", functools.partial(self.transport_bar.step, 10))
         self._add_shortcut("L", self.transport_bar.toggle_loop)
+        self._add_shortcut("]", functools.partial(self._on_jump_to_event, 1))
+        self._add_shortcut("[", functools.partial(self._on_jump_to_event, -1))
 
         view_menu = self.menuBar().addMenu("&View")
         view_menu.addAction(self.bev.toggleViewAction())
         view_menu.addAction(self.layers_panel.toggleViewAction())
         view_menu.addAction(self.inspector_panel.toggleViewAction())
+        view_menu.addAction(self.timeline_strip.toggleViewAction())
+
+        timeline_menu = self.menuBar().addMenu("&Timeline")
+        timeline_menu.addAction("Add signal lane...").triggered.connect(
+            functools.partial(self._on_add_timeline_lane, is_state=False))
+        timeline_menu.addAction("Add state lane...").triggered.connect(
+            functools.partial(self._on_add_timeline_lane, is_state=True))
+        timeline_menu.addAction("Add bookmark at cursor").triggered.connect(self._on_add_bookmark)
 
         self.restore_layout()
 
@@ -654,6 +725,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.transport = Transport(session, self._advance_for_transport, head_tick=len(session) - 1)
         self.transport.goto(0)
         self.transport_bar.bind(self.transport)
+        self._timeline_series_cache.clear()  # stale values from a previous session, if any
+        self.timeline_strip._head_tick = self.transport.head_tick
         self.statusBar().showMessage(f"loaded {session.name} -- {len(session)} ticks", 5000)
         self.render_tick(0)
 
@@ -759,6 +832,65 @@ class MainWindow(QtWidgets.QMainWindow):
             scene, layers=tuple(layer for layer in scene.layers if layer.id in layer_selection),
         )
         self.inspector_panel.sync(visible_scene, self._selection)
+        self._rerender_timeline()
+
+    def _rerender_timeline(self) -> None:
+        """Redraws the strip at the current playhead -- cheap: every
+        lane's series is already resolved and cached (`_on_add_timeline_lane`),
+        so this is rasterising, not re-resolving (§7.3's "synced strip")."""
+        if self.transport is None:
+            return
+        signal_data = {addr: self._timeline_series_cache[addr] for addr in self.timeline_state.signal_lanes()
+                       if addr in self._timeline_series_cache}
+        state_data = {addr: self._timeline_series_cache[addr] for addr in self.timeline_state.state_lanes()
+                      if addr in self._timeline_series_cache}
+        markers = {addr: event_markers(series) for addr, series in state_data.items()}
+        bookmark_ticks = tuple(b.tick_index for b in self.timeline_state.bookmarks())
+        self.timeline_strip._head_tick = self.transport.head_tick
+        frame = render_timeline(
+            signal_series=signal_data, state_series=state_data, markers=markers,
+            bookmark_ticks=bookmark_ticks, current_tick=self.transport.cursor,
+            head_tick=self.transport.head_tick, size_px=self.timeline_strip.size_px,
+        )
+        self.timeline_strip.show_frame(frame)
+
+    def _on_timeline_seek(self, tick_index: int) -> None:
+        if self.transport is None:
+            return
+        self.transport.goto(tick_index)
+        self.transport_bar.sync()
+        self.render_tick(tick_index)
+
+    def _on_add_timeline_lane(self, *, is_state: bool) -> None:
+        if self._session is None:
+            return
+        address, ok = QtWidgets.QInputDialog.getText(
+            self, "Add state lane" if is_state else "Add signal lane",
+            "Signal address (NR-SIM-8: <component>.<port>.<field> / source.* / truth.* / derived.*):",
+        )
+        if not ok or not address:
+            return
+        self._timeline_series_cache[address] = self._session.signal(address, project=self._project)
+        self.timeline_state.add_state_lane(address) if is_state else self.timeline_state.add_signal_lane(address)
+        self._rerender_timeline()
+
+    def _on_add_bookmark(self) -> None:
+        if self.transport is None:
+            return
+        self.timeline_state.add_bookmark(self.transport.cursor)
+        self._rerender_timeline()
+
+    def _on_jump_to_event(self, direction: int) -> None:
+        if self.transport is None:
+            return
+        all_markers = [
+            marker
+            for addr in self.timeline_state.state_lanes()
+            for marker in event_markers(self._timeline_series_cache.get(addr, ()))
+        ]
+        target = self.timeline_state.jump_to_event(self.transport.cursor, direction, all_markers)
+        if target is not None:
+            self._on_timeline_seek(target)
 
     def _on_bev_clicked(self, x: float, y: float, modifiers: QtCore.Qt.KeyboardModifiers) -> None:
         """§7.1: click to select, `Ctrl`+click to toggle membership. Hit-tests
