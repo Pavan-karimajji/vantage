@@ -1278,8 +1278,45 @@ across `tests/unit/test_a3_types.py`, `test_b3_inspector.py`,
 test_b3_selection_and_inspector.py`, closing `UT-B3-2`).
 `scripts\check_invariants.py` and `python docs/py/run_all.py`: both clean.
 
-Timeline, signals, plots, measure and workspace loading are separate,
-not-yet-started slices of this same stage; none of them change
+**Slice 6 (signal resolver) DONE 2026-07-30.** The prerequisite `view/
+timeline.py` and `view/plots.py` both need — one address space, `<component>.
+<port>.<field>` / `source.*` / `truth.*` / `derived.*` (`NR-SIM-8`).
+**Real placement gap found while scoping, checked with the user
+(`AskUserQuestion`) before writing code:** the checklist above named `view/
+signals.py`, but `sim_api_reference.md` §2.3 sketches this as a
+`Session.signal()` method, and `Session` lives in `core/session.py`; `check/`'s
+future expectation evaluator (`S-D6`, headless, no Qt) is one of `NR-SIM-8`'s
+five consumers and would otherwise have to import something named `view/`.
+Built as `core/signals.py` instead. A port name is itself dotted (`N-2`,
+`<component>.<function>.<port>`), so resolution is the **longest entry in
+`tick.ports` that prefixes the address**, then a plain attribute walk
+(`_walk_field_path`, incl. `name[index]` for a repeated field) over whatever
+remains — one mechanism for all three raw prefixes, no special-casing.
+`derived.*` signals register with `@signal(name, unit="")`, taking `(tick,
+ctx)` — the same shape a layer provider gets — and are the only path that
+needs a `LayerCtx` (project + growing history window, same shape `core/
+runner.py`'s own per-tick context); `resolve_series` builds one **only when
+the address is a registered `derived.*` name**, so a raw field's whole-session
+resolution never pays for `ProjectModel.resolve`. Also absorbs `scene/
+registry.py`'s `@signal`/`registered_signals` (`S-A3`, unused anywhere until
+now, same "dormant scaffolding actually wired up" story as Slice 5's `Prim.
+fields`) — one registry next to the resolver that reads it. **Two corrections
+to `sim_api_reference.md`'s `Session.signal()` sketch**, alongside the
+relocation: return type `tuple[tuple[int, object], ...]` not `Sequence[tuple[int,
+float]]` (a state lane's signal, §7.3, is categorical — forcing `float` would
+have made the method lie about what it actually returns), and a `project:
+str = "base"` keyword the original sketch had no way to supply despite
+`derived.*` resolution needing one. **Finding, not reasoned in advance:**
+`core/signals.signal()`'s own docstring claimed N-8 duplicate-name discipline
+("names both") that the first version didn't actually implement — caught by
+its own test (`test_signal_decorator_rejects_a_duplicate_name`) asserting on
+both names and failing, not by re-reading the code. `pytest modules\sim\tests
+-q`: **187 passed** (171 from Slice 5 + 16 new: `tests/unit/test_b3_signals.py`
+plus one delegation test in `test_b2_session.py`). `scripts\check_invariants.py`
+and `python docs/py/run_all.py`: both clean.
+
+Timeline, plots, measure and workspace loading are separate, not-yet-started
+slices of this same stage; none of them change
 `MainWindow`'s shape (visualization spec §11.1's own "a new panel type
 registers itself... the shell does not change").
 
@@ -1318,10 +1355,16 @@ registers itself... the shell does not change").
       copy-as-text
 - [ ] `view/timeline.py` — signal lanes (one scale per lane), state lanes with
       labels, event markers, bookmarks, click-to-seek
-- [ ] `view/signals.py` — the **one signal resolver** (viz §7.4):
+- [x] `view/signals.py` — the **one signal resolver** (viz §7.4):
       `<component>.<port>.<field>` · `source.*` · `truth.*` · `derived.*`. Raw
       port fields resolve off the manifest with **no registration**; only
-      computed signals register with `@signal` (`NR-SIM-8`)
+      computed signals register with `@signal` (`NR-SIM-8`). **Built as
+      `core/signals.py` instead** (`S-B3` slice 6, checked with the user) --
+      `Session.signal()` (`sim_api_reference.md` §2.3) lives in `core/
+      session.py`, and `check/`'s expectation evaluator (`S-D6`) needs the
+      same resolver headless; `core/` is where both can depend on it in the
+      normal direction rather than `check/` importing something named
+      `view/`
 - [ ] `view/plots.py` — `timeseries` / `xy` / `state` / `distribution` panels
       over that resolver
 - [ ] `view/measure.py` — ruler with snap, range rings, cursor readout carrying
@@ -1342,7 +1385,12 @@ registers itself... the shell does not change").
 - [ ] `UT-B3-5` stale banner appears exactly when `valid == 0` or the port's age
       exceeds its declared maximum
 - [ ] `UT-B3-6` one signal string resolves identically for the timeline strip
-      and a plot panel; a **raw port field needs no registration** at all
+      and a plot panel; a **raw port field needs no registration** at all.
+      **Scoped precursor landed in Slice 6** (`tests/unit/test_b3_signals.py`):
+      the resolver itself, and "no registration for a raw field", both
+      proven directly against `core/signals.resolve_tick`/`resolve_series`;
+      the "identically for X and Y" half waits on `view/timeline.py`/
+      `view/plots.py` existing to compare
 - [ ] `UT-B3-7` a `timeseries` lane with two signals of different magnitude
       creates **two lanes**; a single lane with two y-scales is rejected —
       a dual-axis plot is the most reliable way to make two signals look

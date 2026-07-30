@@ -122,8 +122,22 @@ class Session:
     def open(cls, path: Path, *, codec: str | None = None) -> Session: ...
     def at(self, index: int) -> Tick: ...
     def seek_ns(self, t_ns: int) -> int: ...     # -> tick index, boundary-exact
-    def signal(self, path: str) -> Sequence[tuple[int, float]]:
-        """One address space (`NR-SIM-8`): '<component>.<port>.<field>'."""
+    def signal(self, path: str, *, project: str = "base") -> tuple[tuple[int, object], ...]:
+        """One address space (`NR-SIM-8`): '<component>.<port>.<field>' ·
+        'source.*' · 'truth.*' · 'derived.*'. Delegates to
+        `core/signals.resolve_series` (`S-B3` slice 6, not `view/signals.py`
+        as `sim_implementation_plan.md`'s checklist names it -- checked with
+        the user: `check/`'s expectation evaluator (`S-D6`) needs this too,
+        headless, and `core/` is where every consumer can depend on it in
+        the normal direction). Two corrections from the sketch this
+        replaces: `object`, not `float` -- a state lane's signal (`§7.3`) is
+        categorical, and forcing it through `float` would have made this
+        method lie about what `derived.*`/state ports actually carry;
+        `project` is real because `derived.*` resolution needs a
+        `ProjectModel` (`core/history.LayerCtx`) and the sketch had no way
+        to supply one -- defaults to `base` (`R-VAR-4`), matching every
+        other `project=` in this codebase.
+        """
     def __len__(self) -> int: ...
     def __repr__(self) -> str: ...
 ```

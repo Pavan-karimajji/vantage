@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from adas_sim.core.errors import AuthoringError
+from adas_sim.core.signals import resolve_series
 from adas_sim.core.tick import Tick
 from adas_sim.io.base import RunManifest
 
@@ -72,6 +73,14 @@ class Session:
                 expected=f"a tick index in [0, {len(self.ticks)})", found=str(index),
                 where="adas_sim.core.session.Session.at", hint="",
             ) from None
+
+    def signal(self, path: str, *, project: str = "base") -> tuple[tuple[int, object], ...]:
+        """`path`'s value at every tick (`NR-SIM-8`, `sim_api_reference.md`
+        §2.3) -- delegates to `core/signals.resolve_series`. No import cycle
+        (unlike `open()`'s deferred import of `core/runner` below): that
+        function takes `self.ticks`, never a `Session`, so `core/signals.py`
+        never needs to import this module back."""
+        return resolve_series(self.ticks, path, project=project)
 
     def seek_ns(self, t_ns: int) -> int:
         """The index of the tick whose `t_ns` is the greatest value `<=

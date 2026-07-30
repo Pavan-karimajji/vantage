@@ -4,11 +4,14 @@
 # @author Pavan Karimajji
 
 """S-B2 `core/session.py` tests: UT-B2-1, UT-B2-2, UT-B2-6, UT-B2-11
-(docs/sim_implementation_plan.md)."""
+(docs/sim_implementation_plan.md). `Session.signal()` (`S-B3` slice 6) is
+tested here too, as a thin delegation to `core/signals.py` -- the resolver
+mechanics themselves are `tests/unit/test_b3_signals.py`'s job."""
 
 from __future__ import annotations
 
 import dataclasses
+from types import SimpleNamespace
 
 import pytest
 
@@ -65,6 +68,19 @@ def test_time_is_exact_over_ten_thousand_ticks_zero_drift():
     last = session.at(len(session) - 1)
     assert last.t_ns == dt_ns * (len(session) - 1)
     assert last.t_s == pytest.approx(last.t_ns / 1e9)
+
+
+def test_signal_delegates_to_the_core_signals_resolver():
+    """`NR-SIM-8`: `Session.signal()` is the api-reference contract's own
+    entry point, not a second implementation."""
+    ticks = tuple(
+        Tick(index=i, t_ns=i * 50_000_000, dt_ns=50_000_000,
+             ports={"p": PortValue(name="p", message=SimpleNamespace(v=i * 3), origin="measured")},
+             pose=_ORIGIN_POSE)
+        for i in range(3)
+    )
+    session = Session(run_id="r", name="s", ticks=ticks)
+    assert session.signal("p.v") == ((0, 0), (1, 3), (2, 6))
 
 
 def test_session_is_immutable_mutating_a_returned_tick_or_its_ports_raises():

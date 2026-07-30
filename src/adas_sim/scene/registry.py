@@ -3,8 +3,8 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`@layer_provider`, `@signal` -- discovery **by import** (sim_api_reference.md
-§5, §6.4's registry note). A component adds a layer by existing: importing the
+"""`@layer_provider` -- discovery **by import** (sim_api_reference.md §5,
+§6.4's registry note). A component adds a layer by existing: importing the
 module that defines a decorated function is what registers it, so there is no
 central roster to keep in sync (`R-VAR-2`'s "no central roster" principle,
 extended from components to layers).
@@ -18,6 +18,11 @@ called anywhere. Replaced (`S-B3` slice 5) by `Prim.fields`: the provider
 that builds a prim already has the raw entity in hand, so it computes the
 inspector's (name, value) pairs inline, the same pass -- one fewer moving
 part, and no identity to keep in sync.
+
+**`@signal`/`registered_signals` (`S-A3`) lived here too and moved.**
+Unused anywhere until `S-B3` slice 6 needed them for real, at which point
+they belong next to the resolver that reads them -- `core/signals.py`, not
+here (`NR-SIM-8`).
 """
 
 from __future__ import annotations
@@ -53,7 +58,6 @@ class LayerProviderEntry:
 
 
 _PROVIDERS: dict[str, LayerProviderEntry] = {}
-_SIGNALS: dict[str, Callable[..., object]] = {}
 
 
 def layer_provider(
@@ -124,26 +128,3 @@ def layer_provider(
 
 def registered_providers() -> Mapping[str, LayerProviderEntry]:
     return MappingProxyType(_PROVIDERS)
-
-
-def signal(name: str) -> Callable[[Callable[..., object]], Callable[..., object]]:
-    """Registers a **computed** signal under the one address space
-    (`NR-SIM-8`). A raw port field needs no registration; only a signal
-    computed from one does (`S-B3`)."""
-
-    def decorator(func: Callable[..., object]) -> Callable[..., object]:
-        if name in _SIGNALS:
-            raise AuthoringError(
-                expected="a signal name not already registered",
-                found=f"{name!r} requested again by {func.__module__}.{func.__qualname__}",
-                where="adas_sim.scene.registry.signal",
-                hint="rename one of the two signals",
-            )
-        _SIGNALS[name] = func
-        return func
-
-    return decorator
-
-
-def registered_signals() -> Mapping[str, Callable[..., object]]:
-    return MappingProxyType(_SIGNALS)
