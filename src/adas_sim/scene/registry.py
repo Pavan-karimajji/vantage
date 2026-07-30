@@ -15,10 +15,15 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from types import MappingProxyType
 
 from adas_sim.core.errors import AuthoringError
+from adas_sim.core.history import Interaction
+
+#: The vocabulary a provider's `reacts_to=` may name -- read off `Interaction`
+#: itself rather than duplicated here, so the two cannot drift apart.
+_INTERACTION_FIELDS = frozenset(f.name for f in fields(Interaction))
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +34,10 @@ class LayerProviderEntry:
     qualname: str
     group: str = ""
     requires: tuple[str, ...] = ()
+    #: `Interaction` fields (`sim_visualization_spec.md` §7.5) this
+    #: provider's output depends on -- empty means "never re-rendered on a
+    #: mouse move" (`core/runner.SceneCache`'s static tier).
+    reacts_to: tuple[str, ...] = ()
 
     def __repr__(self) -> str:
         return f"<LayerProviderEntry {self.id!r} from {self.module}.{self.qualname}>"
@@ -40,7 +49,8 @@ _SIGNALS: dict[str, Callable[..., object]] = {}
 
 
 def layer_provider(
-    layer_id: str, *, group: str = "", requires: Sequence[str] = ()
+    layer_id: str, *, group: str = "", requires: Sequence[str] = (),
+    reacts_to: Sequence[str] = (),
 ) -> Callable[[Callable[..., object]], Callable[..., object]]:
     """Registers `func` under `layer_id`. A duplicate id raises naming
     **both** providers (`N-8`) -- the failure this prevents is two
@@ -56,7 +66,22 @@ def layer_provider(
     second, separate `tick` parameter -- resolved by treating "now" as
     history's last windowed tick rather than adding a second parameter,
     since a windowed view "over ticks up to now" already has one).
+
+    `reacts_to`, when given, names which `Interaction` fields (`"cursor"`,
+    `"selection"`, `"modifiers"`, `"toggles"`) this provider's output
+    depends on (`sim_visualization_spec.md` §7.5). The provider stays a pure
+    function of `(tick, ctx)` either way -- `reacts_to` only tells
+    `core/runner.SceneCache` which tier to put it in, so a provider
+    declaring nothing is never re-rendered on a mouse move.
     """
+    for field_name in reacts_to:
+        if field_name not in _INTERACTION_FIELDS:
+            raise AuthoringError(
+                expected=f"a reacts_to field from {sorted(_INTERACTION_FIELDS)}",
+                found=repr(field_name),
+                where=f"adas_sim.scene.registry.layer_provider({layer_id!r})",
+                hint="check the field name against core.history.Interaction",
+            )
 
     def decorator(func: Callable[..., object]) -> Callable[..., object]:
         existing = _PROVIDERS.get(layer_id)
@@ -82,7 +107,7 @@ def layer_provider(
 
         _PROVIDERS[layer_id] = LayerProviderEntry(
             id=layer_id, func=registered_func, module=func.__module__, qualname=func.__qualname__,
-            group=group, requires=tuple(requires),
+            group=group, requires=tuple(requires), reacts_to=tuple(reacts_to),
         )
         return registered_func
 

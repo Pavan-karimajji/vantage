@@ -19,10 +19,11 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from adas_sim.core.history import FrameTree, HistoryView, LayerCtx
+from adas_sim.core.history import FrameTree, HistoryView, Interaction, LayerCtx, interaction_cache_key
 from adas_sim.core.session import Session
 from adas_sim.core.tick import Pose2D, PortValue, Tick
 from adas_sim.io.base import Provenance, group_by_log_time
@@ -30,7 +31,11 @@ from adas_sim.io.legacy import LegacyRecordingReader
 from adas_sim.io.registry import reader_for
 from adas_sim.model.project import ProjectModel
 from adas_sim.scene.registry import registered_providers
-from adas_sim.scene.types import Scene
+from adas_sim.scene.types import Layer, Scene
+
+#: The no-op default (`sim_visualization_spec.md` §7.5) -- every caller that
+#: predates interaction-aware layers gets exactly the old behaviour.
+_NO_INTERACTION = Interaction()
 
 
 class LoadCancelled(Exception):
@@ -161,7 +166,41 @@ def build_session_from_recording(
         reader.close()
 
 
-def build_scene(session: Session, tick_index: int, *, project: str = "base") -> Scene:
+def _resolve_tick_index(session: Session, tick_index: int) -> int:
+    return tick_index if tick_index >= 0 else len(session) + tick_index
+
+
+def _build_layer_ctx(session: Session, tick_index: int, *, project: str, interaction: Interaction) -> LayerCtx:
+    index = _resolve_tick_index(session, tick_index)
+    return LayerCtx(
+        model=ProjectModel.resolve(project=project),
+        history=HistoryView(_ticks=tuple(session.ticks[: index + 1])),
+        frames=FrameTree(session.at(index).pose),
+        interaction=interaction,
+    )
+
+
+def _static_layers(ctx: LayerCtx) -> tuple[Layer, ...]:
+    """Providers that declared no `reacts_to` -- `SceneCache`'s cheap tier,
+    unaffected by interaction (`sim_visualization_spec.md` §7.5)."""
+    return tuple(
+        layer for entry in registered_providers().values() if not entry.reacts_to
+        for layer in entry.func(ctx)
+    )
+
+
+def _reactive_layers(ctx: LayerCtx) -> tuple[Layer, ...]:
+    """Providers that declared `reacts_to` -- recomputed whenever the
+    interaction state changes (`sim_visualization_spec.md` §7.5)."""
+    return tuple(
+        layer for entry in registered_providers().values() if entry.reacts_to
+        for layer in entry.func(ctx)
+    )
+
+
+def build_scene(
+    session: Session, tick_index: int, *, project: str = "base", interaction: Interaction = _NO_INTERACTION,
+) -> Scene:
     """Pass 2a: assemble one tick's `Scene` from every currently-registered
     layer provider (`scene/registry.py`) -- discovery by import, never a
     hardcoded provider list (`R-SIM-1`). Whoever composes the running app
@@ -171,16 +210,31 @@ def build_scene(session: Session, tick_index: int, *, project: str = "base") -> 
 
     Independent of theme and layer selection -- both are applied later, at
     render time (`render/bev.py`) -- which is why `SceneCache` (below) keys
-    on them without this function needing either.
+    on them without this function needing either. `interaction` defaults to
+    a no-op, so every caller that predates `S-B3` slice 3 is unaffected; a
+    real caller only needs it to feed a provider declaring `reacts_to`.
     """
-    index = tick_index if tick_index >= 0 else len(session) + tick_index
-    ctx = LayerCtx(
-        model=ProjectModel.resolve(project=project),
-        history=HistoryView(_ticks=tuple(session.ticks[: index + 1])),
-        frames=FrameTree(session.at(index).pose),
-    )
-    layers = [layer for entry in registered_providers().values() for layer in entry.func(ctx)]
-    return Scene(t_s=session.at(index).t_s, layers=tuple(layers))
+    index = _resolve_tick_index(session, tick_index)
+    ctx = _build_layer_ctx(session, tick_index, project=project, interaction=interaction)
+    layers = _static_layers(ctx) + _reactive_layers(ctx)
+    return Scene(t_s=session.at(index).t_s, layers=layers)
+
+
+def build_static_scene(session: Session, tick_index: int, *, project: str = "base") -> Scene:
+    """`SceneCache`'s base tier: only providers that declared no
+    `reacts_to`, so an interaction change never has to re-run them."""
+    ctx = _build_layer_ctx(session, tick_index, project=project, interaction=_NO_INTERACTION)
+    index = _resolve_tick_index(session, tick_index)
+    return Scene(t_s=session.at(index).t_s, layers=_static_layers(ctx))
+
+
+def build_reactive_layers(
+    session: Session, tick_index: int, *, project: str = "base", interaction: Interaction = _NO_INTERACTION,
+) -> tuple[Layer, ...]:
+    """`SceneCache`'s interaction-keyed tier: only providers that declared
+    `reacts_to` (`sim_visualization_spec.md` §7.5)."""
+    ctx = _build_layer_ctx(session, tick_index, project=project, interaction=interaction)
+    return _reactive_layers(ctx)
 
 
 class SceneCache:
@@ -188,25 +242,63 @@ class SceneCache:
     theme)` -- **not** viewport (`UT-B2-5`: a viewport change must never
     invalidate it). Least-recently-used eviction once `max_size` is exceeded
     (`UT-B2-12`).
+
+    **Interaction-aware tier (`S-B3` slice 3, §7.5), opt-in via
+    `build_reactive`.** When given, `.get()` also fetches a second value
+    from `build_reactive` keyed additionally on `interaction` (through
+    `interaction_cache_key`, since `Interaction.toggles` is not hashable on
+    its own) and returns `value` with those layers appended -- `value` must
+    then be a `Scene` (`build_static_scene`'s return type). Omitting
+    `build_reactive` (the default) reproduces `S-B2`'s exact original
+    behaviour: `interaction` is never looked at, and `value` may be
+    anything, which is what lets `UT-B2-3/5/12`'s plain test doubles keep
+    working unchanged.
     """
 
-    def __init__(self, build: Callable[[int, frozenset[str], str], object], *, max_size: int = 256) -> None:
+    def __init__(
+        self,
+        build: Callable[[int, frozenset[str], str], object],
+        *,
+        build_reactive: Callable[[int, frozenset[str], str, Interaction], tuple[Layer, ...]] | None = None,
+        max_size: int = 256,
+    ) -> None:
         self._build = build
+        self._build_reactive = build_reactive
         self._max_size = max_size
         self._store: OrderedDict[tuple[int, frozenset[str], str], object] = OrderedDict()
+        self._reactive_store: OrderedDict[tuple, tuple[Layer, ...]] = OrderedDict()
         self.build_calls = 0
+        self.reactive_build_calls = 0
 
-    def get(self, tick_index: int, layer_selection: frozenset[str], theme: str) -> object:
+    def get(
+        self, tick_index: int, layer_selection: frozenset[str], theme: str,
+        interaction: Interaction = _NO_INTERACTION,
+    ) -> object:
         key: tuple[int, frozenset[str], str] = (tick_index, layer_selection, theme)
         if key in self._store:
             self._store.move_to_end(key)
-            return self._store[key]
-        value = self._build(tick_index, layer_selection, theme)
-        self.build_calls += 1
-        self._store[key] = value
-        if len(self._store) > self._max_size:
-            self._store.popitem(last=False)
-        return value
+            value = self._store[key]
+        else:
+            value = self._build(tick_index, layer_selection, theme)
+            self.build_calls += 1
+            self._store[key] = value
+            if len(self._store) > self._max_size:
+                self._store.popitem(last=False)
+
+        if self._build_reactive is None:
+            return value
+
+        reactive_key = key + (interaction_cache_key(interaction),)
+        if reactive_key in self._reactive_store:
+            self._reactive_store.move_to_end(reactive_key)
+            reactive_layers = self._reactive_store[reactive_key]
+        else:
+            reactive_layers = self._build_reactive(tick_index, layer_selection, theme, interaction)
+            self.reactive_build_calls += 1
+            self._reactive_store[reactive_key] = reactive_layers
+            if len(self._reactive_store) > self._max_size:
+                self._reactive_store.popitem(last=False)
+        return replace(value, layers=value.layers + reactive_layers)
 
     def __len__(self) -> int:
         return len(self._store)

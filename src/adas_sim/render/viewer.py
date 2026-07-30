@@ -43,7 +43,10 @@ from pathlib import Path
 import numpy as np
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from adas_sim.core.runner import LoadCancelled, SceneCache, build_scene, build_session_from_recording
+from adas_sim.core.history import Interaction
+from adas_sim.core.runner import (
+    LoadCancelled, SceneCache, build_reactive_layers, build_session_from_recording, build_static_scene,
+)
 from adas_sim.core.session import Session
 from adas_sim.render.bev import render_scene
 from adas_sim.render.theme import Theme
@@ -305,7 +308,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _on_loaded(self, session: Session) -> None:
         self._session = session
-        self._scene_cache = SceneCache(self._build_scene_for_cache)
+        self._scene_cache = SceneCache(self._build_scene_for_cache, build_reactive=self._build_reactive_for_cache)
         self._stop_thread()
         self.layers_state.load(layers_state_path(self._project, session.meta.pipeline))
         self.statusBar().showMessage(f"loaded {session.name} -- {len(session)} ticks", 5000)
@@ -326,18 +329,28 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _build_scene_for_cache(self, tick_index: int, layer_selection: frozenset[str], theme: str) -> object:
         del layer_selection, theme  # Scene assembly needs neither -- see build_scene's own docstring
-        return build_scene(self._session, tick_index, project=self._project)
+        return build_static_scene(self._session, tick_index, project=self._project)
 
-    def render_tick(self, tick_index: int) -> None:
+    def _build_reactive_for_cache(
+        self, tick_index: int, layer_selection: frozenset[str], theme: str, interaction: Interaction,
+    ) -> tuple:
+        del layer_selection, theme
+        return build_reactive_layers(self._session, tick_index, project=self._project, interaction=interaction)
+
+    def render_tick(self, tick_index: int, *, interaction: Interaction = Interaction()) -> None:
         """GUI-thread only: reads `_scene_cache`, never re-runs pass 1.
         Scene assembly is cached ignoring layer selection (`build_scene`
         needs neither, `core/runner.py`'s own docstring); the layers panel's
         choice is applied only at rasterising, which is why toggling a layer
-        re-renders without re-running pass 1 *or* pass 2a."""
+        re-renders without re-running pass 1 *or* pass 2a. `interaction`
+        defaults to a no-op -- no panel drives cursor/selection yet (that is
+        `view/measure.py`/`view/inspector.py`'s job); a provider declaring
+        `reacts_to` is already correctly wired to it (`sim_visualization_spec.md`
+        §7.5, `SceneCache`'s reactive tier)."""
         if self._session is None or self._scene_cache is None:
             return
         self._current_tick = tick_index
-        scene = self._scene_cache.get(tick_index, frozenset(), self.bev.theme)
+        scene = self._scene_cache.get(tick_index, frozenset(), self.bev.theme, interaction)
         self.layers_panel.sync_from_scene(scene.layers)
         layer_selection = self.layers_state.visible_layer_ids()
         frame = render_scene(scene, self.bev.viewport, self.bev.theme, layer_selection)

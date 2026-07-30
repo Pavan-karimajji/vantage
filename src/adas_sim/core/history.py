@@ -107,6 +107,21 @@ class Interaction:
         return f"<Interaction selection={sorted(self.selection)} toggles={dict(self.toggles)}>"
 
 
+def interaction_cache_key(interaction: Interaction) -> tuple:
+    """A hashable snapshot of `Interaction` for use in a cache key
+    (`core/runner.SceneCache`) -- `toggles` is a `Mapping`, not hashable on
+    its own, so `Interaction`'s own dataclass-generated `__hash__` cannot be
+    used directly. `sim_visualization_spec.md` §7.5: "the cache key simply
+    includes the interaction state for layers that declare a dependency on
+    it"."""
+    return (
+        interaction.cursor,
+        interaction.selection,
+        interaction.modifiers,
+        tuple(sorted(interaction.toggles.items())),
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class LayerCtx:
     """Everything a layer provider may read (sim_architecture.md §5.3)."""

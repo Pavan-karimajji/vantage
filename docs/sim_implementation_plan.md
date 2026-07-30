@@ -1209,6 +1209,33 @@ chain, not just its own show/hide state — the offscreen system tests call
 needed to, since they only read pixels off `BevPanel`, never a dock's own
 visibility flag).
 
+**Slice 4 (interaction plumbing) DONE 2026-07-30.** `Interaction`/`LayerCtx`
+(`core/history.py`) already existed as dormant scaffolding from an earlier
+stage — nothing referenced either one yet. This slice makes them real:
+`scene/registry.py`'s `layer_provider()` gained `reacts_to=`, validated
+against `Interaction`'s own dataclass fields (`dataclasses.fields`, so the
+vocabulary cannot drift from the class) rather than a hand-copied literal
+set. `core/runner.py` splits provider execution into `_static_layers`
+(`reacts_to` empty) and `_reactive_layers` (`reacts_to` non-empty), exposed
+as `build_static_scene`/`build_reactive_layers` alongside the unchanged
+whole-scene `build_scene` (now `interaction`-aware, default a module-level
+no-op so every existing caller is unaffected). `SceneCache` gained an
+**opt-in** second tier (`build_reactive`, `None` by default): the static
+tier's key is untouched, so `UT-B2-3/5/12`'s existing test doubles (which
+return plain strings/tuples, not `Scene`s) keep passing unmodified — the
+reactive tier is keyed on `interaction_cache_key(interaction)` since
+`Interaction.toggles` (a `Mapping`) makes the dataclass's own generated
+`__hash__` raise `TypeError` the moment anything actually hashes it, which
+nothing did until now. `MainWindow.render_tick` gained an `interaction`
+keyword (default the same no-op), wired straight through to the cache; no
+panel drives it live yet (`view/measure.py`/`view/inspector.py`'s job) —
+this slice is the plumbing being *correct*, proven directly rather than
+implied by a UI nobody built yet. `pytest modules\sim\tests -q`: **153
+passed** (146 from Slice 3 + 6 in `tests/unit/test_b3_interaction.py` +
+1 in `tests/system/test_b3_interaction_wiring.py`, closing `UT-B3-13`/
+`UT-B3-14`). `scripts\check_invariants.py` and `python docs/py/run_all.py`:
+both clean.
+
 Inspector, timeline, signals, plots, measure and workspace loading are
 separate, not-yet-started slices of this same stage; none of them change
 `MainWindow`'s shape (visualization spec §11.1's own "a new panel type
@@ -1242,7 +1269,7 @@ registers itself... the shell does not change").
 - [ ] `view/workspace.py` — read `modules/<name>/sim/workspace.yaml`; shipped
       default, user override, reset (viz §13b). **A component's arrangement, not
       an application mode** — Bench/Campaign arrive in `S-D8` and load this
-- [ ] `Interaction` on `LayerCtx` + `reacts_to=` on the provider decorator;
+- [x] `Interaction` on `LayerCtx` + `reacts_to=` on the provider decorator;
       the cache key includes interaction **only for declaring layers**, so a
       mouse move does not invalidate the whole scene (viz §7.5)
 - [ ] `view/inspector.py` — docked, declared fields, pin, multi-select,
@@ -1286,9 +1313,9 @@ registers itself... the shell does not change").
       and ratios; a **missing** workspace falls back to BEV + timeline, no error
 - [ ] `UT-B3-12` the user's own layout wins over the shipped default, and
       `Reset layout` returns to it
-- [ ] `UT-B3-13` a provider declaring `reacts_to=("cursor",)` receives the
+- [x] `UT-B3-13` a provider declaring `reacts_to=("cursor",)` receives the
       cursor **in its own frame, in metres**, and re-renders on cursor change
-- [ ] `UT-B3-14` a provider declaring nothing is **not** re-rendered on a mouse
+- [x] `UT-B3-14` a provider declaring nothing is **not** re-rendered on a mouse
       move — interaction stays cheap, and purity holds
 - [x] `UT-B3-15` **pass 1 does not run on the GUI thread**: with a deliberately
       slow reader, the window stays responsive and progress is reported;
