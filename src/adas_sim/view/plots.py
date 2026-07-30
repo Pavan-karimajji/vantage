@@ -81,3 +81,6 @@ class PlotState:
     def set_distribution(self, address: str) -> None:
         self._require_kind("distribution")
         self.address = address
+
+    def __repr__(self) -> str:
+        return f"<PlotState kind={self.kind!r}>"

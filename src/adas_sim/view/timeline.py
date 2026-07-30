@@ -113,3 +113,7 @@ class TimelineState:
             return min(candidates) if candidates else None
         candidates = [t for t in ticks if t < current_tick]
         return max(candidates) if candidates else None
+
+    def __repr__(self) -> str:
+        return (f"<TimelineState signal_lanes={self._signal_lanes} state_lanes={self._state_lanes} "
+                f"bookmarks={len(self._bookmarks)}>")

@@ -158,3 +158,7 @@ class MeasureState:
             prims.extend(range_ring_prims(self._range_ring_radii))
         prims.extend(annotation_prims(self.annotations()))
         return tuple(prims)
+
+    def __repr__(self) -> str:
+        return (f"<MeasureState ruler={'set' if self._ruler else None} "
+                f"range_rings_visible={self._range_rings_visible} annotations={len(self._annotations)}>")

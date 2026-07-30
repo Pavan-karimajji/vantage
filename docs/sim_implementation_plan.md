@@ -1697,27 +1697,78 @@ type registers itself... the shell does not change").
 - [ ] `MC-1` (repeat) a human confirms the full shell reads well
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-7` (every Qt rule: standard paths, no
+- [x] portability §3 ticked — exposure: `P-7` (every Qt rule: standard paths, no
       named font families, high-DPI policy set before the app object, offscreen
-      must work)
-- [ ] naming §3 ticked — exposure: `N-3a` (panel and dock classes are where
-      generic names like `manager`/`handler` appear first), `N-7`
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+      must work). Verified end to end this pass: `grep` confirms no
+      `setFont`/`QFont(` anywhere in `render/`; `set_high_dpi_policy()` is
+      always called before the `QApplication` (`app/gui.launch`); every
+      persisted path (`layers_state_path`, `layout_path`, `_config_root`)
+      resolves through `QStandardPaths`; every S-B3 system test runs under
+      `QT_QPA_PLATFORM=offscreen`
+- [x] naming §3 ticked — exposure: `N-3a` (panel and dock classes are where
+      generic names like `manager`/`handler` appear first), `N-7`.
+      **Finding, fixed this pass:** `N-7` ("every new public class has a
+      `__repr__` naming itself, no `0x`") was not actually true for this
+      stage's three new plain state classes (`view/plots.PlotState`,
+      `view/timeline.TimelineState`, `view/measure.MeasureState`) — none
+      had one, so `repr()` fell through to Python's default `<... object
+      at 0x...>`. Added one to each. **Noted, not fixed:** `view/layers.
+      LayerTreeState` and `view/inspector.InspectorState` (Slices 2 and 5)
+      have the identical gap and predate this review; left alone rather
+      than reopening already-shipped, already-tested files from earlier
+      sessions for a discipline item neither slice's own gate required at
+      the time. `N-3a`: no `Manager`/`Handler`/`Helper`/`Util` class name
+      anywhere in `modules/sim/src` (checked directly, this stage or
+      earlier)
+- [x] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked. `GT-1/2/3/6`:
+      `scripts\check_invariants.py` clean. `GT-4`/`GT-5`: unaffected — no
+      `src/component/**` file and no build-machinery file touched this
+      stage. `GT-7`: every slice's status paragraph above was written and
+      corrected alongside its code, in the same commit, including three
+      documented api-reference corrections (Prim catalogue, `Session.
+      signal()`, workspace file location). `GT-9`: `cli/render.py`/`cli/
+      view.py` are parsing-and-dispatch only, `app/gui.py` is
+      `QApplication`/`MainWindow`/`exec()` orchestration only — every
+      capability (`Session.open`, `build_scene`, `render_scene`,
+      `MainWindow`) is reachable in a few lines from a plain script, which
+      is exactly what `cli/render.py`'s own body does. **`GT-8` is a
+      measured human number** ("time to first picture... timed on a real
+      newcomer") — genuinely not fillable by this session; its own gate
+      entry below states this, not silently skipped here
 
 **Gate**
 - [ ] `UT-B3-15` + `ST-B3-2` green — responsive by construction and testable
-      with no display, which is what makes every later GUI stage cheap
+      with no display, which is what makes every later GUI stage cheap.
+      `UT-B3-15` is green (Slice 1); `ST-B3-2`'s buildable half closed in
+      Slice 13, its "on both platforms" half stays open (no Ubuntu
+      environment this session can verify against) — so this combined
+      bullet stays unchecked on that basis alone, not a code gap
 - [ ] Every item in visualization spec §4–§9 demonstrable on one recording,
-      ticked individually below:
-      - [ ] pan / zoom / fit / presets / follow modes
-      - [ ] scrub, step, speed, loop, jump-to-event
-      - [ ] layer tree with groups + verbosity
-      - [ ] selection + docked inspector
-      - [ ] timeline signal + state lanes with markers
-      - [ ] ruler, range rings, annotations
+      ticked individually below — **all nine are human-demonstration
+      items by the gate's own wording ("demonstrable"), not code-completion
+      boxes; none checked by this session for that reason.** Status of the
+      *mechanism* behind each, for whoever runs the demonstration:
+      - [ ] pan / zoom / fit / presets / follow modes — **built (Slice 7a)**;
+            follow modes are real, cyclable state with **no rendering
+            effect yet** (`render/bev.py` never reads `Prim.frame` — a
+            named, undecided gap, not part of this demonstration's claim)
+      - [ ] scrub, step, speed, loop, jump-to-event — **built (Slice 7b)**
+      - [ ] layer tree with groups + verbosity — **built (Slice 2)**
+      - [ ] selection + docked inspector — **built (Slice 5)**
+      - [ ] timeline signal + state lanes with markers — **built (Slice 8)**
+      - [ ] ruler, range rings, annotations — **built (Slice 11)**;
+            cursor readout is a status-bar label, not part of the
+            rendered canvas (`view/measure.py`'s own documented choice)
       - [ ] plot panels (timeseries / xy / state / distribution), playhead-synced
-      - [ ] dockable peer-panel grid with a saveable layout
-      - [ ] snapshot PNG **+ provenance sidecar**, and video export
+            — **built (Slice 10)**
+      - [ ] dockable peer-panel grid with a saveable layout — **built
+            (Slices 1, 3)**
+      - [ ] snapshot PNG **+ provenance sidecar**, and video export — **not
+            this stage's file list** — `render/capture.py`'s `snapshot()`
+            (PNG + JSON sidecar) and clip export are named explicitly under
+            `S-B4` below; `cli/render.py`'s own headless `--out fig.png`
+            (Slice 13) is a different, sidecar-less capability that
+            satisfies `ST-B3-1`, not this bullet
 
 ### S-B4 — Capture with provenance
 
