@@ -152,6 +152,28 @@ components it names" engine inside `sil_host` is not yet a tracked, scheduled
 stage — it is stated intent, not yet built. Tracked as an open point below and
 as `OQ-11` in `sim_requirements.md` §11, rather than left as an assumption.
 
+### The ABI is a skeleton, not the architecture
+
+Worth being explicit about, because it is easy to conflate the two: `adasExec`
+and the other four functions are deliberately **empty of architecture**. This
+skeleton does not know how many components exist, what they are called, or how
+they are wired together — the same way a standard electrical socket does not
+know what appliance will plug into it or how a house's rooms are laid out. It
+only guarantees that whatever plugs in speaks the same shape: named ports in,
+named ports out, discoverable via a manifest. That emptiness is the point — it
+is what let this survive AEB, then AEB+BSD, and will let it survive
+ACC/LCA/LDW/LKA and `perception-core` without ever changing again.
+
+**The actual architecture is everything built *on top of* that skeleton**: how
+many components exist and what each one does, how their ports get wired
+together (the `mode:`/`impl:` pipeline model, §5.10 above), who is allowed to
+run what (`sil_host`'s narrower boundary vs. Vantage's full range), and where
+that model still has a real hole (`OQ-11`). None of that lives in
+`adas_sil_abi.h` itself — it lives in the pipeline/manifest design
+(`sim_architecture.md`, `sim_sil_contract.md` §4) and in whichever host is
+doing the composing. A single component's `adasExec` call is never where two
+components meet; that composition always happens one level up, in the host.
+
 ### Where to go from here
 
 Sections 1 onward here (and `sim_architecture.md` §5.10/§9) describe the
