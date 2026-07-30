@@ -39,15 +39,29 @@ it yet. **Slice 5 is that panel, for selection:** `BevPanel` click-to-select
 it was already passing to `SceneCache` (Slice 4) and a new `selection=`
 argument to `render_scene` (§7.1's styling-plus-halo). The docked
 `InspectorPanel` (`view/inspector.py`) shows the resolved entities' declared
-`Prim.fields` live, with pin and copy-as-text. Timeline, signals, plots and
-measure remain later slices; none of them change this module's shape
-(`sim_visualization_spec.md` §11.1's own "a new panel type registers
+`Prim.fields` live, with pin and copy-as-text. Slice 6 built the signal
+resolver (`core/signals.py`, not a `view/` file -- `Session.signal()`
+needed it, `sim_api_reference.md` §2.3). **Slice 7a wires `Viewport` (§4)
+into `BevPanel`:** drag-to-pan and wheel-to-zoom live in
+`_ClickableImageLabel` (which now tells a click from a drag by movement
+past `_DRAG_THRESHOLD_PX`, deferring `clicked` to release); `F`/`0`/`R`/
+`1`-`9` are `MainWindow` shortcuts (fit-to-content, reset, cycle follow
+mode, jump to a `DEFAULT_PRESETS` entry) since they need the current Scene
+or session, which `BevPanel` itself does not hold. Follow mode is real,
+cyclable `Viewport` state with **no rendering effect yet** -- a documented
+gap, not an oversight (see `_on_cycle_follow_mode`'s own docstring).
+Timeline, plots and measure remain later slices; the scrub bar
+(`view/transport.py`'s `Transport`, already built and tested in `S-B2`,
+still unwired to any panel) is next. None of this changes the module's
+shape (`sim_visualization_spec.md` §11.1's own "a new panel type registers
 itself... the shell does not change").
 """
 
 from __future__ import annotations
 
 import dataclasses
+import functools
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -58,18 +72,22 @@ from adas_sim.core.runner import (
     LoadCancelled, SceneCache, build_reactive_layers, build_session_from_recording, build_static_scene,
 )
 from adas_sim.core.session import Session
-from adas_sim.render.bev import hit_test, render_scene
+from adas_sim.render.bev import hit_test, render_scene, scene_bounds_m
 from adas_sim.render.theme import Theme
 from adas_sim.scene.types import Layer, Scene
 from adas_sim.view.inspector import InspectorState, copy_as_text
 from adas_sim.view.layers import LayerTreeState
-from adas_sim.view.viewport import Viewport
+from adas_sim.view.viewport import DEFAULT_PRESETS, Viewport
 
 _CHECK_STATES = {
     "on": QtCore.Qt.CheckState.Checked,
     "off": QtCore.Qt.CheckState.Unchecked,
     "mixed": QtCore.Qt.CheckState.PartiallyChecked,
 }
+
+#: `R` cycles these three (§4.4) -- `locked:<pick_id>` is entered by
+#: locking onto a selection, not by cycling into it (a later slice).
+_FOLLOW_MODE_CYCLE = ("ego_forward", "ego_heading", "world")
 
 
 def set_high_dpi_policy() -> None:
@@ -135,33 +153,84 @@ class _SessionLoadWorker(QtCore.QObject):
         self.loaded.emit(session)
 
 
+#: A drag shorter than this (pixmap-relative pixels) is a click, not a pan --
+#: real mice/trackpads jitter a pixel or two even on an intended click.
+_DRAG_THRESHOLD_PX = 3.0
+
+
 class _ClickableImageLabel(QtWidgets.QLabel):
-    """Emits a click in **pixmap-relative** pixel coordinates
-    (`sim_visualization_spec.md` §7.1's click-to-select) -- `AlignCenter`
-    centres the pixmap within the label whenever the label is larger, so a
-    raw `event.position()` would be off by that offset; this corrects for
-    it once, here, rather than in every caller."""
+    """Click-to-select, drag-to-pan and wheel-to-zoom, all in
+    **pixmap-relative** pixel coordinates (`sim_visualization_spec.md` §4.4,
+    §7.1) -- `AlignCenter` centres the pixmap within the label whenever the
+    label is larger, so a raw `event.position()` would be off by that
+    offset; this corrects for it once, here, rather than in every caller.
+
+    A click only fires on release, and only if the press never moved past
+    `_DRAG_THRESHOLD_PX` -- otherwise it was a pan, not a click, and
+    `dragged` fires instead (once per mouse-move step, so the caller can
+    apply `Viewport.panned` incrementally and each step's own "invariant
+    point" reasoning stays correct)."""
 
     clicked = QtCore.Signal(float, float, QtCore.Qt.KeyboardModifiers)
+    dragged = QtCore.Signal(float, float, float, float)  # from_x, from_y, to_x, to_y
+    zoomed = QtCore.Signal(float, float, float)  # factor, cursor_x, cursor_y
+
+    def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._press_pos: QtCore.QPointF | None = None
+        self._press_modifiers = QtCore.Qt.KeyboardModifier.NoModifier
+        self._last_pos: QtCore.QPointF | None = None
+        self._dragging = False
+
+    def _pixmap_relative(self, event_pos: QtCore.QPointF) -> QtCore.QPointF:
+        pixmap = self.pixmap()
+        if pixmap is None or pixmap.isNull():
+            return event_pos
+        offset_x = (self.width() - pixmap.width()) / 2.0
+        offset_y = (self.height() - pixmap.height()) / 2.0
+        return QtCore.QPointF(event_pos.x() - offset_x, event_pos.y() - offset_y)
 
     def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:  # noqa: N802 -- Qt override
-        pixmap = self.pixmap()
-        if pixmap is not None and not pixmap.isNull():
-            offset_x = (self.width() - pixmap.width()) / 2.0
-            offset_y = (self.height() - pixmap.height()) / 2.0
-            pos = event.position()
-            self.clicked.emit(pos.x() - offset_x, pos.y() - offset_y, event.modifiers())
+        self._press_pos = self._last_pos = self._pixmap_relative(event.position())
+        self._press_modifiers = event.modifiers()
+        self._dragging = False
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QtGui.QMouseEvent) -> None:  # noqa: N802 -- Qt override
+        if self._last_pos is not None and event.buttons() & QtCore.Qt.MouseButton.LeftButton:
+            pos = self._pixmap_relative(event.position())
+            delta = ((pos.x() - self._press_pos.x()) ** 2 + (pos.y() - self._press_pos.y()) ** 2) ** 0.5
+            if self._dragging or delta > _DRAG_THRESHOLD_PX:
+                self._dragging = True
+                self.dragged.emit(self._last_pos.x(), self._last_pos.y(), pos.x(), pos.y())
+                self._last_pos = pos
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QtGui.QMouseEvent) -> None:  # noqa: N802 -- Qt override
+        if not self._dragging and self._press_pos is not None:
+            self.clicked.emit(self._press_pos.x(), self._press_pos.y(), self._press_modifiers)
+        self._press_pos = self._last_pos = None
+        self._dragging = False
+        super().mouseReleaseEvent(event)
+
+    def wheelEvent(self, event: QtGui.QWheelEvent) -> None:  # noqa: N802 -- Qt override
+        # 120 units/notch is Qt's own documented constant, not a magic number.
+        factor = 1.15 ** (event.angleDelta().y() / 120.0)
+        pos = self._pixmap_relative(event.position())
+        self.zoomed.emit(factor, pos.x(), pos.y())
+        event.accept()
 
 
 class BevPanel(QtWidgets.QDockWidget):
     """The first peer panel (`sim_visualization_spec.md` §11.1): a raster
-    from `render/bev.py` shown in a plain label. Pan/zoom/follow-mode
-    controls and the scrub bar are a later slice -- this panel exists to
-    prove the shell and the threading model, not the full viewport feature
-    set."""
+    from `render/bev.py` shown in a plain label, with pan/zoom wired
+    (Slice 7a). Follow modes and fit/preset keys are `MainWindow`'s job
+    (they need the current Scene/session, which this panel does not hold);
+    the scrub bar is a later slice."""
 
     clicked = QtCore.Signal(float, float, QtCore.Qt.KeyboardModifiers)
+    dragged = QtCore.Signal(float, float, float, float)
+    zoomed = QtCore.Signal(float, float, float)
 
     def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__("BEV", parent)
@@ -169,6 +238,8 @@ class BevPanel(QtWidgets.QDockWidget):
         self._label = _ClickableImageLabel()
         self._label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self._label.clicked.connect(self.clicked)
+        self._label.dragged.connect(self.dragged)
+        self._label.zoomed.connect(self.zoomed)
         self.setWidget(self._label)
         self.viewport = Viewport()
         self.theme: Theme = "dark"
@@ -346,6 +417,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.bev = BevPanel(self)
         self.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, self.bev)
         self.bev.clicked.connect(self._on_bev_clicked)
+        self.bev.dragged.connect(self._on_bev_dragged)
+        self.bev.zoomed.connect(self._on_bev_zoomed)
 
         self.layers_state = LayerTreeState()
         self.layers_panel = LayersPanel(self.layers_state, self)
@@ -358,6 +431,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._clear_selection_shortcut = QtGui.QShortcut(QtGui.QKeySequence("Esc"), self)
         self._clear_selection_shortcut.activated.connect(self._on_clear_selection)
+
+        self._viewport_shortcuts: list[QtGui.QShortcut] = []
+        self._add_viewport_shortcut("F", self._on_fit_to_content)
+        self._add_viewport_shortcut("0", self._on_reset_viewport)
+        self._add_viewport_shortcut("R", self._on_cycle_follow_mode)
+        for digit, preset_name in enumerate(sorted(DEFAULT_PRESETS), start=1):
+            self._add_viewport_shortcut(str(digit), functools.partial(self._on_jump_to_preset, preset_name))
 
         view_menu = self.menuBar().addMenu("&View")
         view_menu.addAction(self.bev.toggleViewAction())
@@ -491,4 +571,67 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self._selection:
             return
         self._selection = frozenset()
+        self.render_tick(self._current_tick)
+
+    def _add_viewport_shortcut(self, key: str, slot: Callable[[], None]) -> None:
+        shortcut = QtGui.QShortcut(QtGui.QKeySequence(key), self)
+        shortcut.activated.connect(slot)
+        self._viewport_shortcuts.append(shortcut)
+
+    def _on_bev_dragged(self, from_x: float, from_y: float, to_x: float, to_y: float) -> None:
+        """§4.4: drag to pan. `_ClickableImageLabel` already tells apart a
+        drag from a click; every emission here is a real pan step."""
+        self.bev.viewport = self.bev.viewport.panned((from_x, from_y), (to_x, to_y))
+        self.render_tick(self._current_tick)
+
+    def _on_bev_zoomed(self, factor: float, cursor_x: float, cursor_y: float) -> None:
+        """§4.4: wheel to zoom **about the cursor**, not the centre --
+        `Viewport.zoomed_about_cursor` already carries that invariant."""
+        self.bev.viewport = self.bev.viewport.zoomed_about_cursor(factor, (cursor_x, cursor_y))
+        self.render_tick(self._current_tick)
+
+    def _on_fit_to_content(self) -> None:
+        """`F` (§4.4): fits the currently visible layers' union bounds.
+        Nothing to fit (no session loaded, or every visible layer is empty
+        this tick) is a silent no-op, not an error -- fitting is a
+        convenience, not a claim about the scene."""
+        if self._current_scene is None:
+            return
+        layer_selection = self.layers_state.visible_layer_ids()
+        bounds = scene_bounds_m(self._current_scene, layer_selection)
+        if bounds is None:
+            return
+        self.bev.viewport = self.bev.viewport.fitted_to(bounds)
+        self.render_tick(self._current_tick)
+
+    def _on_reset_viewport(self) -> None:
+        """`0` (§4.4): back to the framework default, keeping only the
+        widget-derived `size_px` (that is the dock's actual size, not a
+        setting to reset)."""
+        self.bev.viewport = Viewport(size_px=self.bev.viewport.size_px)
+        self.render_tick(self._current_tick)
+
+    def _on_cycle_follow_mode(self) -> None:
+        """`R` (§4.4): cycles `Viewport.follow` through the three
+        non-`locked:` modes. **Stores the mode; does not yet change what's
+        drawn** -- every mode renders identically until `render/bev.py`
+        gains a frame-aware transform pass (today it draws every prim's
+        metres directly in viewport space, regardless of `Prim.frame`), a
+        gap this slice found but does not close. Kept anyway, same as
+        `Interaction` was in Slice 4 before anything reacted to it: real,
+        tested state ahead of its consumer, not a fake control."""
+        current = self.bev.viewport.follow
+        index = _FOLLOW_MODE_CYCLE.index(current) if current in _FOLLOW_MODE_CYCLE else -1
+        next_mode = _FOLLOW_MODE_CYCLE[(index + 1) % len(_FOLLOW_MODE_CYCLE)]
+        self.bev.viewport = dataclasses.replace(self.bev.viewport, follow=next_mode)
+        self.statusBar().showMessage(f"follow: {next_mode}", 2000)
+
+    def _on_jump_to_preset(self, preset_name: str) -> None:
+        """`1`…`9` (§4.4): the framework's own generic presets
+        (`DEFAULT_PRESETS`), positionally assigned in sorted order. A
+        component's own named presets (`viewpoints.yaml`) are `view/
+        workspace.py`'s job -- this is the fallback every component starts
+        from, same framing as `DEFAULT_PRESETS`'s own docstring."""
+        preset = DEFAULT_PRESETS[preset_name]
+        self.bev.viewport = dataclasses.replace(preset, size_px=self.bev.viewport.size_px)
         self.render_tick(self._current_tick)

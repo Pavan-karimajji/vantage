@@ -3,11 +3,13 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""S-B1 `render/bev.py` test: UT-B1-10 (docs/sim_implementation_plan.md)."""
+"""S-B1 `render/bev.py` test: UT-B1-10 (docs/sim_implementation_plan.md).
+`scene_bounds_m` (S-B3 slice 7a, "F to fit") reuses the same `_prim_bounds_m`
+this file already exercises through `hit_test`."""
 
 from __future__ import annotations
 
-from adas_sim.render.bev import hit_test
+from adas_sim.render.bev import hit_test, scene_bounds_m
 from adas_sim.scene.types import Layer, Prim, Scene
 from adas_sim.view.viewport import Viewport
 
@@ -45,3 +47,27 @@ def test_hit_test_ignores_prims_with_no_pick_id():
     )),))
     vp = Viewport(size_px=(400, 400), scale_px_per_m=10.0)
     assert hit_test(scene, vp, vp.to_px(0.0, 0.0)) is None
+
+
+def test_scene_bounds_m_unions_every_visible_prims_bounds():
+    scene = Scene(layers=(Layer(id="sim.test", group="sim", prims=(
+        Prim(kind="box", cx_m=0.0, cy_m=0.0, length_m=2.0, width_m=2.0, yaw_rad=0.0, style="ego.body"),
+        Prim(kind="circle", cx_m=10.0, cy_m=-5.0, r_m=1.0, style="sensor.range_ring"),
+    )),))
+    assert scene_bounds_m(scene) == (-1.0, -6.0, 11.0, 1.0)
+
+
+def test_scene_bounds_m_is_none_for_an_empty_scene():
+    assert scene_bounds_m(Scene(layers=())) is None
+
+
+def test_scene_bounds_m_respects_layer_selection():
+    scene = Scene(layers=(
+        Layer(id="sim.a", group="sim", prims=(
+            Prim(kind="box", cx_m=0.0, cy_m=0.0, length_m=2.0, width_m=2.0, yaw_rad=0.0, style="ego.body"),
+        )),
+        Layer(id="sim.b", group="sim", prims=(
+            Prim(kind="circle", cx_m=100.0, cy_m=100.0, r_m=1.0, style="sensor.range_ring"),
+        )),
+    ))
+    assert scene_bounds_m(scene, frozenset({"sim.a"})) == (-1.0, -1.0, 1.0, 1.0)

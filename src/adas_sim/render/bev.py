@@ -208,3 +208,24 @@ def hit_test(scene: Scene, viewport: Viewport, cursor_px: tuple[float, float],
             if best is None or candidate[:2] >= best[:2]:
                 best = candidate
     return best[2] if best else None
+
+
+def scene_bounds_m(scene: Scene, layer_selection: frozenset[str] | None = None) -> tuple[float, float, float, float] | None:
+    """The union of every visible prim's bounds (`_prim_bounds_m`, the same
+    generic one-path bbox `hit_test` uses) -- `None` for an empty scene, so
+    `Viewport.fitted_to` (`§4.4`, "F to fit") has nothing to fit and a caller
+    can decide what "fit an empty scene" means rather than this function
+    guessing."""
+    x_min = y_min = x_max = y_max = None
+    for _layer, prim in _visible_prims(scene, layer_selection):
+        bounds = _prim_bounds_m(prim)
+        if bounds is None:
+            continue
+        bx_min, by_min, bx_max, by_max = bounds
+        x_min = bx_min if x_min is None else min(x_min, bx_min)
+        y_min = by_min if y_min is None else min(y_min, by_min)
+        x_max = bx_max if x_max is None else max(x_max, bx_max)
+        y_max = by_max if y_max is None else max(y_max, by_max)
+    if x_min is None:
+        return None
+    return (x_min, y_min, x_max, y_max)

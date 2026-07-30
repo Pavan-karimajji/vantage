@@ -69,6 +69,45 @@ class Viewport:
             ),
         )
 
+    def panned(self, start_px: tuple[float, float], end_px: tuple[float, float]) -> Viewport:
+        """Drag-to-pan (`sim_visualization_spec.md` §4.4): the world point
+        grabbed at `start_px` ends up under `end_px` -- the same "invariant
+        point" reasoning as `zoomed_about_cursor`, so panning and zooming
+        agree on what "the cursor's world point" means, rather than a
+        second pixel-delta-to-world-delta derivation that could disagree
+        with it."""
+        world_grabbed = self.to_m(*start_px)
+        world_at_end_before_pan = self.to_m(*end_px)
+        return dataclasses.replace(self, centre_m=(
+            self.centre_m[0] + (world_grabbed[0] - world_at_end_before_pan[0]),
+            self.centre_m[1] + (world_grabbed[1] - world_at_end_before_pan[1]),
+        ))
+
+    def fitted_to(self, bounds_m: tuple[float, float, float, float], *, margin: float = 0.1) -> Viewport:
+        """`F` (§4.4): the smallest scale that fits `bounds_m` (world
+        `(x_min, y_min, x_max, y_max)`) inside `size_px`, centred on it.
+        `x` (forward) spans canvas **height**, `y` (left) spans canvas
+        **width** -- the same axis pairing `render/bev.py`'s
+        `_x_axis_limits`/`_y_axis_limits` use, so a fitted viewport and a
+        rendered frame agree on which axis is which. A degenerate (empty or
+        single-point) `bounds_m` keeps this viewport's own scale rather than
+        dividing by zero."""
+        x_min, y_min, x_max, y_max = bounds_m
+        x_span, y_span = x_max - x_min, y_max - y_min
+        candidates = []
+        if x_span > 0:
+            candidates.append(self.size_px[1] / x_span)
+        if y_span > 0:
+            candidates.append(self.size_px[0] / y_span)
+        # A degenerate (empty or single-point) span has nothing to fill, so
+        # the margin -- which only means something relative to a fit -- does
+        # not apply to the "keep this viewport's own scale" fallback.
+        new_scale = min(candidates) * (1.0 - margin) if candidates else self.scale_px_per_m
+        new_scale = min(max(new_scale, self.MIN_SCALE_PX_PER_M), self.MAX_SCALE_PX_PER_M)
+        return dataclasses.replace(
+            self, scale_px_per_m=new_scale, centre_m=((x_min + x_max) / 2.0, (y_min + y_max) / 2.0),
+        )
+
 
 #: Named viewpoints as data (S-B1 checklist; a component's own
 #: `viewpoints.yaml` supplies the presets themselves -- these are the

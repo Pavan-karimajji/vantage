@@ -1315,6 +1315,41 @@ both names and failing, not by re-reading the code. `pytest modules\sim\tests
 plus one delegation test in `test_b2_session.py`). `scripts\check_invariants.py`
 and `python docs/py/run_all.py`: both clean.
 
+**Slice 7a (viewport controls) DONE 2026-07-30.** §4.4: drag-to-pan,
+wheel-to-zoom-about-cursor, `F` fit, `0` reset, `R` cycle follow, `1`-`9`
+jump to a `DEFAULT_PRESETS` entry. `Viewport` gained `panned()` (drag-to-pan,
+proved by the same "invariant point stays under the cursor" reasoning
+`zoomed_about_cursor` already used, rather than a second pixel-delta
+derivation that could disagree with it) and `fitted_to()` (smallest scale
+that fits a world bbox, degenerate spans keep the current scale rather than
+dividing by zero); `render/bev.py` gained `scene_bounds_m` (unions
+`_prim_bounds_m` over every visible prim -- the same generic bbox
+`hit_test` already uses). `_ClickableImageLabel` now tracks press/move/
+release itself: a click only fires on release, and only if the pointer
+never moved past `_DRAG_THRESHOLD_PX` (3px) from the press -- otherwise it
+was a pan, and `dragged` fires once per move step instead, so `Viewport.
+panned` is applied incrementally and each step's own invariant holds.
+**Real gap found while wiring follow modes, not fixed here:** `render/
+bev.py` draws every `Prim`'s metres directly in viewport space and has
+never once read `Prim.frame` -- there is no frame-aware transform pass at
+all. `ego_forward`/`ego_heading`/`world` therefore render **identically**
+today; `Viewport.follow` is real, tested, cyclable state (same "ahead of
+its own consumer" shape `Interaction` had before Slice 4), but the
+rendering difference the spec describes needs that transform pass first, a
+separate piece of work this slice does not attempt. **Finding caught by a
+test, not by re-reading the code:** `test_f_fits_to_the_visible_content`
+failed under the full suite (not in isolation) -- every S-B3 system-test
+file's layer provider uses `group="test"` with no `requires=` gating, so in
+a full run every one of them contributes prims to every other test's Scene,
+and a scene-wide bounds union is exactly the assertion shape that notices.
+Earlier slices' assertions were narrow enough not to trip on this
+pre-existing gap; fixed *for this test* with a distinctive group + solo,
+noted rather than fixed retroactively across the other five files.
+`pytest modules\sim\tests -q`: **203 passed** (187 from Slice 6 + 16 new:
+5 in `test_b1_viewport.py`, 3 in `test_b1_bev_render.py`, 8 in
+`tests/system/test_b3_viewport_controls.py`). `scripts\check_invariants.py`
+and `python docs/py/run_all.py`: both clean.
+
 Timeline, plots, measure and workspace loading are separate, not-yet-started
 slices of this same stage; none of them change
 `MainWindow`'s shape (visualization spec §11.1's own "a new panel type
