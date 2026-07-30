@@ -112,6 +112,40 @@ def _draw_prim(ax, prim: Prim, theme: Theme, selected: bool = False) -> None:
             ))
 
 
+def _draw_scene_figure(scene: Scene, viewport: Viewport, theme: Theme,
+                        layer_selection: frozenset[str] | None,
+                        selection: frozenset[str],
+                        overlay_prims: tuple[Prim, ...],
+                        hud_lines: tuple[str, ...],
+                        stale_banner: str | None, dpi: int) -> plt.Figure:
+    """The one drawing path (`S-B4`'s `D5`: never two rendering stacks with
+    no shared vocabulary) -- `render_scene` (raster) and `render_scene_vector`
+    (`S-B4`'s print/vector capture) both call this and differ only in how
+    the resulting `Figure` is written out."""
+    fig = plt.figure(figsize=(viewport.size_px[0] / dpi, viewport.size_px[1] / dpi), dpi=dpi)
+    ax = fig.add_axes((0, 0, 1, 1))
+    ax.set_xlim(*_x_axis_limits(viewport))
+    ax.set_ylim(*_y_axis_limits(viewport))
+    ax.axis("off")
+    fig.patch.set_facecolor("#1a1a19" if theme == "dark" else "#fcfcfb")
+    ax.set_facecolor(fig.patch.get_facecolor())
+
+    for _layer, prim in _visible_prims(scene, layer_selection):
+        _draw_prim(ax, prim, theme, selected=prim.pick_id in selection)
+    for prim in overlay_prims:
+        _draw_prim(ax, prim, theme)
+
+    hud_color = "#dddddd" if theme == "dark" else "#333333"
+    for i, line in enumerate(hud_lines):
+        ax.text(0.99, 0.99 - i * 0.045, line, transform=ax.transAxes, ha="right", va="top",
+                fontsize=7, color=hud_color, zorder=1000)
+    if stale_banner:
+        ax.text(0.5, 0.98, stale_banner, transform=ax.transAxes, ha="center", va="top",
+                fontsize=9, color="#ff5555", zorder=1001,
+                bbox={"facecolor": "#1a1a19" if theme == "dark" else "#fcfcfb", "alpha": 0.75, "edgecolor": "none"})
+    return fig
+
+
 def render_scene(scene: Scene, viewport: Viewport, theme: Theme,
                   layer_selection: frozenset[str] | None = None,
                   selection: frozenset[str] = frozenset(),
@@ -136,28 +170,9 @@ def render_scene(scene: Scene, viewport: Viewport, theme: Theme,
     `overlay_prims`. Both default to nothing, so every caller predating
     `S-B3` slice 12 renders unchanged."""
     dpi = 100
-    fig = plt.figure(figsize=(viewport.size_px[0] / dpi, viewport.size_px[1] / dpi), dpi=dpi)
-    ax = fig.add_axes((0, 0, 1, 1))
-    ax.set_xlim(*_x_axis_limits(viewport))
-    ax.set_ylim(*_y_axis_limits(viewport))
-    ax.axis("off")
-    fig.patch.set_facecolor("#1a1a19" if theme == "dark" else "#fcfcfb")
-    ax.set_facecolor(fig.patch.get_facecolor())
-
-    for _layer, prim in _visible_prims(scene, layer_selection):
-        _draw_prim(ax, prim, theme, selected=prim.pick_id in selection)
-    for prim in overlay_prims:
-        _draw_prim(ax, prim, theme)
-
-    hud_color = "#dddddd" if theme == "dark" else "#333333"
-    for i, line in enumerate(hud_lines):
-        ax.text(0.99, 0.99 - i * 0.045, line, transform=ax.transAxes, ha="right", va="top",
-                fontsize=7, color=hud_color, zorder=1000)
-    if stale_banner:
-        ax.text(0.5, 0.98, stale_banner, transform=ax.transAxes, ha="center", va="top",
-                fontsize=9, color="#ff5555", zorder=1001,
-                bbox={"facecolor": "#1a1a19" if theme == "dark" else "#fcfcfb", "alpha": 0.75, "edgecolor": "none"})
-
+    fig = _draw_scene_figure(
+        scene, viewport, theme, layer_selection, selection, overlay_prims, hud_lines, stale_banner, dpi,
+    )
     buffer = _io.BytesIO()
     fig.savefig(buffer, format="raw", dpi=dpi)
     buffer.seek(0)
@@ -165,6 +180,28 @@ def render_scene(scene: Scene, viewport: Viewport, theme: Theme,
     array = np.frombuffer(buffer.getvalue(), dtype=np.uint8).reshape((height, width, 4))
     plt.close(fig)
     return array[:, :, :3]  # drop alpha
+
+
+def render_scene_vector(scene: Scene, viewport: Viewport, theme: Theme,
+                         layer_selection: frozenset[str] | None = None,
+                         selection: frozenset[str] = frozenset(),
+                         overlay_prims: tuple[Prim, ...] = (),
+                         hud_lines: tuple[str, ...] = (),
+                         stale_banner: str | None = None, *,
+                         fmt: str = "svg") -> bytes:
+    """`S-B4`'s print variant: the same `Scene` through the same drawing
+    path as `render_scene` (`D5`), written out as a vector format instead of
+    a raster -- `fmt` is any format matplotlib's own `Figure.savefig`
+    accepts (`"svg"`, `"pdf"`); `render/capture.py` picks it from the
+    output path's own suffix, never guessed here."""
+    dpi = 100
+    fig = _draw_scene_figure(
+        scene, viewport, theme, layer_selection, selection, overlay_prims, hud_lines, stale_banner, dpi,
+    )
+    buffer = _io.BytesIO()
+    fig.savefig(buffer, format=fmt, dpi=dpi)
+    plt.close(fig)
+    return buffer.getvalue()
 
 
 def _x_axis_limits(viewport: Viewport) -> tuple[float, float]:

@@ -1788,45 +1788,88 @@ Closes `FR-SIM-13`.
 **Must not.** Write a PNG whose sidecar could be lost without anyone noticing.
 The sidecar is written in the same call, or the capture fails.
 
-- [ ] `render/capture.py` — `snapshot(session, tick, viewport, layers, out)`
+**Status: DONE 2026-07-30.** `render/bev.py` gained `_draw_scene_figure`
+(the one drawing path, `D5`) that both the existing `render_scene` (raster)
+and a new `render_scene_vector` (`.svg`/`.pdf`, matplotlib `savefig`) call —
+`render/capture.py`'s `snapshot()` picks between them from `out`'s own
+suffix. `snapshot()` itself splits into `write_pair(image_bytes, sidecar,
+out)` (the atomic temp-file-then-`os.replace` mechanism, panel-agnostic —
+`UT-B4-3`) and the BEV-specific caller that builds the `Scene`/sidecar dict
+and hands bytes to it; `render/clip.py`'s `export_clip()` reuses the exact
+same `write_pair` for an interval's `.mp4` (`imageio[ffmpeg]`, new `video`
+extra in `pyproject.toml` — no ffmpeg on `PATH` in this environment, so a
+portable binary via pip rather than a system dependency, checked with the
+user first: real signal/CSV export, `S-D7`, is a different stage from this
+one's picture/video capture — confirmed after clarifying which need was
+being asked for). `cli/render.py` now delegates to `snapshot()` instead of
+calling `build_scene`/`render_scene`/`imsave` directly, so `--out fig.svg`
+gets vector output and every `sim render` call gets a sidecar for free,
+with no change to its existing argument shape (`ST-B3-1`'s original tests
+still pass unmodified). **One correction to this checklist's own wording:**
+"pipeline hash" — no pipeline is built or hashed anywhere yet (`S-C1c`);
+the sidecar's `pipeline` field is `RunManifest.pipeline`, the name the
+manifest actually carries today, noted in `capture.py`'s own comment rather
+than fabricating a hash that does not exist. `pytest modules\sim\tests -q`:
+**347 passed** (335 before this stage + 12 new: 6 in `test_b4_capture.py`,
+2 in `test_b4_clip.py`, 4 in `test_b4_capture_cli.py`). `scripts\
+check_invariants.py` and `python docs\py\run_all.py`: both clean. No
+`sim clip`/video CLI verb was added — not named in this stage's own file
+list (only the two `render/` functions), and `sim_api_reference.md` §11
+already frees "internal helpers" and "renderer internals"; `export_clip()`
+is usable in 3 lines from a script either way (`R-SIM-16`).
+
+- [x] `render/capture.py` — `snapshot(session, tick, viewport, layers, out)`
       writing `out.png` **and** `out.json` atomically (temp file, then rename;
       a half-written pair is worse than none)
-- [ ] The sidecar carries: `run_id` (`N-9`), tick, `t_ns`, project,
+- [x] The sidecar carries: `run_id` (`N-9`), tick, `t_ns`, project,
       `bundle_sha256` **and** `bundle_origin`, scenario, pipeline hash, every
       component build hash, viewport, active layers, theme, Scene version, tool
       version
-- [ ] `render/clip.py` — interval export to mp4, same sidecar, one per clip
-- [ ] `cli/render.py` — headless `sim render --at <t|tick> --out fig.png`,
+- [x] `render/clip.py` — interval export to mp4, same sidecar, one per clip
+- [x] `cli/render.py` — headless `sim render --at <t|tick> --out fig.png`,
       working under an offscreen platform (`P-7`)
-- [ ] Print variant: same Scene, `print` theme, vector output where the renderer
+- [x] Print variant: same Scene, `print` theme, vector output where the renderer
       supports it — one Scene, two renderers, never two drawing paths (`D5`)
 
 **Tests**
-- [ ] `UT-B4-1` a snapshot writes exactly two files, and neither exists if the
+- [x] `UT-B4-1` a snapshot writes exactly two files, and neither exists if the
       other could not be written
-- [ ] `UT-B4-2` the sidecar contains every field listed above; a missing one
+- [x] `UT-B4-2` the sidecar contains every field listed above; a missing one
       fails the test by name, not by count
-- [ ] `UT-B4-3` a plot panel captures with the same sidecar shape as the BEV —
+- [x] `UT-B4-3` a plot panel captures with the same sidecar shape as the BEV —
       one capture path, not one per panel type
-- [ ] `UT-B4-4` a snapshot sidecar carries the **same `run_id`** as its session
+- [x] `UT-B4-4` a snapshot sidecar carries the **same `run_id`** as its session
       (`N-9`) — given any one artefact you can find the other five
-- [ ] `UT-B4-5` `bundle_origin` is recorded, so a picture rendered from a
+- [x] `UT-B4-5` `bundle_origin` is recorded, so a picture rendered from a
       checkout is distinguishable from one rendered from the embedded bundle
       (`R-SIM-3a`)
-- [ ] `ST-B4-1` `sim render` twice at the same tick produces byte-identical PNGs
+- [x] `ST-B4-1` `sim render` twice at the same tick produces byte-identical PNGs
 - [ ] `ST-B4-2` `sim render` works with **no display**, under an offscreen
-      platform, on both platforms (`P-7`)
+      platform, on both platforms (`P-7`). **Buildable half closed**: no Qt
+      anywhere in this dependency chain at all (matplotlib's `Agg` backend,
+      unconditionally headless — there is not even an offscreen-platform flag
+      to set, unlike `S-B3`'s Qt panels). "On both platforms" stays open on
+      the same basis as `ST-B3-2`: no Ubuntu environment this session can
+      verify against.
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-7` (offscreen is the tested path, not
-      a fallback), `P-4`, `P-2`
-- [ ] naming §3 ticked — exposure: `N-9` (this is where the correlation id earns
-      its keep), `N-4` (sidecar fields carry units)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [x] portability §3 ticked — exposure: `P-7` (offscreen is the tested path, not
+      a fallback — see `ST-B4-2` above), `P-4` (sidecar written
+      `encoding="utf-8"`), `P-2` (every path is a parameter, nothing hardcoded)
+- [x] naming §3 ticked — exposure: `N-9` (this is where the correlation id earns
+      its keep), `N-4` (sidecar fields carry units: `t_ns`, `clip_t_start_s`/
+      `clip_t_end_s`, `bundle_sha256`)
+- [x] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked. `GT-4`/`GT-5`:
+      unaffected — no `src/component/**` file and no build-machinery file
+      touched this stage.
 
 **Gate**
 - [ ] `ST-B4-1` + `ST-B4-2` green — a snapshot is reproducible evidence, and it
-      is producible on a build machine with no screen
+      is producible on a build machine with no screen. `ST-B4-1` is green;
+      `ST-B4-2`'s buildable half is green and its mechanism is platform-uniform
+      (pure `matplotlib`/`imageio-ffmpeg`, no Qt), but its "on both platforms"
+      clause stays open for the same reason `S-B3`'s combined gate bullet
+      does — not a code gap.
 
 
 ---
