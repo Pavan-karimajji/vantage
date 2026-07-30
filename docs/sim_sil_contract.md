@@ -13,6 +13,154 @@ Governing rules: `R-SIL-1` (host-agnostic C-API DLL is the SIL delivery),
 
 ---
 
+## 0. Background — plain-language, for someone new to this
+
+Read this section first if you haven't worked with a compiled C library
+crossing a language boundary before. Sections 1 onward describe the actual
+mechanism precisely and assume you already know what an ABI, a DLL export and
+protobuf serialization are; this section explains *why any of it matters
+here*, assuming none of that.
+
+### The actual problem, without jargon
+
+`df` compiles down to one file: `df_sil.dll`. Anything that wants to use it —
+a C++ test program (`sil_host`), a Python script driving a CARLA scenario —
+calls into that compiled file through exactly one function, `dfExec()`. Today
+that function looks like:
+
+```c
+int dfExec(void* handle, double dtS, const DfReqBuf* objects, const DfReqBuf* egoDyn,
+           const DfReqBuf* vehSig, DfProBuf* aebOutputs, DfProBuf* bsdOutputs,
+           DfProBuf* aebCompState, DfProBuf* bsdCompState);
+```
+
+Picture a vending machine with one physical button per snack — that's this
+function: one fixed parameter per input or output. It works, but every time a
+new snack (a new driving function — ACC, LCA, LDW, LKA, ...) is added, someone
+has to physically add a button and rewire the machine, and **everyone who
+already uses the machine has to relearn the new layout**, because the layout
+itself changed. This already happened once for real: adding BSD alongside AEB
+grew this function from 5 parameters to 9, and every caller (`sil_host`, the
+Python bridge) had to be edited to match, in lockstep. Six more functions are
+still coming (§2's table below runs the numbers out to 23 parameters). Every
+one of those additions is a breaking change to a compiled library that ripples
+out to every caller by hand.
+
+### What "ABI" means, concretely
+
+"ABI" (Application Binary Interface) just names *the fixed shape of how
+outside code calls into a compiled library* — which functions exist, what
+order their parameters come in, how the raw bytes of each one are laid out in
+memory. It matters here specifically because `df_sil.dll` is **compiled**: by
+the time anything calls it, there is no compiler around to check "did you pass
+the right type in the right order?" Both sides are just handing raw memory
+addresses across a boundary, and if they don't agree on the shape byte-for-byte
+the failure is silent corruption, not a compile error. That is also exactly why
+the header declaring these functions is plain C, with none of C++'s classes or
+namespaces: C's calling rules are simple and universal enough that literally
+anything — C, C++, or Python via `ctypes` — can call it without knowing
+anything about our internal C++ code.
+
+### The fix: a note, instead of buttons
+
+Instead of "press button 3 and button 7," the redesign hands the machine a
+note listing what's wanted, by name:
+
+```c
+int32_t adasExec(void* handle, double dtS, const AdasPortSet* in, AdasPortSet* out);
+```
+
+`AdasPortSet` is just "an array of named pieces of data" (each one: a name
+like `"objects"` or `"bsd.outputs"`, a pointer to bytes, a size, a valid flag).
+**This signature never changes again**, no matter how many functions get
+added — a new function means a new name appearing in the array at run time,
+never a new parameter in the code. A build with only AEB enabled and a build
+with all nine functions enabled call `adasExec` with the *identical* C
+signature; only the contents of the arrays differ.
+
+### Why there's also a "manifest," and why it's a `.proto` file
+
+If ports are just named blobs, whoever calls the library needs a way to ask
+"okay, what ports do you actually have, and what do they mean?" That's the
+**manifest** — the vending machine printing its own menu on request: here's
+what exists, here's the direction (in/out), here's what type each one is. It
+is not the real driving-function data itself (that's still `AebOutputs`,
+`BsdOutputs`, ...) — it's a small description *of* that data, generated
+automatically from whichever functions were actually compiled in
+(`ENABLED_FUNCTIONS`), so it can never drift from the truth.
+
+Every other structured message crossing a component boundary in this codebase
+is already a `.proto` file in `interfaces`, for consistency and because it
+gives serialization in both C++ and Python for free. The manifest is exactly
+that kind of thing, so it is one more `.proto` file, following the same
+pattern already used for `AebOutputs`/`VehDyn`/etc. That is the only reason
+this change touches `proto/` at all.
+
+### Why `interfaces`, and not `df` or `sil_host`
+
+`interfaces` is this codebase's one shared rulebook repo, specifically so that
+when a second component (`perception-core`, eventually) ships its own compiled
+library, it does not invent a private, slightly different version of "how do I
+talk to my library." If this lived inside `df`, `perception-core` would later
+have to copy-paste it (or reinvent it) — two rulebooks free to quietly drift
+apart. Defined once in `interfaces`, every library (`df` today,
+`perception-core` later) and every caller (`sil_host`, Python tooling, `sim`'s
+own viewer) reads from the same page.
+
+`sil_host` specifically is not the right home either — it is *one particular
+caller* of a library, not the place the shared agreement between *all*
+callers and *all* libraries gets defined. And the new header
+(`interfaces/include/adas/adas_sil_abi.h`) lives in its own folder, separate
+from `interfaces/cpp/` (C++-only interfaces for our own components talking to
+each other), because this header must work for any language at all, with zero
+C++ features — it needs to visibly be a different kind of thing.
+
+### `sil_host` and `sim` (Vantage) — one concept, two hosts
+
+Worth stating plainly, since it is easy to assume these are two competing
+tools: **they are not.** Both are meant to be driven by the exact same idea —
+a component's ports are named and discoverable via its manifest, and each
+stage in a run answers two questions: is it actually executed, or is its
+output injected from a recording (`mode: simulate` / `measured` / `off`), and
+if executed, by what (`impl: dll:` / `stub:` / `stubdll:`). `sim_architecture.md`
+§5.10 calls this **"the single concept"** — a deliberate decision (`OD-2`), not
+an accident.
+
+The difference between the two tools is capability, not concept:
+
+- **`sil_host`** — a small, dependency-free C++ program. No Python, no
+  interpreter overhead, which makes it the one place a timing measurement is
+  actually trustworthy, and the closest thing to a real, non-simulation
+  integrator using these DLLs. It can run a real compiled library (`dll:`) or
+  a compiled stand-in (`stubdll:`), and it can replay recorded values
+  (`measured`) — but it can never run a Python-written stand-in (`stub:`),
+  because it has no Python interpreter, and it must never grow its own bespoke
+  way of inventing test data (`sim_architecture.md` §9). If it needs a
+  stand-in, that stand-in is built once as a `stubdll:`, usable by both tools.
+- **`adas_sim` (Vantage)** — the Python framework: development, inspection,
+  recording, visualization, and every stand-in type, including quick
+  Python-only ones.
+
+**Honest gap, not yet closed:** the stated aspiration (`sim_architecture.md`
+§9) is that one pipeline description file should run under Vantage *and* run
+under `sil_host` unchanged. Today, only the ABI-level compatibility is
+actually scheduled: `sil_host` keeps working unmodified once the generic
+functions are added (`sim_implementation_plan.md` `S-C1b`), and later one call
+site switches it from the old function to the new one (`S-E2`). Building an
+actual generic "read the same pipeline file, wire together however many
+components it names" engine inside `sil_host` is not yet a tracked, scheduled
+stage — it is stated intent, not yet built. Tracked as an open point below and
+as `OQ-11` in `sim_requirements.md` §11, rather than left as an assumption.
+
+### Where to go from here
+
+Sections 1 onward here (and `sim_architecture.md` §5.10/§9) describe the
+actual mechanism in implementation-level detail; `sim_implementation_plan.md`'s
+`S-C1a`/`S-C1b`/`S-C1c` stages are the checkbox-tracked order this is actually
+being built in.
+
+---
+
 ## 1. What exists today
 
 `modules/df/src/platform/df_sil/df_interface_c.h`:
@@ -602,3 +750,12 @@ condition instead of a silent misread.
 - **Non-Windows.** `ctypes.WinDLL` becomes `ctypes.CDLL` behind one helper; the
   header already handles the export macro. Untested until a Linux target
   exists, and flagged rather than assumed.
+- **`sil_host` has no generic pipeline reader yet (`OQ-11`).** §0 and
+  `sim_architecture.md` §9 state the intent that one pipeline description file
+  should run unchanged under both Vantage and `sil_host`. Today only ABI-level
+  compatibility is scheduled (`S-C1b`, `S-E2`) — a real C++ engine inside
+  `sil_host` that parses the same pipeline YAML and wires together an
+  arbitrary set of named components is not yet a tracked stage. Until it
+  exists, wiring a second component (e.g. `perception-core`) into `sil_host`
+  means hand-editing `main.cpp`, still on the same named-port/manifest model,
+  just without the "point it at the same file Vantage reads" convenience.

@@ -978,3 +978,4 @@ Recorded so that "we never thought about it" is never the explanation.
 | OQ-8 | Campaign sizing — throughput, storage, retention (`NR-SIM-23`) | undesigned |
 | OQ-9 | Pinning a resim to a stored component build (`NR-SIM-24`) | undesigned |
 | OQ-10 | Are four override verbs enough? The closed list is the decision most likely to be wrong, and the escape hatch (a `stub:` stage) is heavier than the complaint that motivated `FR-SIM-45`. Watch it; do not pre-emptively widen it | `R-SIM-15` |
+| OQ-11 | `sil_host` has no generic pipeline-file reader. The stated intent (contract §0, arch §9) is that one pipeline description runs unchanged under both Vantage and `sil_host`; only ABI-level compatibility (`S-C1b`, `S-E2`) is actually scheduled. Whether/when to build a real C++ engine that parses the same pipeline YAML is undecided | contract §9 |
