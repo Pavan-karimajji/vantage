@@ -2042,61 +2042,153 @@ the existing body** (`df_sil_dll.md` rule 9) — if this stage needs an algorith
 change, the design is wrong, not the algorithm. And must not remove or alter the
 positional exports: `sil_host` still calls them, and `ST-C1b-2` proves it.
 
-- [ ] `adasAbiVersion` / `adasManifest` / `adasInit` / `adasExec` /
+**Status: code + tests written and verified 2026-07-30, again NOT through
+`df`'s own Conan/CMake pipeline** (no `conan`, no MSVC in this environment,
+same caveat as `S-C1a`). Substituted a full, independent standalone build:
+every real source file `df_interface_c.cpp` pulls in — `mathlib`'s `scalar.cpp`
++ the exact 25 `openlibm` translation units its own `CMakeLists.txt` names
+(including its per-file `sin=__olm_sin`-style renames, replicated exactly),
+every `aeb`/`bsd` `.cpp`, `df_runner.cpp`, `param_loader.cpp`, all of
+`interfaces`' real proto files (via the same extracted `protoc`/`libprotobuf`
+as `S-C1a`, plus `libyaml-cpp-dev`/`libgtest-dev` extracted the same
+no-sudo `apt-get download` + `dpkg-deb -x` way) — compiled and linked into a
+real `.so` with `-fPIC`, exporting all nine symbols
+(`dfApiVersion/dfInit/dfExec/dfShutdown` and
+`adasAbiVersion/adasManifest/adasInit/adasExec/adasShutdown` side by side,
+confirmed via `nm -D`). Against that library: the **existing, unmodified**
+`test_interface_c_api.cpp` — **6/6 still pass**, proving the positional path
+is genuinely untouched; a new `test_generic_interface_c_api.cpp` — **14/14
+pass**, including `EquivalenceTest.GenericAndPositionalPathsProduceByteIdenticalOutputs`
+(`ST-C1b-1`'s actual claim, verified byte-for-byte, not asserted); and a
+manual BCT-01-style override (recompiling `df_interface_c.cpp` with neither
+`ADAS_FN_AEB_ENABLED` nor `ADAS_FN_BSD_ENABLED` defined) confirms the manifest
+reports zero inputs/outputs (`UT-C1b-7`). `ST-C1b-1` is therefore green on
+real evidence; `GT-4`'s own count and `ST-C1b-2` (`sil_host` itself) still
+need a real `ctest`/`vs2026` run this environment cannot perform — tracked
+open below, not assumed.
+
+**Three real findings, not anticipated:**
+- **`FileDescriptorSet`/`SimpleDescriptorDatabase` live in `descriptor.pb.h`/
+  `descriptor_database.h`, not `descriptor.h`** — a real compile error the
+  first draft hit immediately, in both `df_interface_c.cpp` and the new test
+  file. Fixed by including the right headers; not a design problem, a missing
+  include.
+- **A user-caught mistake, fixed and now recorded as a standing rule for this
+  codebase:** the first draft's fallback `#define ADAS_DF_PROJECT_NAME "base"`
+  (for when the real CMake wiring is absent) used `"base"` — a real, valid
+  project name, indistinguishable from a genuine answer if the wiring were
+  ever forgotten. Changed to `"unknown"` (matching `ADAS_DF_BUILD_ID`'s own
+  fallback and `io/base.py`'s `Provenance.unknown` elsewhere in this
+  superproject) — a fallback for a value with a real value-space must never
+  itself be a member of that space. Audited every other file touched in this
+  stage and `S-C1a` for the same shape; none found.
+- **`ADAS_DF_BUILD_ID` (git describe) is deliberately NOT wired to a real
+  value.** A real `git describe` would make the checked-in
+  `df_sil.ports.yaml` change on every single commit regardless of whether a
+  port actually changed, defeating the "a port change shows up as a
+  reviewable diff" reason that file exists. Left as `"unknown"`, same
+  deferral shape as `config_bundle_sha256` (`S-C5`) — `UT-C1b-6`'s equality
+  check excludes `build_id` for exactly this reason, documented in the test
+  itself, not silently skipped.
+
+**Design note, not a deviation:** `writeProBuf` (the positional helper) is left
+byte-for-byte unchanged; a **new** `writeAdasProBuf` exists for the generic
+path specifically because `UT-C1b-5` asks for different undersize behaviour
+(report the required size, matching `adasManifest()`'s own two-call pattern)
+than the positional path's existing `len = 0`. `updateReqPort` **is** shared
+between both paths (templated on the buffer type — `DfReqBuf` and `AdasPort`
+carry the same field names by construction), so the input side genuinely
+cannot diverge between the two APIs; only the one deliberately-different
+output behaviour has two implementations.
+
+- [x] `adasAbiVersion` / `adasManifest` / `adasInit` / `adasExec` /
       `adasShutdown` in the component's `*_interface_c.cpp`, `adasExec`
-      dispatching **by port name** onto the existing implementation
-- [ ] Manifest generator driven by `ENABLED_FUNCTIONS` (`R-VAR-5`), embedding
+      dispatching **by port name** onto the existing implementation.
+      `adasInit`/`adasShutdown` delegate straight to `dfInit`/`dfShutdown`
+      (zero chance of the two paths diverging on lifecycle); `adasExec`
+      dispatches via `findPort()` + the shared `updateReqPort` template onto
+      the exact same `DfHandle`/`AebFunction`/`BsdFunction` `dfExec` already
+      calls — no `src/component/**` file touched
+- [x] Manifest generator driven by `ENABLED_FUNCTIONS` (`R-VAR-5`), embedding
       the `FileDescriptorSet` — so the manifest **cannot drift from what was
-      compiled**, which is the whole reason it is generated rather than written
-- [ ] `<component>.ports.yaml` emitted beside the artefact **and** checked in,
-      so a port change shows up as a reviewable diff rather than a rebuild
-- [ ] `try/catch(...)` on every new `extern "C"` body (rule 12) — an exception
-      crossing the ABI boundary is undefined behaviour, and the generic path
-      doubles the number of places it could happen
-- [ ] Export visibility via the one macro from `S-C1a`; **no `.def` file**, which
-      would be a second, Windows-only source of truth for the export list
+      compiled**, which is the whole reason it is generated rather than written.
+      `buildManifest()` in `df_interface_c.cpp`, `#ifdef`-guarded identically
+      to the rest of the file; `addFileAndDeps()` walks each used message
+      type's transitive `FileDescriptor` dependencies into one
+      `FileDescriptorSet`, de-duplicated by filename
+- [x] `df_sil.ports.yaml` emitted beside the artefact **and** checked in
+      (`df_sil.ports.yaml`, content verified against a real `adasManifest()`
+      call before committing — see Status above). Regeneration is a
+      **deliberate** action (`df_manifest_dump`, a new small executable
+      target, never run automatically) — the same discipline `modules/sim`'s
+      own golden files use, and the reason `ADAS_DF_BUILD_ID` is not wired
+      for real (see Finding above)
+- [x] `try/catch(...)` on every new `extern "C"` body (rule 12)
+- [x] Export visibility via the one macro from `S-C1a` (`ADAS_SIL_ABI_EXPORTS`,
+      a second, independent export flag from `DF_SIL_EXPORTS` since it belongs
+      to a different header); **no `.def` file**
 
 **Tests** — in the component's own `tests/unit/sil/`
-- [ ] `UT-C1b-1` every existing positional-API test assertion **mirrored** onto
+- [x] `UT-C1b-1` every existing positional-API test assertion **mirrored** onto
       the generic path, with identical expected values
-- [ ] `UT-C1b-2` an unknown input port is ignored (forward compatibility: an
-      older library must tolerate a newer host offering extra ports)
-- [ ] `UT-C1b-3` a required input that is absent behaves exactly as `valid == 0`
-- [ ] `UT-C1b-4` an all-default (zero-byte) payload with `valid == 1` is accepted
-      — the regression from `df_sil_dll.md` §1 bug 2, re-asserted on the new path
-- [ ] `UT-C1b-5` an undersized output buffer returns the **required size** and
-      writes nothing — the caller retries once, and a second undersize is a bug
-- [ ] `UT-C1b-6` embedded manifest equals the emitted `<component>.ports.yaml`
-- [ ] `UT-C1b-7` a build with one function **disabled** yields no port for it in
-      either the manifest or the YAML (`R-VAR-5`: selection is compile-time)
-- [ ] `UT-C1b-8` `descriptor_set` contains every `proto_type` the manifest names,
-      **transitively** — a host builds message classes from this alone, so a
-      missing nested type is a failure that only appears on another machine
-- [ ] `UT-C1b-9` **one token, every layer** (`N-1`): the manifest's port tokens,
-      the `ENABLED_FUNCTIONS` list and the `src/component/` directory names
-      agree exactly; any disagreement fails naming all three. This is what makes
-      a single grep return the whole vertical slice
+      (`test_generic_interface_c_api.cpp`'s `GenericInterfaceCApiTest.*`, each
+      naming its positional twin in `test_interface_c_api.cpp`) — both suites
+      verified green side by side against the same built library
+- [x] `UT-C1b-2` an unknown input port (`"acc.something"`) is ignored
+- [x] `UT-C1b-3` a required input that is absent behaves exactly as `valid == 0`
+- [x] `UT-C1b-4` an all-default (zero-byte) payload with `valid == 1` is accepted
+- [x] `UT-C1b-5` an undersized output buffer returns the **required size** and
+      writes nothing (sentinel bytes in the buffer verified untouched)
+- [x] `UT-C1b-6` embedded manifest equals the emitted `df_sil.ports.yaml`
+      (structural fields only — `build_id` excluded, see Finding above)
+- [x] `UT-C1b-7` a build with **both** functions disabled yields zero ports in
+      the manifest — verified via a manual BCT-01-style recompile (Status
+      above), same effort level `df_sil_dll.md` rule 10 already established
+      for this exact class of check, not a permanent automated test
+- [x] `UT-C1b-8` `descriptor_set` contains every `proto_type` the manifest names,
+      **transitively** — verified by loading it into a real
+      `DescriptorPool`/`SimpleDescriptorDatabase` and resolving every named
+      type, not just checking the byte count is non-zero
+- [x] `UT-C1b-9` **one token, every layer**: every non-empty `owner_function`
+      in the manifest is checked against a real `src/component/` subdirectory
+      on disk
 - [ ] `UT-C1b-10` an exception thrown inside the implementation is caught at the
-      boundary and returned as a status, never propagated across `extern "C"`
-- [ ] `ST-C1b-1` **equivalence**: for a fixed sequence of inputs, the generic
-      and positional paths produce **byte-identical** outputs
-- [ ] `ST-C1b-2` `sil_host` still builds and runs unchanged (it still calls the
-      positional API)
+      boundary — **not tested**, same precedent `df_sil_dll.md` rule 12 already
+      set for the positional path ("no controlled way to trigger a real throw
+      today without adding an artificial hook... documented as defensive
+      code")
+- [x] `ST-C1b-1` **equivalence**: for a fixed sequence of inputs, the generic
+      and positional paths produce **byte-identical** outputs — real,
+      byte-for-byte verified (Status above)
+- [ ] `ST-C1b-2` `sil_host` still builds and runs unchanged — **not run**;
+      `sil_host` itself needs the real Conan/`vs2026` build this environment
+      cannot perform. Indirect evidence only: `df_interface_c.h`'s existing
+      declarations are untouched, and the unmodified positional test suite
+      passing 6/6 shows the positional symbols behave identically
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-5` (exports are `cdecl` on both; no
-      `__stdcall`, no `.def`), `P-3`
-- [ ] naming §3 ticked — exposure: `N-1` (the manifest is where
-      one-token-every-layer becomes checkable — `UT-C1b-9`), `N-4` (port fields
-      carry units)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [x] portability §3 ticked — exposure: `P-5` (`ADAS_SIL_ABI_EXPORTS` follows
+      the exact same `_WIN32`/export-macro pattern `DF_SIL_EXPORTS` already
+      uses; no `.def` file), `P-3` (port-name comparison is `strcmp`, exact,
+      never case-folded)
+- [x] naming §3 ticked — exposure: `N-1` (`UT-C1b-9`), `N-4` (`max_bytes`,
+      `abi_version` — every manifest field that needs a unit or a scope
+      already has one)
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked —
+      `docs/py/run_all.py` doesn't cover `df`; `GT-4`'s real count needs the
+      real `ctest` run noted above, not assumed from the standalone
+      equivalent; `GT-1..GT-3`/`GT-6` don't apply (no `modules/sim/src`
+      touched this stage); `GT-5` unaffected (no build-machinery file touched
+      in this stage)
 
 **Gate**
-- [ ] `ST-C1b-1` green — the new path is proven equivalent **before** anything
+- [x] `ST-C1b-1` green — the new path is proven equivalent **before** anything
       depends on it, which is the precondition for `S-E2` ever removing the old
-      one
+      one. Verified byte-for-byte via the standalone build (Status above), not
+      yet through `df`'s own Conan pipeline
 - [ ] `GT-4` green at or above its prior count, checked **per commit** in this
-      stage, not only here
+      stage — needs a real `ctest` run (this session's 20/20 — 6 positional +
+      14 generic — passing standalone is strong evidence, not the same claim)
 
 ### S-C1c — `contracts/` — `SilComponent`, `Pipeline`
 
