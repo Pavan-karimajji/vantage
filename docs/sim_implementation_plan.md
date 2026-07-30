@@ -1504,10 +1504,38 @@ module docstring as a deliberate architecture choice, not an oversight.
 `tests/system/test_b3_measure_wiring.py`, closing `UT-B3-4`).
 `scripts\check_invariants.py` and `python docs/py/run_all.py`: both clean.
 
-Every `view/*.py` module this stage's file list names is now built.
-HUD/stale-banner and `cli/view.py`/`cli/render.py` remain; none of this
-changes `MainWindow`'s shape (visualization spec §11.1's own "a new
-panel type registers itself... the shell does not change").
+**Slice 12 (HUD + stale banner) DONE 2026-07-30.** §10's always-on
+furniture. Drawn as a **third rasterising tier inside `render_scene`
+itself** -- world-space prims, then `overlay_prims` (Slice 11's
+world-space ruler/rings/annotations), then `hud_lines`/`stale_banner` in
+**screen space** (`ax.transAxes`) -- a `Prim` cannot stay fixed top-right
+under pan/zoom, proved directly
+(`test_render_scene_hud_lines_stay_fixed_regardless_of_viewport_pan`: the
+same HUD text at two different viewport centres renders byte-identical).
+Scale/`t = .. · tick ..`/project-scenario-pipeline-build-id are always
+shown -- the framework already has every one of those values itself. The
+ego-state line and the stale-port banner are different: §10 wants a
+velocity's *address* and a port's *declared max-age seconds*, and the
+framework has no component calibration to invent either from (`R-SIM-1`)
+-- `MainWindow.__init__` gained `ego_state_signals`/`max_age_s`, both
+caller-supplied dicts, both empty by default, so an unconfigured HUD shows
+exactly what the framework itself knows and nothing guessed.
+**Deliberately not built:** the origin dot/axis arrows/distance grid §10
+also names -- `modules/df/sim/layers/common.py`'s own `frame_layer`
+already draws these today, as a component layer in a different submodule;
+whether that responsibility should move into framework HUD furniture is a
+real cross-submodule question this slice names rather than decides
+unilaterally or silently duplicates. `pytest modules\sim\tests -q`: **322
+passed** (302 from Slice 11 + 20 new: 11 in `test_b3_hud.py`, 3 more in
+`test_b1_bev_render.py`, 6 in `tests/system/test_b3_hud_wiring.py`,
+closing `UT-B3-5`). `scripts\check_invariants.py` and `python
+docs/py/run_all.py`: both clean.
+
+Every `view/*.py` module this stage's file list names is now built, and
+so is every other `render/viewer.py` capability except the origin/axes/
+grid cross-submodule question above. `cli/view.py`/`cli/render.py` remain;
+none of this changes `MainWindow`'s shape (visualization spec §11.1's own
+"a new panel type registers itself... the shell does not change").
 
 **Must not.**
 - **Run pass 1 on the GUI thread.** Building a `Session` blocks for as long as
@@ -1562,7 +1590,16 @@ panel type registers itself... the shell does not change").
       over that resolver
 - [x] `view/measure.py` — ruler with snap, range rings, cursor readout carrying
       the **frame name**, persistent annotations
-- [ ] HUD + the stale/invalid banner (viz §10)
+- [x] HUD + the stale/invalid banner (viz §10). **Scoped:** scale/time/
+      tick/project-scenario-pipeline-build-id are always shown (framework-
+      known); the ego-state line and the stale banner are caller-supplied
+      config (`ego_state_signals`/`max_age_s`), empty by default -- the
+      framework has no component calibration to guess a value from
+      (`R-SIM-1`, `view/hud.py`'s own docstring). The origin dot/axis
+      arrows/distance grid are **not** built here — `modules/df`'s own
+      `frame_layer` already draws these as a component layer in a
+      different submodule; moving that into framework furniture is a
+      real, undecided cross-submodule question, not silently duplicated
 - [ ] `cli/view.py`, `cli/render.py` — argument parsing only. **Not
       `app/cli.py`**: `app/` is the GUI and holds no logic (`GT-9`)
 
@@ -1575,7 +1612,7 @@ panel type registers itself... the shell does not change").
       and only there
 - [x] `UT-B3-4` ruler distance/dx/dy/bearing correct; snap picks the nearest
       anchor within the threshold
-- [ ] `UT-B3-5` stale banner appears exactly when `valid == 0` or the port's age
+- [x] `UT-B3-5` stale banner appears exactly when `valid == 0` or the port's age
       exceeds its declared maximum
 - [x] `UT-B3-6` one signal string resolves identically for the timeline strip
       and a plot panel; a **raw port field needs no registration** at all.

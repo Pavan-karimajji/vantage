@@ -109,7 +109,21 @@ zoom levels. **Cursor readout is deliberately not a `Prim`**: a
 plain status-bar `QLabel` with no re-render at all -- a full `render_scene`
 (a matplotlib figure) on every pixel of mouse travel would make the BEV
 laggy, the same class of cost `S-B3`'s playback timer already has to
-respect per tick. None of this changes the module's shape
+respect per tick. **Slice 12 adds §10's HUD text and stale banner**, drawn
+in **screen space** (`ax.transAxes`) inside `render_scene` itself -- fixed
+top-right/top-centre regardless of pan/zoom, which a `Prim` (world-space)
+cannot do, so this is a third drawing tier alongside the scene's own
+prims and `overlay_prims`, not more of either. Scale/time/tick/project are
+always shown (the framework knows them itself); the ego-state line and the
+stale-port banner are **caller-supplied** (`__init__`'s `ego_state_signals`/
+`max_age_s`, both empty by default) -- the framework has no component
+calibration of its own to guess a velocity's address or a max-age-seconds
+value from (`R-SIM-1`, `view/hud.py`'s own docstring). **Not built here:**
+the origin dot/axis arrows/distance grid §10 also lists -- `modules/df`'s
+own `frame_layer` already draws these today, as a component layer in a
+different submodule; whether that responsibility moves into framework HUD
+furniture is a real, cross-submodule question this slice does not decide
+or silently duplicate. None of this changes the module's shape
 (`sim_visualization_spec.md` §11.1's own "a new panel type registers
 itself... the shell does not change").
 """
@@ -129,6 +143,7 @@ from adas_sim.core.runner import (
     LoadCancelled, SceneCache, build_reactive_layers, build_session_from_recording, build_static_scene,
 )
 from adas_sim.core.session import Session
+from adas_sim.core.signals import resolve_tick
 from adas_sim.render.bev import anchor_points_m, hit_test, render_scene, scene_bounds_m
 from adas_sim.render.plots import render_distribution, render_xy
 from adas_sim.render.theme import Theme
@@ -136,6 +151,7 @@ from adas_sim.render.timeline import px_to_tick, render_timeline
 from adas_sim.scene.types import Layer, Scene
 from adas_sim.view.inspector import InspectorState, copy_as_text
 from adas_sim.view.layers import LayerTreeState
+from adas_sim.view.hud import HudInfo, format_hud_lines, format_stale_banner, stale_ports
 from adas_sim.view.measure import MeasureState, snap_point
 from adas_sim.view.plots import PlotState
 from adas_sim.view.timeline import TimelineState, event_markers
@@ -709,10 +725,19 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def __init__(self, recording: Path, *, project: str = "base",
                  workspace_path: Path | None = None,
+                 ego_state_signals: dict[str, str] | None = None,
+                 max_age_s: dict[str, float] | None = None,
                  parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Vantage")
         self._project = project
+        # §10's ego-state line and stale-port max-age both need a value the
+        # framework does not have on its own (R-SIM-1) -- a signal address
+        # per HUD field, and a calibration seconds-value per port. Both
+        # caller-supplied, both empty (HUD line/banner simply absent) by
+        # default (`view/hud.py`'s own docstring).
+        self._ego_state_signals = ego_state_signals or {}
+        self._max_age_s = max_age_s or {}
         # §13b: "a missing workspace is not an error" -- the caller decides
         # what "missing" means by handing (or not handing) a path; a
         # malformed file, unlike a missing one, still raises (a workspace.yaml
@@ -989,9 +1014,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self._current_scene = scene  # unfiltered -- hit_test takes layer_selection itself
         self.layers_panel.sync_from_scene(scene.layers)
         layer_selection = self.layers_state.visible_layer_ids()
+        hud_lines, stale_banner = self._hud_and_stale_banner(tick_index)
         frame = render_scene(
             scene, self.bev.viewport, self.bev.theme, layer_selection, self._selection,
-            self.measure_state.overlay_prims(),
+            self.measure_state.overlay_prims(), hud_lines, stale_banner,
         )
         self.bev.show_frame(frame)
         # The inspector reflects what's actually drawn, same as hit_test --
@@ -1003,6 +1029,29 @@ class MainWindow(QtWidgets.QMainWindow):
         self.inspector_panel.sync(visible_scene, self._selection)
         self._rerender_timeline()
         self._rerender_plots()
+
+    def _hud_and_stale_banner(self, tick_index: int) -> tuple[tuple[str, ...], str | None]:
+        """§10: everything the framework itself knows (scale, time, tick,
+        project/scenario/pipeline/build id) plus, only if configured
+        (`_ego_state_signals`/`_max_age_s`, `__init__`'s own docstring),
+        the ego state line and the stale-port banner."""
+        tick = self._session.at(tick_index)
+        ego_state = None
+        if self._ego_state_signals:
+            ego_state = {}
+            for field_name, address in self._ego_state_signals.items():
+                value = resolve_tick(tick, address)
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    ego_state[field_name] = value
+        build_id = self._session.meta.components[0].build_id if self._session.meta.components else ""
+        info = HudInfo(
+            scale_px_per_m=self.bev.viewport.scale_px_per_m, t_s=tick.t_s,
+            tick_index=tick_index, head_tick=self.transport.head_tick if self.transport else tick_index,
+            project=self._project, scenario=self._session.meta.scenario,
+            pipeline=self._session.meta.pipeline, build_id=build_id, ego_state=ego_state,
+        )
+        banner = format_stale_banner(stale_ports(tick, self._max_age_s))
+        return format_hud_lines(info), banner
 
     def _rerender_timeline(self) -> None:
         """Redraws the strip at the current playhead -- cheap: every

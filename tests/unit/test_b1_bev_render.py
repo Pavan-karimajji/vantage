@@ -100,3 +100,31 @@ def test_render_scene_draws_overlay_prims_on_top():
         Prim(kind="polyline", points_m=((0.0, 0.0), (5.0, 5.0)), style="measure.ruler"),
     ))
     assert not np.array_equal(blank, with_overlay)
+
+
+def test_render_scene_draws_hud_lines():
+    scene = Scene(layers=())
+    vp = Viewport(size_px=(200, 200), scale_px_per_m=10.0)
+    blank = render_scene(scene, vp, "dark")
+    with_hud = render_scene(scene, vp, "dark", hud_lines=("scale 10.0 px/m", "t = 1.00s"))
+    assert not np.array_equal(blank, with_hud)
+
+
+def test_render_scene_draws_a_stale_banner():
+    scene = Scene(layers=())
+    vp = Viewport(size_px=(200, 200), scale_px_per_m=10.0)
+    blank = render_scene(scene, vp, "dark")
+    with_banner = render_scene(scene, vp, "dark", stale_banner="STALE: a, b")
+    assert not np.array_equal(blank, with_banner)
+
+
+def test_render_scene_hud_lines_stay_fixed_regardless_of_viewport_pan():
+    """Screen-space, not world-space: the same HUD text at two different
+    viewport centres (a pan) renders identically -- unlike a Prim, which
+    would move."""
+    scene = Scene(layers=())
+    vp_a = Viewport(size_px=(200, 200), scale_px_per_m=10.0, centre_m=(0.0, 0.0))
+    vp_b = Viewport(size_px=(200, 200), scale_px_per_m=10.0, centre_m=(50.0, 50.0))
+    frame_a = render_scene(scene, vp_a, "dark", hud_lines=("fixed text",))
+    frame_b = render_scene(scene, vp_b, "dark", hud_lines=("fixed text",))
+    assert np.array_equal(frame_a, frame_b)

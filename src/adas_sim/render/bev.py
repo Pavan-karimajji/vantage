@@ -115,7 +115,9 @@ def _draw_prim(ax, prim: Prim, theme: Theme, selected: bool = False) -> None:
 def render_scene(scene: Scene, viewport: Viewport, theme: Theme,
                   layer_selection: frozenset[str] | None = None,
                   selection: frozenset[str] = frozenset(),
-                  overlay_prims: tuple[Prim, ...] = ()) -> np.ndarray:
+                  overlay_prims: tuple[Prim, ...] = (),
+                  hud_lines: tuple[str, ...] = (),
+                  stale_banner: str | None = None) -> np.ndarray:
     """`Scene` + `Viewport` + `theme` -> an RGB raster array (H, W, 3),
     uint8. Pure function of its arguments -- no window, no state held
     between calls (headless, `ST-B1-3`). `selection` (`Interaction.selection`,
@@ -125,7 +127,14 @@ def render_scene(scene: Scene, viewport: Viewport, theme: Theme,
     top, through the same `_draw_prim` every layer provider's own prims go
     through -- ruler/range-rings/annotations are ordinary `Prim`s, not a
     second drawing path; defaults to none, so every caller predating `S-B3`
-    slice 11 renders unchanged."""
+    slice 11 renders unchanged.
+
+    `hud_lines`/`stale_banner` (`view/hud.py`, §10) are drawn in **screen
+    space** (`ax.transAxes`), not world metres -- HUD furniture must stay
+    fixed top-right regardless of pan/zoom, which a `Prim` (always
+    world-space) cannot do; this is why the HUD is not just more
+    `overlay_prims`. Both default to nothing, so every caller predating
+    `S-B3` slice 12 renders unchanged."""
     dpi = 100
     fig = plt.figure(figsize=(viewport.size_px[0] / dpi, viewport.size_px[1] / dpi), dpi=dpi)
     ax = fig.add_axes((0, 0, 1, 1))
@@ -139,6 +148,15 @@ def render_scene(scene: Scene, viewport: Viewport, theme: Theme,
         _draw_prim(ax, prim, theme, selected=prim.pick_id in selection)
     for prim in overlay_prims:
         _draw_prim(ax, prim, theme)
+
+    hud_color = "#dddddd" if theme == "dark" else "#333333"
+    for i, line in enumerate(hud_lines):
+        ax.text(0.99, 0.99 - i * 0.045, line, transform=ax.transAxes, ha="right", va="top",
+                fontsize=7, color=hud_color, zorder=1000)
+    if stale_banner:
+        ax.text(0.5, 0.98, stale_banner, transform=ax.transAxes, ha="center", va="top",
+                fontsize=9, color="#ff5555", zorder=1001,
+                bbox={"facecolor": "#1a1a19" if theme == "dark" else "#fcfcfb", "alpha": 0.75, "edgecolor": "none"})
 
     buffer = _io.BytesIO()
     fig.savefig(buffer, format="raw", dpi=dpi)
