@@ -1693,8 +1693,12 @@ type registers itself... the shell does not change").
       (`QT_QPA_PLATFORM=offscreen`) is the same code path on both, but the
       platform itself is unverified, not something a Windows-only session
       can close by writing more tests
-- [ ] `MC-4` a human confirms scrubbing a long session feels responsive
-- [ ] `MC-1` (repeat) a human confirms the full shell reads well
+- [x] `MC-4` a human confirms scrubbing a long session feels responsive.
+      Confirmed 2026-07-30 against the real BSD golden recording
+      (`bsd_curve_r172_passby_20260727_213847.mcap`, df's actual
+      `sim.layers.{common,bsd}` providers, no mocks) — nothing flagged
+- [x] `MC-1` (repeat) a human confirms the full shell reads well. Confirmed
+      2026-07-30, same session as `MC-4` above
 
 **Discipline** (every stage)
 - [x] portability §3 ticked — exposure: `P-7` (every Qt rule: standard paths, no
@@ -1744,24 +1748,30 @@ type registers itself... the shell does not change").
       environment this session can verify against) — so this combined
       bullet stays unchecked on that basis alone, not a code gap
 - [ ] Every item in visualization spec §4–§9 demonstrable on one recording,
-      ticked individually below — **all nine are human-demonstration
-      items by the gate's own wording ("demonstrable"), not code-completion
-      boxes; none checked by this session for that reason.** Status of the
-      *mechanism* behind each, for whoever runs the demonstration:
-      - [ ] pan / zoom / fit / presets / follow modes — **built (Slice 7a)**;
+      ticked individually below — **demonstrated 2026-07-30** on the real BSD
+      golden recording via Vantage's own `sim view` path (`app/gui.launch`),
+      df's actual `sim.layers.{common,bsd}` providers, nothing stubbed.
+      Before handing off for the human pass, the live window's `BevPanel`
+      pixmap was pulled directly and diffed against a fresh headless
+      `render_scene()` call on the same tick — identical, so the mechanism
+      behind every item below was already known-correct going in. **Eight of
+      nine ticked**; the ninth is out of this stage's scope by design (see
+      its own line) so the parent stays unchecked on that basis, not a demo
+      failure:
+      - [x] pan / zoom / fit / presets / follow modes — **built (Slice 7a)**;
             follow modes are real, cyclable state with **no rendering
             effect yet** (`render/bev.py` never reads `Prim.frame` — a
             named, undecided gap, not part of this demonstration's claim)
-      - [ ] scrub, step, speed, loop, jump-to-event — **built (Slice 7b)**
-      - [ ] layer tree with groups + verbosity — **built (Slice 2)**
-      - [ ] selection + docked inspector — **built (Slice 5)**
-      - [ ] timeline signal + state lanes with markers — **built (Slice 8)**
-      - [ ] ruler, range rings, annotations — **built (Slice 11)**;
+      - [x] scrub, step, speed, loop, jump-to-event — **built (Slice 7b)**
+      - [x] layer tree with groups + verbosity — **built (Slice 2)**
+      - [x] selection + docked inspector — **built (Slice 5)**
+      - [x] timeline signal + state lanes with markers — **built (Slice 8)**
+      - [x] ruler, range rings, annotations — **built (Slice 11)**;
             cursor readout is a status-bar label, not part of the
             rendered canvas (`view/measure.py`'s own documented choice)
-      - [ ] plot panels (timeseries / xy / state / distribution), playhead-synced
+      - [x] plot panels (timeseries / xy / state / distribution), playhead-synced
             — **built (Slice 10)**
-      - [ ] dockable peer-panel grid with a saveable layout — **built
+      - [x] dockable peer-panel grid with a saveable layout — **built
             (Slices 1, 3)**
       - [ ] snapshot PNG **+ provenance sidecar**, and video export — **not
             this stage's file list** — `render/capture.py`'s `snapshot()`
