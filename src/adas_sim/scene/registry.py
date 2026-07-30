@@ -3,12 +3,21 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`@layer_provider`, `@inspector_fields`, `@signal` -- discovery **by
-import** (sim_api_reference.md §5, §6.4's registry note). A component adds a
-layer by existing: importing the module that defines a decorated function is
-what registers it, so there is no central roster to keep in sync
-(`R-VAR-2`'s "no central roster" principle, extended from components to
-layers).
+"""`@layer_provider`, `@signal` -- discovery **by import** (sim_api_reference.md
+§5, §6.4's registry note). A component adds a layer by existing: importing the
+module that defines a decorated function is what registers it, so there is no
+central roster to keep in sync (`R-VAR-2`'s "no central roster" principle,
+extended from components to layers).
+
+**`@inspector_fields` (`S-A3`) lived here and is gone.** It only ever
+registered field *names* against the decorated function object, with no way
+to resolve *values* for a picked entity -- and since `layer_provider` may
+wrap that same function in `gated` (when `requires` is given), the
+registration key and `LayerProviderEntry.func` could silently diverge. Never
+called anywhere. Replaced (`S-B3` slice 5) by `Prim.fields`: the provider
+that builds a prim already has the raw entity in hand, so it computes the
+inspector's (name, value) pairs inline, the same pass -- one fewer moving
+part, and no identity to keep in sync.
 """
 
 from __future__ import annotations
@@ -44,7 +53,6 @@ class LayerProviderEntry:
 
 
 _PROVIDERS: dict[str, LayerProviderEntry] = {}
-_INSPECTOR_FIELDS: dict[Callable[..., object], tuple[str, ...]] = {}
 _SIGNALS: dict[str, Callable[..., object]] = {}
 
 
@@ -116,21 +124,6 @@ def layer_provider(
 
 def registered_providers() -> Mapping[str, LayerProviderEntry]:
     return MappingProxyType(_PROVIDERS)
-
-
-def inspector_fields(*fields: str) -> Callable[[Callable[..., object]], Callable[..., object]]:
-    """Declares which fields a layer's picked prim exposes to the inspector
-    panel (`S-B3`). Registration only; consumed once the inspector exists."""
-
-    def decorator(func: Callable[..., object]) -> Callable[..., object]:
-        _INSPECTOR_FIELDS[func] = tuple(fields)
-        return func
-
-    return decorator
-
-
-def registered_inspector_fields() -> Mapping[Callable[..., object], tuple[str, ...]]:
-    return MappingProxyType(_INSPECTOR_FIELDS)
 
 
 def signal(name: str) -> Callable[[Callable[..., object]], Callable[..., object]]:

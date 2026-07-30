@@ -30,14 +30,24 @@ per project** (`sim_visualization_spec.md` §11.1) via `saveState()`/
 function's layer overrides persist per project + pipeline, so re-opening a
 recording of that function restores its layer choices). Both locations
 resolve through `QStandardPaths.AppConfigLocation`, never a hand-written
-`%LOCALAPPDATA%`/`~/.config` path. Inspector, timeline, signals, plots,
-measure and component-shipped `workspace.yaml` loading remain later slices;
-none of them change this module's shape (`sim_visualization_spec.md` §11.1's own "a new
-panel type registers itself... the shell does not change").
+`%LOCALAPPDATA%`/`~/.config` path. **Slice 4** activated `Interaction` on
+`LayerCtx` (`reacts_to=`, `SceneCache`'s reactive tier) with no panel driving
+it yet. **Slice 5 is that panel, for selection:** `BevPanel` click-to-select
+(`Ctrl`+click to multi-select, `Esc` to clear) resolves through
+`render/bev.hit_test` (already built and tested in `S-B1`, `UT-B1-10`) into
+`MainWindow._selection`, which `render_tick` folds into both the `Interaction`
+it was already passing to `SceneCache` (Slice 4) and a new `selection=`
+argument to `render_scene` (§7.1's styling-plus-halo). The docked
+`InspectorPanel` (`view/inspector.py`) shows the resolved entities' declared
+`Prim.fields` live, with pin and copy-as-text. Timeline, signals, plots and
+measure remain later slices; none of them change this module's shape
+(`sim_visualization_spec.md` §11.1's own "a new panel type registers
+itself... the shell does not change").
 """
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 
 import numpy as np
@@ -48,9 +58,10 @@ from adas_sim.core.runner import (
     LoadCancelled, SceneCache, build_reactive_layers, build_session_from_recording, build_static_scene,
 )
 from adas_sim.core.session import Session
-from adas_sim.render.bev import render_scene
+from adas_sim.render.bev import hit_test, render_scene
 from adas_sim.render.theme import Theme
-from adas_sim.scene.types import Layer
+from adas_sim.scene.types import Layer, Scene
+from adas_sim.view.inspector import InspectorState, copy_as_text
 from adas_sim.view.layers import LayerTreeState
 from adas_sim.view.viewport import Viewport
 
@@ -124,6 +135,25 @@ class _SessionLoadWorker(QtCore.QObject):
         self.loaded.emit(session)
 
 
+class _ClickableImageLabel(QtWidgets.QLabel):
+    """Emits a click in **pixmap-relative** pixel coordinates
+    (`sim_visualization_spec.md` §7.1's click-to-select) -- `AlignCenter`
+    centres the pixmap within the label whenever the label is larger, so a
+    raw `event.position()` would be off by that offset; this corrects for
+    it once, here, rather than in every caller."""
+
+    clicked = QtCore.Signal(float, float, QtCore.Qt.KeyboardModifiers)
+
+    def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:  # noqa: N802 -- Qt override
+        pixmap = self.pixmap()
+        if pixmap is not None and not pixmap.isNull():
+            offset_x = (self.width() - pixmap.width()) / 2.0
+            offset_y = (self.height() - pixmap.height()) / 2.0
+            pos = event.position()
+            self.clicked.emit(pos.x() - offset_x, pos.y() - offset_y, event.modifiers())
+        super().mousePressEvent(event)
+
+
 class BevPanel(QtWidgets.QDockWidget):
     """The first peer panel (`sim_visualization_spec.md` §11.1): a raster
     from `render/bev.py` shown in a plain label. Pan/zoom/follow-mode
@@ -131,11 +161,14 @@ class BevPanel(QtWidgets.QDockWidget):
     prove the shell and the threading model, not the full viewport feature
     set."""
 
+    clicked = QtCore.Signal(float, float, QtCore.Qt.KeyboardModifiers)
+
     def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__("BEV", parent)
         self.setObjectName("dock.bev")  # stable id `saveState()`/`restoreState()` match on
-        self._label = QtWidgets.QLabel()
+        self._label = _ClickableImageLabel()
         self._label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self._label.clicked.connect(self.clicked)
         self.setWidget(self._label)
         self.viewport = Viewport()
         self.theme: Theme = "dark"
@@ -235,6 +268,62 @@ class LayersPanel(QtWidgets.QDockWidget):
         self._rebuild()
 
 
+class InspectorPanel(QtWidgets.QDockWidget):
+    """The docked inspector (`sim_visualization_spec.md` §7.2): one entry
+    per selected/pinned entity, expandable to its declared `Prim.fields`.
+    Resolution, pin and "drop when gone" all live in `state`
+    (`view/inspector.py`); this class only arranges the tree and dispatches
+    the pin/copy-as-text context menu (`GT-9`)."""
+
+    def __init__(self, state: InspectorState, parent: QtWidgets.QWidget | None = None) -> None:
+        super().__init__("Inspector", parent)
+        self.setObjectName("dock.inspector")  # stable id `saveState()`/`restoreState()` match on
+        self.state = state
+        self._last_scene: Scene | None = None
+        self._last_selection: frozenset[str] = frozenset()
+
+        self._tree = QtWidgets.QTreeWidget()
+        self._tree.setHeaderHidden(True)
+        self._tree.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
+        self._tree.customContextMenuRequested.connect(self._on_context_menu)
+        self.setWidget(self._tree)
+
+    def sync(self, scene: Scene, selection: frozenset[str]) -> None:
+        self._last_scene = scene
+        self._last_selection = selection
+        self._rebuild()
+
+    def _rebuild(self) -> None:
+        self._tree.clear()
+        if self._last_scene is None:
+            return
+        for entry in self.state.entries(self._last_scene, self._last_selection):
+            title = f"{entry.pick_id} [pinned]" if entry.pinned else entry.pick_id
+            item = QtWidgets.QTreeWidgetItem([title])
+            item.setData(0, QtCore.Qt.ItemDataRole.UserRole, entry.pick_id)
+            for name, value in entry.fields:
+                item.addChild(QtWidgets.QTreeWidgetItem([f"{name}: {value}"]))
+            self._tree.addTopLevelItem(item)
+        self._tree.expandAll()
+
+    def _on_context_menu(self, pos: QtCore.QPoint) -> None:
+        item = self._tree.itemAt(pos)
+        if item is None or item.parent() is not None or self._last_scene is None:
+            return
+        pick_id = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
+        menu = QtWidgets.QMenu(self)
+        pin_action = menu.addAction("Unpin" if self.state.is_pinned(pick_id) else "Pin")
+        copy_action = menu.addAction("Copy as text")
+        chosen = menu.exec(self._tree.viewport().mapToGlobal(pos))
+        if chosen is pin_action:
+            self.state.toggle_pin(pick_id)
+            self._rebuild()
+        elif chosen is copy_action:
+            entry = next(e for e in self.state.entries(self._last_scene, self._last_selection)
+                         if e.pick_id == pick_id)
+            QtWidgets.QApplication.clipboard().setText(copy_as_text(entry))
+
+
 class MainWindow(QtWidgets.QMainWindow):
     """Vantage's window (`sim_player.md` names the application). A
     **dockable peer-panel grid** (`sim_visualization_spec.md` §11.1) -- today
@@ -249,18 +338,31 @@ class MainWindow(QtWidgets.QMainWindow):
         self._session: Session | None = None
         self._scene_cache: SceneCache | None = None
         self._current_tick = 0
+        self._current_scene: Scene | None = None
+        #: pick_ids (`sim_visualization_spec.md` §7.1) -- persists across
+        #: ticks by construction: nothing here is tick-indexed.
+        self._selection: frozenset[str] = frozenset()
 
         self.bev = BevPanel(self)
         self.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, self.bev)
+        self.bev.clicked.connect(self._on_bev_clicked)
 
         self.layers_state = LayerTreeState()
         self.layers_panel = LayersPanel(self.layers_state, self)
         self.addDockWidget(QtCore.Qt.DockWidgetArea.LeftDockWidgetArea, self.layers_panel)
         self.layers_panel.changed.connect(self._on_layers_changed)
 
+        self.inspector_state = InspectorState()
+        self.inspector_panel = InspectorPanel(self.inspector_state, self)
+        self.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, self.inspector_panel)
+
+        self._clear_selection_shortcut = QtGui.QShortcut(QtGui.QKeySequence("Esc"), self)
+        self._clear_selection_shortcut.activated.connect(self._on_clear_selection)
+
         view_menu = self.menuBar().addMenu("&View")
         view_menu.addAction(self.bev.toggleViewAction())
         view_menu.addAction(self.layers_panel.toggleViewAction())
+        view_menu.addAction(self.inspector_panel.toggleViewAction())
 
         self.restore_layout()
 
@@ -343,15 +445,50 @@ class MainWindow(QtWidgets.QMainWindow):
         needs neither, `core/runner.py`'s own docstring); the layers panel's
         choice is applied only at rasterising, which is why toggling a layer
         re-renders without re-running pass 1 *or* pass 2a. `interaction`
-        defaults to a no-op -- no panel drives cursor/selection yet (that is
-        `view/measure.py`/`view/inspector.py`'s job); a provider declaring
-        `reacts_to` is already correctly wired to it (`sim_visualization_spec.md`
-        §7.5, `SceneCache`'s reactive tier)."""
+        defaults to a no-op, for a caller feeding `cursor`/`modifiers`/
+        `toggles` (`view/measure.py`, later); its `selection` field is always
+        overridden from `self._selection` here, so every call site -- not
+        just the click handler -- keeps rendering the current selection
+        without having to remember to thread it through by hand."""
         if self._session is None or self._scene_cache is None:
             return
         self._current_tick = tick_index
-        scene = self._scene_cache.get(tick_index, frozenset(), self.bev.theme, interaction)
+        effective_interaction = dataclasses.replace(interaction, selection=self._selection)
+        scene = self._scene_cache.get(tick_index, frozenset(), self.bev.theme, effective_interaction)
+        self._current_scene = scene  # unfiltered -- hit_test takes layer_selection itself
         self.layers_panel.sync_from_scene(scene.layers)
         layer_selection = self.layers_state.visible_layer_ids()
-        frame = render_scene(scene, self.bev.viewport, self.bev.theme, layer_selection)
+        frame = render_scene(scene, self.bev.viewport, self.bev.theme, layer_selection, self._selection)
         self.bev.show_frame(frame)
+        # The inspector reflects what's actually drawn, same as hit_test --
+        # a hidden layer's entity is gone from the panel too, not just the
+        # canvas (a filtered *view* of the Scene, not a second Scene).
+        visible_scene = dataclasses.replace(
+            scene, layers=tuple(layer for layer in scene.layers if layer.id in layer_selection),
+        )
+        self.inspector_panel.sync(visible_scene, self._selection)
+
+    def _on_bev_clicked(self, x: float, y: float, modifiers: QtCore.Qt.KeyboardModifiers) -> None:
+        """§7.1: click to select, `Ctrl`+click to toggle membership. Hit-tests
+        against exactly what's currently drawn (`render/bev.hit_test`, the
+        same layer selection `render_tick` just rasterised with) -- a hit on
+        a hidden layer's prim cannot select it."""
+        if self._current_scene is None:
+            return
+        layer_selection = self.layers_state.visible_layer_ids()
+        pick_id = hit_test(self._current_scene, self.bev.viewport, (x, y), layer_selection)
+        if modifiers & QtCore.Qt.KeyboardModifier.ControlModifier:
+            if pick_id is None:
+                return
+            selection = set(self._selection)
+            selection.symmetric_difference_update({pick_id})
+            self._selection = frozenset(selection)
+        else:
+            self._selection = frozenset({pick_id}) if pick_id is not None else frozenset()
+        self.render_tick(self._current_tick)
+
+    def _on_clear_selection(self) -> None:
+        if not self._selection:
+            return
+        self._selection = frozenset()
+        self.render_tick(self._current_tick)

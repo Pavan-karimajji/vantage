@@ -41,9 +41,14 @@ def _visible_prims(scene: Scene, layer_selection: frozenset[str] | None) -> list
     return pairs
 
 
-def _draw_prim(ax, prim: Prim, theme: Theme) -> None:
+def _draw_prim(ax, prim: Prim, theme: Theme, selected: bool = False) -> None:
     style = resolve(prim.style, theme) if prim.style else None
     color = style.color if style else "#888888"
+    if selected:
+        # §7.1: "selected prims get object.selected styling plus a halo" --
+        # the halo is generic (any kind, via _prim_bounds_m below), the same
+        # one-path reasoning UT-B1-10's hit_test already relies on.
+        color = resolve("object.selected", theme).color
 
     if prim.kind in ("polyline", "polygon", "points") and prim.points_m:
         xs = [p[0] for p in prim.points_m]
@@ -95,12 +100,26 @@ def _draw_prim(ax, prim: Prim, theme: Theme) -> None:
                   prim.x0_m, prim.x0_m + arr.shape[0] * prim.cell_dx_m)
         ax.imshow(arr, extent=extent, origin="lower", alpha=prim.alpha, zorder=prim.z, cmap="viridis")
 
+    if selected:
+        bounds = _prim_bounds_m(prim)
+        if bounds is not None:
+            x_min, y_min, x_max, y_max = bounds
+            margin_m = 0.15
+            ax.add_patch(mpatches.Rectangle(
+                (y_min - margin_m, x_min - margin_m),
+                (y_max - y_min) + 2 * margin_m, (x_max - x_min) + 2 * margin_m,
+                fill=False, edgecolor=color, linestyle="--", linewidth=1.5, zorder=prim.z + 0.5,
+            ))
+
 
 def render_scene(scene: Scene, viewport: Viewport, theme: Theme,
-                  layer_selection: frozenset[str] | None = None) -> np.ndarray:
+                  layer_selection: frozenset[str] | None = None,
+                  selection: frozenset[str] = frozenset()) -> np.ndarray:
     """`Scene` + `Viewport` + `theme` -> an RGB raster array (H, W, 3),
     uint8. Pure function of its arguments -- no window, no state held
-    between calls (headless, `ST-B1-3`)."""
+    between calls (headless, `ST-B1-3`). `selection` (`Interaction.selection`,
+    `pick_id`s) drives §7.1's styling-plus-halo; defaults to none selected,
+    so every caller predating `S-B3` slice 5 renders unchanged."""
     dpi = 100
     fig = plt.figure(figsize=(viewport.size_px[0] / dpi, viewport.size_px[1] / dpi), dpi=dpi)
     ax = fig.add_axes((0, 0, 1, 1))
@@ -111,7 +130,7 @@ def render_scene(scene: Scene, viewport: Viewport, theme: Theme,
     ax.set_facecolor(fig.patch.get_facecolor())
 
     for _layer, prim in _visible_prims(scene, layer_selection):
-        _draw_prim(ax, prim, theme)
+        _draw_prim(ax, prim, theme, selected=prim.pick_id in selection)
 
     buffer = _io.BytesIO()
     fig.savefig(buffer, format="raw", dpi=dpi)

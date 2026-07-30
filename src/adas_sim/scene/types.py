@@ -111,6 +111,17 @@ class Prim:
     data: bytes | None = None
     format: str | None = None
 
+    #: Ordered (name, formatted value) pairs for the inspector panel
+    #: (`sim_visualization_spec.md` §7.2) -- **declared, not dumped**: the
+    #: provider that built this prim already had the raw entity in hand, so
+    #: it computes these inline, the same pass, rather than a separate
+    #: registry resolving a `pick_id` back to a value later (`S-A3`'s
+    #: `@inspector_fields` tried the latter and was never wired up -- "the
+    #: renderer hit-tests the prims it actually drew, so the two cannot
+    #: disagree" (§7.1), extended here: the prim that carries the values is
+    #: the prim that was drawn). Only meaningful alongside `pick_id`.
+    fields: tuple[tuple[str, str], ...] | None = None
+
     def __post_init__(self) -> None:
         if self.kind not in _KNOWN_KINDS:
             raise AuthoringError(
@@ -121,6 +132,12 @@ class Prim:
             raise AuthoringError(
                 expected=f"a known frame: {', '.join(known_frame_kinds())}", found=repr(self.frame),
                 where="Prim.frame", hint="R-COORD-1: default is 'ego'",
+            )
+        if self.fields is not None and self.pick_id is None:
+            raise AuthoringError(
+                expected="pick_id set whenever fields is (fields with nothing to attach it to is dead data)",
+                found="fields set, pick_id is None",
+                where="Prim.fields", hint="give the prim a pick_id, or drop fields",
             )
         if _HEX_STYLE.match(self.style):
             raise AuthoringError(

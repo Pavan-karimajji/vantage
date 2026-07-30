@@ -69,6 +69,21 @@ def test_prim_with_semantic_style_token_is_accepted():
     assert prim.style == "sensor.range_ring"
 
 
+def test_prim_fields_without_a_pick_id_raises():
+    """S-B3 slice 5: `fields` with nothing to attach it to is dead data --
+    the inspector resolves by `pick_id` (`sim_visualization_spec.md` §7.2)."""
+    with pytest.raises(AuthoringError) as excinfo:
+        Prim(kind="circle", cx_m=0.0, cy_m=0.0, r_m=1.0, style="object.label",
+             fields=(("dist_x", "3.20 m"),))
+    assert "pick_id" in excinfo.value.found
+
+
+def test_prim_fields_with_a_pick_id_is_accepted():
+    prim = Prim(kind="circle", cx_m=0.0, cy_m=0.0, r_m=1.0, style="object.label",
+                pick_id="object.7", fields=(("dist_x", "3.20 m"), ("dist_y", "-1.10 m")))
+    assert prim.fields == (("dist_x", "3.20 m"), ("dist_y", "-1.10 m"))
+
+
 def test_layer_and_scene_are_immutable_dataclasses():
     layer = Layer(id="sim.test", group="sim", prims=(ONE_PER_KIND["box"],))
     with pytest.raises(dataclasses.FrozenInstanceError):

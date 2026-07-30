@@ -497,6 +497,12 @@ reference — only metres, a named frame and a **semantic** style token.
       which does not exist until `S-B2`; nothing in `UT-A3-*` requires it yet
 - [x] `scene/registry.py` — `@layer_provider`, `@inspector_fields`, `@signal`;
       discovery **by import**, so a component adds a layer by existing.
+      **`@inspector_fields` removed in `S-B3` slice 5:** never wired to
+      anything, and its registration key (the decorated function) could
+      silently diverge from `LayerProviderEntry.func` once `requires`
+      wrapped it in `gated`. Replaced by `Prim.fields` (inline, computed by
+      the same provider that builds the prim) once the inspector actually
+      needed values, not just names.
       Duplicate id raises naming **both** providers (`N-8`)
 - [x] `scene/codec.py` — Scene to bytes and back, **protobuf**: field numbering
       gives minor-version tolerance for free, and a Foxglove renderer wants the
@@ -1236,8 +1242,44 @@ passed** (146 from Slice 3 + 6 in `tests/unit/test_b3_interaction.py` +
 `UT-B3-14`). `scripts\check_invariants.py` and `python docs/py/run_all.py`:
 both clean.
 
-Inspector, timeline, signals, plots, measure and workspace loading are
-separate, not-yet-started slices of this same stage; none of them change
+**Slice 5 (selection + docked inspector) DONE 2026-07-30.** §7.1's
+click-to-select needed no new hit-testing — `render/bev.hit_test` already
+existed, fully tested (`S-B1`, `UT-B1-10`); the gap was that nothing called
+it. `BevPanel` gained `_ClickableImageLabel`, correcting `AlignCenter`'s
+centring offset so a click lands in true pixmap-relative pixels;
+`MainWindow._on_bev_clicked` runs `hit_test` against exactly the layer
+selection just rendered (a hit on a hidden layer's prim cannot select it)
+and folds the result into `self._selection` (plain click replaces,
+`Ctrl`+click toggles membership, a `QShortcut` on `Esc` clears).
+`render_tick` now overrides `interaction.selection` from `self._selection`
+on every call — not just the click handler's — so the layers panel or a
+tick-scrub cannot silently drop the current selection; `render_scene` gained
+a `selection=` parameter and `_draw_prim` applies `object.selected` styling
+plus a generic bbox halo (any prim kind, via the same `_prim_bounds_m`
+`hit_test` already used — one path, not one per kind). **Real design gap
+found while scoping, not while coding:** `S-A3`'s `@inspector_fields`
+decorator only ever registered field *names* against the decorated function
+object, with no mechanism to resolve *values* for a picked entity, and its
+registration key could silently diverge from `LayerProviderEntry.func` once
+`requires` wrapped it in `gated` — never called anywhere. Checked with the
+user (`AskUserQuestion`) rather than patched silently; removed in favour of
+`Prim.fields: tuple[tuple[str, str], ...] | None` — the provider that builds
+a prim already has the raw entity in hand, so it computes the inspector's
+(name, value) pairs inline, the same pass, matching the legacy tkinter
+viewer's own `_object_summary_fields`/`_ego_summary_fields` shape
+(`replay/viz.py`) rather than the unused registry. `view/inspector.py`'s
+`InspectorState` never caches a resolved value — `entries()` re-derives
+from the *current* Scene every call, so `UT-B3-2`'s "dropped, not shown
+stale" is just what re-deriving does; a pin survives deselection but not the
+entity's actual disappearance from the rendered (layer-filtered) Scene.
+`pytest modules\sim\tests -q`: **171 passed** (153 from Slice 4 + 18 new
+across `tests/unit/test_a3_types.py`, `test_b3_inspector.py`,
+`test_b3_selection_render.py` and `tests/system/
+test_b3_selection_and_inspector.py`, closing `UT-B3-2`).
+`scripts\check_invariants.py` and `python docs/py/run_all.py`: both clean.
+
+Timeline, signals, plots, measure and workspace loading are separate,
+not-yet-started slices of this same stage; none of them change
 `MainWindow`'s shape (visualization spec §11.1's own "a new panel type
 registers itself... the shell does not change").
 
@@ -1272,7 +1314,7 @@ registers itself... the shell does not change").
 - [x] `Interaction` on `LayerCtx` + `reacts_to=` on the provider decorator;
       the cache key includes interaction **only for declaring layers**, so a
       mouse move does not invalidate the whole scene (viz §7.5)
-- [ ] `view/inspector.py` — docked, declared fields, pin, multi-select,
+- [x] `view/inspector.py` — docked, declared fields, pin, multi-select,
       copy-as-text
 - [ ] `view/timeline.py` — signal lanes (one scale per lane), state lanes with
       labels, event markers, bookmarks, click-to-seek
@@ -1291,7 +1333,7 @@ registers itself... the shell does not change").
 **Tests**
 - [x] `UT-B3-1` layer-tree state: group tri-state, solo/mute, persistence
       round-trips
-- [ ] `UT-B3-2` inspector resolves a `pick_id` to its provider's declared fields;
+- [x] `UT-B3-2` inspector resolves a `pick_id` to its provider's declared fields;
       an entity that disappears is **dropped, not shown stale**
 - [ ] `UT-B3-3` timeline: a state lane emits an event marker at every transition
       and only there
