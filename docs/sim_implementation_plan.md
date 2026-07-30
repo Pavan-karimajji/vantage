@@ -2755,36 +2755,83 @@ report nothing. Isolation at run granularity costs nothing per tick.
 Closes `FR-SIM-52`, `NR-SIM-21`. Readers already exist (S-A4); this stage makes
 the codec table symmetric and adds the two verbs that scale it.
 
-- [ ] `io/base.py` — the writer half of the codec protocol; capability flags
-      extended with `round_trips` and `write_only`
-- [ ] `io/mcap.py` — writer path (already partly present via the recorder)
-- [ ] `io/csv.py` — **write-only** export codec: port selection by manifest
+**Status: export/convert DONE 2026-07-30; `sim batch` deferred (scope split
+confirmed with the user — bulk pipeline execution with process isolation is
+a separate, much larger feature from the port-selectable export the user
+actually asked for).** `io/base.py`'s writer protocol and `round_trips`/
+`write_only` capability flags, and `io/mcap.py`'s writer path, turned out to
+already exist (S-A4) — verified, not rebuilt. New: `io/csv.py`'s `CsvWriter`
+works directly on raw `(topic, log_time_ns, bytes)` triples, never
+`core/tick.Tick`/`PortValue`, so `io/` stays below `core/` in the dependency
+direction (`decode_message`/topic→port conversion duplicated locally rather
+than imported, noted in-code). Leaf columns are discovered from each port's
+**declared schema** (`DESCRIPTOR`, default-constructed message — works even
+with zero occurrences), never `ListFields()`/instance presence, so the
+column set is identical on every row (`UT-D7-1`). A genuine finding while
+building this: `Tick.age_s` (`core/runner.py`'s pass 1) is always `0.0`
+today — no scheduler exists yet to populate real multi-rate holding
+(`R-SIM-18` is Phase D). Rather than surface that gap, `CsvWriter` computes
+**real** held-value/`age_s` semantics itself from the row sequence (last
+seen value + elapsed time), which `UT-D7-3` exercises directly — a `core/`-
+level gap this module does not depend on to be correct. `on_missing`
+governs exactly one thing: a port with **no prior value to hold** (never
+appeared at all, or a leading gap before its first occurrence); every
+later gap is held automatically. `io/registry.py`'s `reader_for` gained the
+mirror of `writer_for`'s existing read-only check — a write-only extension
+(`.csv`) is now refused as a resim input **by capability**, naming the
+gap (`R-SIM-14`). `cli/convert.py` copies `meta`/`topics`/`messages`
+through the `RecordingReader`/`RecordingWriter` Protocols unchanged,
+carrying `config_bundle_bytes` through when both sides support it
+(duck-typed, `io/mcap.py`'s own "extra beyond the Protocol" helper) rather
+than silently dropping it. `cli/export.py` wraps `io/csv.py` directly, not
+through `io.registry.writer_for` (`CsvWriter` needs `ports`/`on_missing`
+config `open()`'s Protocol shape has no room for). New test-only dependency:
+`pandas` (`dev` extra) for `ST-D7-1`'s own literal claim. `pytest
+modules\sim\tests -q`: **362 passed** (347 before this stage + 15 new: 8 in
+`test_d7_csv.py`, 3 in `test_d7_convert.py`, 4 in `test_d7_export_cli.py`).
+`scripts\check_invariants.py` and `python docs\py\run_all.py`: both clean.
+**`UT-D7-6`'s own scope note:** "convert to a genuinely different
+round-tripping format and back" is untested — `.mcap` is still the only
+`round_trips=True` codec (`.csv` is write-only by design); the test round-
+trips `tiny.mcap` through `.mcap` twice instead, which still proves the
+copy path is lossless, just not the "different format" half of the claim.
+
+- [x] `io/base.py` — the writer half of the codec protocol; capability flags
+      extended with `round_trips` and `write_only`. **Already present from
+      `S-A4`**, not rebuilt this stage
+- [x] `io/mcap.py` — writer path (already partly present via the recorder).
+      **Already present from `S-A4`**
+- [x] `io/csv.py` — **write-only** export codec: port selection by manifest
       name, one row per tick, one column per leaf field, `log_time_ns` plus
       optional `tick_index`/`scenario_time_s`, `<port>.age_s` for multi-rate,
       `#`-prefixed provenance preamble
-- [ ] `cli/convert.py` — `sim convert <in> <out>`, recording → recording, refused
+- [x] `cli/convert.py` — `sim convert <in> <out>`, recording → recording, refused
       when either side lacks `round_trips`
-- [ ] `cli/export.py` — `sim export <in> <out> --ports …`, honouring
+- [x] `cli/export.py` — `sim export <in> <out> --ports …`, honouring
       `on_missing: error|blank|omit-column` (default `error`)
-- [ ] The loader **refuses an export as a resim input by capability**, naming
+- [x] The loader **refuses an export as a resim input by capability**, naming
       the file and the missing capability (`R-SIM-14`)
 - [ ] `cli/batch.py` — `sim batch <recordings…|glob|list.txt> --pipeline P
       [--report] [-j N]`: the **same pipeline file** used interactively, one
-      report, per-recording pass/fail, continue-on-failure
+      report, per-recording pass/fail, continue-on-failure. **Deferred** —
+      scope split confirmed with the user, a separate session's work
+      (process isolation, crash/timeout containment, §below's own tests)
 
 **Tests**
-- [ ] `UT-D7-1` a port selection exports exactly the named leaf columns, in
+- [x] `UT-D7-1` a port selection exports exactly the named leaf columns, in
       declared order
-- [ ] `UT-D7-2` `log_time_ns` in the export matches the recording tick-for-tick
-- [ ] `UT-D7-3` a held multi-rate value is distinguishable from a blank via
+- [x] `UT-D7-2` `log_time_ns` in the export matches the recording tick-for-tick
+- [x] `UT-D7-3` a held multi-rate value is distinguishable from a blank via
       `age_s`; a missing port errors by default and blanks only when asked
-- [ ] `UT-D7-4` origin tags and override marks survive into the export header
-- [ ] `UT-D7-5` a `write_only` codec is **refused** as a resim input, naming the
+- [x] `UT-D7-4` origin tags and override marks survive into the export header
+- [x] `UT-D7-5` a `write_only` codec is **refused** as a resim input, naming the
       capability
-- [ ] `UT-D7-6` `sim convert` round-trips `tiny.mcap` → other → back with
-      identical topics, schemas, provenance and message bytes
-- [ ] `ST-D7-1` `sim export` on a real recording opens in a spreadsheet and in
-- [ ] `ST-D7-4` an export header carries the `run_id`, the bundle hash and the
+- [x] `UT-D7-6` `sim convert` round-trips `tiny.mcap` → other → back with
+      identical topics, schemas, provenance and message bytes. **Scoped:**
+      "other" is `.mcap` again — no second `round_trips=True` codec exists
+      yet to convert *to*, noted above rather than silently claimed
+- [x] `ST-D7-1` `sim export` on a real recording opens in a spreadsheet and in
+- [x] `ST-D7-4` an export header carries the `run_id`, the bundle hash and the
       origin tags of every exported port (`N-9`, `R-SIM-12`) — an export
       frequently becomes the thing a report quotes
       `pandas.read_csv` with the preamble skipped by its comment character
@@ -2812,13 +2859,27 @@ the codec table symmetric and adds the two verbs that scale it.
       are — this test exists to produce a fact, not to pass
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-4` (an export written on two machines must be byte-identical or it is not evidence), `P-8` (sorted columns and topics)
-- [ ] naming §3 ticked — exposure: `N-2`/`N-4` (a column header is a fully qualified, unit-suffixed name -- the export is often what a report quotes), `N-9`
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [x] portability §3 ticked — exposure: `P-4` (sidecar/CSV written
+      `encoding="utf-8", newline="\n"`, matching `S-B4`'s own discipline —
+      not verified byte-identical cross-platform this session, same "no
+      Ubuntu environment" basis as `S-B3`/`S-B4`), `P-8` (sorted columns and
+      topics — `CsvWriter` sorts the default "every port" selection;
+      an explicit `--ports` list keeps the caller's own declared order,
+      `UT-D7-1`'s own claim)
+- [x] naming §3 ticked — exposure: `N-2`/`N-4` (a column header is a fully
+      qualified name, `<port>.<leaf>`; unit suffixes come from the
+      producing `.proto`'s own field names, outside this module's control),
+      `N-9` (`run_id` in every export's preamble)
+- [x] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked. `GT-4`/
+      `GT-5`: unaffected — no `src/component/**` file and no build-machinery
+      file touched this stage
 
 **Gate**
 - [ ] `UT-D7-5` + `ST-D7-2` + `ST-D7-3` green — an export can never be mistaken
-      for a recording, and scale uses the developer's own file
+      for a recording, and scale uses the developer's own file. `UT-D7-5` is
+      green; `ST-D7-2`/`ST-D7-3` are `sim batch`'s own tests and stay open on
+      that basis alone, not a code gap in the export/convert half done this
+      session
 
 ### S-D8 — **Vantage**: the workspaces, the front door, the product
 

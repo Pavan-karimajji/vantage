@@ -20,7 +20,7 @@ viewer = ["PySide6>=6.6"]
 figures = ["matplotlib>=3.8"]
 video = ["imageio[ffmpeg]>=2.34"]
 foxglove = ["foxglove-sdk>=0.25"]
-dev = ["pytest>=8", "pytest-cov"]
+dev = ["pytest>=8", "pytest-cov", "pandas>=2"]
 
 [project.scripts]
 # The launcher is generated per platform by the installer, not written by us

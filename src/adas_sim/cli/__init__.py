@@ -26,6 +26,8 @@ def main(argv: list[str] | None = None) -> int:
     subparsers.add_parser("explain", help="explain any name in the system (DG-2)", add_help=False)
     subparsers.add_parser("view", help="open Vantage on a recording (S-B3)", add_help=False)
     subparsers.add_parser("render", help="headless snapshot to a PNG (S-B3)", add_help=False)
+    subparsers.add_parser("convert", help="recording -> recording (S-D7)", add_help=False)
+    subparsers.add_parser("export", help="recording -> CSV, port-selectable (S-D7)", add_help=False)
 
     args, remainder = parser.parse_known_args(argv)
     if args.verb == "doctor":
@@ -43,4 +45,12 @@ def main(argv: list[str] | None = None) -> int:
         # same reasoning.
         from adas_sim.cli import render
         return render.run(remainder)
+    if args.verb == "convert":
+        # Deferred: mcap is a hard dependency of `adas_sim.io.mcap`, not of
+        # `adas_sim.io`/`adas_sim.cli` themselves (`UT-A1-2`).
+        from adas_sim.cli import convert
+        return convert.run(remainder)
+    if args.verb == "export":
+        from adas_sim.cli import export
+        return export.run(remainder)
     return 1  # unreachable: every registered verb is dispatched above

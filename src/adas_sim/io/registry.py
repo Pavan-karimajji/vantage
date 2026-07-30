@@ -33,7 +33,7 @@ _WRITERS: dict[str, Callable[[], RecordingWriter]] = {}
 #: manual smoke test happened to do itself, masking the gap. `reader_for`/
 #: `writer_for` are the one place this framework actually needs a codec, so
 #: they are the one place it is loaded.
-_BUILTIN_CODEC_MODULES = {".mcap": "adas_sim.io.mcap"}
+_BUILTIN_CODEC_MODULES = {".mcap": "adas_sim.io.mcap", ".csv": "adas_sim.io.csv"}
 
 
 def _load_builtin(ext: str) -> None:
@@ -63,6 +63,16 @@ def reader_for(path: Path) -> RecordingReader:
     _load_builtin(path.suffix)
     factory = _READERS.get(path.suffix)
     if factory is None:
+        if path.suffix in _WRITERS:
+            # R-SIM-14: an export is refused as a resim input **by
+            # capability**, never by a naming convention someone could work
+            # around -- the writer registered for this extension exists
+            # (`write_only`), there is simply no reader for it.
+            raise AuthoringError(
+                expected="a codec with a reader (round_trips capability)",
+                found=f"{path.suffix!r} is write-only -- refused as a resim input",
+                where=str(path), hint="an export (e.g. CSV) is lossy and terminal; use the recording it was exported from",
+            )
         raise AuthoringError(
             expected=f"a registered extension: {_registered_extensions()}", found=repr(path.suffix),
             where=str(path), hint="register a codec for this extension, or use one already registered",
