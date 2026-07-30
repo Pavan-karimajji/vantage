@@ -92,8 +92,24 @@ and so inherit its exact click-to-seek; `xy`/`distribution` get their own
 axes are scaled to the data, not a fixed range, so the same exact inverse
 does not carry over. `_signal_series_cache` (renamed from
 `_timeline_series_cache`) is shared by the strip and every plot panel, so
-the same address requested by both never resolves twice. Measure remains
-a later slice; none of this changes the module's shape
+the same address requested by both never resolves twice. **Slice 11 adds
+§8's measurement tools, all onto `BevPanel` -- no new dock.** Ruler/range-
+rings/annotations are ordinary `Prim`s (`view/measure.MeasureState.
+overlay_prims()`) drawn last by the same `render_scene`/`_draw_prim` every
+layer provider's own prims go through, never a second canvas-overlay path.
+`M` toggles `_measure_mode`, in which dragging the BEV measures instead of
+panning (`_ClickableImageLabel` grew `drag_extent_changed` -- press-to-here,
+not the incremental `dragged` pan already uses, since panning and ruling
+need different arithmetic from the same gesture); `Shift`+click drops an
+annotation. Both snap to `render/bev.anchor_points_m` (every selectable
+prim's bbox corners + centre) within a fixed **pixel** threshold, not a
+metre one -- a metre threshold would snap wildly differently at different
+zoom levels. **Cursor readout is deliberately not a `Prim`**: a
+`_ClickableImageLabel.hovered` signal (needs `setMouseTracking`) updates a
+plain status-bar `QLabel` with no re-render at all -- a full `render_scene`
+(a matplotlib figure) on every pixel of mouse travel would make the BEV
+laggy, the same class of cost `S-B3`'s playback timer already has to
+respect per tick. None of this changes the module's shape
 (`sim_visualization_spec.md` §11.1's own "a new panel type registers
 itself... the shell does not change").
 """
@@ -113,13 +129,14 @@ from adas_sim.core.runner import (
     LoadCancelled, SceneCache, build_reactive_layers, build_session_from_recording, build_static_scene,
 )
 from adas_sim.core.session import Session
-from adas_sim.render.bev import hit_test, render_scene, scene_bounds_m
+from adas_sim.render.bev import anchor_points_m, hit_test, render_scene, scene_bounds_m
 from adas_sim.render.plots import render_distribution, render_xy
 from adas_sim.render.theme import Theme
 from adas_sim.render.timeline import px_to_tick, render_timeline
 from adas_sim.scene.types import Layer, Scene
 from adas_sim.view.inspector import InspectorState, copy_as_text
 from adas_sim.view.layers import LayerTreeState
+from adas_sim.view.measure import MeasureState, snap_point
 from adas_sim.view.plots import PlotState
 from adas_sim.view.timeline import TimelineState, event_markers
 from adas_sim.view.transport import Transport
@@ -216,11 +233,21 @@ class _ClickableImageLabel(QtWidgets.QLabel):
     `_DRAG_THRESHOLD_PX` -- otherwise it was a pan, not a click, and
     `dragged` fires instead (once per mouse-move step, so the caller can
     apply `Viewport.panned` incrementally and each step's own "invariant
-    point" reasoning stays correct)."""
+    point" reasoning stays correct). `drag_extent_changed` fires the same
+    moments, but **from the press point**, not the last step -- pan wants
+    an increment to chain; the ruler (§8, `MainWindow._measure_mode`) wants
+    the whole drag's start and current end, which is a different pair of
+    numbers from the same gesture, not derivable from the incremental one
+    without accumulating it back up. `hovered` fires on every move
+    regardless of button state (`setMouseTracking`), for the cursor
+    readout -- deliberately **not** a full re-render (§8's own reasoning,
+    see `view/measure.py`'s docstring on why it stays a plain `QLabel`)."""
 
     clicked = QtCore.Signal(float, float, QtCore.Qt.KeyboardModifiers)
-    dragged = QtCore.Signal(float, float, float, float)  # from_x, from_y, to_x, to_y
+    dragged = QtCore.Signal(float, float, float, float)  # from_x, from_y, to_x, to_y (incremental)
+    drag_extent_changed = QtCore.Signal(float, float, float, float)  # press_x, press_y, to_x, to_y
     zoomed = QtCore.Signal(float, float, float)  # factor, cursor_x, cursor_y
+    hovered = QtCore.Signal(float, float)
 
     def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
@@ -228,6 +255,7 @@ class _ClickableImageLabel(QtWidgets.QLabel):
         self._press_modifiers = QtCore.Qt.KeyboardModifier.NoModifier
         self._last_pos: QtCore.QPointF | None = None
         self._dragging = False
+        self.setMouseTracking(True)
 
     def _pixmap_relative(self, event_pos: QtCore.QPointF) -> QtCore.QPointF:
         pixmap = self.pixmap()
@@ -244,13 +272,16 @@ class _ClickableImageLabel(QtWidgets.QLabel):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QtGui.QMouseEvent) -> None:  # noqa: N802 -- Qt override
+        pos = self._pixmap_relative(event.position())
         if self._last_pos is not None and event.buttons() & QtCore.Qt.MouseButton.LeftButton:
-            pos = self._pixmap_relative(event.position())
             delta = ((pos.x() - self._press_pos.x()) ** 2 + (pos.y() - self._press_pos.y()) ** 2) ** 0.5
             if self._dragging or delta > _DRAG_THRESHOLD_PX:
                 self._dragging = True
                 self.dragged.emit(self._last_pos.x(), self._last_pos.y(), pos.x(), pos.y())
+                self.drag_extent_changed.emit(self._press_pos.x(), self._press_pos.y(), pos.x(), pos.y())
                 self._last_pos = pos
+        else:
+            self.hovered.emit(pos.x(), pos.y())
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QtGui.QMouseEvent) -> None:  # noqa: N802 -- Qt override
@@ -277,7 +308,9 @@ class BevPanel(QtWidgets.QDockWidget):
 
     clicked = QtCore.Signal(float, float, QtCore.Qt.KeyboardModifiers)
     dragged = QtCore.Signal(float, float, float, float)
+    drag_extent_changed = QtCore.Signal(float, float, float, float)
     zoomed = QtCore.Signal(float, float, float)
+    hovered = QtCore.Signal(float, float)
 
     def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__("BEV", parent)
@@ -286,7 +319,9 @@ class BevPanel(QtWidgets.QDockWidget):
         self._label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self._label.clicked.connect(self.clicked)
         self._label.dragged.connect(self.dragged)
+        self._label.drag_extent_changed.connect(self.drag_extent_changed)
         self._label.zoomed.connect(self.zoomed)
+        self._label.hovered.connect(self.hovered)
         self.setWidget(self._label)
         self.viewport = Viewport()
         self.theme: Theme = "dark"
@@ -694,13 +729,23 @@ class MainWindow(QtWidgets.QMainWindow):
         self.transport: Transport | None = None
         self._playback_timer = QtCore.QTimer(self)
         self._playback_timer.timeout.connect(self._on_playback_tick)
+        self.measure_state = MeasureState()
+        #: `M` toggles this (§8): while on, dragging the BEV measures
+        #: instead of panning -- the two are mutually exclusive on one
+        #: mouse gesture, never simultaneous.
+        self._measure_mode = False
 
         self.bev = BevPanel(self)
         self.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, self.bev)
         self.bev.clicked.connect(self._on_bev_clicked)
         self.bev.dragged.connect(self._on_bev_dragged)
+        self.bev.drag_extent_changed.connect(self._on_bev_drag_extent_changed)
         self.bev.zoomed.connect(self._on_bev_zoomed)
+        self.bev.hovered.connect(self._on_bev_hovered)
         self._apply_workspace_viewpoint()
+
+        self._cursor_readout_label = QtWidgets.QLabel("")
+        self.statusBar().addPermanentWidget(self._cursor_readout_label)
 
         self.layers_state = LayerTreeState()
         self.layers_panel = LayersPanel(self.layers_state, self)
@@ -746,6 +791,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._add_shortcut("L", self.transport_bar.toggle_loop)
         self._add_shortcut("]", functools.partial(self._on_jump_to_event, 1))
         self._add_shortcut("[", functools.partial(self._on_jump_to_event, -1))
+        self._add_shortcut("M", self._on_toggle_measure_mode)
 
         view_menu = self.menuBar().addMenu("&View")
         view_menu.addAction(self.bev.toggleViewAction())
@@ -764,6 +810,15 @@ class MainWindow(QtWidgets.QMainWindow):
         for kind in ("timeseries", "xy", "state", "distribution"):
             plots_menu.addAction(f"Add {kind} plot...").triggered.connect(
                 functools.partial(self._on_add_plot, kind))
+
+        measure_menu = self.menuBar().addMenu("&Measure")
+        self._measure_mode_action = measure_menu.addAction("Ruler Mode (drag to measure)")
+        self._measure_mode_action.setCheckable(True)
+        self._measure_mode_action.toggled.connect(self._on_set_measure_mode)
+        measure_menu.addAction("Set Range Ring Radii...").triggered.connect(self._on_set_range_ring_radii)
+        self._range_rings_action = measure_menu.addAction("Show Range Rings")
+        self._range_rings_action.setCheckable(True)
+        self._range_rings_action.toggled.connect(self._on_toggle_range_rings)
 
         view_menu.addSeparator()
         view_menu.addAction("Reset Layout").triggered.connect(self._on_reset_layout)
@@ -918,11 +973,14 @@ class MainWindow(QtWidgets.QMainWindow):
         needs neither, `core/runner.py`'s own docstring); the layers panel's
         choice is applied only at rasterising, which is why toggling a layer
         re-renders without re-running pass 1 *or* pass 2a. `interaction`
-        defaults to a no-op, for a caller feeding `cursor`/`modifiers`/
-        `toggles` (`view/measure.py`, later); its `selection` field is always
-        overridden from `self._selection` here, so every call site -- not
-        just the click handler -- keeps rendering the current selection
-        without having to remember to thread it through by hand."""
+        defaults to a no-op, for a caller feeding a provider's declared
+        `reacts_to` (Slice 4); its `selection` field is always overridden
+        from `self._selection` here, so every call site -- not just the
+        click handler -- keeps rendering the current selection without
+        having to remember to thread it through by hand. `measure_state.
+        overlay_prims()` (§8, ruler/range-rings/annotations) draws last,
+        on top -- the cursor readout is deliberately **not** here (a plain
+        `QLabel`, `_on_bev_hovered`, updated with no re-render at all)."""
         if self._session is None or self._scene_cache is None:
             return
         self._current_tick = tick_index
@@ -931,7 +989,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self._current_scene = scene  # unfiltered -- hit_test takes layer_selection itself
         self.layers_panel.sync_from_scene(scene.layers)
         layer_selection = self.layers_state.visible_layer_ids()
-        frame = render_scene(scene, self.bev.viewport, self.bev.theme, layer_selection, self._selection)
+        frame = render_scene(
+            scene, self.bev.viewport, self.bev.theme, layer_selection, self._selection,
+            self.measure_state.overlay_prims(),
+        )
         self.bev.show_frame(frame)
         # The inspector reflects what's actually drawn, same as hit_test --
         # a hidden layer's entity is gone from the panel too, not just the
@@ -1079,13 +1140,19 @@ class MainWindow(QtWidgets.QMainWindow):
             self._rerender_plot(panel)
 
     def _on_bev_clicked(self, x: float, y: float, modifiers: QtCore.Qt.KeyboardModifiers) -> None:
-        """§7.1: click to select, `Ctrl`+click to toggle membership. Hit-tests
-        against exactly what's currently drawn (`render/bev.hit_test`, the
-        same layer selection `render_tick` just rasterised with) -- a hit on
-        a hidden layer's prim cannot select it."""
+        """§7.1: click to select, `Ctrl`+click to toggle membership.
+        `Shift`+click drops a persistent annotation instead (§8) -- snapped
+        the same way the ruler is, so an annotation on an entity tracks its
+        anchor exactly, not a pixel near it. Hit-tests against exactly
+        what's currently drawn (`render/bev.hit_test`, the same layer
+        selection `render_tick` just rasterised with) -- a hit on a hidden
+        layer's prim cannot select it."""
         if self._current_scene is None:
             return
         layer_selection = self.layers_state.visible_layer_ids()
+        if modifiers & QtCore.Qt.KeyboardModifier.ShiftModifier:
+            self._on_add_annotation(x, y)
+            return
         pick_id = hit_test(self._current_scene, self.bev.viewport, (x, y), layer_selection)
         if modifiers & QtCore.Qt.KeyboardModifier.ControlModifier:
             if pick_id is None:
@@ -1109,15 +1176,82 @@ class MainWindow(QtWidgets.QMainWindow):
         self._shortcuts.append(shortcut)
 
     def _on_bev_dragged(self, from_x: float, from_y: float, to_x: float, to_y: float) -> None:
-        """§4.4: drag to pan. `_ClickableImageLabel` already tells apart a
-        drag from a click; every emission here is a real pan step."""
+        """§4.4: drag to pan -- **unless** `_measure_mode` is on (§8), in
+        which case dragging measures instead (`_on_bev_drag_extent_changed`
+        does that; this handler just steps aside so the same gesture is
+        never both at once)."""
+        if self._measure_mode:
+            return
         self.bev.viewport = self.bev.viewport.panned((from_x, from_y), (to_x, to_y))
+        self.render_tick(self._current_tick)
+
+    def _on_bev_drag_extent_changed(self, press_x: float, press_y: float, to_x: float, to_y: float) -> None:
+        """§8's ruler: only active in `_measure_mode`, using the drag's
+        real start (not the incremental step `_on_bev_dragged` gets) so the
+        measurement is press-to-here, not step-to-step. Both ends snap to
+        the nearest prim anchor within threshold (`view/measure.snap_point`)
+        when one is close enough."""
+        if not self._measure_mode:
+            return
+        start_m = self.bev.viewport.to_m(press_x, press_y)
+        end_m = self.bev.viewport.to_m(to_x, to_y)
+        if self._current_scene is not None:
+            anchors = anchor_points_m(self._current_scene, self.layers_state.visible_layer_ids())
+            start_m = snap_point(start_m, anchors, self.bev.viewport)
+            end_m = snap_point(end_m, anchors, self.bev.viewport)
+        self.measure_state.set_ruler(start_m, end_m)
         self.render_tick(self._current_tick)
 
     def _on_bev_zoomed(self, factor: float, cursor_x: float, cursor_y: float) -> None:
         """§4.4: wheel to zoom **about the cursor**, not the centre --
         `Viewport.zoomed_about_cursor` already carries that invariant."""
         self.bev.viewport = self.bev.viewport.zoomed_about_cursor(factor, (cursor_x, cursor_y))
+        self.render_tick(self._current_tick)
+
+    def _on_bev_hovered(self, x: float, y: float) -> None:
+        """§8's cursor readout -- a lightweight status-bar `QLabel`, never
+        a re-render (`view/measure.py`'s own docstring: a full `render_scene`
+        per mouse-move pixel would make the BEV laggy under normal use)."""
+        point_m = self.bev.viewport.to_m(x, y)
+        self._cursor_readout_label.setText(f"({point_m[0]:.2f}, {point_m[1]:.2f}) m [ego]")
+
+    def _on_toggle_measure_mode(self) -> None:
+        self._measure_mode_action.setChecked(not self._measure_mode_action.isChecked())
+
+    def _on_set_measure_mode(self, checked: bool) -> None:
+        self._measure_mode = checked
+        if not checked:
+            self.measure_state.clear_ruler()
+            self.render_tick(self._current_tick)
+
+    def _on_set_range_ring_radii(self) -> None:
+        text, ok = QtWidgets.QInputDialog.getText(
+            self, "Set Range Ring Radii", "Comma-separated radii in metres (from the rear-axle origin):",
+        )
+        if not ok:
+            return
+        try:
+            radii = tuple(float(r.strip()) for r in text.split(",") if r.strip())
+        except ValueError:
+            return
+        self.measure_state.set_range_ring_radii(radii)
+        self.render_tick(self._current_tick)
+
+    def _on_toggle_range_rings(self, checked: bool) -> None:
+        del checked  # state read via measure_state.range_rings_visible; the action just mirrors it
+        self.measure_state.toggle_range_rings()
+        self.render_tick(self._current_tick)
+
+    def _on_add_annotation(self, x: float, y: float) -> None:
+        if self._current_scene is None:
+            return
+        point_m = self.bev.viewport.to_m(x, y)
+        anchors = anchor_points_m(self._current_scene, self.layers_state.visible_layer_ids())
+        point_m = snap_point(point_m, anchors, self.bev.viewport)
+        label, ok = QtWidgets.QInputDialog.getText(self, "Add Annotation", "Label (optional):")
+        if not ok:
+            return
+        self.measure_state.add_annotation(point_m, label)
         self.render_tick(self._current_tick)
 
     def _on_fit_to_content(self) -> None:

@@ -1470,8 +1470,43 @@ from Slice 9 + 24 new: 9 in `test_b3_plots.py`, 7 in
 closing `UT-B3-6`/`UT-B3-7`/`UT-B3-8`/`UT-B3-9`). `scripts\check_invariants.py`
 and `python docs/py/run_all.py`: both clean.
 
-Measure remains a later, not-yet-started slice of this same stage; none of
-this changes `MainWindow`'s shape (visualization spec §11.1's own "a new
+**Slice 11 (measurement tools) DONE 2026-07-30.** §8: ruler with snap,
+range rings, cursor readout, persistent annotations -- the last `view/*.py`
+module this stage's file list names. **No new dock**: everything lands on
+the existing `BevPanel`, as ordinary `Prim`s
+(`view/measure.MeasureState.overlay_prims()`) drawn last by
+`render_scene`'s existing `_draw_prim` -- "the renderer hit-tests the
+prims it actually drew" (§7.1) extended to "draws the measurement it
+actually computed", never a second canvas-overlay mechanism. `render/bev.py`
+gained `anchor_points_m` (every selectable prim's bbox corners + centre,
+reusing `_prim_bounds_m` the same way `hit_test` and `scene_bounds_m` do)
+and an `overlay_prims` parameter on `render_scene`. **A real gesture
+conflict, resolved by splitting the drag signal, not by branching harder
+on the existing one:** panning (Slice 7a) needs an *incremental* delta to
+chain (`Viewport.panned` applied step by step); the ruler needs the
+drag's fixed *press point* to wherever the cursor is now -- two different
+numbers from the same physical gesture. `_ClickableImageLabel` gained
+`drag_extent_changed` (press-to-here) alongside the existing `dragged`
+(step-to-step), both firing from the same `mouseMoveEvent`, so `M`
+(`_measure_mode`) simply routes to one handler or the other rather than
+one handler trying to serve both arithmetics. Snap (`view/measure.
+snap_point`) compares in **pixels** (`viewport.to_px`), not metres --
+a metre threshold would snap at wildly different effective ranges
+depending on zoom, the same reasoning `_DRAG_THRESHOLD_PX` already applies
+to telling a click from a drag. **Cursor readout is deliberately not a
+`Prim`**: a `hovered` signal (`setMouseTracking`) updates a plain
+status-bar `QLabel` with zero re-render cost, because a full `render_scene`
+(a real matplotlib figure) on every pixel of mouse travel would make the
+BEV laggy under ordinary use -- documented in `view/measure.py`'s own
+module docstring as a deliberate architecture choice, not an oversight.
+`pytest modules\sim\tests -q`: **302 passed** (277 from Slice 10 + 25 new:
+13 in `test_b3_measure.py`, 3 more in `test_b1_bev_render.py`, 8 in
+`tests/system/test_b3_measure_wiring.py`, closing `UT-B3-4`).
+`scripts\check_invariants.py` and `python docs/py/run_all.py`: both clean.
+
+Every `view/*.py` module this stage's file list names is now built.
+HUD/stale-banner and `cli/view.py`/`cli/render.py` remain; none of this
+changes `MainWindow`'s shape (visualization spec §11.1's own "a new
 panel type registers itself... the shell does not change").
 
 **Must not.**
@@ -1525,7 +1560,7 @@ panel type registers itself... the shell does not change").
       `view/`
 - [x] `view/plots.py` — `timeseries` / `xy` / `state` / `distribution` panels
       over that resolver
-- [ ] `view/measure.py` — ruler with snap, range rings, cursor readout carrying
+- [x] `view/measure.py` — ruler with snap, range rings, cursor readout carrying
       the **frame name**, persistent annotations
 - [ ] HUD + the stale/invalid banner (viz §10)
 - [ ] `cli/view.py`, `cli/render.py` — argument parsing only. **Not
@@ -1538,7 +1573,7 @@ panel type registers itself... the shell does not change").
       an entity that disappears is **dropped, not shown stale**
 - [x] `UT-B3-3` timeline: a state lane emits an event marker at every transition
       and only there
-- [ ] `UT-B3-4` ruler distance/dx/dy/bearing correct; snap picks the nearest
+- [x] `UT-B3-4` ruler distance/dx/dy/bearing correct; snap picks the nearest
       anchor within the threshold
 - [ ] `UT-B3-5` stale banner appears exactly when `valid == 0` or the port's age
       exceeds its declared maximum

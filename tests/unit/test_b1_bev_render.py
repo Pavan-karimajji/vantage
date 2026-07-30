@@ -4,12 +4,15 @@
 # @author Pavan Karimajji
 
 """S-B1 `render/bev.py` test: UT-B1-10 (docs/sim_implementation_plan.md).
-`scene_bounds_m` (S-B3 slice 7a, "F to fit") reuses the same `_prim_bounds_m`
-this file already exercises through `hit_test`."""
+`scene_bounds_m` (S-B3 slice 7a, "F to fit") and `anchor_points_m` (slice
+11, ruler snap targets) reuse the same `_prim_bounds_m` this file already
+exercises through `hit_test`."""
 
 from __future__ import annotations
 
-from adas_sim.render.bev import hit_test, scene_bounds_m
+import numpy as np
+
+from adas_sim.render.bev import anchor_points_m, hit_test, render_scene, scene_bounds_m
 from adas_sim.scene.types import Layer, Prim, Scene
 from adas_sim.view.viewport import Viewport
 
@@ -71,3 +74,29 @@ def test_scene_bounds_m_respects_layer_selection():
         )),
     ))
     assert scene_bounds_m(scene, frozenset({"sim.a"})) == (-1.0, -1.0, 1.0, 1.0)
+
+
+def test_anchor_points_m_returns_corners_and_centre_for_a_pickable_prim():
+    scene = Scene(layers=(Layer(id="sim.test", group="sim", prims=(
+        Prim(kind="box", cx_m=5.0, cy_m=0.0, length_m=2.0, width_m=2.0, yaw_rad=0.0,
+             style="ego.body", pick_id="box"),
+    )),))
+    anchors = anchor_points_m(scene)
+    assert set(anchors) == {(4.0, -1.0), (4.0, 1.0), (6.0, -1.0), (6.0, 1.0), (5.0, 0.0)}
+
+
+def test_anchor_points_m_ignores_prims_with_no_pick_id():
+    scene = Scene(layers=(Layer(id="sim.test", group="sim", prims=(
+        Prim(kind="box", cx_m=0.0, cy_m=0.0, length_m=2.0, width_m=2.0, yaw_rad=0.0, style="ego.body"),
+    )),))
+    assert anchor_points_m(scene) == ()
+
+
+def test_render_scene_draws_overlay_prims_on_top():
+    scene = Scene(layers=())
+    vp = Viewport(size_px=(200, 200), scale_px_per_m=10.0)
+    blank = render_scene(scene, vp, "dark")
+    with_overlay = render_scene(scene, vp, "dark", overlay_prims=(
+        Prim(kind="polyline", points_m=((0.0, 0.0), (5.0, 5.0)), style="measure.ruler"),
+    ))
+    assert not np.array_equal(blank, with_overlay)

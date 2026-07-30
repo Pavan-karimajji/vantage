@@ -114,12 +114,18 @@ def _draw_prim(ax, prim: Prim, theme: Theme, selected: bool = False) -> None:
 
 def render_scene(scene: Scene, viewport: Viewport, theme: Theme,
                   layer_selection: frozenset[str] | None = None,
-                  selection: frozenset[str] = frozenset()) -> np.ndarray:
+                  selection: frozenset[str] = frozenset(),
+                  overlay_prims: tuple[Prim, ...] = ()) -> np.ndarray:
     """`Scene` + `Viewport` + `theme` -> an RGB raster array (H, W, 3),
     uint8. Pure function of its arguments -- no window, no state held
     between calls (headless, `ST-B1-3`). `selection` (`Interaction.selection`,
     `pick_id`s) drives §7.1's styling-plus-halo; defaults to none selected,
-    so every caller predating `S-B3` slice 5 renders unchanged."""
+    so every caller predating `S-B3` slice 5 renders unchanged. `overlay_prims`
+    (`view/measure.MeasureState.overlay_prims()`, §8) draw last, always on
+    top, through the same `_draw_prim` every layer provider's own prims go
+    through -- ruler/range-rings/annotations are ordinary `Prim`s, not a
+    second drawing path; defaults to none, so every caller predating `S-B3`
+    slice 11 renders unchanged."""
     dpi = 100
     fig = plt.figure(figsize=(viewport.size_px[0] / dpi, viewport.size_px[1] / dpi), dpi=dpi)
     ax = fig.add_axes((0, 0, 1, 1))
@@ -131,6 +137,8 @@ def render_scene(scene: Scene, viewport: Viewport, theme: Theme,
 
     for _layer, prim in _visible_prims(scene, layer_selection):
         _draw_prim(ax, prim, theme, selected=prim.pick_id in selection)
+    for prim in overlay_prims:
+        _draw_prim(ax, prim, theme)
 
     buffer = _io.BytesIO()
     fig.savefig(buffer, format="raw", dpi=dpi)
@@ -229,3 +237,26 @@ def scene_bounds_m(scene: Scene, layer_selection: frozenset[str] | None = None) 
     if x_min is None:
         return None
     return (x_min, y_min, x_max, y_max)
+
+
+def anchor_points_m(
+    scene: Scene, layer_selection: frozenset[str] | None = None,
+) -> tuple[tuple[float, float], ...]:
+    """Every selectable prim's bbox corners + centre (`_prim_bounds_m`, the
+    same generic bbox `hit_test` uses) -- ruler snap targets (§8: "snaps to
+    prim anchor points (box corners/centres)"). Only prims with a
+    `pick_id` count, matching `hit_test`'s own "never a hit on decoration"
+    rule -- a snap target should be a real entity, not the grid."""
+    points: list[tuple[float, float]] = []
+    for _layer, prim in _visible_prims(scene, layer_selection):
+        if prim.pick_id is None:
+            continue
+        bounds = _prim_bounds_m(prim)
+        if bounds is None:
+            continue
+        x_min, y_min, x_max, y_max = bounds
+        points.extend([
+            (x_min, y_min), (x_min, y_max), (x_max, y_min), (x_max, y_max),
+            ((x_min + x_max) / 2.0, (y_min + y_max) / 2.0),
+        ])
+    return tuple(points)
