@@ -191,7 +191,12 @@ plus `df/aeb_outputs` and `df/bsd_outputs` on export.
 for its *consumer*. It is produced by the bridge today and by
 `perception-core` tomorrow, at which point the topic name asserts something
 false. The corrected layout namespaces by **producer and port**, matching the
-port names in [sim_sil_contract.md](sim_sil_contract.md):
+port names in [sim_sil_contract.md](sim_sil_contract.md). A port's dot becomes
+a topic slash — `aeb.compState` → `/df/aeb/compState` — which is `N-1`'s own
+table (`recording topic: /<component>/<token>/<port>`). *An earlier draft of
+this table wrote `/df/aeb.outputs`, keeping the dot and contradicting `N-1` in
+the one place a topic name is actually enumerated; corrected 2026-07-30
+(`GT-7`).*
 
 | Topic | Content |
 |---|---|
@@ -201,9 +206,9 @@ port names in [sim_sil_contract.md](sim_sil_contract.md):
 | `/source/camera/<id>` | camera frames |
 | `/truth/objects` | ground truth from the world model |
 | `/truth/ego` | " |
-| `/df/aeb.outputs` | observation, `<component>/<port>` |
-| `/df/bsd.outputs` | " |
-| `/df/aeb.comp_state` | " |
+| `/df/aeb/outputs` | observation, `/<component>/<token>/<port>` |
+| `/df/bsd/outputs` | " |
+| `/df/aeb/compState` | " |
 | `/perception-core/gen_object_list` | observation, once it exists |
 | `/scene` | serialized `Scene` per tick (optional, see §6) |
 | `/meta/manifest` | the run manifest, once, at `t=0` |

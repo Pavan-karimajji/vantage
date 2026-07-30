@@ -53,9 +53,23 @@ vertical slice — algorithm, build wiring, port, drawing, calibration, tests �
 and nothing else. That is only true if no layer invents its own spelling, which
 is why this is a rule and not a convention.
 
-Enforced by `UT-C1b-5`: the manifest's port tokens are compared against the
-`ENABLED_FUNCTIONS` list and the `src/component/` directory names; any
-disagreement fails, naming all three.
+**Both halves of a port name are governed, not just the first.** A port is
+`<token>.<port>`, and the `<port>` half is **byte-identical to the
+`ReqPort`/`ProPort` member name** in that function's `<fn>_ports.hpp`:
+`aeb.compState`, because the member is `compState`. `snake_case` is the proto
+*field* convention (`R-NAME-4`) and stops at the message boundary; a port name
+is a C++-side identifier travelling outward, so it takes `R-NAME-2` camelCase.
+A port named `aeb.comp_state` breaks the single grep at its first hop and is
+worth naming as the failure it is — it shipped that way in `S-C1b` and was
+caught in the 2026-07-30 Phase C review, before `S-C1c` could spread it into
+topics, signal paths, CSV headers and `expect:` strings, where it would have
+been a breaking change to every recorded artefact rather than a rename.
+
+Enforced by two tests, one per half: `UT-C1b-9` compares each port's
+`owner_function` against the `ENABLED_FUNCTIONS` list and the
+`src/component/` directory names, and `UT-C1b-12` compares each port's
+`<port>` segment against the real `ReqPort`/`ProPort` member names. Any
+disagreement fails, naming all three sources.
 
 ### N-2 — Fully qualified always; bare names never leave their scope
 

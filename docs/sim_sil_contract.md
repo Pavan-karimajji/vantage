@@ -303,8 +303,13 @@ typedef struct {
   size_t    count;
 } AdasPortSet;
 
-/* ABI generation of THIS header. Bumped only when the structs or the call
-   semantics above change — NOT when a component adds or removes a port.       */
+/* The one place this number is spelled out. Every component's adasAbiVersion()
+   returns exactly this — never its own hardcoded literal, or two compiled
+   libraries could silently disagree about which generation they speak.
+   Bumped only when the structs or the call semantics above change — NOT when
+   a component adds or removes a port.                                         */
+#define ADAS_SIL_ABI_VERSION 1
+
 ADAS_SIL_API int32_t adasAbiVersion(void);
 
 /* Component identity + its port manifest, as a serialized
@@ -315,12 +320,20 @@ ADAS_SIL_API size_t adasManifest(uint8_t* data, size_t cap);
 
 /* configPath: the project's config bundle, or NULL to use the bundle packed
    beside this library (<library_dir>/config/, resolved from the module's own
-   path). An explicit path always wins — see §3.4.                             */
+   path). An explicit path always wins — see §3.4.
+   Returns NULL when the configuration cannot be resolved. NEVER returns a
+   handle carrying silently-defaulted calibration: a run that produces
+   plausible numbers from no configuration is the failure NR-SIM-4 forbids,
+   and it is indistinguishable from a correct run at every later layer.       */
 ADAS_SIL_API void* adasInit(const char* configPath);
 
 /* One cycle. Ports are matched BY NAME; order is irrelevant. A port the
    component does not know is ignored. A port it requires but does not receive
    is treated exactly as valid=0 is treated today.
+   dtS is float seconds, NOT integer nanoseconds, deliberately: it is what
+   every component's exec(dtS) already takes, and changing it would mean
+   touching src/component/** (rule 9). Framework time stays integer ns
+   (P-8) and converts in exactly one place, CtypesSilComponent.exec (§4.1).
    Returns 1 on success, 0 on failure.                                         */
 ADAS_SIL_API int32_t adasExec(void* handle, double dtS,
                               const AdasPortSet* in, AdasPortSet* out);
@@ -370,10 +383,22 @@ message ComponentManifest {
   // entirely (§4.4). Same construction foxglove_stream.py already performs at
   // run time to build a channel schema from a DESCRIPTOR, moved to build time.
   bytes descriptor_set      = 9;
+
+  // This stage's declared cycle time (R-SIM-18). Rate is DISCOVERED, exactly
+  // like the port set: the pipeline derives its base grid as the GCD of the
+  // declared periods, and a period that is not an integer multiple of that
+  // grid is a load error naming both numbers. 0 means "undeclared" — the
+  // pipeline then runs the stage every tick and says so in the run manifest.
+  // Component-level rather than per PortSpec: a due tick governs the whole
+  // exec(), and R-SIM-18's hold semantics (outputs held, updated=False,
+  // age_s growing) are a property of the stage that did not run, not of an
+  // individual port. A component whose functions genuinely need different
+  // rates is two stages, not one manifest carrying two periods.
+  uint64 period_ns          = 10;
 }
 
 message PortSpec {
-  string name          = 1;   // "objects", "aeb.outputs"
+  string name          = 1;   // "objects", "aeb.compState"
   string proto_type    = 2;   // fully-qualified: "adas.perception.GenObjectList"
   uint32 max_bytes     = 3;   // sizing hint for the host's output buffer
   bool   optional      = 4;   // may be absent without failing the cycle
@@ -400,30 +425,55 @@ already occupies.
 ```yaml
 component: df
 abi_version: 1
+period_ns: 50000000          # 20 Hz, R-SIM-18
 inputs:
   - {name: objects, proto_type: adas.perception.GenObjectList, optional: false}
-  - {name: egoDyn,  proto_type: adas.vehicle.VehDyn,           optional: false}
-  - {name: vehSig,  proto_type: adas.vehicle.VehSig,           optional: true}
+  - {name: egoDyn,  proto_type: adas.common.VehDyn,            optional: false}
+  - {name: vehSig,  proto_type: adas.common.VehSig,            optional: true}
 outputs:
-  - {name: aeb.outputs,    proto_type: adas.aeb.AebOutputs, max_bytes: 256, owner_function: aeb}
-  - {name: aeb.comp_state, proto_type: adas.common.CompState, max_bytes: 256, owner_function: aeb}
-  - {name: bsd.outputs,    proto_type: adas.bsd.BsdOutputs, max_bytes: 512, owner_function: bsd}
-  - {name: bsd.comp_state, proto_type: adas.common.CompState, max_bytes: 256, owner_function: bsd}
+  - {name: aeb.outputs,   proto_type: adas.df.AebOutputs, max_bytes: 256, owner_function: aeb}
+  - {name: aeb.compState, proto_type: adas.df.CompState,  max_bytes: 256, owner_function: aeb}
+  - {name: bsd.outputs,   proto_type: adas.df.BsdOutputs, max_bytes: 512, owner_function: bsd}
+  - {name: bsd.compState, proto_type: adas.df.CompState,  max_bytes: 256, owner_function: bsd}
 ```
+
+*(`proto_type` values above are the real package names `interfaces` compiles —
+`adas.common.VehDyn`, `adas.df.AebOutputs`. An earlier draft of this section
+invented `adas.vehicle.*` / `adas.aeb.*`, which exist nowhere.)*
 
 Adding LCA appends two output lines. No header edit, no host edit, no ABI bump.
 
 **Port naming rules** (freeze these, they become `R-SIM` rules):
 
-- lowercase, dot-separated: `<function>.<port>` for function-owned ports,
-  bare `<port>` for component-level ones;
+- lowercase-initial, dot-separated: `<function>.<port>` for function-owned
+  ports, bare `<port>` for component-level ones;
 - the segment before the dot is the same `ENABLED_FUNCTIONS` token used by
   `src/component/<fn>/` and `tests/<fn>/` — one vocabulary, three places;
+- **the segment after the dot is byte-identical to the `ReqPort`/`ProPort`
+  member name in that function's `<fn>_ports.hpp`** — `aeb.compState`, because
+  the member is `compState`. This is `N-1` applied to the second half of the
+  name: the whole promise is that `grep -rn compState` returns the vertical
+  slice (ports header → manifest → `adasExec` dispatch → topic → signal path →
+  `expect:` string), and a port called `aeb.comp_state` breaks it at the first
+  hop. **`snake_case` is the proto *field* convention (`R-NAME-4`) and stops
+  at the message boundary; a port name is a C++-side identifier travelling
+  outward, so it follows `R-NAME-2` camelCase.** A port whose name does not
+  match a real member is a build-time error (`UT-C1b-11`), not a review note;
 - a port name is **API**: renaming one is a breaking change to the *manifest*,
   which is versioned by the component's own version, not by the ABI version;
 - the still-open front/rear question (rule 11) becomes expressible without any
   ABI change: `front.objects` and `rear.objects` are just two names. This
   document does not decide it — it removes the reason it could not be decided.
+
+**One table, two readers.** `buildManifest()` and `adasExec`'s dispatch must
+**iterate one static port table**, never two hand-written lists that happen to
+agree. Two lists is the `R-SIM-16` failure ("a second description free to drift
+from the manifest") in its most damaging form, because `adasExec` *silently
+ignores an unrecognised port name* for forward compatibility: a manifest typo
+therefore produces a host that dutifully supplies a port the DLL never reads,
+`valid == 0` downstream, neutral outputs, and a green run that computed
+nothing. Declaring the ports once removes the failure rather than testing for
+it.
 
 ### 3.3 What this does *not* change
 
@@ -451,8 +501,22 @@ see `sim_architecture.md` §5.6 for the full analysis.
    `dladdr`). Platform-specific disk discovery inside the composition root is
    exactly where `R-ARCH-5` puts it, and `../../../docs/df_sil_dll.md` rule 2 already places
    `ParamLoader` there for the same reason;
-3. **neither resolvable** → `adasInit` returns `NULL`, same failure contract as
-   today.
+3. **neither resolvable** → `adasInit` returns `NULL`.
+
+**This is *not* "the same failure contract as today", and an earlier draft of
+this section said it was.** Today's `dfInit` swallows an unreadable config:
+`ParamLoader`'s constructor catches `YAML::Exception` and leaves an empty node,
+so every function initialises on its own defaults and `dfInit` hands back a
+perfectly valid handle. Passing `NULL` therefore produces a run that computes
+plausible numbers from no calibration, reports its built `project` in the
+manifest, and is indistinguishable from a correct run at every later layer —
+the exact substitution `NR-SIM-4` forbids and the one `R-SIM-3a` exists to make
+impossible. `adasInit` owes the stricter contract from the moment it exists,
+**not** from the moment `S-C5` packs a real bundle: until then `NULL` is
+unresolvable and must fail, because "unresolvable" is the honest answer.
+`dfInit`'s own behaviour is left alone (`S-C1b` is additive; changing it would
+alter the positional path `sil_host` still calls) — the strictness lives in
+`adasInit`, which is the one that made the promise.
 
 The bundle contains `project.yaml` (the component's own calibration, including
 `BSD_SENSOR_*` / `BSD_CLASS_*`, which the DLL already reads),
@@ -671,7 +735,7 @@ signature in YAML that the Python host reads:
 
 ```yaml
 exec_signature: [handle, dtS, in:objects, in:egoDyn, in:vehSig,
-                 out:aeb.outputs, out:bsd.outputs, out:aeb.comp_state, out:bsd.comp_state]
+                 out:aeb.outputs, out:bsd.outputs, out:aeb.compState, out:bsd.compState]
 ```
 
 Honest comparison:
@@ -764,11 +828,13 @@ condition instead of a silent misread.
   is enough until a second component exists; whether a project-level bundle
   should supersede the per-component ones is deferred (`R-VAR-4` already
   anticipates it by putting calibration under `projects/<name>/`).
-- **Time and determinism across components.** `dtS` is passed per component
-  today. A pipeline must decide whether all components see the same `dtS` (yes,
-  for now) and what happens when one runs at a different rate than another
-  (real for perception at 30 Hz vs functions at 20 Hz). Scoped in
-  [sim_resim_and_recording.md](sim_resim_and_recording.md) §5, not decided here.
+- ~~**Time and determinism across components.**~~ **Closed by `R-SIM-18`**
+  (`OQ-2`): a stage declares `period_ns` in its manifest (§3.2), the pipeline
+  derives the base grid as the GCD of the declared periods, a non-multiple
+  period is a load error naming both numbers, and a stage that is not due holds
+  its outputs (`updated=False`, `age_s` from integer nanoseconds). Perception at
+  30 Hz beside functions at 20 Hz is therefore expressible without a decision
+  per pipeline. Built in `S-C1c` (`UT-C1c-20/21`).
 - **Non-Windows.** `ctypes.WinDLL` becomes `ctypes.CDLL` behind one helper; the
   header already handles the export macro. Untested until a Linux target
   exists, and flagged rather than assumed.

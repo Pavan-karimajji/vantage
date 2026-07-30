@@ -97,8 +97,14 @@ A stage that breaks one is not done.
 - [ ] **GT-3 — no physical constant in a layer provider or renderer.** No
       literal vehicle/sensor dimension outside `model/` (`R-SIM-3`).
 - [ ] **GT-4 — `df_tests` stays green.** `ctest` on
-      `modules/df/build-gtest-vs2026` at its current count (90/90 as of
-      2026-07-24) or higher. Never lower.
+      `modules/df/build-gtest-vs2026` at its current count (**228/228, measured
+      2026-07-30** through `modules/df/build.bat -t gtest -p vs2026 -P base`;
+      214 before `S-C1b` added 14) or higher. Never lower.
+      **The recorded number must be a number someone ran.** It sat at "90/90 as
+      of 2026-07-24" until the 2026-07-30 review, i.e. a floor 138 tests below
+      actual — a gate that cannot fail is not a gate, and the staleness was
+      invisible precisely because every stage in between ticked it from a
+      standalone harness rather than from `ctest`.
 - [ ] **GT-5 — build machinery untouched.** `diff -q` of `conanfile.py`,
       `scripts/build.py`, `build.bat`/`.sh`, `scripts/build_gui.py`,
       `.clang-format` against another component is silent (`R-BUILD-1..6`).
@@ -1898,6 +1904,75 @@ this plan walked into and which are the reason
 | Locating the library's own directory | `GetModuleFileNameW` — Windows-only, and it appears in the natural first draft of `adasInit(NULL)` | a one-function abstraction: `GetModuleFileNameW` on Windows, `dladdr` on Linux, declared in the contract doc and implemented once (`P-5`) |
 | The bundle's output path | `<build>/…/Release/config/` — `Release/` is a multi-config generator artefact that does not exist under Make/Ninja | `$<TARGET_FILE_DIR:…>/config/`, which is correct for every generator |
 
+---
+
+#### Phase C review, 2026-07-30 — `S-C1a`/`S-C1b` re-opened
+
+`S-C1a` and `S-C1b` were built and self-reported green against a **standalone
+`gcc` harness**, because that session had no `conan` and no MSVC. This review
+ran the repo's own pipeline. The finding that matters is not any single bug —
+it is the **failure mode of the substitution itself**:
+
+> A parallel toolchain verifies the *code*. It structurally cannot verify the
+> *build*, because it does not use the build. Both defects below live entirely
+> in CMake and in cross-repo commit order — the exact surface a hand-rolled
+> `g++` command line replaces rather than exercises.
+
+**Measured:**
+
+| | Command | Result |
+|---|---|---|
+| `ST-C1a-1` | `modules/interfaces/build.bat -t gtest -p vs2026 -P base` | **6/6 green** — gate closed |
+| `GT-4` / `ST-C1b-1` | `modules/df/build.bat -t gtest -p vs2026 -P base` | **CMake generate error → after a one-word fix, 228/228 green** (14 generic + 6 positional, incl. the byte-identical equivalence test) |
+
+**What was actually wrong, and the rule each one restates:**
+
+| # | Defect | Rule |
+|---|---|---|
+| 1 | `df_manifest_dump` links `yaml-cpp::yaml-cpp` — not visible in that directory scope — and not `df_common`, so it gets neither the `interfaces` include dirs nor protobuf. **The whole `df` build fails at generate**, tests included | `GT-4` |
+| 2 | `interfaces` HEAD has no `#define ADAS_SIL_ABI_VERSION`; `df`'s **committed** `df_interface_c.cpp` uses it. The define was left uncommitted in the working tree | `R-GIT-1` |
+| 3 | `component_manifest.proto` has no `period_ns`, which `R-SIM-18` requires and `S-C1c` consumes — `S-C1c` cannot be built without reopening `S-C1a` | `R-SIM-18` |
+| 4 | `adasInit(NULL)` returns a **valid handle with zero configuration**: `ParamLoader` swallows the unreadable path and every function defaults. The header promises the opposite | `NR-SIM-4` |
+| 5 | Port names are written **three times** (`buildManifest`, `adasExec` dispatch, `df_sil.ports.yaml`) and bound by nothing; `UT-C1b-2` makes a typo *silent* | `R-SIM-16` |
+| 6 | `aeb.comp_state` vs the `ProPort` member `compState` — `N-1`'s single-grep promise already broken in a name the contract calls permanent | `N-1` |
+| 7 | The generic-ABI tests are gated on `"aeb" IN_LIST ENABLED_FUNCTIONS`, so a `bsd`-only build silently drops every component-level `ManifestTest.*` | `R-VAR-5` |
+| 8 | `df_sil.ports.yaml` is checked in carrying `project:`/`version:`/`build_id:` — build-variant values in a file whose purpose is a reviewable port diff | `R-SIM-3a` |
+| 9 | `df_sil.ports.yaml` is **not** emitted beside the artefact, though `S-C1b`'s checkbox says it is | `R-SIM-3a` |
+| 10 | `df_sil` links `df_common` PRIVATE while its installed public header now includes `adas/adas_sil_abi.h` — the root cause of defect 1 | `R-BUILD` |
+
+Defects 3–6 are **contract** defects: each one is cheap now and permanent
+later, because `S-C1c` turns port names into topics, signal paths, CSV headers
+and `expect:` strings. They are why this phase is re-opened rather than patched
+forward. The delta work is carried as unticked boxes in the two stages below;
+**neither stage's Gate may be ticked until its delta is clear.**
+
+*Two process observations, recorded because they generalise:* a status line may
+report what was verified and **must not tick a box the verification did not
+cover** — `S-C1b`'s prose was accurate about its harness while its checkboxes
+claimed the pipeline; and `GT-4`'s recorded baseline sat 138 tests stale for
+six days for exactly the same reason, so **the gate now names the command and
+the date it was measured**.
+
+**What this phase got right, since a review that lists only defects misleads.**
+`R-BUILD-2`/`R-BUILD-6` were honoured exactly: the `BUILD_TESTING` fix and the
+editable-mode `includedirs` fix each went to all seven/eight byte-identical
+copies in a single pass, verified byte-identical by checksum in this review.
+The `BUILD_TESTING` finding was real and load-bearing — without it
+`interfaces`' new suite would have reported success while running zero tests,
+which is the worst available outcome and the one `ST-C1a-1` now disproves.
+`src/component/**` is genuinely untouched, `updateReqPort` is genuinely shared
+between both paths, and the "a fallback must never be a member of the real
+value space" catch (`"unknown"`, not `"base"`) is a standing rule worth keeping.
+
+**One `R-BUILD-1` note, out of scope here but not to be lost.** The editable
+fix put `self.cpp.source.includedirs = ["cpp", "include"]` in the
+byte-identical recipe because *`interfaces`* ships `include/`. `R-BUILD-1` says
+all per-component difference lives in `conf/build.yml`, never in the recipe.
+Harmless today — one `cmake_layout` component, and a non-existent directory
+elsewhere — but it is the first component-specific fact to enter the shared
+recipe, and it belongs in `plan.md` item 20's data-driven `recipe:` block
+alongside `type:`/`libs:`, not as a literal.
+
 ### S-C1a — `interfaces`: the ABI header and the manifest schema
 
 *(`S-C1a`/`S-C1b`/`S-C1c` are the three sub-stages of the architecture's single
@@ -2003,10 +2078,15 @@ gap, not introduced by this stage — surfaced only because this is the first
       (text scan for `WINAPI`/`__stdcall`/`HANDLE`/`DWORD`) — `P-5` as a test.
       Caught the header's own comment self-violation (see Finding above) before
       this test was even run for real
-- [ ] `ST-C1a-1` `interfaces` builds clean; Python bindings generate — **not
-      run through this repo's own Conan/CMake pipeline in this environment**
-      (see Status above); the equivalent facts were independently verified
-      through a parallel toolchain instead
+- [x] `ST-C1a-1` `interfaces` builds clean; Python bindings generate —
+      **CLOSED 2026-07-30 through the repo's own pipeline**:
+      `modules/interfaces/build.bat -t gtest -p vs2026 -P base`, `ctest`
+      reports **6/6 passed**. The `BUILD_TESTING` fix in the Finding above is
+      confirmed working — without it this run would have reported zero tests
+      and looked identical to success
+- [x] `UT-C1a-5` `period_ns` round-trips, and a manifest that omits it reads
+      as `0` = *undeclared* rather than as `0 ns` — the two must not be the
+      same observable value at the pipeline's GCD step (delta below)
 
 **Discipline** (every stage)
 - [x] portability §3 ticked — exposure: `P-5` (the ABI header must compile for
@@ -2024,12 +2104,48 @@ gap, not introduced by this stage — surfaced only because this is the first
       Finding above), `GT-4` unaffected (no `df` file touched other than its
       shared `scripts/build.py` copy, which is machinery, not `src/component/**`)
 
+**Delta — re-opened 2026-07-30** (see the Phase C review above). Everything
+here changes `interfaces` only and stays purely additive; `abi_version` does
+**not** move, because none of it alters `AdasPort`/`AdasPortSet` layout or
+`adasExec` semantics — which is the point of having the two version numbers be
+independent (`sim_sil_contract.md` §7).
+
+- [x] **Commit `#define ADAS_SIL_ABI_VERSION 1`** — it is used by `df`'s
+      committed source and exists only in `interfaces`' working tree, so the
+      committed submodule pointers do not compile together (`R-GIT-1`: the
+      submodule commits **first**, then the pointer). Ordering, not content:
+      the define itself is right, and is what stops each component hardcoding
+      its own literal
+- [x] **`period_ns` in `ComponentManifest`** (field 10, `uint64`) — required by
+      `R-SIM-18`, consumed by `S-C1c`'s GCD base grid, and absent from the
+      shipped schema. `0` means *undeclared*, and the pipeline says so rather
+      than treating it as a rate. Component-level, not per `PortSpec`: the
+      reasoning is in `sim_sil_contract.md` §3.2 and belongs there, not in a
+      commit message
+- [x] **`adasInit`'s contract stated in the header** — returns `NULL` when
+      configuration cannot be resolved, and **never** a handle carrying
+      silently-defaulted calibration. The header currently promises bundle
+      resolution that `S-C5` has not built, which is worse than promising
+      nothing (`NR-SIM-4`, `sim_sil_contract.md` §3.4)
+- [x] **`dtS` is float seconds by decision, not by accident** — one comment in
+      the header saying so, and naming `CtypesSilComponent.exec` as the single
+      integer-ns → float-seconds conversion point. `P-8` governs *timestamps*;
+      this is a per-tick duration, and `src/component/**` already takes it
+      (rule 9). Written down so nobody "fixes" it into an ABI break later
+- [x] **Port-name spelling frozen** in `sim_sil_contract.md` §3.2: the segment
+      after the dot is byte-identical to the `ReqPort`/`ProPort` member in
+      `<fn>_ports.hpp` (`aeb.compState`). This is `N-1` applied to the second
+      half of the name, and it is only cheap before `S-C1c` turns these into
+      topics and `expect:` strings
+
 **Gate**
-- [ ] `ST-C1a-1` green; `UT-C1a-4` green; nothing consumes the header yet
-      (purely additive, and therefore revertible in one commit). `UT-C1a-4` is
-      green; `ST-C1a-1` needs a real `conan`/`vs2026` (or Linux Conan) run,
-      which this session's environment cannot perform — tracked open above,
-      not silently assumed passing
+- [x] `ST-C1a-1` green — real pipeline, 6/6, 2026-07-30
+- [x] `UT-C1a-4` green
+- [x] Nothing consumes the header yet (purely additive, revertible in one
+      commit) — **still true; the delta kept it true**
+- [x] `UT-C1a-5` green; every delta box above ticked. `S-C1c` **must not
+      start** before this gate, because it is the first consumer and every
+      unclosed item here becomes a name it has already spread
 
 ### S-C1b — the component library: generic exports **alongside** the positional ones
 
@@ -2066,6 +2182,37 @@ reports zero inputs/outputs (`UT-C1b-7`). `ST-C1b-1` is therefore green on
 real evidence; `GT-4`'s own count and `ST-C1b-2` (`sil_host` itself) still
 need a real `ctest`/`vs2026` run this environment cannot perform — tracked
 open below, not assumed.
+
+**Correction, 2026-07-30 — the real build was RED.** The standalone evidence
+above is accurate about what it tested and was accurate to distrust itself; it
+was simply testing the wrong layer. `modules/df/build.bat -t gtest -p vs2026
+-P base` failed at **CMake generate**, before compiling anything:
+
+```
+CMake Error at src/platform/df_sil/CMakeLists.txt:65 (target_link_libraries):
+  Target "df_manifest_dump" links to:  yaml-cpp::yaml-cpp
+  but the target was not found.
+```
+
+`find_package(yaml-cpp)` runs in `src/component/common/`, a **sibling**
+directory — its imported target is not visible in `src/platform/df_sil/`. The
+deeper cause is defect 10: `df_manifest_dump` was given only `df_sil`, whose
+sole `PUBLIC` include dir is its own source folder, so it also had no
+`interfaces` headers and no protobuf. `df_sil` links `df_common` **PRIVATE**
+while `df_interface_c.h` — installed, and `AdasDf::AdasDf`'s public interface —
+now includes `adas/adas_sil_abi.h`. `sil_host` survives that only by
+independently requiring `interfaces`; `df_manifest_dump` was the first consumer
+with no such luck.
+
+The fix is one word — `target_link_libraries(df_manifest_dump PRIVATE df_sil
+df_common)` — after which a **clean** rebuild is **228/228 green** (214 prior +
+the 14 new), all five `ManifestTest.*` included, and
+`EquivalenceTest.GenericAndPositionalPathsProduceByteIdenticalOutputs` passes
+against the real MSVC-built DLL. `dumpbin /EXPORTS` confirms all nine symbols
+side by side, and `df_manifest_dump` regenerates `df_sil.ports.yaml`
+**byte-identically** to the checked-in copy. So `S-C1b`'s *design* is sound and
+its equivalence claim is true — what failed was the claim that a substitute
+toolchain could stand in for the build.
 
 **Three real findings, not anticipated:**
 - **`FileDescriptorSet`/`SimpleDescriptorDatabase` live in `descriptor.pb.h`/
@@ -2116,7 +2263,9 @@ output behaviour has two implementations.
       to the rest of the file; `addFileAndDeps()` walks each used message
       type's transitive `FileDescriptor` dependencies into one
       `FileDescriptorSet`, de-duplicated by filename
-- [x] `df_sil.ports.yaml` emitted beside the artefact **and** checked in
+- [~] `df_sil.ports.yaml` checked in (the "beside the artefact" half moved to
+      `S-C5`, where `R-SIM-3a` puts it in `<library_dir>/config/` with the rest
+      of the bundle rather than in a second place)
       (`df_sil.ports.yaml`, content verified against a real `adasManifest()`
       call before committing — see Status above). Regeneration is a
       **deliberate** action (`df_manifest_dump`, a new small executable
@@ -2160,11 +2309,21 @@ output behaviour has two implementations.
 - [x] `ST-C1b-1` **equivalence**: for a fixed sequence of inputs, the generic
       and positional paths produce **byte-identical** outputs — real,
       byte-for-byte verified (Status above)
-- [ ] `ST-C1b-2` `sil_host` still builds and runs unchanged — **not run**;
-      `sil_host` itself needs the real Conan/`vs2026` build this environment
-      cannot perform. Indirect evidence only: `df_interface_c.h`'s existing
-      declarations are untouched, and the unmodified positional test suite
-      passing 6/6 shows the positional symbols behave identically
+- [x] `ST-C1b-2` `sil_host` still builds and runs unchanged — **green
+      2026-07-30**, end to end, against a **clean rebuild** of the modified
+      `df`. No `conan create` was needed after all: `adas-df` and
+      `adas-interfaces` are registered as Conan **editables**, so `sil_host`
+      already resolves the working tree. `main.cpp` untouched, `dfApiVersion()`
+      still `2`, `dfInit`/`dfExec`/`dfShutdown` all OK, exit code 0.
+      - **This run also validates the delta's one deliberate asymmetry.**
+        `sil_host` calls `dfInit(nullptr)` and depends on today's
+        silent-defaults behaviour to start at all. Had the delta fixed the root
+        cause in `ParamLoader` — the tempting option, since it would have
+        corrected both API generations at once — this run would have failed.
+        That is exactly why the strictness lives in `adasInit` alone: the
+        positional path's contract is load-bearing for a shipping host, and
+        `S-C1b` is additive. `ParamLoader` is `S-E2`'s to revisit, once nothing
+        calls the positional exports
 
 **Discipline** (every stage)
 - [x] portability §3 ticked — exposure: `P-5` (`ADAS_SIL_ABI_EXPORTS` follows
@@ -2181,14 +2340,113 @@ output behaviour has two implementations.
       touched this stage); `GT-5` unaffected (no build-machinery file touched
       in this stage)
 
+**Delta — re-opened 2026-07-30** (see the Phase C review above). Ordered so the
+tree builds after every step; item 1 is the only one blocking anything else.
+
+- [x] **Link `df_manifest_dump` against `df_common`** —
+      `target_link_libraries(df_manifest_dump PRIVATE df_sil df_common)`.
+      One word, and the difference between a red and a green `df` build
+- [x] **`df_sil` links `df_common` `PUBLIC`** (or at minimum propagates
+      `AdasInterfaces::AdasInterfaces`) — its **installed** header
+      `df_interface_c.h` now includes `adas/adas_sil_abi.h`, so every consumer
+      of `AdasDf::AdasDf` needs that include path and today gets it only by
+      coincidence. Fixing this makes item 1 unnecessary rather than merely
+      unblocked, which is the better shape; keep item 1 regardless, since
+      `df_manifest_dump` genuinely uses protobuf directly
+- [x] **One static port table**, iterated by both `buildManifest()` and
+      `adasExec`'s dispatch — the port name, `proto_type`, `max_bytes`,
+      `owner_function` and the `ReqPort`/`ProPort` it binds, declared once
+      inside the same `#ifdef ADAS_FN_<X>_ENABLED` blocks. Removes the
+      drift-between-two-lists failure by construction instead of testing for
+      it (`R-SIM-16`, `sim_sil_contract.md` §3.2 "One table, two readers")
+- [x] **Rename `<fn>.comp_state` → `<fn>.compState`** in the manifest, the
+      dispatch and `df_sil.ports.yaml` — matching the `ProPort` member
+      (`N-1`). Free today; a breaking change to every recording, signal path
+      and `expect:` string the moment `S-C1c`/`S-C2`/`S-C3` land
+- [x] **`period_ns` populated** from the component's real cycle time once
+      `S-C1a`'s delta adds the field
+- [x] **`adasInit(NULL)` returns `NULL`** until `S-C5` resolves a real bundle.
+      `adasInit` stops being a bare delegation to `dfInit` — deliberately:
+      `S-C1b` bought "zero chance of the two paths diverging on lifecycle",
+      and this trades a slice of that for the one difference that must exist,
+      because `dfInit`'s silent-defaults behaviour is the positional path's
+      contract and `S-C1b` may not change it
+- [x] **Split the test file** — component-level ABI cases
+      (`AbiVersionIsStable`, `UnknownInputPortIsIgnored`, every
+      `ManifestTest.*`) into an **ungated** `test_generic_abi.cpp`, keeping
+      only the aeb-mirroring cases under `if("aeb" IN_LIST ENABLED_FUNCTIONS)`.
+      Today a `bsd`-only build silently drops the whole manifest suite, which
+      is the one suite that has nothing to do with any function
+      (`R-VAR-5`; `test_param_loader.cpp` already sets the ungated precedent)
+- [x] **Build-variant fields leave the checked-in `df_sil.ports.yaml`** — it
+      carries `project: base`, `version: 0.1.0`, `build_id: unknown`, so
+      regenerating from a `cus1` build produces a spurious diff in the one file
+      whose stated purpose is that a **port** change shows up as a reviewable
+      diff. `UT-C1b-6` does not compare those fields, so nothing catches it.
+      The checked-in mirror holds build-invariant facts only (`component`,
+      `abi_version`, `inputs`, `outputs`); project/version/bundle hash belong
+      to the emitted copy in `S-C5`'s bundle, where they are true per build
+- [x] **Untick "emitted beside the artefact"** below, or emit it — there is
+      only `install(FILES … DESTINATION share/adas-df)`; nothing lands in
+      `$<TARGET_FILE_DIR:df_sil>`. Recommend unticking and letting `S-C5` own
+      it, since `R-SIM-3a` wants it in `<library_dir>/config/` beside the rest
+      of the bundle, not in a second place
+- [x] **`df_manifest_dump.cpp`'s own header comment says "Run as a POST_BUILD
+      step"** — the `CMakeLists.txt` in the same commit explains at length why
+      it is deliberately *never* run automatically. `GT-7`, at the smallest
+      possible scale
+
+**Delta outcome, 2026-07-30 — 233/233 green** (`-P base` and `-P cus1`), and
+the two new binding tests were **shown to fail before being trusted**, since a
+gate that has never failed has never been shown to work (`ST-C6-2`'s own
+principle, applied one stage early):
+
+| Probe | Change | Expected | Got |
+|---|---|---|---|
+| A | regress the port name to `aeb.comp_state` | `UT-C1b-12` red | red — plus `ContainsTheAebPorts` and `UT-C1b-6`, three independent catches |
+| A | " | `UT-C1b-11` **green** | green — the one-name-constant design means a rename cannot desynchronise the manifest from the dispatch, which is the property being claimed |
+| B | declare an output row nothing dispatches | `UT-C1b-11` red | red, naming the unbound port |
+
+**Probe A found a defect in `UT-C1b-12` itself**, which is the whole reason to
+run it: the first draft searched the ports header for the port name as a bare
+token and **passed on `aeb.comp_state`**, because `aeb_ports.hpp` contains
+`#include "common/comp_state.pb.h"` and neither `/` nor `.` is an identifier
+character. It now matches a *declaration* — the token followed by `;` — which
+is the distinction the test exists to make. A test that cannot fail is worse
+than no test, and only a probe distinguishes the two.
+
+**Probe B found a defect in the fix.** The first port table bound its dispatch
+by array index (`kOutputPorts[port::kAebOutputs]`), so inserting a row silently
+shifted every later constant — a *new* drift surface, milder than the one being
+removed but real, and it needed an `#elif` block to survive the `ENABLED_
+FUNCTIONS` combinatorics. Replaced with **one `constexpr` name per port**,
+referenced by the table rows and by the dispatch alike: no position to get
+wrong, no combinatoric block, and a rename is still a single edit.
+
+**Tests added by the delta**
+- [x] `UT-C1b-11` **every manifest-declared name is a name the dispatch
+      actually uses**: drive each declared input under its manifest name and
+      assert an observable effect; supply each declared output under its
+      manifest name and assert `updated`/`len` are written. `UT-C1b-2`'s
+      silent-ignore rule makes a manifest typo invisible without this, and
+      "invisible" here means neutral outputs and a green run
+- [x] `UT-C1b-12` every port name's post-dot segment matches a real
+      `ReqPort`/`ProPort` member name — `N-1`'s second half, enforced the same
+      way `UT-C1b-9` enforces its first half against `src/component/`
+- [x] `UT-C1b-13` `adasInit(NULL)` returns `NULL`; `adasInit("<real path>")`
+      returns a handle. The negative case is the one that matters and is the
+      one nothing tests today
+
 **Gate**
 - [x] `ST-C1b-1` green — the new path is proven equivalent **before** anything
-      depends on it, which is the precondition for `S-E2` ever removing the old
-      one. Verified byte-for-byte via the standalone build (Status above), not
-      yet through `df`'s own Conan pipeline
-- [ ] `GT-4` green at or above its prior count, checked **per commit** in this
-      stage — needs a real `ctest` run (this session's 20/20 — 6 positional +
-      14 generic — passing standalone is strong evidence, not the same claim)
+      depends on it, the precondition for `S-E2` ever removing the old one.
+      Byte-for-byte, against the real MSVC-built `df_sil.dll`, 2026-07-30
+- [x] `GT-4` green at or above **228** — **233/233**, clean rebuild, 2026-07-30.
+      Re-measured under `-P cus1` as well (also 233/233), which is what proves
+      the checked-in manifest is genuinely project-independent now
+- [x] Every delta box and `UT-C1b-11..13` green
+- [x] `ST-C1b-2` green — `sil_host` builds and runs unchanged against a clean
+      rebuild of the modified `df`, exit 0. **`S-C1b`'s gate is now clear**
 
 ### S-C1c — `contracts/` — `SilComponent`, `Pipeline`
 
@@ -2201,8 +2459,26 @@ function or a port anywhere in the framework. `GT-6` and `GT-1` are both live
 here, and `UT-C1c-3` runs with the generated bindings made **unimportable** so
 the claim is tested rather than asserted.
 
+**Blocked on `S-C1a`'s delta.** Two of its items are this stage's inputs, not
+polish: `period_ns` (there is no field to read without it) and the frozen
+port-name spelling (this is the stage that turns port names into topics,
+signal paths and `expect:` strings, after which renaming one is a breaking
+change to every artefact). Starting here first means doing this stage twice.
+
 - [ ] `contracts/component.py` — the `SilComponent` Protocol plus
-      `CtypesSilComponent` and `InProcessSilComponent` (api reference §3.1)
+      `CtypesSilComponent` and `InProcessSilComponent` (api reference §3.1).
+      `CtypesSilComponent.exec` is **the one place** integer nanoseconds become
+      the ABI's float `dtS` (`P-8`, `sim_sil_contract.md` §3.1)
+- [ ] **A stub component library implementing the generic ABI** — `impl:
+      stubdll:`, mandated by `R-SIM-10` ("if a stand-in must run without Python
+      it is promoted from `stub:` to `stubdll:` on the same generic ABI"),
+      listed in api reference §3.3's `impl:` vocabulary, and named by
+      `sim_sil_contract.md` §8 as what the framework's own tests should load.
+      **It had no stage until the 2026-07-30 review** — a requirement with no
+      stage, which `check_traceability.py` cannot see because it joins test ids
+      and not obligations. It lands here rather than later because it is also
+      the only way `CtypesSilComponent` gets tested without `df` built, and it
+      is deliberately trivial: an echo component with a hand-written manifest
 - [ ] `contracts/loader.py` — **`resolve_library`**, the single place the
       framework consults the platform (`P-5`). `<stem>` expands to
       `<stem>.dll` on Windows and `lib<stem>.so` / `<stem>.so` on Linux; a miss
@@ -2248,6 +2524,11 @@ the claim is tested rather than asserted.
       pipeline whose declaration order contradicts its wiring is a load error
 - [ ] `UT-C1c-15` `resolve_library` returns the right file for each platform
       pattern (parametrised over both), and a miss names every candidate
+- [ ] `UT-C1c-15a` a `stubdll:` stage loads through the **same**
+      `CtypesSilComponent` path a `dll:` stage does, and its port set is
+      indistinguishable from a `dll:` stage's to everything downstream —
+      `R-SIM-10`'s "executed and injected produce the same port set", proven at
+      the `impl:` axis rather than only at the `mode:` axis
 - [ ] `UT-C1c-16` **severed chain detected** — `simulate → measured → simulate`
       on one path is found; `off → measured → simulate` is **not** flagged
       (`R-SIM-10`; the GUI's auto-close in S-D6 builds on this)
@@ -2456,6 +2737,15 @@ SUT and the viewer provably read the same bytes (`R-SIM-3a`). Closes
 **Must not.** Compile configuration into the library — that would kill the
 edit-and-re-run calibration loop. Copied **beside** the artefact, never inside
 it (production uses AUTOSAR frozen parameters instead, `R-SIL-1`).
+
+**This is the stage that makes `adasInit(NULL)` mean something.** From
+`S-C1b`'s delta until here, `NULL` is *unresolvable* and returns `NULL` — the
+honest answer, and the reason this stage sitting behind `S-C1c`/`S-C2`/`S-C3`
+costs nothing. Before that delta it returned a valid handle carrying
+silently-defaulted calibration, which is why the ordering looked safe and was
+not. Also inherited from `S-C1b`'s delta: `<component>.ports.yaml` lands in
+`<library_dir>/config/` **here**, as part of the bundle, and not in a second
+place beside the DLL.
 
 - [ ] Build copies `project.yaml` + `shared_config`'s `vehicle/ego_params.yaml`
       + `<component>.ports.yaml` into **`$<TARGET_FILE_DIR:…>/config/`** with
@@ -3404,6 +3694,7 @@ the stage named there.
 | **The parity gate is subjective** | `ST-B1-1` compares Scenes (objective); `MC-1` compares appearance (human, recorded). Both, not one. |
 | **`ST-C1c-1` byte-equality fails for float reasons** | Compare parsed protobuf fields with an explicit tolerance policy decided *before* the first run, not after seeing a failure. |
 | **Qt learning cost** | The Scene keeps the renderer thin; `render/bev.py` is Qt-independent and testable headless, so only the shell is Qt. |
+| **A flaky Qt test reads as a broken gate** | Observed 2026-07-30: `test_b3_viewport_controls.py::test_dragging_pans_the_viewport_and_a_second_click_still_selects` failed once in a full-suite run and passed on the immediate re-run (362/362) and in isolation — so it is order- or timing-dependent, not a regression. **Unresolved, and deliberately written down**: an intermittent failure nobody records is re-diagnosed from scratch every time, and in a determinism tool (`R-SIM-5`) it is the one class of flake that must not be tolerated quietly. Owner: `S-B3` follow-up, before `S-C6` makes the suite a CI gate. |
 | **Phase C touches production C++** | Every C++ change is additive until S-E2; both ABIs live and are tested against each other. |
 | **No CI** | The test command is the gate and is cited in each commit. Wiring CI is `plan.md` item 12, unblocked by this work. |
 | **`modules/sim` unpublished** | Until `adas-sim` is published, a checkout is needed; that is the same interim state `interfaces` and `shared_config` already live in. |
