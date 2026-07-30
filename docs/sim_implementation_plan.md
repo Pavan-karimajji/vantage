@@ -1911,50 +1911,125 @@ discoverable. **`D1` closes here or nowhere** — this is the stage that stops
 `interfaces` builds, nothing links against the new symbols, and no component
 changes. That is what makes it independently revertible.
 
-- [ ] `interfaces/include/adas/adas_sil_abi.h` — `AdasPort`, `AdasPortSet`, the
+**Status: code + tests written and verified 2026-07-30, but NOT through this
+repo's own Conan/CMake pipeline** — this session's environment has no `conan`,
+no MSVC/`vs2026` toolchain, and no `protoc`/`libprotobuf`/`gtest` dev packages
+installable via `sudo` (no passwordless sudo). Substituted a genuine,
+independent toolchain with no repo footprint: system `gcc`/`g++` (already
+present) plus `protoc 3.12.4`/`libprotobuf`/`libgtest` extracted from
+`apt-get download` `.deb`s into a scratch prefix (no root needed — `dpkg-deb
+-x`), and `grpcio-tools` (`pip install --user`) for a from-scratch Python
+codegen check. Against that toolchain: `adas_sil_abi.h` compiles clean under
+`-std=c11 -Wall -Wextra -Wpedantic` **and** `-std=c++17`; `component_manifest.proto`
+generates real C++ and Python bindings and both round-trip byte-identically
+(119 bytes for the same fixture in both languages); all 6 gtest cases below
+compile and **pass** linked against real `libprotobuf`/`libgtest`. This is
+strong evidence the code is correct, but it is evidence from a parallel
+toolchain, not this repo's own build — `ST-C1a-1` and this stage's **Gate**
+stay unchecked until someone runs the real thing
+(`modules/interfaces/build.bat gtest vs2026 base`, or the Linux equivalent
+once one exists) and reports a real `ctest` count, the same discipline every
+prior stage's `Status:` line holds itself to. Do not read the ticked boxes
+below as "the official pipeline was run" — they mean "the described artifact
+exists and was independently verified to do what it claims."
+
+**Finding — `scripts/build.py`'s `cmake_layout` branch never turns on
+`BUILD_TESTING`.** `output_folder`-kind components (`df`, etc.) get
+`BUILD_TESTING: "ON"` baked into their hand-authored `gtest-<platform>` CMake
+preset; `cmake_layout`-kind components (today only `interfaces`) configure
+through Conan's generated `conan-default`/`conan-release` presets, which know
+nothing about a per-target test flag — so `interfaces`' new `gtest` target
+would configure with `BUILD_TESTING` unset, `CMakeLists.txt`'s own
+`if(BUILD_TESTING)` would never add `tests/`, and `ctest` would silently find
+zero tests. Fixed with one line (`configure_cmd.append("-DBUILD_TESTING=ON")`
+when `args.target in TEST_TARGETS`), applied identically to all 8 component
+copies of this byte-identical file (`df`, `interfaces`, `mathlib`,
+`perception-core`, `shared_config`, `sil_host`, `vdy` — confirmed byte-identical
+before and after via `diff -q`, `R-BUILD-2`/`R-BUILD-6`/`GT-5`). Pre-existing
+gap, not introduced by this stage — surfaced only because this is the first
+`cmake_layout` component to actually add a `gtest` target.
+
+- [x] `interfaces/include/adas/adas_sil_abi.h` — `AdasPort`, `AdasPortSet`, the
       five exports (`sim_sil_contract.md` §3.1). **Where `R-SIM-4` is built**:
       ports are named and discovered, so adding a function adds a manifest line,
       never an ABI parameter and never a host edit
       - **C, not C++**: no `bool`, no namespaces, no default arguments, no
         `class`. Fixed-width integer types only (`int32_t`, `uint64_t`), and
         `size_t` for buffer lengths
-      - **`cdecl` on both platforms.** No `__stdcall`, no `WINAPI`, no
-        `__declspec` outside a single export macro that expands to
-        `__attribute__((visibility("default")))` on GCC/Clang (`P-5`)
-      - Struct layout is explicit: no bitfields, no `#pragma pack`, and every
-        struct's size is asserted in a static assertion so a compiler change is
-        a build failure rather than a silent ABI break
-- [ ] `interfaces/proto/Adas__Sil/component_manifest.proto` — `ComponentManifest`
+      - **`cdecl` on both platforms.** No non-`cdecl` Windows calling
+        convention, no `__declspec` outside a single export macro that
+        expands to `__attribute__((visibility("default")))` on GCC/Clang
+        (`P-5`). **Finding:** an early draft's own explanatory comment named
+        the banned tokens it was prohibiting ("no `__stdcall`, no `WINAPI`") —
+        the same self-violation shape `S-A2`/`S-A3`/`S-B2` hit with `GT-1`,
+        here tripping `UT-C1a-4`'s own literal text scan. Paraphrased without
+        naming them
+      - Struct layout is explicit: no bitfields, no `#pragma pack`. Every
+        struct's size **and every member's offset** is asserted via
+        `_Static_assert`/`static_assert`, guarded on `UINTPTR_MAX` so only the
+        64-bit pointer model every real target uses (`vs2026` x64, Linux
+        x86_64/aarch64) is asserted — a 32-bit target isn't a target today and
+        would need its own numbers
+- [x] `interfaces/proto/Adas__Sil/component_manifest.proto` — `ComponentManifest`
       incl. `project`, `config_bundle_sha256`, `descriptor_set`, `abi_version`,
-      and per port: name, direction, `proto_type`, required/optional
+      and per port: name, direction, `proto_type`, required/optional. Package
+      `adas.sil` (matches the contract doc's own `adas.sil.ComponentManifest`
+      references). Carries a `PROVENANCE:` comment (`R-IFACE-3`): this schema is
+      original to the sim rework, not reference-derived, so it does not claim
+      the verbatim-naming exception
       - Field naming per `R-NAME-4`; port names per `N-1` — **the token chosen
         here is the token every later layer reuses, and it is permanent**
-- [ ] `R-NAME-4` / `R-STYLE-1` headers on both
+- [x] `R-NAME-4` / `R-STYLE-1` headers on both
 
 **Tests**
-- [ ] `UT-C1a-1` (gtest, `interfaces`) the header compiles as **C**, not just
-      C++ — a `.c` translation unit including it, built as C11
-- [ ] `UT-C1a-2` `ComponentManifest` round-trips in C++ and in Python
-- [ ] `UT-C1a-3` every struct's `sizeof` and member offsets match the static
-      assertions — an ABI break becomes a build failure, not a field that reads
-      as garbage at run time
-- [ ] `UT-C1a-4` the header contains no Windows-only type or calling convention
-      (text scan for `WINAPI`/`__stdcall`/`HANDLE`/`DWORD`) — `P-5` as a test,
-      because this header is the single hardest thing to change later
-- [ ] `ST-C1a-1` `interfaces` builds clean; Python bindings generate
+- [x] `UT-C1a-1` (gtest, `interfaces`) the header compiles as **C**, not just
+      C++ — `tests/unit/test_adas_sil_abi_c_probe.c`, a real `.c` translation
+      unit built as C11 (`project()` gained `LANGUAGES CXX C`), exposing
+      `adasSilAbiCProbeSizeofPort()`/`...PortSet()` back to the gtest binary so
+      `AdasSilAbiTest.CAndCppAgreeOnLayout` proves the C- and C++-compiled
+      views of the struct genuinely agree, not just that each parses
+      separately
+- [x] `UT-C1a-2` `ComponentManifest` round-trips in C++
+      (`tests/unit/test_component_manifest.cpp`) and in Python
+      (`tests/python/test_component_manifest_roundtrip.py`, a standalone
+      script — `interfaces` has no pytest tooling of its own to add it to;
+      skips with a named reason when `build/generated_py` doesn't exist yet).
+      Both independently verified to produce the same 119-byte serialization
+      for the same fixture
+- [x] `UT-C1a-3` every struct's `sizeof` and member offsets match the static
+      assertions — re-asserted in `test_adas_sil_abi.cpp` so a future edit that
+      touches the numbers in both places at once still gets caught by a test
+- [x] `UT-C1a-4` the header contains no Windows-only type or calling convention
+      (text scan for `WINAPI`/`__stdcall`/`HANDLE`/`DWORD`) — `P-5` as a test.
+      Caught the header's own comment self-violation (see Finding above) before
+      this test was even run for real
+- [ ] `ST-C1a-1` `interfaces` builds clean; Python bindings generate — **not
+      run through this repo's own Conan/CMake pipeline in this environment**
+      (see Status above); the equivalent facts were independently verified
+      through a parallel toolchain instead
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-5` (the ABI header must compile for
+- [x] portability §3 ticked — exposure: `P-5` (the ABI header must compile for
       both toolchains; no Windows-only types), `P-8` (integer time in the
-      manifest)
-- [ ] naming §3 ticked — exposure: `N-1` (this stage fixes the port-name token
+      manifest — `descriptor_set` is `bytes`/opaque, no timestamp field exists
+      in this schema to get wrong)
+- [x] naming §3 ticked — exposure: `N-1` (this stage fixes the port-name token
       that every later layer reuses — an abbreviation chosen here is
-      permanent), `N-11`
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+      permanent), `N-11` (`abi` is an approved abbreviation; nothing else new
+      abbreviates)
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked — `docs/py/run_all.py`
+      is `modules/sim`'s own cross-validation script and does not cover
+      `interfaces`; `GT-1..GT-3`/`GT-6` don't apply to `interfaces` (no
+      `modules/sim/src` in this stage), `GT-5` re-checked directly (see
+      Finding above), `GT-4` unaffected (no `df` file touched other than its
+      shared `scripts/build.py` copy, which is machinery, not `src/component/**`)
 
 **Gate**
 - [ ] `ST-C1a-1` green; `UT-C1a-4` green; nothing consumes the header yet
-      (purely additive, and therefore revertible in one commit)
+      (purely additive, and therefore revertible in one commit). `UT-C1a-4` is
+      green; `ST-C1a-1` needs a real `conan`/`vs2026` (or Linux Conan) run,
+      which this session's environment cannot perform — tracked open above,
+      not silently assumed passing
 
 ### S-C1b — the component library: generic exports **alongside** the positional ones
 
