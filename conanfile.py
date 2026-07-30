@@ -122,7 +122,15 @@ class AdasComponent(ConanFile):
 
         if layout_kind == "cmake_layout":
             cmake_layout(self)
-            self.cpp.source.includedirs = ["cpp"]
+            # "include" alongside "cpp": interfaces (the only cmake_layout
+            # component today) also ships include/ - the pure-C SIL ABI
+            # header meant for any host language (S-C1a). Without this, a
+            # standalone (non-aggregator) build of a consumer resolving
+            # AdasInterfaces via Conan editable mode could not find
+            # "adas/adas_sil_abi.h", even though the in-tree aggregator path
+            # already works (CMake target_include_directories PUBLIC on
+            # adas-interfaces already covers both directories there).
+            self.cpp.source.includedirs = ["cpp", "include"]
             self.cpp.build.includedirs = ["generated"]
         elif self.package_type in ("shared-library", "static-library"):
             # output_folder-kind compiled libraries (df/vdy): the real artifact
