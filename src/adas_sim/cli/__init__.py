@@ -24,10 +24,23 @@ def main(argv: list[str] | None = None) -> int:
     subparsers = parser.add_subparsers(dest="verb", required=True)
     subparsers.add_parser("doctor", help="report the environment (DG-3)")
     subparsers.add_parser("explain", help="explain any name in the system (DG-2)", add_help=False)
+    subparsers.add_parser("view", help="open Vantage on a recording (S-B3)", add_help=False)
+    subparsers.add_parser("render", help="headless snapshot to a PNG (S-B3)", add_help=False)
 
     args, remainder = parser.parse_known_args(argv)
     if args.verb == "doctor":
         return doctor.run(remainder)
     if args.verb == "explain":
         return explain.run(remainder)
+    if args.verb == "view":
+        # Deferred: `cli.view` pulls in PySide6 (the "viewer" extra) --
+        # `sim doctor`/`sim explain`/`sim render` must stay usable with
+        # neither Qt nor matplotlib installed (`UT-A1-2`'s own discipline).
+        from adas_sim.cli import view
+        return view.run(remainder)
+    if args.verb == "render":
+        # Deferred: `cli.render` pulls in matplotlib (the "figures" extra),
+        # same reasoning.
+        from adas_sim.cli import render
+        return render.run(remainder)
     return 1  # unreachable: every registered verb is dispatched above

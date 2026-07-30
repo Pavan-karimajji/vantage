@@ -1531,11 +1531,38 @@ passed** (302 from Slice 11 + 20 new: 11 in `test_b3_hud.py`, 3 more in
 closing `UT-B3-5`). `scripts\check_invariants.py` and `python
 docs/py/run_all.py`: both clean.
 
-Every `view/*.py` module this stage's file list names is now built, and
-so is every other `render/viewer.py` capability except the origin/axes/
-grid cross-submodule question above. `cli/view.py`/`cli/render.py` remain;
-none of this changes `MainWindow`'s shape (visualization spec §11.1's own
-"a new panel type registers itself... the shell does not change").
+**Slice 13 (`cli/view.py`, `cli/render.py`) DONE 2026-07-30.** The last
+file bullet in this stage's checklist. `cli/render.py` is genuinely
+Qt-free -- `core/runner.py`/`render/bev.py` never import it (`UT-B3-17`),
+so `sim render` needs no display **and no PySide6 at all**, not merely an
+offscreen Qt platform; `matplotlib.image.imsave` writes the PNG (`ST-B3-1`).
+`cli/view.py` stays argument-parsing-only per its own rule (`GT-9`) by
+deferring into a new `app/gui.py` (`launch()`: construct `QApplication`,
+construct `MainWindow`, run the event loop -- the file `app/` bullet
+actually names, holding orchestration, not logic). Both verbs' Qt/
+matplotlib imports are deferred **inside `cli/__init__.py`'s dispatcher
+too**, not just within their own files -- otherwise `sim doctor` would
+transitively require matplotlib just from `import adas_sim.cli` (`UT-A1-2`'s
+optional-dependency discipline, extended from protobuf to both). `sim view
+<session> [--preset] [--at]` needed two small, real `MainWindow` additions:
+`preset` (wins over the workspace's own `tabs[0]` viewpoint, Slice 9,
+applied last since it is the more specific request) and `initial_at_s`
+(resolved through `Session.seek_ns`, replacing the `goto(0)` default). A
+comprehensive offscreen test now proves every `S-B3` panel type --
+`BevPanel`, `LayersPanel`, `InspectorPanel`, `TimelineStrip`,
+`TransportBar`, a `PlotPanel` -- opens, renders a real frame and stays
+scrubbable together in one window, closing `ST-B3-2`'s buildable half
+(the "on both platforms" clause needs Ubuntu CI this session has no access
+to, named rather than silently assumed). `pytest modules\sim\tests -q`:
+**335 passed** (322 from Slice 12 + 13 new: 6 in `test_b3_cli_render.py`,
+6 in `test_b3_cli_view.py`, 1 in `test_b3_full_shell_offscreen.py`,
+closing `ST-B3-1`). `scripts\check_invariants.py` and `python
+docs/py/run_all.py`: both clean.
+
+Every file this stage's checklist names is now built, except the origin/
+axes/grid cross-submodule question (Slice 12's own note). None of this
+changes `MainWindow`'s shape (visualization spec §11.1's own "a new panel
+type registers itself... the shell does not change").
 
 **Must not.**
 - **Run pass 1 on the GUI thread.** Building a `Session` blocks for as long as
@@ -1600,8 +1627,10 @@ none of this changes `MainWindow`'s shape (visualization spec §11.1's own
       `frame_layer` already draws these as a component layer in a
       different submodule; moving that into framework furniture is a
       real, undecided cross-submodule question, not silently duplicated
-- [ ] `cli/view.py`, `cli/render.py` — argument parsing only. **Not
-      `app/cli.py`**: `app/` is the GUI and holds no logic (`GT-9`)
+- [x] `cli/view.py`, `cli/render.py` — argument parsing only. **Not
+      `app/cli.py`**: `app/` is the GUI and holds no logic (`GT-9`).
+      Landed as `app/gui.py` (orchestration: `QApplication`, `MainWindow`,
+      event loop), matching the file this bullet actually asks for
 
 **Tests**
 - [x] `UT-B3-1` layer-tree state: group tri-state, solo/mute, persistence
@@ -1650,14 +1679,20 @@ none of this changes `MainWindow`'s shape (visualization spec §11.1's own
       half-built session rendered as if complete is a silent wrong picture
 - [x] `UT-B3-17` no Qt module is imported by anything under `core/`, `model/`,
       `scene/`, `contracts/`, `io/` or `check/` (`GT-9`, api reference §1)
-- [ ] `ST-B3-1` `sim render <recording> --at <t> --preset <name> --out fig.png`
+- [x] `ST-B3-1` `sim render <recording> --at <t> --preset <name> --out fig.png`
       produces a non-blank PNG **headlessly**
 - [ ] `ST-B3-2` the full panel set opens and renders under an offscreen
       platform, on both platforms (`P-7`) — this is how the GUI is tested at all.
-      **Scoped precursor landed in Slice 1**
-      (`tests/system/test_b3_offscreen_smoke.py`): window + `BevPanel` +
-      threading construct and render a real frame offscreen end to end; the
-      full claim (every panel) waits on the remaining panels
+      **Full panel set closed on Windows in Slice 13**
+      (`tests/system/test_b3_full_shell_offscreen.py`): `BevPanel`,
+      `LayersPanel`, `InspectorPanel`, `TimelineStrip`, `TransportBar` and a
+      `PlotPanel` all open, all render a real non-null frame, and scrubbing
+      still works with every one of them open, offscreen, in one window.
+      **"On both platforms" stays open** — this session has no Ubuntu
+      environment to verify against; the offscreen mechanism itself
+      (`QT_QPA_PLATFORM=offscreen`) is the same code path on both, but the
+      platform itself is unverified, not something a Windows-only session
+      can close by writing more tests
 - [ ] `MC-4` a human confirms scrubbing a long session feels responsive
 - [ ] `MC-1` (repeat) a human confirms the full shell reads well
 

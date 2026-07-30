@@ -123,7 +123,16 @@ the origin dot/axis arrows/distance grid §10 also lists -- `modules/df`'s
 own `frame_layer` already draws these today, as a component layer in a
 different submodule; whether that responsibility moves into framework HUD
 furniture is a real, cross-submodule question this slice does not decide
-or silently duplicate. None of this changes the module's shape
+or silently duplicate. **Slice 13 gives `MainWindow` its `cli/` surface**:
+`preset`/`initial_at_s` constructor parameters (`sim view <session>
+[--preset] [--at]`, `sim_api_reference.md` §10) -- a command-line preset
+wins over the workspace's own `tabs[0]` viewpoint (Slice 9), applied last,
+after the first real render so it always has a `_current_tick` to
+re-render at; `initial_at_s` resolves through `Session.seek_ns` the same
+way any other seek does, replacing the `goto(0)` default. `cli/view.py`
+and `app/gui.py` (construct `QApplication`, construct this class, run the
+event loop) are the only files that ever construct a `MainWindow` outside
+a test. None of this changes the module's shape
 (`sim_visualization_spec.md` §11.1's own "a new panel type registers
 itself... the shell does not change").
 """
@@ -727,10 +736,18 @@ class MainWindow(QtWidgets.QMainWindow):
                  workspace_path: Path | None = None,
                  ego_state_signals: dict[str, str] | None = None,
                  max_age_s: dict[str, float] | None = None,
+                 preset: str | None = None,
+                 initial_at_s: float | None = None,
                  parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Vantage")
         self._project = project
+        #: `sim view <session> [--preset] [--at]` (`sim_api_reference.md`
+        #: §10) -- applied once, in `_on_loaded`, after the workspace's own
+        #: `tabs[0]` viewpoint (a command-line preset is a more specific
+        #: request than the shipped default, so it wins).
+        self._initial_preset = preset
+        self._initial_at_s = initial_at_s
         # §10's ego-state line and stale-port max-age both need a value the
         # framework does not have on its own (R-SIM-1) -- a signal address
         # per HUD field, and a calibration seconds-value per port. Both
@@ -910,13 +927,20 @@ class MainWindow(QtWidgets.QMainWindow):
         # `goto(0)` so a freshly opened recording starts at its beginning,
         # matching `render_tick(0)` below, not its end.
         self.transport = Transport(session, self._advance_for_transport, head_tick=len(session) - 1)
-        self.transport.goto(0)
+        start_tick = session.seek_ns(int(self._initial_at_s * 1e9)) if self._initial_at_s is not None else 0
+        self.transport.goto(start_tick)
         self.transport_bar.bind(self.transport)
         self._signal_series_cache.clear()  # stale values from a previous session, if any
         self.timeline_strip._head_tick = self.transport.head_tick
         self._apply_workspace_timeline_signals()
         self.statusBar().showMessage(f"loaded {session.name} -- {len(session)} ticks", 5000)
-        self.render_tick(0)
+        self.render_tick(start_tick)
+        if self._initial_preset is not None and self._initial_preset in DEFAULT_PRESETS:
+            # A command-line --preset is a more specific request than the
+            # workspace's own tabs[0] viewpoint (already applied in
+            # __init__), so it wins -- applied last, after the first real
+            # render established `_current_tick`, and re-renders once more.
+            self._on_jump_to_preset(self._initial_preset)
 
     def _advance_for_transport(self, n: int, on_progress: Callable[[int, int], None], cancel: object) -> int:
         """`Transport`'s stand-in for a real SUT's `exec()` loop
