@@ -2479,7 +2479,7 @@ change to every artefact). Starting here first means doing this stage twice.
       and not obligations. It lands here rather than later because it is also
       the only way `CtypesSilComponent` gets tested without `df` built, and it
       is deliberately trivial: an echo component with a hand-written manifest
-- [ ] `contracts/loader.py` — **`resolve_library`**, the single place the
+- [x] `contracts/loader.py` — **`resolve_library`**, the single place the
       framework consults the platform (`P-5`). `<stem>` expands to
       `<stem>.dll` on Windows and `lib<stem>.so` / `<stem>.so` on Linux; a miss
       names **every pattern tried and every directory searched** (`N-8`)
@@ -2522,7 +2522,7 @@ change to every artefact). Starting here first means doing this stage twice.
       toggle is reversible without re-authoring (`R-SIM-10`)
 - [ ] `UT-C1c-14` stages execute in declaration order, single-threaded; a
       pipeline whose declaration order contradicts its wiring is a load error
-- [ ] `UT-C1c-15` `resolve_library` returns the right file for each platform
+- [x] `UT-C1c-15` `resolve_library` returns the right file for each platform
       pattern (parametrised over both), and a miss names every candidate
 - [ ] `UT-C1c-15a` a `stubdll:` stage loads through the **same**
       `CtypesSilComponent` path a `dll:` stage does, and its port set is
