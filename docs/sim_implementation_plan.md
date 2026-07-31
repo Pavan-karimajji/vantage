@@ -2465,10 +2465,14 @@ port-name spelling (this is the stage that turns port names into topics,
 signal paths and `expect:` strings, after which renaming one is a breaking
 change to every artefact). Starting here first means doing this stage twice.
 
-- [ ] `contracts/component.py` — the `SilComponent` Protocol plus
+- [x] `contracts/component.py` — the `SilComponent` Protocol plus
       `CtypesSilComponent` and `InProcessSilComponent` (api reference §3.1).
       `CtypesSilComponent.exec` is **the one place** integer nanoseconds become
-      the ABI's float `dtS` (`P-8`, `sim_sil_contract.md` §3.1)
+      the ABI's float `dtS` (`P-8`, `sim_sil_contract.md` §3.1). **Finding:**
+      the real `df_sil.dll` returns `adasExec()` success even when one output
+      port was undersized (that port is just left `updated=0`) -- undersize
+      detection reads `port.len > port.cap` unconditionally, never gated on
+      the return code, or grow-and-retry silently never fires
 - [ ] **A stub component library implementing the generic ABI** — `impl:
       stubdll:`, mandated by `R-SIM-10` ("if a stand-in must run without Python
       it is promoted from `stub:` to `stubdll:` on the same generic ABI"),
@@ -2483,9 +2487,12 @@ change to every artefact). Starting here first means doing this stage twice.
       framework consults the platform (`P-5`). `<stem>` expands to
       `<stem>.dll` on Windows and `lib<stem>.so` / `<stem>.so` on Linux; a miss
       names **every pattern tried and every directory searched** (`N-8`)
-- [ ] Proto class resolution from `descriptor_set` via `DescriptorPool` +
-      `message_factory` — **no generated bindings imported** (`R-SIM-11`)
-- [ ] Per-handle port buffers (fixes the ctypes keepalive trap: a buffer that is
+- [x] Proto class resolution from `descriptor_set` via `DescriptorPool` +
+      `message_factory` — **no generated bindings imported** (`R-SIM-11`).
+      `ComponentManifest`'s own schema is hand-built the same way
+      (`scene/codec.py`'s technique), since it is the bootstrap schema and has
+      no `descriptor_set` of its own to resolve from
+- [x] Per-handle port buffers (fixes the ctypes keepalive trap: a buffer that is
       garbage-collected while the DLL holds a pointer to it fails rarely and
       unreproducibly, which is the worst failure mode available); grow-once-and-
       retry on undersize
@@ -2500,13 +2507,17 @@ change to every artefact). Starting here first means doing this stage twice.
 - [ ] Component pipeline files under `modules/<name>/sim/pipelines/`
 
 **Tests**
-- [ ] `UT-C1c-1` ABI version mismatch fails loudly at load, naming both versions
-- [ ] `UT-C1c-2` manifest parse yields discovered ports; **no hardcoded port
-      name anywhere in the framework** (grep, as a test)
-- [ ] `UT-C1c-3` message classes built from `descriptor_set` alone, with the
-      generated bindings **not importable** in the test environment
-- [ ] `UT-C1c-4` ports match by name regardless of order
-- [ ] `UT-C1c-5` buffer grow-and-retry succeeds once and logs; a second failure
+- [x] `UT-C1c-1` ABI version mismatch fails loudly at load, naming both versions
+- [x] `UT-C1c-2` manifest parse yields discovered ports; **no hardcoded port
+      name anywhere in the framework** (grep, as a test -- the existing GT-1
+      check already covers `contracts/`, re-verified green this slice, not
+      duplicated as a second grep)
+- [x] `UT-C1c-3` message classes built from `descriptor_set` alone, with the
+      generated bindings **not importable** in the test environment (a
+      synthetic message type that has no generated binding anywhere on disk,
+      so there is nothing importable to fall back to)
+- [x] `UT-C1c-4` ports match by name regardless of order
+- [x] `UT-C1c-5` buffer grow-and-retry succeeds once and logs; a second failure
       raises
 - [ ] `UT-C1c-6` pipeline wiring: `proto_type` mismatch raises naming both ends
 - [ ] `UT-C1c-7` missing required input raises naming the port
