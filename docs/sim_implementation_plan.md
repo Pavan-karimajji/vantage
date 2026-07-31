@@ -5,7 +5,9 @@ checkbox-tracked** execution of [sim_architecture.md](sim_architecture.md) §8.
 The architecture documents say *what and why*; this one says *in what order,
 built how, and proven by which test*.
 
-Design set (read before starting a stage): [sim_architecture.md](sim_architecture.md)
+Design set (read before starting a stage): **[sim_learn.md](sim_learn.md) — the
+plain-language walkthrough; start here if the shape of the system is not yet
+obvious, it is a door rather than a contract** · [sim_architecture.md](sim_architecture.md)
 (master) · [sim_sil_contract.md](sim_sil_contract.md) ·
 [sim_visualization_spec.md](sim_visualization_spec.md) ·
 [sim_resim_and_recording.md](sim_resim_and_recording.md) ·
@@ -18,8 +20,16 @@ a signature there is a contract** ·
 **[sim_portability.md](sim_portability.md) — read before writing any code;
 its `P-1`..`P-10` apply to every stage, and its §3 checklist is ticked per
 stage.**
-Normative rules: superproject `.claude/rules/sim.md` (`R-SIM-1..19`).
+Normative rules: superproject `.claude/rules/sim.md` (`R-SIM-1..25`).
 Backlog entry: superproject `plan.md` item 25.
+
+**Amended 2026-07-31 by a full-set review** (foundation requirements → shipped
+code). It added two defects to the architecture (`D12`, `D13`), three rules
+(`R-SIM-20/21/22`), three global gates (`GT-10/11/12`), widened `GT-4` from one
+component to a build matrix, and added four stages (`S-C1d`, `S-C7`, `S-C8`,
+and `S-B1`'s delta). Nothing already built was invalidated; every addition
+closes a boundary that was specified on one side only. The review's own summary
+of *why* these were missed is in `S-B1`'s delta note — it generalises.
 
 ---
 
@@ -39,11 +49,184 @@ Backlog entry: superproject `plan.md` item 25.
 - **One branch per stage**, off `feat/sim-platform` in the affected repo(s).
   Superproject pointer bumps follow `R-GIT-1` (submodule commits first).
 
+---
+
+## 0a. ▶ START HERE — the implementation entry point
+
+**If you are an implementation session picking this project up, read this
+section first and start at the top of the queue. Do not scan the document for
+something that looks unfinished — the queue below is the authority on order.**
+
+### The one thing to know before anything else
+
+Phases A and B are **done and green** (410 tests, ~40 s, no compiler). Phase C
+is **in progress**: `S-C1a`, `S-C1b`, `S-C1c` have landed. A
+concept-resolution pass on **2026-07-31** resolved fourteen open items and
+recorded them as `OD-6`…`OD-13` (`sim_architecture.md` §10). Those resolutions
+are now written into the stages below as **deltas** and new scope. Nothing
+already built was invalidated.
+
+### ▶ The build sequence — this table is the authority on order
+
+**Stage ids are stable citations and are NOT in build order** (§0 — "labels are
+stable"; renumbering would invalidate every `UT-`/`ST-` id, every commit message
+and every `Verified by` row in the register). So the id order and the build order
+differ in four places, deliberately, and each is marked below and in the stage
+itself. **Follow the `#` column, never the heading order.**
+
+Two blocks, because the split that actually matters to a session is *can I make
+progress without a compiler*. **Nothing in Block 1 depends on anything in Block
+2**, verified stage by stage — so ten consecutive stages are reachable with no
+MSVC, no Conan and no CARLA.
+
+#### Block 1 — no compiler, no world model (10 stages)
+
+**`Blocked on` is a hard dependency — starting earlier means doing the stage
+twice. `follows` is a soft one: correct but reorderable if you have a reason.**
+
+| # | Stage | Blocked on | Why here |
+|---|---|---|---|
+| **1** | `S-C0` — the automatic gate | — | Every later stage's evidence depends on a gate that runs itself. Manual verification has already failed twice here. Cheapest stage in the plan |
+| **2** | `S-A3Δ` — `BulkRef`, `Prim.derived`, layer budget | — | *Permanence*: a `Prim` that inlines a point cloud is un-fixable once `S-D4` copies it (`NR-SIM-43`) |
+| **3** | `S-A4Δ` — two clocks in the codec | — | *Permanence*: every recording written before this lands is missing a field forever (`CR-SIM-4`). Must precede #9 |
+| **4** | `S-B2Δ` — `capture_ns`, lazy parse, byte-bounded cache | 2, 3 | Needs the second stamp (3) and the byte budget (2). **The most invasive item in the pass** — a frozen core type 410 tests use (`OD-13`) |
+| **5** | `S-C1cΔ` — `select`/`drop`, the index grammar, `contracts/binding.py` | — | The override grammar is still free: verbs are parsed and load-validated but **not yet applied to any bytes**. Fixing the grammar after #9/#10 consume it means changing three consumers |
+| **6** | `S-B1Δ` — `self.<port>` binding, no disk in a provider, `ctx.now` | 5, 2 | Needs the resolver (5) and `Prim.derived` (2). Closes `D13` and `GT-11` |
+| **7** | `S-C4` — kill the duplicated calibration | *follows* 6 | Not hard-blocked. Same file set as #6 — both make `modules/df/sim/` read the right source — and doing #6 first means the constants this stage deletes already have no reader |
+| **8** | `S-C9` — recording ingest, feasible cuts | *follows* 5 | Not hard-blocked — it maps topics to ports and needs no `self.` resolution. ***Out of id order*** (before `S-C2`) because it makes today's recordings drivable — the stated primary workflow (`FR-SIM-66`, `P0`) — needs no world model, and **#10 does hard-depend on it** |
+| **9** | `S-C2` — `sources/`, the production side | 3 | Writes recordings, so the two-stamp codec (3) must already exist |
+| **10** | `S-C3` — scenario schema v2, expectations, anchors, faults | 5, 3, 8 | Faults reuse the override grammar (5); `delay` needs the capture stamp (3); `expect:` addresses need ingest (8) |
+
+#### Block 2 — a real MSVC/Conan build is required (6 stages)
+
+| # | Stage | Blocked on | Why here |
+|---|---|---|---|
+| **11** | `S-C1aΔ2` — two manifest fields in `interfaces` | — | ***New, added 2026-07-31.*** `OD-12` (per-**function** period) and `OD-8` (`fixed_slots`) both need attributes the shipped `component_manifest.proto` does not have. Discovered while sequencing: `S-C1a` ticked `period_ns` as *"component-level, not per `PortSpec`"*, which `OD-12` reverses |
+| **12** | `S-C1d` — the generated ABI shim | 11 | The generator must emit the fields (11) it is being asked to declare, or it is written twice |
+| **13** | `S-C5` — the packed config bundle | 12 | Reads `<COMPONENT>_<FN>_PERIOD_US` and reports it through the manifest built by (12) |
+| **14** | `S-C8` — the plug-in bundle | 13 | ***Out of id order*** (before `S-C6`/`S-C7`), on this stage's own instruction: *"sibling of `S-C5`, deliberately built right after it — building them apart is how they end up with two resolution orders"* |
+| **15** | `S-C7` — `sil_host` reads the pipeline | 12, 13 | Needs the generated shim and `adasInit(NULL)`'s bundle |
+| **16** | `S-C6` — resim + determinism in CI | 9, 10, 13 | Needs recordings (9), scenarios (10), and a **rebuilt binary** for determinism axis C, which only exists after (13) |
+
+Then Phase D, in id order — **except that `S-D5` is blocked on a decision, not on
+a stage** (`NR-SIM-46`; see its entry condition), and `S-D2` is deferred with a
+named trigger.
+
+#### The four id-order deviations, in one place
+
+| Built as | Id order would say | Reason |
+|---|---|---|
+| `S-C9` before `S-C2` | after | `S-C9` was added late; it is `P0`, compiler-free, and `S-C3` depends on it |
+| `S-C4` before `S-C9`/`S-C2` | after | Shares its file set with `S-B1Δ`; visiting `modules/df/sim/` once |
+| `S-C8` before `S-C6`/`S-C7` | after | The stage's own stated requirement — adjacency to `S-C5` |
+| `S-C1aΔ2` before `S-C1d` | — (new) | A proto field must exist before a generator emits it |
+
+**Why the deltas come first.** They are *permanence* changes — a recording
+written without a capture stamp cannot be repaired later — and they need no
+compiler, so a session proves the whole loop (edit, test, gate, commit) before
+reaching the stages where a real build is non-negotiable.
+
+**One rework trap that is already closed, stated so it is not re-opened.** The
+override *engine* (verbs, grammar, application, manifest tagging) belongs to
+**#5 `S-C1cΔ`**, not to `S-D6`. `S-D6`'s scope box that says
+`contracts/override.py` is the **developer surface** over that engine — the GUI
+toggle, `sim probe`, the severed-chain badge. Building the engine at `S-D6`
+instead would mean `S-C3`'s fault injection has no grammar to reuse, and the
+verbs would be written twice.
+
+### The per-stage loop — do this every time, in this order
+
+1. **Read the stage** top to bottom, including its `**Must not**` blocks. Then
+   read the design sections it cites. If the stage cites
+   [sim_api_reference.md](sim_api_reference.md), **a signature there is a
+   contract** — type it as written.
+2. **Check the entry conditions.** A stage that says *blocked on X* is blocked;
+   do not start it.
+3. **Implement the unticked `- [ ]` scope boxes**, in the order given.
+4. **Write the stage's tests**, including the ones that must be **shown to
+   fail** — a gate that has never failed has never been shown to work.
+5. **Run all four checks** from the superproject root:
+   ```
+   modules/sim/.venv/Scripts/python.exe -m pytest modules/sim/tests -q
+   modules/sim/.venv/Scripts/python.exe modules/sim/scripts/check_invariants.py
+   modules/sim/.venv/Scripts/python.exe modules/sim/docs/py/run_all.py
+   <the stage's own build command, if it has one>
+   ```
+   **Use that interpreter, not a bare `python`** — a `python` on `PATH` has
+   already misled a session in this project. On Linux the venv path is
+   `modules/sim/.venv/bin/python` (`P-6`).
+6. **Tick only what you verified**, with the number and the date where the box
+   asks for one.
+7. **Commit**, citing the stage: `feat(sim): S-C0 automatic gate + ST-C0-1..2`.
+   Submodule first, then the superproject pointer (`R-GIT-1`).
+
+### Stop and ask — do not decide these alone
+
+- A design document contradicts another design document (`GT-7`). Two documents
+  have already disagreed in this project and both read as authoritative.
+- A stage's scope appears to require changing `src/component/**`. It must not.
+- A test cannot be made to pass without widening a tolerance, relaxing a gate,
+  or adding an exemption to `GT-1`/`GT-11`.
+- The work needs a fifth override verb, a sixth fault, an expression anywhere,
+  or a port address spelled as a literal. Each of those is a closed list with a
+  written reason; reopening one is a design change, not an implementation
+  choice.
+- You cannot run the real build. **Say so.** Do not substitute a hand-rolled
+  compiler command — that has already produced two stages reported green whose
+  build was red, and it is the single most expensive mistake made here.
+
+### Three things that must never happen
+
+- **Never tick a box you did not verify**, and never tick a completed stage's
+  box to make a set look consistent. A ticked box is a claim that something was
+  run on a date.
+- **Never lower a `GT-4` floor.** If a count drops, behaviour changed.
+- **Never "fix" the known flake.**
+  `tests/system/test_b3_viewport_controls.py::test_dragging_pans_the_viewport_and_a_second_click_still_selects`
+  fails in isolation — a fixture-isolation bug recorded in §10's risk table. It
+  is not yours unless a stage says it is.
+
+### Where a resolution's reasoning lives
+
+The stages below say *what to build*. When you need *why*, the owning document
+is:
+
+| Topic | Read |
+|---|---|
+| evidence chain (`OD-6`) | arch §5.19 |
+| bulk by reference (`OD-7`) | arch §5.3 |
+| `select`/`drop` (`OD-8`) | arch §5.10 |
+| two clocks (`OD-9`) | recording §3.3 |
+| determinism + tolerance (`OD-10`) | recording §4a |
+| record policy (`NR-SIM-42`) | recording §3.6 |
+| lazy `PortValue` (`OD-13`), build pinning | recording §10 |
+| config bundle per component (`OD-11`), `period_ns` (`OD-12`) | contract §9.1, §9.2 |
+| anchors (`OQ-3`), faults (`OQ-4`) | scenarios §9.1, §9.2 |
+| plug-in API version (`NR-SIM-44`) | arch §5.7a |
+
 ### Effort shape
 
-24 stages (Phase C's first is split into three sub-stages). A and B touch **no C++ and no DLL at all** — the entire viewer is
-built and tested against recorded files. C is the only phase that changes
-production C++. E only deletes.
+29 stages (Phase C's first is split into four sub-stages; `S-C7`/`S-C8` were
+added by the 2026-07-31 review, `S-C0` by the 2026-07-31 concept-resolution
+pass), plus six **deltas** to already-complete stages — `S-A3Δ`, `S-A4Δ`,
+`S-B2Δ`, `S-B1Δ`, `S-C1cΔ`, `S-C1aΔ2` — which are work, not corrections: they
+close model-level questions that are cheap now and permanent if deferred. A and
+B touch **no C++ and no DLL at all** — the entire viewer is built and tested
+against recorded files. C is the only phase that changes production C++. E only
+deletes.
+
+**Ten of the sixteen remaining Phase C items need no compiler at all**, and none
+of them depends on one that does — see §0a's two blocks. That is not a
+convenience: it is what lets a session make ten stages of verified progress
+before the first stage where a substitute toolchain would silently produce a
+green report and a red build.
+
+**Phase C carries 10 of the 29 stages and all of the C++ risk**, which is why it
+reads as the hardest part of this document. One sentence organises it: *a
+component's DLL must be able to answer three questions — what ports do I have,
+what configuration am I using, and run one tick — and everything else in Phase C
+is building the things that ask those three questions.*
+[sim_learn.md](sim_learn.md) §3 expands that into the stage table.
 
 ---
 
@@ -96,14 +279,33 @@ A stage that breaks one is not done.
       `modules/*/sim/layers/` (`R-SIM-2`).
 - [ ] **GT-3 — no physical constant in a layer provider or renderer.** No
       literal vehicle/sensor dimension outside `model/` (`R-SIM-3`).
-- [ ] **GT-4 — `df_tests` stays green.** `ctest` on
-      `modules/df/build-gtest-vs2026` at its current count (**228/228, measured
-      2026-07-30** through `modules/df/build.bat -t gtest -p vs2026 -P base`;
-      214 before `S-C1b` added 14) or higher. Never lower.
-      **The recorded number must be a number someone ran.** It sat at "90/90 as
-      of 2026-07-24" until the 2026-07-30 review, i.e. a floor 138 tests below
-      actual — a gate that cannot fail is not a gate, and the staleness was
-      invisible precisely because every stage in between ticked it from a
+- [ ] **GT-4 — the build matrix stays green.** *Widened 2026-07-31 from one
+      component to every component that declares a `gtest` target
+      (`NR-SIM-12`).* Each row's `ctest` count is at or above its **measured**
+      floor. Never lower.
+
+      | Module | Command | Floor | Measured |
+      |---|---|---|---|
+      | `df` | `modules/df/build.bat -t gtest -p vs2026 -P base` | **233** | 2026-07-30 |
+      | `interfaces` | `modules/interfaces/build.bat -t gtest -p vs2026 -P base` | **6** | 2026-07-30 |
+      | `mathlib` | `modules/mathlib/build.bat -t gtest -p vs2026 -P base` | _____ | **never run** |
+      | `vdy` | `modules/vdy/build.bat -t gtest -p vs2026 -P base` | _____ | **never run** |
+      | `perception-core` | `modules/perception-core/build.bat -t gtest -p vs2026 -P base` | _____ | **never run** |
+      | `sil_host` | `modules/sil_host/build.bat -t sil -p vs2026 -P base` (builds + runs) | exit 0 | 2026-07-30 |
+
+      **Why one row was not enough.** Both Phase C defects that actually escaped
+      were cross-module and would have passed a `df`-only gate: an `interfaces`
+      change broke `df`'s CMake **generate** (review defect 1), and a
+      link-visibility change in `df_sil`'s installed public header reached every
+      consumer of `AdasDf::AdasDf` (defect 10). A shared contract lives in
+      `interfaces`; a gate that watches one consumer of it is watching the wrong
+      thing. Blank rows are **the honest state**, not an omission — fill them in
+      the first time a stage touches a shared contract, per the rule below.
+
+      **The recorded number must be a number someone ran.** `df`'s sat at "90/90
+      as of 2026-07-24" until the 2026-07-30 review, i.e. a floor 138 tests
+      below actual — a gate that cannot fail is not a gate, and the staleness
+      was invisible precisely because every stage in between ticked it from a
       standalone harness rather than from `ctest`.
 - [ ] **GT-5 — build machinery untouched.** `diff -q` of `conanfile.py`,
       `scripts/build.py`, `build.bat`/`.sh`, `scripts/build_gui.py`,
@@ -126,6 +328,57 @@ A stage that breaks one is not done.
       capability is reachable in ≲3 lines from a plain script
       (`Session.open`, `SilComponent`, a provider, a codec) — checked by a test
       that imports each without touching the CLI (`R-SIM-16`).
+      **This gate is also what keeps headless automation free** (`DF-2`): the
+      moment a capability is reachable only through the window, running in cloud
+      or CI stops being a consequence and becomes a port.
+
+*The three gates below were added by the 2026-07-31 review. Each closes a
+boundary the first nine watched from only one side.*
+
+- [ ] **GT-10 — every module builds standalone.** From a clean partial clone of
+      that module alone plus its declared Conan `requires:` — no sibling
+      checkout on disk — each module in `GT-4`'s matrix configures and builds
+      (`docs/partial_clone_workflow.md`, `R-VAR-2`, `NR-SIM-12`). "Standalone
+      builds" is currently an intention with no test: every build in this
+      project so far has run in a full checkout with editables registered, which
+      is exactly the configuration that hides a missing `requires:`. Run per
+      module, recorded with a date.
+- [ ] **GT-11 — no port address is a literal outside the component that
+      declares it.** A scan over every `modules/*/sim/**` plug-in, scenario
+      `expect:` block, workspace and viewpoint file for a spelled port address
+      (`<word>.<word>.<word>` matching a manifest port) returns nothing; every
+      such reference is component-relative (`self.<port>`) and resolved at load
+      (`R-SIM-21`). **And the resolution failure is loud**: a plug-in requiring
+      a port no manifest declares raises `AuthoringError`, never renders an
+      empty layer. *Extends `GT-1`, which guards the framework and stops exactly
+      at the boundary where `D13` lives — the framework hardcodes no port name
+      and never did; the plug-in does.*
+*The two gates below were added by the 2026-07-31 adversarial audit
+(`sim_requirements.md` §12). Both exist because the claim they guard was
+previously carried by prose alone.*
+
+- [ ] **GT-13 — the numbers exist.** Every quantitative claim the register makes
+      has a **measured number with a date and a machine**: per-tick cost and
+      campaign throughput (`NR-SIM-41`), frame time at a stated tick count
+      (`NR-SIM-5`), recording size for a reference run (`NR-SIM-42`),
+      determinism across all four axes (`NR-SIM-40`). A blank is a finding, not
+      an omission — *"a requirement nobody can fail is a requirement that will
+      be declared satisfied"* (§12 preamble).
+- [ ] **GT-14 — someone who did not build it can change it.** A named owner and
+      a named second reader, plus a **measured maintainer-onboarding number**:
+      time for a second person to land a reviewed change touching a rule, a
+      stage and a test (`NR-SIM-45`). Peer of `GT-8`, which measures a *user*.
+      **Owner: _______  Second reader: _______  Date run: _______
+      Measured: _______ h.** The most probable ending for this project is an
+      ownership failure, not a design failure, and this is the only gate that
+      looks at it.
+- [ ] **GT-12 — the player runs standalone, against libraries it has never
+      heard of.** `vantage <dir>` on a directory containing only built
+      artefacts — DLL, `config/`, `sim/` — renders a run with **no repository
+      checked out, no `PYTHONPATH`, and no component-specific import in the
+      player** (`R-SIM-20`, `FR-SIM-64`, `FR-SIM-70`). Verified on a copied
+      output tree with the source tree renamed away, which is the only way to
+      prove a checkout was not silently supplying something.
 
 ---
 
@@ -477,6 +730,29 @@ cannot be localised later.
 `sources/`. A `Prim` never carries a colour, a pixel coordinate or a viewport
 reference — only metres, a named frame and a **semantic** style token.
 
+**Delta `S-A3Δ` — added 2026-07-31 (`OD-6`, `OD-7`). Build order #2** — Block 1,
+blocked on nothing; must precede `S-B2Δ` (#4) and `S-B1Δ` (#6).** The stage's own gates
+passed and still pass. What they never checked is **size** and **per-prim
+provenance**, because neither was specified when they were written. Confirmed
+against the code: `Prim.values` inlines a nested float array, `Prim.data` inlines
+image bytes, and `Prim.points_m` is unbounded. Two additions, both structural,
+both permanent once `S-D4` builds on them:
+
+- [ ] **`BulkRef` as a `Prim` field** — `topic` + `log_time_ns` + optional
+      `field` path + `count` + `encoding`. It is a *coordinate into the
+      recording*, not a second storage mechanism, so a `Scene` stays
+      serializable and a golden still round-trips (arch §5.3)
+- [ ] **The budget check lives in `Layer.__post_init__`**, not in `Prim`. A
+      `Prim` does not know its layer, and `NR-SIM-43` requires the error to name
+      one. Raise `ContractError` with the layer id, the prim kind and the count
+- [ ] **`Prim.derived: bool = False`**, plus the `Layer.derived` consistency
+      check (`UT-A3-13`). A layer legitimately mixes SUT-published and
+      reconstructed geometry, which makes the existing per-layer flag inaccurate
+      rather than merely coarse (`R-SIM-7`, arch §5.19)
+- [ ] The declared budget is a **named constant with its number in this
+      document**, not a magic literal — `NR-SIM-5` is falsifiable only against a
+      stated figure (`GT-13`)
+
 - [x] `scene/types.py` — frozen `Prim`, `Layer`, `Scene` per api reference §5
       and visualization spec §2. Every prim carries `frame`, `style`, `pick_id`,
       `z`, `alpha`. `width_px`/`offset_px` are **the only** pixel fields, and
@@ -577,6 +853,16 @@ reference — only metres, a named frame and a **semantic** style token.
       (module scan) — the layering that makes `R-SIM-2` mechanical
 - [x] `UT-A3-11` no `Prim` field accepts a colour value: constructing one with
       a hex-literal style raises, because a hex string is not a semantic token
+- [ ] `UT-A3-12` **the Scene carries geometry, not bulk data** (`NR-SIM-43`,
+      audit `A5`): a `Prim` exceeding the declared per-Scene byte budget is a
+      `ContractError` naming the layer, and a bulk array (point cloud, image,
+      grid) is carried as a **reference** into the recording, not inlined.
+      `SceneCache` bounds by **bytes**, not entry count. *Added by the
+      2026-07-31 audit — structural and cheap now, permanent after `S-D4`*
+- [ ] `UT-A3-13` `Prim.derived` and `Layer.derived` **cannot disagree**: a
+      `Layer(derived=False)` containing a `Prim(derived=True)` raises. Both
+      directions asserted, because the check exists to stop a mixed layer
+      claiming to be fully SUT-published (`OD-6`)
 - [x] `ST-A3-1` `python -m adas_sim.render.palette_check` exits 0 for `dark` and
       `light`; every pair in the 6-8 dE band has a **named** secondary encoding
 
@@ -615,6 +901,41 @@ bullet) rather than obfuscating the strings or leaving the mapping incomplete.
 
 **Must not.** Let any other module learn that mcap exists. `Session`, pipeline,
 Scene, viewer and expectations are written against the model (`UT-A4-11`).
+
+**Delta `S-A4Δ` — added 2026-07-31 (`OD-9`, `CR-SIM-4`). Build order #3** — Block 1,
+blocked on nothing; must precede `S-B2Δ` (#4) and `S-C2` (#9).** The model declares
+one time field where the vehicle has two. Confirmed against the code:
+`io/mcap.py:151` writes `publish_time=log_time_ns` and the reader yields only
+`message.log_time`, so both stamps collapse. **Do this before `S-C2` writes
+anything** — a recording produced without a capture stamp cannot be repaired
+afterwards.
+
+Read recording §3.3 first; it corrects the audit's own justification, and the
+correction is what decides the `None` rule below.
+
+- [ ] The message tuple becomes **`(topic, log_time_ns, capture_time_ns,
+      bytes)`**. `log_time_ns` keeps its meaning exactly — **reception**, the
+      scheduling clock — so `group_by_log_time` is unchanged and every existing
+      grouping behaviour is preserved
+- [ ] **`capture_time_ns: int | None`, and `None` is never replaced by
+      `log_time_ns`.** This is the one detail to be stubborn about: `None` means
+      *unknown*, equality means *simultaneous*, and defaulting one to the other
+      manufactures an `age_s` of exactly `0.0` indistinguishable from a true one
+      — the substitution `NR-SIM-4` forbids, on the field that exists to prevent
+      it
+- [ ] `Capabilities.capture_time: bool`. A codec without a second stamp declares
+      it and degrades explicitly — `R-SIM-14`'s existing mechanism, so this adds
+      no concept
+- [ ] `io/mcap.py`: **one line** on the write side. mcap already carries both
+      with these exact semantics — `publish_time` is when the producer published,
+      `log_time` is when it was logged. The reader yields both
+- [ ] **Recordings written before this delta report `capture_time_ns = None`
+      regardless of their bytes**, keyed off `manifest_version`. Their
+      `publish_time == log_time` was written unconditionally and therefore
+      carries no information; reading it as "simultaneous" would be a fabricated
+      fact
+- [ ] `io/csv.py` and `io/legacy.py` follow the tuple change. `csv.py`'s
+      `<port>.age_s` column becomes capture-derived when capture is known
 
 - [x] `io/base.py` — `RecordingReader`/`RecordingWriter` Protocols,
       `Capabilities` (incl. `round_trips`, `write_only`), `TopicInfo`,
@@ -698,6 +1019,18 @@ Scene, viewer and expectations are written against the model (`UT-A4-11`).
       directories loads; tick count > 0; no exception (skips with a named
       reason if that component is absent) — ran for real against all 7
       recordings under `modules/df/tests/carla_testruns/`
+- [ ] `UT-A4-13` **two clocks, not one** (`CR-SIM-4`, audit `A6`): a message
+      round-trips **capture time and reception time** as separate integer-ns
+      stamps; a codec supporting only one declares it as a capability and
+      degrades explicitly (`R-SIM-14`). *`io/mcap.py` currently writes
+      `publish_time=log_time_ns`, collapsing them — so an injected sensor
+      latency cannot survive a round-trip, and every recording written before
+      this lands is permanently missing a field*
+- [ ] `UT-A4-14` **`None` is not `equal`**: a codec with no capture stamp yields
+      `capture_time_ns is None`, and a recording whose two stamps genuinely
+      coincide yields two equal integers — the two cases are distinguishable at
+      the reader, and a pre-delta recording reports `None` regardless of its
+      bytes. Shown by round-tripping one file of each kind (`OD-9`)
 - [x] `ST-A4-2` read, write, read yields an identical topic/message set — ran
       for real against `tests/fixtures/tiny.mcap`
 
@@ -775,6 +1108,40 @@ possible at all. Closes **D7**; delivers the *scrolling* requirement
   here is precisely what makes a resim non-reproducible, and it fails silently.
 - Let pass 2 mutate anything pass 1 produced. `Session` is immutable; that is
   what makes 100 random seeks a cheap test rather than a flaky one.
+
+**Delta `S-B2Δ` — added 2026-07-31 (`OD-9`, `OD-13`, and the seed of `OD-6`).
+Build order #4** — Block 1, blocked on `S-A3Δ` (#2) and `S-A4Δ` (#3).
+The most invasive item of the 2026-07-31 pass — it changes a frozen core type
+that 410 passing tests already use.** Depends on `S-A4Δ` landing first.
+
+Read recording §10 first: the original *"long runs need a windowed Session"*
+flag was **wrong about where the memory is**, and the corrected answer removes a
+concept instead of adding one.
+
+- [ ] **`PortValue.capture_ns: int | None`**, carried from the recording's
+      second stamp (`S-A4Δ`)
+- [ ] **`age_s` stops being stored and becomes derived**:
+      `(t_ns − capture_ns)/1e9` when capture is known, else the schedule-derived
+      hold age (`R-SIM-18`). This *removes* an ambiguity — today `age_s`
+      silently means two different things depending on why a value is old
+- [ ] **`PortValue.message` becomes lazily parsed and memoised over retained
+      bytes.** A `Session` is then bounded by the recording's size rather than by
+      parsed-message count. This is also `NR-SIM-41`'s escalation step 1 —
+      *"stop deserializing what nobody reads"*, the largest available throughput
+      win — taken as the design rather than held as a contingency
+- [ ] **`SceneCache` bounds by bytes**, with entry count as a secondary cap
+      (`NR-SIM-43`). `max_size=256` today is an entry count, so the real ceiling
+      is 256 × whatever a Scene weighs
+- [ ] **Do not build a windowed `Session`.** It is rejected, with a reason worth
+      re-reading before anyone re-proposes it: a window that has scrolled past a
+      tick must re-execute to redraw it, which breaks `R-SIM-17`'s guarantee that
+      *behind the head, seek and step-back are free and never re-run the SUT*
+- [ ] `core/evidence.py` — the `Evidence` record and `evidence(address, session,
+      tick)`, seeded here over what exists now (`run_id`, topics, origins,
+      manifest) exactly as `core/explain.py` was seeded at this stage. It grows
+      ports and stages at `S-C1c`, plug-ins at `S-C8`, and the panel at `S-D3`.
+      **`cli/explain.py` must call it rather than re-deriving** — one producer,
+      two formatters, from the first line of it (`OD-6`, `GT-9`)
 - Implement a backwards `exec()`. There is no inverse; see the head model.
 
 - [x] `core/tick.py` — `PortValue` (message + `age_s`/`valid`/`updated`/
@@ -880,6 +1247,17 @@ possible at all. Closes **D7**; delivers the *scrolling* requirement
       `ports` raises, so pass 2 cannot corrupt pass 1
 - [x] `UT-B2-12` the Scene cache respects its bound and evicts least-recently-
       used, measured on a session larger than the bound
+- [ ] `UT-B2-13` `age_s` is **derived, and states which clock it came from**:
+      capture-derived when the recording carries a capture stamp, hold-derived
+      otherwise, and the two are distinguishable rather than both surfacing as a
+      bare float (`OD-9`)
+- [ ] `UT-B2-14` **the resim path parses nothing.** Drive a pipeline over a
+      recording with a deliberately un-parseable payload on a port no layer,
+      expectation or plot reads: the run completes. Then read that port and
+      assert it raises. Parsing-on-demand is only real if not-parsing is
+      observable (`OD-13`)
+- [ ] `UT-B2-15` `SceneCache` evicts on a **byte** bound: a cache holding few
+      but large Scenes evicts, where an entry-count bound would not (`NR-SIM-43`)
 - [x] `ST-B2-1` on a ≥1000-tick session, 100 random seeks all return correct data
 - [x] `ST-B2-2` a full pass 1 over the largest existing recording completes
       within a stated budget, **recorded as a number** — not asserted as a limit
@@ -1163,6 +1541,69 @@ already required, or a new idea" rather than built blind:
       only meaningful while both exist.
       `ST-B1-1` is green; `MC-1` is closed (Pass, 2026-07-29) — gate closed
 - [x] `ST-B1-2` green — otherwise `D3` is closed on paper only
+
+**Delta `S-B1Δ` — re-opened 2026-07-31 (`D13`, `R-SIM-21`). Build order #6** —
+Block 1, blocked on `S-C1cΔ` (#5, the port-address resolver) and `S-A3Δ` (#2,
+`Prim.derived`). `S-C4` (#7) follows it immediately: same file set.** The stage's own gates all
+passed and still pass; what they never checked is the **plug-in boundary**,
+because no gate looked at it. `GT-1`/`GT-2`/`GT-3` scan `modules/sim/src` — they
+stop precisely where a component's plug-in begins. Three defects in the ~320
+lines of `modules/df/sim/`, all in the same shape:
+
+- [ ] **Port addresses are literals** — `requires=("df.bsd.outputs",)` and
+      `ctx.history.last(1)[-1].port("df.bsd.outputs")` in
+      `sim/layers/bsd.py`. The `df.` segment is the **pipeline stage name**
+      (`Pipeline` builds addresses as `f"{stage.name}.{port.name}"`), so a
+      pipeline that names the stage anything else unbinds the layer; the rest
+      is a C++ constant in another repo bound to this file by nothing.
+      Replace with component-relative `self.bsd.outputs`, resolved once at load
+- [ ] **The failure is silent** — `scene/registry.py`'s `gated` wrapper returns
+      `()` for a missing port, so a broken binding renders as *no overlay*,
+      which on screen is indistinguishable from "no warning was raised". Make an
+      unresolvable `requires` an `AuthoringError` at load, naming the plug-in,
+      the port and every port the manifest declares (`N-8`). **A `requires` that
+      is unsatisfied at *this tick* stays a legitimate empty result** — a port
+      that does not exist and a port that has not arrived are different
+      statements, and merging them is what made this invisible
+- [ ] **A layer provider reads disk** — `_bsd_calibration()` calls
+      `path.read_text()` on `df`'s project YAML **per tick**, which `R-SIM-2`
+      forbids outright ("a provider never touches disk") and which bypasses
+      `R-SIM-3a`: it reads the *source checkout*, not the bundle the SUT was
+      initialised with. That is exactly the "two readers agreeing by
+      coincidence" failure the bundle exists to prevent, reintroduced by the
+      first plug-in written against it. Route through `ctx.model`
+- [ ] `UT-B1-14` a plug-in requiring a port no manifest declares raises at load,
+      naming all three things; and a plug-id whose port exists but has not yet
+      arrived still returns an empty layer without raising
+
+*Scope added 2026-07-31 (`OQ-13`). The concept count was never an API problem —
+it was a documentation one — but one line of it is real ergonomics:*
+
+- [ ] **`LayerCtx.now`** — a property returning `history.last(1)[-1]`, the
+      current tick. Today every provider opens with
+      `ctx.history.last(1)[-1]`, which puts *windowed history* — an advanced
+      concept — in front of every author before they draw anything. One
+      property removes it from the minimum path without removing anything from
+      the API
+- [ ] `.claude/templates/sim_layer_provider.py` is the **measured artefact** for
+      `OQ-13`: a canonical minimal provider of **≤15 lines** mentioning only the
+      four core concepts (decorator, `ctx`, `Prim`, style token), with every
+      optional idea below a second heading. *(Rewritten 2026-07-31 — the previous
+      version taught all ten at once and imported `@inspector_fields`, which no
+      longer exists.)*
+- [ ] `Prim.derived` is set on reconstructed prims in `modules/df/sim/`, not only
+      `Layer.derived` — this stage owns the first plug-in that actually mixes
+      published and reconstructed geometry (`OD-6`)
+
+**Why this was missed, recorded because it generalises.** Every invariant in
+this plan is enforced by a scan over `modules/sim/src`. The framework's
+correctness is therefore well-guarded and the *contract between the framework
+and a plug-in* is not guarded at all — it was specified in prose (`R-SIM-2`) and
+verified by nothing. `S-B1` was the first stage to cross that boundary and it
+crossed it wrongly in three ways on the first attempt, which is roughly what one
+should expect from an unguarded interface. `GT-11` is the gate; the general
+lesson is that **an invariant scoped to a directory stops at that directory**,
+and the interesting failures are on the other side of it.
 
 ### S-B3 — Qt viewer shell
 
@@ -1973,6 +2414,74 @@ elsewhere — but it is the first component-specific fact to enter the shared
 recipe, and it belongs in `plan.md` item 20's data-driven `recipe:` block
 alongside `type:`/`libs:`, not as a literal.
 
+### S-C0 — the automatic gate, before anything else in Phase C
+
+> **Build order: #1** (§0a is the authority on sequence). Block 1. First stage of Phase C. Blocked on nothing.
+
+*(Added 2026-07-31. This is `A10`'s recommendation made executable — see
+`sim_requirements.md` §12.6 for why the audit's own wording could not be
+followed literally.)*
+
+**Purpose.** The audit's finding is right: `S-C6` (CI) sits at the **end** of
+Phase C, after every stage that relied on manual verification — and manual
+verification is the mechanism that has already failed twice here (`GT-4`'s floor
+138 tests stale for six days; two stages reported green from a substitute
+toolchain). In both cases the response was to write down a date, i.e. *more
+careful manual verification*.
+
+**Why this is a separate stage and not simply "move `S-C6`".** `S-C6` runs
+`sim check` over the scenario set, and **the scenario set does not exist until
+`S-C3`**. Moving the stage wholesale is impossible; moving its *first half* is
+not. `S-C0` is the half that is buildable today. `S-C6` keeps its label and its
+scenario half, because a stage id is a stable citation (§0).
+
+**Must not.** Grow into a general CI design — that is `plan.md` item 20 and it
+is larger than this module. `S-C0` runs what already exists, automatically, and
+nothing more.
+
+- [ ] One job, triggered on every push to `feat/sim-platform` in `modules/sim`,
+      running exactly the three checks a stage already owes:
+      `python -m pytest modules/sim/tests -q` · `scripts/check_invariants.py` ·
+      `docs/py/run_all.py`
+- [ ] The job **records the pytest count** and fails when it drops below the
+      recorded floor — the mechanical version of `GT-4`'s discipline, applied to
+      the one suite that needs no compiler. A count that falls silently is the
+      exact defect this stage exists for
+- [ ] Artefacts retained on failure: the pytest output, the `run_all.py` report,
+      the `run_id` (`N-9`). A red build nobody can diagnose gets muted, and a
+      muted gate is worse than no gate
+- [ ] The job is **skipped with a named reason** when a change touches only
+      documents *and* `run_all.py` is green — so a docs commit is fast but never
+      unchecked
+- [ ] The known flake (§10) is listed by name in the job config with its ticket,
+      **not** deselected silently. A quarantined test that nobody can see is a
+      deleted test
+
+**Tests**
+- [ ] `ST-C0-1` the job runs green on the current tree, and its recorded pytest
+      floor equals the number actually observed on the day it was set — no
+      aspirational floor, the defect `GT-4` already suffered
+- [ ] `ST-C0-2` the job turns **red** on each of three planted defects, one per
+      check: a deleted test, a planted `GT-1` violation, and a requirement citing
+      a test id the plan does not define. Proving the gate can fail is the only
+      property that matters, and one planted defect per check is what stops a
+      job that runs only the cheapest of the three
+
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-4`, `P-6` (the job invokes Python
+      directly, never a `.bat`), `P-10` (the runner image carries every core
+      dependency; a Qt-less runner must still pass, which is what proves the
+      extras split is real)
+- [ ] naming §3 ticked — exposure: `N-9`, `N-10` (the job's log must carry the
+      greppable line, or a failure cannot be joined to its artefacts)
+- [ ] `GT-1..GT-14` re-checked
+
+**Gate**
+- [ ] `ST-C0-2` green — all three planted defects turn the job red. A gate that
+      has never failed has never been shown to work
+- [ ] The pytest floor is recorded with **a number and a date** in this stage's
+      own text, not only in the job config
+
 ### S-C1a — `interfaces`: the ABI header and the manifest schema
 
 *(`S-C1a`/`S-C1b`/`S-C1c` are the three sub-stages of the architecture's single
@@ -2088,6 +2597,40 @@ gap, not introduced by this stage — surfaced only because this is the first
       as `0` = *undeclared* rather than as `0 ns` — the two must not be the
       same observable value at the pipeline's GCD step (delta below)
 
+**Delta `S-C1aΔ2` — added 2026-07-31. Build order #11 — the first Block 2
+stage, and everything else in Block 2 waits on it.**
+
+*Found while sequencing the concept-resolution pass, not while designing it.*
+Two of the resolutions need **manifest attributes that the shipped
+`component_manifest.proto` does not have**, and one of them reverses a decision
+this stage already ticked. Discovering that at `S-C5` would have meant building
+`S-C1d`'s generator, then reopening `interfaces`, then regenerating — the
+cross-repo rework the Phase C review already paid for once.
+
+- [ ] **Per-**function** period.** The ticked box above records `period_ns` as
+      *"component-level, not per `PortSpec`"*, and `OD-12` reverses it: a period
+      is declared per function, in **integer microseconds**, so that AEB at 20 Hz
+      and BSD at 10 Hz in one library are expressible. Add the per-function
+      field; **keep component-level `period_ns` readable** so `S-C1c`'s shipped
+      GCD scheduler and `UT-C1a-5` keep working — this is additive, like every
+      other Phase C change (`S-E2` is where anything is removed)
+- [ ] **`fixed_slots` per port.** `OD-8`'s `drop` must clear a fixed-size padded
+      slot in place and remove a variable-length element — and **the framework
+      must not guess which**. The port declares it; the manifest carries it;
+      Python reads it. Declaring it anywhere the framework reads directly
+      (`conf/ports.yaml`, a pipeline key) would be a second description free to
+      drift from the port's real shape, which is `R-SIM-4`'s whole point
+- [ ] Both fields are **optional with an honest absent value** — `0`/unset means
+      *undeclared*, never a default that looks like an answer (`NR-SIM-4`).
+      A consumer that needs one and finds it absent says so, naming the field
+- [ ] `UT-C1a-6` the per-function period round-trips, two functions at different
+      periods are both readable, and a manifest carrying only the old
+      component-level field still loads — the additive guarantee, tested
+- [ ] `UT-C1a-7` `fixed_slots` round-trips per port, and a port that does not
+      declare it reads as **undeclared** rather than as `false` — because
+      `false` means *"variable length, safe to compact"*, which is exactly the
+      silent renumbering `OD-8` exists to prevent
+
 **Discipline** (every stage)
 - [x] portability §3 ticked — exposure: `P-5` (the ABI header must compile for
       both toolchains; no Windows-only types), `P-8` (integer time in the
@@ -2097,7 +2640,7 @@ gap, not introduced by this stage — surfaced only because this is the first
       that every later layer reuses — an abbreviation chosen here is
       permanent), `N-11` (`abi` is an approved abbreviation; nothing else new
       abbreviates)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked — `docs/py/run_all.py`
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked — `docs/py/run_all.py`
       is `modules/sim`'s own cross-validation script and does not cover
       `interfaces`; `GT-1..GT-3`/`GT-6` don't apply to `interfaces` (no
       `modules/sim/src` in this stage), `GT-5` re-checked directly (see
@@ -2333,7 +2876,7 @@ output behaviour has two implementations.
 - [x] naming §3 ticked — exposure: `N-1` (`UT-C1b-9`), `N-4` (`max_bytes`,
       `abi_version` — every manifest field that needs a unit or a scope
       already has one)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked —
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked —
       `docs/py/run_all.py` doesn't cover `df`; `GT-4`'s real count needs the
       real `ctest` run noted above, not assumed from the standalone
       equivalent; `GT-1..GT-3`/`GT-6` don't apply (no `modules/sim/src`
@@ -2459,11 +3002,14 @@ function or a port anywhere in the framework. `GT-6` and `GT-1` are both live
 here, and `UT-C1c-3` runs with the generated bindings made **unimportable** so
 the claim is tested rather than asserted.
 
-**Blocked on `S-C1a`'s delta.** Two of its items are this stage's inputs, not
-polish: `period_ns` (there is no field to read without it) and the frozen
-port-name spelling (this is the stage that turns port names into topics,
-signal paths and `expect:` strings, after which renaming one is a breaking
-change to every artefact). Starting here first means doing this stage twice.
+**Blocked on `S-C1a`'s delta — ✔ resolved 2026-07-30, this stage has landed.**
+Two of its items were this stage's inputs, not polish: `period_ns` (there was no
+field to read without it) and the frozen port-name spelling (this is the stage
+that turns port names into topics, signal paths and `expect:` strings, after
+which renaming one is a breaking change to every artefact). Kept for the
+reasoning, which recurs — `S-C1aΔ2` (build order #11) is the same shape again
+and blocks `S-C1d`. **This stage's own remaining work is `S-C1cΔ` below, build
+order #5.**
 
 - [x] `contracts/component.py` — the `SilComponent` Protocol plus
       `CtypesSilComponent` and `InProcessSilComponent` (api reference §3.1).
@@ -2593,7 +3139,7 @@ change to every artefact). Starting here first means doing this stage twice.
 - [ ] naming §3 ticked — exposure: `N-8` (wiring errors are the most-read
       messages in the system: expected, found, where it looked, next action),
       `N-5`
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [x] `ST-C1c-1` green over every recording — the generic path is proven
@@ -2601,7 +3147,163 @@ change to every artefact). Starting here first means doing this stage twice.
 - [ ] `GT-6` green — the framework imports no generated bindings, tested by
       making them unimportable rather than by inspection
 
+**Delta — added 2026-07-31 (`R-SIM-21`).** `Pipeline` already knows every
+manifest in a run and already builds the concrete address
+(`f"{stage.name}.{port.name}"`). It is therefore the only place that *can*
+resolve a component-relative reference, and the resolver belongs here rather
+than in the plug-in loader — which is what stops a second resolver appearing at
+`S-C3` for `expect:` strings and a third at `S-D3` for workspaces.
+
+- [ ] **`contracts/binding.py` — the one port-address resolver.**
+      `resolve(ref, *, component) -> str`: takes `self.<port>` or a bare
+      `<port>`, returns the concrete address for *this* run. A miss raises
+      `AuthoringError` naming the reference, the component and every port its
+      manifest declares (`N-8`). **One resolver, four consumers** — layer
+      `requires`, `expect:` predicates (`S-C3`), workspace/viewpoint files
+      (`S-D3`), and export column selection (`S-D7`). Four resolvers is how the
+      third one starts accepting a name the first one rejects
+- [ ] `core/signals.py` routes through it rather than resolving addresses
+      itself — today it does a longest-known-prefix match over raw strings,
+      which is correct for a spelled address and has nothing to resolve a
+      component-relative one against
+- [ ] `UT-C1c-22` a component-relative reference resolves to the concrete
+      address **under a renamed stage** — the same plug-in binds correctly
+      whether the pipeline calls the stage `df` or `driving_functions`. This is
+      the whole claim; a test that only checks the default stage name proves
+      nothing
+- [ ] `UT-C1c-23` an unresolvable reference raises naming all three things, and
+      **never** returns a sentinel that a caller could treat as "absent"
+
+**Delta `S-C1cΔ` — added 2026-07-31 (`OD-8`, closes `OQ-10`). Build order #5** —
+Block 1, blocked on nothing; `S-B1Δ` (#6) and `S-C3` (#10) both consume what it
+builds, so building it later means building their consumers twice.** `contracts/
+override.py` declares the four verbs and `Pipeline` parses and load-validates
+them — but **nothing applies an override to a port's bytes yet**, and
+`Override.apply` operates on a bare `float`. That is why this is cheap now: the
+grammar is still free. Read arch §5.10 first.
+
+- [ ] **The address grammar, stated and closed** — `port` · `port.field` ·
+      `port.repeated[i]` · `port.repeated[*]` · a field within either. **Index
+      and `*` only, never a predicate.** `objects[?class=="truck"]` is an
+      expression, and an expression grammar is the over-configuration this design
+      exists to answer
+- [ ] **Two structural verbs, and the list closes again at six** — `drop`
+      removes the addressed element(s), `select` keeps them and drops the rest.
+      They are the complement pair over a set, which is why two is the right
+      number. The governing line, which is what rules out `insert`/`move`/
+      `duplicate` on principle rather than on taste: **an override may destroy or
+      attenuate information; it may never create an entity**
+- [ ] **Fixed-slot behaviour, keyed on a manifest attribute** — a port declared
+      `fixed_slots` has `drop` **clear the element in place**, never compact.
+      Compaction renumbers every later index and breaks track association
+      silently, which is the confidently-wrong-answer failure this architecture
+      exists to prevent. The framework must not guess which shape a port has;
+      the port declares it, through the manifest (`R-SIM-4`), never through a
+      file the framework reads directly.
+      **The attribute arrives at `S-C1aΔ2`/`S-C1d` (build order #11/#12), which
+      is after this stage** — so until then, **`drop` on a port whose manifest
+      does not declare `fixed_slots` is a load error naming the port and the
+      missing attribute.** Not a default: `false` would mean *"safe to compact"*
+      and `true` would mean *"safe to zero"*, and both are guesses about someone
+      else's data (`NR-SIM-4`). This is what keeps this stage compiler-free
+      without deferring the verb
+- [ ] Apply overrides on the input path, and tag the topic `origin: overridden`
+      with the verb set recorded in the run manifest (`R-SIM-15`)
+- [ ] **Refuse, with the alternative named in the error**: a time-varying or
+      conditional override is rejected pointing at *edit the scenario* or *write
+      a `stub:` stage*. A refusal that does not say where to go instead is how a
+      closed list gets reopened
+
+**Tests added by the delta**
+- [ ] `UT-C1c-24` each address form resolves to the right target, and a
+      predicate-shaped address is an `AuthoringError` naming the closed grammar
+- [ ] `UT-C1c-25` `drop` on a **`fixed_slots`-declaring** port clears in place:
+      element 3 becomes its message default and elements 4+ keep their indices.
+      The compacting behaviour is asserted **not** to happen, because that is the
+      failure mode, not the feature. And `drop` on a port whose manifest is
+      **silent** about `fixed_slots` raises, naming the port and the field —
+      never picking a side (`NR-SIM-4`). Until `S-C1aΔ2` lands, the second half
+      is the only reachable path, which is the honest state and is why the verb
+      does not have to wait for a build
+- [ ] `UT-C1c-26` `select` keeps exactly the addressed elements; `select` and
+      `drop` of complementary sets produce the same result, which is the property
+      that makes two verbs sufficient
+
+### S-C1d — the generated ABI shim (`R-SIM-22`, closes `D12`)
+
+> **Build order: #12** (§0a is the authority on sequence). Block 2. Blocked on `S-C1aΔ2` (#11) — the generator must emit fields the proto actually has.
+
+*(Added 2026-07-31. Fourth sub-stage of **C1**, and the one that makes component
+number two cheap.)*
+
+**Purpose.** Stop every component hand-writing ~400 lines of port table,
+manifest builder and dispatch. `S-C1b` proved the shim is *correct*; this stage
+proves it is **generated**, so that `perception-core`, `planning` and `vdy` cost
+a declaration rather than a rewrite.
+
+**Must not.** Change a single byte of what `df_sil.dll` exports. This stage is a
+**refactor with a byte-identical output**: the generated shim must produce the
+same manifest and the same dispatch behaviour as the hand-written one, proven by
+comparison, not by reading. If the manifest changes, the stage is wrong.
+
+**Must not** (second). Touch `src/component/**`, and must not become a general
+code-generation framework. One generator, one input schema, one output file.
+
+- [ ] `modules/df/conf/ports.yaml` — the single declaration
+      (`sim_sil_contract.md` §3.2). Lives beside `conf/build.yml` because it is
+      the same *kind* of thing: per-component build data (`R-VAR-3`)
+- [ ] The generator — reads `conf/ports.yaml` + `ENABLED_FUNCTIONS`, emits the
+      name constants, both port tables, `buildManifest()` and the `adasExec`
+      dispatch bindings. **A build output**: generated into the build tree,
+      never checked in, never edited
+- [ ] `binds:` names the `ReqPort`/`ProPort` member, so `N-1`'s "the segment
+      after the dot is byte-identical to the member" is **generated** rather
+      than asserted by `UT-C1b-12`. The `comp_state`-vs-`compState` defect
+      becomes unrepresentable rather than caught
+- [ ] Diagnostics name the **YAML key and line**, never the emitted C++
+      (`sim_sil_contract.md` §9). A generator that reports errors in its own
+      output is a generator that gets worked around
+- [ ] The checked-in `df_sil.ports.yaml` stays a **dump of what was compiled**
+      (`df_manifest_dump`) — a reviewable port diff, not a third copy
+
+**Tests**
+- [ ] `UT-C1d-1` the generated manifest is **byte-identical** to the one the
+      hand-written shim produced, for `-P base` and `-P cus1`
+- [ ] `UT-C1d-2` `ENABLED_FUNCTIONS` combinatorics: aeb-only, bsd-only, both,
+      neither — each yields exactly the expected port set, the case `UT-C1b-7`
+      had to check by manual recompile
+- [ ] `UT-C1d-3` a `binds:` naming a member that does not exist in the ports
+      header is a **generate-time error** naming the YAML key and line —
+      **shown to fail**, not assumed (`ST-C6-2`'s principle)
+- [ ] `UT-C1d-4` a duplicate port name, and a port name whose post-dot segment
+      is not a real member, are both generate-time errors
+- [ ] `UT-C1d-5` the generated file is not tracked by git and is regenerated
+      from a clean tree
+- [ ] `ST-C1d-1` **the whole point of the stage**: a second component
+      (`vdy`, or the `stubdll:` echo component from `S-C1c`) grows a working
+      generic ABI from a `conf/ports.yaml` and **zero hand-written C++**. If
+      that needs one line of bespoke shim, `D12` is not closed
+
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-1`/`P-2` (a generator is where an
+      absolute build path enters), `P-4` (generated C++ written with explicit
+      encoding and `\n`, or two machines produce different files), `P-8`
+      (declaration order sorted, or the manifest is not reproducible)
+- [ ] naming §3 ticked — exposure: `N-1` (this stage makes it structural), `N-8`
+- [ ] `GT-1..GT-12` re-checked; `GT-4`'s `df` row re-measured (a refactor that
+      changes the count changed behaviour)
+
+**Gate**
+- [ ] `UT-C1d-1` green — byte-identical manifest, both projects. A refactor that
+      cannot prove equivalence is a rewrite
+- [ ] `ST-C1d-1` green — the second component is the evidence; the first one
+      working proves only that the generator can reproduce what it was modelled
+      on
+- [ ] `GT-4` green at or above every recorded floor
+
 ### S-C2 — `sources/` — the production side
+
+> **Build order: #9** (§0a is the authority on sequence). Block 1. Blocked on `S-A4Δ` (#3): this stage writes recordings, so the two-stamp codec must exist first.
 
 **Purpose.** Separate *producing* a recording from *executing* one
 (`R-SIM-12`). Today one 983-line script does both, which is why it is 983 lines.
@@ -2628,6 +3330,34 @@ Nothing in `sources/` may name a driving function (`GT-1`).
       (`R-SIM-6`) and writes every stage's inputs *and* outputs — so "did we
       record everything the SUT reads?" is true by construction rather than by
       diligence
+
+*Scope added 2026-07-31 (`NR-SIM-42`, `OD-9`). Read recording §3.6 and §3.3.*
+
+- [ ] **Per-port `record:` policy**, declared in the pipeline beside the wiring
+      — `full` (the default) · `{decimate: n}` · `excluded`. **No global
+      switch**, deliberately: a global switch is how everything ends up excluded
+      by one person in a hurry
+- [ ] **The policy is written into the recording's meta for *every* declared
+      port, not only the exceptions**, so a reader answers *"was this
+      complete?"* from the file alone. This is what makes `R-SIM-6` degrade
+      *visibly* to "everything except these, by declaration" instead of silently
+      becoming false
+- [ ] **An excluded port feeds `R-SIM-23`'s feasible-cut query, not a second
+      mechanism.** To a later run an excluded port is indistinguishable from one
+      the recording never had, which is the case `S-C9` already computes
+- [ ] **Two different times, two different answers.** At *record* time,
+      declaring a stage `simulate` while excluding or decimating an input it
+      consumes is a **load error** — you would be recording a run whose own
+      inputs you are not keeping. At *resim* time the same file is not an error,
+      merely a cut `sim probe` reports as infeasible
+- [ ] The recorder writes **both stamps** (`S-A4Δ`): reception from the
+      schedule, capture from the source or the error model that produced the
+      value
+- [ ] Size estimate before starting: an upper bound from each port's
+      `max_bytes` × ticks × recordings, **labelled as an upper bound**, revised
+      from the measured rate after the first hundred ticks. Both numbers,
+      both labelled — a single confident figure that turns out to be either is
+      worse than neither
 - [ ] `cli/record.py`, `cli/run.py`, `cli/resim.py` — argument parsing only.
       **Not `app/cli.py`**: `app/` is the GUI and holds no logic (`GT-9`), and
       the package map is asserted by `UT-A1-9`
@@ -2654,6 +3384,22 @@ Nothing in `sources/` may name a driving function (`GT-1`).
       cannot produce fails at load naming the source and the port
 - [ ] `UT-C2-11` no module under `sources/` launches a process through a shell
       or names an absolute path (`P-2`, `P-6`)
+- [ ] `UT-C2-12` **per-port record policy** (`NR-SIM-42`, audit `A3`): a port
+      declared `excluded` or `decimated` is honoured **and named in the
+      recording's own metadata**, so `R-SIM-6`'s "everything the SUT reads was
+      recorded" degrades *visibly* to "everything except these, by declaration"
+      rather than silently becoming false
+- [ ] `UT-C2-13` the recorder writes **capture and reception time** separately
+      (`CR-SIM-4`); an injected latency error model is recoverable from the
+      recording, which is the whole reason the second stamp exists
+- [ ] `ST-C2-3` `sim record`/`sim batch` **estimate and report expected size
+      before starting** (`NR-SIM-42`) — a campaign that would fill the disk says
+      so in advance rather than at 80%
+- [ ] `UT-C2-14` **excluding an input a `simulate` stage consumes is a load
+      error at record time**, naming the stage and the port; and the *same*
+      recording later loads fine for a cut that does not execute that stage,
+      reported as infeasible rather than raising. Both halves, because either
+      alone is the wrong rule (`NR-SIM-42`)
 - [ ] `ST-C2-1` `sim record` on the synthetic source produces a recording that
       `sim resim` consumes with every stage `measured` except one
 - [ ] `ST-C2-2` `sim resim` reproduces byte-identical outputs across two runs
@@ -2665,7 +3411,7 @@ Nothing in `sources/` may name a driving function (`GT-1`).
       simulator through a shell)
 - [ ] naming §3 ticked — exposure: `N-5` (a source's emitted names state origin,
       not intent), `N-12` (`sources/` in a traceback must mean *the world* lied)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] `ST-C2-2` green; `MC-2` recorded with a date and a name
@@ -2673,6 +3419,8 @@ Nothing in `sources/` may name a driving function (`GT-1`).
       `S-E1` is the only place anything is deleted (`NR-SIM-30`)
 
 ### S-C3 — Scenario schema v2 + expectations
+
+> **Build order: #10** (§0a is the authority on sequence). Block 1, last. Blocked on `S-C1cΔ` (#5, the fault address grammar), `S-A4Δ` (#3, `delay`) and `S-C9` (#8).
 
 **Purpose.** Move a scenario's intent out of prose and into data. Closes
 **D10**, **D11**; builds `R-SIM-8`.
@@ -2696,6 +3444,32 @@ review.
 - [ ] `cli/check.py` — `sim check` (argument parsing only, `GT-9`)
 - [ ] Timeline renders expectation windows (visualization spec §7.3)
 
+*Scope added 2026-07-31 (`OQ-3`, `OQ-4`). Read scenarios §9.1 and §9.2.*
+
+- [ ] **Anchors get a second form, and it is not new grammar** —
+      `at: {first: <signal>, becomes: <value>}` and
+      `at: {first: <signal>, crosses: <value>, dir: rising|falling}`. An anchor
+      is an **existing `expect:` predicate used as a time reference**, so it
+      reuses the evaluator built above rather than adding one. A constant `at:`
+      still **requires** `from:`
+- [ ] **One signal address, one literal, one optional direction. Nothing else.**
+      The moment an anchor relates two signals it is an expression, and the
+      answer is a constant with `from:`
+- [ ] **Fault injection: five verbs, closed** — `drop` · `stale` · `delay` ·
+      `invalidate` · `corrupt`. The list is *derived*, not chosen: `PortValue`
+      has exactly four metadata fields plus a payload, and the vocabulary is the
+      set of ways each can be made to lie. Today's `roll_fault:` is `corrupt` +
+      `invalidate` and stops being a special form
+- [ ] **Faults reuse the override address grammar** (`S-C1cΔ`) — a third
+      addressing scheme for the same objects is how a tool becomes inconsistent
+- [ ] A fault is declared in `run.faults:`, lands in the run manifest, tags its
+      topic `origin: overridden` and is badged in the HUD. **The origin enum
+      stays at five** — fault-versus-override is a *record* question, answered
+      by the manifest, not a provenance grade
+- [ ] `delay` requires `S-A4Δ`. With one clock there is nowhere to put the
+      original instant, which is the clearest case of the two-clock change
+      paying for something beyond itself
+
 **Tests**
 - [ ] `UT-C3-1` every v1 scenario loads through the upgrader and yields the same
       effective run configuration
@@ -2712,13 +3486,23 @@ review.
 - [ ] `ST-C3-1` all 18 scenarios load under v2
 - [ ] `ST-C3-2` `sim check tests/carla_scenarios` runs headless, exits non-zero
       on a deliberately broken expectation
+- [ ] `UT-C3-7` a predicate-form anchor resolves to the **first** tick
+      satisfying it and is stable when the scenario's unrelated fields change —
+      which is the drift a constant anchor suffers and this form exists to fix.
+      An anchor naming two signals is a schema error (`OQ-3`)
+- [ ] `UT-C3-8` each of the five faults produces its stated effect **on
+      `PortValue` metadata, not only on bytes**: `stale` yields
+      `updated=False` with a growing `age_s`, `delay` yields a capture stamp
+      earlier than reception, `invalidate` yields `valid=False` with bytes
+      present. A sixth fault name is a schema error naming the closed five
+      (`OQ-4`)
 - [ ] `ST-C3-3` a scenario whose recording is missing is **skipped with a
       warning**, not failed
 
 **Discipline** (every stage)
 - [ ] portability §3 ticked — exposure: `P-4` (scenario YAML read as UTF-8; report written with explicit newline or two machines produce different reports), `P-3`
 - [ ] naming §3 ticked — exposure: `N-2` (an `expect:` path is the one address space, fully qualified), `N-4` (`within_s` is a unit-suffixed name for a reason)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] All 18 scenarios have `expect:` blocks **transcribed from their existing
@@ -2728,6 +3512,8 @@ review.
 - [ ] The migration record lists every claim that **could not** be expressed
 
 ### S-C4 — Viewer reads real calibration; kill the duplicates
+
+> **Build order: #7** (§0a is the authority on sequence). Block 1. Runs straight after `S-B1Δ` (#6) — same file set in `modules/df/sim/`, visited once. **Earlier than its id suggests.**
 
 **Purpose.** Delete the hand-maintained duplicate of calibration the DLL already
 reads. Small stage, disproportionate value: a duplicate that drifts produces a
@@ -2756,13 +3542,15 @@ duplicate**; it does not relocate a source of truth.
       real calibration keys; a case-only mismatch would silently resurrect it)
 - [ ] naming §3 ticked — exposure: `N-1` (the deletion is only safe because both
       spellings were the same token)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] `ST-C4-1` green — and `UT-C4-1` green, because a grep proving the literal
       is gone does not prove the replacement is wired to anything
 
 ### S-C5 — The packed config bundle (OD-4)
+
+> **Build order: #13** (§0a is the authority on sequence). Block 2. Blocked on `S-C1d` (#12) — reads the per-function period through the manifest it generates.
 
 **Purpose.** One atomic bundle per (project, build), beside the library, so the
 SUT and the viewer provably read the same bytes (`R-SIM-3a`). Closes
@@ -2802,6 +3590,37 @@ place beside the DLL.
 - [ ] `ProjectModel` prefers explicit → embedded → library → checkout, and the
       HUD **always says which** (`bundle_origin`)
 
+*Scope added 2026-07-31 (`OD-11`, `OD-12`). Read contract §9.1 and §9.2.*
+
+- [ ] **One bundle per component, permanently** — `OQ-1` is closed and there is
+      no per-pipeline bundle to build. A bundle is a build output; a pipeline is
+      a run-time composition, and a per-pipeline bundle would be either unbuilt
+      or hand-assembled, i.e. the second edit site `R-SIM-3a` forbids
+- [ ] **Project agreement across a multi-component pipeline — a warning with a
+      declared escape.** The loader compares each manifest's `project` and names
+      both components and both projects on a mismatch. `allow_mixed_projects:
+      true` is legal, badged in the HUD and recorded in the manifest, because a
+      deliberate cross-project experiment is a real workflow
+- [ ] **Ego-parameter agreement across bundles — a hard error, no escape.**
+      Every bundle carries its own copy of `shared_config`'s
+      `vehicle/ego_params.yaml`. Two components disagreeing about the wheelbase
+      is a wrong result *and* a wrong picture, with no legitimate reading, so it
+      fails at load (§5.14's hard-fault class). **This is the check the
+      per-component bundle's one genuine risk needed and nothing was doing**
+- [ ] **`period` moves into the bundle as `<COMPONENT>_<FN>_PERIOD_US`** —
+      integer microseconds, per function (`R-NAME-3`). Not seconds: a YAML float
+      of `0.05` is not exactly representable, and a rounded period accumulates
+      into drift that reads as an algorithm bug — the failure `R-SIM-18`'s GCD
+      check already refuses. Not milliseconds: 12.5 ms exists
+- [ ] The manifest **reports** the period; it does not define it. **No ABI
+      parameter is added**: a component is scheduled at the GCD of its own
+      functions' periods and decides internally what to run, because it reads
+      the same bundle and knows its `ENABLED_FUNCTIONS`
+- [ ] **The DLL's own `updated` flag is authoritative over the predicted
+      schedule.** A disagreement is *reported*, never hidden — a component whose
+      rate gating has drifted from its declared period otherwise surfaces months
+      later as an unexplained stale value
+
 **Tests**
 - [ ] `UT-C5-1` `adasInit(NULL)` resolves the bundle beside the library
 - [ ] `UT-C5-2` an explicit path always wins over the packed bundle
@@ -2823,6 +3642,19 @@ place beside the DLL.
 - [ ] `ST-C5-1` **the relocatability test**: copy the build output + `config/`
       to a directory with no Conan cache and no repo checkout; `sil_host` and
       `sim resim` both run correctly (this closes `plan.md` item 19)
+- [ ] `UT-C5-10` **two bundles whose `ego_params.yaml` copies differ is a hard
+      error naming both components and the differing key** — and `allow_mixed_
+      projects: true` does **not** suppress it, asserted explicitly, because an
+      escape hatch that widens beyond its stated scope is how a hard error
+      becomes a warning (`OD-11`)
+- [ ] `UT-C5-11` a period read from the bundle as `<COMPONENT>_<FN>_PERIOD_US`
+      reaches the manifest unchanged and drives the GCD grid; two functions in
+      one component at different periods schedule correctly; and a value that is
+      not an integer number of microseconds is a **load error naming the key**
+      (`OD-12`)
+- [ ] `UT-C5-12` a **sweep** over the period changes behaviour with **no
+      rebuild** — the property `NR-SIM-6` demands and the reason the C++ literal
+      had to go
 - [ ] `ST-C5-2` the viewer's `bundle_origin` reports `embedded` for a new
       recording and `checkout` for a legacy one — the two readers agreeing by
       coincidence is exactly what this reports on
@@ -2832,7 +3664,7 @@ place beside the DLL.
       hashing), `P-5` (the library-directory lookup), `P-3`
 - [ ] naming §3 ticked — exposure: `N-9` (the bundle hash joins the recording,
       the HUD and the report)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] `ST-C5-1` green — item 19 closed with evidence
@@ -2841,6 +3673,33 @@ place beside the DLL.
 
 
 ### S-C6 — Resim in CI (the minimum automatic gate)
+
+> **Build order: #16** (§0a is the authority on sequence). Block 2, last. Blocked on `S-C2` (#9), `S-C3` (#10) and `S-C5` (#13) — determinism axis C needs a rebuilt binary, which only exists after #13.
+
+> **Ordering finding, 2026-07-31 audit (`A10`) — resolved by splitting, not by
+> moving.** The finding is right: this stage sat last, after every stage that
+> relied on manual verification, and manual verification is the mechanism that
+> has already failed twice here (`GT-4`'s floor 138 tests stale for six days;
+> two stages reported green from a substitute toolchain). In both cases the
+> response was to write down a date, i.e. *more careful manual verification*.
+>
+> **But it could not be moved as instructed**: this stage runs `sim check` over
+> the scenario set, and the scenario set does not exist until `S-C3`. So the
+> half that is buildable today became **`S-C0`**, at the front of Phase C, and
+> this stage keeps its label and its scenario half. See `sim_requirements.md`
+> §12.6.
+>
+> Scope grows by two tests from the same audit, because a CI job is where a
+> number becomes non-negotiable:
+> - [ ] `ST-C6-3` `sim determinism` reports all four axes — same process, fresh
+>       process, rebuilt binary, **different machine** — with the **axis derived
+>       from the two runs' manifests, never from a flag**, and a pair differing
+>       in more than one dimension reported as evidence for neither
+>       (`R-SIM-24`, `NR-SIM-40`, `OD-10`). Today only the same-process axis is
+>       exercised (`ST-C2-2`), which is the axis that cannot fail
+> - [ ] `ST-C6-4` a **deliberately non-deterministic** stage turns the job red,
+>       naming the first diverging tick, port and field — the falsification
+>       probe, same principle as `ST-C6-2`
 
 **Purpose.** `R-SIM-5` says resim is *"deterministic and the only thing that
 goes in CI"* — and there is no CI. Until something re-runs it automatically,
@@ -2861,22 +3720,338 @@ delivers **one job**: run `sim check` over the scenario set on every push.
 - [ ] The job is **skipped, with a named reason, when no component library is
       built** — so the repo stays green for a docs-only change
 
+*Scope added 2026-07-31 (`OD-10`, closes `OQ-7`). Read recording §4a — it is the
+one place the tolerance rules are argued rather than stated.*
+
+- [ ] **`sim determinism <run-a> <run-b>`** — takes two session recordings and
+      **derives** the axis from their manifests (`host`, `process_nonce`,
+      `library_sha256`, `build_id`, `config_bundle_sha256`). A `--axis` flag is
+      **refused**: a flag can lie, and "cross-machine verified" claimed from a
+      pair that also rebuilt the binary is the standard cheat this prevents
+- [ ] **`process_nonce` in the run manifest** — random per process, so two runs
+      in one process share it. It lives in `meta`, which the comparison excludes,
+      so it cannot perturb what it measures
+- [ ] **The comparison is over port values, never file bytes.** A recording
+      carries a `run_id` and a timestamp, so two recordings of one deterministic
+      run are never byte-identical files. `ST-C2-2`'s "byte-identical outputs"
+      means port payloads and must be read that way
+- [ ] **Axes A and B are gates and have no tolerance field at all** — not a
+      tolerance set to zero, no field. You cannot widen what does not exist, and
+      a red A/B run has exactly one remedy: fix the code
+- [ ] **Axes C and D are measurements, not gates.** A regression is *the observed
+      delta growing*, not *a delta existing*. And the report **attributes** —
+      component, port, field, first tick — because a divergence there is a
+      finding about the component, not about the framework
+- [ ] **`modules/<name>/sim/tolerance.yaml`** — per component, beside the ingest
+      map (`R-SIM-1`: a float field family is the component's fact).
+      `default: exact`; integers and enums exact and **not overridable**; every
+      row carries a mandatory `why:` or it is an `AuthoringError`; the file's
+      hash joins `config_bundle_sha256` in the run manifest
+- [ ] **A passing report prints the tolerance it used and the headroom
+      consumed**, per family. Above 50 % headroom is a warning **on a pass** —
+      that is the run before the one that goes red and gets "fixed" by widening,
+      and it is the only anti-spiral mechanism that does not depend on someone
+      choosing to look
+
 **Tests**
 - [ ] `ST-C6-1` the job runs green on the current scenario set
 - [ ] `ST-C6-2` a **deliberately broken expectation** turns the job red, and the
       failure message names the scenario, the signal and the expected/actual
       pair — proving the gate can fail, which is the only property that matters
+- [ ] `ST-C6-5` **the tolerance file cannot widen quietly**: a row without
+      `why:` raises; an integer family with a bound raises; and a run that passes
+      *because of* a widened bound prints that bound and its headroom in the
+      passing report. The last clause is the requirement — a tolerance that only
+      appears on failure is invisible exactly when it matters (`OD-10`)
+- [ ] `ST-C6-6` a pair of runs differing in **two** dimensions is reported as
+      evidence for neither axis, naming both differences — the attribution rule,
+      shown to fire rather than assumed
 
 **Discipline** (every stage)
 - [ ] portability §3 ticked — exposure: `P-4`, `P-10` (the runner image must
       carry every dependency; a Linux-unavailable one surfaces here first)
 - [ ] naming §3 ticked — exposure: `N-9` (the `run_id` must reach the CI log or
       a failure cannot be joined to its artefacts)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] `ST-C6-2` green — a gate that has never failed has never been shown to
       work
+
+### S-C7 — `sil_host` reads the pipeline (`FR-SIM-65`, closes `OQ-11`)
+
+> **Build order: #15** (§0a is the authority on sequence). Block 2. Blocked on `S-C1d` (#12) and `S-C5` (#13).
+
+*(Added 2026-07-31.)*
+
+**Purpose.** Make `sil_host` do the job it is named for: **run a complete
+pipeline in simulation, with no Python in the process.** Today it is 54 lines
+driving exactly one component positionally. The architecture asserted that one
+pipeline file runs unchanged under both hosts; the contract doc listed the same
+thing as undecided. Two documents disagreeing about whether a capability exists
+is a `GT-7` failure — resolved by building it, because the claim is
+load-bearing: a second host that cannot read the pipeline file is a second host
+with its own composition model, which is exactly what §9's standing rule exists
+to prevent.
+
+**Must not.** Grow an object generator, a recorder, a viewer or a world-model
+client. `sil_host` executes `dll:` and `stubdll:` stages plus `mode: measured`
+injection, and nothing else (architecture §9). A stand-in it needs is promoted
+to a `stubdll:` on the same generic ABI — **never** a second implementation.
+
+**Must not** (second). Re-specify anything. Every semantic it needs is already
+fixed: `R-SIM-4` (manifest), `R-SIM-10` (`mode:`/`impl:`), `R-SIM-18` (declared
+period, GCD base grid), `R-SIM-3a` (bundle resolution), `CR-SIM-23` (pipeline
+`version:`). If this stage finds itself making a design decision, the decision
+already exists somewhere and was not found.
+
+- [ ] Pipeline reader in C++ — the **same file** `adas_sim` reads, same schema,
+      same `version:` + upgrader semantics. A key it cannot honour is a **load
+      error naming the key and why**, never a silent skip
+- [ ] N-library loading over `resolve_library`'s platform rules (`P-5`), each
+      giving its `adasManifest()`; ports wired **by name**, with the same
+      load-time validation order `contracts/pipeline.py` uses
+- [ ] Multi-rate execution on the GCD base grid (`R-SIM-18`), holds included —
+      a consumer must see the same `updated`/`age_s` behaviour it sees under
+      Vantage, or the two hosts disagree about what the vehicle does
+- [ ] `mode: measured` injection from a recording; **`mode: simulate` on a stage
+      whose `impl:` is `stub:` is a load error naming both** — `sil_host` has no
+      interpreter and must say so rather than fail obscurely
+- [ ] Per-`exec()` timeout (`R-SIM-19`) — the same requirement, in the host
+      where a hang is most likely to be mistaken for slow
+
+**Tests**
+- [ ] `UT-C7-1` a pipeline file loads and its stage/port graph matches what
+      `adas_sim`'s loader produces for the same file — compared structurally,
+      not by eye
+- [ ] `UT-C7-2` a `stub:` stage is rejected at load naming the stage and the
+      reason; a `stubdll:` stage on the same pipeline loads
+- [ ] `UT-C7-3` a non-multiple `period_ns` is a load error naming both numbers,
+      identically worded to the Python side
+- [ ] `ST-C7-1` **the claim, tested**: one unmodified pipeline file runs under
+      `sim resim` and under `sil_host`, and the two produce **byte-identical**
+      outputs for the same recording. This is the only test that makes "one
+      concept, two hosts" a fact rather than a slogan
+- [ ] `ST-C7-2` a two-stage pipeline (component + `stubdll:` stand-in) runs
+      end to end with **no `main.cpp` edit** — the property that distinguishes
+      an engine from a hardcoded composition
+
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-5` (a second loader implementation
+      is where the platform difference gets duplicated; it must follow the same
+      documented rules, not invent its own), `P-1`, `P-4`
+- [ ] naming §3 ticked — exposure: `N-8` (a wiring error must read identically
+      in both hosts, or a developer learns two error vocabularies for one
+      model), `N-2`
+- [ ] `GT-1..GT-12` re-checked; `GT-4`'s `sil_host` row re-measured
+
+**Gate**
+- [ ] `ST-C7-1` green — byte-identical across both hosts
+- [ ] `ST-C7-2` green — no hand-editing to add a stage, which is the whole
+      difference between this stage and `S-E2`'s one-call-site move
+
+### S-C8 — The plug-in bundle: the player runs standalone (`R-SIM-20`, `FR-SIM-64`)
+
+> **Build order: #14** (§0a is the authority on sequence). Block 2. **Built before `S-C6`/`S-C7`, against id order**, on this stage's own instruction: adjacency to `S-C5` (#13).
+
+*(Added 2026-07-31. Sibling of `S-C5`, and deliberately built right after it —
+the two are the same mechanism applied to configuration and to plug-ins, and
+building them apart is how they end up with two resolution orders.)*
+
+**Purpose.** Make *"point the player at a folder of libraries and it draws
+them"* true. A component's plug-ins are authored in the component (`R-SIM-1`,
+unchanged) and **delivered** beside its library, exactly as `S-C5` delivers its
+calibration. Without this, `FR-SIM-70`'s shipped executable cannot render any
+component without a git checkout beside it — and "standalone" is an aspiration.
+
+**Must not.** Move `modules/<name>/sim/` anywhere. The authoring home is
+unchanged and the deployed copy is a **build output**, never a second place to
+edit a layer (`R-SIM-3a`'s own discipline, and the failure it exists to
+prevent).
+
+**Must not** (second). Invent a second resolution order. The plug-in bundle
+resolves **explicit → embedded-in-recording → library `sim/` → source
+checkout**, the same four tiers in the same order as the config bundle, and
+reports which one won.
+
+- [ ] Build copies `modules/<name>/sim/` into `$<TARGET_FILE_DIR:…>/sim/` with
+      its own `bundle.sha256` — `$<TARGET_FILE_DIR>`, never a hand-written
+      `…/Release/…` path (`S-C5`'s trap, same reason)
+- [ ] `--plugin-root` / `ADAS_SIM_PLUGIN_PATH` — a **list** of library
+      directories; the player imports each one's `sim/` package. The dev
+      launcher's existing `--plugin-root` flag becomes the documented mechanism
+      rather than a convenience
+- [ ] Plug-in discovery is **by import**, unchanged (`R-VAR-2`) — this stage
+      changes *where* the framework looks, never *how* a provider registers
+- [ ] Recorder embeds the plug-in bundle hash beside the config bundle's; a
+      recording whose plug-in bundle is missing renders with the layers it can
+      and **says so in the HUD**, never substituting a checkout silently
+      (`R-SIM-6`)
+- [ ] `sim explain` and `sim doctor` both report the plug-in path, what was
+      found on it, and which tier won
+
+*Scope added 2026-07-31 (`NR-SIM-44`). Read arch §5.7a.*
+
+- [ ] **`modules/<name>/sim/plugin.yaml`** — `api:` generation, `component:`,
+      `provides:`, `sha256:`. **A file, not a module attribute**, and the reason
+      is decisive: the player must decide **before importing**, and reading a
+      Python constant requires the import that "refused, not half-loaded"
+      forbids. The file also carries the bundle hash this stage already needs,
+      so it replaces a side-car rather than adding one
+- [ ] The player declares the plug-in API range it supports; outside it, the
+      plug-in is **refused with both numbers named** (`NR-SIM-9`'s existing
+      terms), and **not imported at all**
+- [ ] The plug-in API generation is **independent** of the Scene major and the
+      ABI version. Three interfaces, three numbers — coupling them means a Scene
+      bump gratuitously invalidates every plug-in
+- [ ] **A recording never carries executable content**, and the asymmetry with
+      the config bundle is written into the code comment, not only into the
+      rule: *configuration is data, a plug-in is code*. Left unstated, someone
+      eventually resolves the apparent inconsistency in the wrong direction and
+      a recording becomes a delivery vehicle
+- [ ] A missing plug-in degrades to *"these layers unavailable"* **named with
+      the hashes expected**, so the fix is *install these* rather than *why is my
+      screen empty*
+
+**Tests**
+- [ ] `UT-C8-1` the deployed `sim/` is byte-identical to the authored one, and
+      its hash changes when any file in it changes (incl. a case-only rename,
+      `P-3`)
+- [ ] `UT-C8-2` resolution order: with all four tiers present, explicit wins;
+      with three, embedded wins; the winning tier is always reported
+- [ ] `UT-C8-3` two libraries on the plug-in path, each contributing layers,
+      both register; a duplicate layer id across two components raises naming
+      **both** components (`N-8`) — the collision this stage newly makes
+      possible
+- [ ] `UT-C8-4` **a recording carries plug-in identities and hashes, never
+      executable content** (`NR-SIM-44`, audit `A7`) — opening a colleague's
+      file must never run their code; a missing plug-in degrades to "these
+      layers unavailable, named" (`R-SIM-6`)
+- [ ] `UT-C8-5` a `plugin.yaml` whose `api:` is outside the player's supported
+      range is **refused with both numbers named, and never imported** —
+      asserted by planting a plug-in that raises on import, so "refused before
+      import" is proven rather than assumed (`NR-SIM-44`)
+- [ ] `ST-C8-1` **the relocatability test, for plug-ins**: copy the build output
+      to a directory with no Conan cache and no repo; `vantage <dir>` renders.
+      Sibling of `ST-C5-1`, and run the same way
+- [ ] `ST-C8-2` **with the source tree renamed away**, a recording renders from
+      its embedded bundles alone. Renaming rather than trusting the path is the
+      only way to prove a checkout was not quietly supplying something
+- [ ] `GT-12` — the gate this stage exists to close
+
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-9` (the plug-in bundle hashes by the
+      same platform-neutral rules as the config bundle, or the two disagree on
+      one machine), `P-1`, `P-2`, `P-5`
+- [ ] naming §3 ticked — exposure: `N-2` (a layer id crossing components is now
+      genuinely global), `N-9` (the plug-in hash joins the recording and the HUD)
+- [ ] `GT-1..GT-12` re-checked
+
+**Gate**
+- [ ] `ST-C8-2` green — the strong form; `ST-C8-1` alone can pass while a
+      checkout is silently supplying a module
+- [ ] `GT-12` green — and note this is a **precondition** for `GT-8`'s
+      ten-minute measurement being meaningful: a developer who must clone
+      another component to see a picture is not measuring onboarding, they are
+      measuring `git`
+
+### S-C9 — Recording ingest: what a file provides, and which cuts it supports (`R-SIM-23`, closes `D14`)
+
+> **Build order: #8** (§0a is the authority on sequence). Block 1. **Built before `S-C2`, against id order** — it is `P0`, needs no world model, and `S-C3` (#10) depends on it.
+
+*(Added 2026-07-31. Ordered **before** `S-C3`, because a scenario's `expect:`
+block names ports and this stage is what makes a port name resolvable against a
+recording that was not produced by this framework.)*
+
+**Purpose.** Make an existing recording drivable. Today the chain
+`df/gen_object_list` → `/source/gen_object_list` → `source.gen_object_list`
+stops one step short of the port the manifest actually declares (`objects`), and
+the only working bridge is **hardcoded inside `ST-C1c-1`**. This stage moves
+that bridge into declared data, owned by whoever owns the recordings, and makes
+`CR-SIM-21` answerable before a run rather than discoverable by failing one.
+
+**Must not.** Compute anything. The ingest map renames and tags **only** — no
+expression, no unit conversion, no field arithmetic, no synthesised signal. A
+step that computes is an unversioned algorithm between the recording and the
+SUT, so a resim would reproduce the recording *plus whatever it did*
+(`R-SIM-5`, `R-SIM-7`). A `proto_type` that does not match the port's means
+**this recording does not support that cut** — never a coercion.
+
+**Must not** (second). Leave the mapping in the framework. `io/legacy.py`'s
+`GT-1` exemption was justified at `S-A4` as narrow and one-off; a second
+component's recordings make it a pattern, and a carve-out that repeats is a
+mechanism that was not built. **This stage deletes the exemption**, which is its
+own best test.
+
+- [ ] `modules/<name>/sim/ingest/<family>.yaml` — the declaration:
+      `matches:` (how a recording is recognised as this family), `provides:`
+      (topic → port + `proto_type` + origin tag), and **`absent:`** (a port this
+      family never recorded, with the reason). The `VehSig` hole
+      (`sim_resim_and_recording.md` §4) becomes a declared fact rather than a
+      surprise at tick 0
+- [ ] `df`'s legacy CARLA family declared this way; `LEGACY_TOPIC_MAP` and the
+      `check_gt1` exemption both **deleted**, not deprecated
+- [ ] `io/ingest.py` — loads maps from the plug-in path (`S-C8`), applies them
+      over any `RecordingReader`. Format-agnostic by construction: it operates
+      on the recording *model*, so it works identically for mcap, MF4 or a
+      CarMaker codec (`R-SIM-14` — dimension 1 needs no work here, which is the
+      evidence the two dimensions really are separable)
+- [ ] **`Session.provides()` / `feasible_cuts(pipeline)`** — given the topic
+      index and the manifests present, the set of stages that can be `measured`
+      and those that cannot, each with the reason. This is `CR-SIM-21` becoming
+      a query instead of an assertion
+- [ ] `sim probe <recording>` reports it; the Bench start page shows it **before
+      a run is started**, and greys the cuts the file cannot support
+      (`R-SIM-13` — this is Session data, so the GUI adds no logic, `GT-9`)
+- [ ] **One `GT-7` fix found on the way:** `io/legacy.py` maps to
+      `/df/aeb.outputs` (dot) while `sim_resim_and_recording.md` §3.2's table
+      was corrected on 2026-07-30 to `/df/aeb/outputs` (slash, per `N-1`).
+      Functionally identical after `_topic_to_port_name`, and wrong on a port
+      whose name has no dot. Fix the code
+
+**Tests**
+- [ ] `UT-C9-1` a legacy topic resolves to the **manifest's** port name — the
+      step that does not exist today; asserted against `df_sil.ports.yaml`'s
+      real `objects`/`egoDyn`, not a fixture invented for the test
+- [ ] `UT-C9-2` `absent:` is honoured: a declared-absent port yields `valid=0`
+      downstream **and is named at load**, never a tick-0 failure
+- [ ] `UT-C9-3` a `proto_type` mismatch reports *"this recording does not
+      support that cut"* naming both types — and **does not** coerce
+- [ ] `UT-C9-4` an ingest map containing an expression, a unit conversion or an
+      arithmetic field is an `AuthoringError` — the closed vocabulary, enforced
+      rather than documented (`R-SIM-15`'s precedent)
+- [ ] `UT-C9-5` two components' ingest maps load together off the plug-in path;
+      a topic claimed by both raises naming both maps (`N-8`)
+- [ ] `UT-C9-6` `feasible_cuts` on a recording carrying only objects reports the
+      one supported cut and, for each unsupported one, **which port is missing**
+- [ ] `ST-C9-1` **the asker's workflow, end to end**: every existing recording
+      under a component's test-run directories resims through a real `Pipeline`
+      with `df` as the only stage, with **no per-test topic mapping** — i.e.
+      `ST-C1c-1`'s hardcoded bridge is deleted and the test still passes
+- [ ] `ST-C9-2` **dimension 2, proven with a second shape**: a synthetic
+      recording carrying a *different* stage's ports (perception-shaped, no
+      objects) drives a two-stage pipeline with perception `measured`, using
+      only its own ingest map and **zero framework change**. Until a real
+      perception recording exists this is synthetic, and the test says so
+- [ ] `ST-C9-3` **dimension 1 costs nothing here**: the same ingest map, applied
+      over a second registered format, yields an identical port set — evidence
+      that format and depth are genuinely orthogonal
+
+**Discipline** (every stage)
+- [ ] portability §3 ticked — exposure: `P-3` (topic names are matched exactly,
+      never case-folded — a case-only near-miss would silently drop a port),
+      `P-1`, `P-4`
+- [ ] naming §3 ticked — exposure: `N-6` (**the** stage that decides whether a
+      translation table is data or code; the one sanctioned exception disappears
+      here), `N-2`, `N-8`
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
+
+**Gate**
+- [ ] `ST-C9-1` green **with `ST-C1c-1`'s hardcoded topic constants deleted** —
+      a bridge that still exists in a test is a bridge the product does not have
+- [ ] `GT-1` green **with `io/legacy.py`'s exemption removed from
+      `check_invariants.py`** — the exemption disappearing is the cleanest
+      possible proof that the mapping moved to where it belongs
 
 ---
 
@@ -2937,7 +4112,7 @@ exists because a foreign schema wanted it.
       sorted or two exports of one scene differ)
 - [ ] naming §3 ticked — exposure: `N-2` (a Foxglove entity id **is** a
       `Layer.id`, unchanged — `N-6`: no translation table)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] `ST-D1-1` green — the interop claim is demonstrated in a foreign viewer,
@@ -2980,7 +4155,7 @@ Scene lacks, the Scene is what changes.
       across platforms), `P-7` (matplotlib runs headless here)
 - [ ] naming §3 ticked — exposure: `N-6` (a figure label is the signal name,
       never a hand-typed caption)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] `ST-D2-1` + `ST-D2-2` green — one Scene, two renderers, one palette. A
@@ -3025,6 +4200,12 @@ be replaced the day an Ubuntu machine appears.
 - [ ] `UT-D3-6` a run manifest contains **no absolute path** (`P-2`), so it can
       be committed, shared and replayed on another machine
 - [ ] `UT-D3-7` the panel names no component or function (`GT-1` as a test)
+- [ ] `UT-D3-8` **the evidence panel renders the same record `sim explain`
+      prints** (`FR-SIM-67`, `R-SIM-25`, `OD-6`): for one selected prim, both
+      surfaces are driven by one `evidence()` call and are asserted **field by
+      field**, not merely both non-empty. A field the record cannot fill reads
+      `unknown` on both — never a plausible default, never blank on one side and
+      filled on the other
 - [ ] `ST-D3-1` every run in this plan is launchable from the GUI with no
       hand-typed command
 
@@ -3033,7 +4214,7 @@ be replaced the day an Ubuntu machine appears.
       `P-7`, `P-2` (a run manifest must not embed a machine path)
 - [ ] naming §3 ticked — exposure: `N-8` (the GUI surfaces the same messages the
       CLI raises — one wording, not two), `N-9`
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] `UT-D3-4` + `UT-D3-5` + `ST-D3-1` green — the GUI and the CLI exchange the
@@ -3069,6 +4250,13 @@ the invariant is already broken and no test after this will catch it.
       views come from the **same prim**, so they cannot disagree
 - [ ] `UT-D4-3` a pixel-valued and a metre-valued field never share a bare name
       (`N-4`) — the defect this rule exists for lives exactly here
+- [ ] `UT-D4-4` **a perception-scale layer references rather than inlines**
+      (`NR-SIM-43`, `OD-7`): a provider emitting a 100 000-point cloud produces a
+      `Prim` carrying a `BulkRef`, the Scene stays under the declared byte
+      budget, the renderer resolves it from the recording at draw time, and
+      scrubbing a long session stays within the stated cache bound. **This stage
+      is where the rule becomes permanent** — a layer that inlines here is a
+      layer every later one copies
 - [ ] `ST-D4-1` a two-component pipeline runs and ground truth vs perception is
       visible side by side (skips with a named reason until a second component
       exists)
@@ -3082,7 +4270,7 @@ the invariant is already broken and no test after this will catch it.
 - [ ] naming §3 ticked — exposure: `N-4` (intrinsics and extrinsics are
       unit-suffixed; a pixel and a metre sharing a bare name is the defect this
       rule exists for)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] `ST-D4-1` + `ST-D4-2` green — two components in one pipeline, with the
@@ -3103,6 +4291,20 @@ dependant, exactly inverting `R-SIM-1`.
 **Naming.** The binary is `vantage` (`FR-SIM-48`, `OD-5`); the package remains
 `adas-sim` and the CLI remains `sim`. Two delivery forms, one codebase.
 
+> **▶ Entry condition, added 2026-07-31 (`NR-SIM-46`, `OQ-15`): do not start
+> this stage until the build-vs-adopt decision is recorded.** This is the
+> expensive half of the interactive viewer, and `NR-SIM-46` is deliberately the
+> one requirement left **open** because it is a product judgement. The case is
+> laid out both ways in arch §5.15a, with a recommendation (keep the Qt shell as
+> a *console*, promote `S-D1` to the interop surface, scope this stage down,
+> defer `S-D2`) and with the corrected measurements — `render/` + `view/` is
+> 46 % of the codebase, but only 22 % is replaceable and only **5 %** has a
+> genuine external equivalent.
+>
+> **An implementation session must not decide this.** If it is still open when
+> this stage is reached, stop and ask. If the decision goes to *adopt*, the
+> scope below changes substantially and `FR-SIM-70` must be renegotiated in
+> writing rather than quietly dropped.
 
 Turns the library into the application of arch §5.15. Windows only.
 
@@ -3122,6 +4324,11 @@ Turns the library into the application of arch §5.15. Windows only.
 - [ ] `UT-D5-1` an input outside a declared compatibility range is **refused
       with both numbers named** (`NR-SIM-9`)
 - [ ] `UT-D5-2` `--version` reports every one of the four version fields
+- [ ] `UT-D5-4` **the plug-in API carries its own generation** (`NR-SIM-44`,
+      audit `A7`), independent of the Scene major and the ABI version; a plug-in
+      outside the player's supported range is **refused with both numbers
+      named**, never half-loaded. `NR-SIM-9` versions everything the player
+      reads *except* the one interface `R-SIM-20` made external
 - [ ] `UT-D5-3` the plug-in path imports providers from outside the bundle, and
       two roots with a duplicate layer id raise naming both
 - [ ] `ST-D5-1` **the clean-machine test**: the frozen build opens a session
@@ -3136,7 +4343,7 @@ Turns the library into the application of arch §5.15. Windows only.
 **Discipline** (every stage)
 - [ ] portability §3 ticked — exposure: `P-6`, `P-7`, `P-10` (packaging is where a Linux-unavailable dependency finally bites; §4's bring-up table is the checklist)
 - [ ] naming §3 ticked — exposure: `N-9` (`--version` prints the compatibility statement; a shipped binary must identify itself)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] `ST-D5-1` + `ST-D5-2` green — the player is genuinely component-agnostic
@@ -3147,21 +4354,38 @@ Turns the library into the application of arch §5.15. Windows only.
 **Purpose.** Make the tool worth choosing over a private script. Everything here
 is what a developer reaches for at 18:00 while debugging their own component.
 
-**Must not.** Add a fifth override verb, an expression, or a scripting hook
-(`R-SIM-15`). The measured cost of an open grammar is in
-`docs/py/logs/FR_SIM_45_argument_binding_survey.*.log`: 5.8 authored config
-elements per `exec()` call, 21 for a realistic one. If four verbs prove
+**Must not.** Add a **seventh** override verb, a predicate in the index grammar,
+an expression, or a scripting hook (`R-SIM-15`). *The list became six at
+`S-C1cΔ` — four arithmetic plus `select`/`drop` — and closed again there
+(`OD-8`); the governing line is that an override may destroy or attenuate
+information but never create an entity.* The measured cost of an open grammar is
+in `docs/py/logs/FR_SIM_45_argument_binding_survey.*.log`: 5.8 authored config
+elements per `exec()` call, 21 for a realistic one. If six verbs prove
 insufficient the answer is a `stub:` stage — real code, in a file, reviewable.
 
 
 Closes `FR-SIM-44`, `FR-SIM-45`, `FR-SIM-46`. This is the stage that decides
 whether anyone writes a private player, so `GT-8` is measured here.
 
-- [ ] `contracts/override.py` — the **closed** verb set `const` · `hold` ·
-      `offset` · `scale`, resolved at a port or a field path
-      (`egoDyn.vx`, `objects[*].pos_x`), applied between wiring and `exec()`
+> **Scope correction, 2026-07-31 — the override *engine* is not built here.**
+> `S-C1cΔ` (build order #5) builds `contracts/override.py`'s six verbs
+> (`const`·`hold`·`offset`·`scale`·`select`·`drop`), the closed index grammar,
+> the application on the input path and the manifest tagging — because
+> `S-C3`'s fault injection reuses that grammar and cannot wait for Phase D.
+> **This stage builds the developer *surface* over an engine that already
+> exists.** Written down because the two scope boxes below read as
+> implementation work and were: building them twice is exactly the rework this
+> plan's §0a sequence exists to prevent, and `GT-9` says the capability lives in
+> the library while `S-D6` adds the way a person reaches it.
+
+- [ ] `contracts/override.py` — **verify, do not rebuild**: the six verbs resolve
+      at a port, a field path (`egoDyn.vx`) and a repeated element
+      (`objects[*].pos_x`, `objects[3]`), applied between wiring and `exec()`.
+      If any of that is missing, `S-C1cΔ` is incomplete and the fix belongs
+      there, not here
 - [ ] Overrides land in the run manifest; the affected topic is tagged
-      `origin: overridden` (`R-SIM-12`) and badged in the HUD (`R-SIM-15`)
+      `origin: overridden` (`R-SIM-12`) and badged in the HUD (`R-SIM-15`) —
+      the manifest half lands with the engine; **the HUD badge is this stage's**
 - [ ] `cli/probe.py` — `sim probe <lib>`: load, read `adasManifest`, print the
       port set, types and schema names. **No mapping step, ever** (arch §5.16.1)
 - [ ] `contracts/pipeline.py` — **severed-chain detection**: a `measured` stage
@@ -3213,13 +4437,21 @@ whether anyone writes a private player, so `GT-8` is measured here.
       manifest is probed, wired into a five-line pipeline, run against
       `tiny.mcap`, and its outputs appear in a recording — **no edit anywhere in
       `modules/sim`** (`FR-SIM-46`)
+- [ ] `ST-D6-3` **the evidence chain, end to end** (`FR-SIM-67`, `R-SIM-25`,
+      audit `A4`): selecting any prim answers — in one action — its port, topic,
+      tick, origin tag, config bundle and component build, and whether the value
+      was **published by the SUT or reconstructed by a layer** (`R-SIM-7`).
+      `sim explain <signal> --at <tick>` returns the **same** answer headlessly;
+      if the two differ, the GUI has become the source of truth. Every piece
+      already exists (`Prim.pick_id`, `PortValue.origin`, topic provenance,
+      `bundle_origin`, `run_id`) — this test is that they are joined
 - [ ] `ST-D6-2` a pipeline with overrides resims reproducibly: two runs produce
       byte-identical outputs and identical manifests
 
 **Discipline** (every stage)
 - [ ] portability §3 ticked — exposure: `P-5` (`sim probe` and `sim doctor` are the tools that *explain* library resolution, so they must exercise every pattern), `P-2`
 - [ ] naming §3 ticked — exposure: `N-1`/`N-6` (`sim explain` only works because one name means one thing everywhere -- this stage is where that pays off), `N-8`
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] `ST-D6-1` green **and `GT-8` measured and recorded** — the number goes in
@@ -3344,6 +4576,14 @@ copy path is lossless, just not the "different format" half of the claim.
       tick + `run_id` reproduce it in-process on Bench, where a debugger can
       attach (`R-SIM-19`) — the loop that makes crashes get fixed rather than
       retried
+- [ ] `UT-D7-9` **`--pin-builds` verifies, it does not merely address**
+      (`OQ-9`, `NR-SIM-24`): resolving a component to an artefact whose
+      `library_sha256` differs from the recording's **refuses to start**, naming
+      both hashes. A package reference alone proves nothing — a version can be
+      rebuilt and re-uploaded — so the verification is the requirement and the
+      `pkg:` form in `impl:` is only the addressing. A locally built library
+      with no `package_ref` reports honestly as **unpinnable** rather than
+      silently passing
 - [ ] `ST-D7-7` **campaign sizing, measured** (`NR-SIM-23`): a real campaign over
       the full recording set records per-recording size, wall-clock per resim,
       and scaling with `-j`. **The numbers go in this document**, whatever they
@@ -3463,7 +4703,7 @@ this stage decides whether anyone meets it. Spec:
 **Discipline** (every stage)
 - [ ] portability §3 ticked — exposure: `P-7` (the whole Qt rule set), `P-3`, `P-2` (workspace state goes to the OS config location, never a written-out path)
 - [ ] naming §3 ticked — exposure: `N-3a` (shell/panel classes attract generic names), `N-7`, `N-8` (`UT-D8-8` is the message contract, tested over induced failures)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] `UT-D8-1` + `UT-D8-3` + `ST-D8-1` green, **and `MC-5` recorded with its
@@ -3556,7 +4796,7 @@ ticked. And must not batch the rows into one commit — see the phase preamble.
       leave an absolute path in a doc that referenced it)
 - [ ] naming §3 ticked — exposure: `N-12` (after this stage a traceback path
       means exactly one layer; that is the point of the deletion)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] `ST-E1-1..7` green **and every replacement stage named in the table above
@@ -3608,7 +4848,7 @@ consumer discovered after the deletion is a consumer discovered by an outage.
       must not break either platform's loader path)
 - [ ] naming §3 ticked — exposure: `N-1` (the old positional names disappear;
       nothing may keep a second spelling alive)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] `ST-E2-1..4` green — the positional ABI is gone, every consumer was known
@@ -3626,9 +4866,14 @@ still describe the code, or that a stranger can use the thing. Those are
 separate gates below, and two of them cannot be automated.
 
 - [ ] `scripts/check_invariants.py` wired to run every **automatable** gate:
-      `GT-1`, `GT-2`, `GT-3`, `GT-6`, `GT-9`. The others are named with why:
-      - `GT-4` / `GT-5` — external commands (`ctest`, `diff -q`), run by the
-        gate script but owned elsewhere
+      `GT-1`, `GT-2`, `GT-3`, `GT-6`, `GT-9`, **`GT-11`**. The others are named
+      with why:
+      - `GT-4` / `GT-5` / `GT-10` / `GT-12` — external commands (`ctest`,
+        `diff -q`, a clean partial clone, a launched player), run by the gate
+        script but owned elsewhere. **`GT-10` and `GT-12` must each be run at
+        least once with the source tree renamed away**, or they prove nothing:
+        a full checkout is precisely the configuration that hides a missing
+        dependency
       - `GT-7` — a review judgement (docs vs code), not a script
       - **`GT-8` — a measured human number.** It cannot be automated, it cannot
         be substituted by a green suite, and it is the one that decides whether
@@ -3653,6 +4898,13 @@ separate gates below, and two of them cannot be automated.
       being verified
 - [ ] `ST-E3-4` `docs/py/run_all.py` green, including `check_traceability` and
       `check_rules_coverage` — the design set and the code agree
+- [ ] `ST-E3-6` **what SIL does not verify is disclosed and current**
+      (`CR-SIM-5`, audit `A9`): the documentation states that SIL exercises the
+      **protobuf** port path while production is Adaptive AUTOSAR passing
+      **structs** (`R-SIL-1`), so a field present in one representation and
+      absent or differently-defaulted in the other diverges with no symptom in
+      SIL. The risk this closes is "we tested it in SIL" being offered as
+      integration evidence at a safety review
 - [ ] `ST-E3-5` **the Linux exposure is stated, not assumed**: re-run `S-D8`'s
       offscreen suite on a Linux machine if one exists. **If none exists, that
       is recorded here as an open exposure with a date**, never silently
@@ -3665,7 +4917,7 @@ separate gates below, and two of them cannot be automated.
       last gate before the system is called done
 - [ ] naming §3 ticked — exposure: every `N-` rule; `DG-2`/`DG-3` must answer
       for every name the system can produce
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate — the definition of done**
 - [ ] `ST-E3-1..4` green
@@ -3714,6 +4966,30 @@ separate gates below, and two of them cannot be automated.
 | R28 | **One tool, not two; no onboarding handoff** (`FR-SIM-46`) | S-D6 | `GT-8`, `GT-9`, `ST-D6-1` |
 | R29 | **Writers + export dumps with port selection** (`FR-SIM-52`) | S-D7 | `UT-D7-1..5`, `ST-D7-1` |
 | R30 | **Mass-scale runs expressible** (`NR-SIM-21`) | S-D7 | `ST-D7-2`, `ST-D7-3` |
+| R31 | **Plug-ins delivered, not checked out — standalone player** (`FR-SIM-64`) | S-C8 | `ST-C8-2`, `GT-12` |
+| R32 | **No literal port address outside its component** (`CR-SIM-2`) | S-B1 delta, S-C1c delta | `UT-B1-14`, `UT-C1c-22`, `GT-11` |
+| R33 | **The ABI shim is generated, not hand-written** (`NR-SIM-11`) | S-C1d | `UT-C1d-1`, `ST-C1d-1` |
+| R34 | **A shared-contract change breaks no component's build** (`NR-SIM-12`) | every stage | `GT-4`, `GT-10` |
+| R35 | **`sil_host` runs a complete pipeline** (`FR-SIM-65`) | S-C7 | `ST-C7-1`, `ST-C7-2` |
+| R36 | **Adapt to recordings we did not produce, at any depth** (`FR-SIM-66`) | S-C9 | `ST-C9-1`, `ST-C9-2`, `ST-C9-3` |
+| R37 | **Vantage authors nothing; scenarios belong to the module** (`CR-SIM-3`) | — | `GT-1`, `ST-E1-6` |
+
+*Rows added 2026-07-31 by the concept-resolution pass (`OD-6`…`OD-13`).*
+
+| # | Requirement | Stage | Proven by |
+|---|---|---|---|
+| R38 | **Determinism measured on four axes; tolerance cannot widen quietly** (`NR-SIM-40`, `OD-10`) | S-C0, S-C6 | `ST-C6-3..6` |
+| R39 | **Every rendered value traces to the bytes that produced it** (`FR-SIM-67`, `OD-6`) | S-B2Δ, S-D3, S-D6 | `UT-A3-13`, `UT-D3-8`, `ST-D6-3` |
+| R40 | **The Scene carries geometry, not bulk data** (`NR-SIM-43`, `OD-7`) | S-A3Δ, S-B2Δ, S-D4 | `UT-A3-12`, `UT-B2-15`, `UT-D4-4` |
+| R41 | **Two clocks — capture and reception** (`CR-SIM-4`, `OD-9`) | S-A4Δ, S-B2Δ, S-C2 | `UT-A4-13`, `UT-A4-14`, `UT-B2-13`, `UT-C2-13` |
+| R42 | **Recording volume is declared per port and estimated first** (`NR-SIM-42`) | S-C2 | `UT-C2-12`, `UT-C2-14`, `ST-C2-3` |
+| R43 | **Overrides address repeated fields; the list stays closed** (`FR-SIM-45`, `OD-8`) | S-C1cΔ, S-D6 | `UT-C1c-24..26`, `UT-D6-1` |
+| R44 | **The plug-in API is versioned; a recording never executes code** (`NR-SIM-44`) | S-C8 | `UT-C8-4`, `UT-C8-5`, `UT-D5-4` |
+| R45 | **One bundle per component; ego params must agree** (`OD-11`) | S-C5 | `UT-C5-10` |
+| R46 | **`period` is calibration, per function, swept without a rebuild** (`OD-12`) | S-C5 | `UT-C5-11`, `UT-C5-12` |
+| R47 | **Anchors and faults are closed vocabularies** (`OQ-3`, `OQ-4`) | S-C3 | `UT-C3-7`, `UT-C3-8` |
+| R48 | **A resim is pinnable to the build that produced it** (`NR-SIM-24`, `OQ-9`) | S-D7 | `UT-D7-9` |
+| R49 | **The gate runs itself, and can be shown to fail** (`A10`) | S-C0 | `ST-C0-1`, `ST-C0-2` |
 
 Defects `D1`–`D11` (architecture §3) map through architecture §6; each closes at
 the stage named there.
@@ -3726,19 +5002,25 @@ the stage named there.
 |---|---|
 | **Golden Scenes churn on every cosmetic change** | Goldens are Scenes, not pixels — geometry and tokens, so a theme edit does not touch them. `--update-goldens` diffs must be reviewed. |
 | **The parity gate is subjective** | `ST-B1-1` compares Scenes (objective); `MC-1` compares appearance (human, recorded). Both, not one. |
-| **`ST-C1c-1` byte-equality fails for float reasons** | Compare parsed protobuf fields with an explicit tolerance policy decided *before* the first run, not after seeing a failure. |
+| **`ST-C1c-1` byte-equality fails for float reasons** | Compare parsed protobuf fields with an explicit tolerance policy decided *before* the first run, not after seeing a failure. **Superseded 2026-07-31 by `OD-10`** (recording §4a): the policy is no longer advice in a risk table but a per-component `tolerance.yaml` with `default: exact`, a mandatory `why:` per row, and a bound printed on every *passing* report. Note which axis this is — a same-process comparison has **no tolerance field at all**, so this risk cannot be mitigated by widening one. |
 | **Qt learning cost** | The Scene keeps the renderer thin; `render/bev.py` is Qt-independent and testable headless, so only the shell is Qt. |
-| **A flaky Qt test reads as a broken gate** | Observed 2026-07-30: `test_b3_viewport_controls.py::test_dragging_pans_the_viewport_and_a_second_click_still_selects` failed once in a full-suite run and passed on the immediate re-run (362/362) and in isolation — so it is order- or timing-dependent, not a regression. **Unresolved, and deliberately written down**: an intermittent failure nobody records is re-diagnosed from scratch every time, and in a determinism tool (`R-SIM-5`) it is the one class of flake that must not be tolerated quietly. Owner: `S-B3` follow-up, before `S-C6` makes the suite a CI gate. |
+| **A flaky Qt test reads as a broken gate** | Observed 2026-07-30: `test_b3_viewport_controls.py::test_dragging_pans_the_viewport_and_a_second_click_still_selects` failed once in a full-suite run and passed on the immediate re-run (362/362) and in isolation — so it is order- or timing-dependent, not a regression. **Unresolved, and deliberately written down**: an intermittent failure nobody records is re-diagnosed from scratch every time, and in a determinism tool (`R-SIM-5`) it is the one class of flake that must not be tolerated quietly. Owner: `S-B3` follow-up, before `S-C6` makes the suite a CI gate. **New evidence, 2026-07-31 (docs-only session, no code touched): it now fails in ISOLATION and passes in the full suite — the exact reverse of the 2026-07-30 observation, reproduced twice.** That is not timing; a test that needs the suite to have run first is depending on **state an earlier test leaves behind** (a `QApplication`, a registered provider, or viewport module state). Narrows the diagnosis from "flaky" to "missing fixture isolation", which is a fixable bug rather than a mystery — and it is precisely the failure `NR-SIM-40`/`R-SIM-24` exist to make un-ignorable, arriving in this project's own suite before it ever reached a component's. **A suite whose result depends on which subset you run cannot gate a determinism tool.** |
 | **Phase C touches production C++** | Every C++ change is additive until S-E2; both ABIs live and are tested against each other. |
 | **No CI** | The test command is the gate and is cited in each commit. Wiring CI is `plan.md` item 12, unblocked by this work. |
 | **`modules/sim` unpublished** | Until `adas-sim` is published, a checkout is needed; that is the same interim state `interfaces` and `shared_config` already live in. |
+| **The design set outgrows the code** *(added 2026-07-31, `OQ-14`)* | ~600 KB of normative prose across ten documents describes ~8,300 lines of Python; this plan alone is 3,745 lines and every stage re-ticks two checklists and twelve gates. The discipline has paid for itself so far — `S-A3`'s `Prim` finding and `S-C1a`'s `BUILD_TESTING` finding were both caught *by* it — but the honest failure mode is documents that quietly stop being maintained rather than a decision to stop maintaining them. Mitigation: `GT-7` is a stage gate, `docs/py/run_all.py` is mechanical, and `sim_learn.md` gives a reader one entry point instead of ten. Re-assess at `S-E3`. |
+| **Ten concepts to draw one rectangle** *(added 2026-07-31, `OQ-13`; **diagnosed and mitigated the same day**)* | Counting honestly, the ten are not ten. Themes are a theme-author's concept; frames default to `ego`; `derived`/`assumed_geometry` matter only when something is unusual; the three grep gates are one sentence and **do not even apply** to `modules/<name>/sim/`. The unavoidable core is **four** — decorator, `ctx`, `Prim`, style token — which is exactly `FR-SIM-47`'s `L-3` limit. So the defect was in the *presentation*, not the API: the template taught all ten at once and imported a decorator that no longer exists. Mitigation, landed: a canonical minimal provider of ≤15 lines that mentions none of the six optional concepts, with everything else moved below a second heading. `GT-8` still measures the consequence. |
+| **`S-B2Δ` changes a frozen core type 410 tests already use** *(added 2026-07-31, `OD-13`)* | Making `PortValue.message` lazily parsed and `age_s` derived is the most invasive item of the resolution pass, and it is the one place a mechanical change can quietly alter behaviour rather than fail. Mitigation: it lands **after** `S-A4Δ` (so the capture stamp exists first) and **before** `S-C2` (so no recording is written against the old shape); `UT-B2-14` proves not-parsing is *observable* rather than merely claimed; and the full suite is the regression net — a count below 410 means something broke, per `S-C0`'s recorded floor. |
+| **A requirement can cite a test that exists and proves something else** *(added 2026-07-31, §12.7)* | Two of the eleven test ids the 2026-07-31 audit attached to its new requirements pointed at real tests about unrelated subjects (`FR-SIM-67`→`UT-D3-5`, `NR-SIM-43`→`UT-D4-3`). `check_traceability.py` verifies existence, uniqueness and filing — it **cannot** verify aboutness, and no mechanical check can before the tests exist. The register therefore read as fully traced while two `P0`/`P1` rows were verified by nothing. Mitigation, and it is a habit rather than a tool: **after adding a requirement, open the test it cites and read it.** Same shape as `D13` — a name written by hand, bound to its target by nothing, failing silently. |
+| **A boundary specified on one side only** *(added 2026-07-31)* | `D13` existed because every invariant scanned `modules/sim/src` and the framework↔plug-in contract lived in prose. The general form: an invariant scoped to a directory stops at that directory, and the interesting failures are on the other side. Mitigation: `GT-11` guards the plug-in side; when the next boundary appears (`sources/`↔world model, codec↔recording), ask which side the gate is on **before** the first implementation crosses it. |
 
 **Discipline** (every stage)
 - [ ] portability §3 ticked — exposure: every `P-` rule, re-checked -- this is the last gate before the system is called done
 - [ ] naming §3 ticked — exposure: every `N-` rule, re-checked; `DG-2`/`DG-3` must answer for every name the system can produce
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
+- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
-- [ ] `ST-E3-1` + `ST-E3-2` green **and every global gate `GT-1..GT-9`
+- [ ] `ST-E3-1` + `ST-E3-2` green **and every global gate `GT-1..GT-12`
       ticked** — including `GT-8`'s measured number, which is the only one a
-      green suite cannot substitute for
+      green suite cannot substitute for, and `GT-12`, without which `GT-8` is
+      measuring `git clone` rather than onboarding

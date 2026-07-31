@@ -342,6 +342,28 @@ available; a dock with a pinned list solves it without a second event loop.
 - pin an entity to keep it in the panel after deselecting;
 - copy-as-text for pasting into a ticket.
 
+**Evidence — the second half of the inspector** *(added 2026-07-31,
+`FR-SIM-67` / `R-SIM-25`; design in `sim_architecture.md` §5.19)*. Beneath the
+declared fields, the panel shows **where the value came from**: port, topic,
+tick, origin tag, whether the SUT published it or a layer reconstructed it
+(`R-SIM-7`), which stage produced it and in which `mode:`/`impl:`, any override
+or fault applied to it, the config bundle and its resolution source, the
+component build, and the `run_id`.
+
+Three constraints on it, and they are what make it worth having:
+
+- **It is rendered from one `Evidence` record, produced by one function that
+  `sim explain <signal> --at <tick>` calls too.** The GUI is a formatter, not a
+  second source of truth — otherwise the headless answer and the on-screen answer
+  drift, and the headless one is what CI and reports use (`GT-9`).
+- **A field it cannot fill reads `unknown`.** Never a plausible default: a panel
+  whose whole purpose is being believed must not guess.
+- **It obeys `FR-SIM-47`'s rule that a concept earns screen space by being
+  wrong.** On a fully normal run the evidence rows that would say *simulated ·
+  published · bundle matches* are collapsed behind one line; anything
+  `overridden`, `mocked`, `derived`, `unknown` or stale is shown expanded. The
+  panel is quiet exactly when there is nothing to doubt.
+
 ### 7.3 Timeline / signal strip
 
 A synced strip below the BEV. Entirely new, and the single biggest usability
@@ -839,9 +861,18 @@ Legend: ✅ works · ⚠ partial or worked around · ❌ absent.
 - **Rendering large heatmaps at high zoom.** η coverage at 0.02 m resolution
   over a 3 m × 10 m zone is ~75 k cells. The `Heatmap` prim must carry its own
   resolution and let the renderer downsample; not designed here.
+  *Partly answered 2026-07-31:* where the cells come **from a port**, the prim
+  now references them into the recording rather than inlining them
+  (`sim_architecture.md` §5.3, `NR-SIM-43`), so the *memory* half is settled and
+  what remains open is only the *draw-time downsampling* half.
 - **Multi-panel layouts.** BEV + camera + timeline is three panels; whether the
   user can add a fourth (a second BEV at a different preset, for an A/B diff) is
   a shell feature, deferred to B3's implementation.
-- **Session size with camera frames.** Frames stay by reference into the
-  recording and are decoded on demand; the cache policy is an implementation
-  detail with a real memory consequence, flagged rather than decided.
+- ~~**Session size with camera frames.**~~ **Decided 2026-07-31.** This section's
+  own instinct — *"frames stay by reference into the recording and are decoded on
+  demand"* — was correct and was **not** what the Scene actually did: `Prim.data`
+  inlines image bytes and `Prim.values` inlines a heatmap array. The instinct is
+  now the general rule for all bulk data (`NR-SIM-43`), and the cache policy is
+  decided rather than flagged: `SceneCache` bounds by **bytes**, not by entry
+  count, and a `Session`'s port values are parsed lazily
+  (`sim_resim_and_recording.md` §10, `OQ-6`).

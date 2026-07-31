@@ -111,8 +111,15 @@ declarative `lateral_profile` phase list, and the API-version check at DLL load.
 
 ## 3. The scalability defects
 
-Eleven, each stated as an observable fact plus what breaks when the roadmap
+Thirteen, each stated as an observable fact plus what breaks when the roadmap
 arrives. This list is the requirements set for everything after it.
+
+`D1`–`D11` were catalogued in the original 2026-07-27 survey of today's
+tooling. **`D12` and `D13` were added by the 2026-07-31 review** and are a
+different species: they are defects in *this design's own implementation*, each
+one the original defect's shape reappearing one level up after `D1`/`D2` were
+closed. They are recorded here rather than as review notes because a defect
+that recurs at the next level is the most valuable kind to name.
 
 ### D1 — The C ABI grows a parameter pair per function
 
@@ -265,6 +272,146 @@ comment at the top of its YAML, which `carla_bridge.py --list` prints and
 that comment — the strongest possible signal that the expectation wants to be
 data. Nothing verifies it, so a regression is caught only by a human reading a
 console stream.
+
+### D12 — The ABI stopped growing per function; the *shim* grows per component
+
+**Found 2026-07-31, after `S-C1b` landed.** `D1` is genuinely closed: adding a
+driving function adds a manifest row, and `adasAbiVersion()` still reads `1`.
+But look at what `S-C1b` actually cost `df` — a named-constant block per port, a
+static input table, a static output table, a `buildManifest()` walking both, an
+`adasExec` dispatch block per function, a `df_manifest_dump` executable, a CMake
+target, and 14 tests. Roughly 400 lines, of which the overwhelming majority is
+*mechanical restatement of the port list in four grammars*.
+
+None of it is wrong. All of it is per-component. `perception-core`,
+`perception-lane`, `planning` and `vdy` each get their own near-identical copy,
+hand-written and hand-maintained — and `R-BUILD-6` already tells us what happens
+to N near-identical copies that are not generated: they drift, and the drift is
+found by whoever is unlucky.
+
+**The shape is D1's exactly, moved up one level.** D1 was *"the interface grows
+per function"*; D12 is *"the adapter to the interface is rewritten per
+component"*. The tell is the same in both cases: a human types the same
+structure N times and a test is asked to notice when they diverge.
+
+**What breaks when the roadmap arrives.** Eight components × ~400 lines ≈ 3,200
+lines of glue that exists only because nobody generated it. Every ABI evolution
+(a new manifest field, a new port attribute) is then an eight-repo edit —
+precisely the cross-submodule change `R-BUILD-6` exists to warn about, with none
+of `R-BUILD`'s byte-identical-copy protection, because these files are *not*
+identical: each names its own ports.
+
+Closed by `R-SIM-22` — declare the ports as data, generate the shim.
+
+### D13 — A plug-in's port address is a literal, and a wrong one fails silently
+
+**Found 2026-07-31, inspecting `modules/df/sim/layers/bsd.py`.** The framework
+never hardcodes a port name — `GT-1` guarantees that, and it holds. But the
+guarantee stops at the framework boundary, and the *component's own plug-in* is
+on the other side of it:
+
+```python
+@layer_provider("bsd.warning", group="bsd", requires=("df.bsd.outputs",))
+def warning_layer(ctx):
+    bsd_outputs = ctx.history.last(1)[-1].port("df.bsd.outputs").message
+```
+
+Three separate problems in one string:
+
+1. **`df.` is not the component — it is the *stage name* someone typed in a
+   pipeline YAML.** Rename the stage to `driving_functions` and the layer stops
+   binding. Nothing in the design says a stage name is a stable identifier;
+   `Pipeline` builds the address as `f"{stage.name}.{port.name}"`, and stage
+   names are authoring choices.
+2. **`bsd.outputs` is a C++ constant in another repo, in another language.**
+   `UT-C1b-11`/`UT-C1b-12` bind it tightly to the dispatch and the ports header
+   — and to nothing on the Python side.
+3. **The failure is silent.** `scene/registry.py`'s `requires` gate returns `()`
+   when a port is absent. On screen, a missing overlay is indistinguishable from
+   *"the algorithm did not raise a warning"* — which is the single worst
+   failure mode a debugging tool can have, because it produces a confident
+   wrong answer rather than an error.
+
+A fourth instance is already scheduled: `S-C3`'s `expect:` blocks will name
+these same addresses as strings in scenario YAML.
+
+**The shape is D3's exactly, moved into the plug-in.** D3 was *"the number is
+typed into Python while the real one is in YAML"*; D13 is *"the name is typed
+into Python while the real one is in the manifest"*. Same defect, same
+consequence — a confidently wrong picture — and it survived precisely because
+`GT-1` guards the framework and nothing guards the plug-in.
+
+Closed by `R-SIM-21` — bind relative to the component, resolve once at load,
+error loudly on a miss.
+
+**Note on the sibling defect this exposes.** `bsd.py` also calls
+`path.read_text()` on `df`'s project YAML *inside the layer provider*, which
+`R-SIM-2` forbids twice over (a provider never touches disk) and which bypasses
+the config bundle's whole reason for existing (`R-SIM-3a`: the viewer must read
+the bytes the SUT was initialised with, not the checkout that happens to be
+adjacent). Same root cause — the plug-in boundary was specified and never
+gated — so it is carried as part of `D13`'s closure rather than as a fourteenth
+defect.
+
+### D14 — A recording's topics never reach a port, and the one bridge is hardcoded in the framework
+
+**Found 2026-07-31.** `R-SIM-6` makes topic names equal port names *for
+recordings this framework produced*. Every recording that already exists was
+produced by something else, and for those the chain is broken in the middle:
+
+| Layer | Name | Source |
+|---|---|---|
+| Recording on disk | `df/gen_object_list` | today's exports |
+| After `io/legacy.py` | `/source/gen_object_list` | `LEGACY_TOPIC_MAP` |
+| `Tick.ports` key | `source.gen_object_list` | `runner._topic_to_port_name` |
+| What a pipeline asks for | `source.` **`objects`** | `df_sil.ports.yaml`'s input port |
+
+**The last two lines never meet.** `gen_object_list` is not `objects`, and
+nothing in the system maps one to the other. `io/legacy.py` renames a *topic to
+another topic* and leaves the port question unasked; §3.2 of
+[sim_resim_and_recording.md](sim_resim_and_recording.md) even notes that
+`gen_object_list` "is named for its *consumer*" and "asserts something false" —
+identifying the naming defect without connecting it to the port.
+
+**The evidence this is real rather than theoretical:** `ST-C1c-1` — *"resim
+every existing recording"* — passes, and passes by **hardcoding the bridge
+inside the test** (`TOPIC_GEN_OBJECT_LIST = "df/gen_object_list"`, with its own
+comment mapping positional buffers to manifest port names). The test proves what
+it claims, which is ABI equivalence. It does not prove a legacy recording can
+drive a `Pipeline`, because the mapping it hardcodes is precisely the mapping
+the product does not have.
+
+**Two structural problems, not one:**
+
+1. **The mapping lives in the framework.** `io/legacy.py` holds function-named
+   strings under a named `GT-1` exemption, justified at `S-A4` as narrow and
+   one-off. It is about to stop being one-off: the moment `perception-core` has
+   its own recordings with its own topic vocabulary, the framework needs a
+   second table, then a third for a supplier's data. A carve-out that repeats is
+   a mechanism that was not built (`R-SIM-1`).
+2. **`CR-SIM-21` is named but not mechanised.** *"Which cuts a recording
+   supports is a property of the recording, read from its topic index"* is
+   correct and there is no code that reads a topic index and answers it. The
+   only path is `UT-C1c-10`'s **failure** path — a `measured` stage whose
+   outputs are missing raises. That is the error path, not the discovery path,
+   and a user who wants to know what a file can do should not have to start a
+   run and read a traceback.
+
+**The shape is `D12`/`D13`'s, a third time**: a declaration written as code, at a
+boundary specified on one side only. The producer side of recording was
+specified in full (`R-SIM-6`); the **ingest** side — everything not produced by
+us — was assumed to be a migration detail.
+
+**What breaks when the roadmap arrives.** Exactly the workflow this platform
+exists for: open a component's existing test-run recordings in the player,
+resim that component alone, with only that component checked out. A BSD
+recording carries objects and outputs and no perception layer at all; a
+perception team's recording will carry detections and no objects. Both are
+legitimate, both support exactly one cut, and neither can currently tell the
+tool which one.
+
+Closed by `R-SIM-23` — an ingest map owned by whoever owns the recordings, and
+a feasible-cut query answered before the run.
 
 ---
 
@@ -468,6 +615,68 @@ small (viz §2) precisely so that a new need is usually met by a new *optional
 field* or a new *style token* — both minor — rather than by redefining
 something. A proposal that needs a major bump should be argued for on that
 basis.
+
+#### The Scene carries geometry, not bulk data — resolving `NR-SIM-43`
+
+*Added 2026-07-31, answering audit finding `A5`. `OD-7`.*
+
+`Prim` inlines everything it draws: `points_m`, a `Heatmap`'s `values` array, an
+`Image`'s `data` bytes. For tens of prims of tens of points that is correct and
+pleasant. For the perception content `FR-SIM-3` requires — a 100 000-point cloud,
+a camera frame, an occupancy grid — it is megabytes per tick, protobuf-encoded
+per tick, held in a cache that today bounds itself by **entry count**
+(`SceneCache(max_size=256)`), not by bytes. 256 entries of megabytes is
+gigabytes, and `NR-SIM-5`'s "stays responsive" has no number to fail against.
+
+**The rule.** A `Prim` inlines **small geometry only**, under a declared
+per-Scene budget. Anything bulk is **referenced** and resolved by the renderer at
+draw time:
+
+```python
+@dataclass(frozen=True)
+class BulkRef:                 # a Prim field, never a Prim of its own
+    topic: str                 # the recording topic that carries the payload
+    log_time_ns: int           # which message
+    field: str = ""            # optional path within the message
+    count: int = 0             # elements, for budgeting and for the HUD
+    encoding: str = ""         # "f32[2]", "jpeg", "u8grid" — declared, not sniffed
+```
+
+Three properties make this cheap rather than a new subsystem:
+
+- **It is not a new storage mechanism.** The bytes are already in the recording;
+  a `BulkRef` is a *coordinate into it*. Nothing is copied, nothing is written
+  twice, and a Scene stays serializable — a `BulkRef` survives into a golden, a
+  Foxglove stream and a `/scene` topic exactly as a number would.
+- **It is enforceable precisely because `R-SIM-7` holds.** If a value is big, it
+  came from a port; if it came from a port, it is in the recording. A layer that
+  *computed* a 100 000-cell grid would be estimating what nothing produced, which
+  `R-SIM-7` already forbids. So "bulk data always has a topic to point at" is not
+  an assumption — it is a consequence of a rule that is already gated.
+- **The budget check names the layer, not the frame rate.** A `Prim` does not
+  know which layer it is in, so the check lives in `Layer.__post_init__`, which
+  knows both, and raises a `ContractError` naming the layer, the prim kind and
+  the count. A budget breach is an authoring error at build time
+  (`§5.14`), never a slow render someone profiles a week later.
+
+**`SceneCache` bounds by bytes.** `max_size=256` becomes `max_bytes`, with the
+entry count as a secondary cap. This is the change that makes `NR-SIM-5`
+falsifiable: a stated byte ceiling at a stated tick count is a number a test can
+fail.
+
+**Alternatives rejected.** *Leave it inline and cap the point count in the
+provider* — pushes the budget into every component's plug-in, where it is
+un-auditable and where the first person to need 200 000 points simply raises
+their own constant. *A separate `BulkPrim` type* — doubles the primitive
+catalogue and forces every renderer to handle two shapes for one idea; a field
+on the existing prim does not. *Stream Scenes instead of caching them* — throws
+away the free backwards scrub that `R-SIM-17` is built on.
+
+**Cost.** One small frozen type, one validation, one resolve step in each
+renderer, and `SceneCache` re-bounded. **What it does not solve:** rendering
+100 000 points *quickly* at high zoom — the `Heatmap`/`Points` downsampling
+question (viz §17) is a renderer concern and stays open. Nor does it bound the
+*recording*; that is `NR-SIM-42`'s job.
 
 **A layer provider is the entire contribution a function makes to the viewer:**
 
@@ -833,6 +1042,112 @@ strings `aeb`, `bsd`, `lca`, `acc`, `ldw` or `lka`.** A grep for them is the
 enforcement, cheap enough to be a CI check and a code-review reflex. It is the
 same test `R-ARCH-2` uses for middleware-free algorithm code, applied here.
 
+#### 5.7a Authoring home vs. deployed form — the distinction this section was missing
+
+**Added 2026-07-31**, resolving a recurring and entirely reasonable objection:
+*"if the player is supposed to be standalone, why does BSD's picture live in
+`df`? Shouldn't it move into `modules/sim`?"*
+
+The objection is two questions wearing one coat, and the answer to each is the
+opposite of the other:
+
+| Question | Answer | Why |
+|---|---|---|
+| Where is a component's plug-in **authored and owned**? | `modules/<name>/sim/` — unchanged | Moving it into the framework is `D9` with the polarity reversed: instead of `df` owning everyone's viewer, `sim` owns everyone's content. Every component's picture change becomes a `sim` commit, a `sim` review and a `sim` release; `GT-1` would have to be deleted; and the framework acquires a reason to know what a driving function is |
+| Does the player need `modules/<name>` **checked out** to render it? | **It must not — and today it does** | This is the real defect, and it is what the objection is actually detecting |
+
+The table above is the whole resolution: **the folder is right; the delivery
+mechanism is missing.** A git checkout is not a delivery mechanism — it is an
+authoring convenience that happens to also make the files reachable, which is
+why the gap was invisible.
+
+The fix is symmetric with one already in this design. `R-SIM-3a` already says
+the *configuration* is copied beside the library at build time, because
+requiring `shared_config` on disk to read a run was unacceptable. **Plug-ins get
+exactly the same treatment** (`R-SIM-20`):
+
+```
+<library_dir>/                     e.g. build/.../Release/, or an installed tree
+  df_sil.dll
+  config/                          R-SIM-3a — calibration the SUT was built with
+    default.yaml  ego_params.yaml  df_sil.ports.yaml  bundle.sha256
+  sim/                             R-SIM-20 — what this component contributes
+    layers/  pipelines/  sensor_models/  viewpoints.yaml  bundle.sha256
+```
+
+Consequences, each of which is the standalone property the objection wanted:
+
+- **`vantage <dir-of-dlls>` works with no repo.** The player walks its plug-in
+  path, finds a manifest per library, and imports that library's `sim/`. No
+  sibling checkout, no `PYTHONPATH`, no environment variable.
+- **Adding a driving function never rebuilds the player.** This is the
+  constraint `FR-SIM-70` already imposed on a frozen executable ("a frozen
+  executable must keep an external plug-in import path") — `R-SIM-20` is that
+  constraint made concrete, rather than left as a note.
+- **A recording renders correctly on a machine with no build**, because it
+  embeds the plug-in bundle's hash beside the config bundle's, and a missing one
+  is reported in the HUD rather than substituted from whatever checkout is
+  nearby (`R-SIM-6`'s existing discipline, extended).
+- **`modules/df/sim/` is still `df`'s**, reviewed by the people who own the
+  algorithm, released on the component's cadence.
+
+Stated as the one-liner to remember: **the component owns the picture; the build
+delivers it; the player discovers it.** Only the middle clause was missing, and
+its absence is what made two correct rules look like a contradiction.
+
+*Authoring homes are unchanged by this — the deployed `sim/` folder is a build
+**output**, never a second place to edit a layer. Same discipline `R-SIM-3a`
+states for the config bundle, and the same failure it exists to prevent.*
+
+##### The plug-in path is an external interface — `NR-SIM-44` / `A7`
+
+*Added 2026-07-31.* `R-SIM-20` makes the player **import Python from a directory
+beside a DLL**. That is a code-execution boundary, and `NR-SIM-9` versions
+everything the player reads *except* this one — the only interface the same
+review made external. Two statements, both explicit, because both would otherwise
+be decided by accident.
+
+**1. A recording carries plug-in identity and hashes, never executable content.**
+Opening a colleague's file must never run their code. A missing plug-in degrades
+to *"these layers unavailable"*, **named with the hashes that were expected**, so
+the fix is *install these* rather than *why is my screen empty*.
+
+*This looks inconsistent with `R-SIM-6`, which embeds the config bundle's bytes,
+and it is worth saying why it is not:* **configuration is data and a plug-in is
+code.** Data cannot execute; the whole reason the bundle travels is so a viewer
+with no build can read the same numbers. Stating the asymmetry here is deliberate
+— left unstated, someone eventually "fixes" the inconsistency in the wrong
+direction, and a recording becomes a delivery vehicle.
+
+The honest cost is that a recording opened on a machine without the component's
+plug-ins renders only framework-generic layers. Two mitigations already exist and
+neither is new machinery: the plug-in bundle deploys beside the library
+(`R-SIM-20`), so *having the library* means *having the layers*; and the optional
+`/scene` topic (recording §6) stores the computed geometry itself, so a recording
+that carries its Scenes renders with **no plug-ins at all** — which is the right
+answer for *"send someone a file they can look at"*.
+
+**2. The plug-in API carries its own generation**, independent of the Scene major
+and the ABI version, declared in a **manifest file** rather than in Python:
+
+```yaml
+# modules/<name>/sim/plugin.yaml — deployed to <library_dir>/sim/plugin.yaml
+api: 1
+component: <name>
+provides: [layers, viewpoints, workspace, ingest, sensor_models, tolerance]
+sha256: <bundle hash>
+```
+
+**A file, not a module attribute, and the reason is decisive:** the player must
+decide *before importing*. Reading a `PLUGIN_API` constant requires importing the
+module, and importing an incompatible plug-in is precisely what "refused, not
+half-loaded" forbids. The file also becomes the natural home for the bundle hash
+`R-SIM-20` needs anyway, so it replaces an ad-hoc hash side-car rather than
+adding a concept.
+
+The player declares the range it supports; a plug-in outside it is **refused with
+both numbers named**, on `NR-SIM-9`'s existing terms.
+
 `modules/df/tools/carla/` does not survive: `carla_bridge.py` decomposes into
 `adas_sim.sources.carla` (framework) plus its scenario data (already test data,
 already in the right place). `df_ctypes.py`, `viz.py`, `foxglove_stream.py`,
@@ -1158,6 +1473,73 @@ override (§5.6): it lands in the run manifest, the HUD badges the port, and the
 topic carries `origin: overridden` so no report can mistake a pinned input for a
 measured one.
 
+##### Addressing a repeated field — resolving `OQ-10` / `A8`
+
+*Added 2026-07-31. `OD-8`.*
+
+`OQ-10` worried that four verbs are too few. The audit sharpened it correctly:
+the gap is not a fifth *arithmetic* verb, it is that the four verbs are
+**scalar-shaped** and the requests developers actually make are **structural** —
+*delete object 3*. The escape hatch (write a `stub:` stage) means the closed list
+did not prevent a private fork; it made one heavier, which is the failure
+`FR-SIM-45` names.
+
+Two things are therefore added and one is refused.
+
+**1. The address grammar is stated and closed.** It was previously implied by the
+example above (`objects[*].pos_x`) and implemented nowhere —
+`contracts/override.py` is scalar-only today, which is why this is cheap now.
+
+| Form | Means |
+|---|---|
+| `port` | the whole port |
+| `port.field` | a scalar field, at any depth (`egoDyn.vx`) |
+| `port.repeated[i]` | one element, by index |
+| `port.repeated[*]` | every element |
+| `port.repeated[i].field` · `port.repeated[*].field` | a field within those |
+
+**Index and `*` only. No predicate.** `objects[?class=="truck"]` is an
+expression, and an expression grammar is the over-configuration this design
+answers.
+
+**2. Two structural verbs — `select` and `drop` — and the list closes again at
+six.** `drop` removes the addressed element(s); `select` keeps them and drops the
+rest. They are the complement pair over a set, which is why *two* is the right
+number rather than five:
+
+> **An override may destroy or attenuate information. It may never create an
+> entity.**
+
+That is `R-SIM-7` applied one level up, and it is what rules out `insert`,
+`duplicate`, `move` and `reorder` on principle rather than on taste. `const` on a
+scalar attenuates a field that always existed; `insert objects[4]` manufactures a
+target no producer emitted, and the resim would then be reproducing the recording
+plus whatever the pipeline invented.
+
+**Fixed slots do not shift.** `df`'s object list is a fixed-size array padded
+with all-zero slots (`num_object_slots`). `drop objects[3]` there must **clear
+slot 3 in place**, never compact 4→3, because compaction renumbers every
+downstream index and silently breaks track association — a confidently wrong
+answer, which is the failure mode this whole architecture exists to prevent. The
+framework cannot guess which shape a port has, so it does not: the port declares
+it, `fixed_slots: true`, in the same `conf/ports.yaml` that already declares the
+port (`R-SIM-22`). One optional key, read generically, no component knowledge in
+the framework.
+
+**3. What is refused, and where it goes instead.** The audit's third example —
+*"make the cut-in happen half a second earlier"* — is **not an override at all**.
+It is a change to the scenario, and a scenario is already data
+([sim_scenarios_and_expectations.md](sim_scenarios_and_expectations.md), `R-SIM-8`).
+Answering it with an override would require a time-varying verb, which is a
+schedule, which is a program. Time-varying and conditional overrides stay
+refused; the honest answers are *edit the scenario* or *write a `stub:` stage*,
+and both are files someone reviews.
+
+**Cost.** Two verbs, one address grammar, one optional declaration key.
+**What it replaces:** the `stub:`-stage escape hatch for the two most common
+requests. **What it does not solve:** anything predicated or time-varying, by
+design.
+
 #### What this requires of a recording
 
 A stage can be `measured` **only if the recording contains its output ports.**
@@ -1258,6 +1640,31 @@ crossing a ctypes boundary is a different regime from a 50-slot object list. The
 generic ABI's caller-owned buffers already avoid a copy on the output side, and
 sources can hand buffers in by pointer, but level 3 will need measurement before
 it is promised. Flagged here, not solved — no component at that level exists.
+
+**`OQ-5` closes 2026-07-31, and the answer is that three other decisions already
+made it.** The question was *"data volume through ctypes at raw-sensor injection
+levels"*, and it named the wrong boundary. `NR-SIM-41`'s first measurement puts
+the mcap read path at **46 µs/message at ≈300 MB/s** — that is zstd and I/O
+inside C libraries, not interpreter overhead, and a C++ reader would not
+meaningfully beat it. A 4 MB radar frame therefore costs ≈13 ms to *read* and
+~1 ms to `memmove`, so at raw-sensor levels the cost is **storage and I/O
+bandwidth, an order of magnitude above the language boundary**. The ctypes
+crossing was never the risk.
+
+That means level 3 needs no new mechanism, only the three already decided:
+
+- **bulk data is referenced, never inlined** (`NR-SIM-43`, §5.3) — so a frame is
+  read once and pointed at, not copied into a Scene per tick;
+- **a port's bytes are parsed lazily** (`OQ-6`, recording §10) — so a resim that
+  nobody plots never materialises a 4 MB message at all;
+- **volume is declared and estimated before the run** (`NR-SIM-42`) — so the
+  disk answer arrives before the disk does.
+
+Restated as the honest limit: **raw-sensor injection is bounded by bytes moved,
+not by the host language, and a bulk port is handed in by pointer into the
+recording rather than copied.** The measurement that would falsify this stays
+required (`GT-13`) and its trigger is unchanged — the first component with a bulk
+port.
 
 ---
 
@@ -1556,6 +1963,69 @@ hard-fault split of §5.14 applied to the product boundary. A player that
 half-opens an old recording is the silent-wrong-picture failure this whole
 architecture exists to prevent, arriving by a different door.
 
+#### 5.15a Build or adopt the interactive viewer — the case, both ways
+
+*Written 2026-07-31 for `NR-SIM-46` / `OQ-15`. **This section recommends and does
+not decide** — it is a product judgement, and the register keeps `NR-SIM-46`
+open on purpose.*
+
+**First, the number the question rests on is wrong.** `OQ-15` and the audit both
+state that `render/` + `view/` + `viewer.py` are *"~3,000 of 8,300 lines — 36% of
+the codebase spent on the least differentiated part."* Measured on the tree as it
+stands:
+
+| Package | Lines | Imports Qt? | Survives adopting an external viewer? |
+|---|---|---|---|
+| `render/viewer.py` | 1,417 | **yes** | no — this is the window |
+| `render/bev.py` + `clip.py` | 415 | no | no — Scene → 2D drawing |
+| `render/theme.py` + `palette_check.py` | 462 | no | **yes** — `SceneUpdate` needs colours too |
+| `render/capture.py`, `plots.py`, `timeline.py` | 369 | no | **yes** — headless render, `sim render` |
+| `view/*` (transport, layers, workspace, inspector, measure, hud, plots, timeline, viewport) | 1,167 | **no** | **yes** — headless view state, incl. `R-SIM-17`'s head/review model |
+
+`render/` + `view/` is in fact **3,838 lines, 46%** — the audit understated it —
+but only **1,832 lines (22%)** are replaceable by an external viewer, and of that,
+the part with a genuine external equivalent — a BEV canvas — is **415 lines, 5%**.
+`view/` imports no GUI toolkit at all; it is the headless state model, and an
+adopted front-end would still need it, because Foxglove has no notion of *the
+head* (`R-SIM-17`) and no per-stage `mode:`/`impl:` matrix to render.
+
+**So the honest framing is not "36% on a window we could rent".** It is: *does
+the 1,417-line Qt shell plus its packaging (`S-D5`) and productisation (`S-D8`)
+earn its keep against `Scene` → Foxglove?*
+
+| | Adopt (Foxglove/rerun primary) | Build (Qt console, as planned) |
+|---|---|---|
+| **What it removes** | 1,832 lines, Qt packaging, offscreen rendering, an installer, a GUI compatibility statement | nothing |
+| **What it cannot do** | the pipeline panel (viz §13), the measured/simulate matrix, the severed-chain badge, `Open on Bench`, expectation markers, the evidence panel (§5.19) — none of these are scene rendering, and an external viewer has no pipeline to show | — |
+| **Against `FR-SIM-70`** | *"install Foxglove, add this extension, open this file"* is a materially worse answer than a Windows executable, and fails `FR-SIM-47`'s `L-2` (≤3 steps to a moving picture) | meets it as written |
+| **Ownership** | a third-party product with its own licence, release cadence and commercial dimension — a procurement decision, not only a technical one | ours, and `NR-SIM-45`'s bus factor is worst exactly here |
+| **Sunk / remaining** | `S-B3` is built and green either way | `S-D5` + `S-D8` are the unbuilt, expensive half |
+
+**Recommendation — split the window along the line the architecture already
+draws, and do not treat this as a binary.** The `Scene` *is* the boundary:
+
+1. **Keep the Qt shell as a *console*, not as a renderer.** Its differentiated
+   content is the pipeline panel, the stage matrix, transport-against-the-head,
+   expectations and evidence — everything that needs the engine. The BEV becomes
+   one panel among several rather than the product.
+2. **Promote `S-D1` (Foxglove `SceneUpdate`) from "a third renderer" to *the
+   interop surface*** — first-class, tested, always available. That is the
+   audit's own §12.4 advice (*"defer **or** promote to primary — a fork in the
+   road, not a menu"*), taken in the promote direction, and it is what makes
+   sharing, 3D and "a colleague with no install" real answers rather than
+   aspirations.
+3. **Scope `S-D5` to the console** and trim `S-D8`'s ambition accordingly.
+   Vantage is a console with a BEV; it is not competing with a scene viewer.
+4. **Defer `S-D2` (matplotlib)** with a named trigger: a figure that headless
+   `sim render` cannot produce. Agreed with the audit.
+
+This keeps 22% of the code that the differentiated 78% needs anyway, and it
+declines to spend `S-D8` on out-rendering products whose renderer is their whole
+business. **If the decision goes the other way** — adopt as primary — the cost is
+bounded and known: `render/viewer.py`, `bev.py`, `clip.py` are deleted, `view/`
+and `theme.py` stay, `S-D5`/`S-D8` collapse into a Foxglove extension, and
+`FR-SIM-70` must be renegotiated in writing rather than quietly dropped.
+
 ---
 
 ### 5.16 One engine, two faces — and why there is not a second tool
@@ -1787,6 +2257,121 @@ That round trip — *crash in Campaign, reproduce on Bench, fix, re-run Campaign
 is the loop that makes crashes get fixed rather than retried. Without it, a
 crash in a 500-run report is a line of text nobody can act on.
 
+### 5.19 The evidence chain — from a thing on screen to the bytes that produced it
+
+*Added 2026-07-31, answering audit finding `A4` / `FR-SIM-67` / `R-SIM-25`.
+`OD-6`.*
+
+The way a visualization tool dies is not a crash. It is a developer who sees
+something odd, cannot confirm where it came from, stops believing the window, and
+goes back to `printf` — after which every other feature is sunk cost. The design
+already has good instincts pointed at this (`R-SIM-7`'s `derived` marker,
+`R-SIM-3a`'s bundle provenance, per-topic origin tags, `sim explain` for names).
+**What it did not have is the join.** `Prim.pick_id`, `PortValue.origin`, topic
+provenance, `bundle_origin` and `run_id` all exist, in five places, related by
+nothing.
+
+#### The join already exists — it was never written down
+
+No new capture is needed, because three keys are already present and already
+unique:
+
+| Key | Present since | Answers |
+|---|---|---|
+| `run_id` | `S-A1` (`N-9`) | the run manifest: config bundle, component builds, pipeline, overrides |
+| `Layer.id` → the provider's **resolved** `requires` | `R-SIM-21` / `S-C9` | which ports fed this layer, and therefore which topics and origin tags |
+| `Prim.pick_id` | `S-A3` | which entity *within* the layer |
+
+So the chain is a **query over recorded facts**, not a new index to maintain.
+That is why the audit calls it the cheapest high-value addition available, and
+the assessment is correct.
+
+#### One producer, two formatters
+
+```python
+@dataclass(frozen=True)
+class Evidence:
+    address:       str            # what was asked about, as typed
+    kind:          str            # port | field | prim | layer | signal
+    value:         str            # the value at that tick, formatted
+    tick:          int
+    t_ns:          int
+    port:          str | None     # resolved address (R-SIM-21), never a literal
+    topic:         str | None     # the recording topic that carried it
+    origin:        Origin         # measured|truth|mocked|simulated|overridden|unknown
+    published:     bool | None    # True: the SUT emitted it. False: a layer rebuilt it
+    stage:         str | None     # pipeline stage, with its mode: and impl:
+    overrides:     tuple[str, ...]   # verbs applied to this port or field
+    faults:        tuple[str, ...]   # fault injections targeting it
+    config_bundle: str | None     # hash + which source resolved (embedded/library/checkout)
+    component:     str | None     # build_id, library sha, abi version, manifest sha
+    plugin:        str | None     # plug-in bundle id + hash that produced the layer
+    run_id:        str
+```
+
+**Two rules govern it, and they are the whole design:**
+
+1. **`Evidence` is assembled only from recorded facts.** A field it cannot fill
+   is `None`/`unknown` — never inferred, never defaulted to a plausible value.
+   This is `§5.14`'s never-substitute rule applied to the one surface whose entire
+   purpose is being believed. An evidence panel that guesses is worse than none.
+2. **There is exactly one producer and two formatters.** `evidence(address,
+   session, tick)` returns the record; the GUI panel renders it and
+   `sim explain <signal> --at <tick>` prints it. *"GUI and headless answer
+   identically"* is then structural rather than a discipline — which is the same
+   shape `GT-9` already requires of every other capability, so it costs no new
+   principle.
+
+`address` accepts either a signal address from the one address space
+(`NR-SIM-8` — `df.bsd.outputs.left.warning`) or a prim reference
+(`<layer_id>#<pick_id>`). Both resolve into the same record. In the GUI the prim
+reference is free, because the renderer hit-tested the prim it actually drew
+(viz §7.1) and therefore already knows its layer.
+
+#### The one field this adds, and what it replaces
+
+`Prim` gains **`derived: bool = False`**. `Layer.derived` already exists, but a
+layer legitimately *mixes* — it draws the SUT's own warning state *and* a zone
+polygon reconstructed from calibration — and a per-layer flag makes the honest
+answer impossible for exactly the case `R-SIM-7` cares about. The two are then
+bound so they cannot disagree: **a layer with `derived=False` may not contain a
+prim with `derived=True`**, checked in `Layer.__post_init__`.
+
+So `Layer.derived` keeps its job (the `…(derived)` badge in the layer panel) and
+stops being a lie for mixed layers. That is what the field replaces: not a
+feature, an inaccuracy.
+
+#### The hole this exposes, and closes
+
+A plotted sample may come from a **computed** signal (`@signal`), not from a raw
+port field. Computed signals currently declare nothing about their inputs, so the
+chain would stop at them — and a hole in an evidence chain is worse than no
+chain, because it is invisible. Therefore `@signal` declares its inputs the same
+way `@layer_provider` declares `requires=`, resolved at load by the same
+`R-SIM-21` path. One decorator argument; no new mechanism.
+
+#### The limit, stated
+
+The chain answers **where a value came from**. It does not answer **why the
+algorithm produced it**, and it must not pretend to: it stops at the component
+boundary, because inside `adasExec` there is nothing the framework can see. The
+only way further in is a SIL-only `<fn>.debug` ProPort, which stays parked
+(§11) with its trigger unchanged. An `Evidence` record that reached inside the
+SUT would be a reconstruction, i.e. exactly the `derived` case it exists to flag.
+
+Second limit: evidence is only as good as the recording's provenance. A file with
+no manifest yields a record that is honestly full of `unknown` — which is the
+correct answer and is why `Provenance.UNKNOWN` exists.
+
+**Alternatives rejected.** *A `port` field on `Prim`* — a prim is usually built
+from several ports (an object box needs `objects` *and* the pose), so one field
+would force a lie or a list, and the layer already declares the true set.
+*A side-car provenance index written per run* — a second description free to
+drift from the manifest, which is `FR-SIM-46`'s own rejected onboarding step
+wearing a different hat. *GUI-first, with a headless exporter later* — the
+headless path is the one CI and reports use, and a second implementation of "what
+produced this" is how the two stop agreeing.
+
 ---
 
 ## 6. How each defect closes
@@ -1804,6 +2389,40 @@ crash in a 500-run report is a line of text nobody can act on.
 | D9 | `df`-private | `modules/sim` submodule — §5.7 |
 | D10 | Monolithic scenario | Four-section schema — [sim_scenarios_and_expectations.md](sim_scenarios_and_expectations.md) |
 | D11 | Prose expectations | `expect:` block + headless evaluator — same doc |
+| D12 | Shim grows per component | `conf/ports.yaml` + generated table/manifest/dispatch — `R-SIM-22`, plan `S-C1d` |
+| D13 | Plug-in port address is a literal, failing silently | Component-relative binding, resolved at load, error on miss — `R-SIM-21`, plan `S-B1`/`S-C1c` deltas + `GT-11` |
+| D14 | A recording's topics never reach a port; the one bridge is hardcoded in the framework | Declared ingest map owned by the recordings' owner + a feasible-cut query — `R-SIM-23`, plan `S-C9` |
+
+**Two invariants the 2026-07-31 adversarial audit added are not defect closures
+but *evidence* obligations**, and belong here because every defect above is
+closed by an argument that assumes them. `R-SIM-24` — determinism is **measured**
+along the four axes that break it (same process, fresh process, rebuilt binary,
+different machine) under one declared tolerance policy; today only the first is
+exercised, which is the axis that cannot fail. `R-SIM-25` — every rendered value
+is **traceable** to the bytes that produced it, joining `Prim.pick_id`,
+`PortValue.origin`, topic provenance, `bundle_origin` and `run_id`, which exist
+separately and are never connected. Full reasoning:
+[sim_requirements.md](sim_requirements.md) §12 (`A1`, `A4`).
+
+**`D12` and `D13` are both "the closed defect, one level up."** Worth stating as
+a standing check rather than a one-off finding: after closing a defect of the
+form *"X is written N times by hand"*, ask where the **new** X is written by
+hand. `D1` moved the growth from the ABI into the shim (`D12`); `D3` moved the
+hardcoding from geometry into the port name (`D13`). The next candidate is
+already visible — `S-C3`'s `expect:` strings and `S-D3`'s workspace files will
+be the third and fourth places a port address is spelled by a human, and both
+should be resolved through the same binding path `R-SIM-21` introduces rather
+than growing their own. *`D14` then found the third instance before that
+prediction could be tested, in a place the pattern did not predict — the
+**ingest** side of recording. Generalising once more: the question is not only
+"where is X written by hand" but **"which side of this boundary did we
+specify?"** `R-SIM-6` specified how we *write* a recording in complete detail
+and left how we *read someone else's* as a migration note; `GT-1` guards the
+framework and not the plug-in. Both defects are on the unspecified side.*
+
+**The next boundary to check, before something crosses it:** `sources/` ↔ the
+world model (`S-C2`) and `check/` ↔ a scenario's `expect:` strings (`S-C3`).
+Both are one-sided today.
 
 ### 6.4 The two-pass Session — how backwards seek becomes possible
 
@@ -1969,7 +2588,18 @@ per-stage unit and system test cases. This table is the summary.
 | **C2** | `sources/` refactor: `carla_bridge.py` decomposed into `sources/carla` + run manifest; recordings carry SUT/calibration provenance | A recording states which DLL build and which project produced it; resim refuses a mismatched SUT unless overridden |
 | **C3** | Scenario schema split + `expect:` + headless `sim check` | All 18 scenarios migrated, expectations moved from comments to data, one command runs them all and reports pass/fail |
 | **C4** | Delete the duplicated calibration in the viewer: `bsdviz.sensors`' hardcoded `P3`/`P4`/`P5` poses and `_bsd_project_sensor()`'s `if project == "2w_base"` go; `SensorModel`/`ObjectModel` read `BSD_SENSOR_*` / `BSD_CLASS_*` from the bundle. **No `shared_config` change** — §5.5 | No sensor pose or class footprint exists in Python; changing a `BSD_SENSOR_*` value in the project YAML visibly moves the drawn FOV |
-| **C5** | Packed config bundle (§5.6): build copies `project.yaml` + `shared_config`'s `vehicle/ego_params.yaml` + port manifest into `<build>/…/Release/config/`, hashed; `adasInit(NULL)` resolves it module-relative; `adasManifest()` reports project + bundle hash; bundle embedded in recordings | A build output plus its `config/` runs on a machine with no Conan cache and no checkout; the viewer provably reads the same bytes the DLL read; a project/bundle mismatch is a warning, not silence |
+| **C5** | Packed config bundle (§5.6): build copies `project.yaml` + `shared_config`'s `vehicle/ego_params.yaml` + port manifest into the library's own output directory (`$<TARGET_FILE_DIR:…>/config/` — **never** a hand-written `…/Release/…` path, which is a multi-config-generator artefact that does not exist under Make or Ninja), hashed; `adasInit(NULL)` resolves it module-relative; `adasManifest()` reports project + bundle hash; bundle embedded in recordings | A build output plus its `config/` runs on a machine with no Conan cache and no checkout; the viewer provably reads the same bytes the DLL read; a project/bundle mismatch is a warning, not silence |
+| **C6** | Resim + determinism in CI (`NR-SIM-25`, `NR-SIM-40`) | `sim check` runs on every push; `sim determinism` reports all four axes with the axis **derived** from the two runs' manifests |
+| **C7** | `sil_host` reads the same pipeline file (`FR-SIM-65`) | One pipeline file runs unchanged under both hosts, with byte-identical results |
+| **C8** | Plug-ins delivered beside the library (`R-SIM-20`, `FR-SIM-64`) | `vantage <dir>` renders with no checkout, no `PYTHONPATH` |
+| **C9** | Recording ingest + feasible cuts (`R-SIM-23`, closes `D14`) | An existing recording states which ports it provides and which cuts it supports, **before** a run |
+
+> **This table is content, not order.** Phase C is built in the sequence given by
+> [sim_implementation_plan.md](sim_implementation_plan.md) §0a, which is *not* id
+> order: `S-C0` runs first, four model-level deltas follow, and `S-C9`, `S-C4`
+> and `S-C8` are each built earlier than their ids suggest. The plan is the
+> authority on sequence; this section is the authority on what each stage
+> contains.
 
 ### Phase D — Reach
 
@@ -2035,6 +2665,21 @@ the other:
 - Both become clients of **one** pipeline description (§5.4) and **one** port
   manifest format (C1). A pipeline YAML that runs under `sim resim` runs under
   `sil_host` unchanged, provided every stage is one `sil_host` can execute.
+  **This sentence was written as settled fact and was not**, which the
+  2026-07-31 review corrected. Until `S-C7` lands it is an *intention*: today
+  `sil_host` is 54 lines of `main.cpp` calling `dfInit`/`dfExec`/`dfShutdown`
+  positionally against exactly one component, with no pipeline reader, no
+  wiring, and no notion of a second stage. `S-C1b`/`S-E2` only move that one
+  call site onto the generic ABI — they do not make this sentence true. The
+  discrepancy was visible as `OQ-11` in [sim_sil_contract.md](sim_sil_contract.md)
+  §9 while this section asserted the opposite; two documents disagreeing about
+  whether a capability exists is exactly what `GT-7` is for. **Resolved in
+  favour of building it** (`S-C7`), because the alternative — softening the
+  claim — would leave "one concept, two hosts" as a slogan, and because the
+  engine is small once C1 holds: read the pipeline file, load N libraries by
+  manifest, wire ports by name, tick. The pieces it needs (`R-SIM-4`'s manifest,
+  `R-SIM-18`'s declared period, `R-SIM-10`'s `mode:`/`impl:` semantics) are all
+  `S-C1a`/`S-C1b` outputs already sitting in `interfaces` as protobuf and C.
 - `sil_host` stays the answer for "run the real composition with no Python in
   sight" — closest to a production integration, and the right place for timing
   measurements that a Python host would distort.
@@ -2050,6 +2695,24 @@ already covers what it would buy.
 
 The convergence point is C1 and nothing else. Until C1, `sil_host` continues to
 call `dfExec` directly, unaffected.
+
+**What `sil_host` is *for*, stated positively**, since "the C++ one" is not a
+purpose. Its job is to **run a complete pipeline in simulation with no Python in
+the process** — and that single sentence implies everything else about it:
+
+- *Complete pipeline*, so it needs the pipeline reader and the N-stage wiring
+  that `S-C7` adds. One component ticked in a loop is not a pipeline, and is not
+  what this executable exists to be.
+- *No Python*, so timing measured here is trustworthy, `stub:` stages are
+  unavailable by construction, and a stand-in it needs is promoted to a
+  `stubdll:` rather than reimplemented (the rule above).
+- *In simulation*, so it consumes recordings and stand-ins — it is not a
+  production integrator, and it never acquires a world-model client.
+
+Everything `sil_host` must **not** become follows from the same sentence: not a
+recorder (that is `sources/` + `io/`), not a viewer (that is `R-SIM-13`), and
+never its own object generator (§9's standing rule). It is the pipeline engine
+without the studio around it.
 
 ---
 
@@ -2132,6 +2795,24 @@ gain); *Studio*/*Lab* for the developer face (both imply authoring, and this
 face analyses); *Fleet*/*Batch* for the project face (the first is about
 vehicles, the second about scheduling — neither carries "produces a report
 someone reads").
+
+### OD-6 .. OD-13 — the 2026-07-31 concept-resolution pass
+
+Taken in answer to the adversarial audit (`sim_requirements.md` §12) and to the
+open questions it sharpened. Each is stated in full in the section named, with
+its rejected alternatives; this table exists so the decision list stays complete
+and so none is silently re-made.
+
+| ID | Decision | Where | Closes |
+|---|---|---|---|
+| **OD-6** | **The evidence chain is a join over facts already recorded, with one producer and two formatters.** No new index, no new capture; `Prim` gains one `derived` flag, `@signal` declares its inputs | §5.19 | `A4`, `FR-SIM-67`, `R-SIM-25` |
+| **OD-7** | **Bulk arrays are referenced into the recording, never inlined in a `Prim`;** `SceneCache` bounds by bytes | §5.3 | `A5`, `NR-SIM-43` |
+| **OD-8** | **`select`/`drop` are added over repeated fields; arithmetic stays closed at four; an override may destroy but never create an entity** | §5.10 | `A8`, `OQ-10` |
+| **OD-9** | **A message carries two integer-nanosecond stamps — reception and capture — with capture `None` when unknown, never defaulted to reception** | recording §3.3 | `A6`, `CR-SIM-4` |
+| **OD-10** | **Determinism is two gates and two measurements, not four gates; tolerance exists only on the axes that may legitimately differ, is declared per component with a mandatory `why:`, and is printed on every passing report** | recording §4 | `A1`, `NR-SIM-40`, `OQ-7` |
+| **OD-11** | **One config bundle per component, permanently; a pipeline asserts project agreement and hard-fails on disagreeing ego params** | contract §9 | `OQ-1` |
+| **OD-12** | **`period_ns` is calibration: declared per function in integer microseconds in the config bundle, reported through the manifest, and the DLL's own `updated` flag is authoritative over the predicted schedule** | contract §9 | `OQ-12`, `DF-1` |
+| **OD-13** | **A `PortValue` retains bytes and parses lazily; windowing a `Session` is rejected as the primary answer because it would break free backwards seek** | recording §10 | `OQ-6` |
 
 ---
 

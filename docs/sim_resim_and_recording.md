@@ -257,6 +257,160 @@ async mode — up to ~13× error, ruled out as a fluke across repeated runs). So
 recorded `dt_s` carries genuine wall-clock jitter. That is a feature: resim
 replays the jitter the algorithm actually saw.
 
+#### Two clocks, not one — resolving `CR-SIM-4` / `A6`
+
+*Added 2026-07-31. `OD-9`.*
+
+**First, the audit's justification needs correcting, because the corrected
+version is what fixes the field's semantics.** `A6` argues that *"an injected
+latency cannot be recorded and replayed faithfully into a one-timestamp model —
+replay the recording and the latency is gone."* That is **not true** for
+recordings this framework produces. A latency error model delays *which tick a
+value lands on*, and which tick a value lands on is precisely the one thing the
+current model does record. Resim hands the same bytes to the same tick, so the
+delay survives intact.
+
+What is actually lost is narrower, and worse for being invisible:
+
+1. **The delay cannot be seen.** The recording says *"objects arrived at tick
+   N"*. It does not say *"these objects describe the world at tick N−1.6"*. So
+   `age_s` — which `PortValue` carries and the HUD displays — reads `0.0` at the
+   moment of arrival, which is **false**: the data is 80 ms old. The stale-data
+   banner lies in exactly the situation it exists for.
+2. **Truth is compared at the wrong instant.** A perception-vs-truth diff at tick
+   N compares detections describing t = N−1.6 against ground truth at t = N. That
+   is a systematic offset that reads as perception bias — a confidently wrong
+   number, from a comparison the design advertises as free (§5.10).
+3. **A foreign recording arrives with both stamps and we discard one.** This is
+   the strongest case and the audit does not make it: a real measurement, an MF4,
+   a supplier's file all carry capture and reception natively. Collapsing them at
+   ingest is lossy and irreversible, and no later stage can recover it.
+
+So `CR-SIM-4` stands, restated: the defect is not that latency is *lost*, it is
+that latency is **invisible and unattributable**.
+
+**The model.** Two integer-nanosecond stamps per message:
+
+| Field | Means | Role |
+|---|---|---|
+| `log_time_ns` | **reception** — when the consumer saw it | unchanged. The *scheduling* clock: groups messages into ticks, drives resim, orders the file |
+| `capture_time_ns` | **validity** — the instant the data describes | new, optional |
+
+The message triple becomes a **4-tuple**, `(topic, log_time_ns,
+capture_time_ns, bytes)`, with `capture_time_ns: int | None`.
+
+**`None`, never "equal to reception".** This is the one detail worth being
+stubborn about. `None` means *unknown*; equality means *simultaneous*. Defaulting
+an unknown capture time to the reception time would produce an `age_s` of exactly
+`0.0` — a plausible-looking answer that is indistinguishable from a true one,
+which is the substitution `NR-SIM-4` forbids and the failure this field exists to
+close. Every existing recording is `None` by construction: a file whose
+`manifest_version` predates this change has capture unknown regardless of what
+its bytes contain, because this writer set `publish_time = log_time_ns`
+unconditionally and the equality carries no information.
+
+**The ripple, honestly scoped.** Five touch points, all small, all cheap now and
+permanent if deferred:
+
+- **`io/base.py`** — the tuple gains an element; `group_by_log_time` still groups
+  on `log_time_ns`, because grouping is a *scheduling* question.
+- **`Capabilities`** — one field, `capture_time: bool`. A codec that has no
+  second stamp declares it and degrades explicitly, which is `R-SIM-14`'s
+  existing mechanism, so this costs no new concept.
+- **`io/mcap.py`** — **one line.** mcap already carries both, with exactly these
+  semantics: `publish_time` is when the producer published, `log_time` is when it
+  was logged. The writer currently sets `publish_time=log_time_ns`; it will set
+  capture. The reader yields both.
+- **`PortValue`** — gains `capture_ns: int | None`, and **`age_s` stops being a
+  stored field and becomes derived**: `(t_ns − capture_ns)/1e9` when capture is
+  known, else the schedule-derived hold age (`R-SIM-18`). That *removes* an
+  ambiguity rather than adding one — today `age_s` silently means two different
+  things depending on why the value is old.
+- **Error models** — a latency injection now writes both numbers, and both are
+  true. `sim explain` can then say *"this value is 80 ms old, delayed by
+  `rear_radar_4wr.yaml`"*, which is `§5.19`'s evidence chain reaching a fact that
+  is currently unrepresentable.
+
+**Alternatives rejected.** *A `Stamp` value type instead of a 4-tuple* — cleaner
+in the abstract, but it renames the model's headline shape in three documents and
+adds a type `sim_learn.md` would have to teach, for no behaviour. *Carry capture
+only in a meta side-band* — puts a per-message fact in a per-run block and cannot
+express a per-message delay. *Derive capture from the sensor model at read time*
+— a reconstruction, i.e. `R-SIM-7`'s forbidden estimate, and it would silently
+disagree with a real measurement's own stamp.
+
+**What it does not solve.** Two stamps give delay and age. They do **not** model
+transport: queuing, reordering, partial loss and bus arbitration are not
+expressible as two numbers, and are not attempted. Nor does this make latency
+*testable* on its own — that needs the sensor error models, which stay parked
+with their trigger unchanged (`§10`).
+
+### 3.6 Per-port record policy — bounding volume without breaking `R-SIM-6`
+
+*Added 2026-07-31, answering audit finding `A3` / `NR-SIM-42`.*
+
+`R-SIM-6` records every declared port and calls it *"a few kB per tick of data
+already computed"*. At today's object-level ports that arithmetic is right —
+about 100 kB/s, 360 MB/hour. `FR-SIM-3` then requires scaling to perception,
+where a camera stream, a radar point cloud or an occupancy grid is three to four
+orders of magnitude larger, and the existing recordings **already carry
+`carla/chase_camera`**.
+
+The audit's predicted failure is the one to design against, and it is not
+subtle: the first perception campaign fills a disk, someone disables recording
+for the big ports, and `R-SIM-6`'s *"true by construction"* guarantee quietly
+becomes false **with no signal**, because nothing checks that what was declared
+was recorded.
+
+So the hole must exist — and it must be **narrow, declared, and loud**.
+
+**Declared per port, in the pipeline, beside the wiring:**
+
+```yaml
+components:
+  - name: perception-core
+    mode: simulate
+    record:
+      "*":                full          # the default, stated
+      camera_front:       {decimate: 10}   # every 10th tick
+      radar_cube:         excluded
+```
+
+Four properties, each closing a way the hole could widen:
+
+- **`full` is the default and exclusion is an explicit act**, per port. There is
+  deliberately no global `--no-record` switch: a global switch is how everything
+  ends up excluded by one person in a hurry.
+- **The policy is recorded for *every* declared port, not only the exceptions.**
+  A reader can then answer *"was this complete?"* from the file alone, without
+  knowing what pipeline produced it. `R-SIM-6` degrades from *everything* to
+  *everything except these, by declaration* — visibly, in the artifact.
+- **Exclusion feeds the feasible-cut query, not a second mechanism.** An excluded
+  port is, to a later run, indistinguishable from a port the recording never had
+  — which is exactly the case `R-SIM-23` already computes and `sim probe` already
+  reports. So the honest consequence (*"this file cannot resim perception,
+  because its inputs were excluded"*) arrives through the machinery that exists.
+- **Decimating a consumed input is caught at both ends, at the right time.** At
+  *record* time, declaring a stage `simulate` while excluding or decimating an
+  input it consumes is a **load error** — you are recording a run whose own
+  inputs you are not keeping, which can never be resimmed. At *resim* time it is
+  not an error at all, merely a cut that `sim probe` reports as infeasible.
+  Two different times, two different answers, both correct; conflating them
+  would either forbid a legitimate output-only recording or permit a silently
+  unresimmable one.
+
+**Estimated before it is produced, with both numbers labelled.** `sim record` and
+`sim batch` print an upper bound from the manifest's `max_bytes` per port × tick
+count × recordings *before starting*, then revise it from the measured rate after
+the first hundred ticks. An upper bound labelled as an upper bound is useful; a
+single confident figure that turns out to be either would not be.
+
+**Cost.** One pipeline key, one meta block, one estimator. **What it replaces:**
+the unexamined assumption that everything is always recorded at full rate.
+**What it does not solve:** *retention* — what is kept as a baseline, what is
+regenerable, what is deleted. That is an operations question, it is not the same
+question as volume control, and it stays with `NR-SIM-23`.
+
 ---
 
 ## 4. Determinism — what is guaranteed, and one real hole
@@ -320,6 +474,149 @@ every future cut point.
 - **Buffer capacity.** Output buffers are sized from the port manifest
   (`sim_sil_contract.md` §4.3), not from a hand-picked `256`. A recording notes
   any port that needed a grow, because that is a manifest bug.
+
+### 4a. The determinism report — measuring the claim everything rests on
+
+*Added 2026-07-31, answering audit finding `A1` / `NR-SIM-40` / `R-SIM-24`.
+Closes `OQ-7`. `OD-10`.*
+
+`R-SIM-5` makes resim *"deterministic and the only thing that goes in CI"*, and
+every regression baseline, `sim check` verdict and campaign result rests on it.
+The evidence for it is `ST-C2-2` — two runs, **same process, same machine, same
+binary**. That proves the code does not read a clock. It says nothing about the
+failures that actually occur, and the audit is right that this is the gap most
+likely to end the tool's credibility.
+
+#### First, one thing the claim never meant
+
+**Determinism is a property of port values, never of file bytes.** A recording
+contains a `run_id`, a creation timestamp and a host name, so two recordings of
+one perfectly deterministic run are *never* byte-identical files. `ST-C2-2`'s
+phrase *"byte-identical outputs"* is correct if "outputs" means port payloads and
+meaningless if it means files — and that ambiguity is exactly how a test gets
+quietly weakened later. Stated here so it cannot be: **the comparison is over
+`(topic, log_time_ns, bytes)` for declared ports; `meta` is excluded by
+construction.**
+
+#### The axis is derived from the artifacts, never declared by a flag
+
+Four axes, each a comparison of two runs that differ **only** in the named
+dimension:
+
+| Axis | Catches what the previous cannot | Whose defect is it? |
+|---|---|---|
+| **A — same process** | reading a clock or a random source; iteration over an unordered container; state carried between `exec()` calls that should not be | ours or the component's |
+| **B — fresh process** | hash seed, ASLR, static-init order, a cached file, uninitialised memory the OS happens to zero | ours or the component's |
+| **C — rebuilt binary** | a non-reproducible build (embedded paths/timestamps), changed inlining, FP contraction from a changed flag | **the component's** |
+| **D — different machine** | a different `libm`, x87 vs SSE, FMA availability, a different OS | **the component's** |
+
+The temptation is `sim determinism --axis fresh-process`. **Refused: a flag can
+lie.** Instead, `sim determinism <run-a> <run-b>` takes two session recordings
+and **derives** the axis by comparing their manifests — `host`, `process_nonce`,
+`components[].library_sha256`, `components[].build_id`, `config_bundle_sha256`.
+A pair that differs in *more* than one dimension is not evidence for the narrower
+axis, and the report says so rather than attributing the divergence. That kills
+the standard cheat where *"cross-machine determinism verified"* is claimed from a
+pair that also rebuilt the binary.
+
+This needs **one** new manifest field: `process_nonce`, random per process, so
+two runs in one process share it. It lives in `meta`, which the comparison
+already excludes, so it cannot perturb the thing it measures.
+
+#### Two gates and two measurements — not four gates
+
+This is the substantive correction to `NR-SIM-40` as written, which reads as
+though all four axes must pass.
+
+- **Axes A and B are gates.** They must be **exact**, always, for everything.
+  A float that differs between two runs of the same binary on the same machine is
+  a bug, not a tolerance case. These block CI (`S-C6`).
+- **Axes C and D are measurements.** Bit-identity across a rebuild or across
+  machines is genuinely hard for floating point and many safety programmes accept
+  a bounded difference. Requiring it as a gate would produce a red build that
+  nobody can fix and a tolerance that then widens to hide it — the death spiral,
+  arrived at by mandate. So C and D are **measured, declared and tracked**: a
+  regression is *the observed delta growing*, not *a delta existing*.
+
+The second half of that split matters as much as the first: **when axis C or D
+diverges, the finding belongs to the component, not to the framework.** The
+report attributes it — component, port, field, first tick — so the conversation
+is *"`df`'s binary is not portable-deterministic"* rather than *"the sim tool is
+flaky"*. In a safety programme that is a genuinely valuable finding, and the tool
+must not be the thing that gets blamed for surfacing it.
+
+#### Tolerance: where it lives, and why it cannot widen quietly
+
+**Tolerance and determinism are different questions, and merging them is what
+creates the spiral.** Determinism = *same inputs, same code ⇒ same outputs*; its
+correct tolerance is **exact**. Equivalence = *a legitimately changed thing
+produces an acceptably similar result*; that is where a bound belongs.
+
+Therefore: **axes A and B have no tolerance field at all.** Not "a tolerance set
+to zero" — no field. You cannot widen what does not exist, and a red A/B run has
+exactly one remedy: fix the code. That is a structural defence rather than a
+procedural one, and it is the main reason to separate the axes.
+
+For axes C and D, one file per component, beside the ingest map and for the same
+reason (`R-SIM-1`: a float field family is `adas.common.VehDyn.vx`, which is the
+component's fact, not the framework's):
+
+```yaml
+# modules/<name>/sim/tolerance.yaml
+version: 1
+default: exact                       # anything not named below is exact
+integers_and_enums: exact            # stated, not configurable
+families:
+  - {match: "*.ttc_s", abs: 1.0e-6,
+     why: "divides by a differenced velocity; last-bit sensitive under FMA"}
+```
+
+Four mechanisms keep it honest, and the fourth is the one that actually works:
+
+1. **`default: exact`.** Widening is an *addition*, visible in a review diff, not
+   an edit to a number nobody re-reads.
+2. **`why:` is mandatory** — a row without one is an `AuthoringError`. Same
+   discipline as `absent:` in an ingest map (`R-SIM-23`) and `from:` on a
+   scenario anchor (`R-SIM-8`): the person widening it writes a sentence they
+   will be asked about.
+3. **Integers and enums are exact and not overridable.** A discrete value that
+   differs is a logic difference, never a rounding one.
+4. **A passing report prints the tolerance it used, per field family, next to the
+   pass.** So a run made green by a widened bound *announces the widening every
+   time it passes*. A tolerance that has to introduce itself in every report is a
+   tolerance that gets argued about — which is the only mechanism that has ever
+   worked against the golden-suite spiral, because the others all rely on someone
+   choosing to look.
+
+And one leading indicator: the report states **headroom** — max observed |Δ| as a
+fraction of the allowed bound, per family. Above 50 % is a warning **on a pass**,
+because that is the run before the one that goes red and gets "fixed" by widening.
+
+The tolerance file's hash joins `config_bundle_sha256` in the run manifest, so a
+result always states the yardstick it was measured against.
+
+#### Divergence is reported, never scored
+
+A determinism result is never a bare pass/fail. It names **the first diverging
+tick, the port, the field, both values, and the tolerance in force** — the same
+five things `§5.10`'s A/B divergence already reports, because **it is the same
+comparison**. That is what this design costs: no new comparison engine, only an
+axis label derived from two manifests and a tolerance file to read. `sim
+determinism` is the A/B diff of two Sessions with its axis attributed.
+
+**Alternatives rejected.** *One global tolerance file in `modules/sim`* — names
+component message types in the framework (`R-SIM-1`), and one file that every
+component may widen is a commons. *Tolerance in the pipeline file* — the pipeline
+is edited per run by the person whose run is red, which is the failure mode
+itself. *Tolerance per scenario* — eighteen places to widen and no way to see the
+set. *A `--tolerance` CLI flag* — invisible in the artifact, therefore
+un-auditable.
+
+**What it does not solve.** It cannot *prove* determinism — only fail to disprove
+it over the recordings actually run; expectation-coverage (§12.5) is the
+complementary question. It localises a non-deterministic component but does not
+repair one. And axis D needs two machines, so it is honestly a nightly or
+on-demand measurement, never a per-push gate.
 
 ---
 
@@ -496,6 +793,30 @@ live-verified findings — and must not be invalidated.
 - **Old recordings keep working.** The reader accepts the legacy topic names
   (`df/gen_object_list`, `df/veh_dyn`, `carla/chase_camera`) and maps them onto
   the new namespaced ones, with `VehSig` synthesised as it is today.
+  **Insufficient as written — corrected 2026-07-31 (`D14`, `R-SIM-23`).** That
+  mapping goes *topic → topic* and stops one step short of a **port**:
+  `df/gen_object_list` becomes `source.gen_object_list`, while the port a
+  pipeline actually wires is `objects`. The two never meet, and the only working
+  bridge today is hardcoded inside `ST-C1c-1`. Migration is therefore not a
+  rename — it is a **declaration of what a recording family provides**, which is
+  the same problem another team's recordings and a foreign simulator's output
+  pose, so it gets one mechanism rather than three. See `S-C9`.
+- **The mapping is not the framework's to hold.** `LEGACY_TOPIC_MAP` currently
+  lives in `io/legacy.py` under a named `GT-1` exemption. A topic called
+  `df/gen_object_list` is a fact about **`df`'s** recordings; the declaration
+  moves to `modules/df/sim/ingest/` and the exemption is deleted (`R-SIM-1`).
+- **A recording states which cuts it supports, before it is run.** `CR-SIM-21`
+  said this and nothing implemented it: a BSD recording carries objects and
+  outputs and no perception layer, so it supports exactly one cut; a perception
+  team's recording will carry detections and no objects and support a different
+  one. Both are legitimate. `Session.provides()` / `feasible_cuts()` answer it
+  from the topic index plus the manifests present, and `sim probe` prints it —
+  rather than the user starting a run and reading `UT-C1c-10`'s error.
+- **Two dimensions, deliberately kept separate.** *Format* (mcap, MF4,
+  CarMaker) is a **codec** (§3.0, `R-SIM-14`); *depth* (which stage's ports are
+  in the file) is an **ingest map plus `mode:`** (`R-SIM-10`, `R-SIM-23`).
+  Keeping them apart is what makes "a new format" and "a new cut point" two
+  small independent changes instead of one combinatorial one.
 - **A recording without a manifest** is loaded with `manifest: unknown` and the
   viewer says so in the HUD, rather than pretending to provenance it does not
   have.
@@ -556,15 +877,103 @@ point (`R-SIM-16`), not a convenience.
 
 ## 10. Open points
 
-- **Recording size.** JPEG chase frames dominate. Whether to keep video in the
-  same file, in a sidecar, or as a codec stream is an engineering call with a
-  real disk cost; not decided.
-- **Long runs.** Everything above assumes a run fits in memory (1200 ticks
-  does, comfortably). A 30-minute drive at 20 Hz is 36 000 ticks and needs a
-  windowed Session. Flagged, not designed — no scenario is near this.
-- **Cross-machine determinism.** Bit-identical resim is claimed on one machine
-  with one build. Floating-point differences across compilers/architectures are
-  real and out of scope until a second target exists.
+- ~~**Recording size.**~~ **Answered 2026-07-31** by §3.6 (per-port record
+  policy, `NR-SIM-42`) for *what is written*, and by the Scene's bulk-by-
+  reference rule (`sim_architecture.md` §5.3, `NR-SIM-43`) for *what is held*.
+  The narrower sub-question — video in the same file, in a sidecar, or as a
+  codec stream — is now a codec capability question (`R-SIM-14`) rather than a
+  recording-model one, and is deferred to the first campaign that measures it.
+- ~~**Long runs.**~~ **Answered 2026-07-31 — and the original answer was wrong.**
+  See "Long runs are a parsing problem, not a windowing problem" below (`OQ-6`,
+  `OD-13`).
+- ~~**Cross-machine determinism.**~~ **Closed 2026-07-31** by §4a (`NR-SIM-40`,
+  `R-SIM-24`, `OD-10`): it is not an open question but a precondition of the
+  product's main claim, and it is now a **measurement** on axis D rather than a
+  gate — bit-identity across machines is not required, a declared and tracked
+  bound is. `OQ-7` closes with it.
 - **Recording a live sim's own timing jitter as data.** Per-tick component
   execution time is worth recording (it is free) and worth plotting on the
   timeline, but is not a determinism input. Cheap to add in C2; not specified.
+- **Pinning a resim to a stored component build (`OQ-9` / `NR-SIM-24`).** Shape
+  decided below; scheduling deferred — see "Pinning a resim to the build that
+  produced it".
+
+### Long runs are a parsing problem, not a windowing problem — `OQ-6`
+
+*Resolved 2026-07-31. `OD-13`.*
+
+The original flag said a 36 000-tick run *"needs a windowed Session"*. Working
+the problem changes the answer, because the memory is not in the tick count.
+
+A `Session` holds `Tick`s, and a `Tick` holds `PortValue`s whose `message` is a
+**parsed** protobuf. That is what is large: 36 000 ticks × ~5 ports × a parsed
+50-slot `GenObjectList` is expensive in a way that 36 000 small structs is not.
+And `NR-SIM-41`'s measurement supplies the decisive fact: **the resim path never
+parses at all.** The recording holds serialized protobuf, the port buffer wants
+serialized protobuf, so filling an input is a `memmove`; the parse happens inside
+the DLL, in C++. Only a *layer*, an *expectation* or a *plot* needs a message
+object, and those touch a small fraction of ports.
+
+**So: a `PortValue` retains its bytes and parses lazily, memoised, with the
+parsed-message cache bounded by bytes** — the same bound `NR-SIM-43` puts on
+`SceneCache`. A `Session` is then bounded by the recording's own size, which
+`NR-SIM-42` now estimates before the run.
+
+**Why windowing is rejected as the primary answer.** A window that has scrolled
+past a tick must re-read and re-execute to show it again. That directly
+contradicts `R-SIM-17`: *behind the head, a run is immutable data — seek, scrub
+and step back are free and never re-execute the SUT*. Windowing would make
+backwards scrubbing across a boundary silently non-free, which is the one
+property the two-pass Session exists to provide. Lazy parsing costs nothing there,
+because the bytes behind the head never change.
+
+**Two things this buys beyond the memory.** It *is* `NR-SIM-41`'s escalation
+step 1 — *"stop deserializing what nobody reads"*, the largest available
+throughput win — promoted from a contingency to the design. And it is the same
+mechanism `OQ-5` needs for bulk ports (hand the bytes to the DLL by pointer,
+never materialise them in Python).
+
+**Cost, and it is the most invasive item in this pass:** `PortValue.message`
+becomes a lazily-computed property over retained bytes plus a schema handle, and
+`PortValue` is a frozen core type that the built Phase A/B code and its tests
+already use. The change is mechanical but it is not free, and it is the one
+proposal here that touches shipped code rather than only documents.
+
+**What stays parked:** true windowing, with a named trigger — a recording whose
+*bytes* do not fit in memory, which `NR-SIM-42`'s estimate now predicts before
+the run rather than discovering at tick 30 000.
+
+### Pinning a resim to the build that produced it — `OQ-9` / `NR-SIM-24`
+
+*Shape resolved 2026-07-31; deliberately low priority.*
+
+A run manifest records `components[].library_sha256` and `build_id`, so a
+divergence can be **detected**. Nothing lets you re-run against the earlier
+build to confirm it, and detection without reproduction is half a regression
+workflow.
+
+Two halves, and only one of them is new:
+
+- **Addressing.** `impl:` gains a package form beside the file form —
+  `impl: "pkg:adas-df/1.4.2@#<revision>"` alongside `impl: "dll:df_sil.dll"`.
+  One resolver, no new concept, and it is what `NR-SIM-24` already guessed.
+- **Verification, which is the valuable half.** A package reference alone does
+  not prove you got the same bytes; a version can be rebuilt and re-uploaded.
+  **`sim resim <recording> --pin-builds`** reads each component's recorded
+  `library_sha256`, resolves it (explicit `impl:` → a local artifact store keyed
+  by hash → the Conan cache or remote by package reference), and **refuses to
+  start if any hash does not match**, naming both. That converts *"I reproduced
+  the old result"* from a hope into a statement.
+
+One manifest field is added: `ComponentBuildInfo.package_ref`, empty when the
+library was built locally.
+
+**The honest limit, and it is a feature.** A locally built DLL that was never
+packaged is unreproducible, and the report says so — *"this run used a local
+build (sha …) with no package reference; it cannot be pinned"*. That is both the
+truth and a nudge toward packaging the builds that produce baselines.
+
+**Priority: `P2`.** It matters the first time a baseline from three months ago is
+disputed, and not before. Recorded now so the two manifest fields it needs are
+present from the start rather than retrofitted into recordings that no longer
+exist.

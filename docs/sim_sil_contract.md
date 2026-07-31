@@ -141,16 +141,19 @@ The difference between the two tools is capability, not concept:
   recording, visualization, and every stand-in type, including quick
   Python-only ones.
 
-**Honest gap, not yet closed:** the stated aspiration (`sim_architecture.md`
-§9) is that one pipeline description file should run under Vantage *and* run
-under `sil_host` unchanged. Today, only the ABI-level compatibility is
-actually scheduled: `sil_host` keeps working unmodified once the generic
-functions are added (`sim_implementation_plan.md` `S-C1b`), and later one call
-site switches it from the old function to the new one (`S-E2`). Building an
-actual generic "read the same pipeline file, wire together however many
-components it names" engine inside `sil_host` is not yet a tracked, scheduled
-stage — it is stated intent, not yet built. Tracked as an open point below and
-as `OQ-11` in `sim_requirements.md` §11, rather than left as an assumption.
+**Honest gap — identified as `OQ-11`, closed 2026-07-31 by scheduling it.** The
+stated aspiration (`sim_architecture.md` §9) is that one pipeline description
+file should run under Vantage *and* under `sil_host` unchanged. That was
+**stated intent, not built**: `S-C1b` keeps `sil_host` working unmodified once
+the generic functions are added, and `S-E2` later switches one call site — but
+neither gives `sil_host` a pipeline reader. Today it is 54 lines of `main.cpp`
+driving exactly one component, so wiring in a second one means hand-editing it.
+
+That is now **`S-C7`**, a tracked stage with its own tests, because the
+capability is what `sil_host` is *for*: its whole job is to run a complete
+pipeline in simulation with no Python in the process (`FR-SIM-65`). One
+component ticked in a loop is not a pipeline. See §9's first bullet for the
+reasoning and the scope.
 
 ### The ABI is a skeleton, not the architecture
 
@@ -358,6 +361,89 @@ Ports are *declared* by the component, *discovered* by the host — the same
 principle as `R-VAR-2` ("a project exists iff some module's `conf/build.yml`
 declares it; a missing central roster is unrepresentable by design"). There is
 no list of ports anywhere except inside the component that owns them.
+
+**Where the declaration lives, revised 2026-07-31 (`R-SIM-22`).** `S-C1b` put
+the declaration in C++ — a named constant per port, plus two static tables, plus
+a `buildManifest()` walking them, plus a dispatch block per function. That was
+right for one component and is wrong for N: it is ~400 lines per component of
+mechanical restatement, and it is `D1`'s own shape one level up (arch `D12`). The
+declaration moves to **data**, beside the other per-component build data:
+
+```yaml
+# modules/df/conf/ports.yaml — the ONE declaration. R-VAR-3's neighbour.
+component: df
+period_ns: 50000000            # OQ-12: should come from the config bundle
+inputs:
+  - {name: objects, proto_type: adas.perception.GenObjectList, binds: emGenObjList, functions: [aeb, bsd]}
+  - {name: egoDyn,  proto_type: adas.common.VehDyn,            binds: egoDyn,       functions: [aeb, bsd]}
+  - {name: vehSig,  proto_type: adas.common.VehSig,            binds: vehSig,       functions: [bsd], optional: true}
+outputs:
+  - {name: "<fn>.outputs",   proto_type: "adas.df.<Fn>Outputs", binds: outputs,   max_bytes: 512, per_function: true}
+  - {name: "<fn>.compState", proto_type: adas.df.CompState,     binds: compState, max_bytes: 256, per_function: true}
+```
+
+The build generates the constant block, both tables, `buildManifest()` and the
+`adasExec` dispatch bindings from this, gated by `ENABLED_FUNCTIONS`
+(`R-VAR-5`). Three properties follow, and each one is a defect that stops being
+possible rather than a test that has to catch it:
+
+- **`binds:` is the `ReqPort`/`ProPort` member name**, so `N-1`'s "the segment
+  after the dot is byte-identical to the member" is *generated* rather than
+  asserted by `UT-C1b-12`. The `aeb.comp_state`-vs-`compState` defect that the
+  Phase C review found becomes unrepresentable.
+- **The generated file is a build output** — never edited, never checked in. The
+  checked-in `<component>.ports.yaml` stays a *dump of what was compiled*
+  (`df_manifest_dump`), which is a reviewable diff, not a third hand-maintained
+  copy.
+- **An ABI evolution is one generator change**, not an eight-repo edit. This is
+  the property `R-BUILD-6` wants and cannot give here, because these files are
+  not byte-identical across components — each names its own ports.
+
+*What does **not** change:* `src/component/**` is still untouched, the shim is
+still a name-lookup onto the existing body (`df_sil_dll.md` rule 9), and the
+manifest is still generated from `ENABLED_FUNCTIONS` so it cannot drift from
+what was compiled. Only the authorship of the mechanical part moves.
+
+#### 3.2a The consumer half — binding a port name from outside the DLL
+
+`R-SIM-4` fixed how a port is *declared and discovered*. It left the other end
+implicit, and the gap showed up immediately (`R-SIM-21`, arch `D13`): the first
+real plug-in written against this contract,
+`modules/df/sim/layers/bsd.py`, addresses its own component's port as the
+literal `"df.bsd.outputs"`.
+
+That literal is wrong in a way worth being precise about, because "it works
+today" is true:
+
+| Segment | What it actually is | Why that breaks |
+|---|---|---|
+| `df` | the **stage name** from a pipeline YAML — `Pipeline` builds addresses as `f"{stage.name}.{port.name}"` | an authoring choice, not an identity. Rename the stage and the binding dies |
+| `bsd.outputs` | a C++ constant in another repo | bound to the dispatch by `UT-C1b-11/12`, and to this file by nothing |
+
+And the failure is silent: `scene/registry.py`'s `requires` gate returns `()`
+when a port is missing, so a broken binding renders as *no overlay* — which on
+screen means "the algorithm did not warn". A debugging tool that answers a
+question wrongly and confidently is worse than one that refuses to answer.
+
+**The contract, therefore:**
+
+1. A plug-in names a port **relative to its own component**, with an explicit
+   self-reference: `self.bsd.outputs`. It never spells a stage name, because it
+   cannot know one.
+2. **Resolution happens once, at load**, against the manifests actually present
+   in the run — producing the concrete address (`df.bsd.outputs`, or
+   `driving_functions.bsd.outputs`, whatever the pipeline called it).
+3. **A name that resolves against no manifest is an `AuthoringError`** naming
+   the plug-in, the port requested, and every port the component's manifest does
+   declare (`N-8`). Never an empty layer, never a warning.
+4. The same resolver serves **every** consumer of a port address — layer
+   `requires`, `Prim` field lookups, `expect:` predicates (`S-C3`), workspace
+   files (`S-D3`), plot panels and CSV export column selection. One resolver,
+   because four resolvers is how the third one starts accepting a name the first
+   one rejects.
+
+This is `R-SIM-4`'s own sentence — *"ports are named and discovered, never
+positional"* — applied to the half that reads them.
 
 Schema in `interfaces` as `proto/Adas__Sil/component_manifest.proto`:
 
@@ -827,14 +913,8 @@ condition instead of a silent misread.
 
 ## 9. Open points
 
-- **One bundle per component, or one per pipeline?** §3.4 gives each component
-  its own bundle beside its own library, which is right while components are
-  built independently. A multi-component pipeline then holds N bundles that all
-  claim a `project` — and nothing yet forces them to claim the *same* one. The
-  cheap guard (the pipeline loader rejects mixed projects unless told otherwise)
-  is enough until a second component exists; whether a project-level bundle
-  should supersede the per-component ones is deferred (`R-VAR-4` already
-  anticipates it by putting calibration under `projects/<name>/`).
+- ~~**One bundle per component, or one per pipeline?**~~ **Closed 2026-07-31 —
+  per component, permanently** (`OQ-1`, `OD-11`). See below.
 - ~~**Time and determinism across components.**~~ **Closed by `R-SIM-18`**
   (`OQ-2`): a stage declares `period_ns` in its manifest (§3.2), the pipeline
   derives the base grid as the GCD of the declared periods, a non-multiple
@@ -845,12 +925,130 @@ condition instead of a silent misread.
 - **Non-Windows.** `ctypes.WinDLL` becomes `ctypes.CDLL` behind one helper; the
   header already handles the export macro. Untested until a Linux target
   exists, and flagged rather than assumed.
-- **`sil_host` has no generic pipeline reader yet (`OQ-11`).** §0 and
-  `sim_architecture.md` §9 state the intent that one pipeline description file
-  should run unchanged under both Vantage and `sil_host`. Today only ABI-level
-  compatibility is scheduled (`S-C1b`, `S-E2`) — a real C++ engine inside
-  `sil_host` that parses the same pipeline YAML and wires together an
-  arbitrary set of named components is not yet a tracked stage. Until it
-  exists, wiring a second component (e.g. `perception-core`) into `sil_host`
-  means hand-editing `main.cpp`, still on the same named-port/manifest model,
-  just without the "point it at the same file Vantage reads" convenience.
+- ~~**`sil_host` has no generic pipeline reader yet (`OQ-11`).**~~ **Closed
+  2026-07-31 — it is being built** (`FR-SIM-65`, stage `S-C7`). The question
+  was never really open: §0 and `sim_architecture.md` §9 asserted the capability
+  as fact while this list carried it as undecided, and two documents disagreeing
+  about whether something exists is a `GT-7` failure rather than a genuine
+  open point. The honest choices were to build it or to stop claiming it, and
+  the claim is load-bearing — *"one concept, two hosts"* is a slogan without it,
+  and a second host that cannot read the pipeline file is a second host with its
+  own composition model, which is the thing §9's standing rule exists to
+  prevent. It is also small: read the pipeline file, resolve N libraries, read
+  each manifest, wire ports by name, tick on the derived base grid. Every piece
+  it needs already exists in `interfaces` as C and protobuf after `S-C1a`, and
+  the semantics are already specified (`R-SIM-10` for `mode:`/`impl:`,
+  `R-SIM-18` for the schedule). `sil_host` executes `dll:`/`stubdll:` stages
+  plus `mode: measured` injection, and never a Python `stub:` — the boundary is
+  unchanged, only the composition is no longer hand-written in `main.cpp`.
+- **The generated shim's failure mode is different from a hand-written one's
+  (`R-SIM-22`).** A hand-written shim fails at compile time, on the line you
+  typed. A generated one can fail at *generate* time, in a file nobody opened,
+  with an error naming the generator instead of the declaration — which is the
+  same complaint `R-BUILD` has about machinery that hides its inputs. The
+  mitigation is stated so `S-C1d` does not have to rediscover it: the generator
+  validates `conf/ports.yaml` against the ports header **before** emitting
+  anything, and every diagnostic names the YAML key and line, never the emitted
+  C++. A generator that reports errors in its own output is a generator that
+  gets worked around.
+
+---
+
+### 9.1 `OQ-1` — one bundle per component, permanently
+
+*Resolved 2026-07-31. `OD-11`.*
+
+**A bundle is a build output of a component; a pipeline is a run-time
+composition.** That sentence settles it. A per-pipeline bundle would have to be
+either *built* — but pipelines are not built, they are written — or *assembled by
+hand* from N components' calibration, which creates a second place to edit a
+value and is precisely what `R-SIM-3a` forbids ("the bundle is a build output,
+never a second place to edit"). It would also make `adasInit(NULL)`'s
+module-relative resolution the *exception* rather than the rule, since the host
+would pass an explicit path to every component — turning §3.4's deliberate escape
+hatch into the default path.
+
+So the multi-component problem is real but it is a **consistency question, not a
+storage question**, and it is answered by two load-time checks:
+
+1. **Project agreement — a warning with an escape.** Every component's manifest
+   reports its `project`. The pipeline loader compares them; a disagreement names
+   both components and both projects. It is overridable
+   (`allow_mixed_projects: true`), because a deliberate cross-project experiment
+   is legitimate and §5.6 already preserves it — but the override is declared,
+   badged in the HUD and recorded in the run manifest, like every other override
+   in this design.
+2. **Ego-parameter agreement — a hard error, with no escape.** Every bundle
+   carries its own copy of `shared_config`'s `vehicle/ego_params.yaml`. Copies
+   built from one `shared_config` revision agree; copies that do not mean two
+   components in one pipeline disagree about the wheelbase. That is a wrong
+   result *and* a wrong picture simultaneously, with no legitimate reading, so it
+   fails at load (`§5.14`'s hard-fault class) rather than warning.
+
+The second check is the reason this question was worth asking: the per-component
+bundle's one genuine risk is N copies of a shared file, and nothing was checking
+them. It costs one hash comparison.
+
+**Rejected.** *A project-level bundle superseding the per-component ones* — see
+above; and `R-VAR-4`'s `projects/<name>/` is the **authoring** home, which is
+already true and is not the same as a delivered artifact. *No check at all,
+until a second component exists* — the previous position; it is cheaper to write
+the comparison than to remember to add it, and the failure it prevents is silent.
+
+### 9.2 `OQ-12` — `period_ns` is calibration, declared per function
+
+*Resolved 2026-07-31. `OD-12`. Answers `DF-1`'s open half.*
+
+`R-SIM-18` is right that a rate is **declared by the component** — a rate a host
+could override would let the picture disagree with what the ECU runs. But `df`
+declares it as `constexpr uint64_t kPeriodNs = 50000000`, so a rate sweep needs a
+rebuild: the "frozen in code instead of config" shape in the one place `NR-SIM-6`
+explicitly forbids it. Three decisions close it.
+
+**1. It comes from the config bundle and is *reported* through the manifest.**
+The manifest stays the discovery surface (nothing about `R-SIM-18`'s GCD
+scheduler changes); the *number* is calibration, read at `adasInit` from the
+bundle like every other calibrated value.
+
+**2. The key is in integer microseconds.** `<COMPONENT>_<FN>_PERIOD_US: 50000`,
+per `R-NAME-3` (ALL_CAPS, domain prefix, unit suffix). Not seconds: a YAML float
+of `0.05` is not exactly representable in binary, so seconds-to-nanoseconds
+introduces a rounding step — and a rounded period accumulating into drift that
+reads as an algorithm bug is the exact failure `R-SIM-18` already refuses to
+tolerate in the GCD check. Not milliseconds: 12.5 ms exists. Integer
+microseconds is exact, covers every plausible rate, and multiplies to nanoseconds
+by 1000.
+
+**3. Per function, with a per-component default — decided now because deciding
+later is expensive.** Today `df`'s functions all run at 20 Hz, so per-component
+is *sufficient*; it is not *cheap to change later*. Moving to per-function
+afterwards changes the manifest schema, the scheduler's unit of dueness, and
+every consumer's reasoning about `updated`/`age_s` — because *"the stage is due"*
+becomes *"this port is due"*. Doing it now costs one optional key in
+`conf/ports.yaml` and one field on `PortSpec`.
+
+**The part that could have gone wrong, and how it is avoided.** `adasExec` runs a
+whole DLL, so if AEB is 20 Hz and BSD is 10 Hz inside one library, the host
+cannot execute half a component. The temptation is to pass a due-set into
+`adasExec` — which grows the ABI, i.e. `D1` returning. Instead:
+
+> **The component is scheduled at the GCD of its own functions' periods; the
+> ports carry their function's period so `updated` and `age_s` are correct per
+> port; and the DLL decides internally what to run — it already reads the same
+> bundle and already knows its `ENABLED_FUNCTIONS`.**
+
+No ABI parameter, no host edit, and `R-SIM-18`'s base grid is unchanged — it just
+takes more periods as input.
+
+**And it is self-checking.** `AdasPort` already carries `updated` across the
+boundary, so the DLL reports what it actually did while the framework's schedule
+only *predicts* it. **The DLL's flag is authoritative; a disagreement is
+reported, not hidden** — a component whose internal rate gating has drifted from
+its declared period is exactly the kind of defect that otherwise surfaces months
+later as an unexplained stale value.
+
+**Rejected.** *Leave it a C++ literal* — `NR-SIM-6` forbids it and a sweep is the
+core calibration workflow. *Let the pipeline set the rate* — `R-SIM-18`'s stated
+reason stands: the picture would be free to disagree with the ECU. *Per component
+only, revisit if functions diverge* — the revisit is a schema change plus a
+semantics change to `updated`, which is the definition of expensive-later.

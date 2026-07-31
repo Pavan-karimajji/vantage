@@ -557,18 +557,116 @@ modules/df/sim/layers/*.py
 
 ## 9. Open points
 
-- **Computed anchors.** `markers:` are constants with a stated derivation. Some
-  anchors would be better computed from the scenario itself (entry time =
-  f(offset, rate, footprint)) so they cannot drift when the scenario changes.
-  That means running the derivation at load time — a real feature with a real
-  cost. Deferred; the `from:` provenance field is the interim mitigation.
+- ~~**Computed anchors.**~~ **Closed 2026-07-31** (`OQ-3`) — see §9.1 below. The
+  answer needed no new grammar: an anchor is an existing `expect:` predicate used
+  as a time reference instead of as an assertion.
 - **Expectations over ground truth.** `truth.*` is addressable in a signal path,
   so "perception must detect this object within 200 ms of it entering the FOV"
   is expressible. Untested until perception exists (Phase D4).
 - **Cross-scenario invariants.** "No scenario ever raises a right-side warning
   for a left-side target" is a property of the set, not of one file. Worth
   having, no mechanism proposed.
-- **Fault injection vocabulary.** `run.faults` currently generalises the single
-  existing `roll_fault:` (corrupt-after / invalid-after on the roll signal).
-  Which faults are worth injecting generally — port drop, stale age, corrupted
-  payload, out-of-range value — is a real design question, not answered here.
+- ~~**Fault injection vocabulary.**~~ **Closed 2026-07-31** (`OQ-4`) — see §9.2
+  below. The list is closed at five and is *derived* from `PortValue`'s own
+  fields rather than invented.
+
+---
+
+## 9.1 Anchors — constant, or the first satisfaction of a predicate (`OQ-3`)
+
+*Resolved 2026-07-31.*
+
+The tension was real: a constant `at:` drifts silently when the scenario changes,
+while *computing* an anchor from the scenario needs a derivation engine at load
+— which is an expression language by another name, and `R-SIM-15` refuses one for
+good reason.
+
+**The resolution is that neither horn is necessary, because the tool already has
+a closed predicate vocabulary and an anchor is a predicate.** §5.2's expectation
+verbs already say things like *"this signal becomes this value"* and *"this
+signal crosses this threshold"*. Using one of those as a **time reference**
+rather than as an assertion adds no grammar at all:
+
+```yaml
+markers:
+  - id: entry
+    at: {first: truth.objects[3].y_m, crosses: -1.8, dir: rising}
+  - id: handover
+    at: 7.32
+    from: "measured offline from run 2026-07-14/003; see bsd/notes.md"
+```
+
+Two forms, both closed:
+
+| Form | Means |
+|---|---|
+| `at: <seconds>` + **required** `from:` | an externally derived constant, with its provenance |
+| `at: {first: <signal>, becomes: <value>}` · `at: {first: <signal>, crosses: <value>, dir: rising\|falling}` | the first tick at which an existing predicate holds |
+
+**One signal address (`NR-SIM-8`), one literal, one optional direction. No
+operators, no arithmetic, no second signal.** The moment an anchor needs two
+signals related to each other, it is an expression and the answer is `from:`.
+
+**What this buys.** The anchors that actually drift are exactly the ones
+expressible this way — *"when the target crosses the lane edge"* is a function of
+geometry the scenario owns, so it should be found, not typed. The anchors that
+stay constants are the ones derived from something the run does not contain (an
+offline computation, a map, a measurement), and those are correctly not
+reproducible in the tool — which is what `from:` says.
+
+**Cost.** Zero new vocabulary; one resolution pass at load, reusing the
+expectation evaluator. **Does not solve:** an anchor that needs a derivation over
+data outside the recording; those stay constants with provenance, deliberately.
+
+## 9.2 Fault injection — five faults, derived rather than invented (`OQ-4`)
+
+*Resolved 2026-07-31.*
+
+A vocabulary invented case-by-case drifts open, so the list must come from
+somewhere. It does — and the first step is separating faults from overrides,
+which look similar and are not:
+
+> An **override** (`R-SIM-15`) changes a *value*, deliberately, for a what-if.
+> A **fault** simulates a failure of the *sensor or the transport*, and must
+> therefore be expressible in the port's **metadata** — `valid`, `updated`,
+> `age_s`, capture time — as well as in its bytes.
+
+`PortValue` has exactly four metadata fields plus its payload. **The fault
+vocabulary is the set of ways each of them can be made to lie**, which closes the
+list by construction rather than by taste:
+
+| Fault | What it does to the `PortValue` | Real-world analogue |
+|---|---|---|
+| `drop` | the port does not arrive; `valid=False` | a message lost on the bus |
+| `stale` | `updated=False`, `age_s` grows | a producer stopped publishing |
+| `delay` | capture stamp earlier than reception (`CR-SIM-4`) | transport / processing latency |
+| `invalidate` | `valid=False` with bytes still present | a sensor reporting its own fault |
+| `corrupt` | payload mutated, `valid=True` | a bit error that passes the CRC |
+
+Today's `roll_fault:` is `corrupt` and `invalidate` on one signal, so the
+existing case is covered by two of the five and stops being a special form.
+
+**Three properties, each borrowed rather than invented:**
+
+- **`delay` is only expressible because `CR-SIM-4` exists.** With one clock there
+  is nowhere to put the original instant. This is the clearest example of the
+  two-clock change paying for something beyond itself.
+- **The address grammar is the override grammar** (`sim_architecture.md` §5.10) —
+  port, field, `[i]`, `[*]`. A third addressing scheme for the same objects is
+  how a tool becomes inconsistent, and `NR-SIM-8`'s one-address-space discipline
+  applies here for the same reason.
+- **A fault is declared, never smuggled.** It is written in the scenario's
+  `run.faults:`, it lands in the run manifest, the affected topic is tagged
+  `origin: overridden`, and the HUD badges it. The tag enum stays at five — the
+  manifest distinguishes a fault from an override, because that is a *record*
+  question, not a *provenance-grade* question.
+
+Each fault carries a window (`from_s`/`to_s`, or `after_tick`), and faults live
+with the tooling, never in the config bundle (`R-SIM-9`).
+
+**Rejected.** *An open `mutate:` verb taking a value expression* — that is a
+program between the recording and the SUT, which `R-SIM-23` refuses for ingest
+and which is no more acceptable here. *Bus-level fault models (reordering,
+arbitration loss, partial frames)* — not expressible in `PortValue` and not
+asked for; parked with the sensor error models. *Random/seeded fault storms* —
+a campaign strategy, not a vocabulary; it would be built on these five.
