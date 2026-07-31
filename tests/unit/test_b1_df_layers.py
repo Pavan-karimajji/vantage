@@ -104,7 +104,7 @@ def _make_tick(index: int, *, veh_dyn=None, gen_object_list=None, bsd_outputs=No
     if veh_dyn is not None:
         ports["source.veh_dyn"] = PortValue(
             name="source.veh_dyn", message=veh_dyn, origin="measured",
-            valid=veh_dyn_valid, updated=veh_dyn_valid, age_s=veh_dyn_age_s,
+            valid=veh_dyn_valid, updated=veh_dyn_valid, hold_age_s=veh_dyn_age_s,
         )
     if gen_object_list is not None:
         ports["source.gen_object_list"] = PortValue(name="source.gen_object_list", message=gen_object_list, origin="measured")

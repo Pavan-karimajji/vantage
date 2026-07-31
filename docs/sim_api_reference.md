@@ -80,17 +80,46 @@ def new_run_id(*, inputs: Mapping[str, str], clock: datetime | None = None) -> s
 
 ### 2.2 `core/tick.py`
 
-```python
-Origin = Literal["measured", "truth", "mocked", "simulated", "overridden"]
+**`S-B2Δ`** (`OD-9`, `OD-13`) changed `PortValue` twice: `message` is now
+lazily parsed and memoised over retained bytes (a `Session` is bounded by the
+recording's size, not by parsed-message count -- `NR-SIM-41`'s "stop
+deserializing what nobody reads"), and `age_s` is a derived property, never
+a constructor argument -- `capture_ns` (recording capture, `S-A4Δ`) and
+`hold_age_s` (schedule-derived holding, `R-SIM-18`) are the two sources, and
+they are never both set on one `PortValue`.
 
-@dataclass(frozen=True, slots=True)
+```python
+Origin = Literal["measured", "truth", "mocked", "simulated", "overridden", "unknown"]
+
+@dataclass(frozen=True, slots=True, init=False)
 class PortValue:
-    name: str                  # fully qualified, `N-2`: "df.aeb.outputs"
-    message: Any               # a decoded protobuf message, or None when invalid
+    name: str                  # fully qualified, `N-2`: "<component>.<port>"
     origin: Origin
-    valid: bool = True
-    updated: bool = True       # False when held from an earlier tick (multi-rate)
-    age_s: float = 0.0         # 0.0 when `updated`; else time since production
+    valid: bool
+    updated: bool               # False when held from an earlier tick (multi-rate)
+    capture_ns: int | None      # the recording's own second stamp, when known (`S-A4Δ`)
+    hold_age_s: float | None    # schedule-derived age instead, e.g. Pipeline.step() (`R-SIM-18`)
+    t_ns: int                   # this PortValue's own tick time
+
+    def __init__(self, *, name: str, origin: Origin, message: Any = None,
+                 valid: bool = True, updated: bool = True,
+                 capture_ns: int | None = None, hold_age_s: float | None = None,
+                 t_ns: int = 0, schema_bytes: bytes = b"", schema_name: str = "") -> None: ...
+
+    @property
+    def message(self) -> Any:
+        """A decoded protobuf message, raw bytes if no schema, an
+        already-decoded object a caller handed in directly, or `None` when
+        invalid -- parsed on first access and memoised, never at
+        construction (`UT-B2-14`)."""
+
+    @property
+    def age_s(self) -> float:
+        """`(t_ns - capture_ns)/1e9` when `capture_ns` is known, else
+        `hold_age_s`, else `0.0`. The two sources are distinguishable via
+        `capture_ns is not None`, never both surfacing as a bare float
+        indistinguishable from each other (`UT-B2-13`)."""
+
     def __repr__(self) -> str: ...        # `N-7`
 
 @dataclass(frozen=True, slots=True)
@@ -141,6 +170,32 @@ class Session:
     def __len__(self) -> int: ...
     def __repr__(self) -> str: ...
 ```
+
+### 2.3a `core/evidence.py` — one producer, two formatters (`S-B2Δ`, `OD-6`)
+
+**Seeded at `S-B2Δ` over what a `Session` alone can answer** (`run_id`, a
+tick's own ports and origins); grows fields as the concepts they report
+exist to fill (`port`/`stage` at `S-C1c`, `plugin` at `S-C8`) -- see
+`sim_architecture.md` §5.19 for the destination shape.
+
+```python
+@dataclass(frozen=True, slots=True)
+class Evidence:
+    address: str                 # what was asked about, as typed
+    kind: str                    # "run_id" | "port" | "unknown" -- grows at S-C1c+
+    value: str                   # formatted value, at this tick
+    tick: int
+    t_ns: int
+    topic: str | None            # the port name that carried it
+    origin: Origin | None
+    run_id: str
+
+def evidence(address: str, session: Session, tick: int) -> Evidence: ...
+```
+
+`cli/explain.py --at <tick>` calls this, never re-deriving (`GT-9`) -- the
+same producer the future GUI evidence panel (`S-D3`) will call, which is
+what makes "GUI and headless answer identically" structural.
 
 ### 2.4 `view/transport.py` — the head (`R-SIM-17`)
 
@@ -656,7 +711,7 @@ bug, even when bad input provoked it.
 | `sim diff` | `<a> <b>` | S-D1 |
 | `sim list` | `ports\|topics\|layers\|signals\|scenarios\|pipelines` | S-D6 |
 | `sim probe` | `<lib>` | S-D6 |
-| `sim explain` | `<name> [--session]` | S-D6 |
+| `sim explain` | `<name> [--session] [--at <tick>]` | S-B2Δ (seed) / S-D6 |
 | `sim doctor` | `[--pipeline] [--recording]` | S-D6 |
 | `sim convert` | `<in> <out>` | S-D7 |
 | `sim export` | `<in> <out> --ports …` | S-D7 |

@@ -412,18 +412,22 @@ class Pipeline:
                 self._last_due_ns[stage.name] = self._elapsed_ns
 
             produced = self._last_output.get(stage.name, {})
-            age_s = (self._elapsed_ns - self._last_due_ns.get(stage.name, self._elapsed_ns)) / 1_000_000_000.0
+            # Schedule-derived, never capture-derived (`S-B2Δ`, `R-SIM-18`):
+            # a live SIL stage has no recording capture stamp, only its own
+            # due/held bookkeeping -- `hold_age_s` says so explicitly rather
+            # than the two sources sharing one bare float (`UT-B2-13`).
+            hold_age_s = (self._elapsed_ns - self._last_due_ns.get(stage.name, self._elapsed_ns)) / 1_000_000_000.0
             origin = "measured" if stage.mode == "measured" else "simulated"
             for port_spec in manifest.outputs:
                 qualified = f"{stage.name}.{port_spec.name}"
                 if port_spec.name in produced:
                     result[qualified] = PortValue(
                         name=qualified, message=produced[port_spec.name], origin=origin,
-                        valid=True, updated=due, age_s=age_s,
+                        valid=True, updated=due, hold_age_s=hold_age_s,
                     )
                 else:
                     result[qualified] = PortValue(
-                        name=qualified, message=None, origin="unknown", valid=False, updated=False, age_s=0.0,
+                        name=qualified, message=None, origin="unknown", valid=False, updated=False,
                     )
         return result
 

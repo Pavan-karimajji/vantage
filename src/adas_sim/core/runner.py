@@ -7,25 +7,28 @@
 (sim_implementation_plan.md S-B2). Phase B has no C++ and no DLL -- every
 port is already in an exported recording, so pass 1 here is purely: group raw
 `(topic, log_time_ns, bytes)` triples into `Tick`s (`UT-A4-9`'s
-`group_by_log_time`), decoding each payload against its topic's embedded
-schema when one exists.
+`group_by_log_time`), building a lazily-parsed `PortValue` per port
+(`S-B2Δ`, `core/tick.py` -- nothing is decoded until a reader actually
+touches `.message`).
 
 `SceneCache` is pass 2's memo: toggling a layer or switching theme must not
-re-run pass 1 (`UT-B2-3`), and it is bounded (`UT-B2-12`) because an
-unbounded cache over a 36 000-tick session is `OQ-6` arriving early.
+re-run pass 1 (`UT-B2-3`), and it is bounded both by entry count and by
+bytes (`UT-B2-12`, `UT-B2-15`, `S-B2Δ`) because an unbounded cache over a
+36 000-tick session is `OQ-6` arriving early.
 """
 
 from __future__ import annotations
 
+import sys
 from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
 
 from adas_sim.core.history import FrameTree, HistoryView, Interaction, LayerCtx, interaction_cache_key
 from adas_sim.core.session import Session
 from adas_sim.core.tick import Pose2D, PortValue, Tick
+from adas_sim.core.tick import decode_message  # noqa: F401 -- re-exported, see below
 from adas_sim.io.base import Provenance, group_by_log_time
 from adas_sim.io.legacy import LegacyRecordingReader
 from adas_sim.io.registry import reader_for
@@ -36,6 +39,13 @@ from adas_sim.scene.types import Layer, Scene
 #: The no-op default (`sim_visualization_spec.md` §7.5) -- every caller that
 #: predates interaction-aware layers gets exactly the old behaviour.
 _NO_INTERACTION = Interaction()
+
+#: `SceneCache`'s byte ceiling (`NR-SIM-43`, `S-B2Δ`): a stated figure, not a
+#: magic literal, so "stays responsive" (`NR-SIM-5`) is falsifiable. 256 MiB
+#: comfortably holds hundreds of object-level Scenes; a session of
+#: perception-scale Scenes referencing bulk data by `BulkRef` (`S-A3Δ`)
+#: stays small regardless, since the bytes live in the recording, not here.
+DEFAULT_SCENE_CACHE_MAX_BYTES = 256 * 1024 * 1024
 
 
 class LoadCancelled(Exception):
@@ -61,42 +71,11 @@ def _topic_to_port_name(topic: str) -> str:
     return ".".join(topic.strip("/").split("/"))
 
 
-def decode_message(schema_bytes: bytes, schema_name: str, payload: bytes) -> Any:
-    """Builds the message class from an embedded `FileDescriptorSet` at run
-    time (R-SIM-11: no generated bindings required) and parses `payload`.
-    Returns `payload` unchanged if no schema is available to decode with --
-    degrading, never raising, so a recording predating a component's
-    embedded-schema support still replays (R-SIM-6).
-    """
-    if not schema_bytes:
-        return payload
-    # Deferred: importing adas_sim.core must not pull in protobuf as a side
-    # effect (UT-A1-2) -- only decoding an actual schema needs it.
-    from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
-
-    file_descriptor_set = descriptor_pb2.FileDescriptorSet()
-    file_descriptor_set.ParseFromString(schema_bytes)
-    pool = descriptor_pool.DescriptorPool()
-    by_name = {f.name: f for f in file_descriptor_set.file}
-    added: set[str] = set()
-
-    def add(file_proto: descriptor_pb2.FileDescriptorProto) -> None:
-        if file_proto.name in added:
-            return
-        added.add(file_proto.name)
-        for dependency in file_proto.dependency:
-            if dependency in by_name:
-                add(by_name[dependency])
-        pool.Add(file_proto)
-
-    for file_proto in file_descriptor_set.file:
-        add(file_proto)
-
-    descriptor = pool.FindMessageTypeByName(schema_name)
-    message_cls = message_factory.GetMessageClass(descriptor)
-    message = message_cls()
-    message.ParseFromString(payload)
-    return message
+#: `decode_message` moved to `core/tick.py` at `S-B2Δ` -- `PortValue.message`'s
+#: own lazy parse is its one real caller now, so it lives beside the type it
+#: serves. Imported (above), not redefined, so it stays importable from here
+#: too: every docstring in this codebase that cites it still says
+#: "core/runner.decode_message".
 
 
 def build_session_from_recording(
@@ -131,7 +110,16 @@ def build_session_from_recording(
     try:
         topics = reader.topics()
         manifest = reader.meta()
-        groups = list(group_by_log_time(reader.messages(), expected_topics=topics.keys()))
+        # Materialised once (`S-A4Δ`'s 4-tuple): `group_by_log_time` groups
+        # on `log_time_ns` and drops `capture_time_ns` after (it is a
+        # scheduling primitive shared with the resim path), so capture time
+        # is recovered here from the raw messages instead -- same small
+        # side-table `io/csv.py` already uses for its own age_s column.
+        messages = list(reader.messages())
+        capture_by_topic_time = {
+            (topic, log_time_ns): capture_time_ns for topic, log_time_ns, capture_time_ns, _payload in messages
+        }
+        groups = list(group_by_log_time(messages, expected_topics=topics.keys()))
 
         ticks: list[Tick] = []
         previous_t_ns: int | None = None
@@ -145,10 +133,16 @@ def build_session_from_recording(
             ports: dict[str, PortValue] = {}
             for topic, payload in payloads.items():
                 info = topics[topic]
-                message = decode_message(info.schema_bytes, info.schema_name, payload)
                 origin = _PROVENANCE_TO_ORIGIN.get(info.provenance.value, "unknown")
                 port_name = _topic_to_port_name(topic)
-                ports[port_name] = PortValue(name=port_name, message=message, origin=origin)
+                # Retained as raw bytes plus a schema handle -- `.message`
+                # parses lazily on first access, never here (`S-B2Δ`,
+                # `UT-B2-14`, `OD-13`: the resim path parses nothing).
+                ports[port_name] = PortValue(
+                    name=port_name, message=payload, origin=origin,
+                    capture_ns=capture_by_topic_time.get((topic, t_ns)), t_ns=t_ns,
+                    schema_bytes=info.schema_bytes, schema_name=info.schema_name,
+                )
 
             pose = pose_of(ports) if pose_of is not None else Pose2D(x_m=0.0, y_m=0.0, yaw_rad=0.0)
             ticks.append(Tick(index=index, t_ns=t_ns, dt_ns=dt_ns, ports=ports, pose=pose))
@@ -261,12 +255,17 @@ class SceneCache:
         *,
         build_reactive: Callable[[int, frozenset[str], str, Interaction], tuple[Layer, ...]] | None = None,
         max_size: int = 256,
+        max_bytes: int = DEFAULT_SCENE_CACHE_MAX_BYTES,
     ) -> None:
         self._build = build
         self._build_reactive = build_reactive
         self._max_size = max_size
-        self._store: OrderedDict[tuple[int, frozenset[str], str], object] = OrderedDict()
+        self._max_bytes = max_bytes
+        #: key -> (value, its estimated bytes) -- bytes ride alongside the
+        #: value so eviction never re-measures (`S-B2Δ`, `NR-SIM-43`).
+        self._store: OrderedDict[tuple[int, frozenset[str], str], tuple[object, int]] = OrderedDict()
         self._reactive_store: OrderedDict[tuple, tuple[Layer, ...]] = OrderedDict()
+        self._total_bytes = 0
         self.build_calls = 0
         self.reactive_build_calls = 0
 
@@ -277,13 +276,20 @@ class SceneCache:
         key: tuple[int, frozenset[str], str] = (tick_index, layer_selection, theme)
         if key in self._store:
             self._store.move_to_end(key)
-            value = self._store[key]
+            value, _nbytes = self._store[key]
         else:
             value = self._build(tick_index, layer_selection, theme)
             self.build_calls += 1
-            self._store[key] = value
-            if len(self._store) > self._max_size:
-                self._store.popitem(last=False)
+            nbytes = _estimate_bytes(value)
+            self._store[key] = (value, nbytes)
+            self._total_bytes += nbytes
+            # Bytes first (`NR-SIM-43`'s own ceiling), entry count second
+            # (`UT-B2-12`) -- either can fire; both are checked every insert.
+            # Never evict down to zero: a single oversized Scene must still
+            # be returned once, not evicted before its own `get()` sees it.
+            while len(self._store) > 1 and (len(self._store) > self._max_size or self._total_bytes > self._max_bytes):
+                _evicted_key, (_evicted_value, evicted_bytes) = self._store.popitem(last=False)
+                self._total_bytes -= evicted_bytes
 
         if self._build_reactive is None:
             return value
@@ -304,4 +310,25 @@ class SceneCache:
         return len(self._store)
 
     def __repr__(self) -> str:
-        return f"<SceneCache size={len(self._store)}/{self._max_size} build_calls={self.build_calls}>"
+        return (
+            f"<SceneCache size={len(self._store)}/{self._max_size} "
+            f"bytes={self._total_bytes}/{self._max_bytes} build_calls={self.build_calls}>"
+        )
+
+
+def _estimate_bytes(value: object) -> int:
+    """A cheap-enough size estimate for `SceneCache`'s byte bound
+    (`NR-SIM-43`, `S-B2Δ`). A real `Scene` is measured by its own encoded
+    size -- the exact quantity a recording or golden would carry, and small
+    regardless of how large the *referenced* bulk data is (`BulkRef`,
+    `S-A3Δ`). Anything else (a plain test double) falls back to
+    `sys.getsizeof`, which keeps `UT-B2-3/5/12`'s tiny values from ever
+    approaching `DEFAULT_SCENE_CACHE_MAX_BYTES`.
+    """
+    if isinstance(value, Scene):
+        # Deferred: importing adas_sim.core must not pull in protobuf as a
+        # side effect (UT-A1-2) -- same discipline as `decode_message`.
+        from adas_sim.scene.codec import encode_scene
+
+        return len(encode_scene(value))
+    return sys.getsizeof(value)

@@ -1177,30 +1177,58 @@ Read recording §10 first: the original *"long runs need a windowed Session"*
 flag was **wrong about where the memory is**, and the corrected answer removes a
 concept instead of adding one.
 
-- [ ] **`PortValue.capture_ns: int | None`**, carried from the recording's
-      second stamp (`S-A4Δ`)
-- [ ] **`age_s` stops being stored and becomes derived**:
+- [x] **`PortValue.capture_ns: int | None`**, carried from the recording's
+      second stamp (`S-A4Δ`). *2026-07-31:* `core/runner.py`'s pass 1 recovers
+      it from the raw 4-tuple messages via a small `(topic, log_time_ns) ->
+      capture_time_ns` side table (`group_by_log_time`'s own yielded shape
+      stays payload-only, per `S-A4Δ`'s own bullet — this delta is where that
+      table actually gets consumed)
+- [x] **`age_s` stops being stored and becomes derived**:
       `(t_ns − capture_ns)/1e9` when capture is known, else the schedule-derived
       hold age (`R-SIM-18`). This *removes* an ambiguity — today `age_s`
-      silently means two different things depending on why a value is old
-- [ ] **`PortValue.message` becomes lazily parsed and memoised over retained
+      silently means two different things depending on why a value is old.
+      *2026-07-31:* a real `@property`, not a constructor argument — the two
+      sources (`capture_ns` vs. the new `hold_age_s`) are never both set on
+      one `PortValue`, which is what makes them distinguishable (`UT-B2-13`).
+      `contracts/pipeline.Pipeline.step()`'s own schedule-tracked age now
+      passes `hold_age_s=`, not `age_s=`
+- [x] **`PortValue.message` becomes lazily parsed and memoised over retained
       bytes.** A `Session` is then bounded by the recording's size rather than by
       parsed-message count. This is also `NR-SIM-41`'s escalation step 1 —
       *"stop deserializing what nobody reads"*, the largest available throughput
-      win — taken as the design rather than held as a contingency
-- [ ] **`SceneCache` bounds by bytes**, with entry count as a secondary cap
+      win — taken as the design rather than held as a contingency. *2026-07-31:*
+      `PortValue` gained a hand-written `__init__` (`init=False` on the
+      dataclass) so the public `message=` keyword is unchanged for every
+      existing caller/test, while the real storage is raw bytes + a schema
+      handle; `.message` parses once and memoises via `object.__setattr__`
+      on the frozen instance, exactly `Tick.__post_init__`'s own trick.
+      `decode_message` moved from `core/runner.py` to `core/tick.py` (its one
+      real caller now), re-exported from `runner.py` for every docstring
+      that still cites `core.runner.decode_message`
+- [x] **`SceneCache` bounds by bytes**, with entry count as a secondary cap
       (`NR-SIM-43`). `max_size=256` today is an entry count, so the real ceiling
-      is 256 × whatever a Scene weighs
-- [ ] **Do not build a windowed `Session`.** It is rejected, with a reason worth
+      is 256 × whatever a Scene weighs. *2026-07-31:* `max_bytes` (named
+      constant `DEFAULT_SCENE_CACHE_MAX_BYTES = 256 MiB`) checked on every
+      insert alongside `max_size`; a real `Scene` is measured by its own
+      `encode_scene` byte size (protobuf import deferred inside the helper,
+      `UT-A1-2`'s own discipline), a non-`Scene` test double falls back to
+      `sys.getsizeof` so `UT-B2-3/5/12`'s existing tiny values never trip it
+- [x] **Do not build a windowed `Session`.** It is rejected, with a reason worth
       re-reading before anyone re-proposes it: a window that has scrolled past a
       tick must re-execute to redraw it, which breaks `R-SIM-17`'s guarantee that
-      *behind the head, seek and step-back are free and never re-run the SUT*
-- [ ] `core/evidence.py` — the `Evidence` record and `evidence(address, session,
+      *behind the head, seek and step-back are free and never re-run the SUT*.
+      *2026-07-31: not built, confirmed nothing in this delta reaches for one*
+- [x] `core/evidence.py` — the `Evidence` record and `evidence(address, session,
       tick)`, seeded here over what exists now (`run_id`, topics, origins,
       manifest) exactly as `core/explain.py` was seeded at this stage. It grows
       ports and stages at `S-C1c`, plug-ins at `S-C8`, and the panel at `S-D3`.
       **`cli/explain.py` must call it rather than re-deriving** — one producer,
-      two formatters, from the first line of it (`OD-6`, `GT-9`)
+      two formatters, from the first line of it (`OD-6`, `GT-9`). *2026-07-31:*
+      `Evidence` seeded with exactly `address`/`kind`/`value`/`tick`/`t_ns`/
+      `topic`/`origin`/`run_id` (`kind` one of `run_id`/`port`/`unknown` for
+      now); `cli/explain.py` gained `--at <tick>` (`R-SIM-25`'s own CLI
+      signature), calling `evidence()` when given, unchanged `core/explain.py`
+      static behaviour otherwise
 - Implement a backwards `exec()`. There is no inverse; see the head model.
 
 - [x] `core/tick.py` — `PortValue` (message + `age_s`/`valid`/`updated`/
@@ -1306,17 +1334,28 @@ concept instead of adding one.
       `ports` raises, so pass 2 cannot corrupt pass 1
 - [x] `UT-B2-12` the Scene cache respects its bound and evicts least-recently-
       used, measured on a session larger than the bound
-- [ ] `UT-B2-13` `age_s` is **derived, and states which clock it came from**:
+- [x] `UT-B2-13` `age_s` is **derived, and states which clock it came from**:
       capture-derived when the recording carries a capture stamp, hold-derived
       otherwise, and the two are distinguishable rather than both surfacing as a
-      bare float (`OD-9`)
-- [ ] `UT-B2-14` **the resim path parses nothing.** Drive a pipeline over a
+      bare float (`OD-9`). *2026-07-31:* `tests/unit/test_b2_tick.py` --
+      capture-derived, hold-derived, neither-set, and the core claim (equal
+      `age_s` floats from the two sources, `capture_ns` says which)
+- [x] `UT-B2-14` **the resim path parses nothing.** Drive a pipeline over a
       recording with a deliberately un-parseable payload on a port no layer,
       expectation or plot reads: the run completes. Then read that port and
       assert it raises. Parsing-on-demand is only real if not-parsing is
-      observable (`OD-13`)
-- [ ] `UT-B2-15` `SceneCache` evicts on a **byte** bound: a cache holding few
-      but large Scenes evicts, where an entry-count bound would not (`NR-SIM-43`)
+      observable (`OD-13`). *2026-07-31:* Phase B has no pipeline yet (no
+      C++, no DLL) -- verified on the replay path instead, the one that
+      exists: `test_the_resim_path_parses_nothing_until_message_is_read`
+      builds a `Session` from a real `.mcap` carrying one genuinely
+      un-parseable payload; `build_session_from_recording` completes without
+      raising, and only `.port(...).message` raises (`DecodeError`)
+- [x] `UT-B2-15` `SceneCache` evicts on a **byte** bound: a cache holding few
+      but large Scenes evicts, where an entry-count bound would not (`NR-SIM-43`).
+      *2026-07-31:* three tests in `tests/unit/test_b2_scene_cache.py` --
+      small values never trip the (generous) default byte bound; a tiny
+      `max_bytes` with a generous `max_size` evicts on bytes alone; a real
+      `Scene`'s own encoded size (not a generic `sys.getsizeof`) drives it
 - [x] `ST-B2-1` on a ≥1000-tick session, 100 random seeks all return correct data
 - [x] `ST-B2-2` a full pass 1 over the largest existing recording completes
       within a stated budget, **recorded as a number** — not asserted as a limit

@@ -62,7 +62,7 @@ def test_stale_ports_flags_an_invalid_port():
 
 
 def test_stale_ports_ignores_a_valid_port_with_no_max_age_declared():
-    tick = _tick({"a": PortValue(name="a", message=b"", origin="measured", valid=True, age_s=999.0)})
+    tick = _tick({"a": PortValue(name="a", message=b"", origin="measured", valid=True, hold_age_s=999.0)})
     assert stale_ports(tick) == ()
 
 
@@ -70,20 +70,20 @@ def test_stale_ports_flags_a_valid_port_exceeding_its_declared_max_age():
     """UT-B3-5: age exceeding the *declared* maximum -- only for a port
     actually named in max_age_s (the framework has no calibration of its
     own, R-SIM-1)."""
-    tick = _tick({"a": PortValue(name="a", message=b"", origin="measured", valid=True, age_s=0.5)})
+    tick = _tick({"a": PortValue(name="a", message=b"", origin="measured", valid=True, hold_age_s=0.5)})
     assert stale_ports(tick, max_age_s={"a": 0.3}) == ("a",)
     assert stale_ports(tick, max_age_s={"a": 1.0}) == ()
 
 
 def test_stale_ports_exactly_at_the_maximum_is_not_stale():
-    tick = _tick({"a": PortValue(name="a", message=b"", origin="measured", valid=True, age_s=0.3)})
+    tick = _tick({"a": PortValue(name="a", message=b"", origin="measured", valid=True, hold_age_s=0.3)})
     assert stale_ports(tick, max_age_s={"a": 0.3}) == ()
 
 
 def test_stale_ports_multiple_ports_some_stale_some_not():
     tick = _tick({
         "a": PortValue(name="a", message=b"", origin="measured", valid=False),
-        "b": PortValue(name="b", message=b"", origin="measured", valid=True, age_s=0.1),
+        "b": PortValue(name="b", message=b"", origin="measured", valid=True, hold_age_s=0.1),
     })
     assert stale_ports(tick) == ("a",)
 
