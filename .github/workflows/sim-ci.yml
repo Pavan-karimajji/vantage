@@ -1,0 +1,81 @@
+# S-C0 -- the automatic gate (docs/sim_implementation_plan.md).
+#
+# Thin wrapper only: every real check lives in scripts/ci_gate.py, which is
+# invoked identically here and by hand, so this file owns triggers and
+# artifact retention and nothing else (S-C0's "Must not" -- no general CI
+# design here, that is plan.md item 20).
+#
+# Known flake tolerated by scripts/ci_gate_config.yaml, listed here too so a
+# reader of this job never has to go find it:
+#   tests/system/test_b3_viewport_controls.py::
+#     test_dragging_pans_the_viewport_and_a_second_click_still_selects
+#   -- order/fixture-isolation dependent, owner S-B3 follow-up
+#   (sim_implementation_plan.md Phase C risk table). Not deselected -- it
+#   still runs; ci_gate.py tolerates that one id by name and reports it.
+
+name: sim-ci
+
+on:
+  push:
+    branches: [feat/sim-platform]
+  workflow_dispatch: {}
+
+jobs:
+  gate:
+    name: gate (full deps)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install (core + dev + viewer + figures)
+        run: python -m pip install -e ".[dev,viewer,figures]"
+
+      - name: Resolve docs-only skip decision
+        id: since
+        run: |
+          BEFORE="${{ github.event.before }}"
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            echo "ref=" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=$BEFORE" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run the gate
+        run: |
+          if [ -n "${{ steps.since.outputs.ref }}" ]; then
+            python scripts/ci_gate.py --since "${{ steps.since.outputs.ref }}" --artifact-dir logs/ci_gate/run
+          else
+            python scripts/ci_gate.py --artifact-dir logs/ci_gate/run
+          fi
+
+      - name: Retain artefacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sim-ci-gate-${{ github.run_id }}
+          path: logs/ci_gate/run
+          retention-days: 14
+
+  core-only-smoke:
+    name: core-only smoke (no Qt/matplotlib/foxglove -- P-10)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install (core + dev only, no extras)
+        run: python -m pip install -e ".[dev]"
+
+      - name: Suite must still pass with the extras split real -- Qt/matplotlib/foxglove tests skip, nothing else does
+        run: python -m pytest tests -q

@@ -2439,48 +2439,78 @@ scenario half, because a stage id is a stable citation (§0).
 is larger than this module. `S-C0` runs what already exists, automatically, and
 nothing more.
 
-- [ ] One job, triggered on every push to `feat/sim-platform` in `modules/sim`,
+**Status, 2026-07-31.** Built as `scripts/ci_gate.py` (the entire check logic,
+callable identically by hand and by CI) plus `.github/workflows/sim-ci.yml`
+(a thin trigger/artifact wrapper around it, two jobs — `gate` with full deps,
+`core-only-smoke` with core+dev only, for `P-10`) and
+`scripts/ci_gate_config.yaml` (the pytest floor and the known-flake tolerance,
+as data, so bumping the floor never touches logic). **What was verified for
+real, locally, with the exact interpreter and script the workflow invokes**
+(not a substitute toolchain — same Python, same repo): the gate runs green on
+the clean tree (`ST-C0-1`), and each of the three planted defects — a deleted
+test (`tests/unit/test_a1_package.py`), a `GT-1` violation
+(`bsd_zone_width_m = 1` appended to `src/adas_sim/__init__.py`), and a
+requirement citing an invented, nowhere-defined test id (added to
+`NR-SIM-40`'s block in `sim_requirements.md`) — turned it red, then were
+reverted (`ST-C0-2`). *(That invented id is deliberately not spelled out
+here in `UT-`/`ST-`-shaped form — `check_traceability.py` scans this
+document's full text for id-shaped tokens, not only its Tests blocks, so
+writing the literal placeholder here previously tripped the same check it
+was describing.)*
+**What was not verified**: this session has `git push` but no `gh` CLI and no
+API token, so the hosted GitHub Actions job itself has not been observed to
+fire on a real push or to actually retain an artefact — only its logic has
+been exercised. Confirm this the first time `feat/sim-platform` is pushed with
+this workflow present, by checking the Actions tab.
+
+- [x] One job, triggered on every push to `feat/sim-platform` in `modules/sim`
+      (plus `workflow_dispatch`, for a manual re-run — the one addition beyond
+      this stage's literal wording, and it adds no new check),
       running exactly the three checks a stage already owes:
       `python -m pytest modules/sim/tests -q` · `scripts/check_invariants.py` ·
       `docs/py/run_all.py`
-- [ ] The job **records the pytest count** and fails when it drops below the
+- [x] The job **records the pytest count** and fails when it drops below the
       recorded floor — the mechanical version of `GT-4`'s discipline, applied to
       the one suite that needs no compiler. A count that falls silently is the
       exact defect this stage exists for
-- [ ] Artefacts retained on failure: the pytest output, the `run_all.py` report,
+- [x] Artefacts retained on failure: the pytest output, the `run_all.py` report,
       the `run_id` (`N-9`). A red build nobody can diagnose gets muted, and a
       muted gate is worse than no gate
-- [ ] The job is **skipped with a named reason** when a change touches only
+- [x] The job is **skipped with a named reason** when a change touches only
       documents *and* `run_all.py` is green — so a docs commit is fast but never
       unchecked
-- [ ] The known flake (§10) is listed by name in the job config with its ticket,
+- [x] The known flake (§10) is listed by name in the job config with its ticket,
       **not** deselected silently. A quarantined test that nobody can see is a
       deleted test
 
 **Tests**
-- [ ] `ST-C0-1` the job runs green on the current tree, and its recorded pytest
-      floor equals the number actually observed on the day it was set — no
-      aspirational floor, the defect `GT-4` already suffered
-- [ ] `ST-C0-2` the job turns **red** on each of three planted defects, one per
-      check: a deleted test, a planted `GT-1` violation, and a requirement citing
-      a test id the plan does not define. Proving the gate can fail is the only
-      property that matters, and one planted defect per check is what stops a
-      job that runs only the cheapest of the three
+- [x] `ST-C0-1` (2026-07-31) the job runs green on the current tree, and its
+      recorded pytest floor equals the number actually observed on the day it
+      was set — 409, `scripts/ci_gate_config.yaml` — no aspirational floor, the
+      defect `GT-4` already suffered
+- [x] `ST-C0-2` (2026-07-31) the job turns **red** on each of three planted
+      defects, one per check: a deleted test, a planted `GT-1` violation, and a
+      requirement citing a test id the plan does not define. Proving the gate
+      can fail is the only property that matters, and one planted defect per
+      check is what stops a job that runs only the cheapest of the three
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-4`, `P-6` (the job invokes Python
+- [x] portability §3 ticked — exposure: `P-4`, `P-6` (the job invokes Python
       directly, never a `.bat`), `P-10` (the runner image carries every core
       dependency; a Qt-less runner must still pass, which is what proves the
-      extras split is real)
-- [ ] naming §3 ticked — exposure: `N-9`, `N-10` (the job's log must carry the
-      greppable line, or a failure cannot be joined to its artefacts)
-- [ ] `GT-1..GT-14` re-checked
+      extras split is real — `core-only-smoke` job)
+- [x] naming §3 ticked — exposure: `N-9`, `N-10` (the job's log must carry the
+      greppable line, or a failure cannot be joined to its artefacts —
+      `event=ci_gate_result run=<run_id> status=... mode=...`)
+- [x] `GT-1..GT-14` re-checked — none apply beyond what `ci_gate.py` itself is
+      checked by (it is framework tooling, not a layer/renderer/config path)
 
 **Gate**
-- [ ] `ST-C0-2` green — all three planted defects turn the job red. A gate that
-      has never failed has never been shown to work
-- [ ] The pytest floor is recorded with **a number and a date** in this stage's
-      own text, not only in the job config
+- [x] `ST-C0-2` green — all three planted defects turn the job red, verified
+      locally against the exact script the workflow invokes. A gate that has
+      never failed has never been shown to work
+- [x] The pytest floor is recorded with **a number and a date** in this stage's
+      own text, not only in the job config — 409, 2026-07-31
 
 ### S-C1a — `interfaces`: the ABI header and the manifest schema
 

@@ -1,0 +1,22 @@
+# Copyright (c) <ORG>. All Rights Reserved.
+# Proprietary and Confidential.
+# COMPONENT: SIM
+#
+# Data consumed by scripts/ci_gate.py (S-C0). Bump pytest_floor.count only
+# after a verified local run shows a higher number -- never to make a red
+# gate green (docs/sim_implementation_plan.md "Never lower a GT-4 floor" --
+# the same discipline applied here).
+
+pytest_floor:
+  count: 409
+  date: "2026-07-31"
+  note: >
+    Measured on the full suite (410 collected) minus the one known flake
+    below. Floor established at S-C0.
+
+known_flakes:
+  - id: "tests/system/test_b3_viewport_controls.py::test_dragging_pans_the_viewport_and_a_second_click_still_selects"
+    note: >
+      Order/fixture-isolation dependent (sim_implementation_plan.md Phase C
+      risk table, owner S-B3 follow-up). Must not be "fixed" as part of an
+      unrelated stage; tolerated here by name, never silently deselected.
