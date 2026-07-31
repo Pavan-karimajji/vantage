@@ -9,10 +9,9 @@ every input reference resolves, `mode: measured` is checked against a
 recording's topic index, a port-type mismatch and a forward reference are
 both load errors naming both ends.
 
-This slice covers the declarative model and load-time validation only.
-Actually executing a pipeline tick by tick (`mode: measured` injection,
-`mode: off` -> `valid=0` downstream, multi-rate scheduling) is later slices'
-scope -- nothing here calls a stage's `exec()`.
+`Pipeline.exec` runs one tick, single-rate: every stage executes on every
+call. Multi-rate scheduling (`period_ns`/GCD due-tick gating, held-port
+`age_s`) and `contracts/override.py` are later slices' scope.
 """
 
 from __future__ import annotations
@@ -250,6 +249,49 @@ class Pipeline:
         resolved = _resolve_components(stages, search=search, components=components or {})
         _validate_wiring(stages, resolved, recording)
         return cls(name=name, stages=stages, version=version, components=resolved)
+
+    def exec(
+        self, dt_ns: int, stimulus: Mapping[str, bytes], *,
+        measured: Mapping[str, Mapping[str, bytes]] | None = None,
+    ) -> Mapping[str, Mapping[str, bytes]]:
+        """Runs one tick, stages in declaration order, single-threaded
+        (`sim_sil_contract.md` SS4.2's ordering rule; `FunctionRunner`'s own
+        choice, mirrored). `stimulus` supplies `source.*` values keyed by
+        source port name; `measured` supplies each `mode: measured` stage's
+        recorded outputs for this tick, keyed by stage name then port --
+        `Pipeline` does no I/O itself, so reading those bytes from a
+        recording is the caller's job.
+
+        `mode: off` is neither run nor injected: a reference to an `off`
+        stage's port is simply absent from whatever consumes it, which is
+        `valid=0` downstream by the same "absent port" convention
+        `SilComponent` already uses (`UT-C1c-12`) -- no special-casing
+        needed here.
+
+        Returns every stage's output ports this tick, keyed by stage name --
+        both actually-computed and injected, so a caller (a future
+        recorder) sees the whole tick without re-deriving which stages ran.
+        Single-rate today: every stage executes every call (multi-rate
+        due-tick gating is a later slice).
+        """
+        measured = measured or {}
+        outputs_by_stage: dict[str, Mapping[str, bytes]] = {}
+        for stage in self.stages:
+            if stage.mode == "off":
+                continue
+            if stage.mode == "measured":
+                outputs_by_stage[stage.name] = dict(measured.get(stage.name, {}))
+                continue
+
+            inputs: dict[str, bytes] = {}
+            for port_name, ref in stage.inputs.items():
+                producer_name, ref_port = _split_ref(ref)
+                produced = stimulus if producer_name == "source" else outputs_by_stage.get(producer_name, {})
+                if ref_port in produced:
+                    inputs[port_name] = produced[ref_port]
+
+            outputs_by_stage[stage.name] = self._components[stage.name].exec(dt_ns, inputs)
+        return outputs_by_stage
 
     def severed_chains(self) -> tuple[SeveredChain, ...]:
         """A `measured` stage between two `simulate` stages on one data path

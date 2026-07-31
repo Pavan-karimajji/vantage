@@ -4,17 +4,17 @@
 # @author Pavan Karimajji
 
 """S-C1c pipeline tests: UT-C1c-6, UT-C1c-7, UT-C1c-8, UT-C1c-9, UT-C1c-10,
-UT-C1c-13, UT-C1c-14 (load-time half), UT-C1c-16, UT-C1c-18, UT-C1c-19
-(docs/sim_implementation_plan.md).
+UT-C1c-11, UT-C1c-12, UT-C1c-13, UT-C1c-14, UT-C1c-16, UT-C1c-18, UT-C1c-19,
+ST-C1c-2 (docs/sim_implementation_plan.md).
 
 Every fixture here is a synthetic, invented component ("producer",
 "widget", ...) driven through `InProcessSilComponent` and injected via
 `Pipeline.load`'s `components=` -- pure Python, no DLL, no `interfaces`
 checkout, and no real function name anywhere (`R-SIM-1`).
 
-Execution-dependent halves (`mode: measured` injection, `mode: off` ->
-`valid=0` downstream, and UT-C1c-14's "stages execute in declaration order"
-runtime claim) are a later slice's scope -- nothing here calls `.exec()`.
+Multi-rate scheduling (`period_ns`/GCD due-tick gating, held-port `age_s`)
+and `contracts/override.py` are later slices' scope -- `Pipeline.exec` here
+is single-rate: every stage runs every call.
 """
 
 from __future__ import annotations
@@ -38,7 +38,12 @@ def _manifest(*, component: str, inputs=(), outputs=()) -> ComponentManifest:
 
 
 def _stub(name: str, manifest: ComponentManifest) -> InProcessSilComponent:
-    return InProcessSilComponent(name, manifest, lambda dt_ns, inputs: {})
+    """Pre-initialised: harmless for the load-only tests (`Pipeline.load`
+    never touches a component's handle) and required for the `.exec()`
+    tests (`SilComponent.exec` raises if `init()` was never called)."""
+    component = InProcessSilComponent(name, manifest, lambda dt_ns, inputs: {})
+    component.init()
+    return component
 
 
 def _write_pipeline(tmp_path: Path, stages: list[dict], *, version: int | None = 1, filename: str = "pipeline.yaml") -> Path:
@@ -283,3 +288,136 @@ def test_an_unversioned_pipeline_file_is_read_as_v1(tmp_path):
     pipeline = Pipeline.load(path, components={})
 
     assert pipeline.version == 1
+
+
+# ---------------------------------------------------------------------------
+# UT-C1c-11 -- mode: measured ignores that stage's inputs and injects
+# recorded outputs
+# ---------------------------------------------------------------------------
+
+
+def test_measured_stage_ignores_its_inputs_and_injects_recorded_outputs(tmp_path):
+    """UT-C1c-11."""
+    producer = _manifest(component="producer", outputs=[PortSpec(name="out", proto_type="test.A")])
+    measured_manifest = _manifest(
+        component="measured", inputs=[PortSpec(name="in", proto_type="test.A")], outputs=[PortSpec(name="out", proto_type="test.B")],
+    )
+    stages = [
+        {"name": "producer", "mode": "simulate", "impl": "stub:producer", "inputs": {}},
+        {"name": "measured", "mode": "measured", "impl": "stub:measured", "inputs": {"in": "producer.out"}},
+    ]
+    path = _write_pipeline(tmp_path, stages)
+
+    def _never(dt_ns, inputs):
+        raise AssertionError("a measured stage must never execute")
+
+    measured_comp = InProcessSilComponent("measured", measured_manifest, _never)
+    measured_comp.init()
+    pipeline = Pipeline.load(path, components={"producer": _stub("producer", producer), "measured": measured_comp})
+
+    result = pipeline.exec(50_000_000, {}, measured={"measured": {"out": b"recorded-bytes"}})
+
+    assert result["measured"] == {"out": b"recorded-bytes"}
+
+
+# ---------------------------------------------------------------------------
+# UT-C1c-12 -- mode: off yields valid == 0 downstream
+# ---------------------------------------------------------------------------
+
+
+def test_off_stage_is_absent_from_the_result_and_from_a_consumers_inputs(tmp_path):
+    """UT-C1c-12: `off` -> `valid=0` downstream, via the same "absent port"
+    convention `SilComponent` already uses -- no special-casing needed in
+    `Pipeline.exec` itself."""
+    producer = _manifest(component="producer", outputs=[PortSpec(name="out", proto_type="test.A")])
+    consumer_manifest = _manifest(component="consumer", inputs=[PortSpec(name="in", proto_type="test.A", optional=True)])
+    stages = [
+        {"name": "producer", "mode": "off", "impl": "stub:producer", "inputs": {}},
+        {"name": "consumer", "mode": "simulate", "impl": "stub:consumer", "inputs": {"in": "producer.out"}},
+    ]
+    path = _write_pipeline(tmp_path, stages)
+
+    seen_inputs: dict[str, bytes] = {}
+
+    def _consumer_fn(dt_ns, inputs):
+        seen_inputs.update(inputs)
+        return {}
+
+    consumer_comp = InProcessSilComponent("consumer", consumer_manifest, _consumer_fn)
+    consumer_comp.init()
+    pipeline = Pipeline.load(path, components={"producer": _stub("producer", producer), "consumer": consumer_comp})
+
+    result = pipeline.exec(50_000_000, {})
+
+    assert "producer" not in result
+    assert "in" not in seen_inputs
+
+
+# ---------------------------------------------------------------------------
+# UT-C1c-14 (runtime half) -- stages execute in declaration order,
+# single-threaded
+# ---------------------------------------------------------------------------
+
+
+def test_stages_execute_in_declaration_order(tmp_path):
+    """UT-C1c-14 (runtime half)."""
+    a_manifest = _manifest(component="a", outputs=[PortSpec(name="out", proto_type="test.A")])
+    b_manifest = _manifest(component="b", outputs=[PortSpec(name="out", proto_type="test.A")])
+    stages = [
+        {"name": "a", "mode": "simulate", "impl": "stub:a", "inputs": {}},
+        {"name": "b", "mode": "simulate", "impl": "stub:b", "inputs": {}},
+    ]
+    path = _write_pipeline(tmp_path, stages)
+
+    order: list[str] = []
+
+    def _mark(name: str):
+        def _fn(dt_ns, inputs):
+            order.append(name)
+            return {}
+        return _fn
+
+    a_comp = InProcessSilComponent("a", a_manifest, _mark("a"))
+    a_comp.init()
+    b_comp = InProcessSilComponent("b", b_manifest, _mark("b"))
+    b_comp.init()
+    pipeline = Pipeline.load(path, components={"a": a_comp, "b": b_comp})
+
+    pipeline.exec(50_000_000, {})
+
+    assert order == ["a", "b"]
+
+
+# ---------------------------------------------------------------------------
+# ST-C1c-2 -- an algo-test pipeline runs with everything measured except one
+# stage, the canonical shape of R-SIM-12
+# ---------------------------------------------------------------------------
+
+
+def test_algo_test_pipeline_runs_with_everything_measured_except_one_stage(tmp_path):
+    """ST-C1c-2."""
+    upstream_manifest = _manifest(component="upstream", outputs=[PortSpec(name="objects", proto_type="test.Objects")])
+    under_test_manifest = _manifest(
+        component="under_test",
+        inputs=[PortSpec(name="objects", proto_type="test.Objects")],
+        outputs=[PortSpec(name="verdict", proto_type="test.Verdict")],
+    )
+    stages = [
+        {"name": "upstream", "mode": "measured", "impl": "stub:upstream", "inputs": {}},
+        {"name": "under_test", "mode": "simulate", "impl": "stub:under_test", "inputs": {"objects": "upstream.objects"}},
+    ]
+    path = _write_pipeline(tmp_path, stages)
+
+    def _algorithm(dt_ns, inputs):
+        assert inputs["objects"] == b"three-objects"
+        return {"verdict": b"brake"}
+
+    under_test_comp = InProcessSilComponent("under_test", under_test_manifest, _algorithm)
+    under_test_comp.init()
+    pipeline = Pipeline.load(
+        path, components={"upstream": _stub("upstream", upstream_manifest), "under_test": under_test_comp},
+    )
+
+    result = pipeline.exec(50_000_000, {}, measured={"upstream": {"objects": b"three-objects"}})
+
+    assert result["under_test"] == {"verdict": b"brake"}

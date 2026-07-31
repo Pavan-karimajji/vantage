@@ -2497,12 +2497,15 @@ change to every artefact). Starting here first means doing this stage twice.
       unreproducibly, which is the worst failure mode available); grow-once-and-
       retry on undersize
 - [x] `contracts/pipeline.py` — `mode:` × `impl:`, wiring **per port**,
-      load-time validation in the order given in api reference §3.3. Scope of
-      this pass: the declarative model + load-time validation only --
-      `Pipeline.exec()` (actually running a tick: `measured` injection,
-      `off` → `valid=0` downstream) is not built yet, so `UT-C1c-11`/`-12`
-      and `ST-C1c-2` stay open. `impl: stub:` has no registry yet (`S-C2`);
-      `Pipeline.load`'s `components=` lets a caller supply one directly,
+      load-time validation in the order given in api reference §3.3, plus
+      `Pipeline.exec()` -- one tick, stages in declaration order,
+      single-threaded; `measured` injects from a caller-supplied mapping
+      (no I/O inside `Pipeline` itself); `off` is simply absent from
+      whatever consumes it, which is `valid=0` downstream via the same
+      convention `SilComponent` already uses -- no special-casing needed.
+      Single-rate only this pass (multi-rate due-tick gating is later).
+      `impl: stub:` has no registry yet (`S-C2`); `Pipeline.load`'s
+      `components=` lets a caller supply one directly,
       which is also what makes every test here run with no DLL
 - [x] `version:` as a required top-level key + an upgrader; unversioned files
       are `v1` (`CR-SIM-23`)
@@ -2532,17 +2535,13 @@ change to every artefact). Starting here first means doing this stage twice.
       silent last-tick value**, which would look like it worked
 - [x] `UT-C1c-10` `mode: measured` with the recording lacking that stage's
       outputs raises naming the missing topics
-- [ ] `UT-C1c-11` `mode: measured` ignores that stage's inputs and injects
+- [x] `UT-C1c-11` `mode: measured` ignores that stage's inputs and injects
       recorded outputs
-- [ ] `UT-C1c-12` `mode: off` yields `valid == 0` downstream
+- [x] `UT-C1c-12` `mode: off` yields `valid == 0` downstream
 - [x] `UT-C1c-13` flipping `mode` does not require `impl:` to change — the
       toggle is reversible without re-authoring (`R-SIM-10`)
-- [ ] `UT-C1c-14` stages execute in declaration order, single-threaded; a
-      pipeline whose declaration order contradicts its wiring is a load error.
-      **Load-time half done:** a stage wired to a later stage's output is a
-      load error (`test_a_stage_wired_to_a_later_stages_output_is_a_load_error`).
-      The runtime half (single-threaded, declaration-order execution) needs
-      `Pipeline.exec()`, not built this pass
+- [x] `UT-C1c-14` stages execute in declaration order, single-threaded; a
+      pipeline whose declaration order contradicts its wiring is a load error
 - [x] `UT-C1c-15` `resolve_library` returns the right file for each platform
       pattern (parametrised over both), and a miss names every candidate
 - [ ] `UT-C1c-15a` a `stubdll:` stage loads through the **same**
@@ -2570,7 +2569,7 @@ change to every artefact). Starting here first means doing this stage twice.
       `CtypesSilComponent` and compare with the positional path —
       byte-identical (integration; skips with a named reason if the library is
       not built)
-- [ ] `ST-C1c-2` an algo-test pipeline runs with everything `measured` except
+- [x] `ST-C1c-2` an algo-test pipeline runs with everything `measured` except
       one stage — the canonical shape of `R-SIM-12`
 
 **Discipline** (every stage)
