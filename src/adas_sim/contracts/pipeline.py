@@ -13,9 +13,13 @@ both load errors naming both ends.
 call. `Pipeline.step` is the multi-rate-aware entry point (`R-SIM-18`): it
 advances the pipeline's own clock and only runs a stage on its due ticks,
 holding the rest -- `updated=False`, `age_s` from integer nanoseconds.
-Overrides (`contracts/override.py`) are declared and load-validated
-(`Stage.overrides`) but not yet applied to a live port's bytes; that lands
-in `S-D6`.
+
+Overrides (`contracts/override.py`, `contracts/binding.py`) are declared
+and load-validated (`Stage.overrides`), and -- since `S-C1cΔ` -- actually
+applied to a stage's own input bytes right before `exec()` sees them
+(`OD-8`). `Stage.overrides` itself is the "declared, never smuggled" record
+(`R-SIM-15`); tagging a recorded *topic* `origin: overridden` is `S-C2`'s
+recorder reading this same field once it exists, not a second mechanism.
 """
 
 from __future__ import annotations
@@ -29,10 +33,11 @@ from typing import Literal
 
 import yaml
 
-from adas_sim.contracts.component import CtypesSilComponent, PortSpec, SilComponent
+from adas_sim.contracts.binding import Address, apply_override, parse_address
+from adas_sim.contracts.component import CtypesSilComponent, PortSpec, SilComponent, resolve_message_classes
 from adas_sim.contracts.loader import resolve_library
-from adas_sim.contracts.override import Override, parse_override_verb
-from adas_sim.core.errors import AuthoringError
+from adas_sim.contracts.override import Override, OverrideVerb, parse_override_verb
+from adas_sim.core.errors import AuthoringError, ContractError
 from adas_sim.core.tick import PortValue
 from adas_sim.io.base import RecordingReader
 
@@ -101,14 +106,44 @@ def _resolve_version(raw: Mapping[str, object]) -> int:
     return version
 
 
+#: An override entry's only allowed keys (`S-C1cΔ`) -- anything else is
+#: someone reaching for a time-varying or conditional override, which does
+#: not exist (`R-SIM-15`).
+_ALLOWED_OVERRIDE_KEYS = frozenset({"verb", "value"})
+
+
 def _parse_overrides(raw: Mapping[str, Mapping[str, object]], *, stage_name: str) -> dict[str, Override]:
-    """`overrides: {<port or port.field>: {verb: ..., value: ...}}` -- the
-    verb is checked against the closed four (`R-SIM-15`); an unknown verb
-    is a load error naming the offending key (`UT-C1c-17`)."""
+    """`overrides: {<address>: {verb: ..., value: ...}}` -- the verb is
+    checked against the closed six (`R-SIM-15`, `UT-C1c-17`), the address
+    against the closed grammar (`S-C1cΔ`, `UT-C1c-24`), both load errors
+    naming the offending key. **Refuses a time-varying or conditional
+    override, naming the alternative** (`S-C1cΔ`): an entry key beyond
+    `verb:`/`value:`, or a `value:` that is not a plain number, is exactly
+    the shape someone reaches for first -- refused pointing at *edit the
+    scenario* or *write a `stub:` stage*, because a refusal that does not
+    say where to go instead is how a closed list gets reopened.
+    """
     result: dict[str, Override] = {}
     for key, entry in raw.items():
-        verb = parse_override_verb(entry["verb"], where=f"stage '{stage_name}' overrides '{key}'")
-        result[key] = Override(verb=verb, value=entry.get("value"))
+        where = f"stage '{stage_name}' overrides '{key}'"
+        extra = set(entry) - _ALLOWED_OVERRIDE_KEYS
+        if extra:
+            raise AuthoringError(
+                expected=f"only {sorted(_ALLOWED_OVERRIDE_KEYS)} in an override entry",
+                found=f"also has: {sorted(extra)}", where=where,
+                hint="no time-varying or conditional override exists -- "
+                     "edit the scenario itself, or write a stub: stage",
+            )
+        value = entry.get("value")
+        if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))):
+            raise AuthoringError(
+                expected="a plain number for value:", found=repr(value), where=where,
+                hint="no time-varying or conditional value exists -- "
+                     "edit the scenario itself, or write a stub: stage",
+            )
+        verb = parse_override_verb(entry["verb"], where=where)
+        parse_address(key, where=where)  # grammar validated now (UT-C1c-24); re-resolved when actually applied
+        result[key] = Override(verb=verb, value=float(value) if value is not None else None)
     return result
 
 
@@ -273,6 +308,38 @@ def _validate_wiring(
                 )
 
 
+def _validate_overrides(stages: Sequence[Stage], components: Mapping[str, SilComponent]) -> None:
+    """`S-C1cΔ`: two checks beyond `_parse_overrides`' own grammar gate. An
+    override addresses one of *this stage's own* declared input ports
+    (never an arbitrary string); and a `select`/`drop` override needs
+    `fixed_slots` on that port's spec. `PortSpec` carries no such field
+    until `S-C1aΔ2`/`S-C1d` (build order #11/#12, after this stage) -- so
+    today every real `select`/`drop` raises here, naming the port and the
+    missing attribute (`UT-C1c-25`'s documented, honest, only-reachable
+    path). Never a guessed default (`NR-SIM-4`): `False` would mean "safe
+    to compact", `True` would mean "safe to zero".
+    """
+    for stage in stages:
+        manifest = components[stage.name].manifest
+        for key, override in stage.overrides.items():
+            address = parse_address(key, where=f"stage '{stage.name}' overrides '{key}'")
+            port_spec = _find_port(manifest.inputs, address.port)
+            if port_spec is None:
+                declared = ", ".join(p.name for p in manifest.inputs) or "(none)"
+                raise AuthoringError(
+                    expected=f"stage '{stage.name}' to declare input port '{address.port}'",
+                    found=f"declared inputs: {declared}", where=f"stage '{stage.name}' overrides '{key}'",
+                    hint="an override addresses one of this stage's own input ports",
+                )
+            if override.verb in (OverrideVerb.SELECT, OverrideVerb.DROP) and getattr(port_spec, "fixed_slots", None) is None:
+                raise ContractError(
+                    expected=f"port '{address.port}' to declare fixed_slots for a {override.verb.value} override",
+                    found="fixed_slots absent from the manifest", where=f"stage '{stage.name}' overrides '{key}'",
+                    hint="drop/select on a repeated field needs fixed_slots declared true or false "
+                         "(NR-SIM-4); arrives at S-C1aΔ2/S-C1d",
+                )
+
+
 class Pipeline:
     """Ordered stages, wired by name (`sim_api_reference.md` SS3.3)."""
 
@@ -290,6 +357,11 @@ class Pipeline:
         self._elapsed_ns = 0
         self._last_output: dict[str, Mapping[str, bytes]] = {}
         self._last_due_ns: dict[str, int] = {}
+        #: `S-C1cΔ`: `hold`'s own memory, one entry per (stage, address) --
+        #: also reset on every construction, same reasoning as the clock
+        #: above. Lazily populated per stage on first override application.
+        self._override_first_seen: dict[tuple[str, str], float] = {}
+        self._message_classes: dict[str, Mapping[str, type]] = {}
 
     def __repr__(self) -> str:
         return f"<Pipeline name={self.name!r} stages={[s.name for s in self.stages]}>"
@@ -319,7 +391,45 @@ class Pipeline:
         )
         resolved = _resolve_components(stages, search=search, components=components or {})
         _validate_wiring(stages, resolved, recording)
+        _validate_overrides(stages, resolved)
         return cls(name=name, stages=stages, version=version, components=resolved)
+
+    def _message_classes_for(self, stage_name: str) -> Mapping[str, type]:
+        if stage_name not in self._message_classes:
+            self._message_classes[stage_name] = resolve_message_classes(self._components[stage_name].manifest)
+        return self._message_classes[stage_name]
+
+    def _apply_input_overrides(self, stage: Stage, inputs: dict[str, bytes]) -> None:
+        """Overrides apply to a stage's OWN input ports, right before
+        `exec()`/`step()` hand them to the component (`S-C1cΔ`, `R-SIM-15`)
+        -- declared and load-validated since `S-C1c`, now real. Several
+        overrides addressing the same port (a bare-port `hold` and a
+        `field` `const`, say) apply to one decode/re-encode, not one each.
+        """
+        if not stage.overrides:
+            return
+        manifest = self._components[stage.name].manifest
+        classes = self._message_classes_for(stage.name)
+        by_port: dict[str, list[tuple[Address, Override]]] = {}
+        for key, override in stage.overrides.items():
+            address = parse_address(key, where=f"stage '{stage.name}' overrides '{key}'")
+            by_port.setdefault(address.port, []).append((address, override))
+
+        for port_name, entries in by_port.items():
+            if port_name not in inputs:
+                continue  # nothing wired this tick (an absent optional input) -- nothing to override
+            port_spec = _find_port(manifest.inputs, port_name)
+            message_cls = classes[port_spec.proto_type]
+            payload = inputs[port_name]
+            for address, override in entries:
+                state_key = (stage.name, address.raw)
+                payload, first_seen = apply_override(
+                    payload, message_cls, address, override,
+                    first_seen=self._override_first_seen.get(state_key),
+                    fixed_slots=getattr(port_spec, "fixed_slots", None),
+                )
+                self._override_first_seen[state_key] = first_seen
+            inputs[port_name] = payload
 
     def exec(
         self, dt_ns: int, stimulus: Mapping[str, bytes], *,
@@ -361,6 +471,7 @@ class Pipeline:
                 if ref_port in produced:
                     inputs[port_name] = produced[ref_port]
 
+            self._apply_input_overrides(stage, inputs)
             outputs_by_stage[stage.name] = self._components[stage.name].exec(dt_ns, inputs)
         return outputs_by_stage
 
@@ -406,6 +517,7 @@ class Pipeline:
                         )
                         if ref_port in source_map:
                             inputs[port_name] = source_map[ref_port]
+                    self._apply_input_overrides(stage, inputs)
                     computed = self._components[stage.name].exec(dt_ns, inputs)
                 fresh[stage.name] = computed
                 self._last_output[stage.name] = computed

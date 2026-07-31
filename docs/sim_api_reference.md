@@ -400,7 +400,10 @@ class Pipeline:
         tick's output map, so a downstream reference to it is absent from
         whatever consumes it -- `valid=0`, the same convention
         `SilComponent` already uses for a missing input. Returns every
-        stage's output ports this tick, keyed by stage name."""
+        stage's output ports this tick, keyed by stage name.
+
+        **`S-C1cΔ`:** `Stage.overrides` is now applied to a stage's own
+        input bytes right here, before the component sees them (§3.4a)."""
 
     def step(
         self, dt_ns: int, stimulus: Mapping[str, bytes], *,
@@ -419,7 +422,10 @@ class Pipeline:
         `step()` outputs straight into a `Tick`) -- the full declared port
         set every call, held or fresh, which is `R-SIM-10`'s invariant
         carried into multi-rate: a downstream stage wired to a not-due
-        producer still sees that producer's last real value, not a gap."""
+        producer still sees that producer's last real value, not a gap.
+
+        **`S-C1cΔ`:** applies `Stage.overrides` on a due stage's inputs,
+        same as `exec` (§3.4a)."""
 
     def severed_chains(self) -> tuple[SeveredChain, ...]:
         """A `measured` stage between two `simulate` stages on ONE data path
@@ -441,29 +447,76 @@ class Pipeline:
 ```python
 class OverrideVerb(StrEnum):
     CONST = "const"; HOLD = "hold"; OFFSET = "offset"; SCALE = "scale"
+    SELECT = "select"; DROP = "drop"       # structural, added at S-C1cΔ (OD-8)
 
 @dataclass(frozen=True, slots=True)
 class Override:
     verb: OverrideVerb
-    value: float | None = None             # required for const/offset/scale
-    def apply(self, current: float, first: float) -> float: ...
+    value: float | None = None             # required for const/offset/scale only
+    def apply(self, current: float, first: float) -> float:
+        """The four arithmetic verbs' bare-float math. select/drop are
+        structural -- contracts.binding.apply_override, never this method."""
 
 def parse_override_verb(raw: str, *, where: str) -> OverrideVerb:
     """Added at `S-C1c`. The closed-list gate a pipeline's `overrides:` YAML
-    goes through: a verb outside the four is `AuthoringError`, never a
+    goes through: a verb outside the six is `AuthoringError`, never a
     silent extension point."""
 ```
 
-There is no `expression`, no `python`, no `callable`. A fifth verb is a design
-change requiring a requirement; the survey in `docs/py` records why
-(`FR-SIM-45`).
+There is no `expression`, no `python`, no `callable`. A seventh verb is a
+design change requiring a requirement; the survey in `docs/py` records why
+(`FR-SIM-45`). An override entry itself is closed too (`S-C1cΔ`): only
+`verb:`/`value:` are accepted, and `value:` must be a plain number -- any
+other key, or a non-numeric `value:`, is refused as a time-varying or
+conditional override attempt, naming the two real alternatives (*edit the
+scenario* or *write a `stub:` stage*).
 
-**Scope note (`S-C1c`):** `Override`/`OverrideVerb` and `Stage.overrides` are
-declared and load-validated at `S-C1c` -- a verb outside the closed four is
-caught at `Pipeline.load` time. Actually applying an override to a live
-port's bytes, between wiring and `exec`/`step`, is `S-D6`'s job (its own
-checklist entry already expects this); `Pipeline.exec`/`step` above do not
-consult `Stage.overrides` yet.
+### 3.4a `contracts/binding.py` — the address grammar and its application (`S-C1cΔ`, `OD-8`)
+
+**Corrected at `S-C1cΔ`:** an earlier "Scope note" here said applying an
+override to a live port's bytes was `S-D6`'s job. That was superseded by
+the 2026-07-31 concept-resolution pass: the override *engine* (verbs,
+grammar, application) belongs to `S-C1cΔ`; `S-D6` builds only the
+*developer surface* over it (the GUI toggle, `sim probe`, the
+severed-chain badge). `Pipeline.exec`/`step` now apply `Stage.overrides`
+to a stage's own input bytes before the component ever sees them.
+
+```python
+Index = int | Literal["*"]
+
+@dataclass(frozen=True, slots=True)
+class AddressSegment:
+    name: str
+    index: Index | None = None
+
+@dataclass(frozen=True, slots=True)
+class Address:
+    raw: str
+    port: str
+    path: tuple[AddressSegment, ...] = ()  # empty for a bare-port address
+
+def parse_address(raw: str, *, where: str) -> Address:
+    """The closed grammar: port · port.field · port.repeated[i] ·
+    port.repeated[*] · a field within either. Index or `*` only, never a
+    predicate -- a predicate-shaped segment (`objects[?class=="truck"]`)
+    is `AuthoringError` naming the closed grammar (`UT-C1c-24`)."""
+
+def apply_override(
+    payload: bytes, message_cls: type, address: Address, override: Override, *,
+    first_seen: float | None = None, fixed_slots: bool | None = None,
+) -> tuple[bytes, float | None]:
+    """Decodes, applies, re-serializes. `select`/`drop` need `fixed_slots`
+    (a `PortSpec` attribute that does not exist until `S-C1aΔ2`/`S-C1d`) --
+    `fixed_slots=None` is a `ContractError` naming the port, never a
+    guessed default (`NR-SIM-4`, `UT-C1c-25`). `hold`'s cross-tick memory
+    is the caller's (`Pipeline`'s own `(stage, address) -> float` cache),
+    so this function stays pure."""
+```
+
+`fixed_slots=True` clears an addressed element **in place** (never
+compacts, `UT-C1c-25`); `fixed_slots=False` compacts. `select`/`drop` of
+complementary index sets produce the same result (`UT-C1c-26`) -- the
+property that makes two structural verbs sufficient.
 
 ---
 

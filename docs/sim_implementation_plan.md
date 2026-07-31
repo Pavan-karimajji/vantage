@@ -3310,18 +3310,23 @@ them — but **nothing applies an override to a port's bytes yet**, and
 `Override.apply` operates on a bare `float`. That is why this is cheap now: the
 grammar is still free. Read arch §5.10 first.
 
-- [ ] **The address grammar, stated and closed** — `port` · `port.field` ·
+- [x] **The address grammar, stated and closed** — `port` · `port.field` ·
       `port.repeated[i]` · `port.repeated[*]` · a field within either. **Index
       and `*` only, never a predicate.** `objects[?class=="truck"]` is an
       expression, and an expression grammar is the over-configuration this design
-      exists to answer
-- [ ] **Two structural verbs, and the list closes again at six** — `drop`
+      exists to answer. *2026-07-31:* `contracts/binding.py`'s `parse_address` —
+      one closed regex per segment (`^(\w+)(?:\[(\d+|\*)\])?$`), rejecting a
+      predicate-shaped segment outright; the port's own segment may never
+      carry an index (a port is one message, never a list)
+- [x] **Two structural verbs, and the list closes again at six** — `drop`
       removes the addressed element(s), `select` keeps them and drops the rest.
       They are the complement pair over a set, which is why two is the right
       number. The governing line, which is what rules out `insert`/`move`/
       `duplicate` on principle rather than on taste: **an override may destroy or
-      attenuate information; it may never create an entity**
-- [ ] **Fixed-slot behaviour, keyed on a manifest attribute** — a port declared
+      attenuate information; it may never create an entity**. *2026-07-31:*
+      `OverrideVerb.SELECT`/`DROP` added; `_apply_structural` in
+      `contracts/binding.py` implements both over a repeated container
+- [x] **Fixed-slot behaviour, keyed on a manifest attribute** — a port declared
       `fixed_slots` has `drop` **clear the element in place**, never compact.
       Compaction renumbers every later index and breaks track association
       silently, which is the confidently-wrong-answer failure this architecture
@@ -3334,28 +3339,53 @@ grammar is still free. Read arch §5.10 first.
       missing attribute.** Not a default: `false` would mean *"safe to compact"*
       and `true` would mean *"safe to zero"*, and both are guesses about someone
       else's data (`NR-SIM-4`). This is what keeps this stage compiler-free
-      without deferring the verb
-- [ ] Apply overrides on the input path, and tag the topic `origin: overridden`
-      with the verb set recorded in the run manifest (`R-SIM-15`)
-- [ ] **Refuse, with the alternative named in the error**: a time-varying or
+      without deferring the verb. *2026-07-31:* the clearing/compacting LOGIC
+      is implemented and tested directly (`apply_override`, taking `fixed_slots`
+      as an explicit parameter, `UT-C1c-25`'s "first half"); the GATE that
+      determines whether the real manifest may use it at all lives in
+      `Pipeline._validate_overrides` — `PortSpec` has no `fixed_slots` field,
+      so `getattr(port_spec, "fixed_slots", None)` is always `None` today,
+      making the load error the only path reachable through a real `Pipeline`
+      (`UT-C1c-25`'s "second half")
+- [x] Apply overrides on the input path, and tag the topic `origin: overridden`
+      with the verb set recorded in the run manifest (`R-SIM-15`). *2026-07-31:*
+      `Pipeline._apply_input_overrides` decodes, applies (grouping several
+      overrides on one port into a single decode/re-encode), re-serializes,
+      right before `exec()`/`step()` hand a stage its inputs; `hold`'s
+      cross-tick memory lives on the `Pipeline` instance, keyed per
+      `(stage, address)`, reset on every construction (same discipline as
+      `_elapsed_ns`). **Scoped honestly:** "tag the topic... in the run
+      manifest" needs `core/manifest.py` and `S-C2`'s recorder, neither of
+      which exists yet — `Stage.overrides` itself already **is** the
+      "declared, never smuggled" record (R-SIM-15's own phrase) for the
+      recorder to read from later; no second, speculative tagging API was
+      added ahead of a real consumer
+- [x] **Refuse, with the alternative named in the error**: a time-varying or
       conditional override is rejected pointing at *edit the scenario* or *write
       a `stub:` stage*. A refusal that does not say where to go instead is how a
-      closed list gets reopened
+      closed list gets reopened. *2026-07-31:* `_parse_overrides` rejects an
+      override entry with any key beyond `verb:`/`value:`, and a `value:` that
+      is not a plain number (bool excluded explicitly, since `bool` is an `int`
+      subclass) — both name the two alternatives
 
 **Tests added by the delta**
-- [ ] `UT-C1c-24` each address form resolves to the right target, and a
-      predicate-shaped address is an `AuthoringError` naming the closed grammar
-- [ ] `UT-C1c-25` `drop` on a **`fixed_slots`-declaring** port clears in place:
+- [x] `UT-C1c-24` each address form resolves to the right target, and a
+      predicate-shaped address is an `AuthoringError` naming the closed grammar.
+      *2026-07-31:* `tests/unit/test_c1c_binding.py`
+- [x] `UT-C1c-25` `drop` on a **`fixed_slots`-declaring** port clears in place:
       element 3 becomes its message default and elements 4+ keep their indices.
       The compacting behaviour is asserted **not** to happen, because that is the
       failure mode, not the feature. And `drop` on a port whose manifest is
       **silent** about `fixed_slots` raises, naming the port and the field —
       never picking a side (`NR-SIM-4`). Until `S-C1aΔ2` lands, the second half
       is the only reachable path, which is the honest state and is why the verb
-      does not have to wait for a build
-- [ ] `UT-C1c-26` `select` keeps exactly the addressed elements; `select` and
+      does not have to wait for a build. *2026-07-31:* first half in
+      `test_c1c_binding.py` (`apply_override` given `fixed_slots=True` directly);
+      second half in `test_c1c_pipeline.py` (a real `Pipeline.load` with a real
+      `PortSpec`, silent about `fixed_slots` by construction)
+- [x] `UT-C1c-26` `select` keeps exactly the addressed elements; `select` and
       `drop` of complementary sets produce the same result, which is the property
-      that makes two verbs sufficient
+      that makes two verbs sufficient. *2026-07-31:* `test_c1c_binding.py`
 
 ### S-C1d — the generated ABI shim (`R-SIM-22`, closes `D12`)
 

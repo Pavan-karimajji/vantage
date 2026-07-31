@@ -21,19 +21,22 @@ from pathlib import Path
 
 import pytest
 import yaml
+from google.protobuf import descriptor_pb2 as _dpb
+from google.protobuf import descriptor_pool as _dpool
+from google.protobuf import message_factory as _mfactory
 
 from adas_sim.contracts import pipeline as pipeline_mod
 from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent, PortSpec
 from adas_sim.contracts.override import Override, OverrideVerb
 from adas_sim.contracts.pipeline import Pipeline
-from adas_sim.core.errors import AuthoringError
+from adas_sim.core.errors import AuthoringError, ContractError
 
 
-def _manifest(*, component: str, inputs=(), outputs=(), period_ns: int = 0) -> ComponentManifest:
+def _manifest(*, component: str, inputs=(), outputs=(), period_ns: int = 0, descriptor_set: bytes = b"") -> ComponentManifest:
     return ComponentManifest(
         component=component, version="1", abi_version=1, build_id="test",
         inputs=tuple(inputs), outputs=tuple(outputs),
-        project="base", config_bundle_sha256="", descriptor_set=b"", period_ns=period_ns,
+        project="base", config_bundle_sha256="", descriptor_set=descriptor_set, period_ns=period_ns,
     )
 
 
@@ -567,3 +570,183 @@ def test_held_port_reads_updated_false_with_exact_age_s_and_the_full_port_set(tm
     assert held["a.out"].updated is False
     assert held["a.out"].age_s == pytest.approx(0.01)  # 60ms - 50ms
     assert held["a.out"].message == b"fresh"  # the held value, not empty
+
+
+# ---------------------------------------------------------------------------
+# S-C1cΔ -- overrides are applied on the input path (UT-C1c-24..26 cover the
+# grammar/application logic itself in test_c1c_binding.py; these are the
+# Pipeline-integration half, plus UT-C1c-25's "manifest silent about
+# fixed_slots" load-time check, only reachable through a real PortSpec).
+# ---------------------------------------------------------------------------
+
+
+def _scalar_message_cls():
+    """A real `Scalar { x: float }` schema -- what an override's arithmetic
+    verb actually decodes and re-encodes on a stage's own input port."""
+    fdp = _dpb.FileDescriptorProto()
+    fdp.name = "c1c_pipeline_scalar.proto"
+    fdp.package = "adas_sim.test.c1cpipeline"
+    fdp.syntax = "proto3"
+    msg = fdp.message_type.add()
+    msg.name = "Scalar"
+    f = msg.field.add()
+    f.name, f.number, f.type = "x", 1, _dpb.FieldDescriptorProto.TYPE_FLOAT
+    f.label = _dpb.FieldDescriptorProto.LABEL_OPTIONAL
+
+    fds = _dpb.FileDescriptorSet()
+    fds.file.append(fdp)
+
+    pool = _dpool.DescriptorPool()
+    pool.Add(fdp)
+    cls = _mfactory.GetMessageClass(pool.FindMessageTypeByName("adas_sim.test.c1cpipeline.Scalar"))
+    return cls, fds.SerializeToString()
+
+
+def test_a_const_override_is_actually_applied_before_the_stage_sees_it(tmp_path):
+    """S-C1cΔ: the input path, not just load-time declaration -- the
+    algorithm receives the overridden value, never the original."""
+    scalar_cls, descriptor_set = _scalar_message_cls()
+    consumer = _manifest(
+        component="consumer", inputs=[PortSpec(name="egoDyn", proto_type="adas_sim.test.c1cpipeline.Scalar")],
+        descriptor_set=descriptor_set,
+    )
+    stages = [
+        {
+            "name": "consumer", "mode": "simulate", "impl": "stub:consumer", "inputs": {"egoDyn": "source.veh_dyn"},
+            "overrides": {"egoDyn.x": {"verb": "const", "value": 42.0}},
+        },
+    ]
+    path = _write_pipeline(tmp_path, stages)
+
+    seen: list[float] = []
+
+    def _algorithm(dt_ns, inputs):
+        received = scalar_cls()
+        received.ParseFromString(inputs["egoDyn"])
+        seen.append(received.x)
+        return {}
+
+    component = InProcessSilComponent("consumer", consumer, _algorithm)
+    component.init()
+    pipeline = Pipeline.load(path, components={"consumer": component})
+
+    stimulus_msg = scalar_cls(x=1.0)
+    pipeline.exec(50_000_000, {"veh_dyn": stimulus_msg.SerializeToString()})
+
+    assert seen == [42.0]  # never 1.0 -- the override, not the stimulus
+
+
+def test_hold_override_freezes_at_the_first_ticks_value_across_two_execs(tmp_path):
+    """S-C1cΔ: `hold`'s cross-tick memory is the Pipeline's own job
+    (`contracts/binding.apply_override` stays pure)."""
+    scalar_cls, descriptor_set = _scalar_message_cls()
+    consumer = _manifest(
+        component="consumer", inputs=[PortSpec(name="egoDyn", proto_type="adas_sim.test.c1cpipeline.Scalar")],
+        descriptor_set=descriptor_set,
+    )
+    stages = [
+        {
+            "name": "consumer", "mode": "simulate", "impl": "stub:consumer", "inputs": {"egoDyn": "source.veh_dyn"},
+            "overrides": {"egoDyn.x": {"verb": "hold"}},
+        },
+    ]
+    path = _write_pipeline(tmp_path, stages)
+
+    seen: list[float] = []
+
+    def _algorithm(dt_ns, inputs):
+        received = scalar_cls()
+        received.ParseFromString(inputs["egoDyn"])
+        seen.append(received.x)
+        return {}
+
+    component = InProcessSilComponent("consumer", consumer, _algorithm)
+    component.init()
+    pipeline = Pipeline.load(path, components={"consumer": component})
+
+    pipeline.exec(50_000_000, {"veh_dyn": scalar_cls(x=5.0).SerializeToString()})
+    pipeline.exec(50_000_000, {"veh_dyn": scalar_cls(x=99.0).SerializeToString()})
+
+    assert seen == [5.0, 5.0]  # frozen at the first tick's value, never 99.0
+
+
+def test_an_override_addressing_an_undeclared_port_raises_at_load(tmp_path):
+    """`_validate_overrides`: an override must address one of the stage's
+    own declared input ports."""
+    consumer = _manifest(component="consumer", inputs=[PortSpec(name="egoDyn", proto_type="test.A")])
+    stages = [
+        {
+            "name": "consumer", "mode": "simulate", "impl": "stub:consumer",
+            "inputs": {"egoDyn": "source.veh_dyn"},
+            "overrides": {"noSuchPort": {"verb": "hold"}},
+        },
+    ]
+    path = _write_pipeline(tmp_path, stages)
+
+    with pytest.raises(AuthoringError) as excinfo:
+        Pipeline.load(path, components={"consumer": _stub("consumer", consumer)})
+    message = str(excinfo.value)
+    assert "noSuchPort" in message
+    assert "egoDyn" in message
+
+
+def test_drop_on_a_port_silent_about_fixed_slots_raises_at_load_naming_port_and_field(tmp_path):
+    """UT-C1c-25 (second half, through a REAL `PortSpec` -- which carries
+    no `fixed_slots` field until `S-C1aΔ2`/`S-C1d`): this is the only
+    reachable path today, and it is the honest state, not a gap."""
+    consumer = _manifest(component="consumer", inputs=[PortSpec(name="objects", proto_type="test.Objects")])
+    stages = [
+        {
+            "name": "consumer", "mode": "simulate", "impl": "stub:consumer",
+            "inputs": {"objects": "source.objects"},
+            "overrides": {"objects.items[0]": {"verb": "drop"}},
+        },
+    ]
+    path = _write_pipeline(tmp_path, stages)
+
+    with pytest.raises(ContractError) as excinfo:
+        Pipeline.load(path, components={"consumer": _stub("consumer", consumer)})
+    message = str(excinfo.value)
+    assert "objects" in message
+    assert "fixed_slots" in message
+
+
+def test_an_override_entry_with_an_extra_key_is_refused_naming_the_alternative(tmp_path):
+    """S-C1cΔ: `at_tick:`/`condition:`/anything beyond `verb:`/`value:` is
+    exactly the shape someone reaches for to make an override time-varying
+    or conditional -- refused, pointing at the two real alternatives."""
+    consumer = _manifest(component="consumer", inputs=[PortSpec(name="egoDyn", proto_type="test.A")])
+    stages = [
+        {
+            "name": "consumer", "mode": "simulate", "impl": "stub:consumer",
+            "inputs": {"egoDyn": "source.veh_dyn"},
+            "overrides": {"egoDyn": {"verb": "const", "value": 1.0, "at_tick": 50}},
+        },
+    ]
+    path = _write_pipeline(tmp_path, stages)
+
+    with pytest.raises(AuthoringError) as excinfo:
+        Pipeline.load(path, components={"consumer": _stub("consumer", consumer)})
+    message = str(excinfo.value)
+    assert "at_tick" in message
+    assert "scenario" in message and "stub" in message
+
+
+def test_an_override_with_a_non_numeric_value_is_refused_naming_the_alternative(tmp_path):
+    """S-C1cΔ: a `value:` that is not a plain number (a dict, attempting a
+    conditional shape) is refused the same way, not accepted and left to
+    fail confusingly at apply time."""
+    consumer = _manifest(component="consumer", inputs=[PortSpec(name="egoDyn", proto_type="test.A")])
+    stages = [
+        {
+            "name": "consumer", "mode": "simulate", "impl": "stub:consumer",
+            "inputs": {"egoDyn": "source.veh_dyn"},
+            "overrides": {"egoDyn": {"verb": "const", "value": {"if": "x > 1", "then": 5}}},
+        },
+    ]
+    path = _write_pipeline(tmp_path, stages)
+
+    with pytest.raises(AuthoringError) as excinfo:
+        Pipeline.load(path, components={"consumer": _stub("consumer", consumer)})
+    message = str(excinfo.value)
+    assert "scenario" in message and "stub" in message
