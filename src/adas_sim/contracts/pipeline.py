@@ -10,14 +10,20 @@ recording's topic index, a port-type mismatch and a forward reference are
 both load errors naming both ends.
 
 `Pipeline.exec` runs one tick, single-rate: every stage executes on every
-call. Multi-rate scheduling (`period_ns`/GCD due-tick gating, held-port
-`age_s`) and `contracts/override.py` are later slices' scope.
+call. `Pipeline.step` is the multi-rate-aware entry point (`R-SIM-18`): it
+advances the pipeline's own clock and only runs a stage on its due ticks,
+holding the rest -- `updated=False`, `age_s` from integer nanoseconds.
+Overrides (`contracts/override.py`) are declared and load-validated
+(`Stage.overrides`) but not yet applied to a live port's bytes; that lands
+in `S-D6`.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from functools import reduce
+from math import gcd
 from pathlib import Path
 from typing import Literal
 
@@ -27,6 +33,7 @@ from adas_sim.contracts.component import CtypesSilComponent, PortSpec, SilCompon
 from adas_sim.contracts.loader import resolve_library
 from adas_sim.contracts.override import Override, parse_override_verb
 from adas_sim.core.errors import AuthoringError
+from adas_sim.core.tick import PortValue
 from adas_sim.io.base import RecordingReader
 
 #: The only shape that has ever existed -- `_resolve_version`'s upgrade is a
@@ -141,6 +148,46 @@ def _resolve_components(
     return resolved
 
 
+def _require_multiple(period_ns: int, base_grid_ns: int, *, stage_name: str) -> None:
+    """The guard `_compute_base_grid_ns` calls for every declared period.
+    Kept as its own function, independently unit-tested with adversarial
+    numbers (`test_c1c_pipeline.py`): a `base_grid_ns` that is genuinely the
+    GCD of every period in the set makes this tautologically always pass
+    (GCD divides every member of the set it was computed from, by
+    definition) -- there is no set of real, correctly-derived periods that
+    can ever fail it. The check stays anyway, because `R-SIM-18` states the
+    invariant explicitly and a future change to how periods are supplied
+    (e.g. a per-pipeline override) could make it reachable; a guard that is
+    unreachable today is cheap, and finding out it is unreachable is what
+    this comment records -- not a reason to delete it."""
+    if period_ns % base_grid_ns != 0:
+        raise AuthoringError(
+            expected=f"period_ns to be an integer multiple of the base grid ({base_grid_ns} ns)",
+            found=f"stage '{stage_name}' period_ns={period_ns}",
+            where="Pipeline base grid (R-SIM-18)",
+            hint=f"base grid {base_grid_ns} ns is the GCD of every stage's declared period_ns",
+        )
+
+
+def _compute_base_grid_ns(stages: Sequence[Stage], components: Mapping[str, SilComponent]) -> int:
+    """`R-SIM-18`: the base grid is the GCD of every declared (nonzero)
+    `period_ns` -- derived, never configured, never rounded. `0` means
+    undeclared: that stage is due every call and does not participate in
+    the GCD. No declared periods at all -> no grid (`0`)."""
+    periods = [
+        components[stage.name].manifest.period_ns for stage in stages
+        if components[stage.name].manifest.period_ns > 0
+    ]
+    if not periods:
+        return 0
+    base_grid_ns = reduce(gcd, periods)
+    for stage in stages:
+        period_ns = components[stage.name].manifest.period_ns
+        if period_ns > 0:
+            _require_multiple(period_ns, base_grid_ns, stage_name=stage.name)
+    return base_grid_ns
+
+
 def _find_port(specs: Sequence[PortSpec], name: str) -> PortSpec | None:
     for spec in specs:
         if spec.name == name:
@@ -236,6 +283,13 @@ class Pipeline:
         self.stages = stages
         self.version = version
         self._components = dict(components)
+        self.base_grid_ns = _compute_base_grid_ns(stages, self._components)
+        #: `step()`'s own clock and held-value cache (`R-SIM-18`) -- reset on
+        #: every `Pipeline` construction, including the copies `with_mode`
+        #: returns: a mode change is a configuration edit, not a tick.
+        self._elapsed_ns = 0
+        self._last_output: dict[str, Mapping[str, bytes]] = {}
+        self._last_due_ns: dict[str, int] = {}
 
     def __repr__(self) -> str:
         return f"<Pipeline name={self.name!r} stages={[s.name for s in self.stages]}>"
@@ -288,8 +342,8 @@ class Pipeline:
         Returns every stage's output ports this tick, keyed by stage name --
         both actually-computed and injected, so a caller (a future
         recorder) sees the whole tick without re-deriving which stages ran.
-        Single-rate today: every stage executes every call (multi-rate
-        due-tick gating is a later slice).
+        Single-rate: every declared stage executes every call, unconditionally
+        -- the primitive `step()` (multi-rate, due-tick gating) is built on.
         """
         measured = measured or {}
         outputs_by_stage: dict[str, Mapping[str, bytes]] = {}
@@ -309,6 +363,69 @@ class Pipeline:
 
             outputs_by_stage[stage.name] = self._components[stage.name].exec(dt_ns, inputs)
         return outputs_by_stage
+
+    def step(
+        self, dt_ns: int, stimulus: Mapping[str, bytes], *,
+        measured: Mapping[str, Mapping[str, bytes]] | None = None,
+    ) -> Mapping[str, PortValue]:
+        """The multi-rate-aware entry point (`R-SIM-18`). Advances this
+        `Pipeline`'s own clock by `dt_ns` and runs (or injects) a stage only
+        on its due ticks -- a stage with no declared `period_ns` (`0`,
+        undeclared) is due every call. A stage that is not due HOLDS its
+        last output rather than re-running: `updated=False`, `age_s` the
+        exact elapsed time since it was last actually due, from integer
+        nanoseconds (`P-8`) -- never accumulated as float seconds.
+
+        Returns one `PortValue` per declared output port, keyed by fully
+        qualified name (`"<stage>.<port>"`, matching `core.tick.Tick.ports`
+        directly) -- the FULL declared port set every call, held or fresh,
+        which is `R-SIM-10`'s invariant carried into multi-rate (`UT-C1c-21`):
+        a downstream stage wired to a not-due producer still sees that
+        producer's last real value, not a gap.
+        """
+        self._elapsed_ns += dt_ns
+        measured = measured or {}
+        fresh: dict[str, Mapping[str, bytes]] = {}
+        result: dict[str, PortValue] = {}
+
+        for stage in self.stages:
+            if stage.mode == "off":
+                continue
+            manifest = self._components[stage.name].manifest
+            due = manifest.period_ns == 0 or self._elapsed_ns % manifest.period_ns == 0
+
+            if due:
+                if stage.mode == "measured":
+                    computed = dict(measured.get(stage.name, {}))
+                else:
+                    inputs: dict[str, bytes] = {}
+                    for port_name, ref in stage.inputs.items():
+                        producer_name, ref_port = _split_ref(ref)
+                        source_map = stimulus if producer_name == "source" else (
+                            fresh.get(producer_name) or self._last_output.get(producer_name, {})
+                        )
+                        if ref_port in source_map:
+                            inputs[port_name] = source_map[ref_port]
+                    computed = self._components[stage.name].exec(dt_ns, inputs)
+                fresh[stage.name] = computed
+                self._last_output[stage.name] = computed
+                self._last_due_ns[stage.name] = self._elapsed_ns
+
+            produced = self._last_output.get(stage.name, {})
+            age_s = (self._elapsed_ns - self._last_due_ns.get(stage.name, self._elapsed_ns)) / 1_000_000_000.0
+            origin = "measured" if stage.mode == "measured" else "simulated"
+            for port_spec in manifest.outputs:
+                qualified = f"{stage.name}.{port_spec.name}"
+                if port_spec.name in produced:
+                    result[qualified] = PortValue(
+                        name=qualified, message=produced[port_spec.name], origin=origin,
+                        valid=True, updated=due, age_s=age_s,
+                    )
+                else:
+                    result[qualified] = PortValue(
+                        name=qualified, message=None, origin="unknown", valid=False, updated=False, age_s=0.0,
+                    )
+        return result
 
     def severed_chains(self) -> tuple[SeveredChain, ...]:
         """A `measured` stage between two `simulate` stages on one data path

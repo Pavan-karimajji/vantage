@@ -6,17 +6,13 @@
 """S-C1c pipeline tests: UT-C1c-6, UT-C1c-7, UT-C1c-8, UT-C1c-9, UT-C1c-10,
 UT-C1c-11, UT-C1c-12, UT-C1c-13, UT-C1c-14, UT-C1c-16, UT-C1c-17 (the
 pipeline-wiring half; `override.py`'s own semantics are
-`test_c1c_override.py`'s), UT-C1c-18, UT-C1c-19, ST-C1c-2
-(docs/sim_implementation_plan.md).
+`test_c1c_override.py`'s), UT-C1c-18, UT-C1c-19, UT-C1c-20, UT-C1c-21,
+ST-C1c-2 (docs/sim_implementation_plan.md).
 
 Every fixture here is a synthetic, invented component ("producer",
 "widget", ...) driven through `InProcessSilComponent` and injected via
 `Pipeline.load`'s `components=` -- pure Python, no DLL, no `interfaces`
 checkout, and no real function name anywhere (`R-SIM-1`).
-
-Multi-rate scheduling (`period_ns`/GCD due-tick gating, held-port `age_s`)
-and `contracts/override.py` are later slices' scope -- `Pipeline.exec` here
-is single-rate: every stage runs every call.
 """
 
 from __future__ import annotations
@@ -26,17 +22,18 @@ from pathlib import Path
 import pytest
 import yaml
 
+from adas_sim.contracts import pipeline as pipeline_mod
 from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent, PortSpec
 from adas_sim.contracts.override import Override, OverrideVerb
 from adas_sim.contracts.pipeline import Pipeline
 from adas_sim.core.errors import AuthoringError
 
 
-def _manifest(*, component: str, inputs=(), outputs=()) -> ComponentManifest:
+def _manifest(*, component: str, inputs=(), outputs=(), period_ns: int = 0) -> ComponentManifest:
     return ComponentManifest(
         component=component, version="1", abi_version=1, build_id="test",
         inputs=tuple(inputs), outputs=tuple(outputs),
-        project="base", config_bundle_sha256="", descriptor_set=b"", period_ns=0,
+        project="base", config_bundle_sha256="", descriptor_set=b"", period_ns=period_ns,
     )
 
 
@@ -467,3 +464,106 @@ def test_an_override_verb_outside_the_closed_four_is_a_load_error(tmp_path):
     with pytest.raises(AuthoringError) as excinfo:
         Pipeline.load(path, components={"solo": _stub("solo", manifest)})
     assert "interpolate" in str(excinfo.value)
+
+
+# ---------------------------------------------------------------------------
+# UT-C1c-20 -- rate: base grid is the GCD of declared periods; each stage
+# executes only on its due ticks; a non-multiple period is a load error
+# ---------------------------------------------------------------------------
+
+
+def test_base_grid_is_the_gcd_of_declared_periods(tmp_path):
+    """UT-C1c-20."""
+    a = _manifest(component="a", period_ns=20_000_000)
+    b = _manifest(component="b", period_ns=50_000_000)
+    stages = [
+        {"name": "a", "mode": "simulate", "impl": "stub:a", "inputs": {}},
+        {"name": "b", "mode": "simulate", "impl": "stub:b", "inputs": {}},
+    ]
+    path = _write_pipeline(tmp_path, stages)
+
+    pipeline = Pipeline.load(path, components={"a": _stub("a", a), "b": _stub("b", b)})
+
+    assert pipeline.base_grid_ns == 10_000_000
+
+
+def test_each_stage_executes_only_on_its_due_ticks(tmp_path):
+    """UT-C1c-20."""
+    a_manifest = _manifest(component="a", outputs=[PortSpec(name="out", proto_type="test.A")], period_ns=20_000_000)
+    b_manifest = _manifest(component="b", outputs=[PortSpec(name="out", proto_type="test.A")], period_ns=50_000_000)
+    stages = [
+        {"name": "a", "mode": "simulate", "impl": "stub:a", "inputs": {}},
+        {"name": "b", "mode": "simulate", "impl": "stub:b", "inputs": {}},
+    ]
+    path = _write_pipeline(tmp_path, stages)
+
+    a_calls: list[int] = []
+    b_calls: list[int] = []
+
+    def _a_fn(dt_ns, inputs):
+        a_calls.append(dt_ns)
+        return {"out": b"a"}
+
+    def _b_fn(dt_ns, inputs):
+        b_calls.append(dt_ns)
+        return {"out": b"b"}
+
+    a_comp = InProcessSilComponent("a", a_manifest, _a_fn)
+    a_comp.init()
+    b_comp = InProcessSilComponent("b", b_manifest, _b_fn)
+    b_comp.init()
+    pipeline = Pipeline.load(path, components={"a": a_comp, "b": b_comp})
+
+    for _ in range(5):  # 5 * 10ms base-grid steps = 50ms elapsed
+        pipeline.step(10_000_000, {})
+
+    assert len(a_calls) == 2  # due at 20ms, 40ms
+    assert len(b_calls) == 1  # due at 50ms
+
+
+def test_require_multiple_rejects_a_period_that_is_not_a_multiple_of_the_grid():
+    """UT-C1c-20, the validator tested directly. A base grid genuinely
+    derived as the GCD of a period set can never actually fail this check
+    against any period in that same set (GCD divides every member of the
+    set it came from, by definition) -- there is no way to construct a
+    *reachable* failure through `Pipeline.load` today. The guard is tested
+    here instead, against numbers that do not come from a real GCD, because
+    `R-SIM-18` states the invariant explicitly and a future way of supplying
+    periods could make it reachable; recording that it is unreachable today
+    is the honest alternative to deleting a check the rule requires."""
+    with pytest.raises(AuthoringError) as excinfo:
+        pipeline_mod._require_multiple(25_000_000, 10_000_000, stage_name="a")
+    message = str(excinfo.value)
+    assert "25000000" in message
+    assert "10000000" in message
+
+
+# ---------------------------------------------------------------------------
+# UT-C1c-21 -- a held port reads updated=False with an exact age_s, and the
+# consumer still receives its full port set
+# ---------------------------------------------------------------------------
+
+
+def test_held_port_reads_updated_false_with_exact_age_s_and_the_full_port_set(tmp_path):
+    """UT-C1c-21."""
+    a_manifest = _manifest(component="a", outputs=[PortSpec(name="out", proto_type="test.A")], period_ns=50_000_000)
+    stages = [{"name": "a", "mode": "simulate", "impl": "stub:a", "inputs": {}}]
+    path = _write_pipeline(tmp_path, stages)
+
+    a_comp = InProcessSilComponent("a", a_manifest, lambda dt_ns, inputs: {"out": b"fresh"})
+    a_comp.init()
+    pipeline = Pipeline.load(path, components={"a": a_comp})
+
+    not_yet = pipeline.step(10_000_000, {})  # elapsed=10ms, not due (period 50ms), never produced
+    assert not_yet["a.out"].valid is False
+
+    fresh = pipeline.step(40_000_000, {})  # elapsed=50ms, due
+    assert fresh["a.out"].updated is True
+    assert fresh["a.out"].age_s == 0.0
+    assert fresh["a.out"].message == b"fresh"
+
+    held = pipeline.step(10_000_000, {})  # elapsed=60ms, not due -- held
+    assert "a.out" in held  # full port set: still present even though not due
+    assert held["a.out"].updated is False
+    assert held["a.out"].age_s == pytest.approx(0.01)  # 60ms - 50ms
+    assert held["a.out"].message == b"fresh"  # the held value, not empty

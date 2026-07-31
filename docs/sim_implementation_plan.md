@@ -2509,9 +2509,19 @@ change to every artefact). Starting here first means doing this stage twice.
       which is also what makes every test here run with no DLL
 - [x] `version:` as a required top-level key + an upgrader; unversioned files
       are `v1` (`CR-SIM-23`)
-- [ ] `period_ns` read from each manifest; **base grid derived as the GCD** of
+- [x] `period_ns` read from each manifest; **base grid derived as the GCD** of
       the declared periods; a period that is not an integer multiple is a load
-      error naming both numbers — never rounded (`R-SIM-18`)
+      error naming both numbers — never rounded (`R-SIM-18`). **Finding:** a
+      base grid genuinely computed as the GCD of a period set can never
+      actually fail this check against any period in that set (GCD divides
+      every member of the set it came from, by definition) -- unreachable
+      through `Pipeline.load` today with correct inputs. The guard
+      (`_require_multiple`) stays regardless -- `R-SIM-18` states the
+      invariant explicitly -- and is unit-tested directly with numbers that
+      do not come from a real GCD, rather than pretending a natural failing
+      case exists. `Pipeline.step()` is the multi-rate-aware entry point
+      (`exec()` stays single-rate, unconditional, and is what `step()`'s
+      due ticks are built on)
 - [x] `contracts/override.py` — the closed four-verb list (`R-SIM-15`).
       `Stage.overrides` is declared and validated at load (a verb outside
       the four is `AuthoringError`); actually applying one to a live port's
@@ -2563,10 +2573,10 @@ change to every artefact). Starting here first means doing this stage twice.
 - [x] `UT-C1c-19` an unversioned pipeline file is read as `v1` and upgraded, on
       the same shape as the scenario upgrader — the pipeline is the artefact most
       certain to outlive its format, and was the only one with no migration story
-- [ ] `UT-C1c-20` **rate**: with stages at 20 ms and 50 ms, the base grid is
+- [x] `UT-C1c-20` **rate**: with stages at 20 ms and 50 ms, the base grid is
       10 ms; each stage executes only on its due ticks; a non-multiple period is
       a load error naming both numbers (`R-SIM-18`)
-- [ ] `UT-C1c-21` a held port reads `updated=False` with an **exact** `age_s`
+- [x] `UT-C1c-21` a held port reads `updated=False` with an **exact** `age_s`
       from integer nanoseconds, and the consumer still receives its **full port
       set** — `R-SIM-10`'s invariant under multi-rate
 - [ ] `ST-C1c-1` resim **every** existing recording through
