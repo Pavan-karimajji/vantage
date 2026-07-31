@@ -467,6 +467,14 @@ PrimKind = Literal[
     "points", "arrow", "text", "grid", "heatmap", "image",
 ]                                   # closed set (sim_visualization_spec.md §2)
 
+@dataclass(frozen=True)
+class BulkRef:                     # a coordinate into the recording (`NR-SIM-43`, `OD-7`)
+    topic: str
+    log_time_ns: int
+    field: str = ""
+    count: int = 0
+    encoding: str = ""
+
 @dataclass(frozen=True, slots=True)
 class Prim:
     kind: PrimKind
@@ -497,6 +505,8 @@ class Prim:
     cell_dx_m: float | None = None; cell_dy_m: float | None = None
     values: tuple[tuple[float, ...], ...] | None = None        # heatmap
     data: bytes | None = None; format: str | None = None       # image
+    bulk: BulkRef | None = None     # reference in place of inline data (`NR-SIM-43`)
+    derived: bool = False          # `R-SIM-7` stopgap marker, per-prim (`OD-6`)
 
 @dataclass(frozen=True, slots=True)
 class Layer:
@@ -513,6 +523,12 @@ class LayerProvider(Protocol):
     id: ClassVar[str]
     def __call__(self, ctx: LayerCtx) -> Sequence[Layer]: ...
 ```
+
+**`Layer.__post_init__` (added `S-A3Δ`, `OD-6`/`OD-7`):** a `Layer(derived=False)`
+containing a `Prim(derived=True)` raises `AuthoringError`; a prim inlining more
+than `scene/types.py`'s `MAX_INLINE_PRIM_ELEMENTS` elements (points, heatmap
+cells, or image bytes) raises `ContractError` naming the layer, the prim kind
+and the count -- reference it with `BulkRef` instead (`NR-SIM-43`).
 
 A provider **must not**: compute a pixel, read the viewport, import a renderer /
 `cv2` / `matplotlib` / Qt, touch disk, or hold state between ticks. `LayerCtx`

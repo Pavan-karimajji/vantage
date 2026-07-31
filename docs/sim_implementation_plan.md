@@ -738,20 +738,37 @@ against the code: `Prim.values` inlines a nested float array, `Prim.data` inline
 image bytes, and `Prim.points_m` is unbounded. Two additions, both structural,
 both permanent once `S-D4` builds on them:
 
-- [ ] **`BulkRef` as a `Prim` field** — `topic` + `log_time_ns` + optional
+- [x] **`BulkRef` as a `Prim` field** — `topic` + `log_time_ns` + optional
       `field` path + `count` + `encoding`. It is a *coordinate into the
       recording*, not a second storage mechanism, so a `Scene` stays
-      serializable and a golden still round-trips (arch §5.3)
-- [ ] **The budget check lives in `Layer.__post_init__`**, not in `Prim`. A
+      serializable and a golden still round-trips (arch §5.3). *2026-07-31:*
+      landed in `scene/types.py` exactly per the sketch, one new field on
+      `Prim` (`bulk: BulkRef | None = None`); `scene/codec.py` appends field
+      numbers 38 (`bulk`) and 39 (`derived`) on `Prim` and a new `BulkRef`
+      message, never renumbering an existing one, so old bytes still decode
+      (`UT-A3-8`'s own contract). `sim_api_reference.md` §5 updated in the
+      same commit (`GT-7`)
+- [x] **The budget check lives in `Layer.__post_init__`**, not in `Prim`. A
       `Prim` does not know its layer, and `NR-SIM-43` requires the error to name
-      one. Raise `ContractError` with the layer id, the prim kind and the count
-- [ ] **`Prim.derived: bool = False`**, plus the `Layer.derived` consistency
+      one. Raise `ContractError` with the layer id, the prim kind and the count.
+      *2026-07-31:* `_inline_element_count()` sums whichever of `points_m` /
+      `values` / `data` is set (a prim carrying `bulk` instead sets none of
+      them, so it never counts against the budget)
+- [x] **`Prim.derived: bool = False`**, plus the `Layer.derived` consistency
       check (`UT-A3-13`). A layer legitimately mixes SUT-published and
       reconstructed geometry, which makes the existing per-layer flag inaccurate
-      rather than merely coarse (`R-SIM-7`, arch §5.19)
-- [ ] The declared budget is a **named constant with its number in this
+      rather than merely coarse (`R-SIM-7`, arch §5.19). *2026-07-31:* one
+      direction only, per arch §5.19's own statement — `Layer(derived=False)`
+      containing a `Prim(derived=True)` raises `AuthoringError`; a
+      `Layer(derived=True)` legitimately mixes `derived=True` and
+      `derived=False` prims, which is exactly the case this field exists for
+- [x] The declared budget is a **named constant with its number in this
       document**, not a magic literal — `NR-SIM-5` is falsifiable only against a
-      stated figure (`GT-13`)
+      stated figure (`GT-13`). **Value: `MAX_INLINE_PRIM_ELEMENTS = 2000`**
+      (`scene/types.py`) — points in `points_m`, cells in `values`, bytes in
+      `data`; chosen as comfortably above "tens of prims of tens of points"
+      (arch §5.3's own description of the normal case) and far below the
+      100 000-point cloud the rule exists to catch
 
 - [x] `scene/types.py` — frozen `Prim`, `Layer`, `Scene` per api reference §5
       and visualization spec §2. Every prim carries `frame`, `style`, `pick_id`,
@@ -853,16 +870,25 @@ both permanent once `S-D4` builds on them:
       (module scan) — the layering that makes `R-SIM-2` mechanical
 - [x] `UT-A3-11` no `Prim` field accepts a colour value: constructing one with
       a hex-literal style raises, because a hex string is not a semantic token
-- [ ] `UT-A3-12` **the Scene carries geometry, not bulk data** (`NR-SIM-43`,
+- [x] `UT-A3-12` **the Scene carries geometry, not bulk data** (`NR-SIM-43`,
       audit `A5`): a `Prim` exceeding the declared per-Scene byte budget is a
       `ContractError` naming the layer, and a bulk array (point cloud, image,
       grid) is carried as a **reference** into the recording, not inlined.
       `SceneCache` bounds by **bytes**, not entry count. *Added by the
-      2026-07-31 audit — structural and cheap now, permanent after `S-D4`*
-- [ ] `UT-A3-13` `Prim.derived` and `Layer.derived` **cannot disagree**: a
+      2026-07-31 audit — structural and cheap now, permanent after `S-D4`*.
+      *2026-07-31:* the `Prim`/`Layer` half verified by
+      `test_layer_rejects_a_prim_exceeding_the_inline_budget` and
+      `test_layer_accepts_a_prim_referencing_bulk_data_instead_of_inlining_it`
+      (`tests/unit/test_a3_types.py`); the `SceneCache`-bytes half is
+      `UT-B2-15`'s job (S-B2Δ, #4), not re-claimed here
+- [x] `UT-A3-13` `Prim.derived` and `Layer.derived` **cannot disagree**: a
       `Layer(derived=False)` containing a `Prim(derived=True)` raises. Both
       directions asserted, because the check exists to stop a mixed layer
-      claiming to be fully SUT-published (`OD-6`)
+      claiming to be fully SUT-published (`OD-6`). *2026-07-31:* verified by
+      `test_layer_with_derived_false_rejects_a_derived_prim` (the raise) and
+      `test_layer_with_derived_true_may_legitimately_mix_real_and_derived_prims`
+      (the permitted mix, the other assertion direction)
+      (`tests/unit/test_a3_types.py`)
 - [x] `ST-A3-1` `python -m adas_sim.render.palette_check` exits 0 for `dark` and
       `light`; every pair in the 6-8 dE band has a **named** secondary encoding
 

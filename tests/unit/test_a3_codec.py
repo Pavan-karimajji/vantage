@@ -18,7 +18,7 @@ from google.protobuf import message_factory as _mfactory
 
 from adas_sim.core.errors import ContractError
 from adas_sim.scene.codec import SceneProto, decode_scene, encode_scene
-from adas_sim.scene.types import Layer, Prim, Scene
+from adas_sim.scene.types import BulkRef, Layer, Prim, Scene
 
 SRC_ROOT = Path(__file__).resolve().parent.parent.parent / "src" / "adas_sim"
 
@@ -32,6 +32,18 @@ def _sample_scene() -> Scene:
 def test_scene_round_trips_to_an_equal_object():
     """UT-A3-2."""
     scene = _sample_scene()
+    assert decode_scene(encode_scene(scene)) == scene
+
+
+def test_bulk_ref_and_derived_round_trip():
+    """S-A3Δ: `Prim.bulk` (a `BulkRef`) and `Prim.derived` survive encode/decode
+    like every other field -- UT-A3-2's contract, extended to the two fields
+    this delta adds."""
+    ref = BulkRef(topic="df/point_cloud", log_time_ns=42, field="points",
+                  count=100_000, encoding="f32[3]")
+    prim = Prim(kind="points", bulk=ref, derived=True, style="truth.trace")
+    layer = Layer(id="sim.test.cloud", group="sim", prims=(prim,), derived=True)
+    scene = Scene(t_s=1.0, layers=(layer,))
     assert decode_scene(encode_scene(scene)) == scene
 
 

@@ -24,7 +24,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
-from adas_sim.core.errors import AuthoringError
+from adas_sim.core.errors import AuthoringError, ContractError
 from adas_sim.scene.frames import is_known_frame, known_frame_kinds
 
 #: Closed set (sim_visualization_spec.md §2). Adding a kind is a framework
@@ -45,6 +45,29 @@ _KNOWN_KINDS = frozenset(PrimKind.__args__)  # type: ignore[attr-defined]
 _HEX_STYLE = re.compile(r"^#[0-9a-fA-F]{3}$|^#[0-9a-fA-F]{6}$|^#[0-9a-fA-F]{8}$")
 
 SCENE_VERSION = "1.0"
+
+#: Small geometry only (`NR-SIM-43`, arch §5.3, `OD-7`). Above this many
+#: inline elements -- points in `points_m`, cells in `values`, bytes in
+#: `data` -- a provider must carry a `BulkRef` instead of inlining, checked
+#: in `Layer.__post_init__` because a `Prim` does not know its layer. Fixed
+#: here, as a stated figure, so `NR-SIM-5` is falsifiable rather than a magic
+#: literal (`sim_implementation_plan.md` S-A3Δ, `GT-13`).
+MAX_INLINE_PRIM_ELEMENTS = 2000
+
+
+@dataclass(frozen=True, slots=True)
+class BulkRef:
+    """A coordinate into the recording, never a second storage mechanism
+    (`NR-SIM-43`, arch §5.3). A `Prim` carrying this is a *reference* --
+    resolved by the renderer from the recording at draw time -- not a second
+    copy of the payload, so a `Scene` stays serializable.
+    """
+
+    topic: str
+    log_time_ns: int
+    field: str = ""
+    count: int = 0
+    encoding: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +134,16 @@ class Prim:
     data: bytes | None = None
     format: str | None = None
 
+    #: A coordinate into the recording for bulk geometry too large to inline
+    #: (`NR-SIM-43`) -- the renderer resolves it at draw time instead.
+    bulk: BulkRef | None = None
+
+    #: R-SIM-7's stopgap marker at prim granularity: this prim was
+    #: reconstructed from calibration rather than published by the SUT. A
+    #: layer legitimately mixes real and derived prims, which is why this
+    #: exists alongside (not instead of) `Layer.derived` (`OD-6`, arch §5.19).
+    derived: bool = False
+
     #: Ordered (name, formatted value) pairs for the inspector panel
     #: (`sim_visualization_spec.md` §7.2) -- **declared, not dumped**: the
     #: provider that built this prim already had the raw entity in hand, so
@@ -150,6 +183,21 @@ class Prim:
         return f"<Prim kind={self.kind!r} frame={self.frame!r} style={self.style!r}>"
 
 
+def _inline_element_count(prim: Prim) -> int:
+    """Elements actually inlined in `prim` -- points, heatmap cells, or image
+    bytes -- the quantity `MAX_INLINE_PRIM_ELEMENTS` budgets (`NR-SIM-43`). A
+    prim referencing its payload via `bulk` instead carries none of these.
+    """
+
+    if prim.points_m is not None:
+        return len(prim.points_m)
+    if prim.values is not None:
+        return sum(len(row) for row in prim.values)
+    if prim.data is not None:
+        return len(prim.data)
+    return 0
+
+
 @dataclass(frozen=True, slots=True)
 class Layer:
     """One named, independently toggleable group of prims."""
@@ -165,6 +213,24 @@ class Layer:
     #: R-SIM-7's stopgap marker: reconstructed from calibration rather than a
     #: real debug port, never a silent one.
     derived: bool = False
+
+    def __post_init__(self) -> None:
+        for prim in self.prims:
+            if prim.derived and not self.derived:
+                raise AuthoringError(
+                    expected="a Layer(derived=False) contains only derived=False prims",
+                    found=f"a {prim.kind!r} prim with derived=True",
+                    where=f"Layer.__post_init__ (layer={self.id!r})",
+                    hint="mark the layer derived=True, or stop reconstructing this prim (R-SIM-7, OD-6)",
+                )
+            count = _inline_element_count(prim)
+            if count > MAX_INLINE_PRIM_ELEMENTS:
+                raise ContractError(
+                    expected=f"inline geometry <= {MAX_INLINE_PRIM_ELEMENTS} elements (NR-SIM-43)",
+                    found=f"{count} elements in a {prim.kind!r} prim",
+                    where=f"Layer.__post_init__ (layer={self.id!r})",
+                    hint="reference bulk data with Prim.bulk (a BulkRef) instead of inlining it",
+                )
 
     def __repr__(self) -> str:
         return f"<Layer {self.id!r} group={self.group!r} prims={len(self.prims)}>"

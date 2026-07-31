@@ -32,7 +32,7 @@ from google.protobuf import descriptor_pool as _dpool
 from google.protobuf import message_factory as _mfactory
 
 from adas_sim.core.errors import ContractError
-from adas_sim.scene.types import Layer, Prim, Scene
+from adas_sim.scene.types import BulkRef, Layer, Prim, Scene
 
 _PACKAGE = "adas_sim.scene.v1"
 _FT = _dpb.FieldDescriptorProto
@@ -67,6 +67,14 @@ def _build_file_descriptor() -> _dpb.FileDescriptorProto:
     float_row = fdp.message_type.add()
     float_row.name = "FloatRow"
     _field(float_row, "v", 1, _FT.TYPE_DOUBLE, repeated=True)
+
+    bulk_ref = fdp.message_type.add()
+    bulk_ref.name = "BulkRef"
+    _field(bulk_ref, "topic", 1, _FT.TYPE_STRING)
+    _field(bulk_ref, "log_time_ns", 2, _FT.TYPE_INT64)
+    _field(bulk_ref, "field", 3, _FT.TYPE_STRING)
+    _field(bulk_ref, "count", 4, _FT.TYPE_INT32)
+    _field(bulk_ref, "encoding", 5, _FT.TYPE_STRING)
 
     prim = fdp.message_type.add()
     prim.name = "Prim"
@@ -110,6 +118,10 @@ def _build_file_descriptor() -> _dpb.FileDescriptorProto:
     _field(prim, "values", 35, _FT.TYPE_MESSAGE, repeated=True, type_name=f".{_PACKAGE}.FloatRow")
     _field(prim, "data", 36, _FT.TYPE_BYTES)
     _field(prim, "format", 37, _FT.TYPE_STRING)
+    # Field numbers 38+ added by S-A3Δ (`OD-6`, `OD-7`) -- appended, never
+    # renumbered, per this file's own "permanent once shipped" rule above.
+    _field(prim, "bulk", 38, _FT.TYPE_MESSAGE, type_name=f".{_PACKAGE}.BulkRef")
+    _field(prim, "derived", 39, _FT.TYPE_BOOL)
 
     layer = fdp.message_type.add()
     layer.name = "Layer"
@@ -135,6 +147,7 @@ _POOL = _dpool.DescriptorPool()
 _POOL.Add(_build_file_descriptor())
 Point2DProto = _mfactory.GetMessageClass(_POOL.FindMessageTypeByName(f"{_PACKAGE}.Point2D"))
 FloatRowProto = _mfactory.GetMessageClass(_POOL.FindMessageTypeByName(f"{_PACKAGE}.FloatRow"))
+BulkRefProto = _mfactory.GetMessageClass(_POOL.FindMessageTypeByName(f"{_PACKAGE}.BulkRef"))
 PrimProto = _mfactory.GetMessageClass(_POOL.FindMessageTypeByName(f"{_PACKAGE}.Prim"))
 LayerProto = _mfactory.GetMessageClass(_POOL.FindMessageTypeByName(f"{_PACKAGE}.Layer"))
 SceneProto = _mfactory.GetMessageClass(_POOL.FindMessageTypeByName(f"{_PACKAGE}.Scene"))
@@ -151,7 +164,7 @@ _PRIM_SCALAR_FIELDS = (
     "cx_m", "cy_m", "length_m", "width_m", "yaw_rad", "height_m", "r_m", "a_m", "b_m",
     "x_m", "y_m", "dx_m", "dy_m", "text", "anchor",
     "spacing_m", "extent_m", "x0_m", "y0_m", "cell_dx_m", "cell_dy_m",
-    "data", "format",
+    "data", "format", "derived",
 )
 
 
@@ -169,6 +182,12 @@ def _prim_to_proto(prim: Prim) -> PrimProto:
     if prim.values is not None:
         for row in prim.values:
             msg.values.add(v=list(row))
+    if prim.bulk is not None:
+        msg.bulk.topic = prim.bulk.topic
+        msg.bulk.log_time_ns = prim.bulk.log_time_ns
+        msg.bulk.field = prim.bulk.field
+        msg.bulk.count = prim.bulk.count
+        msg.bulk.encoding = prim.bulk.encoding
     return msg
 
 
@@ -183,6 +202,11 @@ def _prim_from_proto(msg: PrimProto) -> Prim:
         kwargs["points_m"] = tuple((p.x, p.y) for p in msg.points_m)
     if len(msg.values):
         kwargs["values"] = tuple(tuple(row.v) for row in msg.values)
+    if msg.HasField("bulk"):
+        kwargs["bulk"] = BulkRef(
+            topic=msg.bulk.topic, log_time_ns=msg.bulk.log_time_ns,
+            field=msg.bulk.field, count=msg.bulk.count, encoding=msg.bulk.encoding,
+        )
     return Prim(**kwargs)
 
 

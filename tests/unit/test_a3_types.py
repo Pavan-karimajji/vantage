@@ -3,7 +3,7 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""S-A3 `scene/types.py` tests: UT-A3-1, UT-A3-3, UT-A3-11
+"""S-A3 `scene/types.py` tests: UT-A3-1, UT-A3-3, UT-A3-11, UT-A3-12, UT-A3-13
 (docs/sim_implementation_plan.md)."""
 
 from __future__ import annotations
@@ -12,8 +12,8 @@ import dataclasses
 
 import pytest
 
-from adas_sim.core.errors import AuthoringError
-from adas_sim.scene.types import Layer, Prim, Scene
+from adas_sim.core.errors import AuthoringError, ContractError
+from adas_sim.scene.types import MAX_INLINE_PRIM_ELEMENTS, BulkRef, Layer, Prim, Scene
 
 #: One valid construction per catalogue kind (sim_visualization_spec.md §2).
 ONE_PER_KIND: dict[str, Prim] = {
@@ -91,3 +91,50 @@ def test_layer_and_scene_are_immutable_dataclasses():
     scene = Scene(layers=(layer,))
     with pytest.raises(dataclasses.FrozenInstanceError):
         scene.t_s = 1.0
+
+
+def test_layer_rejects_a_prim_exceeding_the_inline_budget():
+    """UT-A3-12: a Prim inlining more than `MAX_INLINE_PRIM_ELEMENTS` is a
+    `ContractError` naming the layer, the prim kind and the count
+    (`NR-SIM-43`)."""
+    too_many_points = tuple((float(i), 0.0) for i in range(MAX_INLINE_PRIM_ELEMENTS + 1))
+    big_prim = Prim(kind="points", points_m=too_many_points, style="truth.trace")
+    with pytest.raises(ContractError) as excinfo:
+        Layer(id="sim.test.cloud", group="sim", prims=(big_prim,))
+    err = excinfo.value
+    assert "sim.test.cloud" in err.where
+    assert "points" in err.found
+    assert str(MAX_INLINE_PRIM_ELEMENTS + 1) in err.found
+
+
+def test_layer_accepts_a_prim_referencing_bulk_data_instead_of_inlining_it():
+    """UT-A3-12 (converse): a `BulkRef` is a coordinate into the recording,
+    not a second copy of the payload, so it sidesteps the inline budget
+    entirely -- this is what `NR-SIM-43` means by "referenced, not inlined"."""
+    ref = BulkRef(topic="df/point_cloud", log_time_ns=123_000_000,
+                  count=100_000, encoding="f32[3]")
+    prim = Prim(kind="points", bulk=ref, style="truth.trace")
+    layer = Layer(id="sim.test.cloud", group="sim", prims=(prim,))
+    assert layer.prims[0].bulk == ref
+
+
+def test_layer_with_derived_false_rejects_a_derived_prim():
+    """UT-A3-13: a `Layer(derived=False)` may not contain a `Prim(derived=True)`
+    (`OD-6`) -- stops a mixed layer claiming to be fully SUT-published."""
+    prim = Prim(kind="polygon", points_m=((0.0, 0.0), (1.0, 0.0), (1.0, 1.0)),
+                style="object.ghost", derived=True)
+    with pytest.raises(AuthoringError) as excinfo:
+        Layer(id="sim.test.mixed", group="sim", prims=(prim,), derived=False)
+    assert "sim.test.mixed" in excinfo.value.where
+
+
+def test_layer_with_derived_true_may_legitimately_mix_real_and_derived_prims():
+    """UT-A3-13 (converse): a layer legitimately mixes SUT-published and
+    reconstructed geometry -- `Layer.derived=True` is exactly that case, and
+    is not required to make every one of its prims `derived=True` too."""
+    real_prim = Prim(kind="text", x_m=0.0, y_m=0.0, text="warning", style="status.warning")
+    derived_prim = Prim(kind="polygon", points_m=((0.0, 0.0), (1.0, 0.0), (1.0, 1.0)),
+                         style="object.ghost", derived=True)
+    layer = Layer(id="sim.test.mixed", group="sim", prims=(real_prim, derived_prim), derived=True)
+    assert layer.prims[0].derived is False
+    assert layer.prims[1].derived is True
