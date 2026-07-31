@@ -32,6 +32,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, fields
 from types import MappingProxyType
 
+from adas_sim.contracts.binding import try_resolve_component_ref
 from adas_sim.core.errors import AuthoringError
 from adas_sim.core.history import Interaction
 
@@ -107,10 +108,26 @@ def layer_provider(
             )
 
         if requires:
+            where = f"{func.__module__}.{func.__qualname__} requires"
+
             @functools.wraps(func)
             def gated(ctx, *args, **kwargs):
                 current = ctx.history.last(1)
-                if not current or not all(name in current[-1].ports for name in requires):
+                if not current:
+                    return ()
+                # A `self.<port>` name matching more than one known port is
+                # an unambiguous same-run collision and raises loudly; zero
+                # matches or a resolved name simply absent from *this* tick
+                # are both a legitimate "nothing to draw yet" (`D13`,
+                # `S-B1Δ`) -- Block 1 has no live manifest to tell "does not
+                # exist" apart from "this run never wired that component".
+                resolved: list[str] = []
+                for name in requires:
+                    ref = try_resolve_component_ref(name, known_ports=ctx.known_ports, where=where)
+                    if ref is None:
+                        return ()
+                    resolved.append(ref)
+                if not all(name in current[-1].ports for name in resolved):
                     return ()
                 return func(ctx, *args, **kwargs)
             registered_func = gated

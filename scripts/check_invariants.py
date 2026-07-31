@@ -3,9 +3,10 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""GT-1, GT-2, GT-3, GT-6 (docs/sim_implementation_plan.md §2), as one script
-run by hand at the end of every stage and exercised by UT-A1-3 -- the check
-is tested, not trusted. Every finding names the file, the line and the gate.
+"""GT-1, GT-2, GT-3, GT-6, GT-11 (docs/sim_implementation_plan.md §2), as one
+script run by hand at the end of every stage and exercised by UT-A1-3 -- the
+check is tested, not trusted. Every finding names the file, the line and the
+gate.
 """
 
 from __future__ import annotations
@@ -55,6 +56,19 @@ _DIMENSION_ASSIGNMENT = re.compile(
 
 # GT-6: the framework may not import a component or generated protobuf bindings.
 _COMPONENT_IMPORT = re.compile(r"^\s*(?:from|import)\s+modules\.\w+\b")
+
+# GT-11: a plug-in's own `requires=` entry or `.port(...)` call naming a
+# dotted, three-plus-segment string is a spelled stage name (R-SIM-21) --
+# `self.<port>` (component-relative) and `source.<name>` (the reserved
+# world-model prefix, contracts/pipeline.py's own grammar) are exempt.
+# Only the `requires=(...)`/`.port(...)` ARGUMENT is scanned, never the
+# whole line -- `@layer_provider("df.common.objects", ..., requires=(...))`
+# has its own three-segment layer id on the same line, which is not a port
+# reference at all.
+_QUOTED_DOTTED_REF = re.compile(r'''["']([A-Za-z_]\w*(?:\.[A-Za-z_]\w*){2,})["']''')
+_REQUIRES_ARG = re.compile(r"requires\s*=\s*[\(\[]([^)\]]*)[\)\]]")
+_PORT_CALL_ARG = re.compile(r"\.port\(([^)]*)\)")
+_GT11_EXEMPT_PREFIXES = ("self.", "source.")
 
 # GT-1's one sanctioned exception: io/legacy.py's job is to recognise real
 # legacy topic names on disk (df/aeb_outputs, df/bsd_outputs), which are
@@ -118,12 +132,32 @@ def check_gt6(src_root: Path = SRC_ROOT) -> list[str]:
     return findings
 
 
+def check_gt11(superproject_root: Path = SUPERPROJECT_ROOT) -> list[str]:
+    """GT-11 -- no port address is a literal outside the component that
+    declares it (R-SIM-21, arch `D13`, `S-B1Δ`). Extends `GT-1`, which stops
+    exactly at the boundary where a component's own plug-in begins."""
+    findings = []
+    for sim_dir in sorted(superproject_root.glob("modules/*/sim")):
+        for path in _iter_py_files(sim_dir):
+            for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+                args = [m.group(1) for m in _REQUIRES_ARG.finditer(line)]
+                args += [m.group(1) for m in _PORT_CALL_ARG.finditer(line)]
+                for arg in args:
+                    for match in _QUOTED_DOTTED_REF.finditer(arg):
+                        ref = match.group(1)
+                        if ref.startswith(_GT11_EXEMPT_PREFIXES):
+                            continue
+                        findings.append(f"GT-11 {path}:{lineno}: spelled port address outside its component: {line.strip()!r}")
+    return findings
+
+
 def run_all(src_root: Path = SRC_ROOT, superproject_root: Path = SUPERPROJECT_ROOT) -> list[str]:
     return [
         *check_gt1(src_root),
         *check_gt2(superproject_root),
         *check_gt3(src_root, superproject_root),
         *check_gt6(src_root),
+        *check_gt11(superproject_root),
     ]
 
 
@@ -134,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
     if findings:
         print(f"\n{len(findings)} invariant violation(s)")
         return 1
-    print("GT-1, GT-2, GT-3, GT-6: clean")
+    print("GT-1, GT-2, GT-3, GT-6, GT-11: clean")
     return 0
 
 

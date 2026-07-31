@@ -48,6 +48,7 @@ def build_scene(session, tick_index: int, project: str = "base") -> Scene:
         model=ProjectModel.resolve(project=project),
         history=HistoryView(_ticks=tuple(session.ticks[: index + 1])),
         frames=FrameTree(session.at(index).pose),
+        known_ports=session.known_ports,
     )
     layers = [layer for provider in _PROVIDERS for layer in provider(ctx)]
     return Scene(t_s=session.at(index).t_s, layers=tuple(layers))

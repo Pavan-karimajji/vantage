@@ -30,6 +30,7 @@ someone else's data (`NR-SIM-4`).
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Literal
 
@@ -93,6 +94,76 @@ def parse_address(raw: str, *, where: str) -> Address:
             hint="index the field within the port, e.g. 'port.repeated[0]', not the port itself",
         )
     return Address(raw=raw, port=segments[0].name, path=tuple(segments[1:]))
+
+
+def _match_component_ref(ref: str, *, known_ports: Iterable[str]) -> list[str] | None:
+    """`None` when `ref` carries no `self.` prefix (already concrete, never
+    matched against anything); otherwise every qualified name in
+    `known_ports` whose segment after the stage prefix equals `ref`'s own
+    port half."""
+    if not ref.startswith("self."):
+        return None
+    wanted = ref[len("self."):]
+    return [name for name in known_ports if name.partition(".")[2] == wanted]
+
+
+def resolve_component_ref(ref: str, *, known_ports: Iterable[str], where: str) -> str:
+    """Component-relative port binding (`R-SIM-21`, arch `D13`): `self.<port>`
+    resolves to the one qualified address in `known_ports` -- this run's
+    actual port universe (a recording's own topics, `S-B1Δ`) -- whose
+    segment after the stage prefix equals `<port>`. A ref with no `self.`
+    prefix is already concrete and passes through unchanged.
+
+    Strict: zero or more than one match raises, naming `where` (the
+    plug-in), the requested ref and every port actually known this run
+    (`N-8`). For a caller that has not already established the port is part
+    of this run (a layer's `requires=` gate), use `try_resolve_component_ref`
+    instead -- this one is for a caller (`LayerCtx.port`) reached only after
+    that gate already passed, where a miss is a real, unambiguous defect.
+    """
+    matches = _match_component_ref(ref, known_ports=known_ports)
+    if matches is None:
+        return ref
+    if len(matches) != 1:
+        raise AuthoringError(
+            expected=f"exactly one port matching {ref!r} across this run's components",
+            found=f"{len(matches)} matches: {sorted(matches)}" if matches else "no matching port",
+            where=where,
+            hint=f"known ports this run: {sorted(known_ports)}",
+        )
+    return matches[0]
+
+
+def try_resolve_component_ref(ref: str, *, known_ports: Iterable[str], where: str) -> str | None:
+    """The tolerant half `resolve_component_ref` deliberately isn't: `None`
+    when `ref` matches no known port at all, rather than raising.
+
+    **Why zero matches must not raise (checked with the user, `S-B1Δ`).**
+    Block 1 discovers layer providers by import into one process-global
+    registry (`R-VAR-2`) with no live component manifest and no per-session
+    plug-in scoping yet (that arrives at `S-C8`/`S-D3`) -- so "this port does
+    not exist anywhere" and "this recording's pipeline never wired that
+    component at all" are indistinguishable from a single recording's own
+    topic set alone. Treating a zero-match as a hard error would crash every
+    layer provider the moment it renders a recording that simply does not
+    include the component it draws for, which is the ordinary case, not a
+    bug. **More than one match stays an unambiguous, same-run collision and
+    still raises** -- that evidence does not depend on a live manifest to be
+    real.
+    """
+    matches = _match_component_ref(ref, known_ports=known_ports)
+    if matches is None:
+        return ref
+    if not matches:
+        return None
+    if len(matches) > 1:
+        raise AuthoringError(
+            expected=f"at most one port matching {ref!r} across this run's components",
+            found=f"{len(matches)} matches: {sorted(matches)}",
+            where=where,
+            hint=f"known ports this run: {sorted(known_ports)}",
+        )
+    return matches[0]
 
 
 def _descend(message: object, path: tuple[AddressSegment, ...]) -> object:

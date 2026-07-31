@@ -36,9 +36,15 @@ unfinished.** Normative rules: root `.claude/rules/sim.md` (`R-SIM-1..25`).
 - **The viewer's only input is a `Session`** (R-SIM-13). It never talks to a
   world model, a DLL or a file.
 - **A plug-in never spells a port address** (R-SIM-21). `self.<port>`, resolved
-  once at load; an unresolvable name is an `AuthoringError`, never an empty
-  layer. This is the boundary `GT-1` does *not* guard — it scans `src/` and
-  stops exactly where a component's plug-in begins (arch `D13`).
+  against `LayerCtx.known_ports` (`ctx.port(...)`/`requires=`, `S-B1Δ`). An
+  *ambiguous* match (more than one known port fits) is an `AuthoringError`,
+  never a guess; a *zero*-match `requires=` entry stays a silent empty layer —
+  Block 1 has no live component manifest, so "this port does not exist" and
+  "this run never wired that component" are indistinguishable from a
+  recording's own topics alone (checked with the user). This is the boundary
+  `GT-1` does *not* guard — it scans `src/` and stops exactly where a
+  component's plug-in begins (arch `D13`); `GT-11` (`scripts/
+  check_invariants.py`) is the mechanised check over `modules/*/sim/**`.
 - **Authoring home ≠ deployed form** (R-SIM-20). Plug-ins are authored in
   `modules/<name>/sim/` and *copied* beside the library at build time, like the
   config bundle. "The player is standalone" and "the picture lives with the

@@ -18,7 +18,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
-from adas_sim.core.tick import Pose2D, Tick
+from adas_sim.contracts.binding import resolve_component_ref
+from adas_sim.core.tick import Pose2D, PortValue, Tick
 from adas_sim.model.project import ProjectModel
 
 
@@ -130,6 +131,29 @@ class LayerCtx:
     history: HistoryView
     frames: FrameTree
     interaction: Interaction = field(default_factory=Interaction)
+    #: This run's actual port universe (a recording's own topics, `S-B1Δ`) --
+    #: what `self.<port>` resolves against (`R-SIM-21`). Empty for a `LayerCtx`
+    #: built by hand (a test, a bare-name `requires`), which resolves nothing
+    #: since a non-`self.` ref passes `resolve_component_ref` through unchanged.
+    known_ports: frozenset[str] = frozenset()
+
+    @property
+    def now(self) -> Tick:
+        """The current tick -- `history`'s own most recent entry (`OQ-13`).
+        Removes windowed history from the minimum path a provider needs to
+        read: `ctx.now` instead of `ctx.history.last(1)[-1]`."""
+        return self.history.last(1)[-1]
+
+    def port(self, ref: str) -> PortValue:
+        """`self.<port>` (or an already-concrete address) on the current
+        tick, component-relative binding resolved against `known_ports`
+        (`R-SIM-21`). Not `Tick.port`'s own job: a `Tick` knows only its own
+        tick's ports, and resolving "does this port exist at all" against a
+        single tick would conflate it with "has this port arrived yet"
+        (arch `D13`) -- `known_ports` is this run's whole universe, `now` is
+        one tick of it."""
+        resolved = resolve_component_ref(ref, known_ports=self.known_ports, where="LayerCtx.port")
+        return self.now.port(resolved)
 
     def __repr__(self) -> str:
         return f"<LayerCtx project={self.model.project!r} history={len(self.history)}>"

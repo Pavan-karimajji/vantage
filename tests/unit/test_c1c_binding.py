@@ -7,6 +7,13 @@
 byte-application half; the load-time "silent about fixed_slots raises"
 half is `test_c1c_pipeline.py`'s, since it needs a real manifest), UT-C1c-26
 (docs/sim_implementation_plan.md).
+
+Also `S-B1Δ`'s `resolve_component_ref`/`try_resolve_component_ref` --
+component-relative `self.<port>` binding (`R-SIM-21`, arch `D13`). These are
+NOT `UT-C1c-22`/`-23` (that pair is the Pipeline/ComponentManifest-based
+resolver the S-C1c delta sketches for Block 2; Block 1 has no live manifest
+to resolve against, so this resolves against a run's own known port names
+instead -- see `scene/registry.py`'s `gated()` and `LayerCtx.port`).
 """
 
 from __future__ import annotations
@@ -16,7 +23,9 @@ from google.protobuf import descriptor_pb2 as _dpb
 from google.protobuf import descriptor_pool as _dpool
 from google.protobuf import message_factory as _mfactory
 
-from adas_sim.contracts.binding import Address, AddressSegment, apply_override, parse_address
+from adas_sim.contracts.binding import (
+    Address, AddressSegment, apply_override, parse_address, resolve_component_ref, try_resolve_component_ref,
+)
 from adas_sim.contracts.override import Override, OverrideVerb
 from adas_sim.core.errors import AuthoringError, ContractError
 
@@ -283,3 +292,49 @@ def test_an_arithmetic_verb_on_a_star_address_raises():
         apply_override(
             payload, Container, parse_address("port.scalars[*]", where="t"), Override(verb=OverrideVerb.CONST, value=1.0),
         )
+
+
+# ---------------------------------------------------------------------------
+# `resolve_component_ref`/`try_resolve_component_ref` -- component-relative
+# port binding (`R-SIM-21`, arch `D13`, `S-B1Δ`).
+# ---------------------------------------------------------------------------
+
+
+def test_a_ref_with_no_self_prefix_passes_through_unchanged():
+    assert resolve_component_ref("df.bsd.outputs", known_ports=(), where="t") == "df.bsd.outputs"
+    assert try_resolve_component_ref("df.bsd.outputs", known_ports=(), where="t") == "df.bsd.outputs"
+
+
+def test_self_ref_resolves_under_a_renamed_stage():
+    """The whole claim: the same `self.<port>` reference binds correctly
+    whichever stage name the concrete run happens to use."""
+    known_ports = frozenset({"driving_functions.bsd.outputs", "driving_functions.common.hud"})
+    assert resolve_component_ref("self.bsd.outputs", known_ports=known_ports, where="t") == "driving_functions.bsd.outputs"
+    assert try_resolve_component_ref("self.bsd.outputs", known_ports=known_ports, where="t") == "driving_functions.bsd.outputs"
+
+
+def test_resolve_component_ref_raises_on_zero_matches():
+    with pytest.raises(AuthoringError):
+        resolve_component_ref("self.bsd.outputs", known_ports=frozenset({"df.common.hud"}), where="t")
+
+
+def test_resolve_component_ref_raises_on_ambiguous_matches():
+    known_ports = frozenset({"df.bsd.outputs", "other.bsd.outputs"})
+    with pytest.raises(AuthoringError):
+        resolve_component_ref("self.bsd.outputs", known_ports=known_ports, where="t")
+
+
+def test_try_resolve_component_ref_returns_none_on_zero_matches():
+    """Zero matches is not raised here: Block 1 has no live component
+    manifest, so "does not exist" and "this run never wired that component"
+    are indistinguishable from a recording's own topics alone (checked with
+    the user, `S-B1Δ`)."""
+    assert try_resolve_component_ref("self.bsd.outputs", known_ports=frozenset({"df.common.hud"}), where="t") is None
+
+
+def test_try_resolve_component_ref_still_raises_on_ambiguous_matches():
+    """More than one match is a same-run collision regardless -- that
+    evidence does not need a live manifest."""
+    known_ports = frozenset({"df.bsd.outputs", "other.bsd.outputs"})
+    with pytest.raises(AuthoringError):
+        try_resolve_component_ref("self.bsd.outputs", known_ports=known_ports, where="t")

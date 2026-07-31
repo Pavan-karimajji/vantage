@@ -155,6 +155,7 @@ def build_session_from_recording(
             ticks=tuple(ticks),
             meta=manifest,
             deterministic=deterministic,
+            known_ports=frozenset(_topic_to_port_name(topic) for topic in topics),
         )
     finally:
         reader.close()
@@ -171,6 +172,7 @@ def _build_layer_ctx(session: Session, tick_index: int, *, project: str, interac
         history=HistoryView(_ticks=tuple(session.ticks[: index + 1])),
         frames=FrameTree(session.at(index).pose),
         interaction=interaction,
+        known_ports=session.known_ports,
     )
 
 

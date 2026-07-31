@@ -343,7 +343,7 @@ boundary the first nine watched from only one side.*
       project so far has run in a full checkout with editables registered, which
       is exactly the configuration that hides a missing `requires:`. Run per
       module, recorded with a date.
-- [ ] **GT-11 — no port address is a literal outside the component that
+- [x] **GT-11 — no port address is a literal outside the component that
       declares it.** A scan over every `modules/*/sim/**` plug-in, scenario
       `expect:` block, workspace and viewpoint file for a spelled port address
       (`<word>.<word>.<word>` matching a manifest port) returns nothing; every
@@ -353,6 +353,14 @@ boundary the first nine watched from only one side.*
       empty layer. *Extends `GT-1`, which guards the framework and stops exactly
       at the boundary where `D13` lives — the framework hardcodes no port name
       and never did; the plug-in does.*
+      *2026-07-31 (`S-B1Δ`):* mechanised in `scripts/check_invariants.py`'s
+      `check_gt11` — only `expect:`/workspace/viewpoint files don't exist yet
+      (later stages), so today it scans `requires=(...)`/`.port(...)` arguments.
+      **The loud/silent split is narrower than first written here** (see
+      `S-B1Δ`'s own finding): only an *ambiguous* match raises; a *zero*-match
+      is a legitimate silent empty layer in Block 1's global-registry world,
+      since "does not exist" and "this run never wired the component" are the
+      same observation without a live manifest.
 *The two gates below were added by the 2026-07-31 adversarial audit
 (`sim_requirements.md` §12). Both exist because the claim they guard was
 previously carried by prose alone.*
@@ -1648,50 +1656,109 @@ because no gate looked at it. `GT-1`/`GT-2`/`GT-3` scan `modules/sim/src` — th
 stop precisely where a component's plug-in begins. Three defects in the ~320
 lines of `modules/df/sim/`, all in the same shape:
 
-- [ ] **Port addresses are literals** — `requires=("df.bsd.outputs",)` and
+- [x] **Port addresses are literals** — `requires=("df.bsd.outputs",)` and
       `ctx.history.last(1)[-1].port("df.bsd.outputs")` in
       `sim/layers/bsd.py`. The `df.` segment is the **pipeline stage name**
       (`Pipeline` builds addresses as `f"{stage.name}.{port.name}"`), so a
       pipeline that names the stage anything else unbinds the layer; the rest
       is a C++ constant in another repo bound to this file by nothing.
-      Replace with component-relative `self.bsd.outputs`, resolved once at load
-- [ ] **The failure is silent** — `scene/registry.py`'s `gated` wrapper returns
+      Replace with component-relative `self.bsd.outputs`, resolved once at load.
+      *2026-07-31:* both call sites now use `self.bsd.outputs` — `requires=` and
+      `ctx.port("self.bsd.outputs")` (`LayerCtx.port`, new). Proved under a
+      renamed stage, not just the default one (`test_b1_df_layers.py`'s
+      `test_warning_layer_binds_correctly_under_a_renamed_stage`)
+- [x] **The failure is silent** — `scene/registry.py`'s `gated` wrapper returns
       `()` for a missing port, so a broken binding renders as *no overlay*,
       which on screen is indistinguishable from "no warning was raised". Make an
       unresolvable `requires` an `AuthoringError` at load, naming the plug-in,
       the port and every port the manifest declares (`N-8`). **A `requires` that
       is unsatisfied at *this tick* stays a legitimate empty result** — a port
       that does not exist and a port that has not arrived are different
-      statements, and merging them is what made this invisible
-- [ ] **A layer provider reads disk** — `_bsd_calibration()` calls
+      statements, and merging them is what made this invisible.
+      *2026-07-31, corrected after checking with the user:* Block 1 discovers
+      layer providers by import into one process-global registry (`R-VAR-2`)
+      with no live component manifest and no per-session plug-in scoping yet
+      (`S-C8`/`S-D3`) — so a `self.<port>` reference matching **zero** known
+      ports is indistinguishable, from a single recording's own topics alone,
+      between "this port does not exist" and "this run never wired that
+      component" (the ordinary case: e.g. a `bsd` layer rendering an `aeb`-only
+      recording). Raising there broke ~40 existing tests rendering synthetic,
+      component-unrelated recordings. Landed instead: `contracts/binding.py`'s
+      `try_resolve_component_ref` raises only on **ambiguity** (more than one
+      known port matches — a same-run collision, real regardless of a live
+      manifest) and returns `None` (silent empty layer) on zero matches;
+      `resolve_component_ref` stays strict (raises on zero *or* many) for a
+      caller already past that gate (`LayerCtx.port`). A perfectly precise
+      "does not exist anywhere, ever" check needs a live component manifest —
+      out of reach until `S-C8`/`S-D3`'s per-session plug-in scoping exists —
+      and is recorded here as a scoped gap, not solved by this stage
+- [x] **A layer provider reads disk** — `_bsd_calibration()` calls
       `path.read_text()` on `df`'s project YAML **per tick**, which `R-SIM-2`
       forbids outright ("a provider never touches disk") and which bypasses
       `R-SIM-3a`: it reads the *source checkout*, not the bundle the SUT was
       initialised with. That is exactly the "two readers agreeing by
       coincidence" failure the bundle exists to prevent, reintroduced by the
-      first plug-in written against it. Route through `ctx.model`
-- [ ] `UT-B1-14` a plug-in requiring a port no manifest declares raises at load,
-      naming all three things; and a plug-id whose port exists but has not yet
-      arrived still returns an empty layer without raising
+      first plug-in written against it. Route through `ctx.model`.
+      *2026-07-31:* `functools.lru_cache`d per project — reads disk once per
+      project, never per tick. **Scoped gap, not fixed here:** it still reads
+      the source checkout rather than the bundle the SUT was initialised with,
+      because `ProjectModel` deliberately exposes no generic bundle-directory
+      accessor yet (`model/project.py`'s own docstring) — there is nothing
+      beyond the project name to route this through until one exists
+- [x] `UT-B1-15` (renumbered off `UT-B1-14` — see the finding below) a
+      `self.<port>` `requires=` entry ambiguous across this run's known ports
+      raises naming the plug-in; one matching zero ports, or matching but not
+      yet present this tick, stays a silent empty result without raising
+      (`test_b1_registry_gating.py`)
 
 *Scope added 2026-07-31 (`OQ-13`). The concept count was never an API problem —
 it was a documentation one — but one line of it is real ergonomics:*
 
-- [ ] **`LayerCtx.now`** — a property returning `history.last(1)[-1]`, the
+- [x] **`LayerCtx.now`** — a property returning `history.last(1)[-1]`, the
       current tick. Today every provider opens with
       `ctx.history.last(1)[-1]`, which puts *windowed history* — an advanced
       concept — in front of every author before they draw anything. One
       property removes it from the minimum path without removing anything from
-      the API
-- [ ] `.claude/templates/sim_layer_provider.py` is the **measured artefact** for
+      the API. *2026-07-31:* landed in `core/history.py`; `modules/df/sim/
+      layers/common.py`'s `objects_layer`/`hud_layer` switched to it too (the
+      motivating "every provider opens with this" case), alongside
+      `LayerCtx.port(ref)` (self.-resolution + `.now.port(...)` in one call)
+- [x] `.claude/templates/sim_layer_provider.py` is the **measured artefact** for
       `OQ-13`: a canonical minimal provider of **≤15 lines** mentioning only the
       four core concepts (decorator, `ctx`, `Prim`, style token), with every
       optional idea below a second heading. *(Rewritten 2026-07-31 — the previous
       version taught all ten at once and imported `@inspector_fields`, which no
-      longer exists.)*
-- [ ] `Prim.derived` is set on reconstructed prims in `modules/df/sim/`, not only
+      longer exists.)* **Finding:** the rewrite itself did not match the real
+      API — `ctx.now.port(...)` (resolution needs `known_ports`, which a bare
+      `Tick` doesn't carry), a `Box` class and `ctx.model.object_length_m`/
+      `object_width_m` accessors, none of which exist. *2026-07-31, corrected:*
+      now imports `Prim`/`LayerCtx` from their real modules, uses
+      `ctx.port(...)`, and states plainly that a component resolves its own
+      calibration mapping (cached), matching `model/project.py`'s own
+      "no generic dimension accessor" scoping
+- [x] `Prim.derived` is set on reconstructed prims in `modules/df/sim/`, not only
       `Layer.derived` — this stage owns the first plug-in that actually mixes
-      published and reconstructed geometry (`OD-6`)
+      published and reconstructed geometry (`OD-6`). *2026-07-31:* every prim
+      in `zone_layer` and `warning_layer` now carries `derived=True` (position
+      is calibration-derived in both; `warning_layer`'s drawn *state* is real,
+      making it the mixed case `OD-6` describes) — `Layer.derived=True` on
+      `warning_layer` follows from `Layer.__post_init__`'s own constraint
+
+**Finding: `UT-B1-14` collides with an already-shipped test id.** This delta's
+own checklist named its new AuthoringError/silent-empty test `UT-B1-14` —
+already spent on "no two layer ids share a prefix" (`test_no_two_layer_ids_
+share_a_prefix`, shipped and still `[x]` above `S-B1`'s own checklist). Caught
+while implementing, not reasoned in advance. Renumbered the new test
+`UT-B1-15`; `R32`'s register row (§13) updated to match.
+
+- [x] `python scripts/check_invariants.py`: `GT-11` — no port address is a
+      literal outside the component that declares it — added as a mechanised
+      check (it existed only in prose before this stage), scanning every
+      `requires=(...)`/`.port(...)` argument under `modules/*/sim/**` for a
+      dotted, three-plus-segment string that is neither `self.`- nor
+      `source.`-prefixed. Clean on the real tree; `test_a1_check_invariants.py`
+      proves it both ways (a planted `requires=("df.bsd.outputs",)` fails it,
+      `self.`/`source.` refs on the same line pass)
 
 **Why this was missed, recorded because it generalises.** Every invariant in
 this plan is enforced by a scan over `modules/sim/src`. The framework's
@@ -3281,6 +3348,17 @@ manifest in a run and already builds the concrete address
 resolve a component-relative reference, and the resolver belongs here rather
 than in the plug-in loader — which is what stops a second resolver appearing at
 `S-C3` for `expect:` strings and a third at `S-D3` for workspaces.
+
+**Still open after `S-B1Δ` — not the same resolver.** `S-B1Δ` (build order #6)
+needed `self.<port>` binding for a layer provider's `requires=`/`ctx.port`
+*today*, replaying from a recording with no live `Pipeline` in the loop at all
+(`core/runner.build_scene` runs entirely off a `Session`). It built
+`contracts/binding.resolve_component_ref`/`try_resolve_component_ref` against a
+run's own **known port names** (a recording's topics), not against this
+Pipeline/`ComponentManifest`-based `resolve(ref, *, component)` sketched below —
+that one is real work for whenever `S-C3`/`S-D3`/`S-D7` actually need it (a live
+`Pipeline` is genuinely available there). The boxes below stay unticked on
+purpose; do not fold them into `S-B1Δ`'s closure.
 
 - [ ] **`contracts/binding.py` — the one port-address resolver.**
       `resolve(ref, *, component) -> str`: takes `self.<port>` or a bare
@@ -5125,7 +5203,7 @@ separate gates below, and two of them cannot be automated.
 | R29 | **Writers + export dumps with port selection** (`FR-SIM-52`) | S-D7 | `UT-D7-1..5`, `ST-D7-1` |
 | R30 | **Mass-scale runs expressible** (`NR-SIM-21`) | S-D7 | `ST-D7-2`, `ST-D7-3` |
 | R31 | **Plug-ins delivered, not checked out — standalone player** (`FR-SIM-64`) | S-C8 | `ST-C8-2`, `GT-12` |
-| R32 | **No literal port address outside its component** (`CR-SIM-2`) | S-B1 delta, S-C1c delta | `UT-B1-14`, `UT-C1c-22`, `GT-11` |
+| R32 | **No literal port address outside its component** (`CR-SIM-2`) | S-B1 delta, S-C1c delta | `UT-B1-15`, `UT-C1c-22`, `GT-11` |
 | R33 | **The ABI shim is generated, not hand-written** (`NR-SIM-11`) | S-C1d | `UT-C1d-1`, `ST-C1d-1` |
 | R34 | **A shared-contract change breaks no component's build** (`NR-SIM-12`) | every stage | `GT-4`, `GT-10` |
 | R35 | **`sil_host` runs a complete pipeline** (`FR-SIM-65`) | S-C7 | `ST-C7-1`, `ST-C7-2` |

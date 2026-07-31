@@ -99,7 +99,7 @@ def _bsd_outputs(left_warning: int = 0, right_warning: int = 0):
 
 def _make_tick(index: int, *, veh_dyn=None, gen_object_list=None, bsd_outputs=None,
                veh_dyn_valid: bool = True, veh_dyn_age_s: float = 0.0, dt_ns: int = 50_000_000,
-               pose: Pose2D = _POSE) -> Tick:
+               pose: Pose2D = _POSE, stage: str = "df") -> Tick:
     ports = {}
     if veh_dyn is not None:
         ports["source.veh_dyn"] = PortValue(
@@ -109,12 +109,17 @@ def _make_tick(index: int, *, veh_dyn=None, gen_object_list=None, bsd_outputs=No
     if gen_object_list is not None:
         ports["source.gen_object_list"] = PortValue(name="source.gen_object_list", message=gen_object_list, origin="measured")
     if bsd_outputs is not None:
-        ports["df.bsd.outputs"] = PortValue(name="df.bsd.outputs", message=bsd_outputs, origin="simulated")
+        qualified = f"{stage}.bsd.outputs"
+        ports[qualified] = PortValue(name=qualified, message=bsd_outputs, origin="simulated")
     return Tick(index=index, t_ns=index * dt_ns, dt_ns=dt_ns if index else 0, ports=ports, pose=pose)
 
 
 def _ctx(ticks: tuple[Tick, ...], *, project: str = "base") -> LayerCtx:
-    return LayerCtx(model=ProjectModel.resolve(project=project), history=HistoryView(_ticks=ticks), frames=FrameTree(ticks[-1].pose))
+    known_ports = frozenset().union(*(t.ports.keys() for t in ticks)) if ticks else frozenset()
+    return LayerCtx(
+        model=ProjectModel.resolve(project=project), history=HistoryView(_ticks=ticks),
+        frames=FrameTree(ticks[-1].pose), known_ports=known_ports,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -173,17 +178,44 @@ def test_warning_state_is_read_not_recomputed_even_when_contradictory():
     causal object at all) is drawn as BLINKING regardless."""
     tick = _make_tick(0, bsd_outputs=_bsd_outputs(left_warning=2, right_warning=0))  # BLINKING, no objects
     ctx = _ctx((tick,))
-    prims = bsd.warning_layer(ctx)[0].prims
+    layer = bsd.warning_layer(ctx)[0]
+    prims = layer.prims
     left_circle = next(p for p in prims if p.kind == "circle" and p.pick_id == "bsd.warning.left")
     assert left_circle.style == "status.critical"  # BLINKING's token, shown as-is
+    # The band's position is calibration-derived even though its state is
+    # real (S-B1Δ, OD-6) -- a prim legitimately mixes the two.
+    assert layer.derived is True
+    assert all(p.derived for p in prims)
 
 
 def test_calibration_reconstructed_zone_layer_carries_derived_true():
-    """UT-B1-7."""
+    """UT-B1-7. S-B1Δ: the individual prims carry `derived=True` too, not
+    only the `Layer` (OD-6)."""
     tick = _make_tick(0)
     ctx = _ctx((tick,))
     layer = bsd.zone_layer(ctx)[0]
     assert layer.derived is True
+    assert all(p.derived for p in layer.prims)
+
+
+def test_warning_layer_binds_correctly_under_a_renamed_stage():
+    """S-B1Δ (`R-SIM-21`, arch `D13`): `bsd.py` no longer spells the
+    pipeline stage name -- the same provider binds correctly whichever
+    stage name a pipeline gave the `df` component."""
+    tick = _make_tick(0, bsd_outputs=_bsd_outputs(left_warning=1, right_warning=0), stage="driving_functions")
+    ctx = _ctx((tick,))
+    prims = bsd.warning_layer(ctx)[0].prims
+    left_circle = next(p for p in prims if p.kind == "circle" and p.pick_id == "bsd.warning.left")
+    assert left_circle.style == "status.warning"
+
+
+def test_warning_layer_yields_nothing_when_the_run_never_produced_bsd_outputs():
+    """The port genuinely isn't part of this run -- Block 1 has no live
+    manifest to call this an error, so it stays a silent empty result
+    (checked with the user, `S-B1Δ`), same as `UT-B1-1`'s own gating."""
+    tick = _make_tick(0, veh_dyn=_veh_dyn())  # a real tick, just no bsd stage at all
+    ctx = _ctx((tick,))
+    assert bsd.warning_layer(ctx) == ()
 
 
 def test_padding_slots_produce_no_prims():

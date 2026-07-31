@@ -51,6 +51,11 @@ class Session:
     meta: RunManifest = field(default_factory=RunManifest)
     #: False for a live sim -> disables recompute-from-0 (view/transport.py).
     deterministic: bool = True
+    #: This run's declared port universe -- the recording's own topics,
+    #: computed once at load (`S-B1Δ`, `R-SIM-21`), never re-derived per
+    #: tick. What `LayerCtx.known_ports` carries into a layer provider's
+    #: `self.<port>` resolution.
+    known_ports: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
         # Session is immutable (UT-B2-11): pass 2 must not be able to
