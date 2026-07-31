@@ -5,7 +5,7 @@
 
 """S-B1 tests for `modules/df/sim/layers/{common,bsd}.py`: UT-B1-2, UT-B1-3,
 UT-B1-4, UT-B1-5, UT-B1-6, UT-B1-7, UT-B1-8, UT-B1-11, UT-B1-12, UT-B1-13,
-UT-B1-14 (docs/sim_implementation_plan.md).
+UT-B1-14 (docs/sim_implementation_plan.md). Also UT-C4-1, UT-C4-2 (`S-C4`).
 
 Placement note: these test a component's own layer providers
 (`modules/df/sim/layers/`), not the framework. They live here rather than in
@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import ast
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -33,6 +34,7 @@ if str(DF_ROOT) not in sys.path:
 from adas_sim.core.history import FrameTree, HistoryView, LayerCtx  # noqa: E402
 from adas_sim.core.tick import Pose2D, PortValue, Tick  # noqa: E402
 from adas_sim.model.project import ProjectModel  # noqa: E402
+from adas_sim.model.sensors import SensorModel  # noqa: E402
 
 _POSE = Pose2D(x_m=0.0, y_m=0.0, yaw_rad=0.0)
 
@@ -279,7 +281,57 @@ def test_no_two_layer_ids_share_a_prefix():
     """UT-B1-14: solo/mute selects by id; a prefix collision would select
     the wrong set."""
     ids = ["df.common.frame", "df.common.ego", "df.common.objects", "df.common.hud",
-           "df.common.trail", "bsd.zone", "bsd.warning"]
+           "df.common.trail", "bsd.zone", "bsd.warning", "bsd.sensor_fov"]
     for i, a in enumerate(ids):
         for b in ids[i + 1:]:
             assert not a.startswith(b) and not b.startswith(a), (a, b)
+
+
+def test_changing_a_sensor_value_changes_the_drawn_fov(monkeypatch):
+    """UT-C4-1: isolates one `BSD_SENSOR_*` field's effect on the drawn
+    wedge, through the real layer provider (`sensor_fov_layer`), not the
+    geometry helper directly -- "asserted on the Scene"."""
+    tick = _make_tick(0)
+    ctx = _ctx((tick,))
+    narrow = SensorModel(sensor_id="0", fields={
+        "POSE_X_M": -0.8, "POSE_Y_M": 0.78, "POSE_YAW_DEG": 140.0,
+        "FOV_AZIMUTH_DEG": 60.0, "RANGE_MAX_CAR_M": 80.0,
+    })
+    wide = replace(narrow, fields={**narrow.fields, "FOV_AZIMUTH_DEG": 75.0})
+
+    monkeypatch.setattr(bsd, "_bsd_sensors", lambda project: (narrow,))
+    narrow_prims = bsd.sensor_fov_layer(ctx)[0].prims
+    monkeypatch.setattr(bsd, "_bsd_sensors", lambda project: (wide,))
+    wide_prims = bsd.sensor_fov_layer(ctx)[0].prims
+
+    assert narrow_prims[0].points_m != wide_prims[0].points_m
+    assert bsd.sensor_fov_layer(ctx)[0].derived is True
+    assert all(p.derived for p in wide_prims)
+
+
+def test_sensor_fov_has_no_per_project_branch_and_differs_by_real_project():
+    """UT-C4-2: `base` (two sensors, `LEFT`/`RIGHT`) and `2w_base` (one
+    sensor, `BOTH`) draw different geometry through the identical call --
+    and, structurally, `bsd.py`'s code contains no comparison against a
+    project name to have produced that difference (the exact shape S-C4
+    removed from `viz.py`'s `_bsd_project_sensor`) -- an AST scan, not a
+    text grep, so the prose above describing that removal doesn't trip it."""
+    tree = ast.parse((DF_ROOT / "sim" / "layers" / "bsd.py").read_text(encoding="utf-8"))
+    violations = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.Compare)
+        and any(isinstance(op, (ast.Eq, ast.NotEq)) for op in node.ops)
+        and any(isinstance(c, ast.Constant) and isinstance(c.value, str) for c in node.comparators)
+        and (
+            (isinstance(node.left, ast.Attribute) and node.left.attr == "project")
+            or (isinstance(node.left, ast.Name) and node.left.id == "project")
+        )
+    ]
+    assert not violations
+
+    tick = _make_tick(0)
+    base_prims = bsd.sensor_fov_layer(_ctx((tick,), project="base"))[0].prims
+    two_w_prims = bsd.sensor_fov_layer(_ctx((tick,), project="2w_base"))[0].prims
+    assert len(base_prims) == 2
+    assert len(two_w_prims) == 1
+    assert base_prims[0].points_m != two_w_prims[0].points_m

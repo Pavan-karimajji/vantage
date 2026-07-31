@@ -16,7 +16,7 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from check_invariants import check_gt1, check_gt11, run_all  # noqa: E402
+from check_invariants import check_gt1, check_gt3, check_gt11, run_all  # noqa: E402
 
 
 def test_check_gt1_passes_on_an_empty_tree(tmp_path):
@@ -70,3 +70,12 @@ def test_check_gt11_fails_on_a_spelled_stage_name(tmp_path):
     findings = check_gt11(superproject_root=tmp_path)
     assert findings
     assert "GT-11" in findings[0]
+
+
+def test_st_c4_1_no_sensor_pose_or_class_footprint_literal_in_bsd_layers():
+    """ST-C4-1: `modules/df/sim/layers/bsd.py`'s new `sensor_fov_layer`
+    (`S-C4`) reads every pose/FOV/range field off `SensorModel`, never a
+    literal -- `check_gt3` (already exercised generically by
+    `test_run_all_is_clean_on_the_current_skeleton`) is the mechanised grep
+    this stage's own gate names."""
+    assert check_gt3() == []

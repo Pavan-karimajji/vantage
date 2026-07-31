@@ -3759,30 +3759,69 @@ picture that disagrees with the algorithm while looking authoritative.
 are already runtime calibration with one consumer). This stage **deletes a
 duplicate**; it does not relocate a source of truth.
 
-- [ ] `SensorModel`/`ObjectModel` sourced from the project config for the
+- [x] `SensorModel`/`ObjectModel` sourced from the project config for the
       component's layers; the hand-maintained pose constants and the
       per-project `if` branch are no longer used by the live path
-- [ ] The duplicated constants are **deleted, not commented out** — a commented
-      constant is a duplicate that still reads as authoritative
+      *2026-07-31:* `modules/df/sim/layers/bsd.py`'s new `sensor_fov_layer`
+      draws each sensor's FOV wedge from `_bsd_sensors(project)`, which parses
+      this run's own resolved `BSD_SENSOR_*` keys via `model/sensors.py`'s
+      `parse_sensors` (discovery **by key shape**, `GT-1`) — no hardcoded
+      pose table, no `if project == ...`. **Scoped, checked with the user:**
+      the actual hand-maintained duplicate is `docs/bsd/py/bsdviz/sensors.py`'s
+      `P3`/`P4`/`P5` plus `tools/carla/replay/viz.py`'s `_bsd_project_sensor`
+      branch, both in the pre-`R-SIM-*` tooling `rules/sim.md` names as "not
+      this stage's file set" (do not extend the old structure) — left
+      untouched rather than edited, so "kill the duplicate" is read as "the
+      live path no longer needs or grows one," not as a decommissioning pass
+      over `viz.py`. `ObjectModel`: no existing duplicate of `BSD_CLASS_*`
+      class-footprint calibration was found anywhere in the live-path Python
+      (`common.py`'s `ObjectModel` already uses only the generic,
+      `assumed_geometry=True` cross-function defaults, never a per-project
+      literal) — nothing to kill there this pass
+- [x] The duplicated constants are **deleted, not commented out** — a commented
+      constant is a duplicate that still reads as authoritative.
+      *2026-07-31:* n/a to the new live-path code (nothing hardcoded was
+      added to delete); the old tooling's duplicate is out of this stage's
+      file set per the scoping note above, so nothing there was commented out
+      either
 
 **Tests**
-- [ ] `UT-C4-1` changing a sensor value in the project YAML changes the drawn
-      FOV — asserted **on the Scene**, not by eye
-- [ ] `UT-C4-2` the per-project branch is gone: two projects produce different
-      geometry through the same code path, with no conditional on project name
-- [ ] `ST-C4-1` no sensor pose or class footprint literal remains in any Python
-      module on the live path (grep, as a test — `GT-3`)
+- [x] `UT-C4-1` changing a sensor value in the project YAML changes the drawn
+      FOV — asserted **on the Scene**, not by eye.
+      *2026-07-31:* `test_changing_a_sensor_value_changes_the_drawn_fov`
+      (`test_b1_df_layers.py`) — isolates one `FOV_AZIMUTH_DEG` field through
+      `sensor_fov_layer` itself, not the geometry helper
+- [x] `UT-C4-2` the per-project branch is gone: two projects produce different
+      geometry through the same code path, with no conditional on project name.
+      *2026-07-31:* `test_sensor_fov_has_no_per_project_branch_and_differs_
+      by_real_project` — `base` (2 sensors) vs `2w_base` (1 sensor) draw
+      different wedges through the identical call, plus an AST scan proving
+      `bsd.py` contains no `project ==`/`!=` comparison anywhere
+- [x] `ST-C4-1` no sensor pose or class footprint literal remains in any Python
+      module on the live path (grep, as a test — `GT-3`).
+      *2026-07-31:* `test_st_c4_1_no_sensor_pose_or_class_footprint_literal_
+      in_bsd_layers` (`test_a1_check_invariants.py`) calls `check_gt3()`
+      directly
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-3` (this stage deletes a duplicate of
-      real calibration keys; a case-only mismatch would silently resurrect it)
-- [ ] naming §3 ticked — exposure: `N-1` (the deletion is only safe because both
-      spellings were the same token)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
+- [x] portability §3 ticked — exposure: `P-3` (this stage deletes a duplicate of
+      real calibration keys; a case-only mismatch would silently resurrect it).
+      *2026-07-31:* `_bsd_sensors` reads `BSD_SENSOR_*` keys through
+      `parse_sensors`, which is case-sensitive by construction (`model/
+      sensors.py`'s own `P-3` note) — no new case-folding introduced
+- [x] naming §3 ticked — exposure: `N-1` (the deletion is only safe because both
+      spellings were the same token).
+      *2026-07-31:* no renaming performed; `sensor_fov_layer` reads the same
+      `BSD_SENSOR_*` token `bsd_params.cpp` reads, unchanged
+- [x] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked.
+      *2026-07-31:* green; `check_invariants.py` reports GT-1/2/3/6/11 clean;
+      471/471 tests pass (up from the 468 baseline: `UT-C4-1`, `UT-C4-2`,
+      `ST-C4-1`)
 
 **Gate**
-- [ ] `ST-C4-1` green — and `UT-C4-1` green, because a grep proving the literal
-      is gone does not prove the replacement is wired to anything
+- [x] `ST-C4-1` green — and `UT-C4-1` green, because a grep proving the literal
+      is gone does not prove the replacement is wired to anything.
+      *2026-07-31:* both green
 
 ### S-C5 — The packed config bundle (OD-4)
 
