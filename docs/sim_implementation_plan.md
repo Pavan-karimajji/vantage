@@ -2496,9 +2496,15 @@ change to every artefact). Starting here first means doing this stage twice.
       garbage-collected while the DLL holds a pointer to it fails rarely and
       unreproducibly, which is the worst failure mode available); grow-once-and-
       retry on undersize
-- [ ] `contracts/pipeline.py` — `mode:` × `impl:`, wiring **per port**,
-      load-time validation in the order given in api reference §3.3
-- [ ] `version:` as a required top-level key + an upgrader; unversioned files
+- [x] `contracts/pipeline.py` — `mode:` × `impl:`, wiring **per port**,
+      load-time validation in the order given in api reference §3.3. Scope of
+      this pass: the declarative model + load-time validation only --
+      `Pipeline.exec()` (actually running a tick: `measured` injection,
+      `off` → `valid=0` downstream) is not built yet, so `UT-C1c-11`/`-12`
+      and `ST-C1c-2` stay open. `impl: stub:` has no registry yet (`S-C2`);
+      `Pipeline.load`'s `components=` lets a caller supply one directly,
+      which is also what makes every test here run with no DLL
+- [x] `version:` as a required top-level key + an upgrader; unversioned files
       are `v1` (`CR-SIM-23`)
 - [ ] `period_ns` read from each manifest; **base grid derived as the GCD** of
       the declared periods; a period that is not an integer multiple is a load
@@ -2519,20 +2525,24 @@ change to every artefact). Starting here first means doing this stage twice.
 - [x] `UT-C1c-4` ports match by name regardless of order
 - [x] `UT-C1c-5` buffer grow-and-retry succeeds once and logs; a second failure
       raises
-- [ ] `UT-C1c-6` pipeline wiring: `proto_type` mismatch raises naming both ends
-- [ ] `UT-C1c-7` missing required input raises naming the port
-- [ ] `UT-C1c-8` a reference to a port nobody produces raises
-- [ ] `UT-C1c-9` a forward reference (B feeding an earlier A) raises — **no
+- [x] `UT-C1c-6` pipeline wiring: `proto_type` mismatch raises naming both ends
+- [x] `UT-C1c-7` missing required input raises naming the port
+- [x] `UT-C1c-8` a reference to a port nobody produces raises
+- [x] `UT-C1c-9` a forward reference (B feeding an earlier A) raises — **no
       silent last-tick value**, which would look like it worked
-- [ ] `UT-C1c-10` `mode: measured` with the recording lacking that stage's
+- [x] `UT-C1c-10` `mode: measured` with the recording lacking that stage's
       outputs raises naming the missing topics
 - [ ] `UT-C1c-11` `mode: measured` ignores that stage's inputs and injects
       recorded outputs
 - [ ] `UT-C1c-12` `mode: off` yields `valid == 0` downstream
-- [ ] `UT-C1c-13` flipping `mode` does not require `impl:` to change — the
+- [x] `UT-C1c-13` flipping `mode` does not require `impl:` to change — the
       toggle is reversible without re-authoring (`R-SIM-10`)
 - [ ] `UT-C1c-14` stages execute in declaration order, single-threaded; a
-      pipeline whose declaration order contradicts its wiring is a load error
+      pipeline whose declaration order contradicts its wiring is a load error.
+      **Load-time half done:** a stage wired to a later stage's output is a
+      load error (`test_a_stage_wired_to_a_later_stages_output_is_a_load_error`).
+      The runtime half (single-threaded, declaration-order execution) needs
+      `Pipeline.exec()`, not built this pass
 - [x] `UT-C1c-15` `resolve_library` returns the right file for each platform
       pattern (parametrised over both), and a miss names every candidate
 - [ ] `UT-C1c-15a` a `stubdll:` stage loads through the **same**
@@ -2540,14 +2550,14 @@ change to every artefact). Starting here first means doing this stage twice.
       indistinguishable from a `dll:` stage's to everything downstream —
       `R-SIM-10`'s "executed and injected produce the same port set", proven at
       the `impl:` axis rather than only at the `mode:` axis
-- [ ] `UT-C1c-16` **severed chain detected** — `simulate → measured → simulate`
+- [x] `UT-C1c-16` **severed chain detected** — `simulate → measured → simulate`
       on one path is found; `off → measured → simulate` is **not** flagged
       (`R-SIM-10`; the GUI's auto-close in S-D6 builds on this)
 - [ ] `UT-C1c-17` an override applies at a port and at a field path, and a verb
       outside the closed four is a **load error**, not a warning (`R-SIM-15`)
-- [ ] `UT-C1c-18` a pipeline file **carries a `version:`**, and one newer than
+- [x] `UT-C1c-18` a pipeline file **carries a `version:`**, and one newer than
       the reader is a load error naming **both** versions (`CR-SIM-23`)
-- [ ] `UT-C1c-19` an unversioned pipeline file is read as `v1` and upgraded, on
+- [x] `UT-C1c-19` an unversioned pipeline file is read as `v1` and upgraded, on
       the same shape as the scenario upgrader — the pipeline is the artefact most
       certain to outlive its format, and was the only one with no migration story
 - [ ] `UT-C1c-20` **rate**: with stages at 20 ms and 50 ms, the base grid is
