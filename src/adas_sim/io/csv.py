@@ -9,16 +9,25 @@ is what `io/registry.py`'s `reader_for` refuses on). One row per tick
 (grouped by `log_time_ns`, `io/base.group_by_log_time`), one column per
 leaf field of each selected port, `#`-prefixed provenance preamble.
 
-Works directly on raw `(topic, log_time_ns, bytes)` triples -- **not**
-`core/tick.Tick`/`PortValue` -- so `io/` never depends upward on `core/`
-(`R-SIM-14`: keep `io/` self-contained). That turns out to buy real
-multi-rate semantics for free: a topic absent from a row it has already
-appeared in at least once before is **held** (`UT-D7-3`) -- last known
-value, `age_s` growing -- computed here from the row sequence itself, not
-borrowed from `Tick.age_s` (which `core/runner.py`'s pass 1 does not yet
+Works directly on raw `(topic, log_time_ns, capture_time_ns, bytes)`
+messages -- **not** `core/tick.Tick`/`PortValue` -- so `io/` never depends
+upward on `core/` (`R-SIM-14`: keep `io/` self-contained). That turns out to
+buy real multi-rate semantics for free: a topic absent from a row it has
+already appeared in at least once before is **held** (`UT-D7-3`) -- last
+known value, `age_s` growing -- computed here from the row sequence itself,
+not borrowed from `Tick.age_s` (which `core/runner.py`'s pass 1 does not yet
 populate meaningfully; a `core/`-level gap this module does not depend on).
 `on_missing` governs only a port with **no prior value to hold**: never
 appeared at all, or a leading gap before its first occurrence.
+
+**`<port>.age_s` is capture-derived when capture is known** (`S-A4Δ`,
+`OD-9`): `(log_time_ns - capture_time_ns)` when the message declared a
+capture time, else the pre-delta reception-based convention (`0.0` fresh,
+growing from the last log time while held) -- `group_by_log_time` itself
+drops `capture_time_ns` after grouping (it is a scheduling primitive shared
+with `core/runner.py`), so this module keeps its own small
+`(topic, log_time_ns) -> capture_time_ns` side table instead of changing
+that shared contract.
 """
 
 from __future__ import annotations
@@ -35,7 +44,7 @@ from adas_sim.io.registry import register
 
 CAPABILITIES = Capabilities(
     embedded_schemas=False, random_access=False, meta_blocks=True,
-    arbitrary_topics=True, round_trips=False, write_only=True,
+    arbitrary_topics=True, round_trips=False, capture_time=False, write_only=True,
 )
 
 OnMissing = Literal["error", "blank", "omit-column"]
@@ -147,7 +156,7 @@ class CsvWriter:
         self._path: Path | None = None
         self._meta: RunManifest = RunManifest()
         self._topics: dict[str, TopicInfo] = {}
-        self._messages: list[tuple[str, int, bytes]] = []
+        self._messages: list[tuple[str, int, int | None, bytes]] = []
 
     def open(self, path: Path, meta: RunManifest, topics: Mapping[str, TopicInfo]) -> None:
         self._path = path
@@ -155,8 +164,8 @@ class CsvWriter:
         self._topics = dict(topics)
         self._messages = []
 
-    def write(self, topic: str, log_time_ns: int, payload: bytes) -> None:
-        self._messages.append((topic, log_time_ns, payload))
+    def write(self, topic: str, log_time_ns: int, payload: bytes, *, capture_time_ns: int | None = None) -> None:
+        self._messages.append((topic, log_time_ns, capture_time_ns, payload))
 
     def close(self) -> None:
         assert self._path is not None, "CsvWriter.close() called before open()"
@@ -207,8 +216,18 @@ class CsvWriter:
         for topic in included_topics:
             header.append(f"{_port_name(topic)}.age_s")
 
+        # A side table, not a change to `group_by_log_time`'s shared contract
+        # (that stays payload-only, `core/runner.py`'s own consumer): capture
+        # time per (topic, log_time_ns), used only for this module's own
+        # age_s column (S-A4Δ).
+        capture_by_topic_time: dict[tuple[str, int], int | None] = {
+            (topic, log_time_ns): capture_time_ns
+            for topic, log_time_ns, capture_time_ns, _payload in self._messages
+        }
+
         first_log_time_ns = groups[0][0] if groups else 0
-        held: dict[str, tuple[int, object]] = {}  # topic -> (last_seen_log_time_ns, decoded value)
+        #: topic -> (last_seen_log_time_ns, its capture_time_ns, decoded value)
+        held: dict[str, tuple[int, int | None, object]] = {}
         rows: list[list[object]] = []
         for tick_index, (log_time_ns, payloads, missing) in enumerate(groups):
             row: list[object] = [log_time_ns, tick_index, (log_time_ns - first_log_time_ns) / 1e9]
@@ -217,13 +236,15 @@ class CsvWriter:
                 info = self._topics[topic]
                 if topic not in missing:
                     value = _decode(info.schema_bytes, info.schema_name, payloads[topic])
-                    held[topic] = (log_time_ns, value)
+                    capture_time_ns = capture_by_topic_time.get((topic, log_time_ns))
+                    held[topic] = (log_time_ns, capture_time_ns, value)
                     row.extend(v for _, v in _leaf_values(value, _port_name(topic)))
-                    ages.append(0.0)
+                    ages.append(0.0 if capture_time_ns is None else (log_time_ns - capture_time_ns) / 1e9)
                 elif topic in held:
-                    last_seen_ns, value = held[topic]
+                    last_seen_ns, held_capture_ns, value = held[topic]
                     row.extend(v for _, v in _leaf_values(value, _port_name(topic)))
-                    ages.append((log_time_ns - last_seen_ns) / 1e9)
+                    reference_ns = last_seen_ns if held_capture_ns is None else held_capture_ns
+                    ages.append((log_time_ns - reference_ns) / 1e9)
                 else:  # no prior value to hold: never seen yet, or never at all -- on_missing governs
                     if self._on_missing == "error":
                         raise AuthoringError(

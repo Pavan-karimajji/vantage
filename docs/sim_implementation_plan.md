@@ -939,29 +939,52 @@ afterwards.
 Read recording §3.3 first; it corrects the audit's own justification, and the
 correction is what decides the `None` rule below.
 
-- [ ] The message tuple becomes **`(topic, log_time_ns, capture_time_ns,
+- [x] The message tuple becomes **`(topic, log_time_ns, capture_time_ns,
       bytes)`**. `log_time_ns` keeps its meaning exactly — **reception**, the
       scheduling clock — so `group_by_log_time` is unchanged and every existing
-      grouping behaviour is preserved
-- [ ] **`capture_time_ns: int | None`, and `None` is never replaced by
+      grouping behaviour is preserved. *2026-07-31:* `group_by_log_time`
+      unpacks the 4th element and drops it after grouping — its own **yielded
+      shape stays `(log_time_ns, {topic: payload}, missing)`**, unchanged,
+      because `core/runner.py`'s pass 1 and `ST-C1c-1`'s resim-equivalence
+      test both already consume that exact shape and neither is this delta's
+      to touch (`core/tick.PortValue.capture_ns` is `S-B2Δ`'s job). `io/csv.py`
+      keeps its own small `(topic, log_time_ns) -> capture_time_ns` side
+      table instead (see its own bullet below) rather than changing the
+      shared primitive's contract
+- [x] **`capture_time_ns: int | None`, and `None` is never replaced by
       `log_time_ns`.** This is the one detail to be stubborn about: `None` means
       *unknown*, equality means *simultaneous*, and defaulting one to the other
       manufactures an `age_s` of exactly `0.0` indistinguishable from a true one
       — the substitution `NR-SIM-4` forbids, on the field that exists to prevent
       it
-- [ ] `Capabilities.capture_time: bool`. A codec without a second stamp declares
+- [x] `Capabilities.capture_time: bool`. A codec without a second stamp declares
       it and degrades explicitly — `R-SIM-14`'s existing mechanism, so this adds
-      no concept
-- [ ] `io/mcap.py`: **one line** on the write side. mcap already carries both
+      no concept. *2026-07-31:* `io/mcap.py` declares `True`; `io/csv.py`
+      declares `False` (a write-only export collapses both stamps into one
+      derived `age_s` column, never re-exposing capture as its own field)
+- [x] `io/mcap.py`: **one line** on the write side. mcap already carries both
       with these exact semantics — `publish_time` is when the producer published,
-      `log_time` is when it was logged. The reader yields both
-- [ ] **Recordings written before this delta report `capture_time_ns = None`
+      `log_time` is when it was logged. The reader yields both. *2026-07-31:*
+      `McapWriter.write` gained a keyword-only `capture_time_ns: int | None =
+      None`; the one line is `publish_time = log_time_ns if capture_time_ns
+      is None else capture_time_ns` — an omitted capture time is byte-identical
+      to pre-delta output
+- [x] **Recordings written before this delta report `capture_time_ns = None`
       regardless of their bytes**, keyed off `manifest_version`. Their
       `publish_time == log_time` was written unconditionally and therefore
       carries no information; reading it as "simultaneous" would be a fabricated
-      fact
-- [ ] `io/csv.py` and `io/legacy.py` follow the tuple change. `csv.py`'s
-      `<port>.age_s` column becomes capture-derived when capture is known
+      fact. *2026-07-31:* `io/base.CAPTURE_TIME_MANIFEST_VERSION = 2` — a
+      recording whose manifest reports less (incl. `0`, no manifest at all)
+      forces `None` for every message at `McapReader.messages()`, regardless
+      of its `publish_time` bytes. Every existing test/fixture manifest
+      (pinned at `manifest_version=1`, `UT-A4-14`'s own "old" case) is left
+      untouched — none of them needed editing for this delta to be correct
+- [x] `io/csv.py` and `io/legacy.py` follow the tuple change. `csv.py`'s
+      `<port>.age_s` column becomes capture-derived when capture is known.
+      *2026-07-31:* `io/legacy.py` just re-yields the 4th element unchanged.
+      `io/csv.py`'s `age_s` is `(log_time_ns - capture_time_ns)` when known,
+      else the pre-delta reception-based value (unchanged for every existing
+      `test_d7_csv.py` case, none of which pass a capture time)
 
 - [x] `io/base.py` — `RecordingReader`/`RecordingWriter` Protocols,
       `Capabilities` (incl. `round_trips`, `write_only`), `TopicInfo`,
@@ -1045,18 +1068,28 @@ correction is what decides the `None` rule below.
       directories loads; tick count > 0; no exception (skips with a named
       reason if that component is absent) — ran for real against all 7
       recordings under `modules/df/tests/carla_testruns/`
-- [ ] `UT-A4-13` **two clocks, not one** (`CR-SIM-4`, audit `A6`): a message
+- [x] `UT-A4-13` **two clocks, not one** (`CR-SIM-4`, audit `A6`): a message
       round-trips **capture time and reception time** as separate integer-ns
       stamps; a codec supporting only one declares it as a capability and
       degrades explicitly (`R-SIM-14`). *`io/mcap.py` currently writes
       `publish_time=log_time_ns`, collapsing them — so an injected sensor
       latency cannot survive a round-trip, and every recording written before
-      this lands is permanently missing a field*
-- [ ] `UT-A4-14` **`None` is not `equal`**: a codec with no capture stamp yields
+      this lands is permanently missing a field*. *2026-07-31:* verified by
+      `test_capture_time_round_trips_as_a_separate_stamp_from_reception`
+      (`tests/unit/test_a4_mcap.py`) — a message received at 100 ms
+      reporting a capture time of 80 ms round-trips both stamps distinctly;
+      `test_capabilities_are_declared_and_reported` extended to assert
+      `CAPABILITIES.capture_time is True`
+- [x] `UT-A4-14` **`None` is not `equal`**: a codec with no capture stamp yields
       `capture_time_ns is None`, and a recording whose two stamps genuinely
       coincide yields two equal integers — the two cases are distinguishable at
       the reader, and a pre-delta recording reports `None` regardless of its
-      bytes. Shown by round-tripping one file of each kind (`OD-9`)
+      bytes. Shown by round-tripping one file of each kind (`OD-9`).
+      *2026-07-31:* verified by
+      `test_none_capture_time_is_distinguishable_from_a_genuine_equal_stamp`
+      (`tests/unit/test_a4_mcap.py`) — an old-style file (`manifest_version=0`)
+      reports `None`; a new file (`manifest_version=2`) whose capture time
+      genuinely equals its log time reports two equal, non-`None` integers
 - [x] `ST-A4-2` read, write, read yields an identical topic/message set — ran
       for real against `tests/fixtures/tiny.mcap`
 

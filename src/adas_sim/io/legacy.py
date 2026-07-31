@@ -70,13 +70,13 @@ class LegacyRecordingReader:
         )
         return remapped
 
-    def messages(self, topics: Sequence[str] | None = None) -> Iterator[tuple[str, int, bytes]]:
+    def messages(self, topics: Sequence[str] | None = None) -> Iterator[tuple[str, int, int | None, bytes]]:
         # `topics` (if given) is expressed in the new namespaced names; the
         # inner reader is asked for its own (possibly legacy) names.
         reverse = {new: old for old, new in LEGACY_TOPIC_MAP.items()}
         inner_topics = [reverse.get(t, t) for t in topics] if topics is not None else None
-        for topic, log_time_ns, payload in self._inner.messages(inner_topics):
-            yield LEGACY_TOPIC_MAP.get(topic, topic), log_time_ns, payload
+        for topic, log_time_ns, capture_time_ns, payload in self._inner.messages(inner_topics):
+            yield LEGACY_TOPIC_MAP.get(topic, topic), log_time_ns, capture_time_ns, payload
 
     def close(self) -> None:
         self._inner.close()

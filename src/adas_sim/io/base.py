@@ -11,7 +11,7 @@ is a **model**, not a file format:
 Recording
   meta:      manifest . config bundle . topic provenance
   topics:    name -> {schema, provenance tag}
-  messages:  (topic, log_time_ns, bytes) in log_time order
+  messages:  (topic, log_time_ns, capture_time_ns, bytes) in log_time order
 ```
 
 Everything above `io/` is written against this model and never against a
@@ -58,6 +58,11 @@ class Capabilities:
     arbitrary_topics: bool
     #: False => cannot be a resim input (R-SIM-14).
     round_trips: bool
+    #: A second, capture-time stamp distinct from reception (`OD-9`,
+    #: `CR-SIM-4`). A codec without one declares it and degrades explicitly
+    #: -- this is R-SIM-14's existing mechanism, so the field costs no new
+    #: concept, only a new declaration.
+    capture_time: bool
     write_only: bool = False
 
     def __repr__(self) -> str:
@@ -125,6 +130,18 @@ class RunManifest:
         return f"<RunManifest run_id={self.run_id!r} known={self.known}>"
 
 
+#: The first `manifest_version` written by a capture-time-aware writer
+#: (`OD-9`, `CR-SIM-4`, `S-A4Δ`). A recording whose manifest reports less than
+#: this -- including `manifest_version=0` (no manifest at all) -- predates
+#: the two-clock model: every message in it reports `capture_time_ns=None`
+#: regardless of its bytes, because the writer that produced it set
+#: `publish_time = log_time_ns` unconditionally, an equality that carries no
+#: information. Existing recordings/tests pinned at `manifest_version=1` are
+#: therefore left exactly as they are -- no existing manifest needs editing
+#: for this delta to be correct.
+CAPTURE_TIME_MANIFEST_VERSION = 2
+
+
 class RecordingReader(Protocol):
     capabilities: ClassVar[Capabilities]
 
@@ -132,7 +149,7 @@ class RecordingReader(Protocol):
 
     def topics(self) -> Mapping[str, TopicInfo]: ...
 
-    def messages(self, topics: Sequence[str] | None = None) -> Iterator[tuple[str, int, bytes]]: ...
+    def messages(self, topics: Sequence[str] | None = None) -> Iterator[tuple[str, int, int | None, bytes]]: ...
 
     def close(self) -> None: ...
 
@@ -142,23 +159,26 @@ class RecordingWriter(Protocol):
 
     def open(self, path: Path, meta: RunManifest, topics: Mapping[str, TopicInfo]) -> None: ...
 
-    def write(self, topic: str, log_time_ns: int, payload: bytes) -> None: ...
+    def write(self, topic: str, log_time_ns: int, payload: bytes, *, capture_time_ns: int | None = None) -> None: ...
 
     def close(self) -> None: ...
 
 
 def group_by_log_time(
-    messages: Iterable[tuple[str, int, bytes]], expected_topics: Collection[str]
+    messages: Iterable[tuple[str, int, int | None, bytes]], expected_topics: Collection[str]
 ) -> Iterator[tuple[int, dict[str, bytes], frozenset[str]]]:
-    """Groups `(topic, log_time_ns, bytes)` triples by `log_time_ns` --
-    format-agnostic, over the model, not a file. Yields `(log_time_ns,
-    {topic: payload}, missing_topics)`: a tick missing one of its expected
-    topics is **reported** via `missing_topics`, never silently dropped
-    (`UT-A4-9`). A full grouped `Tick` object is `core/tick.py`'s job
-    (`S-B2`); this is the format-independent piece of that idea usable now.
+    """Groups `(topic, log_time_ns, capture_time_ns, bytes)` messages by
+    `log_time_ns` -- format-agnostic, over the model, not a file. Grouping is
+    a *scheduling* question, so it keys on `log_time_ns` exactly as before
+    (`OD-9`) and the yielded shape is unchanged: `(log_time_ns, {topic:
+    payload}, missing_topics)`, `capture_time_ns` dropped after grouping. A
+    tick missing one of its expected topics is **reported** via
+    `missing_topics`, never silently dropped (`UT-A4-9`). A full grouped
+    `Tick` object is `core/tick.py`'s job (`S-B2`); this is the
+    format-independent piece of that idea usable now.
     """
     groups: dict[int, dict[str, bytes]] = {}
-    for topic, log_time_ns, payload in messages:
+    for topic, log_time_ns, _capture_time_ns, payload in messages:
         groups.setdefault(log_time_ns, {})[topic] = payload
     expected = frozenset(expected_topics)
     for log_time_ns in sorted(groups):

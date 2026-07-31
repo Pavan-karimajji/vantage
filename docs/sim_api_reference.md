@@ -414,6 +414,10 @@ consult `Stage.overrides` yet.
 
 ## 4. `io/` — format codecs (`R-SIM-14`)
 
+**`S-A4Δ` (`OD-9`, `CR-SIM-4`) added the second, capture-time stamp.** The
+message shape gained an element and `Capabilities` gained a field; nothing
+else in this section's shape changed.
+
 ```python
 @dataclass(frozen=True, slots=True)
 class Capabilities:
@@ -422,6 +426,7 @@ class Capabilities:
     meta_blocks: bool
     arbitrary_topics: bool
     round_trips: bool            # False => cannot be a resim input
+    capture_time: bool            # a second, capture-time stamp (`S-A4Δ`)
     write_only: bool = False
 
 class RecordingReader(Protocol):
@@ -429,14 +434,18 @@ class RecordingReader(Protocol):
     def meta(self) -> RunManifest: ...
     def topics(self) -> Mapping[str, TopicInfo]: ...   # schema + provenance
     def messages(self, topics: Sequence[str] | None = None
-                 ) -> Iterator[tuple[str, int, bytes]]:  # (topic, log_time_ns, bytes)
-    def close(self) -> None: ...
+                 ) -> Iterator[tuple[str, int, int | None, bytes]]:
+        """(topic, log_time_ns, capture_time_ns, bytes). `capture_time_ns` is
+        `None` when unknown -- never defaulted to `log_time_ns` -- and a
+        recording whose manifest predates `CAPTURE_TIME_MANIFEST_VERSION`
+        reports `None` for every message regardless of its bytes."""
 
 class RecordingWriter(Protocol):
     capabilities: ClassVar[Capabilities]
     def open(self, path: Path, meta: RunManifest,
              topics: Mapping[str, TopicInfo]) -> None: ...
-    def write(self, topic: str, log_time_ns: int, payload: bytes) -> None: ...
+    def write(self, topic: str, log_time_ns: int, payload: bytes, *,
+               capture_time_ns: int | None = None) -> None: ...
     def close(self) -> None: ...
 
 def register(ext: str, *, reader=None, writer=None) -> None: ...

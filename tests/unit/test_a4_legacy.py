@@ -55,7 +55,7 @@ def test_legacy_topic_names_map_correctly_and_manifest_is_unknown(tmp_path):
     assert topics[SYNTHESIZED_VEH_SIG_TOPIC].provenance == Provenance.MOCKED
     assert manifest.known is False
 
-    mapped_topics = {topic for topic, _t, _p in messages}
+    mapped_topics = {topic for topic, _t, _c, _p in messages}
     assert mapped_topics == {"/source/veh_dyn", "/source/gen_object_list"}
 
 

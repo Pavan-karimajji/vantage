@@ -59,8 +59,8 @@ def test_read_write_read_yields_an_identical_topic_and_message_set(tmp_path):
     round_tripped = tmp_path / "round_tripped.mcap"
     writer = McapWriter()
     writer.open(round_tripped, first_manifest, first_topics, config_bundle_bytes=first_bundle)
-    for topic, log_time_ns, payload in first_messages:
-        writer.write(topic, log_time_ns, payload)
+    for topic, log_time_ns, capture_time_ns, payload in first_messages:
+        writer.write(topic, log_time_ns, payload, capture_time_ns=capture_time_ns)
     writer.close()
 
     second = McapReader(round_tripped)

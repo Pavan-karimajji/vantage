@@ -23,12 +23,19 @@ import yaml
 from mcap.reader import make_reader
 from mcap.writer import Writer as _McapWriter
 
-from adas_sim.io.base import Capabilities, ComponentBuildInfo, Provenance, RunManifest, TopicInfo
+from adas_sim.io.base import (
+    CAPTURE_TIME_MANIFEST_VERSION,
+    Capabilities,
+    ComponentBuildInfo,
+    Provenance,
+    RunManifest,
+    TopicInfo,
+)
 from adas_sim.io.registry import register
 
 CAPABILITIES = Capabilities(
     embedded_schemas=True, random_access=True, meta_blocks=True,
-    arbitrary_topics=True, round_trips=True, write_only=False,
+    arbitrary_topics=True, round_trips=True, capture_time=True, write_only=False,
 )
 
 _MANIFEST_META = "manifest"
@@ -146,9 +153,15 @@ class McapWriter:
             {topic: topics[topic].provenance.value for topic in sorted(topics)},
         )
 
-    def write(self, topic: str, log_time_ns: int, payload: bytes) -> None:
+    def write(self, topic: str, log_time_ns: int, payload: bytes, *, capture_time_ns: int | None = None) -> None:
+        # mcap already carries both stamps with exactly these semantics --
+        # `publish_time` is when the producer published (our capture_time_ns),
+        # `log_time` is when it was logged (S-A4Δ, OD-9). A caller that does
+        # not know the capture time falls back to log_time_ns, unchanged from
+        # before this delta.
         channel_id = self._channel_ids[topic]
-        self._writer.add_message(channel_id=channel_id, log_time=log_time_ns, data=payload, publish_time=log_time_ns)
+        publish_time = log_time_ns if capture_time_ns is None else capture_time_ns
+        self._writer.add_message(channel_id=channel_id, log_time=log_time_ns, data=payload, publish_time=publish_time)
 
     def close(self) -> None:
         if self._writer is not None:
@@ -202,9 +215,16 @@ class McapReader:
             )
         return result
 
-    def messages(self, topics: Sequence[str] | None = None) -> Iterator[tuple[str, int, bytes]]:
+    def messages(self, topics: Sequence[str] | None = None) -> Iterator[tuple[str, int, int | None, bytes]]:
+        # Whether `publish_time` means anything is a property of the FILE
+        # (which writer produced it), not of any one message -- a file whose
+        # manifest predates the two-clock model wrote `publish_time =
+        # log_time` unconditionally, so reading that back as a real capture
+        # stamp would fabricate information the writer never had (OD-9).
+        capture_aware = self.meta().manifest_version >= CAPTURE_TIME_MANIFEST_VERSION
         for _schema, channel, message in self._reader.iter_messages(topics=topics):
-            yield channel.topic, message.log_time, message.data
+            capture_time_ns = message.publish_time if capture_aware else None
+            yield channel.topic, message.log_time, capture_time_ns, message.data
 
     def close(self) -> None:
         self._file.close()

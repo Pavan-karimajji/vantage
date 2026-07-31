@@ -39,8 +39,8 @@ def run(argv: list[str] | None = None) -> int:
         writer = CsvWriter(ports=ports, on_missing=args.on_missing)
         writer.open(args.out, meta, topics)
         message_count = 0
-        for topic, log_time_ns, payload in reader.messages():
-            writer.write(topic, log_time_ns, payload)
+        for topic, log_time_ns, capture_time_ns, payload in reader.messages():
+            writer.write(topic, log_time_ns, payload, capture_time_ns=capture_time_ns)
             message_count += 1
         writer.close()
         print(f"wrote {args.out} ({message_count} messages)")

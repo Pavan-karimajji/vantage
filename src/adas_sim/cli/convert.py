@@ -57,8 +57,8 @@ def run(argv: list[str] | None = None) -> int:
 
         writer.open(args.recording_out, meta, topics, **open_kwargs)
         message_count = 0
-        for topic, log_time_ns, payload in reader.messages():
-            writer.write(topic, log_time_ns, payload)
+        for topic, log_time_ns, capture_time_ns, payload in reader.messages():
+            writer.write(topic, log_time_ns, payload, capture_time_ns=capture_time_ns)
             message_count += 1
         writer.close()
         print(f"wrote {args.recording_out} ({len(topics)} topics, {message_count} messages)")

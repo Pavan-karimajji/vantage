@@ -4,7 +4,7 @@
 # @author Pavan Karimajji
 
 """S-A4 `io/mcap.py` tests: UT-A4-1, UT-A4-2, UT-A4-3, UT-A4-4, UT-A4-6,
-UT-A4-8, UT-A4-9, UT-A4-12 (docs/sim_implementation_plan.md)."""
+UT-A4-8, UT-A4-9, UT-A4-12, UT-A4-13, UT-A4-14 (docs/sim_implementation_plan.md)."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import pytest
 from mcap.writer import Writer as RawMcapWriter
 
 from adas_sim.io.base import (
+    CAPTURE_TIME_MANIFEST_VERSION,
     ComponentBuildInfo,
     Provenance,
     RunManifest,
@@ -35,14 +36,17 @@ def _write_sample(path, *, manifest=None, config_bundle_bytes=b"", messages=None
 
 
 def test_write_then_read_back_identical_topic_log_time_bytes(tmp_path):
-    """UT-A4-1."""
+    """UT-A4-1. `manifest_version` defaults to 0 (no manifest) here, so
+    `capture_time_ns` reads back `None` (S-A4Δ) -- unrelated to this test's
+    own subject, topic/log_time/bytes identity."""
     path = tmp_path / "sample.mcap"
-    expected = [
+    written = [
         ("/source/veh_dyn", 0, b"\x01\x02"),
         ("/df/aeb.outputs", 0, b"\x03"),
         ("/source/veh_dyn", 50_000_000, b"\x04\x05"),
     ]
-    _write_sample(path, messages=expected)
+    expected = [(topic, t_ns, None, payload) for topic, t_ns, payload in written]
+    _write_sample(path, messages=written)
 
     reader = McapReader(path)
     actual = list(reader.messages())
@@ -104,7 +108,7 @@ def test_a_recording_with_no_meta_degrades_to_unknown_without_raising(tmp_path):
 
     assert manifest.known is False
     assert topics["/source/veh_dyn"].provenance == Provenance.UNKNOWN
-    assert messages == [("/source/veh_dyn", 0, b"\x00")]
+    assert messages == [("/source/veh_dyn", 0, None, b"\x00")]
 
 
 def test_capabilities_are_declared_and_reported():
@@ -112,6 +116,7 @@ def test_capabilities_are_declared_and_reported():
     assert CAPABILITIES.embedded_schemas is True
     assert CAPABILITIES.round_trips is True
     assert CAPABILITIES.write_only is False
+    assert CAPABILITIES.capture_time is True
     assert McapWriter().capabilities is CAPABILITIES
 
 
@@ -123,7 +128,7 @@ def test_dt_s_reconstruction_from_log_time_gaps(tmp_path):
     _write_sample(path, messages=[("/source/veh_dyn", t_ns, b"\x00") for t_ns in ticks_ns])
 
     reader = McapReader(path)
-    log_times = [t_ns for _topic, t_ns, _payload in reader.messages()]
+    log_times = [t_ns for _topic, t_ns, _capture_ns, _payload in reader.messages()]
     reader.close()
 
     assert log_times == ticks_ns
@@ -163,3 +168,56 @@ def test_two_writes_of_the_same_messages_are_byte_identical(tmp_path):
     _write_sample(path_a, messages=messages)
     _write_sample(path_b, messages=messages)
     assert path_a.read_bytes() == path_b.read_bytes()
+
+
+def test_capture_time_round_trips_as_a_separate_stamp_from_reception(tmp_path):
+    """UT-A4-13: a message's capture time and reception time round-trip as
+    two distinct integer-ns stamps (S-A4Δ, OD-9) -- an injected latency
+    (captured before it was received) survives, which the pre-delta
+    behaviour (`publish_time = log_time_ns` unconditionally) could not
+    represent at all."""
+    path = tmp_path / "sample.mcap"
+    manifest = RunManifest(manifest_version=CAPTURE_TIME_MANIFEST_VERSION, run_id="capture-aware")
+    writer = McapWriter()
+    writer.open(path, manifest, _TOPICS)
+    # Received at t=100ms but describing the world 20ms earlier.
+    writer.write("/source/veh_dyn", 100_000_000, b"\x01", capture_time_ns=80_000_000)
+    writer.close()
+
+    reader = McapReader(path)
+    _topic, log_time_ns, capture_time_ns, _payload = next(iter(reader.messages()))
+    reader.close()
+
+    assert log_time_ns == 100_000_000
+    assert capture_time_ns == 80_000_000
+
+
+def test_none_capture_time_is_distinguishable_from_a_genuine_equal_stamp(tmp_path):
+    """UT-A4-14: a pre-delta recording (manifest_version below
+    `CAPTURE_TIME_MANIFEST_VERSION`, including no manifest at all) reports
+    `capture_time_ns=None` for every message regardless of its bytes; a
+    post-delta recording whose two stamps genuinely coincide reports two
+    *equal integers* instead. The two must not be confused -- shown by
+    round-tripping one file of each kind (`OD-9`)."""
+    old_path = tmp_path / "old.mcap"
+    new_path = tmp_path / "new.mcap"
+
+    _write_sample(old_path, messages=[("/source/veh_dyn", 5_000_000, b"\x00")])  # RunManifest() default: version 0
+
+    new_manifest = RunManifest(manifest_version=CAPTURE_TIME_MANIFEST_VERSION, run_id="capture-aware")
+    writer = McapWriter()
+    writer.open(new_path, new_manifest, _TOPICS)
+    writer.write("/source/veh_dyn", 5_000_000, b"\x00", capture_time_ns=5_000_000)  # genuinely simultaneous
+    writer.close()
+
+    old_reader = McapReader(old_path)
+    old_message = next(iter(old_reader.messages()))
+    old_reader.close()
+
+    new_reader = McapReader(new_path)
+    new_message = next(iter(new_reader.messages()))
+    new_reader.close()
+
+    assert old_message[2] is None
+    assert new_message[2] == 5_000_000
+    assert new_message[1] == new_message[2]  # genuinely coincide: a real equality, not a fabricated one
