@@ -214,6 +214,63 @@ class SilComponent(Protocol):
 The wire form is `bytes` deliberately: the framework never needs generated
 bindings (`R-SIM-11`), decoding lazily from the manifest's `FileDescriptorSet`.
 
+**Added at `S-C1c`, filling gaps this section left implicit** -- the
+Protocol above was already normative; the concrete shapes below were not
+spelled out anywhere and had to be invented during implementation, so they
+are recorded here rather than left to drift across a second, undocumented
+copy:
+
+```python
+#: `adas_sil_abi.h`'s own `#define ADAS_SIL_ABI_VERSION` -- the framework's
+#: expected generation, compared against the live `adasAbiVersion()` at
+#: load, never read FROM the component.
+ADAS_SIL_ABI_VERSION = 1
+
+@dataclass(frozen=True, slots=True)
+class PortSpec:                        # component_manifest.proto's PortSpec, decoded
+    name: str
+    proto_type: str
+    max_bytes: int = 0
+    optional: bool = False
+    owner_function: str = ""
+    doc: str = ""
+
+@dataclass(frozen=True, slots=True)
+class ComponentManifest:               # component_manifest.proto's ComponentManifest, decoded
+    component: str
+    version: str
+    abi_version: int
+    build_id: str
+    inputs: tuple[PortSpec, ...]
+    outputs: tuple[PortSpec, ...]
+    project: str
+    config_bundle_sha256: str
+    descriptor_set: bytes
+    period_ns: int
+
+def parse_manifest(raw: bytes) -> ComponentManifest: ...   # decodes adasManifest()'s bytes
+
+def resolve_message_classes(manifest: ComponentManifest) -> Mapping[str, type]:
+    """Message classes for every `proto_type` a manifest's ports use, from
+    `descriptor_set` alone (`R-SIM-11`) -- no generated bindings, no
+    `interfaces` checkout. Keyed by fully-qualified `proto_type`."""
+
+class CtypesSilComponent:
+    def __init__(self, path: Path) -> None: ...   # path already resolved -- see 3.2
+
+class InProcessSilComponent:
+    def __init__(
+        self, name: str, manifest: ComponentManifest,
+        fn: Callable[[int, Mapping[str, bytes]], Mapping[str, bytes]],
+    ) -> None: ...
+```
+
+`ComponentManifest`'s own schema (needed to decode `adasManifest()`'s bytes
+in the first place) is hand-built from `google.protobuf.descriptor_pb2` --
+same technique as `scene/codec.py`'s `Scene` IR -- rather than importing
+`interfaces`'s generated binding, since it is the bootstrap schema and has
+no `descriptor_set` of its own to resolve from (`R-SIM-11` held literally).
+
 ### 3.2 `contracts/loader.py` — the ONE place a library is resolved (`P-5`)
 
 ```python
@@ -236,26 +293,85 @@ class Stage:
     mode: Mode
     impl: str | None                       # "dll:…" | "stub:…" | "stubdll:…" | "legacy:…"
     inputs: Mapping[str, str]              # port -> producer ref or "measured:/…"
-    overrides: Mapping[str, Override]      # `R-SIM-15`, field path -> verb
+    overrides: Mapping[str, Override] = field(default_factory=dict)   # `R-SIM-15`, field path -> verb
+
+@dataclass(frozen=True, slots=True)
+class SeveredChain:                        # added at S-C1c -- referenced below, never shaped until now
+    upstream: str
+    upstream_port: str
+    measured: str
+    downstream: str
+    downstream_port: str
 
 class Pipeline:
     name: str
     stages: tuple[Stage, ...]
+    base_grid_ns: int                      # added at S-C1c -- GCD of every declared period_ns (R-SIM-18)
 
     @classmethod
-    def load(cls, path: Path) -> Pipeline:
+    def load(
+        cls, path: Path, *, search: Sequence[Path] = (),
+        components: Mapping[str, SilComponent] | None = None,
+        recording: RecordingReader | None = None,
+    ) -> Pipeline:
         """Validates at LOAD, never at first tick (`§5.14`). Checks, in order:
         1. every input port resolves (executing producer, or recording topic);
         2. `mode: measured` against a recording lacking the topics -> error;
         3. severed chain -> see `severed_chains()`;
         4. port type match against both manifests;
         5. no forward reference, no cycle.
-        Every failure is `AuthoringError` and names both ends."""
+        Every failure is `AuthoringError` and names both ends.
+
+        `search`/`components`/`recording` added at `S-C1c` (keyword-only,
+        defaulted -- not a signature change under this doc's own reading
+        rule): `search` forwards to `resolve_library` for `dll:`/`stubdll:`
+        stages; `components` supplies already-built stages -- the only way
+        to satisfy `impl: stub:` until `S-C2`'s registry exists, and how a
+        test injects a fake component with no file on disk; `recording` is
+        what check 2 above reads `.topics()` from."""
+
+    def exec(
+        self, dt_ns: int, stimulus: Mapping[str, bytes], *,
+        measured: Mapping[str, Mapping[str, bytes]] | None = None,
+    ) -> Mapping[str, Mapping[str, bytes]]:
+        """Added at `S-C1c` -- not shown in an earlier draft of this section,
+        which listed `Pipeline`'s declarative methods only; execution turned
+        out to need a real entry point and this is it. Runs EVERY stage
+        EVERY call, single-rate, in declaration order: `stimulus` supplies
+        `source.*` values, `measured` supplies each `mode: measured` stage's
+        recorded outputs for this tick (`Pipeline` does no I/O itself --
+        reading a recording is the caller's job). `mode: off` needs no
+        special-casing: an `off` stage's entry is simply never added to the
+        tick's output map, so a downstream reference to it is absent from
+        whatever consumes it -- `valid=0`, the same convention
+        `SilComponent` already uses for a missing input. Returns every
+        stage's output ports this tick, keyed by stage name."""
+
+    def step(
+        self, dt_ns: int, stimulus: Mapping[str, bytes], *,
+        measured: Mapping[str, Mapping[str, bytes]] | None = None,
+    ) -> Mapping[str, PortValue]:
+        """Added at `S-C1c` -- the multi-rate-aware entry point (`R-SIM-18`),
+        built on `exec`'s per-stage dispatch. Advances the `Pipeline`'s own
+        clock by `dt_ns`; a stage runs (or injects) only on its due tick
+        against `base_grid_ns` -- `period_ns == 0` (undeclared) means due
+        every call. A stage that is not due HOLDS its last output rather
+        than re-running: `updated=False`, `age_s` the exact elapsed time
+        since it was last actually due, from integer nanoseconds (`P-8`,
+        never accumulated as float seconds). Returns one `core.tick.PortValue`
+        per DECLARED output port, keyed by fully qualified `"<stage>.<port>"`
+        name (matching `Tick.ports` directly, so a caller can fold a run's
+        `step()` outputs straight into a `Tick`) -- the full declared port
+        set every call, held or fresh, which is `R-SIM-10`'s invariant
+        carried into multi-rate: a downstream stage wired to a not-due
+        producer still sees that producer's last real value, not a gap."""
 
     def severed_chains(self) -> tuple[SeveredChain, ...]:
         """A `measured` stage between two `simulate` stages on ONE data path
         (`R-SIM-10`). Returned, not raised: the GUI auto-closes by default and
-        the CLI warns. Forcing it open is legal and badges the orphan."""
+        the CLI warns. Forcing it open is legal and badges the orphan.
+        `off -> measured -> simulate` is deliberately not flagged -- nothing
+        computed into the gap."""
 
     def with_mode(self, stage: str, mode: Mode, *, close_gaps: bool = True) -> Pipeline:
         """Returns a NEW pipeline. `close_gaps` flips intervening stages, which
@@ -276,11 +392,23 @@ class Override:
     verb: OverrideVerb
     value: float | None = None             # required for const/offset/scale
     def apply(self, current: float, first: float) -> float: ...
+
+def parse_override_verb(raw: str, *, where: str) -> OverrideVerb:
+    """Added at `S-C1c`. The closed-list gate a pipeline's `overrides:` YAML
+    goes through: a verb outside the four is `AuthoringError`, never a
+    silent extension point."""
 ```
 
 There is no `expression`, no `python`, no `callable`. A fifth verb is a design
 change requiring a requirement; the survey in `docs/py` records why
 (`FR-SIM-45`).
+
+**Scope note (`S-C1c`):** `Override`/`OverrideVerb` and `Stage.overrides` are
+declared and load-validated at `S-C1c` -- a verb outside the closed four is
+caught at `Pipeline.load` time. Actually applying an override to a live
+port's bytes, between wiring and `exec`/`step`, is `S-D6`'s job (its own
+checklist entry already expects this); `Pipeline.exec`/`step` above do not
+consult `Stage.overrides` yet.
 
 ---
 

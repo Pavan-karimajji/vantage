@@ -673,11 +673,18 @@ Rules:
 `make_pro_buf(256)` for every output, chosen once by hand. Two failure modes to
 handle explicitly:
 
-- **Too small** — `adasExec` returns 0 today (`"output buffer too small"`).
-  `SilComponent` distinguishes this from a genuine failure by re-reading
-  `port.len`, growing to it and retrying **once**, then raising if it still
-  fails. A grow event is logged, because a manifest whose `max_bytes` is
-  chronically low is a manifest bug worth fixing.
+- **Too small** — this paragraph originally claimed `adasExec` returns 0
+  on an undersized buffer; **found wrong by testing at `S-C1c`, against the
+  real `df_sil.dll`**: `adasExec` returns success (1) even when one output
+  port was undersized -- that port is simply left `updated=0` while every
+  other port still writes normally. `CtypesSilComponent` therefore detects
+  undersize from the ports themselves (`port.len > port.cap`, checked on
+  every port unconditionally after every call), never from the return
+  code -- gating on the return code would mean the grow path silently never
+  fires. Distinguished from a genuine failure this way, `SilComponent`
+  grows to the reported `port.len` and retries **once**, then raises if it
+  still fails. A grow event is logged, because a manifest whose `max_bytes`
+  is chronically low is a manifest bug worth fixing.
 - **Unbounded growth** — a `GenObjectList` with 50 slots is not small. Buffers
   are per-handle and reused, so growth is amortised to at most one realloc per
   port per run.
