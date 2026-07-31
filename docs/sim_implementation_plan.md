@@ -2579,7 +2579,7 @@ change to every artefact). Starting here first means doing this stage twice.
 - [x] `UT-C1c-21` a held port reads `updated=False` with an **exact** `age_s`
       from integer nanoseconds, and the consumer still receives its **full port
       set** — `R-SIM-10`'s invariant under multi-rate
-- [ ] `ST-C1c-1` resim **every** existing recording through
+- [x] `ST-C1c-1` resim **every** existing recording through
       `CtypesSilComponent` and compare with the positional path —
       byte-identical (integration; skips with a named reason if the library is
       not built)
@@ -2596,7 +2596,7 @@ change to every artefact). Starting here first means doing this stage twice.
 - [ ] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked
 
 **Gate**
-- [ ] `ST-C1c-1` green over every recording — the generic path is proven
+- [x] `ST-C1c-1` green over every recording — the generic path is proven
       equivalent before anything depends on it exclusively
 - [ ] `GT-6` green — the framework imports no generated bindings, tested by
       making them unimportable rather than by inspection
