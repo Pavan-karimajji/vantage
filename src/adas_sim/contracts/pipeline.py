@@ -17,7 +17,7 @@ call. Multi-rate scheduling (`period_ns`/GCD due-tick gating, held-port
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
@@ -25,6 +25,7 @@ import yaml
 
 from adas_sim.contracts.component import CtypesSilComponent, PortSpec, SilComponent
 from adas_sim.contracts.loader import resolve_library
+from adas_sim.contracts.override import Override, parse_override_verb
 from adas_sim.core.errors import AuthoringError
 from adas_sim.io.base import RecordingReader
 
@@ -39,12 +40,16 @@ Mode = Literal["simulate", "measured", "off"]
 class Stage:
     """One pipeline entry (`sim_api_reference.md` SS3.3). `inputs` maps this
     stage's own port name to a producer reference: `"source.<name>"` or
-    `"<earlier-stage>.<port>"`."""
+    `"<earlier-stage>.<port>"`. `overrides` is keyed by a port name or a
+    field path (`"egoDyn.vx"`), from the closed four-verb list
+    (`contracts/override.py`, `R-SIM-15`) -- declared and validated at load,
+    not yet applied during `exec()` (a later slice wires that in)."""
 
     name: str
     mode: Mode
     impl: str | None
     inputs: Mapping[str, str]
+    overrides: Mapping[str, Override] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +92,17 @@ def _resolve_version(raw: Mapping[str, object]) -> int:
             hint="this pipeline was written by a newer adas-sim; upgrade the framework",
         )
     return version
+
+
+def _parse_overrides(raw: Mapping[str, Mapping[str, object]], *, stage_name: str) -> dict[str, Override]:
+    """`overrides: {<port or port.field>: {verb: ..., value: ...}}` -- the
+    verb is checked against the closed four (`R-SIM-15`); an unknown verb
+    is a load error naming the offending key (`UT-C1c-17`)."""
+    result: dict[str, Override] = {}
+    for key, entry in raw.items():
+        verb = parse_override_verb(entry["verb"], where=f"stage '{stage_name}' overrides '{key}'")
+        result[key] = Override(verb=verb, value=entry.get("value"))
+    return result
 
 
 def _resolve_components(
@@ -243,6 +259,7 @@ class Pipeline:
             Stage(
                 name=spec["name"], mode=spec.get("mode", "simulate"), impl=spec.get("impl"),
                 inputs=dict(spec.get("inputs", {})),
+                overrides=_parse_overrides(spec.get("overrides", {}), stage_name=spec["name"]),
             )
             for spec in raw.get("stages", [])
         )
@@ -337,7 +354,7 @@ class Pipeline:
                 hint=f"declared stages: {', '.join(names)}",
             )
         new_stages = tuple(
-            Stage(name=s.name, mode=mode, impl=s.impl, inputs=s.inputs) if s.name == stage else s
+            Stage(name=s.name, mode=mode, impl=s.impl, inputs=s.inputs, overrides=s.overrides) if s.name == stage else s
             for s in self.stages
         )
         result = Pipeline(name=self.name, stages=new_stages, version=self.version, components=self._components)
@@ -349,7 +366,7 @@ class Pipeline:
         if not to_close:
             return result
         closed_stages = tuple(
-            Stage(name=s.name, mode="simulate", impl=s.impl, inputs=s.inputs) if s.name in to_close else s
+            Stage(name=s.name, mode="simulate", impl=s.impl, inputs=s.inputs, overrides=s.overrides) if s.name in to_close else s
             for s in new_stages
         )
         return Pipeline(name=self.name, stages=closed_stages, version=self.version, components=self._components)
@@ -363,6 +380,11 @@ class Pipeline:
                     "name": s.name, "mode": s.mode,
                     **({"impl": s.impl} if s.impl is not None else {}),
                     "inputs": dict(s.inputs),
+                    **(
+                        {"overrides": {k: {"verb": o.verb.value, **({"value": o.value} if o.value is not None else {})}
+                                       for k, o in s.overrides.items()}}
+                        if s.overrides else {}
+                    ),
                 }
                 for s in self.stages
             ],

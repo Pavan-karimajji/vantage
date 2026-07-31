@@ -4,8 +4,10 @@
 # @author Pavan Karimajji
 
 """S-C1c pipeline tests: UT-C1c-6, UT-C1c-7, UT-C1c-8, UT-C1c-9, UT-C1c-10,
-UT-C1c-11, UT-C1c-12, UT-C1c-13, UT-C1c-14, UT-C1c-16, UT-C1c-18, UT-C1c-19,
-ST-C1c-2 (docs/sim_implementation_plan.md).
+UT-C1c-11, UT-C1c-12, UT-C1c-13, UT-C1c-14, UT-C1c-16, UT-C1c-17 (the
+pipeline-wiring half; `override.py`'s own semantics are
+`test_c1c_override.py`'s), UT-C1c-18, UT-C1c-19, ST-C1c-2
+(docs/sim_implementation_plan.md).
 
 Every fixture here is a synthetic, invented component ("producer",
 "widget", ...) driven through `InProcessSilComponent` and injected via
@@ -25,6 +27,7 @@ import pytest
 import yaml
 
 from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent, PortSpec
+from adas_sim.contracts.override import Override, OverrideVerb
 from adas_sim.contracts.pipeline import Pipeline
 from adas_sim.core.errors import AuthoringError
 
@@ -421,3 +424,46 @@ def test_algo_test_pipeline_runs_with_everything_measured_except_one_stage(tmp_p
     result = pipeline.exec(50_000_000, {}, measured={"upstream": {"objects": b"three-objects"}})
 
     assert result["under_test"] == {"verdict": b"brake"}
+
+
+# ---------------------------------------------------------------------------
+# UT-C1c-17 (pipeline-wiring half) -- an override applies at a port and at a
+# field path; a verb outside the closed four is a load error
+# ---------------------------------------------------------------------------
+
+
+def test_stage_overrides_accepts_a_bare_port_key_and_a_field_path_key(tmp_path):
+    """UT-C1c-17."""
+    manifest = _manifest(component="solo", inputs=[PortSpec(name="egoDyn", proto_type="test.VehDyn")])
+    stages = [
+        {
+            "name": "solo", "mode": "simulate", "impl": "stub:solo", "inputs": {"egoDyn": "source.veh_dyn"},
+            "overrides": {
+                "egoDyn": {"verb": "hold"},
+                "egoDyn.vx": {"verb": "const", "value": 10.0},
+            },
+        },
+    ]
+    path = _write_pipeline(tmp_path, stages)
+
+    pipeline = Pipeline.load(path, components={"solo": _stub("solo", manifest)})
+
+    overrides = pipeline.stages[0].overrides
+    assert overrides["egoDyn"] == Override(verb=OverrideVerb.HOLD)
+    assert overrides["egoDyn.vx"] == Override(verb=OverrideVerb.CONST, value=10.0)
+
+
+def test_an_override_verb_outside_the_closed_four_is_a_load_error(tmp_path):
+    """UT-C1c-17."""
+    manifest = _manifest(component="solo")
+    stages = [
+        {
+            "name": "solo", "mode": "simulate", "impl": "stub:solo", "inputs": {},
+            "overrides": {"whatever": {"verb": "interpolate"}},
+        },
+    ]
+    path = _write_pipeline(tmp_path, stages)
+
+    with pytest.raises(AuthoringError) as excinfo:
+        Pipeline.load(path, components={"solo": _stub("solo", manifest)})
+    assert "interpolate" in str(excinfo.value)

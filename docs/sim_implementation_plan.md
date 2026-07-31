@@ -2512,7 +2512,11 @@ change to every artefact). Starting here first means doing this stage twice.
 - [ ] `period_ns` read from each manifest; **base grid derived as the GCD** of
       the declared periods; a period that is not an integer multiple is a load
       error naming both numbers — never rounded (`R-SIM-18`)
-- [ ] `contracts/override.py` — the closed four-verb list (`R-SIM-15`)
+- [x] `contracts/override.py` — the closed four-verb list (`R-SIM-15`).
+      `Stage.overrides` is declared and validated at load (a verb outside
+      the four is `AuthoringError`); actually applying one to a live port's
+      bytes between wiring and `exec()` is `S-D6`'s job (its own checklist
+      item below -- run-manifest tagging and HUD badging belong there too)
 - [ ] Component pipeline files under `modules/<name>/sim/pipelines/`
 
 **Tests**
@@ -2552,7 +2556,7 @@ change to every artefact). Starting here first means doing this stage twice.
 - [x] `UT-C1c-16` **severed chain detected** — `simulate → measured → simulate`
       on one path is found; `off → measured → simulate` is **not** flagged
       (`R-SIM-10`; the GUI's auto-close in S-D6 builds on this)
-- [ ] `UT-C1c-17` an override applies at a port and at a field path, and a verb
+- [x] `UT-C1c-17` an override applies at a port and at a field path, and a verb
       outside the closed four is a **load error**, not a warning (`R-SIM-15`)
 - [x] `UT-C1c-18` a pipeline file **carries a `version:`**, and one newer than
       the reader is a load error naming **both** versions (`CR-SIM-23`)
