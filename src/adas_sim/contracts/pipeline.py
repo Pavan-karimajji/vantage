@@ -20,6 +20,16 @@ applied to a stage's own input bytes right before `exec()` sees them
 (`OD-8`). `Stage.overrides` itself is the "declared, never smuggled" record
 (`R-SIM-15`); tagging a recorded *topic* `origin: overridden` is `S-C2`'s
 recorder reading this same field once it exists, not a second mechanism.
+
+Faults (`contracts/fault.py`) are declared at construction (`faults=`,
+scenario-scoped, not per-stage) and -- since the `S-C3` follow-up --
+applied to the STIMULUS every `exec()`/`step()` call, before the override
+above ever sees a stage's own input (`_apply_stimulus_faults`). A stage-to-
+stage or per-stage fault is out of scope (SS9.2's own rejected bus-level
+models); only the world model's own output can be faulted. `InputMeta`
+(`contracts/component.py`) carries the real `valid`/`age_s` a fault or
+`step()`'s own multi-rate holding produces through to `SilComponent.exec`
+-- the field `CtypesSilComponent._build_in_portset` used to hardcode.
 """
 
 from __future__ import annotations

@@ -18,13 +18,15 @@ inconsistent (`NR-SIM-8`). `corrupt` specifically reuses the override
 field is exactly a const override, tagged as a fault rather than a
 deliberate what-if -- never a second byte-mutation mechanism.
 
-**Not yet wired into a live pipeline or resim run.** Same staging
-discipline `S-C1cΔ` used for overrides ("parsed and load-validated but not
-yet applied to any bytes"): this module is the vocabulary, the load-time
-validation, and the pure per-tick effect on one `PortValue`; the injection
-point (which stage, which tick, in `contracts/pipeline.py` or a `Source`)
-is later scope, exactly as `Pipeline._apply_input_overrides` was for
-overrides.
+**Wired into `Pipeline.exec`/`step`** (`Pipeline._apply_stimulus_faults`,
+S-C3 follow-up): this module stays the vocabulary, the load-time
+validation and the pure per-tick effect on one `PortValue` -- the
+injection point applies it to the STIMULUS, before any stage sees it
+(SS9.2's own "a failure of the sensor or the transport"), the same way
+`Pipeline._apply_input_overrides` applies an override to a stage's own
+input. Not yet wired: a fault's *record* side -- landing in the run
+manifest, tagging its topic `origin: overridden`, a HUD badge (tracked
+separately, `sim_implementation_plan.md`'s own `S-C3` gate).
 """
 
 from __future__ import annotations

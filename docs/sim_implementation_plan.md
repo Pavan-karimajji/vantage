@@ -68,11 +68,16 @@ and new scope. Nothing already built was invalidated.
 **Landed as of 2026-08-03** (build order #1–10, i.e. all of Block 1 except
 `S-C1d`): `S-C0`, `S-A3Δ`, `S-A4Δ`, `S-B2Δ`, `S-C1cΔ`, `S-B1Δ`, `S-C4`,
 `S-C9`, `S-C2`, `S-C3`. `S-C3` landed with one gate item **not** fully
-closed — only 7 of the 18 real scenarios carry `expect:`/`markers:` (4 of
+closed — 13 of the 18 real scenarios carry `expect:`/`markers:` (3 of
 those verified against a real recording and a real compiled `df_sil`); see
 its own section and `modules/df/docs/sim_scenarios_and_expectations_migration.md`
-for exactly what's left. Next up per the build-order table: `S-C1aΔ2` (#11),
-starting Block 2 (a real MSVC/Conan build is required from here on).
+for exactly what's left. Same-day follow-up also wired `S-C3`'s fault
+vocabulary into `Pipeline.exec`/`step` (deferred at original landing) and
+fixed a real input-side ABI gap it surfaced (`_build_in_portset` hardcoded
+`valid`/`ageS`, discarding whatever a caller knew) — see the fault-injection
+item in `S-C3`'s own section below. Next up per the build-order table:
+`S-C1aΔ2` (#11), starting Block 2 (a real MSVC/Conan build is required from
+here on).
 
 ### ▶ The build sequence — this table is the authority on order
 
@@ -3729,21 +3734,46 @@ review.
       set of ways each can be made to lie. Today's `roll_fault:` is `corrupt` +
       `invalidate` and stops being a special form.
       *2026-08-03:* `contracts/fault.py` — `FaultVerb`/`Fault`/`apply_fault`.
-      **Not wired into a live pipeline or resim run** (same staging `S-C1cΔ`
-      used for overrides: grammar + pure per-tick effect land first, the
-      injection point is later scope). `_upgrade_v1` now *raises*, naming why,
-      if it ever meets a real `roll_fault:` key rather than silently guessing
-      a mapping — no real scenario among the 18 uses it today
+      `_upgrade_v1` now *raises*, naming why, if it ever meets a real
+      `roll_fault:` key rather than silently guessing a mapping — no real
+      scenario among the 18 uses it today.
+      *2026-08-03 follow-up:* wired into `Pipeline.exec`/`step`
+      (`_apply_stimulus_faults`) — `run.faults:` applies to the STIMULUS
+      every tick, before any stage sees it (`Pipeline.load(..., faults=
+      scenario.run.faults)`, wired at `cli/run.py` and `check/runner.py`).
+      Surfaced a real, separate gap while wiring `stale`/`invalidate`/`delay`
+      through: `CtypesSilComponent._build_in_portset` hardcoded every input
+      port's `valid=1, ageS=0.0` always, discarding whatever the caller
+      knew — confirmed against `df_interface_c.cpp`'s `updateReqPort` that a
+      real component's own `ReqPort.valid`/`.ageS` gating (`aeb_function.cpp`/
+      `bsd_function.cpp`) depends on exactly those fields. Fixed with a new
+      `InputMeta` threaded through `SilComponent.exec` (backward-compatible
+      default; no existing stub call site needed to change). Same pass also
+      fixes `step()`'s own multi-rate holding never reaching a real DLL's
+      input side — a half-rate producer's staleness now reaches a
+      downstream stage's `input_meta` instead of always reading fresh.
+      Verified against the real compiled `df_sil.dll`
+      (`test_c1c_component.py`) and end to end through `check_scenario` ->
+      resim (`test_c3_check.py`)
 - [x] **Faults reuse the override address grammar** (`S-C1cΔ`) — a third
       addressing scheme for the same objects is how a tool becomes inconsistent.
       *2026-08-03:* `Fault.address` goes through `contracts.binding.parse_address`;
       `corrupt` reuses `apply_override`'s own `CONST` verb for the byte
-      mutation rather than a second mechanism
+      mutation rather than a second mechanism.
+      *2026-08-03 follow-up:* for a STIMULUS port (no stage to scope the
+      address within, unlike an override), the address's port segment is
+      matched against the stimulus map's own keys directly, and `corrupt`'s
+      message class is resolved by tracing which stage wires
+      `source.<port>` (`Pipeline._message_cls_for_source_port`)
 - [ ] A fault is declared in `run.faults:`, lands in the run manifest, tags its
       topic `origin: overridden` and is badged in the HUD. **The origin enum
       stays at five** — fault-versus-override is a *record* question, answered
-      by the manifest, not a provenance grade. **Not done**: no pipeline/
-      resim/manifest/HUD wiring exists yet, tracked with fault injection above
+      by the manifest, not a provenance grade. **Still not done**: the
+      2026-08-03 follow-up above wires a fault's *behavioural effect*
+      (pipeline/resim), not its *record* — `apply_fault` already tags its
+      result `origin="overridden"` (`R-SIM-12`), but `Pipeline`'s stimulus
+      is bytes-only and that tag is discarded before it could reach a
+      recorder's topic metadata, the run manifest, or a HUD badge
 - [x] `delay` requires `S-A4Δ`. With one clock there is nowhere to put the
       original instant, which is the clearest case of the two-clock change
       paying for something beyond itself. *2026-08-03:* `apply_fault`'s
@@ -3805,17 +3835,29 @@ review.
 - [ ] All 18 scenarios have `expect:` blocks **transcribed from their existing
       comment blocks**, each reviewed against the comment's claim before being
       accepted (§7 step 5 — an expectation that merely records today's behaviour
-      is worse than none). **Not fully met**: 7 of 18 carry `expect:`/`markers:`
-      (3 `aeb`, 4 `bsd`), verified end to end against a real compiled `df_sil`
-      and a real recording for 4 of those 7 (2 `aeb`, 2 `bsd`); the remaining
-      11 were migrated to schema v2 structurally only, each with a stated
-      reason not to assert (several are the scenario's own comment saying
-      "demonstration, not a measurement"). Full detail:
+      is worse than none). **Not fully met**: 13 of 18 carry `expect:`/`markers:`
+      (3 `aeb`, 10 `bsd`), verified end to end against a real compiled `df_sil`
+      and a real recording for 3 of those 13 (`aeb_canonical_10mps_30m`,
+      `aeb_closing_ego20mps_lead10mps_30m`, `bsd_ego_lane_exit`); the other 10
+      are authored from each scenario's own analytic claim but not yet checked
+      against a recording (none exists yet) — `aeb_watchable_5mps_60m`,
+      `bsd_mergein_vlat025/_vlat050/_vlat075`, and (2026-08-03 follow-up)
+      `bsd_passby_dv8/_dv16/_dv24/_dv32`, `bsd_ncap_bsm_car/_motorcycle`. The
+      remaining 5 were migrated to schema v2 structurally only, each with a
+      stated reason not to assert (several are the scenario's own comment
+      saying "demonstration, not a measurement"). Full detail:
       `modules/df/docs/sim_scenarios_and_expectations_migration.md`
 - [x] The migration record lists every claim that **could not** be expressed.
       *2026-08-03:* see the migration record above — also records two real
       findings surfaced by running against real data (an AEB spawn-offset
-      correction, and a BSD classification-does-not-persist discovery)
+      correction, and a BSD classification-does-not-persist discovery).
+      *2026-08-03 follow-up:* a third finding, surfaced completing the
+      distance→time conversion for the 6 scenarios above: `bsd_ego_lane_exit`
+      (verified) shows a target at negative `lateral_offset_m` triggers
+      `right.warning`, but `bsd_mergein_vlat025` (still unverified) asserts
+      `left.warning` for its own negative `lateral_offset_m` — a likely
+      mislabeling, documented in the migration record rather than silently
+      changed in `bsd_mergein_vlat025.yaml` itself
 
 ### S-C4 — Viewer reads real calibration; kill the duplicates
 
