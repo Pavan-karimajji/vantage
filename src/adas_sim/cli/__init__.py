@@ -29,6 +29,9 @@ def main(argv: list[str] | None = None) -> int:
     subparsers.add_parser("render", help="headless snapshot to a PNG (S-B3)", add_help=False)
     subparsers.add_parser("convert", help="recording -> recording (S-D7)", add_help=False)
     subparsers.add_parser("export", help="recording -> CSV, port-selectable (S-D7)", add_help=False)
+    subparsers.add_parser("record", help="drive a source, execute nothing (S-C2)", add_help=False)
+    subparsers.add_parser("run", help="drive a source and execute a pipeline, live (S-C2)", add_help=False)
+    subparsers.add_parser("resim", help="execute a pipeline against a recording (S-C2)", add_help=False)
 
     args, remainder = parser.parse_known_args(argv)
     if args.verb == "doctor":
@@ -59,4 +62,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.verb == "export":
         from adas_sim.cli import export
         return export.run(remainder)
+    if args.verb == "record":
+        from adas_sim.cli import record
+        return record.run(remainder)
+    if args.verb == "run":
+        from adas_sim.cli import run as run_verb
+        return run_verb.run(remainder)
+    if args.verb == "resim":
+        from adas_sim.cli import resim
+        return resim.run(remainder)
     return 1  # unreachable: every registered verb is dispatched above

@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from enum import StrEnum
 from functools import reduce
 from math import gcd
 from pathlib import Path
@@ -42,12 +43,45 @@ from adas_sim.contracts.override import Override, OverrideVerb, parse_override_v
 from adas_sim.core.errors import AuthoringError, ContractError
 from adas_sim.core.tick import PortValue
 from adas_sim.io.base import RecordingReader
+from adas_sim.sources.base import Source
 
 #: The only shape that has ever existed -- `_resolve_version`'s upgrade is a
 #: no-op today; a real v2 would add a transform step there (`CR-SIM-23`).
 CURRENT_PIPELINE_VERSION = 1
 
 Mode = Literal["simulate", "measured", "off"]
+
+
+class RecordVerb(StrEnum):
+    """The closed per-port record vocabulary (`NR-SIM-42`): `full` is the
+    stated default, `excluded` drops the port entirely, `decimate` keeps
+    every Nth tick. No fourth verb -- same "closed list, stated reason"
+    discipline as `OverrideVerb` (`R-SIM-15`)."""
+
+    FULL = "full"
+    EXCLUDED = "excluded"
+    DECIMATE = "decimate"
+
+
+@dataclass(frozen=True, slots=True)
+class RecordPolicy:
+    """One port's resolved `record:` policy. `decimate_n` is required for,
+    and only meaningful with, `verb is DECIMATE`."""
+
+    verb: RecordVerb
+    decimate_n: int | None = None
+
+
+def record_policy_for(stage: Stage, port_name: str) -> RecordPolicy:
+    """`stage`'s resolved policy for one of its own declared output ports
+    (`NR-SIM-42`): an exact port entry wins, else the `"*"` wildcard entry,
+    else the closed default `full` -- `record:` entirely absent means every
+    port is `full`, stated rather than merely assumed."""
+    if port_name in stage.record:
+        return stage.record[port_name]
+    if "*" in stage.record:
+        return stage.record["*"]
+    return RecordPolicy(RecordVerb.FULL)
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,13 +91,17 @@ class Stage:
     `"<earlier-stage>.<port>"`. `overrides` is keyed by a port name or a
     field path (`"egoDyn.vx"`), from the closed four-verb list
     (`contracts/override.py`, `R-SIM-15`) -- declared and validated at load,
-    not yet applied during `exec()` (a later slice wires that in)."""
+    not yet applied during `exec()` (a later slice wires that in).
+    `record` is keyed by this stage's own OUTPUT port name (or `"*"`), the
+    per-port capture policy the recorder honours (`NR-SIM-42`, `S-C2`) --
+    unrelated to `overrides`, which governs this stage's INPUT side."""
 
     name: str
     mode: Mode
     impl: str | None
     inputs: Mapping[str, str]
     overrides: Mapping[str, Override] = field(default_factory=dict)
+    record: Mapping[str, RecordPolicy] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,6 +185,76 @@ def _parse_overrides(raw: Mapping[str, Mapping[str, object]], *, stage_name: str
         parse_address(key, where=where)  # grammar validated now (UT-C1c-24); re-resolved when actually applied
         result[key] = Override(verb=verb, value=float(value) if value is not None else None)
     return result
+
+
+def _parse_record_policy(raw: object, *, where: str) -> RecordPolicy:
+    """One `record:` entry's value -- a bare string (`full`/`excluded`) or
+    `{decimate: <n>}` (`NR-SIM-42`'s own example shape). Anything else,
+    including a bare `"decimate"` string with no count, is a load error
+    naming the closed vocabulary."""
+    if isinstance(raw, str) and raw != RecordVerb.DECIMATE.value:
+        try:
+            return RecordPolicy(RecordVerb(raw))
+        except ValueError as exc:
+            raise AuthoringError(
+                expected="one of: full, excluded, or {decimate: <n>}", found=repr(raw), where=where,
+                hint="the record: policy vocabulary is closed (NR-SIM-42)",
+            ) from exc
+    if isinstance(raw, Mapping) and set(raw) == {"decimate"}:
+        n = raw["decimate"]
+        if not isinstance(n, int) or isinstance(n, bool) or n < 1:
+            raise AuthoringError(
+                expected="a positive integer for decimate:", found=repr(n), where=where,
+                hint="e.g. {decimate: 10} keeps every 10th tick",
+            )
+        return RecordPolicy(RecordVerb.DECIMATE, decimate_n=n)
+    raise AuthoringError(
+        expected="one of: full, excluded, or {decimate: <n>}", found=repr(raw), where=where,
+        hint="the record: policy vocabulary is closed (NR-SIM-42)",
+    )
+
+
+def _parse_record(raw: Mapping[str, object], *, stage_name: str) -> dict[str, RecordPolicy]:
+    """`record: {<port or "*">: <policy>}` (`NR-SIM-42`) -- keyed by this
+    stage's own output ports, resolved per-port by `record_policy_for`."""
+    return {
+        key: _parse_record_policy(value, where=f"stage '{stage_name}' record '{key}'")
+        for key, value in raw.items()
+    }
+
+
+def validate_recordable(stages: Sequence[Stage], components: Mapping[str, SilComponent]) -> None:
+    """Recording-time-only check (`NR-SIM-42`'s "two different times, two
+    different answers"): the recorder calls this before starting, never
+    `Pipeline.load` itself -- the very same pipeline loads fine for resim,
+    where an excluded/decimated port is merely a cut `sim probe` reports as
+    infeasible, not an error. A `mode: simulate` stage consuming a
+    producing stage's output that is `excluded`/`decimate`d is a load error
+    naming both ends: you would be recording a run whose own inputs you are
+    not keeping, which can never be resimmed. `source.*`-fed inputs are
+    exempt -- stimulus has no `record:` policy of its own in this model,
+    the recorder always keeps it in full."""
+    by_name = {stage.name: stage for stage in stages}
+    for stage in stages:
+        if stage.mode != "simulate":
+            continue
+        for port_name, ref in stage.inputs.items():
+            producer_name, ref_port = _split_ref(ref)
+            if producer_name == "source":
+                continue
+            producer_stage = by_name.get(producer_name)
+            if producer_stage is None:
+                continue  # an undeclared producer is already _validate_wiring's error
+            policy = record_policy_for(producer_stage, ref_port)
+            if policy.verb is RecordVerb.FULL:
+                continue
+            detail = f"decimate={policy.decimate_n}" if policy.verb is RecordVerb.DECIMATE else policy.verb.value
+            raise AuthoringError(
+                expected=f"'{producer_name}.{ref_port}' to be recorded 'full' while "
+                         f"stage '{stage.name}' (mode: simulate) consumes it as '{port_name}'",
+                found=f"record: {detail}", where=f"stage '{producer_name}' record '{ref_port}'",
+                hint="set record: full for this port, or set the consuming stage to mode: measured/off",
+            )
 
 
 def _resolve_components(
@@ -234,12 +342,17 @@ def _find_port(specs: Sequence[PortSpec], name: str) -> PortSpec | None:
 
 def _validate_wiring(
     stages: Sequence[Stage], components: Mapping[str, SilComponent], recording: RecordingReader | None,
+    source: Source | None = None,
 ) -> None:
     """`Pipeline.load`'s validation, in api reference SS3.3's order: every
     input resolves, `measured` is checked against the recording, a
     port-type mismatch and a forward reference both raise naming both ends.
     (Severed-chain detection is `severed_chains()`, checked separately --
-    it is returned, never raised: `sim_sil_contract.md` SS4.2.)"""
+    it is returned, never raised: `sim_sil_contract.md` SS4.2.) `source`
+    is optional (`S-C2`): omitted, a `source.*` reference is left
+    unchecked here, same as before this stage -- a test with no real
+    `Source` still loads. Supplied, a `source.<name>` reference to a port
+    outside `source.emits()` is a load error naming both (`R-SIM-10`)."""
     index_by_name: dict[str, int] = {}
     for i, stage in enumerate(stages):
         if stage.name in index_by_name:
@@ -265,7 +378,15 @@ def _validate_wiring(
 
             producer_name, port_name = _split_ref(ref)
             if producer_name == "source":
-                continue  # S-C2 validates source.* against a real Source's emits()
+                if source is not None and port_name not in source.emits():
+                    emitted = ", ".join(sorted(source.emits())) or "(none)"
+                    raise AuthoringError(
+                        expected=f"source '{source.name}' to emit port '{port_name}'",
+                        found=f"source '{source.name}' emits: {emitted}",
+                        where=f"stage '{stage.name}' input '{input_spec.name}' references '{ref}'",
+                        hint="check the port name against the source's emits(), or wire a different source",
+                    )
+                continue
 
             if producer_name not in index_by_name:
                 raise AuthoringError(
@@ -380,13 +501,17 @@ class Pipeline:
         cls, path: Path, *, search: Sequence[Path] = (),
         components: Mapping[str, SilComponent] | None = None,
         recording: RecordingReader | None = None,
+        source: Source | None = None,
     ) -> Pipeline:
         """Validates at LOAD, never at first tick (SS5.14). `search` is
         forwarded to `resolve_library` for `dll:`/`stubdll:` stages;
         `components` supplies already-built stages (the only way to satisfy
         `impl: stub:` until S-C2's registry exists, and how a test injects a
         fake component with no file on disk); `recording` is checked against
-        every `mode: measured` stage's declared outputs."""
+        every `mode: measured` stage's declared outputs; `source` (`S-C2`)
+        is checked against every `source.*` reference's `emits()` -- both
+        optional, so a test wiring neither still loads exactly as before
+        either stage existed."""
         raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         version = _resolve_version(raw)
         name = raw.get("name", path.stem)
@@ -395,11 +520,12 @@ class Pipeline:
                 name=spec["name"], mode=spec.get("mode", "simulate"), impl=spec.get("impl"),
                 inputs=dict(spec.get("inputs", {})),
                 overrides=_parse_overrides(spec.get("overrides", {}), stage_name=spec["name"]),
+                record=_parse_record(spec.get("record", {}), stage_name=spec["name"]),
             )
             for spec in raw.get("stages", [])
         )
         resolved = _resolve_components(stages, search=search, components=components or {})
-        _validate_wiring(stages, resolved, recording)
+        _validate_wiring(stages, resolved, recording, source)
         _validate_overrides(stages, resolved)
         return cls(name=name, stages=stages, version=version, components=resolved)
 
@@ -596,7 +722,8 @@ class Pipeline:
                 hint=f"declared stages: {', '.join(names)}",
             )
         new_stages = tuple(
-            Stage(name=s.name, mode=mode, impl=s.impl, inputs=s.inputs, overrides=s.overrides) if s.name == stage else s
+            Stage(name=s.name, mode=mode, impl=s.impl, inputs=s.inputs, overrides=s.overrides, record=s.record)
+            if s.name == stage else s
             for s in self.stages
         )
         result = Pipeline(name=self.name, stages=new_stages, version=self.version, components=self._components)
@@ -608,7 +735,8 @@ class Pipeline:
         if not to_close:
             return result
         closed_stages = tuple(
-            Stage(name=s.name, mode="simulate", impl=s.impl, inputs=s.inputs, overrides=s.overrides) if s.name in to_close else s
+            Stage(name=s.name, mode="simulate", impl=s.impl, inputs=s.inputs, overrides=s.overrides, record=s.record)
+            if s.name in to_close else s
             for s in new_stages
         )
         return Pipeline(name=self.name, stages=closed_stages, version=self.version, components=self._components)
@@ -626,6 +754,13 @@ class Pipeline:
                         {"overrides": {k: {"verb": o.verb.value, **({"value": o.value} if o.value is not None else {})}
                                        for k, o in s.overrides.items()}}
                         if s.overrides else {}
+                    ),
+                    **(
+                        {"record": {
+                            k: ({"decimate": p.decimate_n} if p.verb is RecordVerb.DECIMATE else p.verb.value)
+                            for k, p in s.record.items()
+                        }}
+                        if s.record else {}
                     ),
                 }
                 for s in self.stages

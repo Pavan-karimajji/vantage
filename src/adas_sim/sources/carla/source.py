@@ -1,0 +1,225 @@
+# Copyright (c) <ORG>. All Rights Reserved.
+# Proprietary and Confidential.
+# COMPONENT: SIM
+# @author Pavan Karimajji
+
+"""`CarlaSource` -- the `Source` (`sim_api_reference.md` §8) that drives a
+live CARLA server (`S-C2` slice 5). Ties together `world.py` (connect/map),
+`spawn.py` (actor spawn), `actor_behaviour.py` (lane-advance, lateral
+profiles), `mocks.py` (ground-truth -> port bytes) and `chase.py`
+(spectator follow) -- the engine `modules/df/tools/carla/carla_bridge.py`'s
+`run()` loop already implements, decomposed by copy (`R-STYLE-2`).
+
+Camera capture is deliberately **not** ported this slice: the old bridge's
+chase-view JPEG recording would need `S-A3Δ`'s `BulkRef` budget mechanism to
+carry correctly, which is a real design question outside `S-C2`'s mandatory
+checklist -- `emits()` is `gen_object_list`/`veh_dyn`/`veh_sig` only.
+
+`dt_s` is this source's OWN wall-clock pacing (`TARGET_HZ`), not something a
+caller passes in: `Source.poll()` takes no argument (`sim_api_reference.md`
+§8's frozen signature) because a LIVE world determines its own tick rate --
+a caller's `Pipeline`/recorder clock is a separate, nominal `dt_ns` for its
+own scheduling (`R-SIM-18`), which for a live CARLA run is expected to
+track this source's real pacing but is never used to drive it.
+
+`message_classes` (constructor-required) supplies the `GenObjectList`/
+`VehDyn`/`VehSig` message classes `mocks.py` builds bytes with -- resolved
+by the CALLER from a real component's own manifest
+(`contracts.component.resolve_message_classes`, `R-SIM-11`'s own dynamic-
+from-`descriptor_set` construction), never imported here (`GT-6`). A live
+CARLA recording needs a real library loaded for its manifest alone (no
+`exec()` required) purely to harvest these three descriptors -- CLI wiring
+for that is left for whoever runs `MC-2` against a real build.
+"""
+
+from __future__ import annotations
+
+import time
+from collections.abc import Mapping
+from typing import ClassVar
+
+from adas_sim.core.errors import InternalError
+from adas_sim.sources.base import Scenario
+from adas_sim.sources.carla import actor_behaviour, chase, mocks, spawn, world
+from adas_sim.sources.carla.catalogue import classification_for_blueprint, load_catalogue
+
+#: Matches the pacing already proven against a real CARLA build: paced
+#: against wall clock (`time.perf_counter()`), NOT the server's own
+#: `snapshot.timestamp` -- the latter was found not to reliably track real
+#: elapsed time when polled via `world.wait_for_tick()` this fast in async
+#: mode.
+TARGET_HZ = 20.0
+TARGET_DT_S = 1.0 / TARGET_HZ
+
+
+def _normalize_actors(scenario_raw: Mapping[str, object]) -> list[dict]:
+    """Returns a list of actor cfgs (name, blueprint, long_offset_m,
+    lateral_offset_m, speed_mps, classification, lateral_profile) -- the
+    general `actors:` schema. `lead:` is sugar for a single actor dead
+    ahead (`lateral_offset_m: 0.0`), kept so a scenario written against the
+    old shape runs unchanged."""
+    if "actors" in scenario_raw:
+        return [{
+            "name": cfg["name"],
+            "blueprint": cfg["blueprint"],
+            "long_offset_m": cfg["long_offset_m"],
+            "lateral_offset_m": cfg.get("lateral_offset_m", 0.0),
+            "speed_mps": cfg["speed_mps"],
+            "classification": cfg.get("classification"),
+            "lateral_profile": cfg.get("lateral_profile"),
+        } for cfg in scenario_raw["actors"]]
+    lead_cfg = scenario_raw["lead"]
+    return [{
+        "name": "lead",
+        "blueprint": lead_cfg["blueprint"],
+        "long_offset_m": lead_cfg["initial_gap_m"],
+        "lateral_offset_m": 0.0,
+        "speed_mps": lead_cfg["speed_mps"],
+        "classification": None,
+        "lateral_profile": None,
+    }]
+
+
+class CarlaSource:
+    name: ClassVar[str] = "carla"
+
+    def __init__(self, *, message_classes: Mapping[str, type], catalogue: dict | None = None) -> None:
+        self._message_classes = message_classes
+        self._catalogue = catalogue if catalogue is not None else load_catalogue()
+        self._world = None
+        self._ego_actor = None
+        self._actors_by_name: dict = {}
+        self._actor_cfgs: list[dict] = []
+        self._ego_cfg: dict = {}
+        self._object_range_m = 0.0
+        self._num_object_slots = 0
+        self._roll_fault_cfg: dict | None = None
+        self._lateral_profiles: dict = {}
+        self._ego_profile = None
+        self._lane_advancer = None
+        self._elapsed_s = 0.0
+        self._last_real_t: float | None = None
+        self._started = False
+
+    def __repr__(self) -> str:
+        return f"<CarlaSource started={self._started} elapsed_s={self._elapsed_s:.2f}>"
+
+    def emits(self) -> frozenset[str]:
+        return frozenset({"gen_object_list", "veh_dyn", "veh_sig"})
+
+    def start(self, scenario: Scenario) -> None:
+        raw = scenario.raw
+        carla_cfg = raw["carla"]
+        client = world.connect(carla_cfg["host"], carla_cfg["port"])
+        live_world = world.wait_for_world(client)
+        live_world = world.ensure_map(client, live_world, carla_cfg["map"])
+        world.set_asynchronous(live_world)
+
+        ego_cfg = raw["ego"]
+        actor_cfgs = _normalize_actors(raw)
+        ego_actor = None
+        actors_by_name: dict = {}
+        # Spawning is inside its own try: a target whose spawn point is
+        # blocked would otherwise leave the ego actor behind on the
+        # server, and the NEXT run's own ego spawn would then fail on the
+        # orphan -- a confusing second failure that hides the first.
+        try:
+            ego_actor = spawn.spawn_kinematic_ego(live_world, ego_cfg)
+            for cfg in actor_cfgs:
+                actors_by_name[cfg["name"]] = spawn.spawn_kinematic_at(
+                    live_world, ego_actor, cfg["blueprint"], cfg["long_offset_m"],
+                    cfg["lateral_offset_m"], cfg["speed_mps"],
+                )
+        except Exception:
+            for actor in actors_by_name.values():
+                actor.destroy()
+            if ego_actor is not None:
+                ego_actor.destroy()
+            raise
+
+        focus_actor = next(iter(actors_by_name.values()), None)
+        chase.follow_with_spectator(live_world, ego_actor, focus_actor)
+
+        self._world = live_world
+        self._ego_actor = ego_actor
+        self._actors_by_name = actors_by_name
+        self._actor_cfgs = actor_cfgs
+        self._ego_cfg = ego_cfg
+        self._object_range_m = raw["object_range_m"]
+        self._num_object_slots = raw["num_object_slots"]
+        self._roll_fault_cfg = raw.get("roll_fault")
+        self._lateral_profiles = actor_behaviour.build_lateral_profiles(actor_cfgs)
+        # The ego may declare a lateral profile too -- the only actor whose
+        # lateral motion is also yawed (`yaw_with_lateral=True` below),
+        # because only the ego's yaw_rate reaches a consuming component.
+        self._ego_profile = actor_behaviour.build_lateral_profiles(
+            [{"name": "ego", "lateral_profile": ego_cfg.get("lateral_profile")}]).get("ego")
+        self._lane_advancer = actor_behaviour.LaneAdvancer()
+        self._elapsed_s = 0.0
+        self._last_real_t = None
+        self._started = True
+
+    def poll(self) -> Mapping[str, bytes]:
+        if not self._started:
+            raise InternalError(
+                expected="start() called before poll()", found="not started",
+                where="CarlaSource.poll", hint="call start() once before the first poll()",
+            )
+        self._world.wait_for_tick()  # stays synchronized with the server / avoids busy-spinning
+
+        now = time.perf_counter()
+        if self._last_real_t is None:
+            dt_s = TARGET_DT_S
+        else:
+            dt_s = now - self._last_real_t
+            if dt_s < TARGET_DT_S:
+                time.sleep(TARGET_DT_S - dt_s)
+                now = time.perf_counter()
+                dt_s = now - self._last_real_t
+        self._last_real_t = now
+        self._elapsed_s += dt_s
+
+        rates = actor_behaviour.lateral_rates(self._lateral_profiles, self._actor_cfgs, self._elapsed_s)
+        ego_lateral_rate = self._ego_profile.rate_mps(self._elapsed_s) if self._ego_profile else 0.0
+        self._lane_advancer.advance(
+            self._world, self._ego_actor, self._ego_cfg["speed_mps"], dt_s, ego_lateral_rate, yaw_with_lateral=True,
+        )
+        for cfg in self._actor_cfgs:
+            self._lane_advancer.advance(
+                self._world, self._actors_by_name[cfg["name"]], cfg["speed_mps"], dt_s, rates[cfg["name"]],
+            )
+        focus_actor = next(iter(self._actors_by_name.values()), None)
+        chase.follow_with_spectator(self._world, self._ego_actor, focus_actor)
+
+        targets = [
+            (
+                self._actors_by_name[cfg["name"]], cfg["speed_mps"], rates[cfg["name"]],
+                cfg["classification"] or classification_for_blueprint(cfg["blueprint"], self._catalogue),
+            )
+            for cfg in self._actor_cfgs
+        ]
+        gen_object_list_bytes = mocks.build_gen_object_list_bytes(
+            self._ego_actor, self._ego_cfg["speed_mps"], targets, self._object_range_m, self._num_object_slots,
+            self._message_classes,
+        )
+
+        ego_yaw_rate_rad_s = self._lane_advancer.yaw_rate_rad_s(self._ego_actor.id)
+        roll_angle_rad, roll_rate_rad_s, roll_quality = mocks.compute_ego_roll(
+            self._ego_actor, self._elapsed_s, self._roll_fault_cfg,
+        )
+        veh_dyn_bytes = mocks.build_veh_dyn_bytes(
+            self._ego_cfg["speed_mps"], 0.0, ego_yaw_rate_rad_s, roll_angle_rad, roll_rate_rad_s, roll_quality,
+            self._message_classes,
+        )
+        veh_sig_bytes = mocks.build_veh_sig_bytes(self._message_classes)
+
+        return {"gen_object_list": gen_object_list_bytes, "veh_dyn": veh_dyn_bytes, "veh_sig": veh_sig_bytes}
+
+    def stop(self) -> None:
+        if self._ego_actor is not None:
+            self._ego_actor.destroy()
+        for actor in self._actors_by_name.values():
+            actor.destroy()
+        self._actors_by_name = {}
+        self._ego_actor = None
+        self._started = False
