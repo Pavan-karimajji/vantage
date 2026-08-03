@@ -27,6 +27,7 @@ from google.protobuf import message_factory as _mfactory
 
 from adas_sim.contracts import pipeline as pipeline_mod
 from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent, PortSpec
+from adas_sim.contracts.fault import Fault, FaultVerb
 from adas_sim.contracts.override import Override, OverrideVerb
 from adas_sim.contracts.pipeline import Pipeline
 from adas_sim.core.errors import AuthoringError, ContractError, InternalError
@@ -788,3 +789,174 @@ def test_shutdown_components_deactivates_every_stage(tmp_path):
 
     with pytest.raises(InternalError):
         pipeline.exec(50_000_000, {})
+
+
+# ---------------------------------------------------------------------------
+# S-C3 -- `run.faults:` (`contracts/fault.py`) actually applied to the
+# STIMULUS by `Pipeline.exec`/`step`, not merely declared (SS9.2). `drop`/
+# `corrupt` are pure bytes; `stale`/`invalidate`/`delay` are only observable
+# through the `InputMeta` a consuming stage's `exec()` receives -- inspected
+# via `InProcessSilComponent.last_input_meta` (real `valid`/`ageS` reaching
+# `CtypesSilComponent`'s ABI struct is `test_c1c_component.py`'s own test).
+# ---------------------------------------------------------------------------
+
+
+def test_drop_fault_removes_the_stimulus_port_before_the_stage_sees_it(tmp_path):
+    consumer = _manifest(component="consumer", inputs=[PortSpec(name="egoDyn", proto_type="test.A")])
+    stages = [{"name": "consumer", "mode": "simulate", "impl": "stub:consumer", "inputs": {"egoDyn": "source.veh_dyn"}}]
+    path = _write_pipeline(tmp_path, stages)
+
+    seen: list[bool] = []
+
+    def _algorithm(dt_ns, inputs):
+        seen.append("egoDyn" in inputs)
+        return {}
+
+    component = InProcessSilComponent("consumer", consumer, _algorithm)
+    component.init()
+    fault = Fault(verb=FaultVerb.DROP, address="veh_dyn", from_s=0.0, to_s=10.0)
+    pipeline = Pipeline.load(path, components={"consumer": component}, faults=[fault])
+
+    pipeline.exec(50_000_000, {"veh_dyn": b"whatever"})
+
+    assert seen == [False]  # absent, not merely empty bytes -- R-SIM's own convention
+
+
+def test_corrupt_fault_mutates_stimulus_bytes_before_the_stage_sees_it(tmp_path):
+    scalar_cls, descriptor_set = _scalar_message_cls()
+    consumer = _manifest(
+        component="consumer", inputs=[PortSpec(name="egoDyn", proto_type="adas_sim.test.c1cpipeline.Scalar")],
+        descriptor_set=descriptor_set,
+    )
+    stages = [{"name": "consumer", "mode": "simulate", "impl": "stub:consumer", "inputs": {"egoDyn": "source.veh_dyn"}}]
+    path = _write_pipeline(tmp_path, stages)
+
+    seen: list[float] = []
+
+    def _algorithm(dt_ns, inputs):
+        received = scalar_cls()
+        received.ParseFromString(inputs["egoDyn"])
+        seen.append(received.x)
+        return {}
+
+    component = InProcessSilComponent("consumer", consumer, _algorithm)
+    component.init()
+    # message_cls for the STIMULUS port "veh_dyn" is resolved by finding
+    # this same stage's own wiring to it (`_message_cls_for_source_port`)
+    # -- the stimulus itself carries no schema of its own.
+    fault = Fault(verb=FaultVerb.CORRUPT, address="veh_dyn.x", value=42.0, from_s=0.0, to_s=10.0)
+    pipeline = Pipeline.load(path, components={"consumer": component}, faults=[fault])
+
+    pipeline.exec(50_000_000, {"veh_dyn": scalar_cls(x=1.0).SerializeToString()})
+
+    assert seen == [42.0]  # never 1.0
+
+
+def test_stale_fault_grows_age_s_in_input_meta_across_execs(tmp_path):
+    consumer = _manifest(component="consumer", inputs=[PortSpec(name="egoDyn", proto_type="test.A")])
+    stages = [{"name": "consumer", "mode": "simulate", "impl": "stub:consumer", "inputs": {"egoDyn": "source.veh_dyn"}}]
+    path = _write_pipeline(tmp_path, stages)
+
+    component = InProcessSilComponent("consumer", consumer, lambda dt_ns, inputs: {})
+    component.init()
+    fault = Fault(verb=FaultVerb.STALE, address="veh_dyn", from_s=0.0, to_s=10.0)
+    pipeline = Pipeline.load(path, components={"consumer": component}, faults=[fault])
+
+    pipeline.exec(50_000_000, {"veh_dyn": b"x"})
+    first = component.last_input_meta["egoDyn"]
+    pipeline.exec(50_000_000, {"veh_dyn": b"x"})
+    second = component.last_input_meta["egoDyn"]
+
+    assert first.valid is True
+    assert first.age_s == pytest.approx(0.0)  # just went stale
+    assert second.age_s == pytest.approx(0.05)  # a full tick stale now
+
+
+def test_invalidate_fault_marks_input_meta_invalid_but_keeps_the_bytes(tmp_path):
+    consumer = _manifest(component="consumer", inputs=[PortSpec(name="egoDyn", proto_type="test.A")])
+    stages = [{"name": "consumer", "mode": "simulate", "impl": "stub:consumer", "inputs": {"egoDyn": "source.veh_dyn"}}]
+    path = _write_pipeline(tmp_path, stages)
+
+    seen: list[bytes] = []
+
+    def _algorithm(dt_ns, inputs):
+        seen.append(inputs["egoDyn"])
+        return {}
+
+    component = InProcessSilComponent("consumer", consumer, _algorithm)
+    component.init()
+    fault = Fault(verb=FaultVerb.INVALIDATE, address="veh_dyn", from_s=0.0, to_s=10.0)
+    pipeline = Pipeline.load(path, components={"consumer": component}, faults=[fault])
+
+    pipeline.exec(50_000_000, {"veh_dyn": b"still-here"})
+
+    assert seen == [b"still-here"]  # bytes survive, unlike drop
+    assert component.last_input_meta["egoDyn"].valid is False
+
+
+def test_delay_fault_sets_a_constant_age_s_offset(tmp_path):
+    consumer = _manifest(component="consumer", inputs=[PortSpec(name="egoDyn", proto_type="test.A")])
+    stages = [{"name": "consumer", "mode": "simulate", "impl": "stub:consumer", "inputs": {"egoDyn": "source.veh_dyn"}}]
+    path = _write_pipeline(tmp_path, stages)
+
+    component = InProcessSilComponent("consumer", consumer, lambda dt_ns, inputs: {})
+    component.init()
+    fault = Fault(verb=FaultVerb.DELAY, address="veh_dyn", value=0.2, from_s=0.0, to_s=10.0)
+    pipeline = Pipeline.load(path, components={"consumer": component}, faults=[fault])
+
+    pipeline.exec(50_000_000, {"veh_dyn": b"x"})
+
+    meta = component.last_input_meta["egoDyn"]
+    assert meta.valid is True
+    assert meta.age_s == pytest.approx(0.2)
+
+
+def test_a_fault_outside_its_window_leaves_stimulus_and_input_meta_untouched(tmp_path):
+    consumer = _manifest(component="consumer", inputs=[PortSpec(name="egoDyn", proto_type="test.A")])
+    stages = [{"name": "consumer", "mode": "simulate", "impl": "stub:consumer", "inputs": {"egoDyn": "source.veh_dyn"}}]
+    path = _write_pipeline(tmp_path, stages)
+
+    component = InProcessSilComponent("consumer", consumer, lambda dt_ns, inputs: {})
+    component.init()
+    fault = Fault(verb=FaultVerb.DROP, address="veh_dyn", from_s=5.0, to_s=6.0)
+    pipeline = Pipeline.load(path, components={"consumer": component}, faults=[fault])
+
+    pipeline.exec(50_000_000, {"veh_dyn": b"x"})  # t_s == 0.05, well outside [5.0, 6.0]
+
+    assert component.last_input_meta == {}  # the documented default -- fresh and valid, no entry needed
+
+
+def test_step_propagates_a_held_producers_staleness_into_a_downstream_input_meta(tmp_path):
+    """The `R-SIM-18` gap this pass closes: a half-rate producer's held
+    output used to reach `SilComponent.exec` as `valid=1, ageS=0.0`
+    regardless of true staleness -- indistinguishable from fresh. Now a
+    downstream stage's own `input_meta` carries the real elapsed time since
+    the producer last actually ran."""
+    producer_manifest = _manifest(
+        component="producer", outputs=[PortSpec(name="out", proto_type="test.A")], period_ns=20_000_000,
+    )
+    consumer_manifest = _manifest(
+        component="consumer", inputs=[PortSpec(name="in", proto_type="test.A")], period_ns=10_000_000,
+    )
+    stages = [
+        {"name": "producer", "mode": "simulate", "impl": "stub:producer", "inputs": {}},
+        {"name": "consumer", "mode": "simulate", "impl": "stub:consumer", "inputs": {"in": "producer.out"}},
+    ]
+    path = _write_pipeline(tmp_path, stages)
+
+    producer = InProcessSilComponent("producer", producer_manifest, lambda dt_ns, inputs: {"out": b"p"})
+    producer.init()
+    consumer = InProcessSilComponent("consumer", consumer_manifest, lambda dt_ns, inputs: {})
+    consumer.init()
+    pipeline = Pipeline.load(path, components={"producer": producer, "consumer": consumer})
+
+    pipeline.step(10_000_000, {})  # t=10ms: producer not yet due -- nothing produced yet
+    pipeline.step(10_000_000, {})  # t=20ms: producer due, fresh
+    fresh_meta = consumer.last_input_meta["in"]
+    pipeline.step(10_000_000, {})  # t=30ms: producer held -- one base-grid tick stale
+    held_meta = consumer.last_input_meta["in"]
+
+    assert fresh_meta.valid is True
+    assert fresh_meta.age_s == pytest.approx(0.0)
+    assert held_meta.valid is True
+    assert held_meta.age_s == pytest.approx(0.01)

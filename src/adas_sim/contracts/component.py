@@ -195,6 +195,22 @@ def resolve_message_classes(manifest: ComponentManifest) -> Mapping[str, type]:
     return classes
 
 
+@dataclass(frozen=True, slots=True)
+class InputMeta:
+    """One input port's real `valid`/`age_s` for `_AdasPort` (`R-SIM-9`
+    fault injection's own metadata half, `sim_scenarios_and_expectations.md`
+    SS9.2). No `updated` field: `df`'s own `ReqPort<T>`
+    (`modules/df/src/component/common/framework/ports.hpp`) carries only
+    `data`/`ageS`/`valid` on the input side -- `updated` is a *provide*-port
+    concept only, so there is nothing on the input ABI for it to drive.
+    Defaults reproduce the pre-`S-C3` behaviour (fresh and valid) for a port
+    with no entry -- an ordinary stage-to-stage/`source.*` wire that no fault
+    or held-value staleness touches."""
+
+    valid: bool = True
+    age_s: float = 0.0
+
+
 class SilComponent(Protocol):
     """A stage that can execute (`sim_api_reference.md` SS3.1)."""
 
@@ -202,7 +218,9 @@ class SilComponent(Protocol):
     manifest: ComponentManifest
 
     def init(self, config_path: Path | None = None) -> None: ...
-    def exec(self, dt_ns: int, inputs: Mapping[str, bytes]) -> Mapping[str, bytes]: ...
+    def exec(
+        self, dt_ns: int, inputs: Mapping[str, bytes], input_meta: Mapping[str, InputMeta] | None = None,
+    ) -> Mapping[str, bytes]: ...
     def shutdown(self) -> None: ...
     def abi_version(self) -> int: ...
 
@@ -325,7 +343,9 @@ class CtypesSilComponent:
             self._dll.adasShutdown(self._handle)
             self._handle = None
 
-    def exec(self, dt_ns: int, inputs: Mapping[str, bytes]) -> Mapping[str, bytes]:
+    def exec(
+        self, dt_ns: int, inputs: Mapping[str, bytes], input_meta: Mapping[str, InputMeta] | None = None,
+    ) -> Mapping[str, bytes]:
         if self._handle is None:
             raise InternalError(
                 expected="init() called before exec()", found="no handle",
@@ -334,7 +354,7 @@ class CtypesSilComponent:
         dt_s = dt_ns / 1_000_000_000.0  # THE ns -> dtS conversion point (P-8)
 
         keepalive: list[object] = []
-        in_set, _in_ports = self._build_in_portset(inputs, keepalive)
+        in_set, _in_ports = self._build_in_portset(inputs, keepalive, input_meta)
         out_set, out_ports = self._build_out_portset(keepalive)
         ok = self._dll.adasExec(self._handle, dt_s, ctypes.pointer(in_set), ctypes.pointer(out_set))
 
@@ -365,18 +385,22 @@ class CtypesSilComponent:
 
         return self._collect_outputs(out_ports)
 
-    def _build_in_portset(self, inputs: Mapping[str, bytes], keepalive: list[object]) -> tuple[_AdasPortSet, ctypes.Array]:
+    def _build_in_portset(
+        self, inputs: Mapping[str, bytes], keepalive: list[object], input_meta: Mapping[str, InputMeta] | None = None,
+    ) -> tuple[_AdasPortSet, ctypes.Array]:
+        input_meta = input_meta or {}
         ports = (_AdasPort * len(inputs))()
         for i, (name, payload) in enumerate(inputs.items()):
+            meta = input_meta.get(name, InputMeta())
             buf = (ctypes.c_uint8 * len(payload)).from_buffer_copy(payload)
             keepalive.append(buf)
             ports[i].name = name.encode("utf-8")
             ports[i].data = ctypes.cast(buf, ctypes.POINTER(ctypes.c_uint8))
             ports[i].len = len(payload)
             ports[i].cap = 0
-            ports[i].ageS = 0.0
-            ports[i].valid = 1
-            ports[i].updated = 0
+            ports[i].ageS = meta.age_s
+            ports[i].valid = 1 if meta.valid else 0
+            ports[i].updated = 0  # ReqPort<T> has no `updated` -- unused on the input side (see InputMeta)
         port_set = _AdasPortSet(ports=ctypes.cast(ports, ctypes.POINTER(_AdasPort)), count=len(inputs))
         return port_set, ports
 
@@ -428,6 +452,7 @@ class InProcessSilComponent:
         self.manifest = manifest
         self._fn = fn
         self._handle_open = False
+        self.last_input_meta: Mapping[str, InputMeta] | None = None
 
     def __repr__(self) -> str:
         return f"<InProcessSilComponent name={self.name!r}>"
@@ -439,12 +464,20 @@ class InProcessSilComponent:
         del config_path  # a Python stand-in owns no external configuration
         self._handle_open = True
 
-    def exec(self, dt_ns: int, inputs: Mapping[str, bytes]) -> Mapping[str, bytes]:
+    def exec(
+        self, dt_ns: int, inputs: Mapping[str, bytes], input_meta: Mapping[str, InputMeta] | None = None,
+    ) -> Mapping[str, bytes]:
         if not self._handle_open:
             raise InternalError(
                 expected="init() called before exec()", found="no handle",
                 where=f"{self.name}.exec", hint="call init() once before the first exec()",
             )
+        # `_fn` stays a plain (dt_ns, inputs) -> outputs callable -- every
+        # existing stub across the test suite is that shape, and a Python
+        # stand-in has no ABI to feed `valid`/`age_s` into anyway. Recorded
+        # for a test to assert on, never consumed here (`CtypesSilComponent`
+        # is the one real consumer, `S-C3`).
+        self.last_input_meta = input_meta
         return self._fn(dt_ns, inputs)
 
     def shutdown(self) -> None:

@@ -36,8 +36,9 @@ import yaml
 
 from adas_sim.contracts.binding import Address, apply_override, parse_address
 from adas_sim.contracts.component import (
-    ComponentManifest, CtypesSilComponent, PortSpec, SilComponent, resolve_message_classes,
+    ComponentManifest, CtypesSilComponent, InputMeta, PortSpec, SilComponent, resolve_message_classes,
 )
+from adas_sim.contracts.fault import Fault, FaultVerb, apply_fault
 from adas_sim.contracts.loader import resolve_library
 from adas_sim.contracts.override import Override, OverrideVerb, parse_override_verb
 from adas_sim.core.errors import AuthoringError, ContractError
@@ -468,6 +469,7 @@ class Pipeline:
 
     def __init__(
         self, *, name: str, stages: tuple[Stage, ...], version: int, components: Mapping[str, SilComponent],
+        faults: Sequence[Fault] = (),
     ) -> None:
         self.name = name
         self.stages = stages
@@ -485,6 +487,22 @@ class Pipeline:
         #: above. Lazily populated per stage on first override application.
         self._override_first_seen: dict[tuple[str, str], float] = {}
         self._message_classes: dict[str, Mapping[str, type]] = {}
+        #: `run.faults:` (`sim_scenarios_and_expectations.md` SS9.2) --
+        #: applied to the STIMULUS every `exec()`/`step()` call, before any
+        #: stage sees it ("a failure of the sensor or the transport", the
+        #: world model's own output). `_fault_first_active` is `stale`'s own
+        #: cross-tick memory, `apply_fault`'s `first_active_t_s`, keyed by
+        #: the fault's own address -- same reasoning as
+        #: `_override_first_seen`, reset on every construction.
+        self._faults = tuple(faults)
+        self._fault_first_active: dict[str, float | None] = {}
+        #: One shared tick counter for `Fault.active_at`'s `after_tick` --
+        #: `step()` already tracks elapsed time in `_elapsed_ns`; `exec()`
+        #: gains the same accumulation here so both entry points can time
+        #: a fault's window identically. A `Pipeline` instance is driven by
+        #: exactly one of `exec()`/`step()` for its whole life (never both),
+        #: so sharing the counter is safe.
+        self._tick_index = 0
 
     def __repr__(self) -> str:
         return f"<Pipeline name={self.name!r} stages={[s.name for s in self.stages]}>"
@@ -519,6 +537,7 @@ class Pipeline:
         components: Mapping[str, SilComponent] | None = None,
         recording: RecordingReader | None = None,
         source: Source | None = None,
+        faults: Sequence[Fault] = (),
     ) -> Pipeline:
         """Validates at LOAD, never at first tick (SS5.14). `search` is
         forwarded to `resolve_library` for `dll:`/`stubdll:` stages;
@@ -528,7 +547,9 @@ class Pipeline:
         every `mode: measured` stage's declared outputs; `source` (`S-C2`)
         is checked against every `source.*` reference's `emits()` -- both
         optional, so a test wiring neither still loads exactly as before
-        either stage existed."""
+        either stage existed. `faults` is a scenario's own `run.faults:`
+        (`contracts/scenario.py`) -- the pipeline file itself never declares
+        them (SS9.2's vocabulary lives with the run, not the wiring)."""
         raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         version = _resolve_version(raw)
         name = raw.get("name", path.stem)
@@ -544,7 +565,7 @@ class Pipeline:
         resolved = _resolve_components(stages, search=search, components=components or {})
         _validate_wiring(stages, resolved, recording, source)
         _validate_overrides(stages, resolved)
-        return cls(name=name, stages=stages, version=version, components=resolved)
+        return cls(name=name, stages=stages, version=version, components=resolved, faults=faults)
 
     def _message_classes_for(self, stage_name: str) -> Mapping[str, type]:
         if stage_name not in self._message_classes:
@@ -583,6 +604,69 @@ class Pipeline:
                 self._override_first_seen[state_key] = first_seen
             inputs[port_name] = payload
 
+    def _message_cls_for_source_port(self, port_name: str) -> type | None:
+        """Resolves a STIMULUS port's message class for `corrupt`
+        (`apply_fault`'s only verb that needs one) by finding the first
+        stage wired to `source.<port_name>` and reusing its own input
+        `PortSpec`/manifest -- the stimulus itself carries no schema of its
+        own (`Source.poll()` returns bare bytes), so this borrows the
+        schema from whichever stage already declared it. `None` when no
+        stage references this port (a `corrupt` fault the pipeline cannot
+        resolve raises `apply_fault`'s own `message_cls` error, naming the
+        gap rather than silently no-opping)."""
+        for stage in self.stages:
+            for local_port, ref in stage.inputs.items():
+                producer_name, ref_port = _split_ref(ref)
+                if producer_name == "source" and ref_port == port_name:
+                    port_spec = _find_port(self._components[stage.name].manifest.inputs, local_port)
+                    if port_spec is not None:
+                        return self._message_classes_for(stage.name).get(port_spec.proto_type)
+        return None
+
+    def _apply_stimulus_faults(
+        self, stimulus: Mapping[str, bytes], *, t_ns: int, t_s: float, tick_index: int,
+    ) -> tuple[dict[str, bytes], dict[str, InputMeta]]:
+        """`run.faults:` (`sim_scenarios_and_expectations.md` SS9.2) target
+        the STIMULUS -- "a failure of the sensor or the transport" is the
+        world model's own output, before any stage sees it, addressed by
+        the override grammar's bare port name (matching `stimulus`'s own
+        keys, the same "no stage qualifier needed" reasoning
+        `_apply_input_overrides` gets for free by living on one `Stage`).
+        An inter-stage "bus" fault is out of scope here (SS9.2's own
+        rejected bus-level fault models). `drop` removes the stimulus key
+        entirely -- `R-SIM`'s "absent port" convention, `UT-C1c-12` --
+        rather than carrying a `valid=False` `InputMeta` entry, which is
+        indistinguishable from the port never having existed this tick,
+        exactly what `drop` means."""
+        if not self._faults:
+            return dict(stimulus), {}
+        stimulus = dict(stimulus)
+        meta: dict[str, InputMeta] = {}
+        for fault in self._faults:
+            address = parse_address(fault.address, where=f"run.faults address {fault.address!r}")
+            port_name = address.port
+            if port_name not in stimulus:
+                continue
+            port_value = PortValue(
+                name=port_name, origin="simulated", message=stimulus[port_name],
+                valid=True, updated=True, t_ns=t_ns,
+            )
+            message_cls = self._message_cls_for_source_port(port_name) if fault.verb is FaultVerb.CORRUPT else None
+            result, first_active = apply_fault(
+                port_value, fault, t_s=t_s, tick_index=tick_index,
+                first_active_t_s=self._fault_first_active.get(fault.address), message_cls=message_cls,
+            )
+            self._fault_first_active[fault.address] = first_active
+            if first_active is None:
+                continue  # not active this tick
+            if result.message is None:
+                stimulus.pop(port_name, None)
+                meta.pop(port_name, None)
+                continue
+            stimulus[port_name] = result.raw_bytes
+            meta[port_name] = InputMeta(valid=result.valid, age_s=result.age_s)
+        return stimulus, meta
+
     def exec(
         self, dt_ns: int, stimulus: Mapping[str, bytes], *,
         measured: Mapping[str, Mapping[str, bytes]] | None = None,
@@ -607,6 +691,18 @@ class Pipeline:
         Single-rate: every declared stage executes every call, unconditionally
         -- the primitive `step()` (multi-rate, due-tick gating) is built on.
         """
+        # Accumulate BEFORE reading, matching step()'s own convention (its
+        # first line is this same `+=`) -- `resim_pipeline` passes dt_ns=0
+        # for the very first tick, so this still lands `t_s == 0.0` there;
+        # accumulating after would leave every tick reading the PREVIOUS
+        # tick's elapsed time instead of its own.
+        self._elapsed_ns += dt_ns
+        t_s = self._elapsed_ns / 1_000_000_000.0
+        stimulus, stimulus_meta = self._apply_stimulus_faults(
+            stimulus, t_ns=self._elapsed_ns, t_s=t_s, tick_index=self._tick_index,
+        )
+        self._tick_index += 1
+
         measured = measured or {}
         outputs_by_stage: dict[str, Mapping[str, bytes]] = {}
         for stage in self.stages:
@@ -617,14 +713,17 @@ class Pipeline:
                 continue
 
             inputs: dict[str, bytes] = {}
+            input_meta: dict[str, InputMeta] = {}
             for port_name, ref in stage.inputs.items():
                 producer_name, ref_port = _split_ref(ref)
                 produced = stimulus if producer_name == "source" else outputs_by_stage.get(producer_name, {})
                 if ref_port in produced:
                     inputs[port_name] = produced[ref_port]
+                    if producer_name == "source" and ref_port in stimulus_meta:
+                        input_meta[port_name] = stimulus_meta[ref_port]
 
             self._apply_input_overrides(stage, inputs)
-            outputs_by_stage[stage.name] = self._components[stage.name].exec(dt_ns, inputs)
+            outputs_by_stage[stage.name] = self._components[stage.name].exec(dt_ns, inputs, input_meta)
         return outputs_by_stage
 
     def step(
@@ -647,6 +746,11 @@ class Pipeline:
         producer's last real value, not a gap.
         """
         self._elapsed_ns += dt_ns
+        t_s = self._elapsed_ns / 1_000_000_000.0
+        stimulus, stimulus_meta = self._apply_stimulus_faults(
+            stimulus, t_ns=self._elapsed_ns, t_s=t_s, tick_index=self._tick_index,
+        )
+        self._tick_index += 1
         measured = measured or {}
         fresh: dict[str, Mapping[str, bytes]] = {}
         result: dict[str, PortValue] = {}
@@ -662,6 +766,7 @@ class Pipeline:
                     computed = dict(measured.get(stage.name, {}))
                 else:
                     inputs: dict[str, bytes] = {}
+                    input_meta: dict[str, InputMeta] = {}
                     for port_name, ref in stage.inputs.items():
                         producer_name, ref_port = _split_ref(ref)
                         source_map = stimulus if producer_name == "source" else (
@@ -669,8 +774,21 @@ class Pipeline:
                         )
                         if ref_port in source_map:
                             inputs[port_name] = source_map[ref_port]
+                            if producer_name == "source":
+                                if ref_port in stimulus_meta:
+                                    input_meta[port_name] = stimulus_meta[ref_port]
+                            else:
+                                # The producer's own held-value staleness
+                                # (`R-SIM-18`) -- the real gap this pass
+                                # closes: a half-rate producer's stale
+                                # output now reaches the real DLL's own
+                                # ageS gate instead of always reading 0.0.
+                                producer_hold_age_s = (
+                                    self._elapsed_ns - self._last_due_ns.get(producer_name, self._elapsed_ns)
+                                ) / 1_000_000_000.0
+                                input_meta[port_name] = InputMeta(valid=True, age_s=producer_hold_age_s)
                     self._apply_input_overrides(stage, inputs)
-                    computed = self._components[stage.name].exec(dt_ns, inputs)
+                    computed = self._components[stage.name].exec(dt_ns, inputs, input_meta)
                 fresh[stage.name] = computed
                 self._last_output[stage.name] = computed
                 self._last_due_ns[stage.name] = self._elapsed_ns
@@ -743,7 +861,10 @@ class Pipeline:
             if s.name == stage else s
             for s in self.stages
         )
-        result = Pipeline(name=self.name, stages=new_stages, version=self.version, components=self._components)
+        result = Pipeline(
+            name=self.name, stages=new_stages, version=self.version, components=self._components,
+            faults=self._faults,
+        )
         if not close_gaps:
             return result
         to_close = {

@@ -23,6 +23,7 @@ from adas_sim.contracts import component as component_mod
 from adas_sim.contracts.component import (
     ComponentManifest,
     CtypesSilComponent,
+    InputMeta,
     PortSpec,
     parse_manifest,
     resolve_message_classes,
@@ -189,6 +190,38 @@ def test_exec_matches_ports_by_name_regardless_of_input_order():
     comp_b.shutdown()
 
     assert out_a == out_b
+
+
+def test_build_in_portset_passes_real_valid_and_age_s_from_input_meta():
+    """S-C3: `_build_in_portset` used to hardcode every input port's
+    `valid`/`ageS` (`valid=1, ageS=0.0`, always), discarding whatever the
+    caller actually knew -- the gap `df`'s own `ReqPort` gating
+    (`reqPorts_.emGenObjList.valid && ageS <= maxAge`,
+    `modules/df/src/component/aeb/aeb_function.cpp`) depends on. Verified
+    against the real ABI struct directly, naming no port (`R-SIM-1`) --
+    only that the field the caller supplied for one port lands there, and
+    every other port keeps the documented default."""
+    path = _real_df_sil_path()
+    if path is None:
+        pytest.skip(_SKIP_REASON)
+
+    comp = _real_df_component()
+    names = [p.name for p in comp.manifest.inputs]
+    if not names:
+        pytest.skip("df_sil declares no input ports")
+    target = names[0]
+
+    keepalive: list[object] = []
+    input_meta = {target: InputMeta(valid=False, age_s=2.5)}
+    _port_set, ports = comp._build_in_portset({name: b"" for name in names}, keepalive, input_meta)
+    comp.shutdown()
+
+    by_name = {port.name.decode("utf-8"): port for port in ports}
+    assert by_name[target].valid == 0
+    assert by_name[target].ageS == pytest.approx(2.5)
+    for name in names[1:]:
+        assert by_name[name].valid == 1
+        assert by_name[name].ageS == pytest.approx(0.0)
 
 
 # ---------------------------------------------------------------------------

@@ -54,9 +54,9 @@ def run(argv: list[str] | None = None) -> int:
     ticks = _tick_count(args, source)
     dt_ns = int(args.dt_ms * 1_000_000)
 
-    pipeline = Pipeline.load(args.pipeline, source=source)
-    pipeline.init_components(args.config)
     scenario = load_scenario(args.scenario)
+    pipeline = Pipeline.load(args.pipeline, source=source, faults=scenario.run.faults)
+    pipeline.init_components(args.config)
 
     try:
         if args.record:

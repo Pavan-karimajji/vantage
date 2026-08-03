@@ -228,7 +228,9 @@ def check_scenario(
             )
         resolved_pipeline_path = available[scenario.sut.pipeline]
 
-    pipeline = Pipeline.load(resolved_pipeline_path, search=search, components=components)
+    pipeline = Pipeline.load(
+        resolved_pipeline_path, search=search, components=components, faults=scenario.run.faults,
+    )
     pipeline.init_components(config_path)
     try:
         outputs = resim_pipeline(pipeline, resolved_recording)

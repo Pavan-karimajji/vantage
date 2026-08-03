@@ -66,11 +66,13 @@ def test_discover_pipelines_scans_modules_star_sim_pipelines(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def _write_scenario(path: Path, *, sut_pipeline: str | None = None, expect: list | None = None) -> None:
+def _write_scenario(
+    path: Path, *, sut_pipeline: str | None = None, expect: list | None = None, faults: list | None = None,
+) -> None:
     data = {
         "schema": 2, "id": path.stem, "doc": "fixture",
         "scenario": {"ego": {"speed_mps": 10.0}, "actors": []},
-        "world": {}, "sensor_model": {}, "run": {},
+        "world": {}, "sensor_model": {}, "run": {"faults": faults or []},
         "sut": {"pipeline": sut_pipeline, "project": "base"},
         "markers": [],
         "expect": expect or [],
@@ -211,6 +213,89 @@ def test_check_scenario_end_to_end_resims_and_evaluates_expect(tmp_path):
     assert by_id["EXP-NEVER"].passed is True
     assert by_id["EXP-ALWAYS"].passed is False  # x is 0.0/0.2/0.6 before it ever reaches 1.0
     assert result.passed is False  # one failed expectation fails the scenario
+
+
+# ---------------------------------------------------------------------------
+# S-C3 -- `scenario.run.faults` actually reaches the resim, not just the
+# schema (`check/runner.check_scenario` -> `Pipeline.load(faults=...)` ->
+# `Pipeline.exec`'s own stimulus fault application, `test_c1c_pipeline.py`'s
+# own unit level). `widget` here has a real INPUT wired to `source.stim`
+# and echoes it -- a `mode: measured` stage (the earlier test's shape) never
+# touches the stimulus at all, so this needs its own fixture.
+# ---------------------------------------------------------------------------
+
+
+def _echo_widget_manifest(descriptor_set: bytes) -> ComponentManifest:
+    return ComponentManifest(
+        component="widget", version="1", abi_version=1, build_id="test",
+        inputs=(PortSpec(name="in", proto_type="adas_sim.test.c3check.Scalar"),),
+        outputs=(PortSpec(name="outputs", proto_type="adas_sim.test.c3check.Scalar"),),
+        project="base", config_bundle_sha256="", descriptor_set=descriptor_set, period_ns=0,
+    )
+
+
+def _echo_fn(scalar_cls):
+    def _fn(dt_ns, inputs):
+        received = scalar_cls()
+        received.ParseFromString(inputs["in"])
+        return {"outputs": scalar_cls(x=received.x).SerializeToString()}
+    return _fn
+
+
+def _write_echo_pipeline(path: Path, *, component: InProcessSilComponent) -> Pipeline:
+    stages = [{"name": "widget", "mode": "simulate", "impl": "stub:widget", "inputs": {"in": "source.stim"}}]
+    path.write_text(yaml.safe_dump({"name": "widget_only", "stages": stages}, sort_keys=False), encoding="utf-8")
+    return Pipeline.load(path, components={"widget": component})
+
+
+def _record_echo_recording(tmp_path: Path, values: list[float], *, descriptor_set: bytes, scalar_cls) -> Path:
+    component = InProcessSilComponent("widget", _echo_widget_manifest(descriptor_set), _echo_fn(scalar_cls))
+    component.init()
+
+    record_pipeline_path = tmp_path / "record_pipeline_echo.yaml"
+    pipeline = _write_echo_pipeline(record_pipeline_path, component=component)
+
+    script = [{"stim": scalar_cls(x=v).SerializeToString()} for v in values]
+    source = SyntheticSource(script)
+    recording_path = tmp_path / "echo_recording.mcap"
+    meta = build_manifest(pipeline=pipeline, pipeline_path=record_pipeline_path, run_kind="sim", source_kind="synthetic")
+    recorder = Recorder(pipeline, source, recording_path, meta=meta)
+    recorder.open(Scenario(
+        schema=2, id="t", doc="",
+        scenario=ScenarioContent(road=RoadHint(), ego=EgoScenario(speed_mps=0.0), actors=()),
+        world={}, sensor_model=SensorModelRef(), run=RunControl(), sut=SutRef(),
+    ))
+    for _ in values:
+        recorder.tick(100_000_000)
+    recorder.close()
+    return recording_path
+
+
+def test_check_scenario_applies_scenario_faults_during_resim(tmp_path):
+    scalar_cls, descriptor_set = _scalar_message_cls()
+    recording_path = _record_echo_recording(tmp_path, [1.0, 2.0, 3.0], descriptor_set=descriptor_set, scalar_cls=scalar_cls)
+
+    check_component = InProcessSilComponent("widget", _echo_widget_manifest(descriptor_set), _echo_fn(scalar_cls))
+    check_component.init()
+    check_pipeline_path = tmp_path / "check_pipeline_echo.yaml"
+    _write_echo_pipeline(check_pipeline_path, component=check_component)
+
+    scenario_path = tmp_path / "case.yaml"
+    _write_scenario(
+        scenario_path,
+        expect=[{"id": "EXP-CORRUPTED", "signal": "widget.outputs.x", "equals": 99.0, "always": True}],
+        faults=[{"verb": "corrupt", "address": "stim.x", "value": 99.0, "from_s": 0.0, "to_s": 10.0}],
+    )
+
+    result = check_scenario(
+        scenario_path, recording_path=recording_path, pipeline_path=check_pipeline_path,
+        components={"widget": check_component},
+    )
+
+    assert result.skipped is False
+    by_id = {r.id: r for r in result.results}
+    # never 1.0/2.0/3.0 -- every tick's echoed x is the corrupt fault's value
+    assert by_id["EXP-CORRUPTED"].passed is True
 
 
 def test_check_scenarios_aggregates_a_directory(tmp_path):
