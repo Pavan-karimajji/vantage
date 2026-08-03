@@ -70,14 +70,6 @@ _REQUIRES_ARG = re.compile(r"requires\s*=\s*[\(\[]([^)\]]*)[\)\]]")
 _PORT_CALL_ARG = re.compile(r"\.port\(([^)]*)\)")
 _GT11_EXEMPT_PREFIXES = ("self.", "source.")
 
-# GT-1's one sanctioned exception: io/legacy.py's job is to recognise real
-# legacy topic names on disk (df/aeb_outputs, df/bsd_outputs), which are
-# function-prefixed by construction -- not framework prose repeating a
-# function's name. N-6 already calls this file "the one sanctioned name
-# translation"; this is the same narrow exception applied to GT-1. Named
-# here, specifically, rather than a general carve-out.
-_GT1_EXEMPT_FILENAMES = frozenset({"legacy.py"})
-
 
 def _iter_py_files(root: Path):
     if not root.is_dir():
@@ -86,11 +78,13 @@ def _iter_py_files(root: Path):
 
 
 def check_gt1(src_root: Path = SRC_ROOT) -> list[str]:
-    """GT-1 -- no function names in the framework (R-SIM-1)."""
+    """GT-1 -- no function names in the framework (R-SIM-1). `io/legacy.py`'s
+    exemption is gone (`S-C9`): the one thing that needed it -- recognising
+    real legacy topic names -- moved to `modules/df/sim/ingest/carla_legacy.
+    yaml`, declared data outside `src/`, which `GT-1` never scanned in the
+    first place."""
     findings = []
     for path in _iter_py_files(src_root):
-        if path.name in _GT1_EXEMPT_FILENAMES:
-            continue
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             if _FUNCTION_TOKENS.search(line):
                 findings.append(f"GT-1 {path}:{lineno}: function-name token in framework code: {line.strip()!r}")

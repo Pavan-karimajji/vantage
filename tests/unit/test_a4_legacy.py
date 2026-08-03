@@ -3,22 +3,28 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""S-A4 `io/legacy.py` tests: UT-A4-5, UT-A4-10 (docs/sim_implementation_plan.md)."""
+"""S-A4 `io/legacy.py` tests: UT-A4-5, UT-A4-10 (docs/sim_implementation_plan.md).
+
+**`S-C9`:** `io/legacy.py` (the framework's own hand-maintained
+`LEGACY_TOPIC_MAP`, and its narrow `GT-1` exemption) is deleted -- the
+mapping moved to `modules/df/sim/ingest/carla_legacy.yaml`, declared data
+owned by `df` (`R-SIM-23`). `UT-A4-5` is kept, rewritten against the real
+ingest map through `io/ingest.py`'s `IngestRecordingReader` instead of the
+deleted reader -- stronger than before, since it now exercises `df`'s actual
+declared file rather than a hardcoded dict duplicating it. The old
+GT-1-exemption test is gone with the exemption it tested (`test_a1_check_
+invariants.py`'s `test_run_all_is_clean_on_the_current_skeleton` is the
+proof the exemption is no longer needed at all)."""
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 from mcap.writer import Writer as RawMcapWriter
 
 from adas_sim.io.base import Provenance, RunManifest, TopicInfo
-from adas_sim.io.legacy import LEGACY_TOPIC_MAP, SYNTHESIZED_VEH_SIG_TOPIC, LegacyRecordingReader
+from adas_sim.io.ingest import IngestRecordingReader, discover_ingest_maps
 from adas_sim.io.mcap import McapReader, McapWriter
-
-_SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent / "scripts"
-if str(_SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS_DIR))
 
 
 def _write_legacy_shaped_recording(path):
@@ -37,32 +43,54 @@ def _write_legacy_shaped_recording(path):
 
 
 def test_legacy_topic_names_map_correctly_and_manifest_is_unknown(tmp_path):
-    """UT-A4-5."""
+    """UT-A4-5, rewritten for `S-C9`: `df`'s real ingest map, not a
+    framework-internal dict."""
     path = tmp_path / "legacy.mcap"
     _write_legacy_shaped_recording(path)
 
     inner = McapReader(path)
-    reader = LegacyRecordingReader(inner)
+    reader = IngestRecordingReader(inner, discover_ingest_maps())
     topics = reader.topics()
     messages = list(reader.messages())
     manifest = reader.meta()
     reader.close()
 
-    assert "/source/veh_dyn" in topics
-    assert "/source/gen_object_list" in topics
+    assert "source.veh_dyn" in topics
+    assert "source.gen_object_list" in topics
     assert "df/veh_dyn" not in topics
-    assert SYNTHESIZED_VEH_SIG_TOPIC in topics
-    assert topics[SYNTHESIZED_VEH_SIG_TOPIC].provenance == Provenance.MOCKED
     assert manifest.known is False
 
     mapped_topics = {topic for topic, _t, _c, _p in messages}
-    assert mapped_topics == {"/source/veh_dyn", "/source/gen_object_list"}
+    assert mapped_topics == {"source.veh_dyn", "source.gen_object_list"}
+
+    # source.veh_sig is declared absent, not synthesised as a topic nobody
+    # ever publishes to (S-C9: "named at load", never a dead placeholder).
+    assert "source.veh_sig" not in topics
+    assert any(a.port == "source.veh_sig" for a in reader.absent)
 
 
-def test_no_name_is_translated_outside_legacy_py(tmp_path):
-    """UT-A4-10: a round-trip through the mcap codec (not legacy.py) leaves
-    every topic name exactly as declared -- io/legacy.py is the one declared
-    exception, readable as data (LEGACY_TOPIC_MAP)."""
+def test_a_recording_that_matches_no_ingest_map_passes_through_unchanged(tmp_path):
+    """`IngestRecordingReader` is a no-op when no loaded map's `matches:`
+    fires -- a modern recording that already names its own topics correctly
+    needs no translation (`io/ingest.py`'s own docstring)."""
+    path = tmp_path / "modern.mcap"
+    writer = McapWriter()
+    writer.open(path, RunManifest(), {
+        "/source/veh_dyn": TopicInfo(schema_name="adas_sim.test.VehDyn", provenance=Provenance.MEASURED),
+    })
+    writer.write("/source/veh_dyn", 0, b"\x00")
+    writer.close()
+
+    reader = IngestRecordingReader(McapReader(path), discover_ingest_maps())
+    topics = reader.topics()
+    reader.close()
+    assert "/source/veh_dyn" in topics
+    assert reader.provides == ()
+
+
+def test_no_name_is_translated_outside_a_declared_ingest_map(tmp_path):
+    """UT-A4-10: a round-trip through the mcap codec (not an ingest map)
+    leaves every topic name exactly as declared."""
     path = tmp_path / "sample.mcap"
     topics = {
         "/source/veh_dyn": TopicInfo(schema_name="adas_sim.test.VehDyn", provenance=Provenance.MEASURED),
@@ -77,21 +105,3 @@ def test_no_name_is_translated_outside_legacy_py(tmp_path):
     read_topics = set(reader.topics())
     reader.close()
     assert read_topics == set(topics)
-
-    # The mapping itself is plain data -- printable, not hidden logic.
-    assert LEGACY_TOPIC_MAP["df/veh_dyn"] == "/source/veh_dyn"
-    assert isinstance(LEGACY_TOPIC_MAP, dict)
-
-
-def test_the_gt1_exemption_is_narrow_and_legacy_py_genuinely_needs_it():
-    """`check_invariants.py`'s `_GT1_EXEMPT_FILENAMES` exempts `legacy.py`
-    specifically. This confirms that exemption is doing real work (the file
-    genuinely contains the tokens) rather than being a no-op, and that
-    `check_gt1` itself still exempts only this one file by name, not a
-    pattern that could accidentally swallow something else."""
-    from check_invariants import _FUNCTION_TOKENS, _GT1_EXEMPT_FILENAMES
-
-    assert _GT1_EXEMPT_FILENAMES == frozenset({"legacy.py"})
-    legacy_path = Path(__file__).resolve().parent.parent.parent / "src" / "adas_sim" / "io" / "legacy.py"
-    text = legacy_path.read_text(encoding="utf-8")
-    assert _FUNCTION_TOKENS.search(text), "legacy.py no longer needs the GT-1 exemption -- consider removing it"

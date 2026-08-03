@@ -4258,75 +4258,128 @@ component's recordings make it a pattern, and a carve-out that repeats is a
 mechanism that was not built. **This stage deletes the exemption**, which is its
 own best test.
 
-- [ ] `modules/<name>/sim/ingest/<family>.yaml` — the declaration:
+- [x] `modules/<name>/sim/ingest/<family>.yaml` — the declaration:
       `matches:` (how a recording is recognised as this family), `provides:`
       (topic → port + `proto_type` + origin tag), and **`absent:`** (a port this
       family never recorded, with the reason). The `VehSig` hole
       (`sim_resim_and_recording.md` §4) becomes a declared fact rather than a
-      surprise at tick 0
-- [ ] `df`'s legacy CARLA family declared this way; `LEGACY_TOPIC_MAP` and the
+      surprise at tick 0 — `modules/df/sim/ingest/carla_legacy.yaml`
+- [x] `df`'s legacy CARLA family declared this way; `LEGACY_TOPIC_MAP` and the
       `check_gt1` exemption both **deleted**, not deprecated
-- [ ] `io/ingest.py` — loads maps from the plug-in path (`S-C8`), applies them
-      over any `RecordingReader`. Format-agnostic by construction: it operates
-      on the recording *model*, so it works identically for mcap, MF4 or a
-      CarMaker codec (`R-SIM-14` — dimension 1 needs no work here, which is the
-      evidence the two dimensions really are separable)
-- [ ] **`Session.provides()` / `feasible_cuts(pipeline)`** — given the topic
+- [x] `io/ingest.py` — loads maps and applies them over any `RecordingReader`.
+      Format-agnostic by construction: it operates on the recording *model*,
+      so it works identically for mcap, MF4 or a CarMaker codec (`R-SIM-14` —
+      dimension 1 needs no work here, which is the evidence the two
+      dimensions really are separable). **Scoped gap, documented in the
+      module docstring:** `discover_ingest_maps` scans
+      `modules/*/sim/ingest/*.yaml` under the source checkout directly, not
+      the plug-in path — `S-C8` (build order #14) does not exist yet. Same
+      shape as `S-C4`'s calibration-reading gap; revisit when `S-C8` lands
+- [x] **`Session.provides()` / `feasible_cuts(pipeline)`** — given the topic
       index and the manifests present, the set of stages that can be `measured`
       and those that cannot, each with the reason. This is `CR-SIM-21` becoming
       a query instead of an assertion
-- [ ] `sim probe <recording>` reports it; the Bench start page shows it **before
-      a run is started**, and greys the cuts the file cannot support
-      (`R-SIM-13` — this is Session data, so the GUI adds no logic, `GT-9`)
-- [ ] **One `GT-7` fix found on the way:** `io/legacy.py` maps to
-      `/df/aeb.outputs` (dot) while `sim_resim_and_recording.md` §3.2's table
+- [~] `sim probe <recording>` reports it (done — `cli/probe.py`); **the Bench
+      start page showing it before a run, and greying the cuts the file
+      cannot support, is not done** — `S-B3`/`S-D8` (the Bench workspace and
+      start page themselves) have not been built yet. Nothing here is
+      speculative: `Session.provides`/`absent`/`feasible_cuts` are real data
+      today, so that panel is wiring, not design, whenever `S-B3`/`S-D8` land
+- [x] **One `GT-7` fix found on the way:** `io/legacy.py` mapped
+      `df/aeb_outputs` to the *topic* `/df/aeb.outputs` (dot), conflating a
+      topic name with a port name; `sim_resim_and_recording.md` §3.2's table
       was corrected on 2026-07-30 to `/df/aeb/outputs` (slash, per `N-1`).
-      Functionally identical after `_topic_to_port_name`, and wrong on a port
-      whose name has no dot. Fix the code
+      The redesign resolves this architecturally, not by swapping a
+      character: `carla_legacy.yaml`'s `provides:` keys are raw *topics*
+      (`df/aeb_outputs`, unchanged — that really is what's on disk) and its
+      `port:` values are *port* addresses (`df.aeb.outputs`, dot-separated
+      per `R-SIM-4`'s own convention) — two namespaces that were previously
+      conflated into one string are now separated by construction, so the
+      dot/slash bug has nowhere left to reappear
 
 **Tests**
-- [ ] `UT-C9-1` a legacy topic resolves to the **manifest's** port name — the
+- [x] `UT-C9-1` a legacy topic resolves to the **manifest's** port name — the
       step that does not exist today; asserted against `df_sil.ports.yaml`'s
-      real `objects`/`egoDyn`, not a fixture invented for the test
-- [ ] `UT-C9-2` `absent:` is honoured: a declared-absent port yields `valid=0`
-      downstream **and is named at load**, never a tick-0 failure
-- [ ] `UT-C9-3` a `proto_type` mismatch reports *"this recording does not
-      support that cut"* naming both types — and **does not** coerce
-- [ ] `UT-C9-4` an ingest map containing an expression, a unit conversion or an
+      real `objects`/`egoDyn`, not a fixture invented for the test —
+      `tests/unit/test_c9_ingest.py::test_df_carla_legacy_map_resolves_to_df_sil_ports_yamls_real_output_names`
+      (checks the two *output* ports, `aeb.outputs`/`bsd.outputs`, against the
+      real checked-in `df_sil.ports.yaml`; the stimulus ports `objects`/`egoDyn`
+      are a pipeline-authoring choice — `Stage.inputs` — not something the
+      ingest map itself resolves, and are exercised end to end by `ST-C9-1`)
+- [x] `UT-C9-2` `absent:` is honoured: a declared-absent port yields `valid=0`
+      downstream **and is named at load**, never a tick-0 failure —
+      `tests/unit/test_a4_legacy.py::test_legacy_topic_names_map_correctly_and_manifest_is_unknown`
+      covers "named at load"; the `valid=0`-downstream half is exercised by
+      `test_c1c_resim_equivalence.py` (an absent `source.veh_sig` is simply
+      never in a tick's port set, which is the pre-existing generic
+      "unwired optional port" convention `UT-C1c-12` already proves)
+- [x] `UT-C9-3` a `proto_type` mismatch reports *"this recording does not
+      support that cut"* naming both types — and **does not** coerce —
+      `tests/unit/test_c9_ingest.py::test_feasible_cuts_reports_a_proto_type_mismatch_naming_both_types`
+- [x] `UT-C9-4` an ingest map containing an expression, a unit conversion or an
       arithmetic field is an `AuthoringError` — the closed vocabulary, enforced
-      rather than documented (`R-SIM-15`'s precedent)
-- [ ] `UT-C9-5` two components' ingest maps load together off the plug-in path;
-      a topic claimed by both raises naming both maps (`N-8`)
-- [ ] `UT-C9-6` `feasible_cuts` on a recording carrying only objects reports the
+      rather than documented (`R-SIM-15`'s precedent) —
+      `tests/unit/test_c9_ingest.py::test_a_provides_entry_with_an_expression_key_is_refused`,
+      `::test_an_absent_entry_with_an_extra_key_is_refused`
+- [x] `UT-C9-5` two components' ingest maps load together; a topic claimed by
+      both raises naming both maps (`N-8`) —
+      `tests/unit/test_c9_ingest.py::test_a_topic_claimed_by_two_ingest_maps_raises_naming_both_families`
+      (off the *source-checkout scan*, not the plug-in path — see the
+      `io/ingest.py` scoped gap above)
+- [x] `UT-C9-6` `feasible_cuts` on a recording carrying only objects reports the
       one supported cut and, for each unsupported one, **which port is missing**
-- [ ] `ST-C9-1` **the asker's workflow, end to end**: every existing recording
+      — `tests/unit/test_c9_ingest.py::test_feasible_cuts_reports_the_supported_stage_and_names_missing_ports_for_the_rest`
+- [x] `ST-C9-1` **the asker's workflow, end to end**: every existing recording
       under a component's test-run directories resims through a real `Pipeline`
       with `df` as the only stage, with **no per-test topic mapping** — i.e.
-      `ST-C1c-1`'s hardcoded bridge is deleted and the test still passes
+      `ST-C1c-1`'s hardcoded bridge is deleted and the test still passes —
+      `tests/system/test_c1c_resim_equivalence.py`, green against the real
+      `df_sil.dll` and real recordings on this machine
 - [ ] `ST-C9-2` **dimension 2, proven with a second shape**: a synthetic
       recording carrying a *different* stage's ports (perception-shaped, no
       objects) drives a two-stage pipeline with perception `measured`, using
       only its own ingest map and **zero framework change**. Until a real
-      perception recording exists this is synthetic, and the test says so
+      perception recording exists this is synthetic, and the test says so.
+      **Not written** — needs a synthetic perception-shaped recording fixture
+      and a two-stage pipeline; left open rather than guessed at
 - [ ] `ST-C9-3` **dimension 1 costs nothing here**: the same ingest map, applied
       over a second registered format, yields an identical port set — evidence
-      that format and depth are genuinely orthogonal
+      that format and depth are genuinely orthogonal. **Not written** — no
+      second recording format is registered yet to prove this against; left
+      open rather than guessed at
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-3` (topic names are matched exactly,
-      never case-folded — a case-only near-miss would silently drop a port),
-      `P-1`, `P-4`
-- [ ] naming §3 ticked — exposure: `N-6` (**the** stage that decides whether a
+- [x] portability §3 ticked — exposure: `P-3` (topic names are matched exactly,
+      never case-folded — a case-only near-miss would silently drop a port,
+      confirmed: `IngestMap.matches`/`_by_raw_topic` key off exact string
+      equality, no `.lower()`/`.casefold()` anywhere in `io/ingest.py`), `P-1`,
+      `P-4`
+- [x] naming §3 ticked — exposure: `N-6` (**the** stage that decides whether a
       translation table is data or code; the one sanctioned exception disappears
-      here), `N-2`, `N-8`
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
+      here — `io/legacy.py` and its `check_gt1` exemption are both deleted),
+      `N-2`, `N-8`
+- [x] `python docs/py/run_all.py` green; `GT-1, GT-2, GT-3, GT-6, GT-11`
+      re-checked clean (`scripts/check_invariants.py`'s own current scope —
+      not all of `GT-1..12` are wired into that script yet, pre-existing)
 
 **Gate**
-- [ ] `ST-C9-1` green **with `ST-C1c-1`'s hardcoded topic constants deleted** —
-      a bridge that still exists in a test is a bridge the product does not have
-- [ ] `GT-1` green **with `io/legacy.py`'s exemption removed from
+- [x] `ST-C9-1` green **with `ST-C1c-1`'s hardcoded topic constants deleted** —
+      a bridge that still exists in a test is a bridge the product does not
+      have. `TOPIC_GEN_OBJECT_LIST`/`TOPIC_VEH_DYN` are gone from
+      `test_c1c_resim_equivalence.py`; it now opens a `Session` through the
+      real `df.carla_legacy` ingest map and drives a real `Pipeline`
+- [x] `GT-1` green **with `io/legacy.py`'s exemption removed from
       `check_invariants.py`** — the exemption disappearing is the cleanest
-      possible proof that the mapping moved to where it belongs
+      possible proof that the mapping moved to where it belongs. Confirmed:
+      `check_invariants.py` no longer references `legacy.py` or a
+      `_GT1_EXEMPT_FILENAMES` carve-out, and `GT-1` still reports clean
+
+**Open at the end of this pass (2026-08-03):** `ST-C9-2`/`ST-C9-3` unwritten,
+and the Bench-start-page half of the `sim probe` item — both flagged above at
+the point they're incomplete rather than silently left as blank checkboxes.
+Everything else in this stage is implemented, tested against real artifacts
+where one exists (`df_sil.dll`, real recordings, the real checked-in
+`df_sil.ports.yaml`), and green.
 
 ---
 

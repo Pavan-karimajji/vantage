@@ -17,13 +17,35 @@ collision `N-3` exists to prevent. Named `SessionEvent` here instead.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from adas_sim.contracts.pipeline import Pipeline
 from adas_sim.core.errors import AuthoringError
 from adas_sim.core.signals import resolve_series
 from adas_sim.core.tick import Tick
 from adas_sim.io.base import RunManifest
+from adas_sim.io.ingest import AbsentPort, ProvidedPort
+
+
+@dataclass(frozen=True, slots=True)
+class CutFeasibility:
+    """One pipeline stage's answer to "can this recording drive it as
+    `mode: measured`" (`R-SIM-23`, `CR-SIM-21` made mechanical) -- a query,
+    computed from `Session.provides`/`Session.absent` and the stage's own
+    component manifest, never a load-time assertion (`contracts/pipeline.py`'s
+    own `_validate_wiring` is that; this is the "what's possible" report
+    `sim probe` and the Bench start page read *before* choosing one)."""
+
+    stage: str
+    feasible: bool
+    #: One entry per missing/mismatched output port, human-readable and
+    #: naming the port -- `()` when `feasible` is `True`.
+    missing: tuple[str, ...] = ()
+
+    def __repr__(self) -> str:
+        return f"<CutFeasibility stage={self.stage!r} feasible={self.feasible}>"
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +78,18 @@ class Session:
     #: tick. What `LayerCtx.known_ports` carries into a layer provider's
     #: `self.<port>` resolution.
     known_ports: frozenset[str] = frozenset()
+    #: `S-C9`: the ingest map's declared `provides:`, keyed by the bare,
+    #: pipeline-stage-agnostic `manifest_port` (`ProvidedPort.manifest_port`)
+    #: -- what this *file* can supply, independent of what a particular
+    #: pipeline calls its stage. `known_ports` above is the run-relative
+    #: view (`self.<port>` resolution); this is the file-level view
+    #: (`feasible_cuts`). Both are derived from the same ingest pass, never
+    #: two separate mechanisms.
+    provides: Mapping[str, ProvidedPort] = field(default_factory=dict)
+    #: `S-C9`: declared-absent ports (`ProvidedPort`'s sibling, `AbsentPort`),
+    #: keyed by port name -- named at load, never discovered as a tick-0
+    #: failure (`R-SIM-23`'s own "a known hole declared is a startup answer").
+    absent: Mapping[str, AbsentPort] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         # Session is immutable (UT-B2-11): pass 2 must not be able to
@@ -86,6 +120,30 @@ class Session:
         function takes `self.ticks`, never a `Session`, so `core/signals.py`
         never needs to import this module back."""
         return resolve_series(self.ticks, path, project=project)
+
+    def feasible_cuts(self, pipeline: Pipeline) -> tuple[CutFeasibility, ...]:
+        """Per stage in `pipeline`, whether this file can drive it as
+        `mode: measured` -- every declared output port present with a
+        matching `proto_type` (`UT-C9-3`: a mismatch is refused, never
+        coerced), each miss naming the port and why (missing entirely, or a
+        declared-`absent` reason, `UT-C9-2`)."""
+        results = []
+        for stage in pipeline.stages:
+            manifest = pipeline.manifest_for(stage.name)
+            missing: list[str] = []
+            for spec in manifest.outputs:
+                provided = self.provides.get(spec.name)
+                if provided is None:
+                    absent = self.absent.get(spec.name)
+                    reason = absent.reason if absent is not None else "not provided by this recording"
+                    missing.append(f"{spec.name}: {reason}")
+                elif provided.proto_type != spec.proto_type:
+                    missing.append(
+                        f"{spec.name}: recording provides {provided.proto_type!r}, "
+                        f"pipeline expects {spec.proto_type!r}"
+                    )
+            results.append(CutFeasibility(stage=stage.name, feasible=not missing, missing=tuple(missing)))
+        return tuple(results)
 
     def seek_ns(self, t_ns: int) -> int:
         """The index of the tick whose `t_ns` is the greatest value `<=

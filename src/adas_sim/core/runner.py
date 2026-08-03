@@ -30,7 +30,7 @@ from adas_sim.core.session import Session
 from adas_sim.core.tick import Pose2D, PortValue, Tick
 from adas_sim.core.tick import decode_message  # noqa: F401 -- re-exported, see below
 from adas_sim.io.base import Provenance, group_by_log_time
-from adas_sim.io.legacy import LegacyRecordingReader
+from adas_sim.io.ingest import IngestRecordingReader, discover_ingest_maps
 from adas_sim.io.registry import reader_for
 from adas_sim.model.project import ProjectModel
 from adas_sim.scene.registry import registered_providers
@@ -103,10 +103,11 @@ def build_session_from_recording(
     complete is a silent wrong picture (`UT-B3-16`'s own reasoning).
     """
     del codec  # reserved, not yet a second resolution axis (see docstring)
-    # Always wrapped: legacy topic remapping is a no-op on a modern recording
-    # (io/legacy.py's own docstring), so every recording -- old or new --
-    # presents namespaced names to the rest of the framework.
-    reader = LegacyRecordingReader(reader_for(path))
+    # Always wrapped: ingest remapping is a no-op when no loaded map matches
+    # this recording's topics (`io/ingest.py`'s own docstring, `S-C9`), so
+    # every recording -- legacy or modern, this framework's own or someone
+    # else's -- presents namespaced names to the rest of the framework.
+    reader = IngestRecordingReader(reader_for(path), discover_ingest_maps())
     try:
         topics = reader.topics()
         manifest = reader.meta()
@@ -156,6 +157,8 @@ def build_session_from_recording(
             meta=manifest,
             deterministic=deterministic,
             known_ports=frozenset(_topic_to_port_name(topic) for topic in topics),
+            provides={p.manifest_port: p for p in reader.provides},
+            absent={a.port: a for a in reader.absent},
         )
     finally:
         reader.close()

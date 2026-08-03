@@ -170,6 +170,22 @@ class PortValue:
         return self._parsed
 
     @property
+    def raw_bytes(self) -> bytes:
+        """The undecoded wire bytes this `PortValue` was built from --
+        independent of whether `.message` has since parsed them (`S-C9`):
+        what a resim harness feeds `contracts.pipeline.Pipeline.exec`'s
+        byte-only `stimulus`/`measured`. Raises if this `PortValue` was
+        built from an already-decoded object instead of bytes (a synthetic
+        test tick) -- there is nothing to hand back."""
+        if not isinstance(self._raw, (bytes, bytearray)):
+            raise AuthoringError(
+                expected="a PortValue built from raw bytes", found=type(self._raw).__name__,
+                where="adas_sim.core.tick.PortValue.raw_bytes",
+                hint="this PortValue was constructed from an already-decoded object, not recorded bytes",
+            )
+        return bytes(self._raw)
+
+    @property
     def age_s(self) -> float:
         if self.capture_ns is not None:
             return (self.t_ns - self.capture_ns) / 1e9

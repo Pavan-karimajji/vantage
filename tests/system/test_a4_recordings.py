@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from adas_sim.io.legacy import LegacyRecordingReader
+from adas_sim.io.ingest import IngestRecordingReader, discover_ingest_maps
 from adas_sim.io.mcap import McapReader, McapWriter
 
 SIM_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -32,8 +32,9 @@ def test_every_existing_recording_loads_with_a_positive_tick_count():
     if not recordings:
         pytest.skip("modules/df/tests/carla_testruns is absent (partial clone)")
 
+    ingest_maps = discover_ingest_maps()
     for path in recordings:
-        reader = LegacyRecordingReader(McapReader(path))
+        reader = IngestRecordingReader(McapReader(path), ingest_maps)
         try:
             tick_count = sum(1 for _ in reader.messages())
             assert tick_count > 0, f"{path}: no messages"

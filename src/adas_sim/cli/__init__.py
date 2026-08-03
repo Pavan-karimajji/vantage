@@ -24,6 +24,7 @@ def main(argv: list[str] | None = None) -> int:
     subparsers = parser.add_subparsers(dest="verb", required=True)
     subparsers.add_parser("doctor", help="report the environment (DG-3)")
     subparsers.add_parser("explain", help="explain any name in the system (DG-2)", add_help=False)
+    subparsers.add_parser("probe", help="what a recording provides, and what it doesn't (S-C9)", add_help=False)
     subparsers.add_parser("view", help="open Vantage on a recording (S-B3)", add_help=False)
     subparsers.add_parser("render", help="headless snapshot to a PNG (S-B3)", add_help=False)
     subparsers.add_parser("convert", help="recording -> recording (S-D7)", add_help=False)
@@ -34,6 +35,11 @@ def main(argv: list[str] | None = None) -> int:
         return doctor.run(remainder)
     if args.verb == "explain":
         return explain.run(remainder)
+    if args.verb == "probe":
+        # Deferred: opening a recording eventually needs a real codec (mcap),
+        # same reasoning as convert/export below.
+        from adas_sim.cli import probe
+        return probe.run(remainder)
     if args.verb == "view":
         # Deferred: `cli.view` pulls in PySide6 (the "viewer" extra) --
         # `sim doctor`/`sim explain`/`sim render` must stay usable with

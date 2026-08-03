@@ -11,9 +11,13 @@ Resims every existing `df` recording through two independent paths against
 the same `df_sil.dll` build and compares every declared output port
 byte-for-byte, tick by tick:
 
-  - the GENERIC path: `CtypesSilComponent` (`adasInit`/`adasManifest`/
-    `adasExec`), ports matched by name, discovered from the manifest
-    (`R-SIM-4`) -- exactly what every other `UT-C1c-*` test already drives.
+  - the GENERIC path: a real `Pipeline` (`S-C9`) built from a `Session`
+    (`adas_sim.core.session.Session.open`, itself built through the
+    declared `df.carla_legacy` ingest map, `modules/df/sim/ingest/
+    carla_legacy.yaml` -- no per-test topic constant). `Pipeline.exec` drives
+    `CtypesSilComponent` (`adasInit`/`adasManifest`/`adasExec`), ports
+    matched by name, discovered from the manifest (`R-SIM-4`) -- exactly
+    what every other `UT-C1c-*` test already drives.
   - the POSITIONAL path: `dfInit`/`dfExec`/`dfShutdown`, the fixed
     nine-parameter pre-S-C1c ABI `modules/df/tools/carla/df_ctypes.py` and
     `replay/df_dll_sim_mcap.py` already drive live resim with today, and
@@ -28,6 +32,13 @@ byte-for-byte, tick by tick:
 port name to the exact same internal helper as dfExec" -- so a divergence
 here would mean the generic ABI computed something different from the one
 already proven live, not a new algorithm bug.
+
+**`S-C9`.** Before this stage, the GENERIC path read `df/gen_object_list`/
+`df/veh_dyn` directly off the mcap file and hand-renamed them to `objects`/
+`egoDyn` in a dict literal here -- `S-C9`'s own Gate names this test's own
+bridge as the thing to delete. The two paths now diverge only in *what they
+bind to* (a real `Pipeline` vs. the fixed positional ABI), never in *how the
+bytes reached each one*.
 
 Skips with a named reason if the df_sil.dll build or the recordings
 directory is absent (partial clone, or -- as on this Linux checkout, where
@@ -46,9 +57,9 @@ import pytest
 
 from adas_sim.contracts.component import CtypesSilComponent
 from adas_sim.contracts.loader import resolve_library
+from adas_sim.contracts.pipeline import Pipeline, Stage
 from adas_sim.core.errors import EnvironmentError_
-from adas_sim.io.base import group_by_log_time
-from adas_sim.io.mcap import McapReader
+from adas_sim.core.session import Session
 
 SIM_ROOT = Path(__file__).resolve().parent.parent.parent
 MODULES_ROOT = SIM_ROOT.parent
@@ -63,11 +74,6 @@ _DF_SIL_SEARCH_DIRS = [
 ]
 _SKIP_REASON_NO_DLL = "no built df_sil.dll found under modules/df/build-*-vs2026 (partial clone / not built for this platform)"
 _SKIP_REASON_NO_RECORDINGS = "modules/df/tests/carla_testruns is absent (partial clone)"
-
-# The two topics every recording under aeb/ and bsd/ actually carries
-# (sim_resim_and_recording.md SS8's "the hole": VehSig was never recorded).
-TOPIC_GEN_OBJECT_LIST = "df/gen_object_list"
-TOPIC_VEH_DYN = "df/veh_dyn"
 
 # Positional buffer name -> the manifest's own named port (df_sil.ports.yaml).
 # Fixed and hand-written deliberately: the whole point of "positional" is
@@ -207,44 +213,53 @@ def test_every_existing_recording_is_byte_identical_between_the_generic_and_posi
         pytest.skip(_SKIP_REASON_NO_RECORDINGS)
 
     for path in recordings:
-        reader = McapReader(path)
-        try:
-            messages = list(reader.messages([TOPIC_GEN_OBJECT_LIST, TOPIC_VEH_DYN]))
-        finally:
-            reader.close()
+        # S-C9: no per-test topic constant -- the recording's own declared
+        # ingest map (modules/df/sim/ingest/carla_legacy.yaml) is what
+        # resolves df/gen_object_list -> source.gen_object_list etc.
+        session = Session.open(path)
 
         generic = CtypesSilComponent(dll_path)
         generic.init(DF_DEFAULT_PROJECT_YAML)
         positional = _PositionalDfComponent(dll_path)
         positional.init(DF_DEFAULT_PROJECT_YAML)
         declared_outputs = {p.name for p in generic.manifest.outputs}
+        pipeline = Pipeline(
+            name="df_resim", version=1, components={"df": generic},
+            stages=(Stage(
+                name="df", mode="simulate", impl=None,
+                inputs={"objects": "source.gen_object_list", "egoDyn": "source.veh_dyn", "vehSig": "source.veh_sig"},
+            ),),
+        )
 
         try:
-            prev_log_time_ns = 0
+            prev_t_ns = 0
             tick_count = 0
-            for log_time_ns, by_topic, missing in group_by_log_time(
-                messages, expected_topics=(TOPIC_GEN_OBJECT_LIST, TOPIC_VEH_DYN)
-            ):
-                if missing:
-                    # An incomplete tick: both paths would see the same gap
+            for tick in session.ticks:
+                if "source.gen_object_list" not in tick.ports or "source.veh_dyn" not in tick.ports:
+                    # An incomplete tick (e.g. only the chase camera arrived
+                    # at this log_time): both paths would see the same gap
                     # either way -- skip rather than fabricate a stimulus
                     # (mirrors df_dll_sim_mcap.py's own handling).
                     continue
-                dt_ns = log_time_ns - prev_log_time_ns
-                prev_log_time_ns = log_time_ns
-                objects_bytes = by_topic[TOPIC_GEN_OBJECT_LIST]
-                veh_dyn_bytes = by_topic[TOPIC_VEH_DYN]
+                dt_ns = tick.t_ns - prev_t_ns
+                prev_t_ns = tick.t_ns
+                objects_bytes = tick.port("source.gen_object_list").raw_bytes
+                veh_dyn_bytes = tick.port("source.veh_dyn").raw_bytes
 
-                generic_out = generic.exec(
-                    dt_ns, {"objects": objects_bytes, "egoDyn": veh_dyn_bytes, "vehSig": b""}
-                )
+                # source.veh_sig is declared absent (S-C9) -- both paths get
+                # a fresh, all-default VehSig() every tick, which is exactly
+                # what b"" deserializes to in proto3 (no generated binding
+                # needed to construct it, R-SIM-11).
+                generic_out = pipeline.exec(
+                    dt_ns, {"gen_object_list": objects_bytes, "veh_dyn": veh_dyn_bytes, "veh_sig": b""}
+                )["df"]
                 positional_out = positional.exec(dt_ns, objects_bytes, veh_dyn_bytes)
 
                 for positional_name, generic_name in _OUTPUT_NAME_MAP.items():
                     if generic_name not in declared_outputs:
                         continue  # this build's ENABLED_FUNCTIONS doesn't declare it either way
                     assert generic_out.get(generic_name) == positional_out.get(positional_name), (
-                        f"{path.name} tick log_time_ns={log_time_ns}: port {generic_name!r} diverges "
+                        f"{path.name} tick t_ns={tick.t_ns}: port {generic_name!r} diverges "
                         f"between the generic ({generic_out.get(generic_name)!r}) and positional "
                         f"({positional_out.get(positional_name)!r}) paths"
                     )

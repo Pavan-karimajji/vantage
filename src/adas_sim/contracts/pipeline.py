@@ -34,7 +34,9 @@ from typing import Literal
 import yaml
 
 from adas_sim.contracts.binding import Address, apply_override, parse_address
-from adas_sim.contracts.component import CtypesSilComponent, PortSpec, SilComponent, resolve_message_classes
+from adas_sim.contracts.component import (
+    ComponentManifest, CtypesSilComponent, PortSpec, SilComponent, resolve_message_classes,
+)
 from adas_sim.contracts.loader import resolve_library
 from adas_sim.contracts.override import Override, OverrideVerb, parse_override_verb
 from adas_sim.core.errors import AuthoringError, ContractError
@@ -365,6 +367,13 @@ class Pipeline:
 
     def __repr__(self) -> str:
         return f"<Pipeline name={self.name!r} stages={[s.name for s in self.stages]}>"
+
+    def manifest_for(self, stage_name: str) -> ComponentManifest:
+        """A declared stage's own component manifest (`S-C9`,
+        `Session.feasible_cuts`'s one dependency on `Pipeline` beyond its
+        `stages`) -- the manifest a recording's `provides:` is checked
+        against, never a name this class invents."""
+        return self._components[stage_name].manifest
 
     @classmethod
     def load(
