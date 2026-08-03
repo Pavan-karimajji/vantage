@@ -371,15 +371,15 @@ they are built. The plan's §0a table is the authority; this one is the story.
 
 | # | Stage | Who is being taught | In one line | Status |
 |---|---|---|---|---|
-| 1 | **S-C0** | CI | Make the gate run itself, before trusting any later stage | not started |
-| — | *(deltas #2–#6)* | `sim` + `df` | Two clocks, bulk-by-reference, lazy parsing, `select`/`drop`, and plug-ins that bind by name | not started |
+| 1 | **S-C0** | CI | Make the gate run itself, before trusting any later stage | done |
+| — | *(deltas #2–#6)* | `sim` + `df` | Two clocks, bulk-by-reference, lazy parsing, `select`/`drop`, and plug-ins that bind by name | done |
 | — | **S-C1a** | `interfaces` | Define the socket and the label format | done |
 | — | **S-C1b** | `df` | Make one real component speak it — *beside* the old way, not instead of | done |
 | — | **S-C1c** | `sim` | Teach Python to load a DLL, read its label, and wire a pipeline | mostly done |
-| 7 | **S-C4** | `df` | Delete the duplicated calibration | not started |
-| 8 | **S-C9** | `df` + `sim` | Make recordings we did not produce drivable (see §5a) | not started |
-| 9 | **S-C2** | `sim` | Split *producing* a recording from *executing* one | not started |
-| 10 | **S-C3** | `sim` + `df` | Turn scenario intent from prose comments into data | not started |
+| 7 | **S-C4** | `df` | Delete the duplicated calibration | done |
+| 8 | **S-C9** | `df` + `sim` | Make recordings we did not produce drivable (see §5a) | mostly done (2 stress-shape tests open, `ST-C9-2/3`) |
+| 9 | **S-C2** | `sim` | Split *producing* a recording from *executing* one | done |
+| 10 | **S-C3** | `sim` + `df` | Turn scenario intent from prose comments into data | mostly done (7/18 scenarios carry `expect:`, 4 verified against a real recording + a real compiled `df_sil`; see its own plan section) |
 | 11 | **S-C1aΔ2** | `interfaces` | Two manifest fields the resolutions need — the first stage that needs a compiler | not started |
 | 12 | **S-C1d** | `df` + build | Generate the shim instead of hand-writing it per component | not started |
 | 13 | **S-C5** | `df` + build | Pack the config bundle beside the DLL | not started |

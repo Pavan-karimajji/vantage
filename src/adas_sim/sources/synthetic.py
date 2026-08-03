@@ -18,8 +18,8 @@ from typing import ClassVar
 
 import yaml
 
+from adas_sim.contracts.scenario import Scenario
 from adas_sim.core.errors import AuthoringError, InternalError
-from adas_sim.sources.base import Scenario
 
 
 class SyntheticSource:

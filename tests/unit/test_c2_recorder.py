@@ -17,12 +17,22 @@ import yaml
 
 from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent, PortSpec
 from adas_sim.contracts.pipeline import Pipeline
+from adas_sim.contracts.scenario import (
+    EgoScenario, RoadHint, RunControl, Scenario, ScenarioContent, SensorModelRef, SutRef,
+)
 from adas_sim.core.manifest import build_manifest
 from adas_sim.io.base import CAPTURE_TIME_MANIFEST_VERSION, Provenance, RunManifest
 from adas_sim.io.mcap import McapReader
-from adas_sim.sources.base import Scenario
 from adas_sim.sources.recorder import REVISE_AFTER_TICKS, Recorder
 from adas_sim.sources.synthetic import SyntheticSource
+
+
+def _scenario(name: str = "t") -> Scenario:
+    return Scenario(
+        schema=2, id=name, doc="",
+        scenario=ScenarioContent(road=RoadHint(), ego=EgoScenario(speed_mps=0.0), actors=()),
+        world={}, sensor_model=SensorModelRef(), run=RunControl(), sut=SutRef(),
+    )
 
 
 def _manifest(*, component: str, inputs=(), outputs=(), max_bytes: int = 0) -> ComponentManifest:
@@ -74,7 +84,7 @@ def test_topic_list_equals_the_declared_ports_including_the_source_port(tmp_path
     out_path = tmp_path / "out.mcap"
     recorder = Recorder(pipeline, source, out_path, meta=_manifest_for(pipeline, pipeline_path))
 
-    recorder.open(Scenario(name="t", raw={}))
+    recorder.open(_scenario())
     recorder.tick(50_000_000)
     recorder.tick(50_000_000)
     recorder.close()
@@ -102,7 +112,7 @@ def test_provenance_tags_source_and_stage_output_ports(tmp_path):
         source_provenance=Provenance.TRUTH,
     )
 
-    recorder.open(Scenario(name="t", raw={}))
+    recorder.open(_scenario())
     recorder.tick(50_000_000)
     recorder.close()
 
@@ -124,7 +134,7 @@ def test_provenance_can_be_tagged_per_source_port(tmp_path):
         source_provenance={"veh_dyn": Provenance.MOCKED},
     )
 
-    recorder.open(Scenario(name="t", raw={}))
+    recorder.open(_scenario())
     recorder.tick(50_000_000)
     recorder.close()
 
@@ -147,7 +157,7 @@ def test_capture_and_reception_time_are_both_written(tmp_path):
     out_path = tmp_path / "out.mcap"
     recorder = Recorder(pipeline, source, out_path, meta=_manifest_for(pipeline, pipeline_path))
 
-    recorder.open(Scenario(name="t", raw={}))
+    recorder.open(_scenario())
     recorder.tick(50_000_000)
     recorder.close()
 
@@ -173,7 +183,7 @@ def test_excluded_output_port_is_never_a_topic(tmp_path):
     out_path = tmp_path / "out.mcap"
     recorder = Recorder(pipeline, source, out_path, meta=_manifest_for(pipeline, pipeline_path))
 
-    recorder.open(Scenario(name="t", raw={}))
+    recorder.open(_scenario())
     recorder.tick(50_000_000)
     recorder.close()
 
@@ -192,7 +202,7 @@ def test_decimated_output_port_keeps_only_every_nth_tick(tmp_path):
     out_path = tmp_path / "out.mcap"
     recorder = Recorder(pipeline, source, out_path, meta=_manifest_for(pipeline, pipeline_path))
 
-    recorder.open(Scenario(name="t", raw={}))
+    recorder.open(_scenario())
     for _ in range(6):
         recorder.tick(50_000_000)
     recorder.close()
@@ -217,7 +227,7 @@ def test_pipeline_none_records_every_emitted_source_port_and_nothing_else(tmp_pa
     meta = RunManifest(manifest_version=CAPTURE_TIME_MANIFEST_VERSION, run_id="20260101T000000Z-deadbeef", source_kind="synthetic")
     recorder = Recorder(None, source, out_path, meta=meta)
 
-    recorder.open(Scenario(name="t", raw={}))
+    recorder.open(_scenario())
     recorder.tick(50_000_000)
     recorder.close()
 
@@ -255,7 +265,7 @@ def test_revised_estimate_is_none_before_the_threshold_and_a_number_after(tmp_pa
     out_path = tmp_path / "out.mcap"
     recorder = Recorder(pipeline, source, out_path, meta=_manifest_for(pipeline, pipeline_path))
 
-    recorder.open(Scenario(name="t", raw={}))
+    recorder.open(_scenario())
     for i in range(REVISE_AFTER_TICKS):
         assert recorder.revised_estimate_bytes(REVISE_AFTER_TICKS * 2) is None
         recorder.tick(50_000_000)

@@ -1,0 +1,34 @@
+# Fixture: v1 shape using the general `actors:` list, one actor with a
+# lateral_profile phase list. Same scope note as fixture_lead_v1.yaml.
+
+carla:
+  host: 127.0.0.1
+  port: 2000
+  map: FixtureTown
+
+ego:
+  blueprint: vehicle.fixture.ego
+  spawn_point_index: 12
+  speed_mps: 20.0
+
+actors:
+  - name: target
+    blueprint: vehicle.fixture.target
+    long_offset_m: -1.0
+    lateral_offset_m: -6.0
+    speed_mps: 20.0
+    classification: CAR
+    lateral_profile:
+      - { name: converge, rate_mps: 0.25, duration_s: 8 }
+      - { name: hold, rate_mps: 0.0, duration_s: 2 }
+
+end_condition:
+  type: time_elapsed
+  max_s: 21.0
+
+object_range_m: 100.0
+num_object_slots: 50
+
+df:
+  config_path: null
+  dll_path: null

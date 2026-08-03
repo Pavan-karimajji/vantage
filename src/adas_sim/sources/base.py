@@ -20,32 +20,20 @@ already expects, since `source.*` is split into `("source", port)` before
 either function ever looks at the map (`contracts/pipeline.py`
 `_split_ref`).
 
-`Scenario` wraps a scenario file's parsed YAML verbatim rather than
-imposing a schema: no `Scenario` type exists anywhere in this codebase yet
-(`S-C3`, "Scenario schema v2", is the next stage after this one and owns
-that design). `.raw` is today's real shape (`ego:`, `actors:`/`lead:`,
-`lateral_profile:`, `roll_fault:`, `end_condition:`, `world.<name>:` --
-`modules/df/tools/carla/carla_bridge.py`'s own scenario YAML, unchanged) --
-`S-C3` formalizes/versions it later; this is "decompose by copy," not
-"invent schema v2 early."
+`Scenario` (`contracts.scenario.Scenario`, `S-C3`) is the schema-v2 type --
+this module's own interim `{name, raw}` wrapper (`S-C2`'s stand-in, before
+`S-C3` existed) has been retired in its favour, since `S-C3` is exactly the
+"next stage [that] owns that design" this docstring used to point at.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
 from typing import ClassVar, Protocol
 
+from adas_sim.contracts.scenario import Scenario
 
-@dataclass(frozen=True, slots=True)
-class Scenario:
-    """A scenario's parsed YAML, unmodified (`S-C2`'s interim shape --
-    see this module's docstring). `name` is the scenario file's own stem,
-    used for the run manifest's `scenario:` field (`core/manifest.py`),
-    never re-derived from `raw`."""
-
-    name: str
-    raw: Mapping[str, object]
+__all__ = ["Scenario", "Source"]
 
 
 class Source(Protocol):

@@ -9,7 +9,7 @@ except one) and `ST-C2-2` (`sim resim` reproduces byte-identical outputs
 across two runs) -- `docs/sim_implementation_plan.md`.
 
 Drives the real engines underneath the CLI verbs (`sources.recorder.Recorder`,
-`cli.resim.resim_pipeline`) rather than `cli.record.run`/`cli.resim.run`
+`core.resim.resim_pipeline`) rather than `cli.record.run`/`cli.resim.run`
 themselves: those top-level entry points resolve `impl:` through
 `dll:`/`stubdll:` only (no `components=` registry to inject a Python stub,
 same limitation `test_c1c_pipeline.py`'s own fixtures accept), and no
@@ -22,13 +22,23 @@ from pathlib import Path
 
 import yaml
 
-from adas_sim.cli.resim import resim_pipeline
 from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent, PortSpec
 from adas_sim.contracts.pipeline import Pipeline
+from adas_sim.contracts.scenario import (
+    EgoScenario, RoadHint, RunControl, Scenario, ScenarioContent, SensorModelRef, SutRef,
+)
 from adas_sim.core.manifest import build_manifest
-from adas_sim.sources.base import Scenario
+from adas_sim.core.resim import resim_pipeline
 from adas_sim.sources.recorder import Recorder
 from adas_sim.sources.synthetic import SyntheticSource
+
+
+def _scenario(name: str = "t") -> Scenario:
+    return Scenario(
+        schema=2, id=name, doc="",
+        scenario=ScenarioContent(road=RoadHint(), ego=EgoScenario(speed_mps=0.0), actors=()),
+        world={}, sensor_model=SensorModelRef(), run=RunControl(), sut=SutRef(),
+    )
 
 
 def _manifest(*, component: str, inputs=(), outputs=()) -> ComponentManifest:
@@ -105,7 +115,7 @@ def _record(tmp_path: Path) -> Path:
         pipeline=pipeline, pipeline_path=record_pipeline_path, run_kind="sim", source_kind="synthetic",
     )
     recorder = Recorder(pipeline, source, recording_path, meta=meta)
-    recorder.open(Scenario(name="algo_test", raw={}))
+    recorder.open(_scenario("algo_test"))
     for _ in range(5):
         recorder.tick(50_000_000)
     recorder.close()

@@ -17,8 +17,9 @@ import yaml
 
 from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent, PortSpec
 from adas_sim.contracts.pipeline import Pipeline, RecordPolicy, RecordVerb, Stage, record_policy_for, validate_recordable
+from adas_sim.contracts.scenario import Scenario
 from adas_sim.core.errors import AuthoringError
-from adas_sim.sources.base import Scenario, Source
+from adas_sim.sources.base import Source
 
 
 def _manifest(*, component: str, inputs=(), outputs=(), period_ns: int = 0) -> ComponentManifest:
@@ -60,18 +61,6 @@ class _FakeSource:
 
     def stop(self) -> None:  # pragma: no cover -- unused here
         raise NotImplementedError
-
-
-# ---------------------------------------------------------------------------
-# Scenario -- wraps parsed YAML verbatim, no schema imposed (S-C2's own
-# stated interim decision; S-C3 formalizes it)
-# ---------------------------------------------------------------------------
-
-
-def test_scenario_wraps_raw_mapping_verbatim():
-    scenario = Scenario(name="my_case", raw={"ego": {"speed_mps": 10.0}})
-    assert scenario.name == "my_case"
-    assert scenario.raw["ego"]["speed_mps"] == 10.0
 
 
 # ---------------------------------------------------------------------------

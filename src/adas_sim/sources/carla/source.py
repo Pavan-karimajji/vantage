@@ -38,8 +38,8 @@ import time
 from collections.abc import Mapping
 from typing import ClassVar
 
+from adas_sim.contracts.scenario import Scenario
 from adas_sim.core.errors import InternalError
-from adas_sim.sources.base import Scenario
 from adas_sim.sources.carla import actor_behaviour, chase, mocks, spawn, world
 from adas_sim.sources.carla.catalogue import classification_for_blueprint, load_catalogue
 
@@ -52,32 +52,48 @@ TARGET_HZ = 20.0
 TARGET_DT_S = 1.0 / TARGET_HZ
 
 
-def _normalize_actors(scenario_raw: Mapping[str, object]) -> list[dict]:
+def _profile_cfgs(phases: tuple) -> list[dict] | None:
+    """A typed `Actor`/`EgoScenario.lateral_profile` back into the plain
+    dict shape `actor_behaviour.LateralProfile` already expects (it indexes
+    with `in`/`[]`/`.get`, not attributes) -- that module stays untouched;
+    only the boundary where a `Scenario` enters this source changes."""
+    if not phases:
+        return None
+    return [{"name": p.name, "rate_mps": p.rate_mps, "duration_s": p.duration_s, "shape": p.shape} for p in phases]
+
+
+def _ego_cfg_from_scenario(scenario: Scenario, carla_cfg: Mapping[str, object]) -> dict:
+    """Adapts `scenario.scenario.ego` + `scenario.world["carla"]` into the
+    plain dict `spawn.spawn_kinematic_ego` already expects (`blueprint`,
+    `spawn_point_index`, `speed_mps`, `lateral_profile`)."""
+    return {
+        "blueprint": carla_cfg.get("ego_blueprint"),
+        "spawn_point_index": carla_cfg.get("spawn_point_index", 0),
+        "speed_mps": scenario.scenario.ego.speed_mps,
+        "lateral_profile": _profile_cfgs(scenario.scenario.ego.lateral_profile),
+    }
+
+
+def _actor_cfgs_from_scenario(scenario: Scenario, carla_cfg: Mapping[str, object]) -> list[dict]:
     """Returns a list of actor cfgs (name, blueprint, long_offset_m,
-    lateral_offset_m, speed_mps, classification, lateral_profile) -- the
-    general `actors:` schema. `lead:` is sugar for a single actor dead
-    ahead (`lateral_offset_m: 0.0`), kept so a scenario written against the
-    old shape runs unchanged."""
-    if "actors" in scenario_raw:
-        return [{
-            "name": cfg["name"],
-            "blueprint": cfg["blueprint"],
-            "long_offset_m": cfg["long_offset_m"],
-            "lateral_offset_m": cfg.get("lateral_offset_m", 0.0),
-            "speed_mps": cfg["speed_mps"],
-            "classification": cfg.get("classification"),
-            "lateral_profile": cfg.get("lateral_profile"),
-        } for cfg in scenario_raw["actors"]]
-    lead_cfg = scenario_raw["lead"]
-    return [{
-        "name": "lead",
-        "blueprint": lead_cfg["blueprint"],
-        "long_offset_m": lead_cfg["initial_gap_m"],
-        "lateral_offset_m": 0.0,
-        "speed_mps": lead_cfg["speed_mps"],
-        "classification": None,
-        "lateral_profile": None,
-    }]
+    lateral_offset_m, speed_mps, classification, lateral_profile) --
+    `spawn.spawn_kinematic_at`/`actor_behaviour`'s own general shape,
+    unchanged since `S-C2`. Blueprints live in `world.carla.
+    actor_blueprints` (`contracts/scenario.py`'s v1 upgrader moves them
+    there; a hand-authored v2 scenario declares them there directly)."""
+    blueprints = carla_cfg.get("actor_blueprints", {})
+    return [
+        {
+            "name": actor.name,
+            "blueprint": blueprints.get(actor.name),
+            "long_offset_m": actor.long_offset_m,
+            "lateral_offset_m": actor.lateral_offset_m,
+            "speed_mps": actor.speed_mps,
+            "classification": actor.classification,
+            "lateral_profile": _profile_cfgs(actor.lateral_profile),
+        }
+        for actor in scenario.scenario.actors
+    ]
 
 
 class CarlaSource:
@@ -108,15 +124,19 @@ class CarlaSource:
         return frozenset({"gen_object_list", "veh_dyn", "veh_sig"})
 
     def start(self, scenario: Scenario) -> None:
-        raw = scenario.raw
-        carla_cfg = raw["carla"]
-        client = world.connect(carla_cfg["host"], carla_cfg["port"])
+        carla_cfg = scenario.world.get("carla", {})
+        # CARLA's own default RPC host/port -- every real scenario states
+        # them explicitly (preserved verbatim by the v1 upgrader), but a
+        # hand-authored v2 scenario's `world.carla` (`sim_scenarios_and_
+        # expectations.md` SS3) may omit connection details entirely, since
+        # "how do I reach a server" is arguably not scenario content.
+        client = world.connect(carla_cfg.get("host", "127.0.0.1"), carla_cfg.get("port", 2000))
         live_world = world.wait_for_world(client)
         live_world = world.ensure_map(client, live_world, carla_cfg["map"])
         world.set_asynchronous(live_world)
 
-        ego_cfg = raw["ego"]
-        actor_cfgs = _normalize_actors(raw)
+        ego_cfg = _ego_cfg_from_scenario(scenario, carla_cfg)
+        actor_cfgs = _actor_cfgs_from_scenario(scenario, carla_cfg)
         ego_actor = None
         actors_by_name: dict = {}
         # Spawning is inside its own try: a target whose spawn point is
@@ -145,9 +165,12 @@ class CarlaSource:
         self._actors_by_name = actors_by_name
         self._actor_cfgs = actor_cfgs
         self._ego_cfg = ego_cfg
-        self._object_range_m = raw["object_range_m"]
-        self._num_object_slots = raw["num_object_slots"]
-        self._roll_fault_cfg = raw.get("roll_fault")
+        self._object_range_m = scenario.sensor_model.object_range_m
+        self._num_object_slots = scenario.sensor_model.num_object_slots
+        # `run.faults` (SS3.2's `roll_fault:` -> `run.faults` upgrade) is a
+        # list; this source has only ever driven the single-fault case
+        # `roll_fault:` expressed, so the first (only) entry is equivalent.
+        self._roll_fault_cfg = scenario.run.faults[0] if scenario.run.faults else None
         self._lateral_profiles = actor_behaviour.build_lateral_profiles(actor_cfgs)
         # The ego may declare a lateral profile too -- the only actor whose
         # lateral motion is also yawed (`yaw_with_lateral=True` below),

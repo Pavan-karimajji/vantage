@@ -164,3 +164,40 @@ def test_resolve_series_for_a_derived_signal_builds_a_real_ctx_per_tick():
     ticks = tuple(_tick(i, {}) for i in range(3))
     result = resolve_series(ticks, "derived.test_series_ego", project="base")
     assert result == ((0, "base"), (1, "base"), (2, "base"))
+
+
+def _enum_message_cls():
+    """A real `{state: Enum}` schema -- a protobuf enum field decodes to a
+    bare int by default (`google.protobuf`'s own Python mapping); this is
+    what `_walk_field_path`'s enum-name resolution actually converts."""
+    from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
+
+    fdp = descriptor_pb2.FileDescriptorProto()
+    fdp.name = "b3_signals_enum.proto"
+    fdp.package = "adas_sim.test.b3signals"
+    fdp.syntax = "proto3"
+    enum = fdp.enum_type.add()
+    enum.name = "WarningState"
+    for name, number in [("OFF", 0), ("NORMAL", 1), ("BLINKING", 2)]:
+        value = enum.value.add()
+        value.name, value.number = name, number
+    msg = fdp.message_type.add()
+    msg.name = "SideState"
+    f = msg.field.add()
+    f.name, f.number, f.type, f.type_name = (
+        "warning", 1, descriptor_pb2.FieldDescriptorProto.TYPE_ENUM, ".adas_sim.test.b3signals.WarningState",
+    )
+
+    pool = descriptor_pool.DescriptorPool()
+    pool.Add(fdp)
+    return message_factory.GetMessageClass(pool.FindMessageTypeByName("adas_sim.test.b3signals.SideState"))
+
+
+def test_an_enum_field_resolves_to_its_name_not_its_bare_int():
+    """UT-B3-6-equivalent: `equals: NORMAL` in an `expect:` block (or a plot
+    label) must compare a name against a name, never `1` against
+    `'NORMAL'`."""
+    side_state_cls = _enum_message_cls()
+    message = side_state_cls(warning=1)
+    tick = _tick(0, {"df.bsd.outputs": _port("df.bsd.outputs", message)})
+    assert resolve_tick(tick, "df.bsd.outputs.warning") == "NORMAL"

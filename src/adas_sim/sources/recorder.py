@@ -34,10 +34,11 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from adas_sim.contracts.pipeline import Pipeline, RecordVerb, _split_ref, record_policy_for
+from adas_sim.contracts.scenario import Scenario
 from adas_sim.core.errors import InternalError
 from adas_sim.io.base import Provenance, RunManifest, TopicInfo
 from adas_sim.io.registry import writer_for
-from adas_sim.sources.base import Scenario, Source
+from adas_sim.sources.base import Source
 
 #: `max_bytes: 0` (undeclared) fallback -- mirrors `contracts/component.py`'s
 #: own `_DEFAULT_OUTPUT_CAP` so the size estimate and the real allocator

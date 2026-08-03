@@ -496,6 +496,23 @@ class Pipeline:
         against, never a name this class invents."""
         return self._components[stage_name].manifest
 
+    def init_components(self, config_path: Path | None = None) -> None:
+        """Calls `.init()` on every resolved stage's own component
+        (`SilComponent.init`, `sim_sil_contract.md` SS4.1) -- required
+        once before the first `exec()`/`step()` for a real `dll:`/
+        `stubdll:` stage (`CtypesSilComponent.exec` raises otherwise).
+        Every test to date injects a pre-initialised `InProcessSilComponent`
+        via `components=` and so never needed this; a live resim or run
+        against a real library does."""
+        for component in self._components.values():
+            component.init(config_path)
+
+    def shutdown_components(self) -> None:
+        """The paired teardown (`SilComponent.shutdown`) -- always call
+        after a real run, even if `exec()`/`step()` raised."""
+        for component in self._components.values():
+            component.shutdown()
+
     @classmethod
     def load(
         cls, path: Path, *, search: Sequence[Path] = (),

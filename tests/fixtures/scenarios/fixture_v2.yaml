@@ -1,0 +1,59 @@
+# Fixture: schema v2 authored directly (no upgrade path). Same scope note
+# as the v1 fixtures in this directory.
+
+schema: 2
+id: fixture_v2
+doc: |
+  A minimal, freshly authored v2 fixture -- one actor, one marker, one raw
+  expectation entry (parsed by check/expect.py, a later slice; carried
+  through unevaluated here).
+
+scenario:
+  road:
+    hint: straight_multilane
+    min_straight_m: 400
+    lanes_right_of_ego: 2
+  ego:
+    speed_mps: 20.111
+  actors:
+    - name: target
+      class: CAR
+      long_offset_m: -1.0
+      lateral_offset_m: -6.0
+      speed_mps: 20.111
+      lateral_profile:
+        - { name: converge, rate_mps: 0.25, duration_s: 8 }
+
+world:
+  carla:
+    map: FixtureTown
+    spawn_point_index: 54
+    ego_blueprint: vehicle.fixture.ego
+    actor_blueprints: { target: vehicle.fixture.target }
+
+sensor_model:
+  preset: fixture_ideal
+  object_range_m: 100.0
+  num_object_slots: 50
+
+run:
+  end_condition: { type: time_elapsed, max_s: 21.0 }
+  faults: []
+
+sut:
+  pipeline: fixture_only
+  project: base
+
+markers:
+  - id: entry_s
+    at: 4.80
+    from: "fixtures/fixture_v2_offline.py"
+  - id: crossing
+    at: { first: widget.outputs.value, crosses: 0.5, dir: rising }
+
+expect:
+  - id: EXP-1
+    doc: "fixture predicate, not yet evaluated by this stage"
+    signal: widget.outputs.value
+    equals: 1
+    always: true

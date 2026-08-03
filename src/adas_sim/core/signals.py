@@ -88,6 +88,13 @@ def _walk_field_path(value: object, field_path: str, *, address: str) -> object:
     for segment in field_path.split("."):
         match = _INDEX_RE.match(segment)
         attr_name = match.group(1) if match else segment
+        # A protobuf enum field decodes to a bare int by default; captured
+        # here (before `getattr`, off the PARENT message's own descriptor)
+        # so an `equals: NORMAL`-style expectation compares a name against
+        # a name, not a name against `1` -- the same resolver a plot panel
+        # or the HUD reads, which want the name too, never a raw int.
+        descriptor = getattr(value, "DESCRIPTOR", None)
+        field_descriptor = descriptor.fields_by_name.get(attr_name) if descriptor is not None else None
         try:
             value = getattr(value, attr_name)
         except AttributeError:
@@ -107,6 +114,8 @@ def _walk_field_path(value: object, field_path: str, *, address: str) -> object:
                     found=f"out of range, resolving {address!r}",
                     where="adas_sim.core.signals.resolve_tick", hint="",
                 ) from None
+        if field_descriptor is not None and field_descriptor.enum_type is not None:
+            value = field_descriptor.enum_type.values_by_number[value].name
         walked.append(segment)
     return value
 

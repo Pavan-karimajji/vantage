@@ -7,9 +7,11 @@
 -- executes a SUT against an existing recording
 (`sim_resim_and_recording.md` §9: "produces an artifact: optional, executes
 a SUT: yes (from a recording)"). Argument parsing only (`GT-9`);
-`resim_pipeline` is the real, directly-testable engine underneath, built on
-`contracts.pipeline.Pipeline.exec` + `io.base.group_by_log_time` (both
-already built) -- never a second tick-grouping implementation.
+`resim_pipeline` (`core/resim.py`, moved there at `S-C3` -- `check/` needs
+the same engine and may never import `cli/`) is the real, directly-testable
+engine underneath, built on `contracts.pipeline.Pipeline.exec` +
+`io.base.group_by_log_time` (both already built) -- never a second
+tick-grouping implementation.
 
 `--pipeline` is not shown in `sim_resim_and_recording.md` §9's own example
 CLI line, but a resim structurally needs one (which stages exist, which
@@ -22,10 +24,11 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from adas_sim.contracts.pipeline import Pipeline, _split_ref
+from adas_sim.contracts.pipeline import Pipeline
 from adas_sim.core.manifest import build_manifest
-from adas_sim.io.base import Provenance, TopicInfo, group_by_log_time
-from adas_sim.io.registry import reader_for, writer_for
+from adas_sim.core.resim import resim_pipeline
+from adas_sim.io.base import Provenance, TopicInfo
+from adas_sim.io.registry import writer_for
 from adas_sim.sources.recorder import topic_for
 
 
@@ -35,63 +38,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--pipeline", type=Path, required=True, help="the pipeline YAML to execute")
     parser.add_argument("--save", type=Path, help="write this resim's own freshly-computed tick outputs to a new recording")
     parser.add_argument("--project", default="base")
+    parser.add_argument(
+        "--config", type=Path,
+        help="config path forwarded to each stage's adasInit -- adasInit(NULL)'s own bundle "
+             "resolution is S-C5, not yet built, so a real dll:/stubdll: stage needs this explicitly",
+    )
     return parser
-
-
-def _wired_source_ports(pipeline: Pipeline) -> set[str]:
-    ports: set[str] = set()
-    for stage in pipeline.stages:
-        if stage.mode == "off":
-            continue
-        for ref in stage.inputs.values():
-            producer_name, port = _split_ref(ref)
-            if producer_name == "source":
-                ports.add(port)
-    return ports
-
-
-def resim_pipeline(pipeline: Pipeline, recording_path: Path) -> list[tuple[int, dict]]:
-    """Runs `pipeline` tick by tick against `recording_path`: `mode:
-    measured` stages are fed their recorded output bytes for that tick
-    (`Pipeline.exec`'s own `measured=` kwarg, `S-C1c`, unchanged);
-    `mode: simulate` stages execute live. Returns `(t_ns, outputs)` per
-    tick, `outputs` keyed exactly as `Pipeline.exec` returns it -- every
-    stage's port bytes this tick, by stage name then port name.
-    """
-    source_ports = _wired_source_ports(pipeline)
-    measured_stage_names = [stage.name for stage in pipeline.stages if stage.mode == "measured"]
-
-    reader = reader_for(recording_path)
-    try:
-        topics = reader.topics()
-        messages = list(reader.messages())
-        groups = list(group_by_log_time(messages, expected_topics=topics.keys()))
-
-        previous_t_ns: int | None = None
-        results: list[tuple[int, dict]] = []
-        for t_ns, payloads, _missing in groups:
-            dt_ns = 0 if previous_t_ns is None else t_ns - previous_t_ns
-            previous_t_ns = t_ns
-
-            stimulus = {
-                port: payloads[topic_for(f"source.{port}")]
-                for port in source_ports if topic_for(f"source.{port}") in payloads
-            }
-            measured: dict[str, dict[str, bytes]] = {}
-            for stage_name in measured_stage_names:
-                manifest = pipeline.manifest_for(stage_name)
-                recorded = {
-                    port_spec.name: payloads[topic_for(f"{stage_name}.{port_spec.name}")]
-                    for port_spec in manifest.outputs if topic_for(f"{stage_name}.{port_spec.name}") in payloads
-                }
-                if recorded:
-                    measured[stage_name] = recorded
-
-            outputs = pipeline.exec(dt_ns, stimulus, measured=measured)
-            results.append((t_ns, dict(outputs)))
-        return results
-    finally:
-        reader.close()
 
 
 def _save_outputs(pipeline: Pipeline, outputs: list[tuple[int, dict]], path: Path, meta) -> None:
@@ -119,7 +71,11 @@ def _save_outputs(pipeline: Pipeline, outputs: list[tuple[int, dict]], path: Pat
 def run(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     pipeline = Pipeline.load(args.pipeline)
-    outputs = resim_pipeline(pipeline, args.recording)
+    pipeline.init_components(args.config)
+    try:
+        outputs = resim_pipeline(pipeline, args.recording)
+    finally:
+        pipeline.shutdown_components()
 
     if args.save:
         meta = build_manifest(

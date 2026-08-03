@@ -1,0 +1,282 @@
+# Copyright (c) <ORG>. All Rights Reserved.
+# Proprietary and Confidential.
+# COMPONENT: SIM
+# @author Pavan Karimajji
+
+"""S-C3 `sim check` wiring tests (docs/sim_implementation_plan.md):
+`check/runner.py` (recording/pipeline discovery, resim + decode) and
+`check/report.py` (formatting). No function name anywhere (`R-SIM-1`) --
+the single stage under test is `widget`, same convention
+`test_c1c_pipeline.py`/`test_c2_record_resim.py` already use.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+import yaml
+from google.protobuf import descriptor_pb2 as _dpb
+from google.protobuf import descriptor_pool as _dpool
+from google.protobuf import message_factory as _mfactory
+
+from adas_sim.check.expect import ExpectationResult
+from adas_sim.check.report import format_report_json, format_report_md, suite_passed, write_report
+from adas_sim.check.runner import (
+    ScenarioCheckResult, check_scenario, check_scenarios, default_recording_stem_for, discover_pipelines,
+)
+from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent, PortSpec
+from adas_sim.contracts.pipeline import Pipeline
+from adas_sim.contracts.scenario import (
+    EgoScenario, RoadHint, RunControl, Scenario, ScenarioContent, SensorModelRef, SutRef,
+)
+from adas_sim.core.errors import AuthoringError
+from adas_sim.core.manifest import build_manifest
+from adas_sim.sources.recorder import Recorder
+from adas_sim.sources.synthetic import SyntheticSource
+
+
+# ---------------------------------------------------------------------------
+# default_recording_for / discover_pipelines -- pure path helpers
+# ---------------------------------------------------------------------------
+
+
+def test_default_recording_stem_for_swaps_sibling_folder_with_no_extension():
+    scenario_path = Path("modules/df/tests/carla_scenarios/widget/widget_case.yaml")
+    assert default_recording_stem_for(scenario_path) == Path("modules/df/tests/carla_testruns/widget/widget_case")
+
+
+def test_default_recording_stem_for_raises_when_convention_does_not_apply():
+    with pytest.raises(AuthoringError, match="carla_scenarios"):
+        default_recording_stem_for(Path("some/other/layout/case.yaml"))
+
+
+def test_discover_pipelines_scans_modules_star_sim_pipelines(tmp_path):
+    pipeline_dir = tmp_path / "modules" / "widget" / "sim" / "pipelines"
+    pipeline_dir.mkdir(parents=True)
+    (pipeline_dir / "widget_only.yaml").write_text("name: widget_only\nstages: []\n", encoding="utf-8")
+
+    pipelines = discover_pipelines(superproject_root=tmp_path)
+    assert pipelines == {"widget_only": pipeline_dir / "widget_only.yaml"}
+
+
+# ---------------------------------------------------------------------------
+# check_scenario -- skip cases (ST-C3-3-equivalent) and the load error
+# ---------------------------------------------------------------------------
+
+
+def _write_scenario(path: Path, *, sut_pipeline: str | None = None, expect: list | None = None) -> None:
+    data = {
+        "schema": 2, "id": path.stem, "doc": "fixture",
+        "scenario": {"ego": {"speed_mps": 10.0}, "actors": []},
+        "world": {}, "sensor_model": {}, "run": {},
+        "sut": {"pipeline": sut_pipeline, "project": "base"},
+        "markers": [],
+        "expect": expect or [],
+    }
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+
+def test_check_scenario_skips_when_recording_missing(tmp_path):
+    scenario_path = tmp_path / "case.yaml"
+    _write_scenario(scenario_path, sut_pipeline="widget_only")
+
+    result = check_scenario(scenario_path, recording_path=tmp_path / "does_not_exist.mcap")
+    assert result.skipped is True
+    assert "recording not found" in result.skip_reason
+    assert result.passed is True  # a skip is not a failure
+
+
+def test_check_scenario_skips_when_no_sut_pipeline_declared(tmp_path):
+    scenario_path = tmp_path / "case.yaml"
+    _write_scenario(scenario_path, sut_pipeline=None)
+    recording_path = tmp_path / "recording.mcap"
+    recording_path.touch()  # existence is all the recording check needs here
+
+    result = check_scenario(scenario_path, recording_path=recording_path)
+    assert result.skipped is True
+    assert "sut.pipeline" in result.skip_reason
+
+
+def test_check_scenario_raises_when_named_pipeline_unknown(tmp_path):
+    scenario_path = tmp_path / "case.yaml"
+    _write_scenario(scenario_path, sut_pipeline="does_not_exist")
+    recording_path = tmp_path / "recording.mcap"
+    recording_path.touch()
+
+    with pytest.raises(AuthoringError, match="does_not_exist"):
+        check_scenario(scenario_path, recording_path=recording_path, pipelines={})
+
+
+# ---------------------------------------------------------------------------
+# check_scenario -- end to end: record a real value series, resim it, and
+# evaluate expect: against the decoded result
+# ---------------------------------------------------------------------------
+
+
+def _scalar_message_cls():
+    """A real `Scalar { x: float }` schema (mirrors
+    `test_c1c_pipeline.py`'s own `_scalar_message_cls`) -- what
+    `check/runner.py`'s eager decode actually parses."""
+    fdp = _dpb.FileDescriptorProto()
+    fdp.name = "c3_check_scalar.proto"
+    fdp.package = "adas_sim.test.c3check"
+    fdp.syntax = "proto3"
+    msg = fdp.message_type.add()
+    msg.name = "Scalar"
+    f = msg.field.add()
+    f.name, f.number, f.type = "x", 1, _dpb.FieldDescriptorProto.TYPE_FLOAT
+    f.label = _dpb.FieldDescriptorProto.LABEL_OPTIONAL
+
+    fds = _dpb.FileDescriptorSet()
+    fds.file.append(fdp)
+
+    pool = _dpool.DescriptorPool()
+    pool.Add(fdp)
+    cls = _mfactory.GetMessageClass(pool.FindMessageTypeByName("adas_sim.test.c3check.Scalar"))
+    return cls, fds.SerializeToString()
+
+
+def _widget_manifest(descriptor_set: bytes) -> ComponentManifest:
+    return ComponentManifest(
+        component="widget", version="1", abi_version=1, build_id="test",
+        inputs=(), outputs=(PortSpec(name="outputs", proto_type="adas_sim.test.c3check.Scalar"),),
+        project="base", config_bundle_sha256="", descriptor_set=descriptor_set, period_ns=0,
+    )
+
+
+def _write_widget_pipeline(path: Path, *, mode: str, component: InProcessSilComponent) -> Pipeline:
+    stages = [{"name": "widget", "mode": mode, "impl": "stub:widget", "inputs": {}}]
+    path.write_text(yaml.safe_dump({"name": "widget_only", "stages": stages}, sort_keys=False), encoding="utf-8")
+    return Pipeline.load(path, components={"widget": component})
+
+
+def _record_widget_recording(tmp_path: Path, values: list[float], *, descriptor_set: bytes, scalar_cls) -> Path:
+    manifest = _widget_manifest(descriptor_set)
+    remaining = iter(values)
+    component = InProcessSilComponent("widget", manifest, lambda dt_ns, inputs: {"outputs": scalar_cls(x=next(remaining)).SerializeToString()})
+    component.init()
+
+    record_pipeline_path = tmp_path / "record_pipeline.yaml"
+    pipeline = _write_widget_pipeline(record_pipeline_path, mode="simulate", component=component)
+
+    source = SyntheticSource([{} for _ in values])
+    recording_path = tmp_path / "recording.mcap"
+    meta = build_manifest(pipeline=pipeline, pipeline_path=record_pipeline_path, run_kind="sim", source_kind="synthetic")
+    recorder = Recorder(pipeline, source, recording_path, meta=meta)
+    recorder.open(Scenario(
+        schema=2, id="t", doc="",
+        scenario=ScenarioContent(road=RoadHint(), ego=EgoScenario(speed_mps=0.0), actors=()),
+        world={}, sensor_model=SensorModelRef(), run=RunControl(), sut=SutRef(),
+    ))
+    for _ in values:
+        recorder.tick(100_000_000)
+    recorder.close()
+    return recording_path
+
+
+def test_check_scenario_end_to_end_resims_and_evaluates_expect(tmp_path):
+    scalar_cls, descriptor_set = _scalar_message_cls()
+    values = [0.0, 0.2, 0.6, 1.0]
+    recording_path = _record_widget_recording(tmp_path, values, descriptor_set=descriptor_set, scalar_cls=scalar_cls)
+
+    check_pipeline_path = tmp_path / "check_pipeline.yaml"
+
+    def _never(dt_ns, inputs):
+        raise AssertionError("a measured stage must never execute during resim")
+
+    check_component = InProcessSilComponent("widget", _widget_manifest(descriptor_set), _never)
+    check_component.init()
+    _write_widget_pipeline(check_pipeline_path, mode="measured", component=check_component)
+
+    scenario_path = tmp_path / "case.yaml"
+    _write_scenario(scenario_path, expect=[
+        {"id": "EXP-BECOMES", "signal": "widget.outputs.x", "becomes": 1.0, "within_s": 0.15, "of": "marker.crossing"},
+        {"id": "EXP-NEVER", "signal": "widget.outputs.x", "never": 5.0},
+        {"id": "EXP-ALWAYS", "signal": "widget.outputs.x", "equals": 1.0, "always": True},
+    ])
+    raw = yaml.safe_load(scenario_path.read_text(encoding="utf-8"))
+    raw["markers"] = [{"id": "crossing", "at": {"first": "widget.outputs.x", "crosses": 0.5, "dir": "rising"}}]
+    scenario_path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+
+    result = check_scenario(
+        scenario_path, recording_path=recording_path, pipeline_path=check_pipeline_path,
+        components={"widget": check_component},
+    )
+
+    assert result.skipped is False
+    by_id = {r.id: r for r in result.results}
+    assert by_id["EXP-BECOMES"].passed is True
+    assert by_id["EXP-NEVER"].passed is True
+    assert by_id["EXP-ALWAYS"].passed is False  # x is 0.0/0.2/0.6 before it ever reaches 1.0
+    assert result.passed is False  # one failed expectation fails the scenario
+
+
+def test_check_scenarios_aggregates_a_directory(tmp_path):
+    scenario_dir = tmp_path / "scenarios"
+    scenario_dir.mkdir()
+    _write_scenario(scenario_dir / "always_one.yaml", expect=[
+        {"id": "EXP-1", "signal": "widget.outputs.x", "equals": 1.0, "always": True},
+    ])
+
+    results = check_scenarios(scenario_dir)
+    # This scenario's path is outside the carla_scenarios/carla_testruns
+    # convention (it lives directly under tmp_path), so recording
+    # resolution itself is a skip -- exercising "skip, don't crash" over a
+    # whole batch, rather than the real resim path (`test_..._end_to_end`
+    # above, which passes an explicit recording_path/pipeline_path).
+    assert len(results) == 1
+    assert results[0].skipped is True
+
+
+# ---------------------------------------------------------------------------
+# report.py -- formatting only, never re-deriving pass/fail
+# ---------------------------------------------------------------------------
+
+
+def _fake_result(scenario_id: str, *, passed: bool) -> ScenarioCheckResult:
+    expectation = ExpectationResult(
+        id="EXP-1", doc="", signal="widget.outputs.x", passed=passed,
+        detail="== 1.0 always" if passed else "was 0.0 at t=0.000s, expected always 1.0",
+        actual_value=None if passed else 0.0, actual_time_s=None if passed else 0.0,
+    )
+    return ScenarioCheckResult(scenario_id=scenario_id, scenario_path=Path(f"{scenario_id}.yaml"), skipped=False, results=(expectation,))
+
+
+def test_format_report_md_shows_pass_and_fail_marks():
+    text = format_report_md([_fake_result("a", passed=True), _fake_result("b", passed=False)])
+    assert "a" in text and "1/1 PASS" in text
+    assert "b" in text and "0/1 FAIL" in text
+    assert "✓" in text and "✗" in text
+
+
+def test_format_report_md_shows_skipped_scenarios():
+    skipped = ScenarioCheckResult(scenario_id="c", scenario_path=Path("c.yaml"), skipped=True, skip_reason="recording not found: x.mcap")
+    text = format_report_md([skipped])
+    assert "SKIPPED (recording not found: x.mcap)" in text
+
+
+def test_format_report_json_round_trips():
+    text = format_report_json([_fake_result("a", passed=True), _fake_result("b", passed=False)])
+    payload = json.loads(text)
+    assert payload[0]["scenario_id"] == "a"
+    assert payload[0]["passed"] is True
+    assert payload[1]["expectations"][0]["passed"] is False
+
+
+def test_write_report_dispatches_by_extension(tmp_path):
+    results = [_fake_result("a", passed=True)]
+    md_path = tmp_path / "report.md"
+    json_path = tmp_path / "report.json"
+
+    write_report(results, md_path)
+    write_report(results, json_path)
+
+    assert "a" in md_path.read_text(encoding="utf-8")
+    assert json.loads(json_path.read_text(encoding="utf-8"))[0]["scenario_id"] == "a"
+
+
+def test_suite_passed_is_false_if_any_scenario_fails():
+    assert suite_passed([_fake_result("a", passed=True)]) is True
+    assert suite_passed([_fake_result("a", passed=True), _fake_result("b", passed=False)]) is False

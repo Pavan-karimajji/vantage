@@ -12,8 +12,10 @@ without it, ticks execute and nothing is written; with it, `Recorder`
 --record` always has (`sim_architecture.md`'s own migration table).
 
 `--source`/`--script` reuse `cli.record`'s own stand-in for scenario-driven
-source selection (see that module's docstring -- `S-C3`'s job, not yet
-built).
+source selection (see that module's docstring) -- `--source`/`--script`
+choose which `Source` drives the run; which scenario schema section that
+choice should someday be read from is unrelated to `S-C3`'s own job (the
+schema itself, now built, `contracts/scenario.py`) and stays a stand-in.
 """
 
 from __future__ import annotations
@@ -21,12 +23,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import yaml
-
 from adas_sim.cli.record import _build_source, _tick_count
 from adas_sim.contracts.pipeline import Pipeline
+from adas_sim.contracts.scenario import load_scenario
 from adas_sim.core.manifest import build_manifest
-from adas_sim.sources.base import Scenario
 from adas_sim.sources.recorder import Recorder
 
 
@@ -40,6 +40,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ticks", type=int, help="ticks to run (defaults to --script's own length, --source synthetic only)")
     parser.add_argument("--dt-ms", type=float, default=50.0, help="tick period in milliseconds")
     parser.add_argument("--project", default="base")
+    parser.add_argument(
+        "--config", type=Path,
+        help="config path forwarded to each stage's adasInit -- adasInit(NULL)'s own bundle "
+             "resolution is S-C5, not yet built, so a real dll:/stubdll: stage needs this explicitly",
+    )
     return parser
 
 
@@ -50,29 +55,32 @@ def run(argv: list[str] | None = None) -> int:
     dt_ns = int(args.dt_ms * 1_000_000)
 
     pipeline = Pipeline.load(args.pipeline, source=source)
-    scenario_raw = yaml.safe_load(args.scenario.read_text(encoding="utf-8")) or {}
-    scenario = Scenario(name=args.scenario.stem, raw=scenario_raw)
+    pipeline.init_components(args.config)
+    scenario = load_scenario(args.scenario)
 
-    if args.record:
-        meta = build_manifest(
-            pipeline=pipeline, pipeline_path=args.pipeline, run_kind="sim", source_kind=source.name,
-            project=args.project, scenario_name=scenario.name, scenario_path=args.scenario,
-        )
-        recorder = Recorder(pipeline, source, args.record, meta=meta)
-        recorder.open(scenario)
-        try:
-            for _ in range(ticks):
-                recorder.tick(dt_ns)
-        finally:
-            recorder.close()
-        print(f"wrote {args.record}")
-    else:
-        source.start(scenario)
-        try:
-            for _ in range(ticks):
-                pipeline.step(dt_ns, source.poll())
-        finally:
-            source.stop()
+    try:
+        if args.record:
+            meta = build_manifest(
+                pipeline=pipeline, pipeline_path=args.pipeline, run_kind="sim", source_kind=source.name,
+                project=args.project, scenario_name=scenario.id, scenario_path=args.scenario,
+            )
+            recorder = Recorder(pipeline, source, args.record, meta=meta)
+            recorder.open(scenario)
+            try:
+                for _ in range(ticks):
+                    recorder.tick(dt_ns)
+            finally:
+                recorder.close()
+            print(f"wrote {args.record}")
+        else:
+            source.start(scenario)
+            try:
+                for _ in range(ticks):
+                    pipeline.step(dt_ns, source.poll())
+            finally:
+                source.stop()
+    finally:
+        pipeline.shutdown_components()
 
     print(f"run complete: {ticks} tick(s)")
     return 0

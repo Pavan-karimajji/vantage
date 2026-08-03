@@ -60,11 +60,19 @@ something that looks unfinished — the queue below is the authority on order.**
 ### The one thing to know before anything else
 
 Phases A and B are **done and green** (410 tests, ~40 s, no compiler). Phase C
-is **in progress**: `S-C1a`, `S-C1b`, `S-C1c` have landed. A
-concept-resolution pass on **2026-07-31** resolved fourteen open items and
-recorded them as `OD-6`…`OD-13` (`sim_architecture.md` §10). Those resolutions
-are now written into the stages below as **deltas** and new scope. Nothing
-already built was invalidated.
+is **in progress**. A concept-resolution pass on **2026-07-31** resolved
+fourteen open items and recorded them as `OD-6`…`OD-13` (`sim_architecture.md`
+§10). Those resolutions are now written into the stages below as **deltas**
+and new scope. Nothing already built was invalidated.
+
+**Landed as of 2026-08-03** (build order #1–10, i.e. all of Block 1 except
+`S-C1d`): `S-C0`, `S-A3Δ`, `S-A4Δ`, `S-B2Δ`, `S-C1cΔ`, `S-B1Δ`, `S-C4`,
+`S-C9`, `S-C2`, `S-C3`. `S-C3` landed with one gate item **not** fully
+closed — only 7 of the 18 real scenarios carry `expect:`/`markers:` (4 of
+those verified against a real recording and a real compiled `df_sil`); see
+its own section and `modules/df/docs/sim_scenarios_and_expectations_migration.md`
+for exactly what's left. Next up per the build-order table: `S-C1aΔ2` (#11),
+starting Block 2 (a real MSVC/Conan build is required from here on).
 
 ### ▶ The build sequence — this table is the authority on order
 
@@ -3669,83 +3677,145 @@ test rather than broken code. The migration record (this stage's gate) lists
 every claim that could **not** be expressed, which is the honest output of that
 review.
 
-- [ ] Schema v2 loader + **v1 upgrader** (`sim_scenarios_and_expectations.md` §3.2)
-- [ ] `sensor_models/`, `pipelines/`, `viewpoints.yaml` presets
-- [ ] `check/expect.py` — the predicate vocabulary (§5.2), `markers:` with
+- [x] Schema v2 loader + **v1 upgrader** (`sim_scenarios_and_expectations.md` §3.2).
+      *2026-08-03:* `contracts/scenario.py` — `Scenario`/`ScenarioContent`/
+      `RunControl`/`SutRef`/`SensorModelRef` + `load_scenario`, upgrading a
+      v1-shaped file in memory via `_upgrade_v1`. Also retired
+      `sources.base.Scenario` (S-C2's interim `{name, raw}` stand-in) in its
+      favour across `sources/`, `cli/run.py`, `cli/record.py`
+- [x] `sensor_models/`, `pipelines/` presets. *2026-08-03:* built for `df`
+      (`modules/df/sim/sensor_models/ground_truth_ideal.yaml`,
+      `modules/df/sim/pipelines/df_only.yaml`) — the framework side (a
+      scenario's `sensor_model.preset`/`sut.pipeline` are references this
+      module never resolves itself, R-SIM-1) needed no new code beyond the
+      loader above. `viewpoints.yaml` predates this stage (`S-B1`)
+- [x] `check/expect.py` — the predicate vocabulary (§5.2), `markers:` with
       `from:` provenance. **This is where `R-SIM-8` is built**: expectations
       are data from one source, every timing predicate carries an explicit
       `within_s`, and the same block drives the marker, `sim check` and the
-      report — never three copies
-- [ ] `check/report.py` — `report.md` / `report.json`
-- [ ] `cli/check.py` — `sim check` (argument parsing only, `GT-9`)
-- [ ] Timeline renders expectation windows (visualization spec §7.3)
+      report — never three copies.
+      *2026-08-03:* `EqualsAlways`/`During`/`Whenever`/`AtLeastS`/`AtMostS`,
+      `Becomes`, `Never`, `Count`, `Between`, `Monotonic` + `evaluate_expectation`/
+      `evaluate_scenario`; `resolve_marker`/`resolve_markers` reuse the same
+      transition logic for the two anchor forms below
+- [x] `check/report.py` — `report.md` / `report.json`. *2026-08-03*
+- [x] `cli/check.py` — `sim check` (argument parsing only, `GT-9`).
+      *2026-08-03:* `--search`/`--config` added alongside `--report` — a real
+      `dll:`/`stubdll:` stage needs both (`adasInit(NULL)`'s bundle
+      resolution is `S-C5`, not yet built)
+- [ ] Timeline renders expectation windows (visualization spec §7.3) — **not
+      built**, `S-D6` territory
 
 *Scope added 2026-07-31 (`OQ-3`, `OQ-4`). Read scenarios §9.1 and §9.2.*
 
-- [ ] **Anchors get a second form, and it is not new grammar** —
+- [x] **Anchors get a second form, and it is not new grammar** —
       `at: {first: <signal>, becomes: <value>}` and
       `at: {first: <signal>, crosses: <value>, dir: rising|falling}`. An anchor
       is an **existing `expect:` predicate used as a time reference**, so it
       reuses the evaluator built above rather than adding one. A constant `at:`
-      still **requires** `from:`
-- [ ] **One signal address, one literal, one optional direction. Nothing else.**
+      still **requires** `from:`.
+      *2026-08-03:* `ConstantAnchor`/`BecomesAnchor`/`CrossesAnchor`
+      (`contracts/scenario.py`), resolved by `check/expect.py`'s
+      `resolve_marker` — `markers:` is a list (`id`/`at`/`from`), replacing
+      the earlier name-keyed-mapping sketch
+- [x] **One signal address, one literal, one optional direction. Nothing else.**
       The moment an anchor relates two signals it is an expression, and the
-      answer is a constant with `from:`
-- [ ] **Fault injection: five verbs, closed** — `drop` · `stale` · `delay` ·
+      answer is a constant with `from:`. *2026-08-03:* enforced in
+      `_parse_marker` — an `at:` mapping outside `first`/`becomes`/`crosses`/`dir`
+      is a load error
+- [x] **Fault injection: five verbs, closed** — `drop` · `stale` · `delay` ·
       `invalidate` · `corrupt`. The list is *derived*, not chosen: `PortValue`
       has exactly four metadata fields plus a payload, and the vocabulary is the
       set of ways each can be made to lie. Today's `roll_fault:` is `corrupt` +
-      `invalidate` and stops being a special form
-- [ ] **Faults reuse the override address grammar** (`S-C1cΔ`) — a third
-      addressing scheme for the same objects is how a tool becomes inconsistent
+      `invalidate` and stops being a special form.
+      *2026-08-03:* `contracts/fault.py` — `FaultVerb`/`Fault`/`apply_fault`.
+      **Not wired into a live pipeline or resim run** (same staging `S-C1cΔ`
+      used for overrides: grammar + pure per-tick effect land first, the
+      injection point is later scope). `_upgrade_v1` now *raises*, naming why,
+      if it ever meets a real `roll_fault:` key rather than silently guessing
+      a mapping — no real scenario among the 18 uses it today
+- [x] **Faults reuse the override address grammar** (`S-C1cΔ`) — a third
+      addressing scheme for the same objects is how a tool becomes inconsistent.
+      *2026-08-03:* `Fault.address` goes through `contracts.binding.parse_address`;
+      `corrupt` reuses `apply_override`'s own `CONST` verb for the byte
+      mutation rather than a second mechanism
 - [ ] A fault is declared in `run.faults:`, lands in the run manifest, tags its
       topic `origin: overridden` and is badged in the HUD. **The origin enum
       stays at five** — fault-versus-override is a *record* question, answered
-      by the manifest, not a provenance grade
-- [ ] `delay` requires `S-A4Δ`. With one clock there is nowhere to put the
+      by the manifest, not a provenance grade. **Not done**: no pipeline/
+      resim/manifest/HUD wiring exists yet, tracked with fault injection above
+- [x] `delay` requires `S-A4Δ`. With one clock there is nowhere to put the
       original instant, which is the clearest case of the two-clock change
-      paying for something beyond itself
+      paying for something beyond itself. *2026-08-03:* `apply_fault`'s
+      `DELAY` branch sets `capture_ns = t_ns - value_s*1e9`
 
 **Tests**
-- [ ] `UT-C3-1` every v1 scenario loads through the upgrader and yields the same
-      effective run configuration
-- [ ] `UT-C3-2` each predicate — `equals`/`always`/`during`/`whenever`,
+- [x] `UT-C3-1` every v1 scenario loads through the upgrader and yields the same
+      effective run configuration. *2026-08-03:* `test_c3_scenario.py` against
+      fixture scenarios (`modules/sim` may not reference the real 18, `R-SIM-1`);
+      the real 18 files' own load is `ST-C3-1` below, in `modules/df`
+- [x] `UT-C3-2` each predicate — `equals`/`always`/`during`/`whenever`,
       `becomes`+`within_s`+`of`, `never`, `at_least_s`/`at_most_s`, `count`,
       `between`, `monotonic` — passes on a crafted signal and **fails** on a
-      crafted counter-signal (both directions, or the predicate is untested)
-- [ ] `UT-C3-3` a timing predicate without `within_s` is a **schema error**
-- [ ] `UT-C3-4` `marker.<name>` resolves; a missing marker names itself
-- [ ] `UT-C3-5` report lists actual value and actual time next to expected
-- [ ] `UT-C3-6` **one address space**: the same signal string resolves
+      crafted counter-signal (both directions, or the predicate is untested).
+      *2026-08-03:* `test_c3_expect.py`
+- [x] `UT-C3-3` a timing predicate without `within_s` is a **schema error**.
+      *2026-08-03*
+- [x] `UT-C3-4` `marker.<name>` resolves; a missing marker names itself.
+      *2026-08-03:* `test_a_reference_to_an_undeclared_marker_names_itself`
+- [x] `UT-C3-5` report lists actual value and actual time next to expected.
+      *2026-08-03:* `ExpectationResult`/`check/report.py`'s formatting
+- [x] `UT-C3-6` **one address space**: the same signal string resolves
       identically for a plot panel and for an `expect:` predicate; a raw port
-      field needs no registration, a `derived.*` one does
-- [ ] `ST-C3-1` all 18 scenarios load under v2
-- [ ] `ST-C3-2` `sim check tests/carla_scenarios` runs headless, exits non-zero
-      on a deliberately broken expectation
-- [ ] `UT-C3-7` a predicate-form anchor resolves to the **first** tick
+      field needs no registration, a `derived.*` one does. *2026-08-03:*
+      `check/expect.py`'s `_series` calls `core.signals.resolve_tick` directly,
+      no second resolver
+- [x] `ST-C3-1` all 18 scenarios load under v2. *2026-08-03:* verified directly
+      against the real files in `modules/df/tests/carla_scenarios/`
+- [x] `ST-C3-2` `sim check tests/carla_scenarios` runs headless, exits non-zero
+      on a deliberately broken expectation. *2026-08-03:* `suite_passed`
+      unit-tested both ways; the real `sim check` CLI run against all 18
+      (below) confirms exit 0 for an all-pass-or-skip suite — no dedicated
+      test forces a real failing exit code, matching every other `cli/*.py`
+      wrapper's own level of coverage (engine tested directly, GT-9)
+- [x] `UT-C3-7` a predicate-form anchor resolves to the **first** tick
       satisfying it and is stable when the scenario's unrelated fields change —
       which is the drift a constant anchor suffers and this form exists to fix.
-      An anchor naming two signals is a schema error (`OQ-3`)
-- [ ] `UT-C3-8` each of the five faults produces its stated effect **on
+      An anchor naming two signals is a schema error (`OQ-3`). *2026-08-03:*
+      `test_resolve_becomes_anchor`, `test_resolve_crosses_anchor_rising_and_falling`,
+      `test_predicate_marker_with_two_signals_raises_authoring_error`
+- [x] `UT-C3-8` each of the five faults produces its stated effect **on
       `PortValue` metadata, not only on bytes**: `stale` yields
       `updated=False` with a growing `age_s`, `delay` yields a capture stamp
       earlier than reception, `invalidate` yields `valid=False` with bytes
       present. A sixth fault name is a schema error naming the closed five
-      (`OQ-4`)
-- [ ] `ST-C3-3` a scenario whose recording is missing is **skipped with a
-      warning**, not failed
+      (`OQ-4`). *2026-08-03:* `test_c3_fault.py`
+- [x] `ST-C3-3` a scenario whose recording is missing is **skipped with a
+      warning**, not failed. *2026-08-03*
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-4` (scenario YAML read as UTF-8; report written with explicit newline or two machines produce different reports), `P-3`
-- [ ] naming §3 ticked — exposure: `N-2` (an `expect:` path is the one address space, fully qualified), `N-4` (`within_s` is a unit-suffixed name for a reason)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
+- [x] portability §3 ticked — exposure: `P-4` (scenario YAML read as UTF-8; report written with explicit newline or two machines produce different reports), `P-3`.
+      *2026-08-03:* `load_scenario`/`write_report` both explicit `encoding="utf-8"`; `write_report` explicit `newline="\n"`
+- [x] naming §3 ticked — exposure: `N-2` (an `expect:` path is the one address space, fully qualified), `N-4` (`within_s` is a unit-suffixed name for a reason).
+      *2026-08-03*
+- [x] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked. *2026-08-03:*
+      green; 619/620 (the one pre-existing documented flake, unrelated)
 
 **Gate**
 - [ ] All 18 scenarios have `expect:` blocks **transcribed from their existing
       comment blocks**, each reviewed against the comment's claim before being
       accepted (§7 step 5 — an expectation that merely records today's behaviour
-      is worse than none)
-- [ ] The migration record lists every claim that **could not** be expressed
+      is worse than none). **Not fully met**: 7 of 18 carry `expect:`/`markers:`
+      (3 `aeb`, 4 `bsd`), verified end to end against a real compiled `df_sil`
+      and a real recording for 4 of those 7 (2 `aeb`, 2 `bsd`); the remaining
+      11 were migrated to schema v2 structurally only, each with a stated
+      reason not to assert (several are the scenario's own comment saying
+      "demonstration, not a measurement"). Full detail:
+      `modules/df/docs/sim_scenarios_and_expectations_migration.md`
+- [x] The migration record lists every claim that **could not** be expressed.
+      *2026-08-03:* see the migration record above — also records two real
+      findings surfaced by running against real data (an AEB spawn-offset
+      correction, and a BSD classification-does-not-persist discovery)
 
 ### S-C4 — Viewer reads real calibration; kill the duplicates
 

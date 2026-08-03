@@ -1,9 +1,15 @@
 # Scenarios & Expectations — schema, sensor model, and assertions as data
 
-Status: **concept, frozen for review 2026-07-27.** Part of the simulation
-rework — see [sim_architecture.md](sim_architecture.md). This document owns the
-scenario schema and the expectation layer that turns 18 hand-watched test cases
-into a suite something can run.
+Status: **implemented (`S-C3`, landed 2026-08-03)**, concept frozen for review
+2026-07-27. Part of the simulation rework — see
+[sim_architecture.md](sim_architecture.md). This document owns the scenario
+schema and the expectation layer that turns 18 hand-watched test cases into a
+suite something can run. The schema, the upgrader, the predicate vocabulary
+and `sim check` are all built (`contracts/scenario.py`, `check/expect.py`,
+`check/runner.py`); 7 of the 18 scenarios carry `expect:` blocks so far (4
+verified against a real recording and a real compiled `df_sil`) — see
+`sim_implementation_plan.md`'s own `S-C3` section and
+`modules/df/docs/sim_scenarios_and_expectations_migration.md` for the rest.
 
 Builds on, and does not replace, two decisions that are correct and are kept:
 the engine-vs-test-data split ([df_carla_scenario_architecture.md](../../../docs/df_carla_scenario_architecture.md) §1)

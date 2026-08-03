@@ -29,7 +29,7 @@ from adas_sim.contracts import pipeline as pipeline_mod
 from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent, PortSpec
 from adas_sim.contracts.override import Override, OverrideVerb
 from adas_sim.contracts.pipeline import Pipeline
-from adas_sim.core.errors import AuthoringError, ContractError
+from adas_sim.core.errors import AuthoringError, ContractError, InternalError
 
 
 def _manifest(*, component: str, inputs=(), outputs=(), period_ns: int = 0, descriptor_set: bytes = b"") -> ComponentManifest:
@@ -750,3 +750,41 @@ def test_an_override_with_a_non_numeric_value_is_refused_naming_the_alternative(
         Pipeline.load(path, components={"consumer": _stub("consumer", consumer)})
     message = str(excinfo.value)
     assert "scenario" in message and "stub" in message
+
+
+# ---------------------------------------------------------------------------
+# S-C3 -- Pipeline.init_components/shutdown_components (a real dll:/stubdll:
+# stage needs .init() called before exec(); every earlier test injects a
+# pre-initialised InProcessSilComponent via _stub() and so never exercised
+# this -- core.resim.resim_pipeline/check.runner.check_scenario both call it
+# now for a real component to work at all).
+# ---------------------------------------------------------------------------
+
+
+def test_init_components_activates_every_stage_before_exec(tmp_path):
+    manifest = _manifest(component="widget", outputs=[PortSpec(name="out", proto_type="test.A")])
+    component = InProcessSilComponent("widget", manifest, lambda dt_ns, inputs: {"out": b"x"})
+    stages = [{"name": "widget", "mode": "simulate", "impl": "stub:widget", "inputs": {}}]
+    path = _write_pipeline(tmp_path, stages)
+    pipeline = Pipeline.load(path, components={"widget": component})
+
+    with pytest.raises(InternalError):
+        pipeline.exec(50_000_000, {})  # not yet init()'d
+
+    pipeline.init_components()
+    assert pipeline.exec(50_000_000, {})["widget"]["out"] == b"x"
+
+
+def test_shutdown_components_deactivates_every_stage(tmp_path):
+    manifest = _manifest(component="widget", outputs=[PortSpec(name="out", proto_type="test.A")])
+    component = InProcessSilComponent("widget", manifest, lambda dt_ns, inputs: {"out": b"x"})
+    stages = [{"name": "widget", "mode": "simulate", "impl": "stub:widget", "inputs": {}}]
+    path = _write_pipeline(tmp_path, stages)
+    pipeline = Pipeline.load(path, components={"widget": component})
+
+    pipeline.init_components()
+    pipeline.exec(50_000_000, {})  # proves init worked
+    pipeline.shutdown_components()
+
+    with pytest.raises(InternalError):
+        pipeline.exec(50_000_000, {})

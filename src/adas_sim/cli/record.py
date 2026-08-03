@@ -11,10 +11,12 @@ executes a SUT: no") -- there is no pipeline here at all, only a `Source`
 
 `--source`/`--script` are `S-C2`'s own stand-in for scenario-driven source
 selection (a `world.<name>:` block naming which world model produced a
-scenario, `R-SIM-9`) -- that's `S-C3`'s job ("Scenario schema v2"), not yet
-built. `synthetic` needs a scripted YAML of per-tick bytes (`--script`,
-`SyntheticSource.from_yaml`); `carla` (`S-C2` slice 5) drives the scenario
-file itself and needs no `--script`.
+scenario, `R-SIM-9`) -- reading that choice from the scenario itself
+(`contracts.scenario.Scenario.world`, built at `S-C3`) rather than a CLI
+flag is future CLI wiring, not part of the schema stage. `synthetic` needs
+a scripted YAML of per-tick bytes (`--script`, `SyntheticSource.from_yaml`);
+`carla` (`S-C2` slice 5) drives the scenario file itself and needs no
+`--script`.
 """
 
 from __future__ import annotations
@@ -22,11 +24,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import yaml
-
+from adas_sim.contracts.scenario import load_scenario
 from adas_sim.core.errors import AuthoringError
 from adas_sim.core.manifest import build_manifest
-from adas_sim.sources.base import Scenario
 from adas_sim.sources.recorder import Recorder
 from adas_sim.sources.synthetic import SyntheticSource
 
@@ -82,12 +82,11 @@ def run(argv: list[str] | None = None) -> int:
     ticks = _tick_count(args, source)
     dt_ns = int(args.dt_ms * 1_000_000)
 
-    scenario_raw = yaml.safe_load(args.scenario.read_text(encoding="utf-8")) or {}
-    scenario = Scenario(name=args.scenario.stem, raw=scenario_raw)
+    scenario = load_scenario(args.scenario)
 
     meta = build_manifest(
         run_kind="sim", source_kind=source.name, project=args.project,
-        scenario_name=scenario.name, scenario_path=args.scenario, recording_path=None,
+        scenario_name=scenario.id, scenario_path=args.scenario, recording_path=None,
     )
     recorder = Recorder(None, source, args.output, meta=meta)
 
