@@ -65,6 +65,51 @@ def test_a_state_lane_draws_a_band_and_its_marker():
     assert not np.array_equal(with_state, without_marker)
 
 
+def test_an_expectation_window_changes_the_rendered_pixels():
+    """§7.3: "expected windows drawn as translucent spans" -- a window on
+    a lane's own address changes what that lane draws."""
+    series = ((0, "OFF"), (20, "NORMAL"))
+    without_window = render_timeline(
+        signal_series={}, state_series={"test.warning": series}, markers={},
+        bookmark_ticks=(), current_tick=0, head_tick=49, size_px=_SIZE_PX,
+    )
+    with_window = render_timeline(
+        signal_series={}, state_series={"test.warning": series}, markers={},
+        bookmark_ticks=(), current_tick=0, head_tick=49, size_px=_SIZE_PX,
+        expectation_windows={"test.warning": ((5, 15, True),)},
+    )
+    assert not np.array_equal(without_window, with_window)
+
+
+def test_a_passing_and_a_failing_expectation_window_render_differently():
+    """Green vs red -- "so a pass/fail is visible rather than computed"
+    (§7.3) has to actually mean two different colours, not one badge."""
+    series = ((0, "OFF"), (20, "NORMAL"))
+    passing = render_timeline(
+        signal_series={}, state_series={"test.warning": series}, markers={},
+        bookmark_ticks=(), current_tick=0, head_tick=49, size_px=_SIZE_PX,
+        expectation_windows={"test.warning": ((5, 15, True),)},
+    )
+    failing = render_timeline(
+        signal_series={}, state_series={"test.warning": series}, markers={},
+        bookmark_ticks=(), current_tick=0, head_tick=49, size_px=_SIZE_PX,
+        expectation_windows={"test.warning": ((5, 15, False),)},
+    )
+    assert not np.array_equal(passing, failing)
+
+
+def test_an_expectation_window_on_an_unlanned_signal_renders_nothing_extra():
+    """A window keyed by a signal that is not lane'd has nowhere to draw
+    -- absent, not an error and not drawn elsewhere by guesswork."""
+    blank = _blank_render()
+    still_blank = render_timeline(
+        signal_series={}, state_series={}, markers={}, bookmark_ticks=(),
+        current_tick=0, head_tick=49, size_px=_SIZE_PX,
+        expectation_windows={"nobody.lanes.this": ((5, 15, True),)},
+    )
+    assert np.array_equal(blank, still_blank)
+
+
 def test_px_to_tick_round_trips_at_the_ends_and_middle():
     size_px = (600, 200)
     head_tick = 49

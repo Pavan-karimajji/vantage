@@ -139,6 +139,16 @@ def test_equals_always_passes_and_fails():
     assert result.actual_time_s == pytest.approx(0.2)
 
 
+def test_equals_always_reports_no_window_s():
+    """A predicate with no single fixed span never guesses one
+    (`NR-SIM-4`) -- `always`/`whenever`/`never`/`count`/`between`/
+    `monotonic`/`at_least_s`/`at_most_s` all stay `window_s=None`; only
+    `during`/`becomes` (their own dedicated tests) have one."""
+    ticks = _ticks([1, 1, 1, 1])
+    exp = parse_expectation({"id": "E", "signal": "widget.outputs.value", "equals": 1, "always": True}, where="t")
+    assert evaluate_expectation(exp, ticks, markers={}).window_s is None
+
+
 def test_equals_during_passes_and_fails():
     ticks = _ticks([0, 0, 0, 1, 1])  # off until t=0.3, then on
     exp = parse_expectation(
@@ -146,6 +156,18 @@ def test_equals_during_passes_and_fails():
     )
     assert evaluate_expectation(exp, ticks, markers={"entry": 0.2}).passed is True
     assert evaluate_expectation(exp, ticks, markers={"entry": 0.35}).passed is False
+
+
+def test_equals_during_reports_its_window_s():
+    """The timeline overlay's own input (`render/timeline.py` §7.3): a
+    `during:` span's window_s is exactly its resolved [start, end], marker
+    bounds included, regardless of pass/fail."""
+    ticks = _ticks([0, 0, 0, 1, 1])
+    exp = parse_expectation(
+        {"id": "E", "signal": "widget.outputs.value", "equals": 0, "during": [0.0, "marker.entry"]}, where="t",
+    )
+    result = evaluate_expectation(exp, ticks, markers={"entry": 0.35})
+    assert result.window_s == (0.0, 0.35)
 
 
 def test_equals_whenever_passes_and_fails():
@@ -216,6 +238,19 @@ def test_becomes_never_reaching_value_fails():
     result = evaluate_expectation(exp, ticks, markers={"entry": 0.1})
     assert result.passed is False
     assert "never became" in result.detail
+
+
+def test_becomes_reports_its_window_s_symmetric_around_the_anchor():
+    """The timeline overlay's own input: `becomes ... within_s ... of:`
+    passes on `abs(actual - expected) <= within_s` (evaluate_expectation's
+    own condition) -- so its window is symmetric around the anchor, not a
+    one-sided deadline extending only forward."""
+    ticks = _ticks([0, 0, 1, 1, 1])
+    exp = parse_expectation(
+        {"id": "E", "signal": "widget.outputs.value", "becomes": 1, "within_s": 0.05, "of": "marker.entry"}, where="t",
+    )
+    result = evaluate_expectation(exp, ticks, markers={"entry": 0.2})
+    assert result.window_s == pytest.approx((0.15, 0.25))
 
 
 def test_a_reference_to_an_undeclared_marker_names_itself():

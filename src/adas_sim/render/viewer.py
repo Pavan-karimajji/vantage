@@ -147,6 +147,8 @@ from pathlib import Path
 import numpy as np
 from PySide6 import QtCore, QtGui, QtWidgets
 
+from adas_sim.check.expect import ExpectationResult, evaluate_scenario
+from adas_sim.contracts.scenario import Scenario, load_scenario
 from adas_sim.core.history import Interaction
 from adas_sim.core.runner import (
     LoadCancelled, SceneCache, build_reactive_layers, build_session_from_recording, build_static_scene,
@@ -726,6 +728,24 @@ class PlotPanel(QtWidgets.QDockWidget):
         self.seek_requested.emit(px_to_tick(x, self.size_px, self._head_tick))
 
 
+def _index_expectation_windows(
+    scenario: Scenario | None, session: Session,
+) -> dict[str, tuple[ExpectationResult, ...]]:
+    """`scenario`'s own `expect:` block, evaluated once against
+    `session.ticks` (`evaluate_scenario` -- the same call `sim check` makes,
+    `R-SIM-8`'s "one evaluator, five consumers" extended to the viewer) and
+    indexed by signal address for `_rerender_timeline`'s per-lane lookup.
+    `{}` when no `--scenario` was given -- the overlay is then simply
+    absent, never a guessed pass (`NR-SIM-4`)."""
+    if scenario is None:
+        return {}
+    windows: dict[str, list[ExpectationResult]] = {}
+    for result in evaluate_scenario(scenario, session.ticks):
+        if result.window_s is not None:
+            windows.setdefault(result.signal, []).append(result)
+    return {signal: tuple(results) for signal, results in windows.items()}
+
+
 class MainWindow(QtWidgets.QMainWindow):
     """Vantage's window (`sim_player.md` names the application). A
     **dockable peer-panel grid** (`sim_visualization_spec.md` §11.1) -- today
@@ -738,6 +758,7 @@ class MainWindow(QtWidgets.QMainWindow):
                  max_age_s: dict[str, float] | None = None,
                  preset: str | None = None,
                  initial_at_s: float | None = None,
+                 scenario_path: Path | None = None,
                  parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Vantage")
@@ -748,6 +769,24 @@ class MainWindow(QtWidgets.QMainWindow):
         #: request than the shipped default, so it wins).
         self._initial_preset = preset
         self._initial_at_s = initial_at_s
+        # `--scenario` (`sim_visualization_spec.md` SS7.3's expectation
+        # windows): explicit, never guessed -- a recording's own run
+        # manifest carries only the scenario's NAME (`RunManifest.scenario`),
+        # not a path back to the file. Loaded eagerly (a malformed file is
+        # an authoring bug, not the same failure mode as `--scenario` simply
+        # not given, same distinction `workspace_path` draws below);
+        # evaluated against `session.ticks` lazily in `_on_loaded`, once,
+        # since the scenario alone has nothing to evaluate against yet.
+        self._scenario: Scenario | None = (
+            load_scenario(scenario_path) if scenario_path is not None else None
+        )
+        #: signal address -> every `ExpectationResult` naming it with a
+        #: drawable `window_s` (`check/expect.py`) -- several expectations
+        #: can share one signal (`sim_mergein_vlat025.yaml`'s own `EXP-1`/
+        #: `EXP-2` both address `left.warning`), so this is a list per
+        #: address, not a single result. Populated once in `_on_loaded`,
+        #: read (never re-evaluated) by `_rerender_timeline`.
+        self._expectation_windows: dict[str, tuple[ExpectationResult, ...]] = {}
         # §10's ego-state line and stale-port max-age both need a value the
         # framework does not have on its own (R-SIM-1) -- a signal address
         # per HUD field, and a calibration seconds-value per port. Both
@@ -918,6 +957,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._scene_cache = SceneCache(self._build_scene_for_cache, build_reactive=self._build_reactive_for_cache)
         self._stop_thread()
         self.layers_state.load(layers_state_path(self._project, session.meta.pipeline))
+        self._expectation_windows = _index_expectation_windows(self._scenario, session)
         # head_tick pinned to the last tick: the whole recording is already
         # loaded (pass 1 already ran), so there is nothing left to "execute"
         # -- `_advance_for_transport` exists only to satisfy Transport's
@@ -1089,11 +1129,24 @@ class MainWindow(QtWidgets.QMainWindow):
                       if addr in self._signal_series_cache}
         markers = {addr: event_markers(series) for addr, series in state_data.items()}
         bookmark_ticks = tuple(b.tick_index for b in self.timeline_state.bookmarks())
+        # seconds -> ticks is `render/timeline.py`'s one thing it cannot do
+        # itself (it draws pixels, not a `Session`, `R-SIM-13`) -- done here,
+        # the one place both `self._expectation_windows` (seconds,
+        # `check.expect.ExpectationResult.window_s`) and `self._session`
+        # (`seek_ns`) are both in scope.
+        expectation_windows = {
+            addr: tuple(
+                (self._session.seek_ns(int(r.window_s[0] * 1e9)), self._session.seek_ns(int(r.window_s[1] * 1e9)), r.passed)
+                for r in self._expectation_windows[addr]
+            )
+            for addr in (*signal_data, *state_data) if addr in self._expectation_windows
+        }
         self.timeline_strip._head_tick = self.transport.head_tick
         frame = render_timeline(
             signal_series=signal_data, state_series=state_data, markers=markers,
             bookmark_ticks=bookmark_ticks, current_tick=self.transport.cursor,
             head_tick=self.transport.head_tick, size_px=self.timeline_strip.size_px,
+            expectation_windows=expectation_windows,
         )
         self.timeline_strip.show_frame(frame)
 

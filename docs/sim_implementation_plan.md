@@ -3708,8 +3708,20 @@ review.
       *2026-08-03:* `--search`/`--config` added alongside `--report` — a real
       `dll:`/`stubdll:` stage needs both (`adasInit(NULL)`'s bundle
       resolution is `S-C5`, not yet built)
-- [ ] Timeline renders expectation windows (visualization spec §7.3) — **not
-      built**, `S-D6` territory
+- [x] Timeline renders expectation windows (visualization spec §7.3).
+      *2026-08-03 follow-up:* `ExpectationResult.window_s` (`check/expect.py`)
+      -- populated only for the two predicate shapes with a genuine fixed
+      span (`becomes ... within_s ... of:`, symmetric around the anchor;
+      `equals ... during: [a, b]`), `None` for the other eight rather than
+      a guessed one (`NR-SIM-4`). `sim view --scenario <path>` (explicit,
+      never auto-discovered -- a recording's own run manifest carries only
+      the scenario's NAME, not a path back to the file) evaluates it once
+      against the loaded `Session` (`render/viewer._index_expectation_windows`,
+      the same `evaluate_scenario` call `sim check` makes, `R-SIM-8`'s "one
+      evaluator" extended to the viewer); `render/timeline.render_timeline`
+      draws each window as a translucent span, green if that expectation
+      passed and red if it failed -- "so a pass/fail is visible rather than
+      computed" is the spec's own words, not a badge added on top.
 
 *Scope added 2026-07-31 (`OQ-3`, `OQ-4`). Read scenarios §9.1 and §9.2.*
 

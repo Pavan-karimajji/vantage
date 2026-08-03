@@ -23,12 +23,13 @@ def launch(
     workspace_path: Path | None = None,
     preset: str | None = None,
     at_s: float | None = None,
+    scenario_path: Path | None = None,
 ) -> int:
     set_high_dpi_policy()
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     window = MainWindow(
         recording, project=project, workspace_path=workspace_path,
-        preset=preset, initial_at_s=at_s,
+        preset=preset, initial_at_s=at_s, scenario_path=scenario_path,
     )
     window.show()
     return app.exec()

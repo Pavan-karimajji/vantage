@@ -40,6 +40,8 @@ _MARKER_COLOR = "#ffb000"
 _PLAYHEAD_COLOR = "#ffffff"
 _BOOKMARK_COLOR = "#66ff99"
 _STATE_BAND_COLOR = "#3c5a80"
+_EXPECTATION_PASS_COLOR = "#2ecc71"
+_EXPECTATION_FAIL_COLOR = "#e74c3c"
 
 
 def render_timeline(
@@ -51,11 +53,27 @@ def render_timeline(
     current_tick: int,
     head_tick: int,
     size_px: tuple[int, int],
+    expectation_windows: dict[str, tuple[tuple[int, int, bool], ...]] | None = None,
 ) -> np.ndarray:
     """One row per lane (signal lanes first, then state lanes), all
     sharing the same fixed `[0, head_tick]` x-axis (`§7.3`'s "synced
     strip"). Pure function of its arguments -- no window, no state held
-    between calls, matching `render/bev.render_scene`'s own discipline."""
+    between calls, matching `render/bev.render_scene`'s own discipline.
+
+    `expectation_windows`, keyed by the same lane address, is a
+    `(start_tick, end_tick, passed)` triple per expectation with a
+    drawable span (`check.expect.ExpectationResult.window_s`, already
+    converted from seconds by the caller -- this module draws pixels, it
+    does not own a `Session` to do that conversion itself, `R-SIM-13`).
+    Drawn first, low-alpha, full lane height, so the lane's own signal
+    line / state bands / markers sit visibly on top -- "expected windows
+    drawn as translucent spans, so a pass/fail is visible rather than
+    computed" (`sim_visualization_spec.md` §7.3), green if that
+    expectation passed, red if it failed. Several expectations can name
+    one signal (a `during:` and a `becomes:` on the same warning port),
+    so this is a tuple per address, not a single window.
+    """
+    expectation_windows = expectation_windows or {}
     lane_names = [*signal_series, *state_series]
     n_lanes = max(1, len(lane_names))
     dpi = 100
@@ -74,11 +92,17 @@ def render_timeline(
             spine.set_visible(False)
         return ax
 
+    def _draw_expectation_windows(ax, name: str) -> None:
+        for start_tick, end_tick, passed in expectation_windows.get(name, ()):
+            color = _EXPECTATION_PASS_COLOR if passed else _EXPECTATION_FAIL_COLOR
+            ax.axvspan(start_tick, end_tick, color=color, alpha=0.22, zorder=0)
+
     axes = []
     row = 0
     for name, series in signal_series.items():
         ax = _new_lane_axes(row)
         row += 1
+        _draw_expectation_windows(ax, name)
         xs = [t for t, _ in series]
         ys = [v for _, v in series]
         ax.plot(xs, ys, color=_SIGNAL_COLOR, linewidth=1.2)
@@ -90,6 +114,7 @@ def render_timeline(
     for name, series in state_series.items():
         ax = _new_lane_axes(row)
         row += 1
+        _draw_expectation_windows(ax, name)
         for i, (tick_index, value) in enumerate(series):
             end = series[i + 1][0] if i + 1 < len(series) else head_tick + 1
             ax.axvspan(tick_index, end, color=_STATE_BAND_COLOR, alpha=0.5)

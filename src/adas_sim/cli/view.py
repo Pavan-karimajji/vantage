@@ -21,6 +21,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--workspace", type=Path, default=None, help="a component's sim/workspace.yaml")
     parser.add_argument("--preset", default=None, help="a view.viewport.DEFAULT_PRESETS name")
     parser.add_argument("--at", type=float, default=None, help="seconds into the recording to open at")
+    parser.add_argument(
+        "--scenario", type=Path, default=None,
+        help="the scenario YAML this recording was run against -- draws its expect: windows on the "
+             "timeline strip (sim_visualization_spec.md SS7.3). Explicit, never guessed: a recording's "
+             "own run manifest carries only the scenario's name (RunManifest.scenario), not a path back "
+             "to the file",
+    )
     return parser
 
 
@@ -34,5 +41,5 @@ def run(argv: list[str] | None = None) -> int:
 
     return launch(
         args.session, project=args.project, workspace_path=args.workspace,
-        preset=args.preset, at_s=args.at,
+        preset=args.preset, at_s=args.at, scenario_path=args.scenario,
     )

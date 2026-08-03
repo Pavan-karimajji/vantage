@@ -358,7 +358,20 @@ def _count_transitions_into(series: Sequence[tuple[float, object]], value: objec
 class ExpectationResult:
     """One expectation's outcome (SS5.4): the actual value/time next to the
     expected ones, so a report row never needs a second run to explain a
-    failure."""
+    failure.
+
+    `window_s` is a **fixed, drawable time span**, populated only for the
+    two predicate shapes that actually have one: `becomes ... within_s ...
+    of:` (symmetric around the anchor -- `evaluate_expectation`'s own pass
+    condition is `abs(actual - expected) <= within_s`, not one-sided) and
+    `equals ... during: [a, b]` (the span itself). The other eight
+    predicates (`always`, `whenever`, `never`, `count`, `between`,
+    `monotonic`, `at_least_s`, `at_most_s`) have no single fixed span to
+    draw and stay `None` -- never a guessed one (`NR-SIM-4`). This is what
+    `render/timeline.py`'s expectation-window overlay draws
+    (`sim_visualization_spec.md` §7.3): "expected windows drawn as
+    translucent spans, so a pass/fail is visible rather than computed."
+    """
 
     id: str
     doc: str
@@ -368,6 +381,7 @@ class ExpectationResult:
     actual_value: object = None
     actual_time_s: float | None = None
     expected_time_s: float | None = None
+    window_s: tuple[float, float] | None = None
 
     def __repr__(self) -> str:
         return f"<ExpectationResult id={self.id!r} passed={self.passed}>"
@@ -399,6 +413,7 @@ def evaluate_expectation(
     actual_time_s: float | None = None
     actual_value: object = None
     detail: str
+    window_s: tuple[float, float] | None = None
 
     if isinstance(predicate, EqualsAlways):
         passed, actual_time_s, actual_value, detail = _eval_equals_always(series, predicate.value)
@@ -407,6 +422,7 @@ def evaluate_expectation(
         lo = _bound_seconds(predicate.start, markers=markers, where=f"expect '{expectation.id}' during[0]")
         hi = _bound_seconds(predicate.end, markers=markers, where=f"expect '{expectation.id}' during[1]")
         passed, actual_time_s, actual_value, detail = _eval_span(series, predicate.value, lo=lo, hi=hi, label="during")
+        window_s = (lo, hi)
 
     elif isinstance(predicate, EqualsWhenever):
         cond_series = _series(ticks, predicate.condition.signal, project=project)
@@ -469,6 +485,7 @@ def evaluate_expectation(
         return ExpectationResult(
             id=expectation.id, doc=expectation.doc, signal=expectation.signal, passed=passed, detail=detail,
             actual_value=actual_value, actual_time_s=actual_time_s, expected_time_s=expected_t,
+            window_s=(expected_t - predicate.within_s, expected_t + predicate.within_s),
         )
 
     elif isinstance(predicate, Never):
@@ -522,7 +539,7 @@ def evaluate_expectation(
 
     return ExpectationResult(
         id=expectation.id, doc=expectation.doc, signal=expectation.signal, passed=passed, detail=detail,
-        actual_value=actual_value, actual_time_s=actual_time_s,
+        actual_value=actual_value, actual_time_s=actual_time_s, window_s=window_s,
     )
 
 
