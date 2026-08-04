@@ -53,5 +53,6 @@ platform-neutral and runs identically on Windows and Ubuntu
 | `FR_SIM_45_argument_binding_survey.py` | `FR-SIM-45`, `FR-SIM-46` | How much hand-written configuration one `exec()` call costs when a tool must bind to an opaque DLL — the measured basis for the closed override verb list and for `sim probe` |
 | `check_traceability.py` | all | Every `UT-`/`ST-`/`GT-` cited in the register exists in the plan; every requirement names a verifier; every stage's tests are reachable |
 | `check_rules_coverage.py` | all | Every `R-SIM-n` is cited by at least one requirement and one stage; no requirement is orphaned from the rules |
+| `check_requirement_coverage.py` | all | How much of each requirement is actually **proven** today, derived from the plan's own ticks — `check_traceability.py` proves a verifier *exists*, this one reports whether it has been *done*. Fails only on a verifier that resolves to no unit of work, or a non-parked row with no `Verified by`; low coverage is a status report, not a failure |
 | `check_doc_invariants.py` | `R-SIM-1`, `NR-SIM-33` | No function name leaks into framework-owned prose paths; no absolute machine path; no company name; every internal doc link resolves |
 | `run_all.py` | — | Runs all of the above, writes one log, returns non-zero on any check failure |

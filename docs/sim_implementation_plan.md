@@ -57,10 +57,49 @@ of *why* these were missed is in `S-B1`'s delta note — it generalises.
 section first and start at the top of the queue. Do not scan the document for
 something that looks unfinished — the queue below is the authority on order.**
 
+### ⚠ Audited 2026-08-04 — read this box before the queue
+
+A full-scope audit (`.claude/prompts/sim_system_audit_and_replan.md`) ran on a
+machine **with** MSVC 2026 + Conan + CMake and rebuilt every module in `GT-4`'s
+matrix for real. Two things changed in this document as a result:
+
+1. **`S-C5` is not "believed complete, unverified" — it is incomplete and
+   red.** `df` gtest is **236/238**; the two failures are `S-C5`'s own
+   assertions. One root cause, diagnosed below. Its checkboxes stay unticked
+   and it stays the current stage.
+2. **`GT-4`'s matrix was re-measured end to end** — every blank row is now
+   filled with a real number, and one row was found to be *unrunnable as
+   written*. See §2.
+3. **"Phase D not started" was wrong.** `S-D7` is **17 of 27 boxes done** —
+   `io/base.py`, `io/csv.py`, `cli/convert.py`, `cli/export.py`, `UT-D7-1..6`
+   and `ST-D7-1`/`ST-D7-4`, with 15 passing tests. It landed out of build
+   order as a by-product of `S-C5`'s recorder work and nothing recorded it, so
+   both this document and `plan.md` said Phase D was untouched. **Nothing is
+   wrong with the work** — it is real and green. What was wrong is that a
+   session reading the queue would have re-implemented it. See `S-D7`.
+4. **The master requirements register was walked row by row for the first
+   time** (audit angle 1, added to the prompt on the same date). Its findings
+   live in `sim_requirements.md` §0a, and the coverage question is now
+   mechanical — `docs/py/check_requirement_coverage.py`, wired into
+   `run_all.py`. Headline: **24 of 77 requirements proven, 12 partial, 31
+   unproven**; ten of seventeen `P0` rows have zero verifiers done.
+
+Everything else landed (build order #1–12) re-verified green: `pytest` 649
+passed / 3 skipped, `check_invariants.py` clean, `docs/py/run_all.py` clean,
+`GT-5` byte-identity clean across all eight machinery files.
+
+**The environment note that misled the last session is now resolved.** `S-C5`
+was implemented in a shell with no MSVC and no Conan, and its own note says so
+honestly. That shell was WSL; **this repo's Windows shell has the full
+toolchain** (`conan`, `cmake`, VS 2026 Community). A session that cannot build
+should re-check the *Windows* shell before recording "no compiler here" — in
+`S-C5`'s case the toolchain was one shell away, and the cost was a stage
+landing red without anyone knowing for a day.
+
 ### The one thing to know before anything else
 
-Phases A and B are **done and green** (410 tests, ~40 s, no compiler). Phase C
-is **in progress**. A concept-resolution pass on **2026-07-31** resolved
+Phases A and B are **done and green** (no compiler needed). Phase C is
+**in progress**. A concept-resolution pass on **2026-07-31** resolved
 fourteen open items and recorded them as `OD-6`…`OD-13` (`sim_architecture.md`
 §10). Those resolutions are now written into the stages below as **deltas**
 and new scope. Nothing already built was invalidated.
@@ -103,13 +142,12 @@ generator's first cut had (per-function dispatch fan-out not narrowed to
 tests), in the stage's own section below. Next up per the build-order table:
 `S-C5` (#13), the packed config bundle.
 
-**`S-C5` (#13) — Milestone 1 (the original 7 scope boxes) implemented
-2026-08-04, not yet tick-verified against a real `df_sil` build.** This
-session's environment has no Conan/MSVC (nor a Linux C++ toolchain wired to
-`AdasInterfaces`/`AdasSharedConfig`), so the C++ side could not be compiled
-or gtest-run for real — the per-stage loop's own discipline ("tick only
-what you verified") is why none of this stage's checkboxes are ticked yet,
-even though the code is believed complete. What landed: `interfaces/
+**▶ `S-C5` (#13) — IN PROGRESS, C++ half RED. This is where the next session
+starts.** Milestone 1 (the original 7 scope boxes) was implemented 2026-08-04
+in a shell with no C++ toolchain, so it was landed unticked and unverified.
+The 2026-08-04 audit built it for real and found it **incomplete, not merely
+unproven** — see the *"What the real build found"* block immediately after
+this paragraph, which is the actionable part. What landed: `interfaces/
 scripts/pack_config_bundle.py` + `cmake/config_bundle_pack.cmake` (the P-9
 hash algorithm, smoke-tested standalone: determinism, CRLF normalization,
 case-only-rename sensitivity, self-exclusion of `bundle.sha256`); `df`'s
@@ -146,14 +184,77 @@ half of `ST-C5-1` against a minimal, dependency-free fixture library
 at test time) whose `adasInit`/`adasManifest` bodies deliberately mirror
 `df_interface_c.cpp`'s own S-C5 logic — evidence for the mechanism, not a
 substitute for the real `df_sil` proof. Full `pytest`/`check_invariants.py`/
-`docs/py/run_all.py` green (558 tests, +8 from this stage). **Deferred by
+`docs/py/run_all.py` green. *(The "558 tests" originally recorded here was
+wrong — `S-C1d`, an earlier stage, had already recorded 643. Re-measured
+2026-08-04: **652 collected, 649 passed, 3 skipped.** The 3 skips are
+`tests/system/test_c5_relocatability.py`, which needs `g++` and therefore
+**skips silently on Windows** — so this stage's one Python-side system test
+does not run at all on the primary dev platform. See `P-6`/`P-10`; a
+`pytest.skip` that is unreachable on the platform the team uses is a test that
+exists only in principle.)* **Deferred by
 explicit scope choice, not started:** the 2026-07-31 addendum (`OD-11`
 project/ego-param agreement across a multi-component pipeline, `OD-12`
 `<COMPONENT>_<FN>_PERIOD_US` read from the bundle and reported per-function
 through `buildManifest()` at runtime) — `UT-C5-6/7/10/11/12`, `ST-C5-2`.
-**Next action for a session with a real C++ toolchain:** build `df_sil`,
-run `df_tests`, confirm the updated gtest assertions, then tick this
-stage's own checkboxes with the date.
+
+#### What the real build found — `S-C5`'s actual defect (2026-08-04 audit)
+
+`python scripts/build.py df -t gtest -p vs2026 -P base` → **236/238, two
+failures**, both `S-C5`'s own new assertions:
+
+| Test | Symptom |
+|---|---|
+| `GenericAbiTest.AdasInitResolvesThePackedBundle` | `adasInit(nullptr)` returns `NULL` |
+| `ManifestTest.CarriesComponentIdentityAndDeclaredRate` | `config_bundle_sha256()` is `""`, expected 64 hex chars |
+
+**One root cause: the bundle does not travel with the DLL.** It is written
+into df_sil's *own* build directory by the `POST_BUILD` step and nowhere
+else. Two consequences, both observed on disk:
+
+- `modules/df/tests/CMakeLists.txt:95` copies `$<TARGET_FILE:df_sil>` next to
+  `df_tests.exe` **without** `config/`. There are now two `df_sil.dll` on
+  disk — `src/platform/df_sil/Release/` (has `config/`) and `tests/Release/`
+  (does not). `resolveOwnLibraryDir()` is working *correctly*: it resolves to
+  the copy that is actually loaded, which is the one with no bundle. The test's
+  own header comment asserts the opposite and is wrong.
+- `modules/df/src/platform/df_sil/CMakeLists.txt` has **no `install()` rule
+  for `config/`** — only `install(TARGETS df_sil)`, `install(FILES
+  df_interface_c.h)` and `install(FILES df_sil.ports.yaml DESTINATION
+  share/adas-df)`. So the bundle is **absent from the Conan package**, and any
+  consumer resolving `df_sil.dll` through Conan (which is how `sil_host` gets
+  it) can never satisfy `adasInit(NULL)`.
+
+**This is the exact gap `S-C1b`'s delta already found and handed to this
+stage** — *"there is only `install(FILES … DESTINATION share/adas-df)`;
+nothing lands in `$<TARGET_FILE_DIR:df_sil>` … Recommend unticking and letting
+`S-C5` own it"*. `S-C5` then implemented the `POST_BUILD` half and not the
+`install()` half. Verified independently: `df_manifest_dump.exe` run **from**
+df_sil's own Release directory emits a correct manifest byte-identical to the
+checked-in `df_sil.ports.yaml`, so the packing logic and the hash are right —
+only the *delivery* is missing.
+
+**Do this, in order:**
+
+1. Make the bundle a first-class output that follows the library:
+   `install(DIRECTORY $<TARGET_FILE_DIR:df_sil>/config/ DESTINATION
+   bin/config)` (or the `resdirs` equivalent the `conanfile.py` already
+   declares), **and** extend `modules/df/tests/CMakeLists.txt`'s POST_BUILD
+   copy to bring `config/` with the DLL. Both, not either — they are two
+   different consumers.
+2. Re-run `python scripts/build.py df -t gtest -p vs2026 -P base` and confirm
+   **238/238**.
+3. Only then tick this stage's Milestone-1 boxes with the date.
+4. `ST-C5-1` (relocatability) is now a **real** test rather than a formality:
+   with (1) done it can copy the *installed* tree, not the build tree. It is
+   this stage's gate and it closes `plan.md` item 19.
+
+**Do not** "fix" this by making `adasInit(NULL)` search parent directories or
+the source checkout. That reintroduces exactly the silently-defaulted
+calibration `S-C1b`'s delta removed, and it would make `R-SIM-3a`'s "the two
+readers provably read the same bytes" unprovable again.
+
+**Then** Milestone 2 (the deferred `OD-11`/`OD-12` addendum above) — unchanged
+in scope, still `UT-C5-6/7/10/11/12` and `ST-C5-2`.
 
 ### ▶ The build sequence — this table is the authority on order
 
@@ -201,6 +302,14 @@ Then Phase D, in id order — **except that `S-D5` is blocked on a decision, not
 a stage** (`NR-SIM-46`; see its entry condition), and `S-D2` is deferred with a
 named trigger.
 
+> **`S-D7` is already 17/27 done** (2026-08-04 audit). Its writer/export/convert
+> half — `io/base.py`, `io/csv.py`, `cli/convert.py`, `cli/export.py`,
+> `UT-D7-1..6`, `ST-D7-1`, `ST-D7-4` — landed out of order as a by-product of
+> `S-C5`'s recorder work, with 15 passing tests. What remains is the
+> **isolation and batch** half: `sim batch`, per-recording subprocesses,
+> crash/timeout classification (`NR-SIM-22`, `P0`) and `ST-D7-2`/`ST-D7-3`/
+> `ST-D7-5..7`. Do **not** re-implement the export side; read the ticks first.
+
 #### The four id-order deviations, in one place
 
 | Built as | Id order would say | Reason |
@@ -222,6 +331,45 @@ override *engine* (verbs, grammar, application, manifest tagging) belongs to
 toggle, `sim probe`, the severed-chain badge. Building the engine at `S-D6`
 instead would mean `S-C3`'s fault injection has no grammar to reuse, and the
 verbs would be written twice.
+
+### ▶▶ RESUME MARKER — 2026-08-04 audit. Start here, in this order.
+
+**1. Finish `S-C5` (#13).** It is the current stage and it is red. Do the
+four numbered steps in the *"What the real build found"* block above, in
+order. Nothing else in Block 2 should start first — `S-C8` (#14), `S-C7`
+(#15) and `S-C6` (#16) all consume `adasInit(NULL)`'s bundle resolution, so
+starting them now means building on a mechanism that does not deliver.
+
+**2. Then continue the build-order table**: `S-C8` (#14) → `S-C7` (#15) →
+`S-C6` (#16), then Phase D in id order.
+
+**3. The open findings.** Every one is a row in
+[sim_audit_log.md](sim_audit_log.md) — read it there, not here, so there is one
+list and it gets reconciled. Summary of what is open and where it is owned:
+
+| `AR-n` | Owned by | Blocks step 1? |
+|---|---|---|
+| `AR-1`, `AR-3` | `S-C5`'s own scope boxes | **`AR-1` *is* step 1** |
+| `AR-7`, `AR-8` | one-line test-docstring fixes; do them next time you touch those files | no |
+| `AR-2`, `AR-4` | **human decision** — below | no |
+| `AR-5` | `GT-10`, at `S-E3` or whenever a partial clone is available | no |
+| `AR-6`, `AR-9` | housekeeping; `AR-6` is a one-character `.gitignore` fix left unapplied on purpose | no |
+
+#### Human decisions needed — do not pick these alone
+
+*(Per §0a's "Stop and ask". Both are cheap to answer and neither blocks
+step 1.)*
+
+1. **`mathlib` and `GT-4` (`AR-2`).** Does `mathlib` get a real `gtest` target
+   (item 22 deferred its tests out of ctest), or does the `GT-4` row get struck
+   with a written reason? Either is defensible; leaving the row un-runnable is
+   not, because it reads as a gate and is not one.
+2. **`GT-13`/`GT-14` ownership (`AR-4`).** Both need a *named person*, not a
+   stage — `GT-14` explicitly ("Owner / Second reader"), and `GT-13` because
+   the numbers it demands must be measured on a stated machine. They are
+   currently blank with no owner, and §2 now says blanks are their finding. If
+   nobody is going to own them before `S-E3`, that should be recorded as a
+   decision rather than discovered at `S-E3`.
 
 ### The per-stage loop — do this every time, in this order
 
@@ -295,7 +443,8 @@ is:
 
 ### Effort shape
 
-29 stages (Phase C's first is split into four sub-stages; `S-C7`/`S-C8` were
+32 `### S-` stage sections (Phase C's first is split into four sub-stages;
+`S-C7`/`S-C8` were
 added by the 2026-07-31 review, `S-C0` by the 2026-07-31 concept-resolution
 pass), plus six **deltas** to already-complete stages — `S-A3Δ`, `S-A4Δ`,
 `S-B2Δ`, `S-B1Δ`, `S-C1cΔ`, `S-C1aΔ2` — which are work, not corrections: they
@@ -310,7 +459,7 @@ convenience: it is what lets a session make ten stages of verified progress
 before the first stage where a substitute toolchain would silently produce a
 green report and a red build.
 
-**Phase C carries 10 of the 29 stages and all of the C++ risk**, which is why it
+**Phase C carries 13 of the 32 stage sections and all of the C++ risk**, which is why it
 reads as the hardest part of this document. One sentence organises it: *a
 component's DLL must be able to answer three questions — what ports do I have,
 what configuration am I using, and run one tick — and everything else in Phase C
@@ -351,6 +500,32 @@ is building the things that ask those three questions.*
 These are the invariants that make the architecture true rather than aspirational.
 A stage that breaks one is not done.
 
+### What "`GT-1..GT-12` re-checked" in a stage's Discipline block means
+
+*Clarified 2026-08-04 by the full-scope audit — this was ambiguous, not wrong,
+and the ambiguity was hiding two gates.* There are **fourteen** gates
+(`GT-1`…`GT-14`), but every stage's Discipline line says `GT-1..GT-12`. That
+literal range is **not** the whole set, and mass-editing it to `GT-1..GT-14`
+would be worse: it would retroactively claim that already-ticked stages
+re-checked `GT-13`/`GT-14`, which none of them did. The honest split, which is
+what the gates' own content already implies:
+
+| Class | Gates | When |
+|---|---|---|
+| **Per-stage, mechanised** | `GT-1`, `GT-2`, `GT-3`, `GT-6`, `GT-11` | every stage — one command, `scripts/check_invariants.py` |
+| **Per-stage, by hand** | `GT-5`, `GT-7`, `GT-9` | every stage |
+| **Per-stage, when a build is touched** | `GT-4` | any stage that compiles anything |
+| **Milestone measurements, recorded once** | `GT-8`, `GT-10`, `GT-12`, `GT-13`, `GT-14` | at `S-E3`, or when the stage that owns them lands |
+
+So a stage's `GT-1..GT-12` line means **the first three rows**. `GT-13`/`GT-14`
+were never per-stage gates — they measure the project, not a change. Read them
+at `S-E3`, and note that `GT-13`'s blanks *are* its finding.
+
+**Unticked boxes below are the normal state.** These gates are re-checked
+continuously, not completed once, so an empty `- [ ]` here does not mean
+"not done" the way it does inside a stage. `GT-11` is ticked because it
+records a one-off mechanisation, not a re-check.
+
 - [ ] **GT-1 — no function names in the framework.**
       `grep -rniE '\b(aeb|bsd|lca|acc|ldw|lka)\b' modules/sim/src` returns
       nothing (`R-SIM-1`).
@@ -371,16 +546,33 @@ A stage that breaks one is not done.
 - [ ] **GT-4 — the build matrix stays green.** *Widened 2026-07-31 from one
       component to every component that declares a `gtest` target
       (`NR-SIM-12`).* Each row's `ctest` count is at or above its **measured**
-      floor. Never lower.
+      floor **and every test in it passes**. Never lower a floor.
+
+      **The pass clause was added 2026-08-04 and is not cosmetic.** As
+      originally written this gate said only *"count is at or above its
+      measured floor"*, and on that reading `df`'s current **236/238 with two
+      failures** *passes* — 238 ≥ 233. A gate that a red build satisfies is
+      not a gate. Count catches deleted tests; pass catches broken ones; both
+      are required.
 
       | Module | Command | Floor | Measured |
       |---|---|---|---|
-      | `df` | `modules/df/build.bat -t gtest -p vs2026 -P base` | **233** | 2026-08-04 (re-measured, `S-C1d`) |
-      | `interfaces` | `modules/interfaces/build.bat -t gtest -p vs2026 -P base` | **6** | 2026-07-30 |
-      | `mathlib` | `modules/mathlib/build.bat -t gtest -p vs2026 -P base` | _____ | **never run** |
-      | `vdy` | `modules/vdy/build.bat -t gtest -p vs2026 -P base` | **18** | 2026-08-04 (`S-C1d`, first real number) |
-      | `perception-core` | `modules/perception-core/build.bat -t gtest -p vs2026 -P base` | _____ | **never run** |
-      | `sil_host` | `modules/sil_host/build.bat -t sil -p vs2026 -P base` (builds + runs) | exit 0 | 2026-07-30 |
+      | `df` | `scripts/build.py df -t gtest -p vs2026 -P base` | **233** | **2026-08-04 audit: 238 run, 236 pass, 2 FAIL** (`S-C5`, see §0a) — count above floor, **gate RED on the pass clause** |
+      | `interfaces` | `scripts/build.py interfaces -t gtest -p vs2026 -P base` | **10** | 2026-08-04 audit: 10/10 (floor raised from 6 — `S-C1aΔ2` added the `ComponentManifest` cases) |
+      | `mathlib` | — | **n/a** | **2026-08-04 audit: this row is not runnable.** `mathlib`'s `conf/build.yml` declares only `sil` and `package`; there is no `gtest` target, so `-t gtest` exits *"unknown target 'gtest'"*. `mathlib` has no ctest suite (item 22 landed its tests outside one). This is a **plan defect, not a blank measurement** — resolve it deliberately: either give `mathlib` a `gtest` target, or strike the row and say in `plan.md` item 22 that `mathlib` is covered elsewhere |
+      | `vdy` | `scripts/build.py vdy -t gtest -p vs2026 -P base` | **18** | 2026-08-04 audit: 18/18 (confirms `S-C1d`'s number) |
+      | `perception-core` | `scripts/build.py perception-core -t gtest -p vs2026 -P base` | **2** | 2026-08-04 audit: 2/2 — **first real number**, replacing "never run" |
+      | `sil_host` | `scripts/build.py sil_host -t sil -p vs2026 -P base`, then run `sil.exe` **under `conanrun.bat`** | builds; runs exit 0 | 2026-08-04 audit: builds clean; `sil.exe` exits 0 and ticks `df`+`vdy` |
+
+      **Two corrections to how this row set is run** (2026-08-04):
+      *(a)* the commands were written as `modules/<m>/build.bat …`; the
+      dispatcher form above is the one that actually resolves the project and
+      is what was run. *(b)* the `sil_host` row said *"(builds + runs)"*, but
+      `-t sil` **only builds** — launching `Release/sil.exe` bare fails with
+      `STATUS_DLL_NOT_FOUND` because its dependencies come from the Conan
+      package, not from beside the exe. It runs correctly under the generated
+      `conanrun.bat`. Recording "exit 0" from a build-only command was
+      measuring the wrong thing.
 
       **Why one row was not enough.** Both Phase C defects that actually escaped
       were cross-module and would have passed a `df`-only gate: an `interfaces`
@@ -388,8 +580,12 @@ A stage that breaks one is not done.
       link-visibility change in `df_sil`'s installed public header reached every
       consumer of `AdasDf::AdasDf` (defect 10). A shared contract lives in
       `interfaces`; a gate that watches one consumer of it is watching the wrong
-      thing. Blank rows are **the honest state**, not an omission — fill them in
-      the first time a stage touches a shared contract, per the rule below.
+      thing. Blank rows were **the honest state**, not an omission — and the
+      2026-08-04 audit filled every one of them, which is how the `mathlib` row
+      turned out to be un-runnable rather than merely unmeasured. A blank that
+      survives long enough stops reading as "we have not measured this" and
+      starts reading as "this is fine"; measure them at the first opportunity,
+      not at the first stage that happens to touch a shared contract.
 
       **The recorded number must be a number someone ran.** `df`'s sat at "90/90
       as of 2026-07-24" until the 2026-07-30 review, i.e. a floor 138 tests
@@ -4181,6 +4377,22 @@ not. Also inherited from `S-C1b`'s delta: `<component>.ports.yaml` lands in
 `<library_dir>/config/` **here**, as part of the bundle, and not in a second
 place beside the DLL.
 
+- [ ] **`AR-1` — the bundle must follow the library, not sit in one build
+      directory.** Add an `install()` rule for `config/` so it enters the Conan
+      package, **and** extend `modules/df/tests/CMakeLists.txt`'s
+      `copy_if_different` to bring `config/` with the DLL. Both, not either —
+      they are two different consumers, and today neither has it. Then
+      `scripts/build.py df -t gtest -p vs2026 -P base` must be **238/238**
+      (currently 236/238; the two failures *are* this box). Full diagnosis in
+      §0a. **Do not** make `adasInit(NULL)` search parent directories or the
+      source checkout instead — that reinstates the silently-defaulted
+      calibration `S-C1b`'s delta removed
+- [ ] **`AR-3` — `ST-C5-1`'s Python half must run on Windows.**
+      `tests/system/test_c5_relocatability.py` skips silently without `g++`,
+      so this stage's only Python-side system test never runs on the primary
+      dev platform. Build the fixture with the MSVC toolchain that is present,
+      or declare the test Linux-only in its skip reason and say why (`P-1`,
+      `P-6`)
 - [ ] Build copies `project.yaml` + `shared_config`'s `vehicle/ego_params.yaml`
       + `<component>.ports.yaml` into **`$<TARGET_FILE_DIR:…>/config/`** with
       `bundle.sha256`
@@ -5661,6 +5873,33 @@ the stage named there.
 
 ---
 
+## 9a. Audit findings — where they live
+
+**Findings do not live here.** They live in
+[sim_audit_log.md](sim_audit_log.md) as stable `AR-n` rows, and every
+actionable fix is a **checkbox in the stage that will do it**, in build order,
+citing its `AR-n`. This section is a pointer, deliberately — the first audit
+wrote its findings into a table at the end of this document, which is exactly
+the place a session working the queue never reaches.
+
+| | |
+|---|---|
+| **Ledger** | [sim_audit_log.md](sim_audit_log.md) — id · origin level · fix type · landed-in · state |
+| **Enforced by** | `docs/py/check_audit_ledger.py` (inside `run_all.py`) — a `CLOSED` row must name a landed-in target that resolves, and a level 1/2 finding must name a **master document**, not just a stage |
+| **Produced by** | `modules/sim/.claude/prompts/sim_audit.md` (method: root `.claude/prompts/system_audit_and_replan.md`) |
+
+**The rule worth repeating here**, because this is where someone will look for
+it: a finding whose origin is the requirements or design level is **not
+closable until that master document has been edited**. The ledger records that
+it happened and where; it never carries the correction. Otherwise the ledger
+becomes a second source of truth and the register stays wrong.
+
+**Reconciliation precedes appending.** An audit re-verifies every `OPEN` row
+before writing a new one. A run that cannot shrink the ledger means the
+previous run was ignored — which is itself a finding.
+
+---
+
 ## 10. Risks
 
 | Risk | Mitigation |
@@ -5685,7 +5924,10 @@ the stage named there.
 - [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
-- [ ] `ST-E3-1` + `ST-E3-2` green **and every global gate `GT-1..GT-12`
-      ticked** — including `GT-8`'s measured number, which is the only one a
-      green suite cannot substitute for, and `GT-12`, without which `GT-8` is
-      measuring `git clone` rather than onboarding
+- [ ] `ST-E3-1` + `ST-E3-2` green **and every global gate `GT-1..GT-14`
+      ticked** — *the range is `GT-14` here and only here* (§2: `GT-13`/`GT-14`
+      are milestone measurements, never per-stage re-checks, so this is the
+      one place they come due). Including `GT-8`'s measured number, which is
+      the only one a green suite cannot substitute for; `GT-12`, without which
+      `GT-8` is measuring `git clone` rather than onboarding; and `GT-13`'s
+      table of numbers, whose blanks are its finding

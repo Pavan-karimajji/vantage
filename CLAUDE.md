@@ -26,9 +26,13 @@ unfinished.** Normative rules: root `.claude/rules/sim.md` (`R-SIM-1..25`).
 
 ## Local constraints
 
-- **This module must never contain the strings `aeb`/`bsd`/`lca`/`acc`/`ldw`/
-  `lka`** (R-SIM-1). A grep is the enforcement. A function's contribution lives
-  in that component's own `modules/<name>/sim/`, never here.
+- **This module's `src/` must never contain the strings `aeb`/`bsd`/`lca`/
+  `acc`/`ldw`/`lka`** (R-SIM-1). A grep is the enforcement (`GT-1`, mechanised
+  in `scripts/check_invariants.py`, scoped to `src/adas_sim/**`). A function's
+  contribution lives in that component's own `modules/<name>/sim/`, never here.
+  **`tests/` is deliberately outside the grep** — a parity/golden test must name
+  the component it achieves parity with (see R-SIM-1 for why widening it would
+  delete real coverage).
 - **Layer providers emit geometry, renderers emit pixels** (R-SIM-2) — metres,
   named frames, semantic style tokens. No provider imports a renderer.
 - **`io/` holds format codecs; `sources/` holds world-model clients** (R-SIM-14).
@@ -69,6 +73,18 @@ unfinished.** Normative rules: root `.claude/rules/sim.md` (`R-SIM-1..25`).
 - No compiled artifact, so no `CMakeLists.txt`/`build.bat` — same shape as
   `shared_config`. `conanfile.py` uses `package_type = "unknown"`.
 - Python file headers per R-STYLE-1; `COMPONENT: SIM` (R-NAME-6).
+
+## Auditing this module
+
+`\.claude/prompts/sim_audit.md` (here, in this module) is the entry point for a
+full-scope audit. It binds the root method
+(`../../.claude/prompts/system_audit_and_replan.md`) to sim's document triad —
+`docs/sim_requirements.md` (master register) → `docs/sim_architecture.md` →
+`docs/sim_implementation_plan.md` → code. Findings land in
+`docs/sim_audit_log.md` as stable `AR-n` rows, and every actionable fix is a
+checkbox in its owning stage. `docs/py/check_audit_ledger.py` enforces that a
+requirements- or design-level finding cannot be closed without the master
+document actually being edited.
 
 ## AI operational layer — root-canonical
 

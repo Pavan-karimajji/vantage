@@ -38,6 +38,77 @@ feature set rather than guess at it, and paraphrasing would lose that.
 
 ---
 
+## 0a. What this register does **not** say, and where to read it instead
+
+*Added 2026-08-04 by the full-scope audit
+(`.claude/prompts/sim_system_audit_and_replan.md`, angle 1 — the first pass to
+walk this register row by row rather than summarise it.)*
+
+**`Status` is about the decision, never about the code.** Its vocabulary is
+`frozen` / `partial` / `open` / `parked`, and `frozen` means *"decided, not
+built"*. There is deliberately **no `built` value** — and the consequence has
+to be stated plainly, because it is not obvious and it misleads: after twelve
+build-order stages landed, **68 of the 77 rows still read `frozen`**, exactly
+as they did the day the register was frozen. A row that is fully shipped and
+green reads identically to a row nothing has started.
+
+**So this register cannot answer "what is left?", and must not be used to
+try.** That is not a defect to fix here by adding a hand-maintained `Built:`
+column — a second copy of the plan's checkboxes would drift from them within
+one stage, which is the precise failure `R-SIM-22`, `R-SIM-3a` and defect
+`D13` all exist to prevent. The answer is **derived**, not stored:
+
+> **`python docs/py/check_requirement_coverage.py`** resolves every `Verified
+> by` id to its checkbox in `sim_implementation_plan.md` and reports, per
+> requirement, how many verifiers are actually done. It runs inside
+> `docs/py/run_all.py`. **That output is the authority on verification state;
+> this register is the authority on what was asked for.**
+
+### The measurement, 2026-08-04
+
+| Priority | proven | partial | unproven | no test id | parked | total |
+|---|---|---|---|---|---|---|
+| **P0** | 3 | 3 | 10 | 1 | 0 | **17** |
+| **P1** | 21 | 9 | 21 | 8 | 1 | **60** |
+| **Total** | **24** | **12** | **31** | **9** | **1** | **77** |
+
+**Read the `P0` row before anything else.** Ten of seventeen `P0`
+requirements — rows whose own definition is *"the tool is not usable without
+it"* — have **zero** verifiers done, and one more (`NR-SIM-45`) has no test id
+at all by design. That is not alarming on its own: most of them are verified
+by Phase D and Phase E stages that are correctly not started, and the priority
+field is doing its job by making the concentration visible. It is recorded
+here so that the number is a **measurement** rather than an impression, per
+`GT-13`'s own principle — *a requirement nobody can fail is a requirement that
+will be declared satisfied*.
+
+### Three per-row findings from the same pass
+
+- **`FR-SIM-66` (`P0`) is verified for one depth, not "whatever depth".** Its
+  headline is *"at whatever depth they were cut"*; `ST-C9-2` (a second stage
+  shape) and `ST-C9-3` (a second format) are both unwritten, and `S-C9`'s own
+  section says so honestly. The register did not, showing three verifiers with
+  no signal that two do not exist. The coverage check now reports it as
+  `partial 2/3`.
+- **`ST-C9-1` is real but unfindable.** It is implemented inside
+  `tests/system/test_c1c_resim_equivalence.py` — a file named for a *different*
+  stage, whose docstring announces `ST-C1c-1`, and which contains the string
+  `ST-C9-1` nowhere. Grepping the suite for `ST-C9-1` returns nothing. The only
+  thing binding `FR-SIM-66` → `ST-C9-1` → that test is one sentence in a
+  5,500-line plan. Its *assertion* is byte-equality between the generic and
+  positional ABI paths (`ST-C1c-1`'s claim); it exercises the ingest map
+  genuinely, but a reader cannot discover that. **This is `§12.7`'s defect
+  shape a third time** — a name bound to its target by nothing — and it is why
+  `check_requirement_coverage.py` deliberately does *not* claim to check
+  aboutness. Fix: put the id in the test's docstring.
+- **`ST-C2-3`'s only appearance in the suite is a docstring claim.**
+  `tests/unit/test_c2_recorder.py` lists `ST-C2-3` among what it covers; no
+  test function implements it and the plan's box is correctly unticked. A
+  docstring that over-claims coverage is the same failure with the polarity
+  reversed.
+
+---
+
 ## 1. Architecture & scalability
 
 ### FR-SIM-1 — One framework, N functions

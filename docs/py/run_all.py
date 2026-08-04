@@ -27,6 +27,8 @@ CHECKS = [
     "check_doc_invariants.py",
     "check_traceability.py",
     "check_rules_coverage.py",
+    "check_requirement_coverage.py",
+    "check_audit_ledger.py",
 ]
 SURVEYS = [
     "FR_SIM_46_reference_tool_survey.py",
