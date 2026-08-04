@@ -84,8 +84,24 @@ here" note in this stage's own history was a different environment).
 `PortSpec` gained `period_us`/`fixed_slots` in `interfaces`' proto, read
 through in `contracts/component.py`; `df` rebuilt clean against the edited
 `interfaces` (`gtest` 233/233, real build) confirming nothing downstream
-broke. Full detail in the stage's own section below. Next up per the
-build-order table: `S-C1d` (#12), the generated ABI shim.
+broke. Full detail in the stage's own section below.
+
+**`S-C1d` (#12) landed 2026-08-04** — the generated ABI shim
+(`interfaces/scripts/gen_sil_ports.py` + `interfaces/cmake/
+sil_ports_generate.cmake`), closing `D12`. `df`'s hand-written port table/
+`buildManifest()`/`adasExec` dispatch is now generated from
+`modules/df/conf/ports.yaml`, proven byte-identical to the pre-refactor
+manifest for both `-P base` and `-P cus1` (`gtest` 233/233 both). `ST-C1d-1`'s
+second-component proof is **`vdy`**, not the `S-C1c` `stubdll:` echo
+component — `vdy` already carried `df`'s exact pre-`S-C1a` shape and is named
+in this stage's own purpose text; it gained the generic ABI for real (not a
+throwaway fixture), producing **its first-ever real `gtest` run** (18/18,
+`GT-4`'s previously-blank row now filled). Full detail, including the
+handle-member-naming convention this stage had to freeze and a real bug the
+generator's first cut had (per-function dispatch fan-out not narrowed to
+`ENABLED_FUNCTIONS`, caught by an actual aeb-only rebuild, not the fixture
+tests), in the stage's own section below. Next up per the build-order table:
+`S-C5` (#13), the packed config bundle.
 
 ### ▶ The build sequence — this table is the authority on order
 
@@ -307,10 +323,10 @@ A stage that breaks one is not done.
 
       | Module | Command | Floor | Measured |
       |---|---|---|---|
-      | `df` | `modules/df/build.bat -t gtest -p vs2026 -P base` | **233** | 2026-07-30 |
+      | `df` | `modules/df/build.bat -t gtest -p vs2026 -P base` | **233** | 2026-08-04 (re-measured, `S-C1d`) |
       | `interfaces` | `modules/interfaces/build.bat -t gtest -p vs2026 -P base` | **6** | 2026-07-30 |
       | `mathlib` | `modules/mathlib/build.bat -t gtest -p vs2026 -P base` | _____ | **never run** |
-      | `vdy` | `modules/vdy/build.bat -t gtest -p vs2026 -P base` | _____ | **never run** |
+      | `vdy` | `modules/vdy/build.bat -t gtest -p vs2026 -P base` | **18** | 2026-08-04 (`S-C1d`, first real number) |
       | `perception-core` | `modules/perception-core/build.bat -t gtest -p vs2026 -P base` | _____ | **never run** |
       | `sil_host` | `modules/sil_host/build.bat -t sil -p vs2026 -P base` (builds + runs) | exit 0 | 2026-07-30 |
 
@@ -3548,57 +3564,152 @@ comparison, not by reading. If the manifest changes, the stage is wrong.
 **Must not** (second). Touch `src/component/**`, and must not become a general
 code-generation framework. One generator, one input schema, one output file.
 
-- [ ] `modules/df/conf/ports.yaml` — the single declaration
+- [x] `modules/df/conf/ports.yaml` — the single declaration
       (`sim_sil_contract.md` §3.2). Lives beside `conf/build.yml` because it is
-      the same *kind* of thing: per-component build data (`R-VAR-3`)
-- [ ] The generator — reads `conf/ports.yaml` + `ENABLED_FUNCTIONS`, emits the
+      the same *kind* of thing: per-component build data (`R-VAR-3`).
+      *2026-08-04:* also `modules/vdy/conf/ports.yaml` (see `ST-C1d-1` below)
+- [x] The generator — reads `conf/ports.yaml` + `ENABLED_FUNCTIONS`, emits the
       name constants, both port tables, `buildManifest()` and the `adasExec`
       dispatch bindings. **A build output**: generated into the build tree,
-      never checked in, never edited
-- [ ] `binds:` names the `ReqPort`/`ProPort` member, so `N-1`'s "the segment
+      never checked in, never edited.
+      *2026-08-04:* `interfaces/scripts/gen_sil_ports.py` +
+      `interfaces/cmake/sil_ports_generate.cmake`
+      (`adas_generate_sil_ports(<target> PORTS_YAML ... COMPONENT_ROOT ...
+      ENABLED_FUNCTIONS ...)`). **Lives in `interfaces`, not a new root
+      `scripts/` or a per-component copy** — `GT-10` requires every module to
+      build standalone from its own submodule clone, which a root `scripts/`
+      reference would break; every SIL component already hard-depends on
+      `interfaces` via Conan, so shipping the generator there costs nothing
+      new to check out. Mirrors the existing `cmake/proto_generate.cmake`
+      precedent in the same repo. Required two additive `conanfile.py`
+      changes (`exports_sources` gains `"scripts/*"`; `layout()`/
+      `package_info()` gain `builddirs = ["cmake"]` under the `cmake_layout`
+      branch, so a consumer's `find_package(AdasInterfaces)` populates
+      `CMAKE_MODULE_PATH` and `include(sil_ports_generate)` resolves) —
+      propagated to **all 8** byte-identical `conanfile.py` copies (`df`,
+      `interfaces`, `mathlib`, `perception-core`, `shared_config`, `sil_host`,
+      `sim`, `vdy`; `isp`/`perception-lane`/`planning`/`platform-services`
+      already diverge and are out of scope), `diff -q` re-verified clean
+      (`GT-5`)
+- [x] **Handle-member-naming convention, newly frozen** (not written down
+      anywhere before this stage): `binds:` only names the `ReqPort`/`ProPort`
+      member, not which port-set instance on the handle owns it. The
+      generator infers `<fn>ReqPorts`/`<fn>ProPorts` when any port declares
+      `functions:`/`owner_function` (`df`'s shape) vs. bare
+      `reqPorts`/`proPorts` when none does (`vdy`'s shape) — from the YAML
+      content itself, never a second CLI flag or field. Written into
+      `sim_sil_contract.md` §3.2
+- [x] `binds:` names the `ReqPort`/`ProPort` member, so `N-1`'s "the segment
       after the dot is byte-identical to the member" is **generated** rather
       than asserted by `UT-C1b-12`. The `comp_state`-vs-`compState` defect
       becomes unrepresentable rather than caught
-- [ ] Diagnostics name the **YAML key and line**, never the emitted C++
+- [x] Diagnostics name the **YAML key and line**, never the emitted C++
       (`sim_sil_contract.md` §9). A generator that reports errors in its own
-      output is a generator that gets worked around
-- [ ] The checked-in `df_sil.ports.yaml` stays a **dump of what was compiled**
-      (`df_manifest_dump`) — a reviewable port diff, not a third copy
+      output is a generator that gets worked around.
+      *2026-08-04:* `PortsGenError`, a lightweight `_LineLoader` PyYAML
+      subclass attaching `__line__` to every mapping
+- [x] The checked-in `df_sil.ports.yaml` stays a **dump of what was compiled**
+      (`df_manifest_dump`) — a reviewable port diff, not a third copy.
+      *2026-08-04:* byte-identical to the pre-refactor golden capture, both
+      `-P base` and `-P cus1` (see `UT-C1d-1` below). `df`'s `conf/ports.yaml`
+      deliberately leaves `period_us`/`fixed_slots` undeclared — setting them
+      would change the serialized manifest and fail this stage's own
+      byte-identical bar. The generator's *capability* to emit them (proven
+      structurally, `UT-C1d-2`'s fixture) is a different claim from `df`
+      *using* them, and the two must not be conflated
 
 **Tests**
-- [ ] `UT-C1d-1` the generated manifest is **byte-identical** to the one the
-      hand-written shim produced, for `-P base` and `-P cus1`
-- [ ] `UT-C1d-2` `ENABLED_FUNCTIONS` combinatorics: aeb-only, bsd-only, both,
+- [x] `UT-C1d-1` the generated manifest is **byte-identical** to the one the
+      hand-written shim produced, for `-P base` and `-P cus1`.
+      *2026-08-04:* golden `df_manifest_dump` capture taken before the
+      refactor touched `df_interface_c.cpp`; real `build.bat -t gtest -p
+      vs2026` for both projects, post-refactor dump diffed byte-for-byte
+      against the golden — silent both times
+- [x] `UT-C1d-2` `ENABLED_FUNCTIONS` combinatorics: aeb-only, bsd-only, both,
       neither — each yields exactly the expected port set, the case `UT-C1b-7`
-      had to check by manual recompile
-- [ ] `UT-C1d-3` a `binds:` naming a member that does not exist in the ports
+      had to check by manual recompile.
+      *2026-08-04:* `interfaces/tests/python/test_gen_sil_ports.py` (fixture,
+      no compiler) plus a **real** aeb-only reconfigure/rebuild of `df_sil`
+      that caught a genuine bug the fixture alone had not: the first
+      generator cut only filtered which port *rows* appeared, not each
+      input's per-function dispatch fan-out, so an aeb-only build still
+      referenced `bsdReqPorts` (a real compile error, not a manifest
+      diff) — fixed by intersecting `functions:` with the enabled set at the
+      dispatch-generation site specifically, leaving `manifest_owner_function`
+      (which must NOT narrow — `objects`/`egoDyn` stay component-level in the
+      manifest regardless of which functions are actually enabled, matching
+      the original hand-written table's static behaviour) untouched.
+      *Follow-up same day, prompted by "did every corner case actually get
+      tested":* the **neither**-enabled case had only ever been fixture-tested,
+      never real-built. A real reconfigure found a second, different real bug
+      the fixture couldn't see either: an empty port list emitted
+      `T kGenOutputPorts[] = {};` — a C array with an empty braced
+      initializer, ill-formed (MSVC C2466). Fixed by falling back to a null
+      pointer + a `kGen{Input,Output}PortsCount` of `0` when a list is empty,
+      and switching `buildManifest()`'s consuming loops from range-based-for
+      to index-based so both cases share one code path. All four
+      combinations (aeb-only, bsd-only, both, neither) now real-compile;
+      `test_gen_sil_ports.py`'s own "neither" assertion was rewritten too —
+      the original checked for the exact empty-array text that was the bug,
+      so it would not have caught a regression back to it
+- [x] `UT-C1d-3` a `binds:` naming a member that does not exist in the ports
       header is a **generate-time error** naming the YAML key and line —
-      **shown to fail**, not assumed (`ST-C6-2`'s principle)
-- [ ] `UT-C1d-4` a duplicate port name, and a port name whose post-dot segment
-      is not a real member, are both generate-time errors
-- [ ] `UT-C1d-5` the generated file is not tracked by git and is regenerated
-      from a clean tree
-- [ ] `ST-C1d-1` **the whole point of the stage**: a second component
-      (`vdy`, or the `stubdll:` echo component from `S-C1c`) grows a working
-      generic ABI from a `conf/ports.yaml` and **zero hand-written C++**. If
-      that needs one line of bespoke shim, `D12` is not closed
+      **shown to fail**, not assumed (`ST-C6-2`'s principle).
+      *2026-08-04:* `test_gen_sil_ports.py`
+- [x] `UT-C1d-4` a duplicate port name, and a port name whose post-dot segment
+      is not a real member, are both generate-time errors.
+      *2026-08-04:* `test_gen_sil_ports.py`
+- [x] `UT-C1d-5` the generated file is not tracked by git and is regenerated
+      from a clean tree.
+      *2026-08-04:* generated header lands under each component's own
+      `build-*/`, already covered by that component's `.gitignore`; a
+      `--clean` rebuild of `df` (`-P base`) regenerated it and reproduced the
+      byte-identical manifest
+- [x] `ST-C1d-1` **the whole point of the stage**: a second component
+      grows a working generic ABI from a `conf/ports.yaml` and **zero
+      hand-written C++**. If that needs one line of bespoke shim, `D12` is not
+      closed.
+      *2026-08-04:* **`vdy`**, not the `stubdll:` echo component — `vdy`
+      already carried the exact pre-`S-C1a` shape `df` had (positional
+      `vdyExec` ABI, `VdyReqPorts`/`VdyProPorts`, `VdyFunction`, **no**
+      `ENABLED_FUNCTIONS` gating at all), is named explicitly in this stage's
+      own purpose text as a target beneficiary, and is real product value
+      rather than a throwaway fixture. Also the shape `df` alone cannot prove:
+      no function gating, bare `reqPorts`/`proPorts`. `vdy_interface_c.h/.cpp`
+      gained the generic ABI block (mirroring `df_interface_c.cpp`'s
+      byte-for-byte, including its own copies of `updateReqPort`/
+      `writeAdasProBuf`/`findPort` — generic ABI plumbing, not port
+      declarations, so out of the generator's own scope per this stage's
+      "must not become a general code-generation framework"), a new
+      `vdy_manifest_dump.cpp`, and a new `tests/unit/sil/test_generic_abi.cpp`
+      (18 tests, mirroring `df`'s own suite) — **`vdy`'s first-ever real
+      `gtest` run**, 18/18 green. `S-C1c`'s own leftover `stubdll:` echo
+      component stays unbuilt — a different need (testing
+      `CtypesSilComponent` with no real DLL at all), not required once `vdy`
+      covers this gate
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-1`/`P-2` (a generator is where an
+- [x] portability §3 ticked — exposure: `P-1`/`P-2` (a generator is where an
       absolute build path enters), `P-4` (generated C++ written with explicit
       encoding and `\n`, or two machines produce different files), `P-8`
       (declaration order sorted, or the manifest is not reproducible)
-- [ ] naming §3 ticked — exposure: `N-1` (this stage makes it structural), `N-8`
-- [ ] `GT-1..GT-12` re-checked; `GT-4`'s `df` row re-measured (a refactor that
-      changes the count changed behaviour)
+- [x] naming §3 ticked — exposure: `N-1` (this stage makes it structural), `N-8`
+- [x] `GT-1..GT-12` re-checked; `GT-4`'s `df` row re-measured (a refactor that
+      changes the count changed behaviour).
+      *2026-08-04:* `df` still 233/233 (`-P base` and `-P cus1`, unchanged);
+      `vdy` 18/18, its **first real number**, replacing the blank "never run"
+      row. `pytest modules/sim/tests` 643 passed (the one pre-existing,
+      documented flake aside — `test_dragging_pans_the_viewport_and_a_second_
+      click_still_selects`, not touched); `check_invariants.py` and
+      `docs/py/run_all.py` both clean
 
 **Gate**
-- [ ] `UT-C1d-1` green — byte-identical manifest, both projects. A refactor that
+- [x] `UT-C1d-1` green — byte-identical manifest, both projects. A refactor that
       cannot prove equivalence is a rewrite
-- [ ] `ST-C1d-1` green — the second component is the evidence; the first one
+- [x] `ST-C1d-1` green — the second component is the evidence; the first one
       working proves only that the generator can reproduce what it was modelled
       on
-- [ ] `GT-4` green at or above every recorded floor
+- [x] `GT-4` green at or above every recorded floor
 
 ### S-C2 — `sources/` — the production side
 

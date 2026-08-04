@@ -399,6 +399,25 @@ possible rather than a test that has to catch it:
   the property `R-BUILD-6` wants and cannot give here, because these files are
   not byte-identical across components — each names its own ports.
 
+**The handle-member-naming convention (`S-C1d`, frozen 2026-08-04).** `binds:`
+names only the `ReqPort`/`ProPort` member (`emGenObjList`) — not which
+port-set instance on the component's handle struct owns it, since a
+component may or may not split its ports by function. The generator infers
+this from `conf/ports.yaml` itself, never a second field or CLI flag:
+
+- **Gated** (any port declares `functions:`/`owner_function`, e.g. `df`'s
+  `aeb`/`bsd`): the handle member is `<fn>ReqPorts`/`<fn>ProPorts`
+  (`handle.aebReqPorts.emGenObjList`) — one port-set instance per function,
+  matching `DfHandle`'s existing shape.
+- **Ungated** (no port ever names a function, e.g. `vdy` — a single
+  always-on function with no `ENABLED_FUNCTIONS` split): the handle member is
+  the bare singular `reqPorts`/`proPorts` (`handle.reqPorts.vehSig`), matching
+  `VdyHandle`'s existing shape.
+
+A component's shape is a property of its own port declarations, not a choice
+the generator or a caller makes — so onboarding a third component costs
+exactly the same `conf/ports.yaml`, whichever shape it turns out to have.
+
 *What does **not** change:* `src/component/**` is still untouched, the shim is
 still a name-lookup onto the existing body (`df_sil_dll.md` rule 9), and the
 manifest is still generated from `ENABLED_FUNCTIONS` so it cannot drift from

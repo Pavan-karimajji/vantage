@@ -61,7 +61,9 @@ class AdasComponent(ConanFile):
     # exported: it's build.py's hand-authored presets and would collide with the
     # ones Conan's own CMakeToolchain generates for `conan create`.
     exports = "conf/*"
-    exports_sources = "CMakeLists.txt", "src/*", "cpp/*", "proto/*", "cmake/*", "projects/*"
+    exports_sources = (
+        "CMakeLists.txt", "src/*", "cpp/*", "proto/*", "cmake/*", "scripts/*", "projects/*",
+    )
 
     # ---- data helpers -----------------------------------------------------
     def _build_conf_for(self, project):
@@ -132,6 +134,14 @@ class AdasComponent(ConanFile):
             # adas-interfaces already covers both directories there).
             self.cpp.source.includedirs = ["cpp", "include"]
             self.cpp.build.includedirs = ["generated"]
+            # S-C1d: exposes cmake/ (sil_ports_generate.cmake) on a consumer's
+            # CMAKE_MODULE_PATH via CMakeDeps, so df/vdy's own CMakeLists.txt
+            # can `include(sil_ports_generate)` after find_package(AdasInterfaces)
+            # with no sibling checkout of their own (R-SIM-11's own reasoning,
+            # applied to build-time codegen rather than run-time proto classes).
+            # scripts/gen_sil_ports.py is found relative to the .cmake file's own
+            # CMAKE_CURRENT_LIST_DIR, not via a second builddirs entry.
+            self.cpp.source.builddirs = ["cmake"]
         elif self.package_type in ("shared-library", "static-library"):
             # output_folder-kind compiled libraries (df/vdy): the real artifact
             # lives under build.py's own build-sil-<platform>/src/platform/
@@ -200,6 +210,13 @@ class AdasComponent(ConanFile):
             self.cpp_info.resdirs = meta.get("resdirs", ["projects"])
         else:
             self.cpp_info.libs = meta["libs"]
+        conf = _conf(self.recipe_folder)
+        if conf.get("layout_kind") == "cmake_layout":
+            # Mirrors layout()'s editable-mode builddirs above, for a real
+            # `conan create` package - untested by this stage (today's only
+            # exercised path is editable mode), kept symmetric on principle
+            # rather than left to silently diverge later.
+            self.cpp_info.builddirs = ["cmake"]
         name = self._cmake_name()
         self.cpp_info.set_property("cmake_target_name", f"{name}::{name}")
         self.cpp_info.set_property("cmake_file_name", name)
