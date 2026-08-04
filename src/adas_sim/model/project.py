@@ -53,7 +53,18 @@ BundleOrigin = Literal["explicit", "embedded", "library", "checkout"]
 def _bundle_ego(bundle_dir: Path) -> tuple[str, EgoModel] | None:
     """A bundle-shaped directory: `<dir>/vehicle/ego_params.yaml`, optionally
     `<dir>/manifest.yaml` naming its project. `None` if the shape isn't
-    present -- callers fall through to the next tier."""
+    present -- callers fall through to the next tier.
+
+    A real S-C5-packed bundle carries no `manifest.yaml` (the checked-in
+    `<component>.ports.yaml` deliberately excludes `project:` too -- build-
+    variant data must not churn a checked-in file, `test_generic_abi.cpp`'s
+    `EmbeddedManifestAgreesWithCheckedInPortsYaml`), so `project` falls back
+    to `bundle_dir.name` there -- meaningless for a real `.../config/`
+    directory. The only place a real bundle's built project genuinely lives
+    is the loaded library's own `adasManifest()`. Real cross-component
+    project-agreement checking is `S-C5`'s addendum scope (`OD-11`),
+    deferred; `manifest.yaml` stays only to keep this module's own
+    synthetic-fixture tests (`UT-A2-7`, `UT-A2-10`) meaningful."""
     ego_path = bundle_dir / "vehicle" / "ego_params.yaml"
     if not ego_path.is_file():
         return None
@@ -65,13 +76,54 @@ def _bundle_ego(bundle_dir: Path) -> tuple[str, EgoModel] | None:
     return project, EgoModel.from_yaml_file(ego_path, project=project)
 
 
-def _bundle_sha256(ego_path: Path) -> str:
-    """P-9: hashed over UTF-8 bytes with `\\n` newlines, so the same source
-    produces the same hash on both platforms. Today's bundle content is just
-    `ego_params.yaml`; the real multi-file bundle hash (default.yaml + port
-    manifest too) is `S-C1`'s config-bundle build step, not this stage's."""
-    normalized = ego_path.read_text(encoding="utf-8").replace("\r\n", "\n")
+def _bundle_sha256(bundle_dir: Path) -> str:
+    """S-C5, P-9: hashed over every file in `bundle_dir` (excluding
+    `bundle.sha256` itself) -- sorted POSIX-relative paths, UTF-8 bytes,
+    `\\n` newlines, so a bundle built on either platform hashes the same.
+    Identical algorithm to `interfaces/scripts/pack_config_bundle.py`'s
+    `bundle_sha256()`, implemented independently (a component's build must
+    not require `adas_sim`) -- proven to agree by `ST-C5-1`, not by sharing
+    code across the two repos. Generic over whatever files are actually
+    present, so it covers both a real packed bundle (`default.yaml` +
+    `vehicle/ego_params.yaml` + `<component>.ports.yaml`) and a
+    fixture-shaped test bundle carrying only a subset."""
+    files = sorted(
+        p.relative_to(bundle_dir).as_posix()
+        for p in bundle_dir.rglob("*")
+        if p.is_file() and p.name != "bundle.sha256"
+    )
+    h = hashlib.sha256()
+    for relpath in files:
+        normalized = (bundle_dir / relpath).read_text(encoding="utf-8").replace("\r\n", "\n")
+        h.update(relpath.encode("utf-8") + b"\n")
+        h.update(normalized.encode("utf-8") + b"\n")
+    return h.hexdigest()
+
+
+def _single_file_sha256(path: Path) -> str:
+    """The `checkout` tier's hash: no bundle directory exists there at all
+    (a bare `shared_config` checkout, flagged as unverified provenance), so
+    the honest thing to hash is the one file actually read -- never a
+    directory that was never assembled."""
+    normalized = path.read_text(encoding="utf-8").replace("\r\n", "\n")
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def bundle_bytes_for_recording(bundle_dir: Path) -> bytes:
+    """S-C5, R-SIM-6: serializes a bundle directory's files into the "few kB
+    of YAML" `Recorder.open()`'s `config_bundle_bytes` embeds on `/meta/
+    config_bundle` (`sim_resim_and_recording.md` §3.4) -- a flat mapping of
+    bundle-relative POSIX path to file content, so a reader on a machine
+    with no build can reconstruct the exact directory `adasInit` read.
+    Includes `bundle.sha256` itself (unlike the hash algorithm above, which
+    excludes it while computing it) -- the embedded copy is a full mirror,
+    not an input to a second hash."""
+    mapping = {
+        p.relative_to(bundle_dir).as_posix(): p.read_text(encoding="utf-8").replace("\r\n", "\n")
+        for p in sorted(bundle_dir.rglob("*"))
+        if p.is_file()
+    }
+    return yaml.safe_dump(mapping, sort_keys=True).encode("utf-8")
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,9 +169,9 @@ class ProjectModel:
                         f"not the requested {project!r}"
                     )
                 )
-            sha = _bundle_sha256(Path(bundle_dir) / "vehicle" / "ego_params.yaml")
+            sha = _bundle_sha256(Path(bundle_dir))
             return cls(project=resolved_project, bundle_sha256=sha, bundle_origin=origin, _ego=ego)
 
         ego = EgoModel.load(project)
-        sha = _bundle_sha256(SHARED_CONFIG_PROJECTS / project / "vehicle" / "ego_params.yaml")
+        sha = _single_file_sha256(SHARED_CONFIG_PROJECTS / project / "vehicle" / "ego_params.yaml")
         return cls(project=project, bundle_sha256=sha, bundle_origin="checkout", _ego=ego)

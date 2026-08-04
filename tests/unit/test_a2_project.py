@@ -4,16 +4,29 @@
 # @author Pavan Karimajji
 
 """S-A2 `ProjectModel.resolve` tests: UT-A2-7, UT-A2-10
-(docs/sim_implementation_plan.md)."""
+(docs/sim_implementation_plan.md). S-C5's real multi-file bundle hash
+(UT-C5-4, UT-C5-5) is added below, in the same module rather than a new
+file -- it exercises the same `ProjectModel`/bundle-directory machinery."""
 
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 from adas_sim.core.errors import ProvenanceWarning
-from adas_sim.model.project import ProjectModel
+from adas_sim.model.project import ProjectModel, bundle_bytes_for_recording
+
+#: modules/interfaces/scripts, sibling submodule -- not a pip dependency of
+#: adas_sim (R-SIM-11: a component's build must not require adas_sim, and
+#: symmetrically adas_sim's own package must not require interfaces). Only
+#: this test file reaches across, to prove the two independent hash
+#: implementations agree (S-C5's own cross-implementation proof, absent a
+#: real df_sil build in this environment -- see test_c5_relocatability.py).
+_INTERFACES_SCRIPTS = Path(__file__).resolve().parents[3] / "interfaces" / "scripts"
 
 _EGO_TEMPLATE = (
     "EGO_LENGTH_M: {length}\n"
@@ -71,3 +84,103 @@ def test_project_mismatch_emits_provenance_warning_and_still_resolves(tmp_path):
 
     assert resolved.project == "cus1"
     assert resolved.ego().length_m == 5.0
+
+
+def _make_real_bundle(bundle_dir: Path, *, newline: str = "\n") -> None:
+    """A real S-C5-shaped bundle (default.yaml + vehicle/ego_params.yaml +
+    fixture.ports.yaml, no manifest.yaml) -- as opposed to `_make_bundle`
+    above, which is UT-A2-7/UT-A2-10's own synthetic fixture shape."""
+    bundle_dir.mkdir(parents=True, exist_ok=True)
+    (bundle_dir / "vehicle").mkdir(parents=True, exist_ok=True)
+    (bundle_dir / "default.yaml").write_bytes(f"aeb:{newline}  AEB_TTC_BRAKE_THRESHOLD_S: 1.2{newline}".encode())
+    (bundle_dir / "vehicle" / "ego_params.yaml").write_bytes(
+        _EGO_TEMPLATE.format(length=4.5, width=1.8, wheelbase=2.7, overhang=0.9).replace("\n", newline).encode()
+    )
+    (bundle_dir / "fixture.ports.yaml").write_bytes(f"component: fixture{newline}".encode())
+
+
+def test_bundle_sha256_is_stable_across_mixed_line_endings_and_iteration_order(tmp_path):
+    """UT-C5-5, P-9: a bundle written with CRLF line endings hashes
+    identically to the same content written with LF -- the property that
+    makes a bundle built on Windows and one built on Ubuntu agree."""
+    lf_dir = tmp_path / "lf"
+    crlf_dir = tmp_path / "crlf"
+    _make_real_bundle(lf_dir, newline="\n")
+    _make_real_bundle(crlf_dir, newline="\r\n")
+
+    lf = ProjectModel.resolve(library_dir=lf_dir, project="lf")
+    crlf = ProjectModel.resolve(library_dir=crlf_dir, project="crlf")
+    assert lf.bundle_sha256 == crlf.bundle_sha256
+    assert len(lf.bundle_sha256) == 64  # a sha256 hex digest
+
+
+def test_bundle_sha256_changes_on_case_only_rename(tmp_path):
+    """UT-C5-4, P-3: sorted-path hashing means a case-only rename is a
+    different bundle, never silently treated as the same file on a
+    case-insensitive filesystem's behalf."""
+    bundle_dir = tmp_path / "bundle"
+    _make_real_bundle(bundle_dir)
+    before = ProjectModel.resolve(library_dir=bundle_dir, project="bundle").bundle_sha256
+
+    os.rename(bundle_dir / "default.yaml", bundle_dir / "Default.yaml")
+    after = ProjectModel.resolve(library_dir=bundle_dir, project="bundle").bundle_sha256
+
+    assert before != after
+
+
+def test_bundle_sha256_excludes_its_own_file(tmp_path):
+    """Writing bundle.sha256 into the directory and re-resolving must not
+    change the hash on the next read -- it is computed OVER the other
+    files, never over itself (a self-referential hash cannot be verified)."""
+    bundle_dir = tmp_path / "bundle"
+    _make_real_bundle(bundle_dir)
+    first = ProjectModel.resolve(library_dir=bundle_dir, project="bundle").bundle_sha256
+
+    (bundle_dir / "bundle.sha256").write_text(first + "\n", encoding="utf-8")
+    second = ProjectModel.resolve(library_dir=bundle_dir, project="bundle").bundle_sha256
+
+    assert first == second
+
+
+def test_bundle_bytes_for_recording_round_trips_file_contents(tmp_path):
+    """The embedded `/meta/config_bundle` blob (R-SIM-6) is a flat relpath
+    -> content mapping that reconstructs every bundle file, newline-
+    normalized -- what `sim view` on a colleague's recording relies on with
+    no build present."""
+    bundle_dir = tmp_path / "bundle"
+    _make_real_bundle(bundle_dir, newline="\r\n")
+
+    blob = bundle_bytes_for_recording(bundle_dir)
+    mapping = yaml.safe_load(blob.decode("utf-8"))
+
+    assert mapping["default.yaml"] == "aeb:\n  AEB_TTC_BRAKE_THRESHOLD_S: 1.2\n"
+    assert mapping["vehicle/ego_params.yaml"].startswith("EGO_LENGTH_M: 4.5")
+    assert mapping["fixture.ports.yaml"] == "component: fixture\n"
+
+
+def test_bundle_sha256_agrees_with_pack_config_bundle_py(tmp_path):
+    """S-C5's own cross-implementation proof: `interfaces/scripts/
+    pack_config_bundle.py` (build-time, stdlib-only) and `adas_sim.model.
+    project` (read-time) implement the P-9 algorithm independently --
+    proven to agree here, over a bundle the FORMER actually packs. The
+    stronger, full proof (adasInit(NULL) against a real compiled df_sil) is
+    `tests/system/test_c5_relocatability.py`."""
+    if not _INTERFACES_SCRIPTS.is_dir():
+        pytest.skip(f"interfaces submodule not checked out at {_INTERFACES_SCRIPTS}")
+    sys.path.insert(0, str(_INTERFACES_SCRIPTS))
+    import pack_config_bundle  # noqa: PLC0415
+
+    default_yaml = tmp_path / "src_default.yaml"
+    default_yaml.write_text("aeb:\n  AEB_MAX_AGE_OBJECTS_S: 0.2\n", encoding="utf-8")
+    ego_yaml = tmp_path / "src_ego.yaml"
+    ego_yaml.write_text(_EGO_TEMPLATE.format(length=4.5, width=1.8, wheelbase=2.7, overhang=0.9).replace("\n", "\r\n"), encoding="utf-8")
+    ports_yaml = tmp_path / "fixture.ports.yaml"
+    ports_yaml.write_text("component: fixture\n", encoding="utf-8")
+
+    bundle_dir = tmp_path / "packed"
+    packed_digest = pack_config_bundle.pack(
+        out=bundle_dir, default_yaml=default_yaml, ego_yaml=ego_yaml, ports_yaml=ports_yaml
+    )
+
+    read_digest = ProjectModel.resolve(library_dir=bundle_dir, project="packed").bundle_sha256
+    assert read_digest == packed_digest

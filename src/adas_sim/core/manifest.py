@@ -51,6 +51,9 @@ def build_manifest(
     scenario_path: Path | None = None,
     recording_path: Path | None = None,
     component_build_shas: Mapping[str, str] | None = None,
+    component_bundle_paths: Mapping[str, str] | None = None,
+    component_bundle_shas: Mapping[str, str] | None = None,
+    config_bundle_embedded: bool = False,
     bundle_sha: str = "",
     seed: int = 0,
     host: str = "",
@@ -66,6 +69,17 @@ def build_manifest(
     caller that has one (a real `dll:` stage) supplies it keyed by stage
     name.
 
+    `component_bundle_paths`/`component_bundle_shas` (`S-C5`, `sim_resim_
+    and_recording.md` §2's `sut.components[]`): the resolved bundle
+    directory's path and its `bundle.sha256`, per stage -- `config_bundle`
+    is a display string (the path a reader would check), never bundle
+    bytes; the bytes themselves go on the separate `/meta/config_bundle`
+    topic (`Recorder.open`'s `config_bundle_bytes`), embedded once per
+    recording, not per component. `config_bundle_embedded` states whether
+    THIS recording actually carries those bytes -- a run with a resolved
+    bundle but no recording in progress (e.g. `sim resim`'s own SUT) leaves
+    it `False`, honestly.
+
     `pipeline`/`pipeline_path` are both optional: `sim record`
     (`sim_resim_and_recording.md` §9's own "executes a SUT: no") has no
     pipeline at all, only a `Source` -- `pipeline_sha`/`overrides_repr`
@@ -73,6 +87,8 @@ def build_manifest(
     genuinely did not wire through a pipeline file, not placeholders for
     one it forgot to pass."""
     component_build_shas = component_build_shas or {}
+    component_bundle_paths = component_bundle_paths or {}
+    component_bundle_shas = component_bundle_shas or {}
     pipeline_sha = _sha256_file(pipeline_path) if pipeline_path is not None and pipeline_path.exists() else ""
     recording_sha = _sha256_file(recording_path) if recording_path is not None and recording_path.exists() else ""
     scenario_sha = _sha256_file(scenario_path) if scenario_path is not None and scenario_path.exists() else ""
@@ -92,7 +108,13 @@ def build_manifest(
     )
 
     components = tuple(
-        ComponentBuildInfo(name=stage.name, library_sha256=component_build_shas.get(stage.name, ""))
+        ComponentBuildInfo(
+            name=stage.name,
+            library_sha256=component_build_shas.get(stage.name, ""),
+            config_bundle=component_bundle_paths.get(stage.name, ""),
+            config_bundle_sha256=component_bundle_shas.get(stage.name, ""),
+            config_bundle_embedded=config_bundle_embedded,
+        )
         for stage in pipeline.stages if stage.mode != "off"
     ) if pipeline is not None else ()
 

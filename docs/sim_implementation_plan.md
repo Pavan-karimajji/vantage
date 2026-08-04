@@ -103,6 +103,58 @@ generator's first cut had (per-function dispatch fan-out not narrowed to
 tests), in the stage's own section below. Next up per the build-order table:
 `S-C5` (#13), the packed config bundle.
 
+**`S-C5` (#13) — Milestone 1 (the original 7 scope boxes) implemented
+2026-08-04, not yet tick-verified against a real `df_sil` build.** This
+session's environment has no Conan/MSVC (nor a Linux C++ toolchain wired to
+`AdasInterfaces`/`AdasSharedConfig`), so the C++ side could not be compiled
+or gtest-run for real — the per-stage loop's own discipline ("tick only
+what you verified") is why none of this stage's checkboxes are ticked yet,
+even though the code is believed complete. What landed: `interfaces/
+scripts/pack_config_bundle.py` + `cmake/config_bundle_pack.cmake` (the P-9
+hash algorithm, smoke-tested standalone: determinism, CRLF normalization,
+case-only-rename sensitivity, self-exclusion of `bundle.sha256`); `df`'s
+`module_path.{hpp,cpp}` (`resolveOwnLibraryDir`, `GetModuleHandleExW`+
+`GetModuleFileNameW`/`dladdr`, syntax-checked standalone on the Linux path
+only); `ParamLoader::fromBundleDir`/`egoParams()` (directory mode, additive
+— `dfInit`'s file-mode constructor call sites untouched); `adasInit`'s NULL
+tier now resolves `<library_dir>/config/` via the above and
+`adasManifest()` resolves `config_bundle_sha256` independently (module-
+relative, not tied to any `adasInit` call); `df_sil`'s `CMakeLists.txt`
+wired to pack the bundle POST_BUILD. New/updated gtest coverage in
+`test_generic_abi.cpp` (`AdasInitResolvesThePackedBundle`, manifest
+`config_bundle_sha256`/`project` assertions) and `test_param_loader.cpp`
+(`fromBundleDir`/`egoParams`, including the missing-directory degrade
+path) — none of it executed here, all of it unrun until a real build
+exists. On the Python side, fully implemented **and verified** (Python
+3.12 venv built ad hoc in this session, since the checked-in `.venv` is
+Windows-only and this shell's system Python was 3.10): `model/project.py`'s
+`ProjectModel` now computes the real multi-file bundle hash (was ego-file-
+only since `S-A2`) and gained `bundle_bytes_for_recording()`;
+`core/manifest.py`'s `build_manifest()` gained
+`component_bundle_paths`/`component_bundle_shas`/`config_bundle_embedded`;
+`sources/recorder.py`'s `open()` now embeds `config_bundle_bytes` on
+`/meta/config_bundle` when the concrete writer's own signature accepts it
+(checked via `inspect.signature`, since `CsvWriter.open()` does not — same
+"never silently dropped when supported" discipline `cli/convert.py`
+already set). New tests: `tests/unit/test_a2_project.py` gained the P-9
+hash-stability/case-rename/self-exclusion/cross-implementation-agreement
+cases (the last one imports `interfaces/scripts/pack_config_bundle.py`
+directly, real cross-repo proof the two independent implementations
+agree); `tests/system/test_c5_relocatability.py` proves the Python-facing
+half of `ST-C5-1` against a minimal, dependency-free fixture library
+(`tests/fixtures/c5_bundle_fixture/adas_fixture.cpp`, compiled with `g++`
+at test time) whose `adasInit`/`adasManifest` bodies deliberately mirror
+`df_interface_c.cpp`'s own S-C5 logic — evidence for the mechanism, not a
+substitute for the real `df_sil` proof. Full `pytest`/`check_invariants.py`/
+`docs/py/run_all.py` green (558 tests, +8 from this stage). **Deferred by
+explicit scope choice, not started:** the 2026-07-31 addendum (`OD-11`
+project/ego-param agreement across a multi-component pipeline, `OD-12`
+`<COMPONENT>_<FN>_PERIOD_US` read from the bundle and reported per-function
+through `buildManifest()` at runtime) — `UT-C5-6/7/10/11/12`, `ST-C5-2`.
+**Next action for a session with a real C++ toolchain:** build `df_sil`,
+run `df_tests`, confirm the updated gtest assertions, then tick this
+stage's own checkboxes with the date.
+
 ### ▶ The build sequence — this table is the authority on order
 
 **Stage ids are stable citations and are NOT in build order** (§0 — "labels are

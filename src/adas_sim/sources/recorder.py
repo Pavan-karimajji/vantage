@@ -30,6 +30,7 @@ canonical port names `Pipeline` wiring uses.
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -70,12 +71,19 @@ class Recorder:
     def __init__(
         self, pipeline: Pipeline | None, source: Source, path: Path, *, meta: RunManifest,
         source_provenance: Provenance | Mapping[str, Provenance] = Provenance.MOCKED,
+        config_bundle_bytes: bytes = b"",
     ) -> None:
         self._pipeline = pipeline
         self._source = source
         self._path = path
         self._meta = meta
         self._source_provenance = source_provenance
+        # S-C5, R-SIM-6: the SUT's config bundle, embedded once at open() on
+        # /meta/config_bundle -- empty when the caller has no real component
+        # bundle to embed (e.g. a pure-synthetic-source `sim record` run
+        # with no `dll:`/`stubdll:` stage), the honest "nothing to embed"
+        # rather than a placeholder.
+        self._config_bundle_bytes = config_bundle_bytes
         self._writer = writer_for(path)
         self._elapsed_ns = 0
         self._tick_index = 0
@@ -154,7 +162,16 @@ class Recorder:
 
     def open(self, scenario: Scenario) -> None:
         self._source.start(scenario)
-        self._writer.open(self._path, self._meta, self._topics())
+        # `config_bundle_bytes` is an extra beyond RecordingWriter's minimal
+        # Protocol (`io/base.py`, mirrors `cli/convert.py`'s own comment) --
+        # not every registered writer accepts it (`CsvWriter.open()` does
+        # not), so it is only ever passed when the concrete writer's own
+        # signature declares it, never assumed and never silently dropped
+        # when it's actually supported.
+        open_kwargs: dict[str, bytes] = {}
+        if self._config_bundle_bytes and "config_bundle_bytes" in inspect.signature(self._writer.open).parameters:
+            open_kwargs["config_bundle_bytes"] = self._config_bundle_bytes
+        self._writer.open(self._path, self._meta, self._topics(), **open_kwargs)
         self._opened = True
 
     def _write_one(self, qualified_port_name: str, payload: bytes, log_time_ns: int) -> None:
