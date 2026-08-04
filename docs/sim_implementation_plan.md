@@ -347,29 +347,23 @@ starting them now means building on a mechanism that does not deliver.
 [sim_audit_log.md](sim_audit_log.md) — read it there, not here, so there is one
 list and it gets reconciled. Summary of what is open and where it is owned:
 
-| `AR-n` | Owned by | Blocks step 1? |
+**Two rows remain open** after the 2026-08-04 fix session, which closed seven
+(`AR-1`, `AR-2`, `AR-3`, `AR-5`, `AR-6`, `AR-7`, `AR-8`) and reclassified one
+(`AR-9`):
+
+| `AR-n` | What it needs | Blocks the queue? |
 |---|---|---|
-| `AR-1`, `AR-3` | `S-C5`'s own scope boxes | **`AR-1` *is* step 1** |
-| `AR-7`, `AR-8` | one-line test-docstring fixes; do them next time you touch those files | no |
-| `AR-2`, `AR-4` | **human decision** — below | no |
-| `AR-5` | `GT-10`, at `S-E3` or whenever a partial clone is available | no |
-| `AR-6`, `AR-9` | housekeeping; `AR-6` is a one-character `.gitignore` fix left unapplied on purpose | no |
+| **`AR-24`** | **A packaging fix in `interfaces`** — it ships no `cmake/` in its Conan package, so **no component builds from a partial clone**. Needs `install(DIRECTORY cmake/ ...)`, a republish, and a re-probe. Found by running `GT-10` for the first time; see §2 | **Yes, for `S-C7`/`S-C8`** and for every "only that component checked out" claim (`FR-SIM-66`, `NR-SIM-10`) |
+| **`AR-4`** | **A named person for `GT-14`.** `GT-13` legitimately cannot be filled yet — every number it wants is behind an unbuilt stage — but `GT-14` needs an owner and a second reader, which no stage can produce | no, until `S-E3` |
 
-#### Human decisions needed — do not pick these alone
+#### The one human decision left — do not pick this alone
 
-*(Per §0a's "Stop and ask". Both are cheap to answer and neither blocks
-step 1.)*
-
-1. **`mathlib` and `GT-4` (`AR-2`).** Does `mathlib` get a real `gtest` target
-   (item 22 deferred its tests out of ctest), or does the `GT-4` row get struck
-   with a written reason? Either is defensible; leaving the row un-runnable is
-   not, because it reads as a gate and is not one.
-2. **`GT-13`/`GT-14` ownership (`AR-4`).** Both need a *named person*, not a
-   stage — `GT-14` explicitly ("Owner / Second reader"), and `GT-13` because
-   the numbers it demands must be measured on a stated machine. They are
-   currently blank with no owner, and §2 now says blanks are their finding. If
-   nobody is going to own them before `S-E3`, that should be recorded as a
-   decision rather than discovered at `S-E3`.
+**`GT-14` ownership (`AR-4`).** It needs a *named owner and a named second
+reader*, plus a measured maintainer-onboarding time. No stage can produce
+those, and `S-E3` is where their absence becomes a blocked gate rather than a
+blank. If nobody is going to own it, record that as a decision now instead of
+discovering it at `S-E3`. *(`GT-13`'s blanks are not a decision — they are
+correctly blocked on `S-D7`, `S-C6` and the player; §2 says so.)*
 
 ### The per-stage loop — do this every time, in this order
 
@@ -559,7 +553,7 @@ records a one-off mechanisation, not a re-check.
       |---|---|---|---|
       | `df` | `scripts/build.py df -t gtest -p vs2026 -P base` | **233** | **2026-08-04 audit: 238 run, 236 pass, 2 FAIL** (`S-C5`, see §0a) — count above floor, **gate RED on the pass clause** |
       | `interfaces` | `scripts/build.py interfaces -t gtest -p vs2026 -P base` | **10** | 2026-08-04 audit: 10/10 (floor raised from 6 — `S-C1aΔ2` added the `ComponentManifest` cases) |
-      | `mathlib` | — | **n/a** | **2026-08-04 audit: this row is not runnable.** `mathlib`'s `conf/build.yml` declares only `sil` and `package`; there is no `gtest` target, so `-t gtest` exits *"unknown target 'gtest'"*. `mathlib` has no ctest suite (item 22 landed its tests outside one). This is a **plan defect, not a blank measurement** — resolve it deliberately: either give `mathlib` a `gtest` target, or strike the row and say in `plan.md` item 22 that `mathlib` is covered elsewhere |
+      | `mathlib` | `scripts/build.py mathlib -t gtest -p vs2026 -P base` | **29** | 2026-08-04 audit: 29/29 on `-P base` and `-P cus1` — **first real number.** The row was previously un-runnable (`conf/build.yml` declared only `sil`/`package`, so `-t gtest` exited *"unknown target"*); `AR-2` wired the target and implemented `TC-U1`/`U2`/`U3` + `TC-D2`. **Its first link found a real latent defect** — `e_atan2f.c`/`e_powf.c` referenced `fabsf` while `s_fabsf.c`'s definition was renamed to `__olm_fabsf`, unresolved at link. Nothing had ever linked mathlib's float path: `df` uses the double overloads, and mathlib had no test target. Exactly the blindness this row exists for |
       | `vdy` | `scripts/build.py vdy -t gtest -p vs2026 -P base` | **18** | 2026-08-04 audit: 18/18 (confirms `S-C1d`'s number) |
       | `perception-core` | `scripts/build.py perception-core -t gtest -p vs2026 -P base` | **2** | 2026-08-04 audit: 2/2 — **first real number**, replacing "never run" |
       | `sil_host` | `scripts/build.py sil_host -t sil -p vs2026 -P base`, then run `sil.exe` **under `conanrun.bat`** | builds; runs exit 0 | 2026-08-04 audit: builds clean; `sil.exe` exits 0 and ticks `df`+`vdy` |
@@ -623,11 +617,36 @@ boundary the first nine watched from only one side.*
 - [ ] **GT-10 — every module builds standalone.** From a clean partial clone of
       that module alone plus its declared Conan `requires:` — no sibling
       checkout on disk — each module in `GT-4`'s matrix configures and builds
-      (`docs/partial_clone_workflow.md`, `R-VAR-2`, `NR-SIM-12`). "Standalone
-      builds" is currently an intention with no test: every build in this
-      project so far has run in a full checkout with editables registered, which
-      is exactly the configuration that hides a missing `requires:`. Run per
+      (`docs/partial_clone_workflow.md`, `R-VAR-2`, `NR-SIM-12`). Run per
       module, recorded with a date.
+
+      **First run ever, 2026-08-04 (`AR-5`).** Method: fresh `git clone` of the
+      superproject into an empty directory, `git submodule update --init` for
+      **one** module only, and a **separate `CONAN_HOME`** — the last part
+      matters, because this repo's normal Conan home has every `adas-*` package
+      registered *editable*, which resolves them from the working checkout and
+      is precisely the configuration that hides the failure below.
+
+      | Module | Result |
+      |---|---|
+      | `mathlib` | **PASS** — configures, builds, links with no sibling checkout and an empty cache |
+      | `df` | **FAIL** — CMake configure error: `include could not find requested file: sil_ports_generate` / `config_bundle_pack`, then `Unknown CMake command "adas_generate_sil_ports"` |
+
+      **Root cause of the `df` failure, diagnosed not guessed (`AR-24`):**
+      `interfaces`' `package_info()` declares `builddirs = ["cmake"]`, but
+      `modules/interfaces/CMakeLists.txt` installs `cpp/`, `include/` and
+      `proto/` and **never `cmake/`** — so `package()`'s `CMake(self).install()`
+      produces a package whose declared build dir does not exist, and
+      `include(sil_ports_generate)` finds nothing. Not staleness: the package
+      resolved and downloaded from `adas-local` fine. The recipe's own comment
+      called it — *"untested by this stage (today's only exercised path is
+      editable mode), kept symmetric on principle"*. It was symmetric and wrong.
+
+      **This is the gate working on its first run.** `S-C1d` added the generator
+      to `interfaces` specifically *because* `GT-10` requires standalone builds,
+      and the one configuration nobody could run is the one where that choice
+      breaks. Every `-t gtest` number in `GT-4` above was measured in a full
+      checkout and none of them would have caught it.
 - [x] **GT-11 — no port address is a literal outside the component that
       declares it.** A scan over every `modules/*/sim/**` plug-in, scenario
       `expect:` block, workspace and viewpoint file for a spelled port address
