@@ -14,17 +14,19 @@ an address becomes structure and a verb meets real bytes.
 expression, and an expression grammar is the over-configuration this
 design exists to answer.
 
-**Fixed-slot behaviour is keyed on a manifest attribute this framework
-cannot supply yet.** `select`/`drop` clear an addressed element **in
-place** on a port whose manifest declares `fixed_slots=True` (compaction
-would renumber every later index and break track association silently);
-they **compact** (remove and shift) on `fixed_slots=False`. `PortSpec` has
-no `fixed_slots` field until `S-C1aΔ2`/`S-C1d` (build order #11/#12, after
-this stage) -- so today, every real `select`/`drop` is a load error naming
-the port and the missing attribute (`apply_override`'s own
-`fixed_slots=None` branch). Never a default: `False` would mean "safe to
-compact" and `True` would mean "safe to zero", and both are guesses about
-someone else's data (`NR-SIM-4`).
+**Fixed-slot behaviour is keyed on a manifest attribute no real component
+populates yet.** `select`/`drop` clear an addressed element **in place**
+on a port whose manifest declares `fixed_slots=True` (compaction would
+renumber every later index and break track association silently); they
+**compact** (remove and shift) on `fixed_slots=False`. `PortSpec.
+fixed_slots` exists as of `S-C1aΔ2` (build order #11), but no real
+component's manifest sets it yet -- that is `S-C1d`'s own job (build
+order #12, generating it from `conf/ports.yaml`), still pending -- so
+today, every real `select`/`drop` is still a load error naming the port
+and the undeclared attribute (`apply_override`'s own `fixed_slots=None`
+branch). Never a default: `False` would mean "safe to compact" and `True`
+would mean "safe to zero", and both are guesses about someone else's data
+(`NR-SIM-4`).
 """
 
 from __future__ import annotations
@@ -272,7 +274,7 @@ def apply_override(
                 expected=f"the port's manifest to declare fixed_slots for a {override.verb.value} override",
                 found="fixed_slots absent from the manifest", where=f"address {address.raw!r}",
                 hint="drop/select on a repeated field needs fixed_slots declared true or false -- "
-                     "neither may be guessed (NR-SIM-4); arrives at S-C1aΔ2/S-C1d",
+                     "neither may be guessed (NR-SIM-4); arrives at S-C1d",
             )
         container, index = _resolve_repeated_target(message, address.path, address=address.raw)
         _apply_structural(container, index, override.verb, fixed_slots=fixed_slots)

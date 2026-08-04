@@ -446,12 +446,14 @@ def _validate_overrides(stages: Sequence[Stage], components: Mapping[str, SilCom
     """`S-C1cΔ`: two checks beyond `_parse_overrides`' own grammar gate. An
     override addresses one of *this stage's own* declared input ports
     (never an arbitrary string); and a `select`/`drop` override needs
-    `fixed_slots` on that port's spec. `PortSpec` carries no such field
-    until `S-C1aΔ2`/`S-C1d` (build order #11/#12, after this stage) -- so
-    today every real `select`/`drop` raises here, naming the port and the
-    missing attribute (`UT-C1c-25`'s documented, honest, only-reachable
-    path). Never a guessed default (`NR-SIM-4`): `False` would mean "safe
-    to compact", `True` would mean "safe to zero".
+    `fixed_slots` on that port's spec. `PortSpec.fixed_slots` exists as of
+    `S-C1aΔ2`, but no real component yet POPULATES it -- that is `S-C1d`'s
+    own job (build order #12, generating it from `conf/ports.yaml`), still
+    pending -- so today every real `select`/`drop` still raises here,
+    naming the port and the undeclared field (`UT-C1c-25`'s documented,
+    honest, only-reachable path until `S-C1d` lands). Never a guessed
+    default (`NR-SIM-4`): `False` would mean "safe to compact", `True`
+    would mean "safe to zero".
     """
     for stage in stages:
         manifest = components[stage.name].manifest
@@ -465,12 +467,12 @@ def _validate_overrides(stages: Sequence[Stage], components: Mapping[str, SilCom
                     found=f"declared inputs: {declared}", where=f"stage '{stage.name}' overrides '{key}'",
                     hint="an override addresses one of this stage's own input ports",
                 )
-            if override.verb in (OverrideVerb.SELECT, OverrideVerb.DROP) and getattr(port_spec, "fixed_slots", None) is None:
+            if override.verb in (OverrideVerb.SELECT, OverrideVerb.DROP) and port_spec.fixed_slots is None:
                 raise ContractError(
                     expected=f"port '{address.port}' to declare fixed_slots for a {override.verb.value} override",
                     found="fixed_slots absent from the manifest", where=f"stage '{stage.name}' overrides '{key}'",
                     hint="drop/select on a repeated field needs fixed_slots declared true or false "
-                         "(NR-SIM-4); arrives at S-C1aΔ2/S-C1d",
+                         "(NR-SIM-4); arrives at S-C1d",
                 )
 
 
@@ -609,7 +611,7 @@ class Pipeline:
                 payload, first_seen = apply_override(
                     payload, message_cls, address, override,
                     first_seen=self._override_first_seen.get(state_key),
-                    fixed_slots=getattr(port_spec, "fixed_slots", None),
+                    fixed_slots=port_spec.fixed_slots,
                 )
                 self._override_first_seen[state_key] = first_seen
             inputs[port_name] = payload

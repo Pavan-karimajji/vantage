@@ -75,9 +75,17 @@ for exactly what's left. Same-day follow-up also wired `S-C3`'s fault
 vocabulary into `Pipeline.exec`/`step` (deferred at original landing) and
 fixed a real input-side ABI gap it surfaced (`_build_in_portset` hardcoded
 `valid`/`ageS`, discarding whatever a caller knew) — see the fault-injection
-item in `S-C3`'s own section below. Next up per the build-order table:
-`S-C1aΔ2` (#11), starting Block 2 (a real MSVC/Conan build is required from
-here on).
+item in `S-C3`'s own section below.
+
+**`S-C1aΔ2` (#11) landed 2026-08-04** — the first Block 2 stage, and the
+first requiring a real MSVC/Conan build in this environment (confirmed
+available: `conan`, `cmake`, MSVC/VS all present; every prior "no compiler
+here" note in this stage's own history was a different environment).
+`PortSpec` gained `period_us`/`fixed_slots` in `interfaces`' proto, read
+through in `contracts/component.py`; `df` rebuilt clean against the edited
+`interfaces` (`gtest` 233/233, real build) confirming nothing downstream
+broke. Full detail in the stage's own section below. Next up per the
+build-order table: `S-C1d` (#12), the generated ABI shim.
 
 ### ▶ The build sequence — this table is the authority on order
 
@@ -2815,29 +2823,69 @@ this stage already ticked. Discovering that at `S-C5` would have meant building
 `S-C1d`'s generator, then reopening `interfaces`, then regenerating — the
 cross-repo rework the Phase C review already paid for once.
 
-- [ ] **Per-**function** period.** The ticked box above records `period_ns` as
+- [x] **Per-**function** period.** The ticked box above records `period_ns` as
       *"component-level, not per `PortSpec`"*, and `OD-12` reverses it: a period
       is declared per function, in **integer microseconds**, so that AEB at 20 Hz
       and BSD at 10 Hz in one library are expressible. Add the per-function
       field; **keep component-level `period_ns` readable** so `S-C1c`'s shipped
       GCD scheduler and `UT-C1a-5` keep working — this is additive, like every
-      other Phase C change (`S-E2` is where anything is removed)
-- [ ] **`fixed_slots` per port.** `OD-8`'s `drop` must clear a fixed-size padded
+      other Phase C change (`S-E2` is where anything is removed).
+      *2026-08-03:* `PortSpec.period_us` (field 7, `uint64`) in
+      `interfaces/proto/Adas__Sil/component_manifest.proto` — plain, not
+      `optional` (same "0 = undeclared, no real port runs at 0 us" reasoning
+      `period_ns` already uses, so no presence tracking is needed)
+- [x] **`fixed_slots` per port.** `OD-8`'s `drop` must clear a fixed-size padded
       slot in place and remove a variable-length element — and **the framework
       must not guess which**. The port declares it; the manifest carries it;
       Python reads it. Declaring it anywhere the framework reads directly
       (`conf/ports.yaml`, a pipeline key) would be a second description free to
-      drift from the port's real shape, which is `R-SIM-4`'s whole point
-- [ ] Both fields are **optional with an honest absent value** — `0`/unset means
+      drift from the port's real shape, which is `R-SIM-4`'s whole point.
+      *2026-08-03:* `PortSpec.fixed_slots` (field 8, `optional bool`) — real
+      proto3 explicit presence, since `false` is itself a meaningful answer
+      here (unlike `period_us`). `contracts/component.py`'s hand-built
+      bootstrap schema (`R-SIM-11`'s "nothing to resolve a descriptor_set
+      from yet") reproduces protoc's own synthetic-oneof shape for a
+      proto3-optional field by hand, since it cannot generate one
+- [x] Both fields are **optional with an honest absent value** — `0`/unset means
       *undeclared*, never a default that looks like an answer (`NR-SIM-4`).
-      A consumer that needs one and finds it absent says so, naming the field
-- [ ] `UT-C1a-6` the per-function period round-trips, two functions at different
+      A consumer that needs one and finds it absent says so, naming the field.
+      *2026-08-03:* `contracts/pipeline.py`'s `_validate_overrides`/
+      `_apply_input_overrides` read `port_spec.fixed_slots` directly now (no
+      more `getattr(..., None)` — the attribute genuinely exists); **no real
+      component populates either field yet**, that is `S-C1d`'s own job
+      (build order #12) — `select`/`drop` still raises today, honestly,
+      naming the still-undeclared field, not a regression
+- [x] `UT-C1a-6` the per-function period round-trips, two functions at different
       periods are both readable, and a manifest carrying only the old
-      component-level field still loads — the additive guarantee, tested
-- [ ] `UT-C1a-7` `fixed_slots` round-trips per port, and a port that does not
+      component-level field still loads — the additive guarantee, tested.
+      *2026-08-03:* `interfaces/tests/unit/test_component_manifest.cpp`
+      (`PortPeriodUsRoundTripsPerFunctionIndependently`,
+      `PortPeriodUsDefaultsToUndeclaredAndOldManifestsStillLoad`) — real
+      MSVC/Conan build, 10/10 green (7 prior + 3 new); Python binding half
+      in `tests/python/test_component_manifest_roundtrip.py`, run directly
+      against generated bindings, green
+- [x] `UT-C1a-7` `fixed_slots` round-trips per port, and a port that does not
       declare it reads as **undeclared** rather than as `false` — because
       `false` means *"variable length, safe to compact"*, which is exactly the
-      silent renumbering `OD-8` exists to prevent
+      silent renumbering `OD-8` exists to prevent.
+      *2026-08-03:* `FixedSlotsUndeclaredIsDistinctFromExplicitFalse` (same
+      file) — asserts `HasField("fixed_slots")` on all three states
+      (undeclared / explicit false / explicit true), not just the bool value
+
+  **`S-C1aΔ2` closed 2026-08-04.** `test_c1c_component.py` gained
+  `test_parse_manifest_round_trips_every_field` (extended) and
+  `test_parse_manifest_port_period_us_and_fixed_slots_undeclared_defaults`
+  — the Python-side counterpart to `UT-C1a-6`/`UT-C1a-7`, decoding both
+  fields through `contracts/component.py`'s hand-built bootstrap schema,
+  not just the generated C++/Python bindings `interfaces`' own tests use.
+  536/536 `modules/sim` unit tests green. `df` rebuilt against the edited
+  `interfaces` via its active `conan editable` (no republish needed): `sil`
+  and `gtest` targets both green — `gtest` 233/233 (real MSVC/Conan build,
+  `vs2026`), confirming the additive proto change breaks nothing downstream
+  before a single line of `S-C1d`'s generator exists. `df` itself still
+  populates neither new field (that generator is `S-C1d`'s own job) — this
+  stage's job was the manifest attribute existing and being readable, both
+  now true.
 
 **Discipline** (every stage)
 - [x] portability §3 ticked — exposure: `P-5` (the ABI header must compile for
@@ -3424,14 +3472,16 @@ grammar is still free. Read arch §5.10 first.
       exists to prevent. The framework must not guess which shape a port has;
       the port declares it, through the manifest (`R-SIM-4`), never through a
       file the framework reads directly.
-      **The attribute arrives at `S-C1aΔ2`/`S-C1d` (build order #11/#12), which
-      is after this stage** — so until then, **`drop` on a port whose manifest
-      does not declare `fixed_slots` is a load error naming the port and the
-      missing attribute.** Not a default: `false` would mean *"safe to compact"*
-      and `true` would mean *"safe to zero"*, and both are guesses about someone
-      else's data (`NR-SIM-4`). This is what keeps this stage compiler-free
-      without deferring the verb. *2026-07-31:* the clearing/compacting LOGIC
-      is implemented and tested directly (`apply_override`, taking `fixed_slots`
+      **The attribute itself landed at `S-C1aΔ2` (build order #11, 2026-08-03)
+      — populating it for a real component is `S-C1d`'s own job (build order
+      #12), still pending** — so until then, **`drop` on a port whose
+      manifest does not declare `fixed_slots` is a load error naming the port
+      and the undeclared attribute.** Not a default: `false` would mean
+      *"safe to compact"* and `true` would mean *"safe to zero"*, and both
+      are guesses about someone else's data (`NR-SIM-4`). This is what kept
+      this stage compiler-free without deferring the verb. *2026-07-31:* the
+      clearing/compacting LOGIC is implemented and tested directly
+      (`apply_override`, taking `fixed_slots`
       as an explicit parameter, `UT-C1c-25`'s "first half"); the GATE that
       determines whether the real manifest may use it at all lives in
       `Pipeline._validate_overrides` — `PortSpec` has no `fixed_slots` field,

@@ -96,7 +96,10 @@ def test_parse_manifest_round_trips_every_field():
         project="base", config_bundle_sha256="", descriptor_set=b"\x01\x02", period_ns=50_000_000,
     )
     msg.inputs.add(name="objects", proto_type="adas.perception.GenObjectList", optional=False)
-    msg.outputs.add(name="widget.outputs", proto_type="adas.df.WidgetOutputs", max_bytes=256, owner_function="widget")
+    msg.outputs.add(
+        name="widget.outputs", proto_type="adas.df.WidgetOutputs", max_bytes=256, owner_function="widget",
+        period_us=50_000, fixed_slots=True,
+    )
 
     manifest = parse_manifest(msg.SerializeToString())
 
@@ -107,8 +110,33 @@ def test_parse_manifest_round_trips_every_field():
     assert manifest.period_ns == 50_000_000
     assert manifest.inputs == (PortSpec(name="objects", proto_type="adas.perception.GenObjectList"),)
     assert manifest.outputs == (
-        PortSpec(name="widget.outputs", proto_type="adas.df.WidgetOutputs", max_bytes=256, owner_function="widget"),
+        PortSpec(
+            name="widget.outputs", proto_type="adas.df.WidgetOutputs", max_bytes=256, owner_function="widget",
+            period_us=50_000, fixed_slots=True,
+        ),
     )
+
+
+def test_parse_manifest_port_period_us_and_fixed_slots_undeclared_defaults():
+    """S-C1aΔ2 (UT-C1a-6/7's Python-side counterpart): a port that never sets
+    `period_us`/`fixed_slots` decodes as 0/`None` -- undeclared, not a
+    guessed value (`NR-SIM-4`). `None`, not `False`: a real declared
+    `fixed_slots=False` ("safe to compact") must stay distinguishable from
+    "never declared" all the way through `parse_manifest`, the same
+    `HasField` distinction `interfaces`' own C++/Python round-trip tests
+    check at the wire level."""
+    schema = component_mod._manifest_proto_class()
+    msg = schema(component="widget")
+    msg.outputs.add(name="undeclared_port")
+    msg.outputs.add(name="variable_length_port", fixed_slots=False)
+    msg.outputs.add(name="fixed_size_port", fixed_slots=True)
+
+    manifest = parse_manifest(msg.SerializeToString())
+
+    assert manifest.outputs[0].period_us == 0
+    assert manifest.outputs[0].fixed_slots is None
+    assert manifest.outputs[1].fixed_slots is False
+    assert manifest.outputs[2].fixed_slots is True
 
 
 def test_manifest_ports_are_discovered_from_the_real_library_not_hardcoded():

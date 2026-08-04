@@ -38,7 +38,19 @@ _DEFAULT_OUTPUT_CAP = 256
 
 @dataclass(frozen=True, slots=True)
 class PortSpec:
-    """`sim_sil_contract.md` SS3.2's `PortSpec`, one port either direction."""
+    """`sim_sil_contract.md` SS3.2's `PortSpec`, one port either direction.
+
+    `period_us` (`OQ-12`/`OD-12`, `S-C1aΔ2`): this port's own function's
+    cycle time in integer microseconds, `0` meaning undeclared -- the same
+    "no real rate is 0" reasoning `ComponentManifest.period_ns` already
+    uses, so a plain `int` needs no presence tracking.
+
+    `fixed_slots` (`OD-8`, `S-C1aΔ2`): `True`/`False` is a real, declared
+    answer ("safe to compact" or not); `None` is *undeclared*, and the two
+    must never collide (`NR-SIM-4`) -- unlike `period_us` above, `False`
+    cannot stand in for "not declared", so this is `bool | None`, not a
+    plain `bool` defaulting to `False`.
+    """
 
     name: str
     proto_type: str
@@ -46,6 +58,8 @@ class PortSpec:
     optional: bool = False
     owner_function: str = ""
     doc: str = ""
+    period_us: int = 0
+    fixed_slots: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,6 +124,26 @@ def _build_manifest_schema() -> type:
     field(port_spec, "optional", 4, ft.TYPE_BOOL)
     field(port_spec, "owner_function", 5, ft.TYPE_STRING)
     field(port_spec, "doc", 6, ft.TYPE_STRING)
+    field(port_spec, "period_us", 7, ft.TYPE_UINT64)
+    # `fixed_slots` is proto3 `optional` on the wire (interfaces/proto/
+    # Adas__Sil/component_manifest.proto) -- explicit presence, not a plain
+    # bool. protoc implements that as a single-field SYNTHETIC oneof named
+    # "_<field>" with proto3_optional=true on the field (the FileDescriptorProto
+    # shape every proto3-optional field compiles to); reproduced by hand here
+    # for the same reason the rest of this schema is hand-built (R-SIM-11's
+    # bootstrap problem -- nothing to resolve a descriptor_set FROM yet).
+    # Skipping this and declaring a bare bool would silently lose presence:
+    # `HasField("fixed_slots")` would raise (no oneof) instead of
+    # distinguishing undeclared from explicit False.
+    fixed_slots_oneof_index = len(port_spec.oneof_decl)
+    port_spec.oneof_decl.add(name="_fixed_slots")
+    fixed_slots_field = port_spec.field.add()
+    fixed_slots_field.name = "fixed_slots"
+    fixed_slots_field.number = 8
+    fixed_slots_field.type = ft.TYPE_BOOL
+    fixed_slots_field.label = ft.LABEL_OPTIONAL
+    fixed_slots_field.oneof_index = fixed_slots_oneof_index
+    fixed_slots_field.proto3_optional = True
 
     manifest = fdp.message_type.add()
     manifest.name = "ComponentManifest"
@@ -151,6 +185,7 @@ def parse_manifest(raw: bytes) -> ComponentManifest:
         return PortSpec(
             name=p.name, proto_type=p.proto_type, max_bytes=p.max_bytes,
             optional=p.optional, owner_function=p.owner_function, doc=p.doc,
+            period_us=p.period_us, fixed_slots=p.fixed_slots if p.HasField("fixed_slots") else None,
         )
 
     return ComponentManifest(
