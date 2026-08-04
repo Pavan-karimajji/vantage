@@ -29,6 +29,44 @@ is the failure the whole mechanism exists to prevent.
 row before writing a new one. If a run cannot shrink this table, the previous
 run's output was ignored — which is itself a finding.
 
+## Which file to start from
+
+| If the job is… | Start at |
+|---|---|
+| *"fix the audit findings"* | **this file** — pick rows from Open, then follow each to its owner |
+| *"what do we build next"* | `sim_implementation_plan.md` §0a — the resume marker and build order |
+| *"audit the module again"* | `../.claude/prompts/sim_audit.md` |
+
+The two are not alternatives: this file is an **index by problem**, the plan is
+the **queue by build order**. A finding always names its owner, so starting
+here always leads back to the plan — but a fix session should still read the
+owning stage before editing, because the stage carries the `**Must not**`
+constraints and this file deliberately does not repeat them.
+
+## How to work a row
+
+1. **Read the row, then open its owner** — the stage or document under *Landed
+   in / owner*. Do not fix straight from this file.
+2. **Fix at the origin level.** `Lvl 1`/`2` means the master document
+   (`sim_requirements.md`, `sim_architecture.md` or a contract doc) is edited —
+   a requirements defect is not fixed by changing code that happens to satisfy
+   the new reading.
+3. **Re-verify with the evidence the row names** — the failing test, the build
+   command, the check. Not "it looks right now".
+4. **Tick the owning stage's checkbox**, citing the `AR-n`.
+5. **Move the row to Closed**, filling *Landed in* with the document(s) and/or
+   stage(s) actually edited, plus the date.
+6. **Run `python docs/py/run_all.py`.** `check_audit_ledger.py` refuses a
+   `CLOSED` row that names nothing, names something that does not resolve, or
+   — for `Lvl 1`/`2` — names only a stage. That refusal is the point: it is
+   what stops this file drifting into being the correction rather than the
+   index of one.
+7. **Commit citing the id** (`fix(sim): AR-1 -- …`).
+
+**A fix session may not add findings.** If it discovers something new, note it
+and leave it for the next audit run — mixing discovery into fixing is how a
+ledger stops being reconcilable.
+
 ---
 
 ## Run 1 — 2026-08-04
