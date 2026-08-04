@@ -35,7 +35,13 @@ So this check enforces, mechanically:
   only a stage. A requirements defect closed by ticking a stage box has not
   been fixed at its origin;
 * **``WONTFIX`` and ``SUPERSEDED`` carry a reason** — the columns exist so the
-  decision survives the person who made it.
+  decision survives the person who made it;
+* **the ledger carries its own instructions** — the four header sections the
+  audit method requires. A later session reads *this file*, not the audit
+  prompt, so a ledger without a stated way to work it is a list of problems and
+  nothing else. These were hand-added once, after a fix session would have
+  tripped over the gap; checking them is what stops the next ledger being
+  created without them.
 
 Coverage of the *content* — is the correction correct? — is not checkable here
 and is not attempted. This guards the shape.
@@ -89,6 +95,23 @@ STAGE_REF_RE = re.compile(r"`(S-[A-E]\d+[a-z]?(?:Δ\d?)?)`")
 
 LEVELS_NEEDING_A_DOC = {"1", "2"}
 
+#: The header sections the audit method requires every ledger to be created
+#: with (root `.claude/prompts/system_audit_and_replan.md`, "The ledger's own
+#: header is part of the method"). Matched on the heading, case-insensitively:
+#: this is a shape check, so it proves a section exists, never that its content
+#: is right.
+REQUIRED_SECTIONS = (
+    "which file to start from",
+    "how to read a row",
+    "how to work a row",
+)
+#: Phrases that must appear somewhere, because they are the two rules that stop
+#: the ledger becoming a second source of truth rather than an index of one.
+REQUIRED_RULES = (
+    ("not closable until", "the level 1/2 rule (a master document must be edited)"),
+    ("reconciliation", "the reconcile-before-append rule"),
+)
+
 
 def main() -> int:
     if not LEDGER.exists():
@@ -103,6 +126,19 @@ def main() -> int:
     rep.line("Audit ledger shape check -- sim_audit_log.md")
 
     failures: list[str] = []
+
+    # -- the ledger must carry its own instructions -------------------------
+    headings = {h.strip().lower() for h in re.findall(r"^#{2,3} +(.+)$", text, re.M)}
+    for section in REQUIRED_SECTIONS:
+        if not any(section in h for h in headings):
+            failures.append(
+                f"missing required section '{section}' -- the audit method requires "
+                "every ledger to be created carrying its own instructions")
+    lowered = text.lower()
+    for phrase, what in REQUIRED_RULES:
+        if phrase not in lowered:
+            failures.append(f"ledger does not state {what}")
+
     seen: dict[str, int] = {}
     counts = {"OPEN": 0, "CLOSED": 0, "SUPERSEDED": 0, "WONTFIX": 0}
     rows = 0
