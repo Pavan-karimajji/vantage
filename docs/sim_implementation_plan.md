@@ -334,36 +334,45 @@ verbs would be written twice.
 
 ### ▶▶ RESUME MARKER — 2026-08-04 audit. Start here, in this order.
 
-**1. Finish `S-C5` (#13).** It is the current stage and it is red. Do the
-four numbered steps in the *"What the real build found"* block above, in
-order. Nothing else in Block 2 should start first — `S-C8` (#14), `S-C7`
-(#15) and `S-C6` (#16) all consume `adasInit(NULL)`'s bundle resolution, so
-starting them now means building on a mechanism that does not deliver.
+**1. Finish `S-C5` (#13) — still the current stage, but no longer blocked.**
+`AR-1` is fixed: the bundle now travels with the library and `df` is
+**238/238** on `-P base` and `-P cus1`. The stage sits at **2 of 34 boxes**,
+and that is a *recording* gap, not a work gap — Milestone 1 was implemented
+on 2026-08-04 and could not be ticked because the build was red. It is green
+now, so those boxes are **verifiable today**. Work them in this order:
+
+  1. **The 7 Milestone-1 scope boxes** — each is now provable against the real
+     build. Tick with the date; do not tick as a batch without checking each.
+  2. **`UT-C5-1`…`UT-C5-5`.** Several already exist as real gtests and pass
+     (`UT-C5-1` *is* `AdasInitResolvesThePackedBundle`). Confirm each one
+     asserts what its plan text says before ticking — `AR-1` found `UT-C1b-13`
+     passing for the wrong reason, and that is the failure mode here.
+  3. **`ST-C5-1`, the gate** — copy the build output plus its `config/` to a
+     directory with no Conan cache and no checkout, and run it. This closes
+     `plan.md` item 19 with evidence. *Independent of `plan.md` item 15's
+     packaging work: this copies a built output tree, not a Conan package.*
+  4. **Then Milestone 2** — the `OD-11`/`OD-12` addendum
+     (`UT-C5-6/7/10/11/12`, `ST-C5-2`), unchanged in scope.
 
 **2. Then continue the build-order table**: `S-C8` (#14) → `S-C7` (#15) →
-`S-C6` (#16), then Phase D in id order.
+`S-C6` (#16), then Phase D in id order — remembering `S-D7` is already 17/27.
 
 **3. The open findings.** Every one is a row in
 [sim_audit_log.md](sim_audit_log.md) — read it there, not here, so there is one
 list and it gets reconciled. Summary of what is open and where it is owned:
 
-**Two rows remain open** after the 2026-08-04 fix session, which closed seven
-(`AR-1`, `AR-2`, `AR-3`, `AR-5`, `AR-6`, `AR-7`, `AR-8`) and reclassified one
-(`AR-9`):
+**3. The audit ledger is fully reconciled — nothing to triage.**
+[sim_audit_log.md](sim_audit_log.md) is at **24 findings, 0 open**: 21 closed,
+3 won't-fix. You do not need to read it to start work. Two of its closures
+carry real work that is **not** done, and both now live where they belong
+rather than in the ledger:
 
-| `AR-n` | What it needs | Blocks the queue? |
-|---|---|---|
-| **`AR-24`** | **A packaging fix in `interfaces`** — it ships no `cmake/` in its Conan package, so **no component builds from a partial clone**. Needs `install(DIRECTORY cmake/ ...)`, a republish, and a re-probe. Found by running `GT-10` for the first time; see §2 | **Yes, for `S-C7`/`S-C8`** and for every "only that component checked out" claim (`FR-SIM-66`, `NR-SIM-10`) |
-| **`AR-4`** | **A named person for `GT-14`.** `GT-13` legitimately cannot be filled yet — every number it wants is behind an unbuilt stage — but `GT-14` needs an owner and a second reader, which no stage can produce | no, until `S-E3` |
+| Where it lives now | What is left |
+|---|---|
+| **`plan.md` item 15** (reopened) | The partial-clone workflow regressed and nothing re-ran it. `interfaces`' packaging is half-fixed and `df` now configures; the remainder is the **package include layout** — generated protos are never installed, and package vs editable header prefixes disagree. A design decision, then re-verify every module |
+| **§2's `GT-14`** (this document) | Two people's names and one measured number. **The only open item no work can close** — see the flagged block at the gate |
 
-#### The one human decision left — do not pick this alone
-
-**`GT-14` ownership (`AR-4`).** It needs a *named owner and a named second
-reader*, plus a measured maintainer-onboarding time. No stage can produce
-those, and `S-E3` is where their absence becomes a blocked gate rather than a
-blank. If nobody is going to own it, record that as a decision now instead of
-discovering it at `S-E3`. *(`GT-13`'s blanks are not a decision — they are
-correctly blocked on `S-D7`, `S-C6` and the player; §2 says so.)*
+Neither blocks step 1.
 
 ### The per-stage loop — do this every time, in this order
 
@@ -684,6 +693,23 @@ previously carried by prose alone.*
       Measured: _______ h.** The most probable ending for this project is an
       ownership failure, not a design failure, and this is the only gate that
       looks at it.
+
+      > **⚠ THIS IS THE ONE OPEN ITEM NO WORK CAN CLOSE** *(raised 2026-08-04 by
+      > the audit, `AR-4`, now tracked here rather than in the ledger).* Every
+      > other finding from the audit was either fixed or handed to a stage.
+      > These four blanks cannot be: they need **two people's names** and one
+      > measured number. Nothing in the build order produces them, so they will
+      > still be blank at `S-E3` unless someone fills them deliberately.
+      >
+      > **If there is no second person, that is the answer and it should be
+      > written here**, not discovered at `S-E3`. A single-maintainer project is
+      > a legitimate state; an unexamined one is what this gate exists to catch.
+      > `NR-SIM-45`'s own framing — *"the tool must be survivable by someone who
+      > did not build it"* — is falsifiable only against a real second reader.
+      >
+      > *(`GT-13`'s blanks are **not** in this category and need no decision:
+      > every number it wants is behind `S-D7`'s batch half, `S-C6` or the
+      > player. They fill themselves as those land.)*
 - [ ] **GT-12 — the player runs standalone, against libraries it has never
       heard of.** `vantage <dir>` on a directory containing only built
       artefacts — DLL, `config/`, `sim/` — renders a run with **no repository
