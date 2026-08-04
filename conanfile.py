@@ -62,7 +62,8 @@ class AdasComponent(ConanFile):
     # ones Conan's own CMakeToolchain generates for `conan create`.
     exports = "conf/*"
     exports_sources = (
-        "CMakeLists.txt", "src/*", "cpp/*", "proto/*", "cmake/*", "scripts/*", "projects/*",
+        "CMakeLists.txt", "src/*", "cpp/*", "include/*", "proto/*", "cmake/*",
+        "scripts/*", "projects/*",
     )
 
     # ---- data helpers -----------------------------------------------------
