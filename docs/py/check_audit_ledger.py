@@ -139,6 +139,24 @@ def main() -> int:
         if phrase not in lowered:
             failures.append(f"ledger does not state {what}")
 
+    # -- map every line to the state section it sits under ------------------
+    # Structural, done once up front, so a row's state never depends on what
+    # its prose happens to say.
+    SECTION_STATES = {
+        "open": "OPEN",
+        "closed": "CLOSED",
+        "superseded": "SUPERSEDED",
+        "won't fix": "WONTFIX",
+        "wont fix": "WONTFIX",
+    }
+    section_of: dict[int, str] = {}
+    current = "OPEN"
+    for lineno, line in enumerate(text.splitlines(), 1):
+        heading = re.match(r"^#{2,3} +(.+?)\s*$", line)
+        if heading:
+            current = SECTION_STATES.get(heading.group(1).strip().lower(), current)
+        section_of[lineno] = current
+
     seen: dict[str, int] = {}
     counts = {"OPEN": 0, "CLOSED": 0, "SUPERSEDED": 0, "WONTFIX": 0}
     rows = 0
@@ -162,17 +180,13 @@ def main() -> int:
                 break
 
         joined = " ".join(cells)
-        state = next((s for s in counts if s in joined), None)
-        # Section context decides the state when the row carries no state cell.
-        if state is None:
-            head = text[: text.find(line)]
-            last = max(
-                (head.rfind("### Open"), "OPEN"),
-                (head.rfind("### Closed"), "CLOSED"),
-                (head.rfind("### Won't fix"), "WONTFIX"),
-                (head.rfind("### Superseded"), "SUPERSEDED"),
-            )
-            state = last[1] if last[0] >= 0 else "OPEN"
+        # A row's state is the SECTION it sits in -- never a word sniffed out of
+        # its prose. The first cut did the latter and mis-stated the ledger: a
+        # Won't-fix row whose text happened to contain the word "CLOSED" (while
+        # explaining why it was NOT closed) was counted and validated as closed,
+        # and then passed the landed-in check for the wrong reason. A finding's
+        # state is structural, so read it structurally.
+        state = section_of.get(lineno, "OPEN")
         counts[state] = counts.get(state, 0) + 1
 
         if state in ("CLOSED", "SUPERSEDED"):

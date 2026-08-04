@@ -41,9 +41,25 @@ _FIXTURE_SRC = (
 )
 _INTERFACES_SCRIPTS = Path(__file__).resolve().parents[3] / "interfaces" / "scripts"
 
+# AR-3: the platform marker comes FIRST, deliberately. Both conditions are true
+# on a typical Windows box, pytest reports whichever it matches first, and the
+# g++ one said only "no C++ toolchain (g++) available" -- which reads as a gap
+# in the environment when it is actually a designed boundary. A Windows
+# developer then cannot tell whether ST-C5-1 is unproven or proven elsewhere.
+# It is proven elsewhere: df's own AdasInitResolvesThePackedBundle (UT-C5-1)
+# exercises the real GetModuleFileNameW path against the real df_sil.dll, and
+# is green at 238/238. This fixture covers the POSIX dladdr path only.
 pytestmark = [
+    pytest.mark.skipif(
+        sys.platform == "win32",
+        reason=(
+            "POSIX-only by design: this fixture exercises the dladdr path. "
+            "df_sil's Windows path (GetModuleFileNameW) is covered for real by "
+            "modules/df/tests/unit/sil/test_generic_abi.cpp::"
+            "GenericAbiTest.AdasInitResolvesThePackedBundle (UT-C5-1)"
+        ),
+    ),
     pytest.mark.skipif(shutil.which("g++") is None, reason="no C++ toolchain (g++) available"),
-    pytest.mark.skipif(sys.platform == "win32", reason="fixture uses dladdr, POSIX-only (df_sil's own Windows path is GetModuleFileNameW, exercised by the real C++ gtest suite instead)"),
 ]
 
 

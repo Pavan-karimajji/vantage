@@ -1,0 +1,40 @@
+# check_rules_coverage
+# platform  win32
+# python    3.12.10
+
+Checking: rule <-> requirement <-> stage
+20 rules declared
+
+1. Every rule is asked for by a requirement
+-------------------------------------------
+rule      in register  in plan  in design docs
+--------  -----------  -------  --------------
+R-SIM-1   yes          yes      yes
+R-SIM-2   NO           yes      yes
+R-SIM-3   yes          yes      yes
+R-SIM-3a  yes          yes      yes
+R-SIM-4   yes          yes      yes
+R-SIM-5   yes          yes      yes
+R-SIM-6   yes          yes      yes
+R-SIM-7   NO           yes      yes
+R-SIM-8   yes          yes      yes
+R-SIM-9   yes          yes      yes
+R-SIM-10  yes          yes      yes
+R-SIM-11  yes          yes      yes
+R-SIM-12  yes          yes      yes
+R-SIM-13  yes          yes      yes
+R-SIM-14  yes          yes      yes
+R-SIM-15  yes          yes      yes
+R-SIM-16  yes          yes      yes
+R-SIM-17  yes          yes      yes
+R-SIM-18  yes          yes      yes
+R-SIM-19  yes          yes      NO
+
+2. Every rule is built by a stage
+---------------------------------
+
+3. Rules cited but never declared
+---------------------------------
+ok    all 20 rules are derived from a requirement and built by a stage
+
+RESULT  pass

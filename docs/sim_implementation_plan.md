@@ -4377,22 +4377,36 @@ not. Also inherited from `S-C1b`'s delta: `<component>.ports.yaml` lands in
 `<library_dir>/config/` **here**, as part of the bundle, and not in a second
 place beside the DLL.
 
-- [ ] **`AR-1` — the bundle must follow the library, not sit in one build
-      directory.** Add an `install()` rule for `config/` so it enters the Conan
-      package, **and** extend `modules/df/tests/CMakeLists.txt`'s
-      `copy_if_different` to bring `config/` with the DLL. Both, not either —
-      they are two different consumers, and today neither has it. Then
-      `scripts/build.py df -t gtest -p vs2026 -P base` must be **238/238**
-      (currently 236/238; the two failures *are* this box). Full diagnosis in
-      §0a. **Do not** make `adasInit(NULL)` search parent directories or the
-      source checkout instead — that reinstates the silently-defaulted
-      calibration `S-C1b`'s delta removed
-- [ ] **`AR-3` — `ST-C5-1`'s Python half must run on Windows.**
-      `tests/system/test_c5_relocatability.py` skips silently without `g++`,
-      so this stage's only Python-side system test never runs on the primary
-      dev platform. Build the fixture with the MSVC toolchain that is present,
-      or declare the test Linux-only in its skip reason and say why (`P-1`,
-      `P-6`)
+- [x] **`AR-1` — the bundle must follow the library, not sit in one build
+      directory.** *Done 2026-08-04.* `install(DIRECTORY $<TARGET_FILE_DIR:
+      df_sil>/config/ …)` so it enters the Conan package, destination tracking
+      `install(TARGETS)` (`bin/` on Windows, `lib/` on Linux — a hard-coded
+      `bin` installs a bundle that is invisible at run time on one platform
+      only, `P-5`); **and** `modules/df/tests/CMakeLists.txt` now
+      `copy_directory`s `config/` alongside the DLL it already copied. Both,
+      because they are two different consumers. **238/238 on `-P base` and
+      `-P cus1`.**
+      *Surfaced a second, real defect while fixing it:* `adasInit("")` returned
+      a **handle**. An empty string is a *supplied but invalid* path and is not
+      `NULL`; the code tested `configPath[0] != '\0'` for tier 1 and let `""`
+      fall through to the bundle tier. `UT-C1b-13` had been passing **for the
+      wrong reason** — no bundle had ever been packed beside `df_tests.exe`, so
+      the wrong branch happened to return `nullptr`. Fixing delivery made the
+      accident visible, which is exactly what that test exists for. `vdy`
+      checked and clean (it rejects both).
+      *Not done, deliberately:* `adasInit(NULL)` still does **not** search
+      parent directories or the checkout — that would reinstate the
+      silently-defaulted calibration `S-C1b`'s delta removed
+- [x] **`AR-3` — `ST-C5-1`'s Python-half skip must state the truth.**
+      *Done 2026-08-04, and the finding was overstated:* the test already
+      declared itself POSIX-only with a reason. The real defect was **marker
+      order** — both `skipif`s are true on Windows, `g++` matched first, and a
+      Windows developer saw *"no C++ toolchain available"*, which reads as an
+      environment gap rather than a designed boundary. Platform marker now
+      comes first and names where the Windows path **is** proven for real:
+      `df`'s own `AdasInitResolvesThePackedBundle` (`UT-C5-1`), green at
+      238/238. No MSVC port of the fixture needed — it would duplicate
+      coverage that already exists in C++
 - [ ] Build copies `project.yaml` + `shared_config`'s `vehicle/ego_params.yaml`
       + `<component>.ports.yaml` into **`$<TARGET_FILE_DIR:…>/config/`** with
       `bundle.sha256`
@@ -5908,7 +5922,7 @@ previous run was ignored — which is itself a finding.
 | **The parity gate is subjective** | `ST-B1-1` compares Scenes (objective); `MC-1` compares appearance (human, recorded). Both, not one. |
 | **`ST-C1c-1` byte-equality fails for float reasons** | Compare parsed protobuf fields with an explicit tolerance policy decided *before* the first run, not after seeing a failure. **Superseded 2026-07-31 by `OD-10`** (recording §4a): the policy is no longer advice in a risk table but a per-component `tolerance.yaml` with `default: exact`, a mandatory `why:` per row, and a bound printed on every *passing* report. Note which axis this is — a same-process comparison has **no tolerance field at all**, so this risk cannot be mitigated by widening one. |
 | **Qt learning cost** | The Scene keeps the renderer thin; `render/bev.py` is Qt-independent and testable headless, so only the shell is Qt. |
-| **A flaky Qt test reads as a broken gate** | Observed 2026-07-30: `test_b3_viewport_controls.py::test_dragging_pans_the_viewport_and_a_second_click_still_selects` failed once in a full-suite run and passed on the immediate re-run (362/362) and in isolation — so it is order- or timing-dependent, not a regression. **Unresolved, and deliberately written down**: an intermittent failure nobody records is re-diagnosed from scratch every time, and in a determinism tool (`R-SIM-5`) it is the one class of flake that must not be tolerated quietly. Owner: `S-B3` follow-up, before `S-C6` makes the suite a CI gate. **New evidence, 2026-07-31 (docs-only session, no code touched): it now fails in ISOLATION and passes in the full suite — the exact reverse of the 2026-07-30 observation, reproduced twice.** That is not timing; a test that needs the suite to have run first is depending on **state an earlier test leaves behind** (a `QApplication`, a registered provider, or viewport module state). Narrows the diagnosis from "flaky" to "missing fixture isolation", which is a fixable bug rather than a mystery — and it is precisely the failure `NR-SIM-40`/`R-SIM-24` exist to make un-ignorable, arriving in this project's own suite before it ever reached a component's. **A suite whose result depends on which subset you run cannot gate a determinism tool.** |
+| **A flaky Qt test reads as a broken gate** | Observed 2026-07-30: `test_b3_viewport_controls.py::test_dragging_pans_the_viewport_and_a_second_click_still_selects` failed once in a full-suite run and passed on the immediate re-run (362/362) and in isolation — so it is order- or timing-dependent, not a regression. **Unresolved, and deliberately written down**: an intermittent failure nobody records is re-diagnosed from scratch every time, and in a determinism tool (`R-SIM-5`) it is the one class of flake that must not be tolerated quietly. Owner: `S-B3` follow-up, before `S-C6` makes the suite a CI gate. **New evidence, 2026-07-31 (docs-only session, no code touched): it now fails in ISOLATION and passes in the full suite — the exact reverse of the 2026-07-30 observation, reproduced twice.** That is not timing; a test that needs the suite to have run first is depending on **state an earlier test leaves behind** (a `QApplication`, a registered provider, or viewport module state). Narrows the diagnosis from "flaky" to "missing fixture isolation", which is a fixable bug rather than a mystery — and it is precisely the failure `NR-SIM-40`/`R-SIM-24` exist to make un-ignorable, arriving in this project's own suite before it ever reached a component's. **A suite whose result depends on which subset you run cannot gate a determinism tool.** **Third observation, 2026-08-04 (audit fix session) — this supersedes the "missing fixture isolation" diagnosis above, which the data no longer supports.** Run six times *in isolation*, same command, same inputs, nothing else collected: `pass, FAIL, pass` at clean `HEAD` and `pass, FAIL, FAIL` with an unrelated working tree. So it is **not** subset-dependent and **not** state left by an earlier test — it is non-deterministic **run to run at fixed inputs**, which points inside the test (a drag/click sequence racing an asynchronous Qt repaint) rather than between tests. Two consequences worth stating: the earlier "reproduced twice" conclusions were each drawn from too few samples of a coin-flip, and **any single green full-suite run in this project's history — including the 649-passed baseline this audit recorded on 2026-08-04 — is one sample, not a verdict.** Re-diagnosis needs a repeat count, not another single run. Still `S-B3`'s to fix, still not to be touched by an unrelated session. |
 | **Phase C touches production C++** | Every C++ change is additive until S-E2; both ABIs live and are tested against each other. |
 | **No CI** | The test command is the gate and is cited in each commit. Wiring CI is `plan.md` item 12, unblocked by this work. |
 | **`modules/sim` unpublished** | Until `adas-sim` is published, a checkout is needed; that is the same interim state `interfaces` and `shared_config` already live in. |

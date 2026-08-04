@@ -3,9 +3,26 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""S-C1c system test: ST-C1c-1 (docs/sim_implementation_plan.md) -- the
-generic ABI's correctness gate, proven once against a real component before
-anything depends on it exclusively.
+"""S-C1c system test: ST-C1c-1 and ST-C9-1 (docs/sim_implementation_plan.md).
+
+Carries TWO stage gates, which is why the ids are both named here (AR-7):
+
+  - `ST-C1c-1` -- the generic ABI's correctness gate, proven once against a
+    real component before anything depends on it exclusively. This file's
+    original and primary claim.
+  - `ST-C9-1` -- the asker's workflow end to end (`FR-SIM-66`, P0): every
+    existing recording resims through a real `Pipeline` with `df` as the only
+    stage and **no per-test topic mapping**, i.e. this file's own hardcoded
+    topic constants are gone and the run goes through the declared ingest map
+    instead. `S-C9` ticked that gate against this file; until AR-7 the id
+    appeared nowhere in the suite, so grepping for `ST-C9-1` found nothing and
+    the only thing binding a P0 requirement to its verifier was one sentence
+    in a 5,500-line plan.
+
+`ST-C9-1` is a claim about the INGEST MAP; `ST-C1c-1` is a claim about the
+ABI. They share a body because the generic path exercises both, not because
+they are the same assertion -- if this file is ever split, both ids move with
+the half that still proves them.
 
 Resims every existing `df` recording through two independent paths against
 the same `df_sil.dll` build and compares every declared output port
