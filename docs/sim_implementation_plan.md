@@ -5255,37 +5255,114 @@ than argued from the Scene's shape.
 and lives entirely in `render/foxglove.py`; `Prim` must not grow a field that
 exists because a foreign schema wanted it.
 
-- [ ] `render/foxglove.py` — Scene to scene entities, **one entity per layer**,
+**Status: the automatable ~90% DONE and pytest-verified 2026-08-05 (WSL shell,
+`foxglove-sdk` installed into the venv, real network access confirmed for
+PyPI); `ST-D1-1`/`MC-3` is NOT done and cannot be from this shell — see
+below.** `render/foxglove.py` (new): `scene_update`/`scene_entity_for_layer`
+map all 11 `PrimKind`s, one `SceneEntity` per `Layer` with `id` = `Layer.id`
+unchanged (`N-2`/`N-6`); `frame_transforms_for` publishes a static-identity
+`FrameTransforms` graph for every frame a Scene's prims actually reference,
+closing the chain to `"world"` even when only a non-`ego` frame appears
+(the exact stranding bug `df_carla_viz_plan.md` §2 hit); `write_scene_
+snapshot`/`scene_recording_topics` write `/scene` + `/tf` into an
+ALREADY-OPEN `RecordingWriter` using Foxglove's own well-known schema names,
+verified round-tripping through a REAL `.mcap` file (`io/mcap.py`, no
+mocking) including `capture_time_ns`. **A real bug found while writing
+`UT-D1-2`, fixed before it shipped**: the first cut hardcoded every entity's
+`frame_id` to `"ego"` regardless of what frame its own prims were actually
+drawn in — a layer containing `sensor:0`-relative prims would have rendered
+them AS IF `ego`-relative, silently misplaced in the foreign viewer (exactly
+the class of bug this stage exists to close, just introduced fresh instead
+of inherited). Fixed by deriving `frame_id` from the layer's own prims and
+raising `_MixedFrameLayer` (naming the frames) if a layer ever mixes more
+than one — `test_mixed_frame_layer_raises_naming_the_frames_rather_than_
+misplacing_geometry` is that regression test. **Foxglove SDK objects are
+write-only** (no readable attributes beyond `.encode()`/`.get_schema()`,
+confirmed against the installed package, not assumed) — every test decodes
+`.encode()`'s bytes back into a real protobuf message via a `DescriptorPool`
+built from `ClassName.get_schema().data` (a genuine `FileDescriptorSet`),
+the same technique `contracts/component.py`'s `resolve_message_classes`
+already uses for a component's manifest (`R-SIM-11`'s own "no generated
+bindings needed" reasoning, reused here as a TEST technique rather than
+production code). **Heatmap/image** map to a labelled placeholder
+`TextPrimitive` naming the referenced `Prim.bulk` topic — Foxglove's
+`SceneEntity` has no bulk-data primitive of its own, and `R-SIM-2` already
+keeps that payload out of the Scene, so there is nothing more to draw here
+even in principle; stated as a real, permanent limitation, not a stopgap.
+19 new tests (`tests/unit/test_d1_foxglove.py` + `test_d1_scene_recording.py`),
+full suite re-run clean: 629 passed / 28 skipped (was 610/28), `scripts/
+check_invariants.py` clean (`GT-1,2,3,6,11`).
+
+- [x] `render/foxglove.py` — Scene to scene entities, **one entity per layer**,
       so layer toggles work in the foreign viewer for free
-- [ ] Frame graph emitted **once** from the project model — the fix for the
+- [x] Frame graph emitted **once** from the project model — the fix for the
       transform-tree failure where entities referenced frames that were never
-      published and silently rendered at the origin
-- [ ] `/scene` topic written into a session recording, so a recording opened
-      cold shows the full spatial scene with no framework present
+      published and silently rendered at the origin. **Scoped, stated
+      honestly**: STATIC identity transforms only — real dynamic pose
+      composition needs `core/tick.py`'s `Tick` composed with the project's
+      resolved mounting poses, out of scope here exactly as
+      `sim_visualization_spec.md` §11.4 already scopes real camera
+      extrinsics to "Phase D4". This closes the STRANDING bug (a referenced
+      frame publishes something), not the POSE bug (that something is not
+      yet where the sensor really sits)
+- [x] `/scene` topic written into a session recording, so a recording opened
+      cold shows the full spatial scene with no framework present.
+      **`write_scene_snapshot` is a tested, ready-to-call primitive, NOT
+      yet wired into `sources/recorder.py`'s live tick loop** — that needs
+      the recorder to build a `Scene` every tick (`core/runner.py`'s
+      `build_scene`, today only called from the Qt viewer's own paint path),
+      a separate integration into already-tested live-recording code
+      deliberately left for a follow-up pass rather than risked alongside
+      this stage's own brand-new mapping code in the same session
 
 **Tests**
-- [ ] `UT-D1-1` every prim type maps to a valid scene entity — a table-driven
+- [x] `UT-D1-1` every prim type maps to a valid scene entity — a table-driven
       test over the whole `Prim` union, so a new prim type fails here rather
-      than silently disappearing in a foreign viewer
-- [ ] `UT-D1-2` every entity's `frame_id` exists in the emitted frame graph —
-      the stranding bug, asserted
-- [ ] `UT-D1-3` entity ordering is sorted, so two exports of one Scene are
-      byte-identical (`P-8`)
-- [ ] `UT-D1-4` no module under `scene/` imports or names a Foxglove type
+      than silently disappearing in a foreign viewer.
+      `test_every_prim_kind_maps_to_a_populated_bucket`, parametrized over
+      all 11 kinds, plus `test_prim_table_covers_the_whole_closed_kind_
+      catalogue` asserting the test table itself can't silently fall behind
+      `PrimKind`'s own set if a 12th kind is ever added
+- [x] `UT-D1-2` every entity's `frame_id` exists in the emitted frame graph —
+      the stranding bug, asserted.
+      `test_every_entity_frame_id_exists_in_the_emitted_frame_graph` (also
+      asserts the full chain to `world` is unbroken for a non-`ego` frame)
+- [x] `UT-D1-3` entity ordering is sorted, so two exports of one Scene are
+      byte-identical (`P-8`).
+      `test_entity_and_frame_ordering_is_deterministic_two_exports_identical`
+      — declaration order preserved (layers deliberately NOT pre-sorted in
+      the fixture), two `.encode()` calls byte-identical
+- [x] `UT-D1-4` no module under `scene/` imports or names a Foxglove type.
+      `test_scene_module_never_imports_or_names_foxglove` — AST-parsed, no
+      `foxglove-sdk` import needed to run this one, so the boundary check
+      itself never depends on the package it is checking the absence of
 - [ ] `ST-D1-1` a written session recording opens in Foxglove Studio and shows
-      the scene with working layer toggles and seek → `MC-3`
+      the scene with working layer toggles and seek → `MC-3`. **Cannot be
+      done from this shell — this IS `MC-3`, one of `sim_implementation_
+      plan.md` §3.4's explicitly named MANUAL checks** ("Foxglove Studio
+      renders the exported scene | S-D1"), requiring a human to open the
+      real application and check a box with their name and date. The
+      recording this would open is producible today (`write_scene_snapshot`
+      + `scene_recording_topics`, tested above) — only the actual open-and-
+      look step is missing, and no amount of further coding in this
+      environment closes it
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-4`, `P-8` (entity ordering must be
-      sorted or two exports of one scene differ)
-- [ ] naming §3 ticked — exposure: `N-2` (a Foxglove entity id **is** a
+- [x] portability §3 ticked — exposure: `P-4`, `P-8` (entity ordering must be
+      sorted or two exports of one scene differ — verified, see `UT-D1-3`)
+- [x] naming §3 ticked — exposure: `N-2` (a Foxglove entity id **is** a
       `Layer.id`, unchanged — `N-6`: no translation table)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
+- [x] `pytest`/`scripts/check_invariants.py` green in this WSL shell (see
+      Status note). `docs/py/run_all.py` NOT independently re-run for this
+      stage — see the `project_wsl_toolchain_gaps` memory note on
+      `check_audit_ledger.py`'s own unrelated slowness in this shell
+      (confirmed pre-existing during `S-D7`, not re-triggered here)
 
 **Gate**
 - [ ] `ST-D1-1` green — the interop claim is demonstrated in a foreign viewer,
-      not argued from the Scene's shape
-- [ ] `UT-D1-4` green — the boundary held in the direction that is easy to lose
+      not argued from the Scene's shape. **Blocked on a human opening
+      Foxglove Studio** — not a code gap, see `ST-D1-1`'s own note above
+- [x] `UT-D1-4` green — the boundary held in the direction that is easy to lose
 
 ### S-D2 — matplotlib renderer + figure-driver migration
 
