@@ -1,6 +1,6 @@
 # check_requirement_coverage
-# platform  linux
-# python    3.12.13
+# platform  win32
+# python    3.12.10
 
 Requirement verification coverage, derived from the plan's ticks
 77 requirements; 332 test ids defined in the plan
@@ -10,7 +10,7 @@ Summary
 priority  proven  partial  unproven  no test id  parked  total
 --------  ------  -------  --------  ----------  ------  -----
 P0        5       6        5         1           0       17
-P1        26      9        16        8           1       60
+P1        27      9        15        8           1       60
 P2        0       0        0         0           0       0
 
 P0 requirements — the tool is not usable without these
@@ -55,4 +55,4 @@ NR-SIM-40  P0   1/2   Determinism must be measured across the axes  ST-C6-4
 CR-SIM-4   P0   1/2   A message carries capture time and reception  UT-C2-13
 NR-SIM-44  P1   1/2   The plug-in API is versioned, and a recordin  UT-D5-4
 
-RESULT  ok — every cited verifier resolves to a unit of work (31 proven, 15 partial, 21 unproven, 9 verified by other means)
+RESULT  ok — every cited verifier resolves to a unit of work (32 proven, 15 partial, 20 unproven, 9 verified by other means)

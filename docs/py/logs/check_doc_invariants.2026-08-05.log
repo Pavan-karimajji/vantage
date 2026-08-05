@@ -1,6 +1,6 @@
 # check_doc_invariants
-# platform  linux
-# python    3.12.13
+# platform  win32
+# python    3.12.10
 
 Checking DC-1..DC-7 over the design set
 14 documents, 9 scripts

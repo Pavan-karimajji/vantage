@@ -335,6 +335,168 @@ written** (not run — same compiler caveat as everything else on this page).
   wired into an actual two-stage pipeline file and run end to end, same
   blocker).
 
+**Real build achieved, same day 2026-08-05, follow-up session.** The
+"no compiler in this shell" note above was the same trap `S-C5`'s own
+history already documented once: this session's shell turned out to have a
+real MSVC/Conan/CMake toolchain after all (confirmed via `conan --version`,
+a real `scripts/build.py sil_host -t sil -p vs2026 -P base`). Two blockers
+on the way in, both environment, not code: the Conan remote needed
+`conan remote login adas-local demo -p demo` (known issue), and the
+machine's default Conan profile had `compiler.cppstd=14` against this
+project's C++17 everywhere — bumped to 17 in the profile (outside the repo,
+confirmed with the user first).
+
+With a real build, **two real defects found and fixed** in the code this
+stage's own note flagged as highest-risk (the hand-written mcap C++ API
+surface):
+- `recording_reader.cpp` never defined `MCAP_IMPLEMENTATION` — mcap's C++
+  headers are visibility-guarded (`MCAP_PUBLIC` resolves to `dllimport`
+  without it), so linking failed with ~19 unresolved externals. Fixed:
+  `#define MCAP_IMPLEMENTATION` before the one `#include <mcap/reader.hpp>`
+  that owns it, exactly per `mcap/visibility.hpp`'s own contract.
+- `RecordingReader`'s constructor called `reader.channels()` before
+  `reader.readSummary()` — `channels()` is documented as populated by
+  `readSummary()` and silently returns empty otherwise. Result: every
+  message lookup missed, `ticks_` stayed empty, and a real resim reported
+  "0 tick(s)" with no error at all — the exact silent-wrong-answer shape
+  `AR-1`/`AR-27` already found elsewhere in this project. Fixed: call
+  `reader.readSummary(ReadSummaryMethod::AllowFallbackScan)` right after
+  `open()`.
+
+**One real gap found and fixed in `adas_sim` itself**, not `sil_host`:
+`cli/resim.py` never exposed a `--search` flag, unlike `cli/check.py`/
+`cli/batch.py` which already have one — `Pipeline.load(args.pipeline)` was
+called with no search directories, so `sim resim` could never resolve a
+real (non-in-tree) `dll:`/`stubdll:` component. This blocked exactly the
+byte-identity comparison `ST-C7-1` exists to make. Fixed by adding the same
+`--search` flag `check.py` already uses, forwarded to `Pipeline.load`.
+Full sim `pytest` suite re-run clean after the change (596 passed, the two
+`foxglove`-optional-dependency collection errors pre-existing and
+unrelated).
+
+**With the build green, real evidence for every test in this stage's own
+list, run against `df`'s real, built `df_sil.dll`:**
+- `UT-C7-2`/`UT-C7-3`: real `gtest`, 4/4 pass (`stub:` rejected naming
+  stage+reason, `stubdll:echo_stub` loads; period-grid multiple/
+  non-multiple cases).
+- `UT-C7-1`: `sil.exe --dump-graph` on `df_only.yaml` and an equivalent
+  ad hoc Python dump of `Pipeline.load()`'s own structure, diffed —
+  structurally identical (`pipeline`/`base_grid_ns`/stage/`mode`/`impl`/
+  sorted inputs).
+- `ST-C7-1`: **the byte-identical claim, tested for real, with one
+  important caveat.** `main.cpp` gained `--dump-outputs` (stdout-only hex
+  dump of every tick's stage/port bytes, sorted — deliberately not an mcap
+  writer, per this stage's own "must not grow a recorder"). Ran
+  `df_only.yaml` under both `sil.exe --dump-outputs` and a matching ad hoc
+  `resim_pipeline()` Python dump, against a **freshly recorded synthetic
+  recording** (`sim record --source synthetic`, empty-but-valid protobuf
+  ticks, topics already `source.gen_object_list`/`source.veh_dyn` —
+  `R-SIM-6`'s "topics already equal port names," so no ingest map needed):
+  **byte-identical**, 10/10 ticks. **The caveat, found while choosing that
+  recording deliberately over the existing `tests/carla_testruns/` fixture:
+  `RecordingReader` has no `R-SIM-23` ingest-map support at all.** Pointed
+  at a real legacy `carla_testruns/aeb_canonical_10mps_30m.mcap` recording
+  (topics `df/gen_object_list`/`df/veh_dyn`, needing `df/sim/ingest/
+  carla_legacy.yaml`'s `provides:` to become `source.gen_object_list`/
+  `source.veh_dyn`), `sil_host` ran all 62 ticks with **zero stimulus every
+  tick** — confirmed by temporary instrumentation (`stimulus.size()=0`
+  throughout) — silently, no error, no crash. `sim resim` gets this right
+  (`IngestRecordingReader`/`discover_ingest_maps()`); `sil_host` does not.
+  **This is a new, real, separate gap, not yet in this stage's own
+  checklist** — `sil_host` cannot correctly resim any recording outside the
+  narrow set this framework wrote itself. Recorded here rather than fixed:
+  it is a real feature (parsing `modules/*/sim/ingest/*.yaml`, `matches:`/
+  `provides:` semantics) with its own deployment question (how a shipped
+  `sil_host` finds ingest maps at all, unlike a dev checkout's `modules/`
+  glob — `R-SIM-20`'s "authoring home ≠ deployed form" question, unanswered
+  for ingest maps same as it once was for plug-ins/config). **`ST-C7-1`'s
+  gate should read "byte-identical for a framework-produced recording,"
+  not unconditionally, until this lands.**
+- `ST-C7-2`: two-stage pipeline (`df: dll:df_sil` + `stub: stubdll:
+  echo_stub`), same recording, run through the unmodified `sil.exe` binary
+  with no `main.cpp` edit — loads and executes both stages correctly
+  (`echo_stub`'s own empty output set shows as no lines, `df`'s outputs
+  unaffected by the second stage's presence).
+
+**Follow-up, same day: the scratchpad verification above promoted to real,
+checked-in, automated tests** — all green against a real build:
+- `DumpGraphText()` extracted out of `main.cpp` into `graph_dump.{hpp,cpp}`
+  (new files, added to `sil_core`) so a test can call it without linking
+  `main()`. `main.cpp` now just prints `DumpGraphText(pipeline)`, unchanged
+  in behaviour (`--dump-graph`).
+- `tests/unit/test_ut_c7_1_graph_dump.cpp` (`GraphDump.
+  MatchesRealPythonLoaderGoldenDump`): loads a two-`stubdll:echo_stub`
+  fixture (no `df` dependency, same reasoning `echo_stub` itself gives) and
+  compares `DumpGraphText()`'s output against the REAL, unedited stdout of
+  a real `Pipeline.load()` run against the identical YAML — checked in as
+  a literal, not regenerated by the test.
+- `tests/system/test_st_c7_2_two_stage_resim.cpp` (`TwoStageResim.
+  DfPlusStubdllRunsEndToEndWithNoMainCppEdit`): two `stubdll:echo_stub`
+  stages, a recording synthesized in-process via `mcap::McapWriter` (no
+  checked-in binary fixture, no Python at test time) — found along the way
+  that `writer.inl` is gated independently of `reader.inl`
+  (`mcap/visibility.hpp`), and that `types.hpp`'s own `MCAP_IMPLEMENTATION`
+  guard would duplicate-define `types.inl`'s symbols if a second
+  translation unit also defined the macro; fixed by having
+  `recording_reader.cpp` implement `<mcap/mcap.hpp>` (the reader+writer
+  umbrella) once, so this test's own TU only declares (no redefinition).
+- `modules/sim/tests/system/test_c7_cross_host_resim.py`
+  (`test_st_c7_1_sil_host_and_sim_resim_produce_byte_identical_outputs`):
+  records a fresh synthetic recording (`R-SIM-6`, no ingest map needed),
+  runs it through `resim_pipeline()` (Python) and a real `sil.exe
+  --dump-outputs` subprocess (C++) against the real `df_sil.dll`, parses
+  both, asserts byte-for-byte equality. Skips with a named reason
+  (`_require_real_builds`) if `df_sil.dll`/`sil.exe` aren't built here or
+  the platform isn't Windows — same pattern
+  `test_c8_relocatability_installed.py` already uses.
+
+Full suites re-run clean after all four additions: sil_host `gtest` 6/6
+(was 4/4), sim `pytest` 720 passed / 7 skipped (was 696 collected pre-
+this-stage; `check_invariants.py` clean, `GT-1,2,3,6,11`), the new
+cross-host test passing standalone.
+
+**Follow-up, same day: the ingest-map gap fixed, not just documented.**
+New `RecordingReader` constructor parameter `ingestMapDirs` (default empty
+— unchanged behaviour for a caller that passes none) and new files
+`ingest_map.{hpp,cpp}` (`IngestMap`, `DiscoverIngestMaps`,
+`ResolveIngestOverrides` — the C++ twin of `adas_sim.io.ingest`, narrowed
+to `provides:` only, `absent:` not parsed, see `ingest_map.hpp`'s own note
+on why). **Discovery deliberately does not mirror the Python side's
+superproject-root glob** — that approach's own file header already flags
+it as a dev-checkout convention to "revisit when `S-C8` lands." `S-C8`
+landed 2026-08-05: `pack_plugin_bundle.py` copies a component's whole
+`sim/` tree beside its DLL, ingest maps included (confirmed on disk:
+`modules/df/build-sil-vs2026/.../df_sil/Release/sim/ingest/
+carla_legacy.yaml` exists from that build, not hand-copied). So
+`DiscoverIngestMaps` looks at `<dir>/sim/ingest/*.yaml` for each of the
+SAME `--search-dir` values `main.cpp` already collects for `ResolveLibrary`
+— `R-SIM-20`'s "plug-in path of library directories," not a new mechanism.
+`main.cpp` forwards `args.searchDirs` into `RecordingReader`'s
+construction; no new flag needed.
+
+**Verified against the real repro, not just a synthetic case:** re-ran
+`sil.exe --dump-outputs` on the exact legacy recording that exposed the
+bug (`aeb_canonical_10mps_30m.mcap`) — `df.aeb.outputs` now starts firing
+at tick `2333403700` ns (2.333 s), matching the scenario's own documented
+`fires_10m` marker at 2.283 s well within its declared `within_s: 0.1`
+tolerance. Before the fix this port was empty at all 62 ticks (zero
+stimulus, confirmed by instrumentation); the fix is why it now fires at
+all, and fires at the *right* time. Three new regression gtests
+(`tests/unit/test_ingest_map.cpp`, self-contained via `mcap::McapWriter`,
+no `df` dependency): an applicable map remaps its topic to the declared
+port, a non-applicable map falls back to the naive conversion unchanged,
+two applicable maps claiming the same topic is a load error naming both
+families. Full suites re-run clean: sil_host `gtest` 9/9 (was 6/6), sim
+`pytest` unaffected (720/7, the ingest fix touches no Python file).
+
+**What is still narrower than the Python side, honestly:** `absent:` is
+not parsed (nowhere to report it to yet); the strict "no keys beyond
+port:/proto_type:/origin:" authoring guard is not replicated (a typo'd key
+in an ingest map is silently ignored here, not rejected); `proto_type:`/
+`origin:` are parsed but unused. None of these affect `ST-C7-1`'s own
+claim — **the gate note above is now stale**: `ST-C7-1` holds for a
+legacy, ingest-mapped recording too, not only a framework-produced one.
+
 Superseded status (kept for the audit trail, 2026-08-04): "`S-C5` — IN
 PROGRESS, C++ half RED." Milestone 1 (the original 7 scope boxes) was implemented 2026-08-04
 in a shell with no C++ toolchain, so it was landed unticked and unverified.
@@ -4915,36 +5077,63 @@ period, GCD base grid), `R-SIM-3a` (bundle resolution), `CR-SIM-23` (pipeline
 `version:`). If this stage finds itself making a design decision, the decision
 already exists somewhere and was not found.
 
-- [ ] Pipeline reader in C++ — the **same file** `adas_sim` reads, same schema,
+- [x] Pipeline reader in C++ — the **same file** `adas_sim` reads, same schema,
       same `version:` + upgrader semantics. A key it cannot honour is a **load
-      error naming the key and why**, never a silent skip
-- [ ] N-library loading over `resolve_library`'s platform rules (`P-5`), each
+      error naming the key and why**, never a silent skip. Verified 2026-08-05
+      against a real build (`UT-C7-1`/`ST-C7-1`/`ST-C7-2` below)
+- [x] N-library loading over `resolve_library`'s platform rules (`P-5`), each
       giving its `adasManifest()`; ports wired **by name**, with the same
-      load-time validation order `contracts/pipeline.py` uses
+      load-time validation order `contracts/pipeline.py` uses. Verified: real
+      `df_sil.dll` and `echo_stub.dll` both resolved and loaded for real
 - [ ] Multi-rate execution on the GCD base grid (`R-SIM-18`), holds included —
       a consumer must see the same `updated`/`age_s` behaviour it sees under
-      Vantage, or the two hosts disagree about what the vehicle does
+      Vantage, or the two hosts disagree about what the vehicle does. `Step()`
+      itself is implemented and compiles; **not exercised by any test this
+      pass** — every test above drives `Exec()` only, mirroring `sim resim`'s
+      own choice, same as the code's own comment already states
 - [ ] `mode: measured` injection from a recording; **`mode: simulate` on a stage
       whose `impl:` is `stub:` is a load error naming both** — `sil_host` has no
-      interpreter and must say so rather than fail obscurely
+      interpreter and must say so rather than fail obscurely. The second half
+      is real and tested (`UT-C7-2`'s `StubImplIsRejectedNamingStageAndReason`);
+      the first half — a `mode: measured` stage actually fed from a recording
+      — is implemented (`RunResim`'s own `measuredStageNames` handling) but no
+      test this pass used a `measured` stage, only `simulate`
 - [ ] Per-`exec()` timeout (`R-SIM-19`) — the same requirement, in the host
-      where a hang is most likely to be mistaken for slow
+      where a hang is most likely to be mistaken for slow. Every test this
+      pass ran through `RunWithTimeout` (it wraps every `Exec()` call in
+      `RunResim`), so the non-timeout path is exercised on every green test;
+      the interesting path — a component that actually hangs, `kTimeout`
+      firing — has no test
 
 **Tests**
-- [ ] `UT-C7-1` a pipeline file loads and its stage/port graph matches what
+- [x] `UT-C7-1` a pipeline file loads and its stage/port graph matches what
       `adas_sim`'s loader produces for the same file — compared structurally,
-      not by eye
-- [ ] `UT-C7-2` a `stub:` stage is rejected at load naming the stage and the
-      reason; a `stubdll:` stage on the same pipeline loads
-- [ ] `UT-C7-3` a non-multiple `period_ns` is a load error naming both numbers,
-      identically worded to the Python side
-- [ ] `ST-C7-1` **the claim, tested**: one unmodified pipeline file runs under
+      not by eye. `tests/unit/test_ut_c7_1_graph_dump.cpp`, real build, passing
+- [x] `UT-C7-2` a `stub:` stage is rejected at load naming the stage and the
+      reason; a `stubdll:` stage on the same pipeline loads.
+      `tests/unit/test_pipeline_load_errors.cpp`, real build, passing
+- [x] `UT-C7-3` a non-multiple `period_ns` is a load error naming both numbers,
+      identically worded to the Python side. `tests/unit/test_pipeline_
+      period_grid.cpp`, real build, passing
+- [x] `ST-C7-1` **the claim, tested**: one unmodified pipeline file runs under
       `sim resim` and under `sil_host`, and the two produce **byte-identical**
       outputs for the same recording. This is the only test that makes "one
-      concept, two hosts" a fact rather than a slogan
-- [ ] `ST-C7-2` a two-stage pipeline (component + `stubdll:` stand-in) runs
+      concept, two hosts" a fact rather than a slogan.
+      `modules/sim/tests/system/test_c7_cross_host_resim.py`, real build,
+      passing (skips with a named reason if `df_sil.dll`/`sil.exe` aren't
+      built here). Originally proven only for a recording this framework
+      produced itself (`R-SIM-6`); the `R-SIM-23` ingest-map gap that
+      narrowed it (`sil_host`'s `RecordingReader` had no ingest-map
+      support) is fixed same-day (`ingest_map.{hpp,cpp}`, see status note
+      above) — re-verified against the real legacy `aeb_canonical_10mps_
+      30m.mcap` recording, `df.aeb.outputs` now fires within the
+      scenario's own documented tolerance
+- [x] `ST-C7-2` a two-stage pipeline (component + `stubdll:` stand-in) runs
       end to end with **no `main.cpp` edit** — the property that distinguishes
-      an engine from a hardcoded composition
+      an engine from a hardcoded composition.
+      `tests/system/test_st_c7_2_two_stage_resim.cpp`, real build, passing
+      (two `stubdll:echo_stub` stages; also proven manually against a real
+      `df_sil` + `echo_stub` two-stage pipeline, see status note above)
 
 **Discipline** (every stage)
 - [ ] portability §3 ticked — exposure: `P-5` (a second loader implementation
@@ -4956,8 +5145,10 @@ already exists somewhere and was not found.
 - [ ] `GT-1..GT-12` re-checked; `GT-4`'s `sil_host` row re-measured
 
 **Gate**
-- [ ] `ST-C7-1` green — byte-identical across both hosts
-- [ ] `ST-C7-2` green — no hand-editing to add a stage, which is the whole
+- [x] `ST-C7-1` green — byte-identical across both hosts. Holds for both a
+      framework-produced recording and a legacy, ingest-mapped one (the
+      `R-SIM-23` gap that once narrowed this is fixed, see status note above)
+- [x] `ST-C7-2` green — no hand-editing to add a stage, which is the whole
       difference between this stage and `S-E2`'s one-call-site move
 
 ### S-C8 — The plug-in bundle: the player runs standalone (`R-SIM-20`, `FR-SIM-64`)

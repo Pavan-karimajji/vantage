@@ -37,6 +37,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("recording", type=Path, help="a recording to resim against")
     parser.add_argument("--pipeline", type=Path, required=True, help="the pipeline YAML to execute")
     parser.add_argument("--save", type=Path, help="write this resim's own freshly-computed tick outputs to a new recording")
+    parser.add_argument(
+        "--search", type=Path, action="append", default=[],
+        help="a directory to search for a dll:/stubdll: stage's library (repeatable, contracts.loader.resolve_library)",
+    )
     parser.add_argument("--project", default="base")
     parser.add_argument(
         "--config", type=Path,
@@ -70,7 +74,7 @@ def _save_outputs(pipeline: Pipeline, outputs: list[tuple[int, dict]], path: Pat
 
 def run(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    pipeline = Pipeline.load(args.pipeline)
+    pipeline = Pipeline.load(args.pipeline, search=args.search)
     pipeline.init_components(args.config)
     try:
         outputs = resim_pipeline(pipeline, args.recording)
