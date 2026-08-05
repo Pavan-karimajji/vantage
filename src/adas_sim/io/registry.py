@@ -59,6 +59,16 @@ def _registered_extensions() -> list[str]:
     return sorted(set(_READERS) | set(_WRITERS) | set(_BUILTIN_CODEC_MODULES))
 
 
+def is_registered_recording_extension(suffix: str) -> bool:
+    """`True` for a suffix (`Path.suffix`, leading dot) this registry knows
+    as a recording codec -- read, write or both. The one public check `sim
+    probe` (`S-D6`) uses to tell "this path is a recording" from "this path
+    is a component library" WITHOUT paying `_load_builtin`'s import cost or
+    `reader_for`'s own capability-mismatch error for the library case, which
+    is not an error here, just the other branch."""
+    return suffix in _registered_extensions()
+
+
 def reader_for(path: Path) -> RecordingReader:
     _load_builtin(path.suffix)
     factory = _READERS.get(path.suffix)

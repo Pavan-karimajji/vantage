@@ -5623,27 +5623,81 @@ whether anyone writes a private player, so `GT-8` is measured here.
 > plan's §0a sequence exists to prevent, and `GT-9` says the capability lives in
 > the library while `S-D6` adds the way a person reaches it.
 
-- [ ] `contracts/override.py` — **verify, do not rebuild**: the six verbs resolve
+**Status: the CLI/logic half partially done and pytest-verified 2026-08-05**
+(WSL shell, same session as `S-D7`/`S-D1`). `sim_learn.md` SS5 confirms
+`sim probe <lib>` and `sim probe <recording>` are ONE verb, auto-detected —
+`cli/probe.py` extended (not replaced) with `is_registered_recording_
+extension` (new, `io/registry.py`) doing the dispatch by suffix, the
+library half reusing `CtypesSilComponent` exactly (no second manifest
+reader). `cli/list_cmd.py` is new (`DG-1`'s four sub-verbs); named
+`list_cmd.py`, **not** `list.py` — a real bug found while writing it:
+importing a submodule literally named `list` sets a `list` attribute on the
+`adas_sim.cli` PACKAGE module object, which IS `cli/__init__.py`'s own
+`globals()`, silently shadowing the `list()` BUILTIN for every other verb's
+dispatch the moment anything imported it (broke `render`/`export`/`doctor`
+CLI dispatch tests until caught by the full-suite run, not the file's own
+tests in isolation). Both compiled fixtures live at `tests/fixtures/
+echo_stub/` — `echo_stub.c`, pure C, zero dependencies (no protobuf, no
+`AdasInterfaces` link), hand-encoding two manifest fields in raw protobuf
+wire format — compiled here with `gcc` against nothing but `interfaces/
+include/adas/adas_sil_abi.h`, proving the REAL `ctypes.CDLL` load path (not
+mocked) with no Conan/C++ toolchain needed, same precedent `test_c5_
+relocatability.py`'s own fixture already set. **`test_list_layers_builds_
+a_real_scene` needed a fresh-subprocess sidestep** (mirrors `test_c8_
+relocatability_installed.py`'s own reasoning) — `scene/registry.py`'s
+provider table is process-global, so whether `df`'s real layer providers
+are already registered when `tiny.mcap`'s synthetic non-protobuf payload
+reaches them (and crashes trying to decode it) depends on pytest collection
+order, not on `cli/list_cmd.py`'s own correctness. **Verifying severed-chain
+handling found a second real gap**, fixed in `contracts/pipeline.py`
+alongside its own tests: `with_mode(close_gaps=False)` silently left an
+orphan stage with no warning at all — `R-SIM-10`'s own text ("forcing the
+gap open... is badged... and warned at load headlessly. Never silent")
+was not actually true until now. Full suite re-run clean: 640 passed / 28
+skipped (was 629/28), `check_invariants.py` clean (`GT-1,2,3,6,11`).
+
+- [x] `contracts/override.py` — **verify, do not rebuild**: the six verbs resolve
       at a port, a field path (`egoDyn.vx`) and a repeated element
       (`objects[*].pos_x`, `objects[3]`), applied between wiring and `exec()`.
       If any of that is missing, `S-C1cΔ` is incomplete and the fix belongs
-      there, not here
+      there, not here.
+      **Confirmed intact via existing coverage** (`test_c1c_override.py`,
+      `test_c1c_binding.py`) — not rebuilt, not re-tested from scratch
 - [ ] Overrides land in the run manifest; the affected topic is tagged
       `origin: overridden` (`R-SIM-12`) and badged in the HUD (`R-SIM-15`) —
-      the manifest half lands with the engine; **the HUD badge is this stage's**
-- [ ] `cli/probe.py` — `sim probe <lib>`: load, read `adasManifest`, print the
+      the manifest half lands with the engine; **the HUD badge is this stage's**.
+      **A real, unresolved gap, not attempted**: `Provenance.OVERRIDDEN`
+      exists (`io/base.py`) but is referenced NOWHERE in `core/manifest.py`
+      or `sources/recorder.py`. Design snag found while scoping the fix: an
+      override addresses a CONSUMING stage's own input port
+      (`Stage.overrides`), but the RECORDED topic is named after the
+      PRODUCER (`source.veh_dyn`, an earlier stage's output) — tagging that
+      producer's topic `overridden` would be misleading, since its recorded
+      bytes are unmodified; only what the consuming stage internally saw
+      was altered. Left deferred rather than guessed
+- [x] `cli/probe.py` — `sim probe <lib>`: load, read `adasManifest`, print the
       port set, types and schema names. **No mapping step, ever** (arch §5.16.1)
-- [ ] `contracts/pipeline.py` — **severed-chain detection**: a `measured` stage
+- [x] `contracts/pipeline.py` — **severed-chain detection**: a `measured` stage
       between two `simulate` stages on one data path; auto-close on set,
-      overridable, orphan stage flagged (`R-SIM-10`)
+      overridable, orphan stage flagged (`R-SIM-10`). Detection and
+      auto-close already existed (`S-C1cΔ`); **the orphan-stage flag on
+      `close_gaps=False` did not — added this pass** (see Status note)
 - [ ] `app/gui/pipeline_panel.py` — the per-stage mode toggle performs the
-      auto-close undoably and renders the *"computed, not consumed"* badge
+      auto-close undoably and renders the *"computed, not consumed"* badge.
+      **Not attempted — needs a display**, same class of blocker `S-D1`'s
+      `ST-D1-1` hit; the engine this would call (`Pipeline.with_mode`) is
+      done and tested above
 - [ ] `cli/explain.py` — **complete `sim explain <name>`** (seeded `S-B2`,
       extended `S-C1c`; this is the full form). Accepts a port, field, layer id, style token, codec name,
       run id or error code; prints kind, type+unit, producer stage and mode,
       origin tag, topic presence, schema, which layer draws it, which
       expectation asserts it, and its value at the current tick. Every line
-      comes from something already in the system — no new index
+      comes from something already in the system — no new index.
+      **Not attempted this pass** — `core/explain.py` today resolves 3 of
+      ~7 named kinds (`run_id`, `topic`, registered `layer` id; missing:
+      field path, style token, codec name, error code) plus its own
+      docstring already names fuzzy "did you mean" as undone. A real,
+      multi-part gap, sized for its own pass rather than squeezed in here
 - [ ] `cli/doctor.py` — **complete `sim doctor`** (seeded `S-A1`, grown per
       stage; this is the full form) (`DG-3`): interpreter and install
       mode; which library each `impl:` stem resolves to **and by which
@@ -5651,37 +5705,71 @@ whether anyone writes a private player, so `GT-8` is measured here.
       bundle each stage resolves, from where, its hash, **and whether the
       viewer and the SUT would agree** (`R-SIM-3a`); codec capabilities;
       which cuts a recording supports; platform, line endings, console
-      encoding (`P-4`). Non-zero exit on anything that would break a run
-- [ ] `cli/list.py` — `sim list ports|topics|layers|signals` (`DG-1`)
+      encoding (`P-4`). Non-zero exit on anything that would break a run.
+      **Not attempted this pass** — `core/diagnostics.py` today reports
+      only the `S-A1` slice (interpreter/install mode/platform/encoding);
+      the extended form needs `sim doctor` to accept a `--pipeline`/
+      `--search`/`--recording` to have something concrete to diagnose,
+      which is itself new CLI surface, not just more facts
+- [x] `cli/list.py` — `sim list ports|topics|layers|signals` (`DG-1`).
+      **Filename is `cli/list_cmd.py`, not `cli/list.py`** — see the Status
+      note's own bug story for why. `signals` is scoped to the PORT-level
+      address space only, stated in the module's own docstring — `DG-1`'s
+      full "ports x fields" claim needs each port's message class resolved
+      from its embedded schema and walked recursively, real separate work
 - [ ] `impl: "legacy:<lib>"` — **scope only**: the adapter's config shape is
       specified, not implemented. No such binary exists yet; implementing it
-      before one does would be speculative
+      before one does would be speculative. **Not touched this pass**
 
 **Tests**
-- [ ] `UT-D6-1` each of the four verbs applies correctly at a port and at a
-      field path; a fifth verb name is a **load error**, not a warning
-- [ ] `UT-D6-2` an override appears in the run manifest and tags its topic
+- [x] `UT-D6-1` each of the four verbs applies correctly at a port and at a
+      field path; a fifth verb name is a **load error**, not a warning.
+      Pre-existing (`test_c1c_override.py`'s `test_parse_override_verb_
+      outside_the_closed_four_is_a_load_error_not_a_warning` + `test_c1c_
+      binding.py`'s field-path tests), confirmed intact, not rewritten
+- [ ] `UT-D6-2` an override appears in the run manifest and tags its topic.
+      **Blocked on the same undecided design question** as its own
+      checklist item above
 - [ ] `UT-D6-3` `sim probe` on `InProcessSilComponent` prints the same port set
-      the pipeline resolves — one source, no second description
+      the pipeline resolves — one source, no second description.
+      **Not written** — `Pipeline.manifest_for` already returns a
+      component's own `.manifest` with no transformation, so this is
+      trivially true by construction today; an explicit assertion was not
+      added this pass. (Separately: `sim probe` the CLI verb only ever
+      takes a file path, never an in-process object — probing an
+      `InProcessSilComponent` directly is a unit-level check, not a CLI one)
 - [ ] `UT-D6-4` the **GUI** acts on a severed chain: given the detection from
       `UT-C1c-16`, setting a stage to `simulate` flips the intervening
       stages and shows the undo bar. Detection is the loader's; **acting on
       it is this stage's** — two tests, because a correct detector behind a
-      GUI that ignores it is exactly the silent toggle `R-SIM-10` bans
-- [ ] `UT-D6-5` auto-close flips only the intervening stages, and undo restores
-      the exact prior modes
-- [ ] `UT-D6-6` forcing the gap open is permitted and yields exactly one
-      orphan-stage warning naming the stage
+      GUI that ignores it is exactly the silent toggle `R-SIM-10` bans.
+      **The engine half (no GUI) is `UT-D6-5` below**; the GUI half needs
+      `app/gui/pipeline_panel.py`, not attempted
+- [x] `UT-D6-5` auto-close flips only the intervening stages, and undo restores
+      the exact prior modes.
+      `tests/unit/test_d6_severed_chain.py::test_auto_close_flips_only_
+      the_intervening_stage_and_undo_restores_exact_prior_modes`
+- [x] `UT-D6-6` forcing the gap open is permitted and yields exactly one
+      orphan-stage warning naming the stage. **Found not implemented,
+      fixed, then tested** — see Status note.
+      `test_forcing_the_gap_open_yields_exactly_one_orphan_warning_naming_
+      the_stage` (+ a third test confirming the warning stays silent when
+      nothing is actually severed)
 - [ ] `UT-D6-7` `sim explain` resolves each of the six accepted name kinds,
       and on an unknown name suggests a fuzzy match rather than failing
-      bare (`DG-2`, `N-8`)
+      bare (`DG-2`, `N-8`). **Blocked on `cli/explain.py`'s own completion**
+      above, not attempted
 - [ ] `UT-D6-8` `sim doctor` exits non-zero on a broken stem, a bundle
       mismatch and a missing codec capability — and each message names the
-      file (`DG-3`)
+      file (`DG-3`). **Blocked on `cli/doctor.py`'s own completion** above
 - [ ] `ST-D6-1` **day one, end to end**: a fresh component library with only a
       manifest is probed, wired into a five-line pipeline, run against
       `tiny.mcap`, and its outputs appear in a recording — **no edit anywhere in
-      `modules/sim`** (`FR-SIM-46`)
+      `modules/sim`** (`FR-SIM-46`). **Not attempted** — the pieces
+      (`echo_stub`-style fixture, `sim probe`, a hand-written pipeline,
+      `tiny.mcap`) all exist and were exercised individually this pass, but
+      not chained into one end-to-end walkthrough, and `GT-8`'s own timing
+      measurement needs a real newcomer, not a self-timed session
 - [ ] `ST-D6-3` **the evidence chain, end to end** (`FR-SIM-67`, `R-SIM-25`,
       audit `A4`): selecting any prim answers — in one action — its port, topic,
       tick, origin tag, config bundle and component build, and whether the value
@@ -5689,18 +5777,25 @@ whether anyone writes a private player, so `GT-8` is measured here.
       `sim explain <signal> --at <tick>` returns the **same** answer headlessly;
       if the two differ, the GUI has become the source of truth. Every piece
       already exists (`Prim.pick_id`, `PortValue.origin`, topic provenance,
-      `bundle_origin`, `run_id`) — this test is that they are joined
+      `bundle_origin`, `run_id`) — this test is that they are joined.
+      **Not attempted** — needs both a GUI to compare against and `sim
+      explain`'s completion
 - [ ] `ST-D6-2` a pipeline with overrides resims reproducibly: two runs produce
-      byte-identical outputs and identical manifests
+      byte-identical outputs and identical manifests. **Not attempted this
+      pass** — likely already true given `Pipeline.exec`'s own determinism,
+      but not explicitly asserted
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-5` (`sim probe` and `sim doctor` are the tools that *explain* library resolution, so they must exercise every pattern), `P-2`
-- [ ] naming §3 ticked — exposure: `N-1`/`N-6` (`sim explain` only works because one name means one thing everywhere -- this stage is where that pays off), `N-8`
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
+- [x] portability §3 ticked — exposure: `P-5` (`sim probe` and `sim doctor` are the tools that *explain* library resolution, so they must exercise every pattern — `sim probe`'s own extension does; `sim doctor`'s extended form is not built), `P-2`
+- [ ] naming §3 ticked — exposure: `N-1`/`N-6` (`sim explain` only works because one name means one thing everywhere -- this stage is where that pays off, blocked on `explain.py`'s completion), `N-8`
+- [x] `pytest`/`scripts/check_invariants.py` green in this WSL shell (see
+      Status note). `docs/py/run_all.py` not independently re-run — same
+      `check_audit_ledger.py` slowness noted for `S-D1`
 
 **Gate**
 - [ ] `ST-D6-1` green **and `GT-8` measured and recorded** — the number goes in
-      this document, whatever it is
+      this document, whatever it is. **Not closed** — see `ST-D6-1`'s own
+      note; this stage lands partial, not gated closed
 
 ### S-D7 — Writers, exports, `sim convert`, `sim batch`
 

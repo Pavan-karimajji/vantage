@@ -957,7 +957,15 @@ class Pipeline:
         changed stage so the toggle is reversible (`R-SIM-10`). With
         `close_gaps` (default), any severed chain the change just created
         that involves `stage` is closed by flipping its `measured` member to
-        `simulate` too -- undoably, since the caller keeps the old object."""
+        `simulate` too -- undoably, since the caller keeps the old object.
+
+        `close_gaps=False` forces the gap open deliberately (watching one
+        stage's divergence while a downstream stage stays on known-good
+        input, `R-SIM-10`'s own example) -- never silent: exactly ONE
+        `ProvenanceWarning` names every stage `close_gaps=True` would have
+        flipped, badged *"computed, not consumed"* wherever a GUI renders it
+        (`S-D6`, `UT-D6-6`). The run itself is never blocked -- this is a
+        warning a headless caller sees in the log, not an error."""
         names = {s.name for s in self.stages}
         if stage not in names:
             raise AuthoringError(
@@ -973,12 +981,16 @@ class Pipeline:
             name=self.name, stages=new_stages, version=self.version, components=self._components,
             faults=self._faults,
         )
-        if not close_gaps:
-            return result
         to_close = {
             chain.measured for chain in result.severed_chains() if stage in (chain.upstream, chain.measured, chain.downstream)
         }
         if not to_close:
+            return result
+        if not close_gaps:
+            warn(ProvenanceWarning(
+                f"stage(s) {', '.join(sorted(to_close))} computed, not consumed -- "
+                f"setting '{stage}' to {mode!r} severed the chain to it and close_gaps=False left the gap open"
+            ))
             return result
         closed_stages = tuple(
             Stage(name=s.name, mode="simulate", impl=s.impl, inputs=s.inputs, overrides=s.overrides, record=s.record)

@@ -35,6 +35,7 @@ def main(argv: list[str] | None = None) -> int:
     subparsers.add_parser("check", help="evaluate expect: against a scenario set, headless (S-C3)", add_help=False)
     subparsers.add_parser("determinism", help="compare two recordings, axis derived not flagged (S-C6)", add_help=False)
     subparsers.add_parser("batch", help="run a pipeline over a recording set, isolated per recording (S-D7)", add_help=False)
+    subparsers.add_parser("list", help="list ports|topics|layers|signals for a lib/recording/session (S-D6, DG-1)", add_help=False)
 
     args, remainder = parser.parse_known_args(argv)
     if args.verb == "doctor":
@@ -83,4 +84,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.verb == "batch":
         from adas_sim.cli import batch
         return batch.run(remainder)
+    if args.verb == "list":
+        # Deliberately NOT `adas_sim.cli.list` -- importing a submodule
+        # named `list` sets a `list` attribute on the `adas_sim.cli`
+        # PACKAGE module object, which IS this module's own globals()
+        # (found the hard way: it shadowed the `list()` builtin used two
+        # lines above this dispatch, breaking every OTHER verb once
+        # anything imported `adas_sim.cli.list`).
+        from adas_sim.cli import list_cmd
+        return list_cmd.run(remainder)
     return 1  # unreachable: every registered verb is dispatched above
