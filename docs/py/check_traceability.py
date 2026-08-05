@@ -96,11 +96,15 @@ def main() -> int:
             if tid not in defined:
                 rep.fail(f"{rid} cites {tid}, which the plan does not define")
         # A requirement legitimately has no verifier when it is not yet
-        # decided (`open`) or deliberately not designed (`parked`). Anything
-        # else without one is a requirement nothing will ever prove.
+        # decided (`open`), deliberately not designed (`parked`), or --
+        # `NR-SIM-46`'s own case, found when its decision landed 2026-08-05
+        # -- provable only by a human decision record, never by a test (a
+        # product judgement, not a code behaviour). Anything else without
+        # one is a requirement nothing will ever prove.
         deferred = any(m in block for m in
                        ("**parked**", "**Status.** parked",
-                        "**`open`**", "**Status.** open", "`open`."))
+                        "**`open`**", "**Status.** open", "`open`.",
+                        "**Verified by.** A recorded decision"))
         if not cited and not deferred:
             unverified.append(rid)
         elif not cited:

@@ -1770,9 +1770,22 @@ the same discipline `OD-1`..`OD-5` already follow.
 the least differentiated part of it; the differentiator is the pipeline engine.
 `S-B3` is sunk and is not in question — `S-D5`/`S-D8` are, and they are the
 expensive half.
-**Verified by.** A recorded decision. **Priority.** `P1`. **Status.** open —
-**this is the one requirement here deliberately left open**, because it is a
-product judgement, not an engineering one.
+**Verified by.** A recorded decision. **Priority.** `P1`. **Status.** **DECIDED
+2026-08-05** — the recommendation below, adopted as written. Recorded by the
+user, in session, exactly as this requirement's own text asked: "before
+`S-D5`, record a decision... with the reasoning and the rejected alternative."
+
+> **Decision, 2026-08-05: the recommendation below is adopted, unmodified.**
+> Keep the Qt shell as a *console*; promote `S-D1` (Foxglove `SceneUpdate`,
+> landed 2026-08-05) to the interop surface; scope `S-D5` to the console form;
+> defer `S-D2` with the trigger already named below (a figure headless `sim
+> render` cannot produce). The rejected alternative — adopt an external viewer
+> as primary and collapse `S-D5`/`S-D8` into a Foxglove extension — is
+> rejected on the basis already stated: it cannot supply the pipeline panel,
+> the measured/simulate matrix, the severed-chain badge, `Open on Bench` or
+> the evidence panel, none of which are scene rendering and all of which need
+> the engine. `FR-SIM-70` stands as written (a packaged Windows console, not a
+> Foxglove extension) — the renegotiation clause below does not trigger.
 
 > **Case laid out and a recommendation made, 2026-07-31 — `sim_architecture.md`
 > §5.15a. The decision itself is not taken here.**

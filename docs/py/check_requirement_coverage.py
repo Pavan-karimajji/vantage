@@ -64,8 +64,13 @@ TEST_ID_RE = re.compile(r"\b(?:UT|ST)-[A-E]\d+[a-z]?-\d+\b")
 REQ_HEAD_RE = re.compile(r"^### ((?:FR|NR|CR)-SIM-\d+[a-z]?) +(?:--|—) *(.*)$", re.M)
 #: The line that *defines* a test: a checkbox whose first token is the id.
 #: ``> `` prefixes are allowed — several stages quote their scope in blockquotes.
+#: `~` is the plan's own "partial" checkbox state (e.g. `UT-D7-7`, ticked
+#: neither done nor blank -- mechanism proven, one named sub-claim isn't).
+#: Matched here so a partial test still counts as *defined*; `state == "x"`
+#: below is what decides *ticked*, so `~` correctly lands as defined-but-
+#: not-ticked, same as a blank box.
 DEFN_RE = re.compile(
-    r"^\s*(?:> )?- \[([ x])\]\s*`((?:UT|ST)-[A-E]\d+[a-z]?-\d+)`", re.M)
+    r"^\s*(?:> )?- \[([ x~])\]\s*`((?:UT|ST)-[A-E]\d+[a-z]?-\d+)`", re.M)
 FIELD_RE = "\\*\\*{}\\.?\\*\\*\\s*(.*?)(?=\\*\\*[A-Z][a-z]|\\Z)"
 
 

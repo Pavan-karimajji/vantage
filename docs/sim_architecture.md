@@ -1965,9 +1965,10 @@ architecture exists to prevent, arriving by a different door.
 
 #### 5.15a Build or adopt the interactive viewer — the case, both ways
 
-*Written 2026-07-31 for `NR-SIM-46` / `OQ-15`. **This section recommends and does
-not decide** — it is a product judgement, and the register keeps `NR-SIM-46`
-open on purpose.*
+*Written 2026-07-31 for `NR-SIM-46` / `OQ-15`. **Decided 2026-08-05: the
+recommendation below is adopted, unmodified** — `NR-SIM-46`'s own entry
+records the decision; this section is kept as the case it was decided from,
+not rewritten into a retroactive justification.*
 
 **First, the number the question rests on is wrong.** `OQ-15` and the audit both
 state that `render/` + `view/` + `viewer.py` are *"~3,000 of 8,300 lines — 36% of

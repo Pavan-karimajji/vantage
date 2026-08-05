@@ -491,9 +491,11 @@ twice. `follows` is a soft one: correct but reorderable if you have a reason.**
 | **15** | `S-C7` — `sil_host` reads the pipeline | 12, 13 | Needs the generated shim and `adasInit(NULL)`'s bundle |
 | **16** | `S-C6` — resim + determinism in CI | 9, 10, 13 | Needs recordings (9), scenarios (10), and a **rebuilt binary** for determinism axis C, which only exists after (13) |
 
-Then Phase D, in id order — **except that `S-D5` is blocked on a decision, not on
-a stage** (`NR-SIM-46`; see its entry condition), and `S-D2` is deferred with a
-named trigger.
+Then Phase D, in id order — **`S-D5`'s entry condition (`NR-SIM-46`) was
+blocked on a decision, not on a stage; that decision was recorded 2026-08-05
+and the condition is cleared** (see `S-D5`'s own section) — and `S-D2` is
+deferred with a named trigger (a figure headless `sim render` cannot
+produce, per that same decision).
 
 > **`S-D7` is already 17/27 done** (2026-08-04 audit). Its writer/export/convert
 > half — `io/base.py`, `io/csv.py`, `cli/convert.py`, `cli/export.py`,
@@ -5366,6 +5368,11 @@ check_invariants.py` clean (`GT-1,2,3,6,11`).
 
 ### S-D2 — matplotlib renderer + figure-driver migration
 
+> **Deferred by decision, 2026-08-05 (`NR-SIM-46`, see `S-D5`'s entry
+> condition and `sim_requirements.md`).** Named trigger: a figure headless
+> `sim render` cannot produce. Do not start this stage until that trigger
+> fires — it is not "next" in id order, it is parked.
+
 **Purpose.** Prove **one Scene, two renderers, one palette** (`D5`). A figure in
 a document and the live view must be the same picture in two media, not two
 drawings that happen to resemble each other.
@@ -5595,20 +5602,25 @@ dependant, exactly inverting `R-SIM-1`.
 **Naming.** The binary is `vantage` (`FR-SIM-48`, `OD-5`); the package remains
 `adas-sim` and the CLI remains `sim`. Two delivery forms, one codebase.
 
-> **▶ Entry condition, added 2026-07-31 (`NR-SIM-46`, `OQ-15`): do not start
-> this stage until the build-vs-adopt decision is recorded.** This is the
-> expensive half of the interactive viewer, and `NR-SIM-46` is deliberately the
-> one requirement left **open** because it is a product judgement. The case is
-> laid out both ways in arch §5.15a, with a recommendation (keep the Qt shell as
-> a *console*, promote `S-D1` to the interop surface, scope this stage down,
-> defer `S-D2`) and with the corrected measurements — `render/` + `view/` is
-> 46 % of the codebase, but only 22 % is replaceable and only **5 %** has a
-> genuine external equivalent.
+> **▶ Entry condition CLEARED 2026-08-05.** `NR-SIM-46`'s build-vs-adopt
+> decision is recorded (`sim_requirements.md`, `sim_architecture.md` §5.15a):
+> the recommendation is adopted, unmodified. **Keep the Qt shell as a
+> *console*** — the checklist below is unchanged by this, since a console with
+> a BEV panel is exactly what it already describes (a frozen build, an
+> external plug-in path, `--version`, settings, open-a-recording — none of
+> that is the "compete with a scene viewer" ambition the decision declined).
+> **`S-D1` is promoted to the interop surface** — already landed (this
+> session, 2026-08-05), so this half of the recommendation is not merely
+> decided but done. **`S-D2` stays deferred**, with the trigger `sim_
+> requirements.md` already names: a figure headless `sim render` cannot
+> produce. **`S-D8`'s ambition is trimmed accordingly** — see that stage's
+> own section for what that means concretely. The rejected alternative
+> (adopt as primary, renegotiate `FR-SIM-70`) does not apply — `FR-SIM-70`
+> stands as written.
 >
-> **An implementation session must not decide this.** If it is still open when
-> this stage is reached, stop and ask. If the decision goes to *adopt*, the
-> scope below changes substantially and `FR-SIM-70` must be renegotiated in
-> writing rather than quietly dropped.
+> This stage itself is **not started this pass** — clearing the entry
+> condition is what unblocks a future session to start it, not a decision to
+> start it now.
 
 Turns the library into the application of arch §5.15. Windows only.
 
@@ -6094,6 +6106,15 @@ copy path is lossless, just not the "different format" half of the claim.
       own three named tests — the Gate itself is closed
 
 ### S-D8 — **Vantage**: the workspaces, the front door, the product
+
+> **Scope trimmed by decision, 2026-08-05 (`NR-SIM-46`, see `S-D5`'s entry
+> condition).** "Vantage is a console with a BEV; it is not competing with a
+> scene viewer" (arch §5.15a's recommendation, adopted). Concretely: this
+> stage still builds the shell, workspaces and the engine-facing surface
+> below — what it does NOT do is chase feature parity with a dedicated 3D/
+> scene tool (Foxglove, promoted to that role via `S-D1` instead). If a
+> checklist item here starts reading as "out-render the interop surface,"
+> that is the ambition this decision declined, not a gap to fill.
 
 **Purpose.** Everything before this stage builds capability; this stage decides
 whether anyone meets it. Spec: [sim_player.md](sim_player.md).
