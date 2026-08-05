@@ -5483,44 +5483,103 @@ against.
 anything in its entry path branches on the upstream stage's `mode` or `impl`,
 the invariant is already broken and no test after this will catch it.
 
+**Status: the pure-geometry half DONE and pytest-verified 2026-08-05** (same
+WSL session as `S-D7`/`S-D1`/`S-D6`), **exactly the slice the stage's own
+"Gating" note names as landable now.** `render/image_view.py` (new):
+`project_point`/`unproject_pixel` (pinhole projection, internal CV-frame
+conversion never exposed outside this module), `project_box` reading a
+`kind="box"` `Prim`'s OWN fields (`cx_m`/`cy_m`/`length_m`/`width_m`/
+`yaw_rad`/`height_m`) — the identical `Prim` `render/bev.py` already draws,
+so `UT-D4-2`'s "cannot disagree" claim holds by construction, not by
+cross-checking two derivations. `ProjectedPoint` is a new, `_px`-suffixed
+dataclass, never reusing a `CameraModel`/`Prim` field's bare stem
+(`UT-D4-3`). `CameraModel` itself (`model/cameras.py`, `S-A2`) needed no
+change — its declared field set was already sufficient. 7 new tests
+(`tests/unit/test_d4_image_view.py`), full suite re-run clean: 647 passed /
+28 skipped (was 640/28), `check_invariants.py` clean (`GT-1,2,3,6,11`).
+
+**Explicitly NOT attempted, and why:**
+
+- **`ground_truth`/`perception`/`perception.error` layer groups** — these
+  are a NAMING CONVENTION a real provider adopts when it registers
+  (`group="perception"` etc.), not free-standing code; there is no real
+  perception provider to apply them to (see below), so there is nothing to
+  build here yet beyond the string itself
+- **A source emitting camera/radar stimuli via `emits()`** — a real
+  world-model client (CARLA-shaped or otherwise), materially bigger and a
+  different kind of work than the pure geometry above; not attempted this
+  pass
+- **`ST-D4-1`/`ST-D4-2`** — correctly stay un-attempted, per the stage's OWN
+  "Gating" note: both need a second real PERCEPTION component, which does
+  not exist (`perception-core` has no real Conan package yet, `R-SIL-2`).
+  **`vdy`'s existence does not change this** — checked explicitly before
+  starting this pass, since an earlier session-planning message speculated
+  it might: `vdy` is vehicle dynamics, not perception, and does not satisfy
+  what `R-SIM-10`'s invariant needs a SECOND component's output compared
+  against ground truth for
+
 - [ ] `CameraModel` completed (declared in `S-A2`) + `render/image_view.py` —
-      project Scene prims onto a camera frame
+      project Scene prims onto a camera frame.
+      **`render/image_view.py` done**; `CameraModel` needed no completion
+      (already sufficient as declared)
 - [ ] `ground_truth` and `perception` layer groups; `perception.error` as a
-      **derived** group, marked (`R-SIM-7`)
-- [ ] A source emits camera/radar stimuli, declared through `emits()`
+      **derived** group, marked (`R-SIM-7`). **Not attempted** — see Status
+      note
+- [ ] A source emits camera/radar stimuli, declared through `emits()`.
+      **Not attempted** — see Status note
 
 **Tests**
-- [ ] `UT-D4-1` projection round-trips for a known intrinsic/extrinsic pair
-- [ ] `UT-D4-2` a `Box` with `height` projects to a 3D box; the BEV and image
-      views come from the **same prim**, so they cannot disagree
-- [ ] `UT-D4-3` a pixel-valued and a metre-valued field never share a bare name
-      (`N-4`) — the defect this rule exists for lives exactly here
-- [ ] `UT-D4-4` **a perception-scale layer references rather than inlines**
+- [x] `UT-D4-1` projection round-trips for a known intrinsic/extrinsic pair.
+      `test_projection_round_trips_for_a_known_intrinsic_extrinsic_pair`
+      (+ a straight-ahead sanity check and a behind-camera `None` check)
+- [x] `UT-D4-2` a `Box` with `height` projects to a 3D box; the BEV and image
+      views come from the **same prim**, so they cannot disagree.
+      `test_a_box_with_height_projects_to_eight_corners_from_the_same_prim`
+- [x] `UT-D4-3` a pixel-valued and a metre-valued field never share a bare name
+      (`N-4`) — the defect this rule exists for lives exactly here.
+      `test_pixel_and_metre_fields_never_share_a_bare_name` (structural:
+      asserts the field sets themselves, not a runtime behaviour)
+- [x] `UT-D4-4` **a perception-scale layer references rather than inlines**
       (`NR-SIM-43`, `OD-7`): a provider emitting a 100 000-point cloud produces a
       `Prim` carrying a `BulkRef`, the Scene stays under the declared byte
       budget, the renderer resolves it from the recording at draw time, and
       scrubbing a long session stays within the stated cache bound. **This stage
       is where the rule becomes permanent** — a layer that inlines here is a
-      layer every later one copies
+      layer every later one copies.
+      **The budget/`BulkRef` mechanism itself is `S-A3`'s, already tested
+      (`test_a3_types.py`) — not rebuilt.** This pass proves it at the
+      perception scale the rule is actually stated for: `test_perception_
+      scale_layer_references_a_100000_point_cloud_instead_of_inlining`
+      (100 000 points, well over `MAX_INLINE_PRIM_ELEMENTS`, refused when
+      inlined, accepted via `BulkRef`, resulting `Scene` under 2 KB).
+      **The "renderer resolves at draw time" and "cache bound" halves are
+      `SceneCache`'s own claim (`test_b2_scene_cache.py`), not re-tested here**
 - [ ] `ST-D4-1` a two-component pipeline runs and ground truth vs perception is
       visible side by side (skips with a named reason until a second component
-      exists)
+      exists). **Correctly un-attempted** — see Status note
 - [ ] `ST-D4-2` **the invariant**: the downstream component's input bytes are
       identical across `truth` / stand-in / real-upstream, for the same
-      scenario — the test `R-SIM-10` was written for
+      scenario — the test `R-SIM-10` was written for. **Correctly
+      un-attempted** — see Status note
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-8` (projection maths must not
-      introduce float time), `P-1`
-- [ ] naming §3 ticked — exposure: `N-4` (intrinsics and extrinsics are
+- [x] portability §3 ticked — exposure: `P-8` (projection maths must not
+      introduce float time — `project_point`/`unproject_pixel` take/return
+      plain floats, no timestamp involved), `P-1`
+- [x] naming §3 ticked — exposure: `N-4` (intrinsics and extrinsics are
       unit-suffixed; a pixel and a metre sharing a bare name is the defect this
-      rule exists for)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
+      rule exists for — `UT-D4-3` above)
+- [x] `pytest`/`scripts/check_invariants.py` green in this WSL shell (see
+      Status note). `docs/py/run_all.py` not independently re-run — same
+      `check_audit_ledger.py` slowness noted for `S-D1`/`S-D6`
 
 **Gate**
 - [ ] `ST-D4-1` + `ST-D4-2` green — two components in one pipeline, with the
       downstream component's entry byte-identical to its single-component form
-      (`R-SIM-10`'s central invariant, first demonstrated here)
+      (`R-SIM-10`'s central invariant, first demonstrated here). **Not
+      closed** — correctly gated on a second real perception component that
+      does not exist yet; this pass lands only the pure-geometry half the
+      stage's own "Gating" note says is landable without one
 
 ### S-D5 — Package the player
 
