@@ -189,6 +189,152 @@ or scope beyond what this pass covered.
 This closes the user's requested queue for this session: `S-C5` → `S-C8` →
 `S-C6`, `S-C7` deliberately skipped throughout.
 
+**`S-C7` (#15) — IMPLEMENTED, UNVERIFIED, 2026-08-05.** A follow-up session
+picked up the literal next item in the build-order table. Same environment
+trap `S-C5`'s own history already documents, hit again: this session's shell
+is WSL, with no Conan and no MSVC (see the WSL toolchain gap noted
+elsewhere) — every file below was written and cross-checked line-by-line
+against `contracts/pipeline.py`/`contracts/component.py`/`contracts/
+loader.py`/`io/mcap.py`/`io/base.py`/`core/resim.py`, but **none of it has
+been compiled, linked, or run.** Do not tick any of this stage's checkboxes
+from this note alone — confirm each against a real build in the Windows
+shell first, exactly as `S-C5`'s own audit had to.
+
+What landed, under `modules/sil_host/src/` (new directory) plus a rewritten
+`main.cpp`:
+
+- `errors.hpp` — `SilHostError`, the expected/found/where/hint shape mirrored
+  from `adas_sim.core.errors.SimError` byte-for-byte (`N-8`).
+- `library_loader.{hpp,cpp}` — `ResolveLibrary` (P-5, mirrors
+  `contracts/loader.py` exactly) + a `DynamicLibrary` LoadLibraryW/dlopen
+  wrapper.
+- `sil_component.{hpp,cpp}` — `SilComponent`, the C++ twin of
+  `CtypesSilComponent`: binds the five ABI exports at RUN TIME (never
+  linked, since N components are resolved by stem), reads the manifest via
+  the real generated `adas::sil::ComponentManifest` (sil_host already links
+  `AdasInterfaces` and already used generated proto code in the old
+  `main.cpp` — `R-SIM-11`'s "no generated bindings" constrains the Python
+  framework specifically, not this superproject's own C++ host), grow-once
+  output buffers.
+- `pipeline.{hpp,cpp}` — `Pipeline`/`Stage`, the C++ twin of
+  `contracts/pipeline.py`, **narrowed to sil_host's own host boundary**:
+  no overrides (`R-SIM-15`), no faults, no `stub:`/live `Source` (sil_host
+  has no interpreter and no world-model client — S-C7's own "Must not").
+  Implements both `Exec()` (single-rate, mirrors `Pipeline.exec` — what
+  `sim resim` itself calls, `cli/resim.py`) and `Step()` (multi-rate,
+  GCD/hold, mirrors `Pipeline.step`, `R-SIM-18` — the checklist's own
+  "holds included" item, not exercised by the resim driver below but
+  present as the same capability the Python class carries). Deliberately
+  deferred, not silently dropped: `OD-11`'s cross-component project/
+  ego-parameter agreement check — not named in this stage's own checklist,
+  and `adasInit(NULL)`'s per-DLL bundle resolution already works without it.
+- `recording_reader.{hpp,cpp}` — reads an `.mcap` recording over the mcap
+  C++ library (conancenter `mcap/1.2.0`, newly added — see below), grouped
+  by `log_time_ns` (mirrors `io/mcap.py` + `io/base.py`'s
+  `group_by_log_time`, narrowed to port names + bytes only, no run
+  manifest/config-bundle/plugin-bundle metadata — sil_host's own resim
+  driver needs none of that provenance). **Field/method names for the mcap
+  C++ API were taken from the upstream `foxglove/mcap` headers via
+  websearch/fetch in this session, not from a locally installed copy — the
+  single highest-risk unverified surface in this pass.**
+- `exec_timeout.{hpp,cpp}` — `RunWithTimeout` (`R-SIM-19`): runs one tick's
+  worth of `Pipeline::Exec` on a detached thread with a bounded wait,
+  reporting `kOk`/`kTimeout`/`kException` as three distinct outcomes, never
+  merged. Honestly documented limit: sil_host is single-process, so a
+  genuine hang is *detected*, not *recovered from* — the hung thread is
+  abandoned, never joined.
+- `resim_runner.{hpp,cpp}` — `RunResim`, the C++ twin of
+  `core/resim.py`'s `resim_pipeline`: builds `source.*` stimulus and
+  `mode: measured` injection per recorded tick, calls `Pipeline::Exec` (the
+  same primitive `sim resim` calls) wrapped in `RunWithTimeout`. This is the
+  engine `ST-C7-1`'s byte-identical claim is actually measured against.
+- `main.cpp` (rewritten) — `<pipeline.yaml> <recording.mcap>
+  [--search-dir DIR]... [--config PATH] [--timeout-ms N]`, replacing the old
+  54-line hardcoded df+vdy demo. Adding a stage needs no edit here
+  (`ST-C7-2`'s own claim) — the file names no component.
+- `conf/build.yml` + `CMakeLists.txt` — added `yaml-cpp/0.8.0` (same version
+  `df`/`vdy` already pin, reused rather than a second YAML library),
+  `mcap/1.2.0` (conancenter — confirmed to exist there via websearch this
+  session, exact resolved version **not** confirmed from this shell),
+  `Threads` (for `exec_timeout.cpp`), and the six new source files.
+
+**What is explicitly NOT done, not silently skipped:**
+
+- `UT-C7-1`…`UT-C7-3`, `ST-C7-1`, `ST-C7-2` are **not written**. `sil_host`
+  has no gtest target today (`conf/build.yml`'s `sil:` is the one real
+  target) — adding one is itself a small build-machinery decision (a new
+  target in the frozen vocabulary, `docs/build_grammar.md`) that this pass
+  deliberately left for whoever runs the first real build, rather than
+  guessing at it unverified alongside everything else above.
+- The **portability discipline row** (`P-5`, `P-1`, `P-4`) is written to,
+  not independently exercised — `library_loader.cpp`'s Linux branch has
+  never run.
+- `GT-1..GT-12` re-check, `GT-4`'s `sil_host` row — not re-measured; both
+  need a real build.
+
+**Next session, in order:** get a real MSVC/Conan build of `sil_host`
+green (expect real compile errors — the mcap C++ API surface especially is
+the least-verified part of this pass), then work the checklist boxes above
+against that build exactly the way `S-C5`'s own audit did, then write
+`UT-C7-1..3`/`ST-C7-1`/`ST-C7-2` (deciding the gtest-target question first).
+
+**Same-day follow-up (still 2026-08-05, still WSL, still unverified): the
+gtest-target question above is answered, and `UT-C7-2`/`UT-C7-3` are
+written** (not run — same compiler caveat as everything else on this page).
+
+- `conf/build.yml` gained a `gtest:` target (both projects, aliased to
+  `sil:`'s own `platforms:`, same technique `df`'s `gtest:` already uses).
+  `CMakeLists.txt` split the pipeline-reader sources out of the `sil`
+  executable into a new `sil_core` static library, so `main.cpp` and a test
+  binary can both link it without recompiling twice or colliding on
+  `int main()`. `CMakeLists.txt` gained the `BUILD_TESTING`/
+  `add_subdirectory(tests)` guard `df`'s own root `CMakeLists.txt` already
+  has; `CMakePresets.json` gained a `gtest-vs2026` configure/build/test
+  preset triple, same shape as `df`'s.
+- `tests/fixtures/echo_stub/echo_stub.cpp` — a minimal generic-ABI component
+  (empty port set, component name + `period_ns` read from environment
+  variables at `adasManifest()` call time, never cached), the C++ twin of
+  `sim_sil_contract.md` §8's Python precedent ("a stub DLL built in-tree...
+  so the framework's tests do not depend on `df` being built"). Exists
+  because `Pipeline::Load` has **no `components=` test-injection seam** —
+  a deliberate choice (sil_host has none at run time either, "every stage is
+  either a real library or a load error") that means `UT-C7-2`'s `stubdll:`
+  half and `ST-C7-2` both need one real, resolvable library to point at.
+  Doubles as `ST-C7-2`'s own stand-in once that test is written.
+- **Found while writing `UT-C7-3`**: `RequirePeriodIsMultipleOfBaseGrid` (the
+  C++ twin of `_require_multiple`) was originally file-local to
+  `pipeline.cpp`, same as the Python function it mirrors describes about
+  itself — "a `base_grid_ns` that is genuinely the GCD of every period in
+  the set makes this tautologically always pass... there is no set of real,
+  correctly-derived periods that can ever fail it." A full `Pipeline::Load`
+  can therefore **never reach the failing branch**, exactly like the Python
+  side; `test_c1c_pipeline.py` unit-tests the guard directly rather than
+  through a real load, so `UT-C7-3` does the same — the guard was promoted
+  from an anonymous-namespace helper to a declared `adas::sil_host` function
+  (`pipeline.hpp`) specifically so a test can call it with adversarial
+  numbers with no component, no library, no YAML file at all.
+- `UT-C7-2` (`tests/unit/test_pipeline_load_errors.cpp`): `stub:` rejected
+  naming the stage and the reason; `stubdll:echo_stub` loads. `UT-C7-3`
+  (`tests/unit/test_pipeline_period_grid.cpp`): the multiple case passes,
+  the adversarial non-multiple case raises naming both numbers.
+- `main.cpp` gained `--dump-graph <pipeline.yaml>` — loads with no
+  recording (mirrors a fair `Pipeline.load(path)`-only comparison basis) and
+  prints a deterministic, line-oriented stage/port graph (declaration order
+  for stages, `std::map`'s own sorted order for each stage's inputs — never
+  hash order). This is `UT-C7-1`'s C++-side half. **What's still missing for
+  `UT-C7-1` itself: the Python-side counterpart dump and the diff that
+  actually compares them.** Deliberately not built this pass — it means
+  touching `adas_sim` itself (a second submodule) to add an equivalent
+  deterministic dump function, and doing that alongside six new,
+  uncompiled C++ files already stretched this session's error budget. The
+  shape is decided (line-oriented, sorted, no hash-order leakage — same
+  discipline `UT-A4-12`/`P-8` already require of recording writers); only
+  the second half needs writing.
+- Still not written: `ST-C7-1` (needs a real built `sil.exe` + `df_sil` +
+  a recording — no compiler in this shell), `ST-C7-2` (needs `echo_stub`
+  wired into an actual two-stage pipeline file and run end to end, same
+  blocker).
+
 Superseded status (kept for the audit trail, 2026-08-04): "`S-C5` — IN
 PROGRESS, C++ half RED." Milestone 1 (the original 7 scope boxes) was implemented 2026-08-04
 in a shell with no C++ toolchain, so it was landed unticked and unverified.
