@@ -27,13 +27,14 @@ def launch(
     scenario_path: Path | None = None,
     pipeline_path: Path | None = None,
     pipeline_search: Sequence[Path] = (),
+    pipeline_config: Path | None = None,
 ) -> int:
     set_high_dpi_policy()
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     window = MainWindow(
         recording, project=project, workspace_path=workspace_path,
         preset=preset, initial_at_s=at_s, scenario_path=scenario_path,
-        pipeline_path=pipeline_path, pipeline_search=pipeline_search,
+        pipeline_path=pipeline_path, pipeline_search=pipeline_search, pipeline_config=pipeline_config,
     )
     window.show()
     return app.exec()

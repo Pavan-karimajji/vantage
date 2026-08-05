@@ -141,6 +141,8 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import shutil
+import tempfile
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
@@ -150,8 +152,10 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from adas_sim.check.expect import ExpectationResult, evaluate_scenario
 from adas_sim.contracts.pipeline import Pipeline
 from adas_sim.contracts.scenario import Scenario, load_scenario
+from adas_sim.core.errors import AuthoringError
 from adas_sim.core.history import Interaction
-from adas_sim.core.manifest import write_run_manifest
+from adas_sim.core.manifest import build_manifest, write_run_manifest
+from adas_sim.core.resim import resim_pipeline_merged
 from adas_sim.core.runner import (
     LoadCancelled, SceneCache, build_reactive_layers, build_session_from_recording, build_static_scene,
 )
@@ -241,6 +245,55 @@ class _SessionLoadWorker(QtCore.QObject):
         except LoadCancelled:
             self.cancelled.emit()
             return
+        except Exception as exc:  # noqa: BLE001 -- surfaced to the GUI, never crashes the worker thread
+            self.failed.emit(str(exc))
+            return
+        self.loaded.emit(session)
+
+
+class _ResimWorker(QtCore.QObject):
+    """`ST-D3-1`: executes `pipeline_path` (a run manifest `MainWindow`
+    already wrote via `write_run_manifest`, reflecting the panel's current
+    mode toggles) against `recording_path` and reloads the result as a
+    viewable `Session` -- off the GUI thread, same ownership rule
+    `_SessionLoadWorker` already establishes.
+
+    Reuses the exact same machinery `sim resim --pipeline <manifest>`
+    would (`Pipeline.load` re-resolves `dll:`/`stubdll:` stages fresh,
+    same single-rate `exec()` engine via `resim_pipeline_merged`, `S-D3`
+    slice 4) -- a GUI "Run" and the CLI must never silently diverge
+    (`R-SIM-16`). `loaded` is the SAME signal shape `_SessionLoadWorker`
+    emits, so `MainWindow` treats a resim result exactly like opening any
+    other recording (`_on_loaded`, unchanged)."""
+
+    loaded = QtCore.Signal(object)  # Session
+    failed = QtCore.Signal(str)
+
+    def __init__(
+        self, *, pipeline_path: Path, pipeline_search: Sequence[Path], recording_path: Path,
+        config_path: Path | None, project: str, out_path: Path,
+    ) -> None:
+        super().__init__()
+        self._pipeline_path = pipeline_path
+        self._pipeline_search = pipeline_search
+        self._recording_path = recording_path
+        self._config_path = config_path
+        self._project = project
+        self._out_path = out_path
+
+    def run(self) -> None:
+        try:
+            pipeline = Pipeline.load(self._pipeline_path, search=self._pipeline_search)
+            pipeline.init_components(self._config_path)
+            try:
+                meta = build_manifest(
+                    pipeline=pipeline, pipeline_path=self._pipeline_path, run_kind="resim", source_kind="mcap",
+                    project=self._project, recording_path=self._recording_path,
+                )
+                resim_pipeline_merged(pipeline, self._recording_path, self._out_path, meta=meta)
+            finally:
+                pipeline.shutdown_components()
+            session = build_session_from_recording(self._out_path)
         except Exception as exc:  # noqa: BLE001 -- surfaced to the GUI, never crashes the worker thread
             self.failed.emit(str(exc))
             return
@@ -458,12 +511,14 @@ class PipelinePanel(QtWidgets.QDockWidget):
     only arranges the table and dispatches clicks (`GT-9`), same split
     `LayersPanel`/`InspectorPanel` already use.
 
-    **Not wired into `MainWindow` this pass** -- standalone and
-    independently testable (`sync()` + `mode_changed`), per this slice's
-    own scope note in `view/pipeline_panel.py`. Integrating it (a new dock,
-    re-running pass 1 on a mode change) is separate, later work."""
+    **Slice 4: `run_requested`** (`ST-D3-1`) -- a "Run" button, enabled
+    once `sync()` has given this panel a real state. Emitting is this
+    class's whole contribution; `MainWindow` owns what "run" actually does
+    (write a temp run manifest, execute, reload as the viewed `Session`) --
+    same split as `mode_changed` already uses, `GT-9`."""
 
     mode_changed = QtCore.Signal(str, str)  # stage name, new mode
+    run_requested = QtCore.Signal()
 
     _MODE_LABELS = (("simulate", "simulate"), ("measured", "measured"), ("off", "off"))
 
@@ -473,15 +528,33 @@ class PipelinePanel(QtWidgets.QDockWidget):
         self.state: PipelinePanelState | None = None
         self._updating = False
 
+        container = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+
         self._table = QtWidgets.QTableWidget(0, 3)
         self._table.setHorizontalHeaderLabels(["stage", "mode", "implementation"])
         self._table.horizontalHeader().setStretchLastSection(True)
         self._table.verticalHeader().setVisible(False)
-        self.setWidget(self._table)
+        layout.addWidget(self._table)
+
+        self._run_button = QtWidgets.QPushButton("Run")
+        self._run_button.setEnabled(False)  # no state yet -- see sync()
+        self._run_button.clicked.connect(self.run_requested.emit)
+        layout.addWidget(self._run_button)
+
+        self.setWidget(container)
 
     def sync(self, state: PipelinePanelState) -> None:
         self.state = state
+        self._run_button.setEnabled(True)
         self._rebuild()
+
+    def set_run_enabled(self, enabled: bool) -> None:
+        """`MainWindow` disables this while a run is already in flight
+        (`_ResimWorker`'s own lifetime) -- never two concurrent resims
+        racing the same temp files."""
+        self._run_button.setEnabled(enabled and self.state is not None)
 
     def _rebuild(self) -> None:
         assert self.state is not None
@@ -837,6 +910,7 @@ class MainWindow(QtWidgets.QMainWindow):
                  scenario_path: Path | None = None,
                  pipeline_path: Path | None = None,
                  pipeline_search: Sequence[Path] = (),
+                 pipeline_config: Path | None = None,
                  parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Vantage")
@@ -867,7 +941,20 @@ class MainWindow(QtWidgets.QMainWindow):
         #: (see `_on_loaded`'s own try/except).
         self._pipeline_path = pipeline_path
         self._pipeline_search = tuple(pipeline_search)
+        #: `S-D3` slice 4 (`ST-D3-1`): forwarded to `pipeline.init_components`
+        #: for a real "Run" -- `None` is `adasInit(NULL)`, same documented
+        #: limitation `cli/resim.py --config`'s own help text already states
+        #: (`S-C5`'s bundle auto-resolution is not built yet).
+        self._pipeline_config = pipeline_config
         self.pipeline_panel_state: PipelinePanelState | None = None
+        #: `ST-D3-1`'s worker pair -- `None` when no run is in flight. A
+        #: fresh `QThread`/`_ResimWorker` per Run (never the initial-load
+        #: `_thread`/`_worker`, which is already spent after `_on_loaded`).
+        self._resim_thread: QtCore.QThread | None = None
+        self._resim_worker: _ResimWorker | None = None
+        #: Lazily created on the first Run -- one scratch dir per window,
+        #: reused (overwritten) across runs, removed in `closeEvent`.
+        self._resim_scratch_dir: Path | None = None
         #: signal address -> every `ExpectationResult` naming it with a
         #: drawable `window_s` (`check/expect.py`) -- several expectations
         #: can share one signal (`sim_mergein_vlat025.yaml`'s own `EXP-1`/
@@ -926,13 +1013,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, self.inspector_panel)
 
         #: S-D3 slice 3: docked empty (no `pipeline_path` -> no state to
-        #: sync) until `_on_loaded` knows `session.known_ports`. Read-only
-        #: this slice -- `mode_changed` only enables "Save Run Manifest...",
-        #: it does not re-run anything (`view/pipeline_panel.py`'s own
-        #: scope note).
+        #: sync) until `_on_loaded` knows `session.known_ports`.
+        #: Slice 4 (`ST-D3-1`) adds a real "Run" -- `run_requested`.
         self.pipeline_panel = PipelinePanel(self)
         self.addDockWidget(QtCore.Qt.DockWidgetArea.BottomDockWidgetArea, self.pipeline_panel)
         self.pipeline_panel.mode_changed.connect(self._on_pipeline_mode_changed)
+        self.pipeline_panel.run_requested.connect(self._on_run_requested)
 
         self.timeline_state = TimelineState()
         #: address -> resolved (tick_index, value) series -- resolved once
@@ -1046,11 +1132,22 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:  # noqa: N802 -- Qt override
         self.save_layout()
+        self._stop_resim_thread()
+        if self._resim_scratch_dir is not None:
+            shutil.rmtree(self._resim_scratch_dir, ignore_errors=True)
         super().closeEvent(event)
 
     def _stop_thread(self) -> None:
         self._thread.quit()
         self._thread.wait()
+
+    def _stop_resim_thread(self) -> None:
+        if self._resim_thread is None:
+            return
+        self._resim_thread.quit()
+        self._resim_thread.wait()
+        self._resim_thread = None
+        self._resim_worker = None
 
     def _on_progress(self, done: int, total: int) -> None:
         self.statusBar().showMessage(f"loading... {done}/{total}")
@@ -1105,12 +1202,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self._save_run_manifest_action.setEnabled(True)
 
     def _on_pipeline_mode_changed(self, stage_name: str, mode: str) -> None:
-        """Read-only this slice (`view/pipeline_panel.py`'s own scope note)
-        -- nothing here re-runs anything live. Only tells the operator
-        where the toggle actually went: `File > Save Run Manifest...`."""
-        self.statusBar().showMessage(
-            f"{stage_name} -> {mode} (not re-run -- File > Save Run Manifest... to persist this choice)", 5000,
-        )
+        """Nothing here re-runs anything live -- only tells the operator
+        where the toggle actually landed: `Run`, to see it live, or
+        `File > Save Run Manifest...`, to persist it."""
+        self.statusBar().showMessage(f"{stage_name} -> {mode} (Run to see it, or File > Save Run Manifest...)", 5000)
 
     def _on_save_run_manifest(self) -> None:
         if self.pipeline_panel_state is None or self._pipeline_path is None:
@@ -1124,12 +1219,59 @@ class MainWindow(QtWidgets.QMainWindow):
             write_run_manifest(
                 Path(path_str), pipeline=self.pipeline_panel_state.pipeline,
                 mode_overrides=self.pipeline_panel_state.mode_overrides,
-                recording=self._recording_path, project=self._project,
+                recording=self._recording_path, project=self._project, config=self._pipeline_config,
             )
         except Exception as exc:  # noqa: BLE001 -- a save failure is reported, never silently lost
             self.statusBar().showMessage(f"could not save run manifest: {exc}", 8000)
             return
         self.statusBar().showMessage(f"wrote {path_str}", 5000)
+
+    def _on_run_requested(self) -> None:
+        """`ST-D3-1`: writes the panel's CURRENT state as a run manifest
+        (`write_run_manifest`, same call `_on_save_run_manifest` makes, into
+        a scratch file instead of a user-chosen one) and executes it off the
+        GUI thread (`_ResimWorker`). On success the result becomes the
+        viewed `Session`, through the exact same `_on_loaded` any other
+        recording load goes through."""
+        if self.pipeline_panel_state is None or self._pipeline_path is None or self._resim_thread is not None:
+            return
+        if self._resim_scratch_dir is None:
+            self._resim_scratch_dir = Path(tempfile.mkdtemp(prefix="adas_sim_resim_"))
+        manifest_path = self._resim_scratch_dir / "run_manifest.yaml"
+        try:
+            write_run_manifest(
+                manifest_path, pipeline=self.pipeline_panel_state.pipeline,
+                mode_overrides=self.pipeline_panel_state.mode_overrides,
+                recording=self._recording_path, project=self._project, config=self._pipeline_config,
+            )
+        except AuthoringError as exc:
+            self.statusBar().showMessage(f"could not run: {exc}", 8000)
+            return
+
+        self.pipeline_panel.set_run_enabled(False)
+        self.statusBar().showMessage("running...")
+        self._resim_thread = QtCore.QThread(self)
+        self._resim_worker = _ResimWorker(
+            pipeline_path=manifest_path, pipeline_search=self._pipeline_search,
+            recording_path=self._recording_path, config_path=self._pipeline_config,
+            project=self._project, out_path=self._resim_scratch_dir / "resim.mcap",
+        )
+        self._resim_worker.moveToThread(self._resim_thread)
+        self._resim_thread.started.connect(self._resim_worker.run)
+        self._resim_worker.loaded.connect(self._on_resim_loaded)
+        self._resim_worker.failed.connect(self._on_resim_failed)
+        self._resim_thread.start()
+
+    def _on_resim_loaded(self, session: Session) -> None:
+        self._stop_resim_thread()
+        self.pipeline_panel.set_run_enabled(True)
+        self._on_loaded(session)  # same path any other recording load takes
+        self.statusBar().showMessage(f"run complete -- viewing {session.name}", 5000)
+
+    def _on_resim_failed(self, message: str) -> None:
+        self._stop_resim_thread()
+        self.pipeline_panel.set_run_enabled(True)
+        self.statusBar().showMessage(f"run failed: {message}", 8000)
 
     def _advance_for_transport(self, n: int, on_progress: Callable[[int, int], None], cancel: object) -> int:
         """`Transport`'s stand-in for a real SUT's `exec()` loop

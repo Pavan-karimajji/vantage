@@ -75,9 +75,15 @@ def _save_outputs(pipeline: Pipeline, outputs: list[tuple[int, dict]], path: Pat
     simulate_stages = [stage for stage in pipeline.stages if stage.mode == "simulate"]
     topics = {}
     for stage in simulate_stages:
-        for port_spec in pipeline.manifest_for(stage.name).outputs:
+        manifest = pipeline.manifest_for(stage.name)
+        for port_spec in manifest.outputs:
             name = f"{stage.name}.{port_spec.name}"
-            topics[topic_for(name)] = TopicInfo(schema_name=port_spec.proto_type or name, provenance=Provenance.SIMULATED)
+            # R-SIM-11: descriptor_set, so this file decodes on replay
+            # instead of staying raw bytes (previously never wired in here).
+            topics[topic_for(name)] = TopicInfo(
+                schema_name=port_spec.proto_type or name, provenance=Provenance.SIMULATED,
+                schema_bytes=manifest.descriptor_set,
+            )
 
     writer = writer_for(path)
     writer.open(path, meta, topics)

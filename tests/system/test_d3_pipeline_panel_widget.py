@@ -67,6 +67,31 @@ def test_panel_renders_one_row_per_stage_offscreen(tmp_path):
     assert "stub:upstream" in panel._table.item(0, 2).text()
 
 
+def test_run_button_disabled_until_sync_then_clicking_it_emits_run_requested(tmp_path):
+    """S-D3 slice 4 (`ST-D3-1`): the Run button follows `sync()`'s own
+    "no state yet" gating `_save_run_manifest_action` already uses, and a
+    real click dispatches `run_requested` -- `MainWindow` owns what "run"
+    means, this class only emits."""
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    panel = PipelinePanel()
+    assert not panel._run_button.isEnabled()
+
+    pipeline = _load_pipeline(tmp_path)
+    state = PipelinePanelState(pipeline, known_ports=frozenset({"upstream.objects"}))
+    panel.sync(state)
+    assert panel._run_button.isEnabled()
+
+    received = []
+    panel.run_requested.connect(lambda: received.append(True))
+    panel._run_button.click()
+    assert received == [True]
+
+    panel.set_run_enabled(False)
+    assert not panel._run_button.isEnabled()
+    panel.set_run_enabled(True)
+    assert panel._run_button.isEnabled()  # state is still set -- re-enabled for real
+
+
 def test_clicking_a_mode_radio_dispatches_mode_changed_and_rebuilds_the_row(tmp_path):
     QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     pipeline = _load_pipeline(tmp_path)

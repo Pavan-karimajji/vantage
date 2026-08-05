@@ -32,13 +32,20 @@ from __future__ import annotations
 from pathlib import Path
 
 from adas_sim.contracts.pipeline import Pipeline, _split_ref
-from adas_sim.io.base import group_by_log_time
+from adas_sim.io.base import Provenance, RunManifest, TopicInfo, group_by_log_time
 from adas_sim.io.ingest import IngestRecordingReader, discover_ingest_maps
-from adas_sim.io.registry import reader_for
+from adas_sim.io.registry import reader_for, writer_for
 
 
 def _topic_to_port_name(topic: str) -> str:
     return ".".join(topic.strip("/").split("/"))
+
+
+def _port_name_to_topic(name: str) -> str:
+    """Inverse of `_topic_to_port_name` -- private one-line copy, same
+    reasoning as that function's own docstring (`sources/recorder.py`'s
+    `topic_for` is not imported for a one-liner)."""
+    return name.replace(".", "/")
 
 
 def _wired_source_ports(pipeline: Pipeline) -> set[str]:
@@ -98,5 +105,102 @@ def resim_pipeline(pipeline: Pipeline, recording_path: Path) -> list[tuple[int, 
             outputs = pipeline.exec(dt_ns, stimulus, measured=measured)
             results.append((t_ns, dict(outputs)))
         return results
+    finally:
+        reader.close()
+
+
+def resim_pipeline_merged(pipeline: Pipeline, recording_path: Path, out_path: Path, *, meta: RunManifest) -> None:
+    """`S-D3`'s live-resim-to-Session capability (`ST-D3-1`): writes a FULL
+    merged recording at `out_path` -- every original topic passed through
+    unchanged, except each `mode: simulate` stage's own declared output
+    ports, which are overwritten with this resim's freshly-computed bytes
+    (`schema_bytes` populated from the component's own `descriptor_set`,
+    `R-SIM-11`, same fix as `Recorder._topics()`/`cli/resim.py`'s own
+    `_save_outputs`, so the merged file decodes exactly like a live
+    recording would). Unlike `cli/resim.py --save` (only the freshly-
+    simulated stages' own bytes), the file this writes is a complete
+    recording on its own -- `core/runner.build_session_from_recording` can
+    load it with no other input, which is the one and only way a `Session`
+    is ever built anywhere in this framework (`R-SIM-6`/`R-SIM-13`/
+    `R-SIM-14`): this function does not invent a second way, it produces
+    the artifact the existing way already knows how to read.
+
+    Same engine as `resim_pipeline` (`Pipeline.exec`, single-rate) -- a
+    GUI "Run" and `sim resim` must never silently diverge on the same
+    pipeline+recording (`R-SIM-16`'s "one engine").
+    """
+    source_ports = _wired_source_ports(pipeline)
+    measured_stage_names = [stage.name for stage in pipeline.stages if stage.mode == "measured"]
+    simulate_stages = [stage for stage in pipeline.stages if stage.mode == "simulate"]
+
+    reader = IngestRecordingReader(reader_for(recording_path), discover_ingest_maps())
+    try:
+        topics = reader.topics()
+        port_name_of = {topic: _topic_to_port_name(topic) for topic in topics}
+
+        # A simulate stage's own output topics take over their channel
+        # entirely -- the merged file must never carry both the base
+        # recording's stale bytes and this resim's fresh ones under the
+        # same topic, or a reader could not tell which is current (R-SIM-6).
+        simulate_topics: dict[str, TopicInfo] = {}
+        for stage in simulate_stages:
+            manifest = pipeline.manifest_for(stage.name)
+            for port_spec in manifest.outputs:
+                topic = _port_name_to_topic(f"{stage.name}.{port_spec.name}")
+                simulate_topics[topic] = TopicInfo(
+                    schema_name=port_spec.proto_type or f"{stage.name}.{port_spec.name}",
+                    schema_bytes=manifest.descriptor_set, provenance=Provenance.SIMULATED,
+                )
+        merged_topics = {topic: info for topic, info in topics.items() if topic not in simulate_topics}
+        merged_topics.update(simulate_topics)
+
+        messages = list(reader.messages())
+        capture_by_topic_time = {
+            (topic, log_time_ns): capture_time_ns for topic, log_time_ns, capture_time_ns, _payload in messages
+        }
+        groups = list(group_by_log_time(messages, expected_topics=topics.keys()))
+
+        writer = writer_for(out_path)
+        writer.open(out_path, meta, merged_topics)
+        try:
+            previous_t_ns: int | None = None
+            for t_ns, payloads, _missing in groups:
+                dt_ns = 0 if previous_t_ns is None else t_ns - previous_t_ns
+                previous_t_ns = t_ns
+
+                # Pass through every original topic this tick carried,
+                # except the ones a simulate stage is about to overwrite --
+                # its own real capture stamp travels with it unchanged,
+                # never defaulted to reception (R-SIM-14).
+                for topic, payload in payloads.items():
+                    if topic in simulate_topics:
+                        continue
+                    writer.write(topic, t_ns, payload, capture_time_ns=capture_by_topic_time.get((topic, t_ns)))
+
+                port_payloads = {port_name_of[topic]: payload for topic, payload in payloads.items()}
+                stimulus = {
+                    port: port_payloads[f"source.{port}"]
+                    for port in source_ports if f"source.{port}" in port_payloads
+                }
+                measured: dict[str, dict[str, bytes]] = {}
+                for stage_name in measured_stage_names:
+                    manifest = pipeline.manifest_for(stage_name)
+                    recorded = {
+                        port_spec.name: port_payloads[f"{stage_name}.{port_spec.name}"]
+                        for port_spec in manifest.outputs if f"{stage_name}.{port_spec.name}" in port_payloads
+                    }
+                    if recorded:
+                        measured[stage_name] = recorded
+
+                outputs = pipeline.exec(dt_ns, stimulus, measured=measured)
+                for stage in simulate_stages:
+                    for port_name, payload in outputs.get(stage.name, {}).items():
+                        # Freshly computed THIS tick, zero injected latency
+                        # (no error model exists yet, R-SIM-9) -- reception
+                        # and validity genuinely coincide, same reasoning
+                        # `Recorder._write_one`'s own comment gives.
+                        writer.write(_port_name_to_topic(f"{stage.name}.{port_name}"), t_ns, payload, capture_time_ns=t_ns)
+        finally:
+            writer.close()
     finally:
         reader.close()

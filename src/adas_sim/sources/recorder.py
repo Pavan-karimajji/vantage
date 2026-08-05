@@ -149,7 +149,13 @@ class Recorder:
             topics[topic_for(name)] = TopicInfo(schema_name=name, provenance=self._provenance_for_source_port(port))
         for stage, port_spec, _policy in self._recorded_stage_output_ports():
             name = _qualified(stage.name, port_spec.name)
-            topics[topic_for(name)] = TopicInfo(schema_name=port_spec.proto_type or name, provenance=Provenance.SIMULATED)
+            # R-SIM-11: the component's own adasManifest() descriptor_set,
+            # so a stage's recorded output decodes on replay instead of
+            # staying raw bytes forever (previously never wired in here).
+            topics[topic_for(name)] = TopicInfo(
+                schema_name=port_spec.proto_type or name, provenance=Provenance.SIMULATED,
+                schema_bytes=self._pipeline.manifest_for(stage.name).descriptor_set,
+            )
         return topics
 
     def estimate_upper_bound_bytes(self, ticks: int) -> int:

@@ -38,6 +38,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--search", type=Path, action="append", default=[],
         help="a directory to search for --pipeline's dll:/stubdll: stages (repeatable)",
     )
+    parser.add_argument(
+        "--config", type=Path, default=None,
+        help="S-D3 slice 4 (ST-D3-1): config path forwarded to --pipeline's adasInit for a real Run -- "
+             "same 'adasInit(NULL) bundle auto-resolution is not built yet' caveat as sim resim --config",
+    )
     return parser
 
 
@@ -52,5 +57,5 @@ def run(argv: list[str] | None = None) -> int:
     return launch(
         args.session, project=args.project, workspace_path=args.workspace,
         preset=args.preset, at_s=args.at, scenario_path=args.scenario,
-        pipeline_path=args.pipeline, pipeline_search=args.search,
+        pipeline_path=args.pipeline, pipeline_search=args.search, pipeline_config=args.config,
     )

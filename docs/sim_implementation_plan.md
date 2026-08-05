@@ -5775,6 +5775,102 @@ be replaced the day an Ubuntu machine appears.
 > consistency, and the live-resim-to-Session capability `ST-D3-1` actually
 > needs (`UT-D3-3`, `UT-D3-8`, `ST-D3-1`).
 
+> **Slice 4 closes `ST-D3-1`: the live-resim-to-Session capability itself,
+> agreed with the user before starting** (two real forks put to them first
+> — merge mechanism, and whether to close the schema_bytes gap discovered
+> during investigation — both resolved to the more thorough option).
+> Investigated first: `Pipeline.exec()` (`cli/resim.py`'s engine) and
+> `Pipeline.step()` (live `sim run`/`Recorder`'s engine) are two different
+> engines — a GUI "Run" naively built on `step()` would silently diverge
+> from `sim resim` on any multi-rate pipeline, exactly the `R-SIM-16` "one
+> engine" failure the `S-D3` gate names. Also found: neither `Recorder`
+> nor `cli/resim.py --save` ever populated `TopicInfo.schema_bytes` for a
+> stage's own output topics (only the type name string) — a real,
+> pre-existing gap, `ComponentManifest.descriptor_set` (`R-SIM-11`)
+> available but never wired in, meaning a freshly-computed port stayed raw
+> bytes forever on any existing round trip.
+>
+> **Fixed first**: `sources/recorder.py::Recorder._topics()` and
+> `cli/resim.py::_save_outputs` both now pass `manifest.descriptor_set` as
+> `TopicInfo.schema_bytes` — a stage's own recorded output decodes on
+> replay like any other port.
+>
+> **What landed**: `core/resim.py` gains `resim_pipeline_merged(pipeline,
+> recording_path, out_path, *, meta)` — writes a FULL merged recording
+> (every original topic passed through unchanged, except each `mode:
+> simulate` stage's own declared output ports, overwritten with this
+> resim's freshly-computed bytes, schema_bytes included) at `out_path`.
+> Same single-rate `Pipeline.exec()` engine as `resim_pipeline`
+> (`cli/resim.py`'s own, unchanged) — deliberately, per the fork above.
+> Unlike `--save` (only the freshly-simulated stages' own bytes), this
+> file is a complete, standalone recording: `core/runner.
+> build_session_from_recording` — the one and only way a `Session` is
+> ever built anywhere in this framework (`R-SIM-6`/`R-SIM-13`/`R-SIM-14`)
+> — reads it with no other input. This function does not invent a second
+> way to build a `Session`; it produces the artifact the existing way
+> already knows how to read.
+>
+> `PipelinePanel` gains a **Run** button (`run_requested` signal, enabled
+> once `sync()` has a real state, disabled while a run is in flight —
+> `MainWindow`'s `set_run_enabled`). `MainWindow` gains `pipeline_config=`
+> (forwarded to `pipeline.init_components`, same `adasInit(NULL)` caveat
+> `cli/resim.py --config`'s own help text already states — `S-C5`'s bundle
+> auto-resolution is not built yet) and a new `_ResimWorker` (off the GUI
+> thread, mirrors `_SessionLoadWorker`'s ownership rule): `_on_run_
+> requested` writes the panel's CURRENT state as a run manifest into a
+> scratch dir (`write_run_manifest` — the SAME call `_on_save_run_
+> manifest` already makes, into a temp file instead of a user-chosen one,
+> so a GUI "Run" and a saved-then-`sim resim`'d manifest are provably the
+> same artifact, `R-SIM-16`'s own "GUI and CLI exchange the same
+> artifact"), then `_ResimWorker.run()` re-loads it fresh (`Pipeline.load`,
+> real `dll:`/`stubdll:` resolution), `init_components`, `resim_pipeline_
+> merged`, `shutdown_components`, `build_session_from_recording`. On
+> success the result becomes the viewed `Session` through `_on_loaded`
+> unchanged — a resim result is treated exactly like opening any other
+> recording. `sim view --pipeline --config` threads a real config path
+> through (`cli/view.py` → `app/gui.launch` → `MainWindow`).
+>
+> **Deliberately not attempted this slice**: the panel does not preserve
+> the user's mode toggles across a Run — `_on_loaded` (reused unchanged)
+> rebuilds `PipelinePanelState` fresh from `self._pipeline_path`, so a Run
+> shows what was actually executed but the dock then reverts to the
+> original declared modes. Carrying `mode_overrides` forward across a
+> reload is real, separate, later work, same "not attempted" discipline
+> every earlier slice in this stage uses. Also not attempted: on-disk
+> `impl:` discovery, severed-chain UI, per-port override expansion,
+> compare-against-recorded, evidence-panel consistency (`UT-D3-3`,
+> `UT-D3-8` — unrelated to `ST-D3-1` and still open).
+>
+> 6 new tests, all real: 3 in `tests/system/test_d3_resim_merged.py`
+> (a record→resim round trip through the merged-writer path decodes a
+> real, non-empty `descriptor_set` on reload — not just carries bytes;
+> byte-identical output against `resim_pipeline` on the same pipeline +
+> recording, proving engine consistency, `R-SIM-16`; the merged file's
+> `known_ports` covers every wired port with no other input needed), 1 in
+> `tests/system/test_d3_pipeline_panel_widget.py` (Run disabled until
+> `sync()`, a real click emits `run_requested`, `set_run_enabled`
+> round-trips), 2 in `tests/system/test_d3_mainwindow_pipeline_panel.py`
+> (a REAL `echo_stub.dll` run: clicking Run produces a genuinely different
+> `Session` object, the button disables mid-run and re-enables after,
+> "run complete" lands in the status bar; the no-pipeline early-return
+> guard spawns no worker). Full suite re-run clean: `pytest` 746 passed /
+> 7 skipped (was 740; 2 pre-existing collection errors unrelated to this
+> stage — `tests/unit/test_d1_foxglove.py`/`test_d1_scene_recording.py`,
+> the optional `foxglove-sdk` extra not installed in this environment —
+> excluded from the count, not touched this pass). `check_invariants.py`
+> clean (`GT-1,2,3,6,11`). One pre-existing flake confirmed **not** caused
+> by this slice (`git stash -u` + rerun on the untouched baseline
+> reproduced it identically): `test_b3_viewport_controls.py::test_
+> dragging_pans_the_viewport_and_a_second_click_still_selects` fails
+> intermittently inside the full-suite run but passes every time in
+> isolation — real, pre-existing, order/timing-sensitive flakiness in that
+> test, unrelated to `S-D3` and not investigated further here.
+>
+> `ST-D3-1` is now **closed**: every run this plan can express as a
+> pipeline is launchable from the GUI with no hand-typed command. `UT-D3-3`
+> (severed-chain UI) and `UT-D3-8` (evidence-panel consistency) remain
+> open — the stage's own Gate below reflects this.
+
 - [ ] `app/panels/pipeline.py` — the pipeline dock, per visualization spec §13:
       one row per stage, `mode` toggle, `impl:` and overrides in a collapsed
       expert row. **Landed as `view/pipeline_panel.py` +
@@ -5850,9 +5946,16 @@ be replaced the day an Ubuntu machine appears.
       filled on the other. **Not attempted this pass** — `core/evidence.py`
       already exists (a real prerequisite, confirmed present); this pass
       did not touch the evidence panel at all
-- [ ] `ST-D3-1` every run in this plan is launchable from the GUI with no
-      hand-typed command. **Not attempted** — the panel is not wired into
-      `MainWindow` this pass, so nothing is launchable from it yet
+- [x] `ST-D3-1` every run in this plan is launchable from the GUI with no
+      hand-typed command. **Closed, slice 4** — `PipelinePanel`'s Run button
+      → `write_run_manifest` (scratch file) → `_ResimWorker` (off the GUI
+      thread: `Pipeline.load`, `init_components`, `core.resim.
+      resim_pipeline_merged`, `shutdown_components`, `build_session_
+      from_recording`) → `_on_loaded`, the same path any other recording
+      open takes. Proven against a REAL `stubdll:` (`echo_stub.dll`):
+      clicking Run yields a genuinely different `Session` object, no
+      hand-typed CLI command anywhere in the path. `tests/system/
+      test_d3_mainwindow_pipeline_panel.py`, real, passing
 
 **Discipline** (every stage)
 - [ ] portability §3 ticked — exposure: `P-6` (entry point, never a `.bat`),
@@ -5862,15 +5965,18 @@ be replaced the day an Ubuntu machine appears.
 - [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
-- [ ] `UT-D3-4` + `UT-D3-5` + `ST-D3-1` green — the GUI and the CLI exchange the
+- [x] `UT-D3-4` + `UT-D3-5` + `ST-D3-1` green — the GUI and the CLI exchange the
       same artefact in both directions, which is what keeps them one engine
-      (`R-SIM-16`) rather than two paths that drift. **Still not closed** —
-      `UT-D3-4`/`UT-D3-5` are real and green (slice 2); `ST-D3-1` needs a
-      live-resim-to-Session capability that does not exist anywhere in the
-      framework yet (slice 3's own investigation) — the panel IS wired into
-      `MainWindow` now (slice 3), but read-only, so nothing is launchable
-      from it. This is real, separate, substantial future work, not a
-      wiring gap
+      (`R-SIM-16`) rather than two paths that drift. **Closed, slice 4** —
+      `UT-D3-4`/`UT-D3-5` real since slice 2; `ST-D3-1` closed by wiring
+      `PipelinePanel`'s Run button through `write_run_manifest` (the SAME
+      call `Save Run Manifest...` makes) into a real, off-thread resim
+      (`_ResimWorker` → `core.resim.resim_pipeline_merged`, same single-rate
+      `Pipeline.exec()` engine `cli/resim.py` uses — never a second engine)
+      → `build_session_from_recording`. **`UT-D3-3`/`UT-D3-8` are a
+      separate, still-open concern** (severed-chain UI, evidence-panel
+      consistency) — not part of this gate's own three checks, correctly
+      left unticked above
 
 ### S-D4 — Perception readiness
 

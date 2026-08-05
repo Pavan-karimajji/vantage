@@ -20,6 +20,13 @@ vs2026/tests/Release/` build path) rather than building a second trivial
 fixture library -- skips with a named reason if it is not present here,
 same pattern `test_c8_relocatability_installed.py` already uses for a
 missing `df_sil` build.
+
+**Slice 4 (`ST-D3-1`) adds real "Run" wiring tests**, same `echo_stub.dll`
+fixture: clicking `PipelinePanel`'s Run button executes the panel's
+current pipeline against the recording (`_ResimWorker`, off the GUI
+thread) and the result becomes the viewed `Session` -- proven by the
+`Session` object changing identity, not just that nothing crashed. A
+second test proves the early-return guards (no pipeline, already running).
 """
 
 from __future__ import annotations
@@ -82,6 +89,20 @@ def _pump_until_loaded(window: MainWindow, timeout_ms: int = 5000) -> None:
     ceiling.start(timeout_ms)
     poll = QtCore.QTimer()
     poll.timeout.connect(lambda: loop.quit() if window.session is not None else None)
+    poll.start(10)
+    loop.exec()
+    poll.stop()
+    ceiling.stop()
+
+
+def _pump_until(condition, timeout_ms: int = 8000) -> None:
+    loop = QtCore.QEventLoop()
+    ceiling = QtCore.QTimer()
+    ceiling.setSingleShot(True)
+    ceiling.timeout.connect(loop.quit)
+    ceiling.start(timeout_ms)
+    poll = QtCore.QTimer()
+    poll.timeout.connect(lambda: loop.quit() if condition() else None)
     poll.start(10)
     loop.exec()
     poll.stop()
@@ -152,3 +173,52 @@ def test_a_real_resolvable_pipeline_populates_the_dock_and_save_run_manifest_wri
     assert written["stages"][0]["name"] == "echo"
     assert written["recording"]  # some relative path was written
     assert not Path(written["recording"]).is_absolute()
+
+
+@pytest.mark.skipif(
+    not (_ECHO_STUB_DIR / "echo_stub.dll").is_file(),
+    reason=f"needs sil_host's echo_stub.dll built at {_ECHO_STUB_DIR} (scripts/build.py sil_host -t gtest -p vs2026 -P base)",
+)
+def test_st_d3_1_clicking_run_executes_the_pipeline_and_the_result_becomes_the_viewed_session(tmp_path):
+    recording = tmp_path / "test_d3.mcap"
+    _write_synthetic_recording(recording)
+    pipeline_path = tmp_path / "real_pipeline.yaml"
+    pipeline_path.write_text(yaml.safe_dump({
+        "name": "real", "stages": [{"name": "echo", "mode": "simulate", "impl": "stubdll:echo_stub"}],
+    }, sort_keys=False), encoding="utf-8")
+
+    set_high_dpi_policy()
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    window = MainWindow(recording, pipeline_path=pipeline_path, pipeline_search=[_ECHO_STUB_DIR])
+    _pump_until_loaded(window)
+    assert window.pipeline_panel_state is not None
+    assert window.pipeline_panel._run_button.isEnabled()
+
+    before = window.session
+    window.pipeline_panel._run_button.click()
+    assert not window.pipeline_panel._run_button.isEnabled(), "disabled while a run is in flight"
+    _pump_until(lambda: window.session is not before)
+
+    assert window.session is not before, window.statusBar().currentMessage()
+    assert window.session is not None
+    assert len(window.session) == _TICK_COUNT
+    assert window.pipeline_panel._run_button.isEnabled(), "re-enabled once the run completes"
+    assert "run complete" in window.statusBar().currentMessage()
+
+
+def test_on_run_requested_is_a_no_op_with_no_pipeline_loaded(tmp_path):
+    """The early-return guard (`ST-D3-1`): no `pipeline_path` means no
+    `pipeline_panel_state`, so a stray `run_requested` (the button is
+    disabled in this state anyway, `test_d3_pipeline_panel_widget.py`'s own
+    test) must not spawn a worker or crash."""
+    recording = tmp_path / "test_d3.mcap"
+    _write_synthetic_recording(recording)
+
+    set_high_dpi_policy()
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    window = MainWindow(recording)
+    _pump_until_loaded(window)
+
+    window._on_run_requested()
+
+    assert window._resim_thread is None
