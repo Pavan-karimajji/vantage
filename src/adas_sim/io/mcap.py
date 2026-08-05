@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
+from types import MappingProxyType
 
 import yaml
 from mcap.reader import make_reader
@@ -40,6 +41,7 @@ CAPABILITIES = Capabilities(
 
 _MANIFEST_META = "manifest"
 _CONFIG_BUNDLE_META = "config_bundle"
+_PLUGIN_BUNDLES_META = "plugin_bundles"
 _TOPIC_PROVENANCE_META = "topic_provenance"
 _PROVENANCE_VALUES = frozenset(p.value for p in Provenance)
 
@@ -59,6 +61,8 @@ def _manifest_to_dict(manifest: RunManifest) -> dict:
         "project": manifest.project,
         "pipeline": manifest.pipeline,
         "seed": manifest.seed,
+        "allow_mixed_projects": manifest.allow_mixed_projects,
+        "process_nonce": manifest.process_nonce,
         "components": [
             {
                 "name": c.name,
@@ -105,6 +109,8 @@ def _manifest_from_dict(data: dict) -> RunManifest:
         project=data.get("project", ""),
         pipeline=data.get("pipeline", ""),
         seed=data.get("seed", 0),
+        allow_mixed_projects=data.get("allow_mixed_projects", False),
+        process_nonce=data.get("process_nonce", ""),
         components=components,
     )
 
@@ -124,6 +130,7 @@ class McapWriter:
         topics: Mapping[str, TopicInfo],
         *,
         config_bundle_bytes: bytes = b"",
+        plugin_bundles_meta: Mapping[str, Mapping[str, object]] = MappingProxyType({}),
     ) -> None:
         self._file = path.open("wb")
         self._writer = _McapWriter(self._file)
@@ -148,6 +155,10 @@ class McapWriter:
             self._writer.add_metadata(_MANIFEST_META, {"yaml": yaml.safe_dump(_manifest_to_dict(meta), sort_keys=True)})
         if config_bundle_bytes:
             self._writer.add_metadata(_CONFIG_BUNDLE_META, {"yaml": config_bundle_bytes.decode("utf-8")})
+        if plugin_bundles_meta:
+            # NR-SIM-44: identity + hash only, never bytes -- opening a
+            # colleague's recording must never run their code.
+            self._writer.add_metadata(_PLUGIN_BUNDLES_META, {"yaml": yaml.safe_dump(dict(plugin_bundles_meta), sort_keys=True)})
         self._writer.add_metadata(
             _TOPIC_PROVENANCE_META,
             {topic: topics[topic].provenance.value for topic in sorted(topics)},
@@ -197,6 +208,14 @@ class McapReader:
         twin of `open()`'s `config_bundle_bytes` keyword."""
         block = self._metadata_by_name.get(_CONFIG_BUNDLE_META)
         return block["yaml"].encode("utf-8") if block else b""
+
+    def plugin_bundles_meta(self) -> Mapping[str, Mapping[str, object]]:
+        """S-C8: the writer-side twin of `open()`'s `plugin_bundles_meta`
+        keyword -- `{component: {"api": int, "sha256": str}}`, identity and
+        hash only (`NR-SIM-44`). Empty when the recording predates `S-C8` or
+        embedded none."""
+        block = self._metadata_by_name.get(_PLUGIN_BUNDLES_META)
+        return yaml.safe_load(block["yaml"]) if block else {}
 
     def topics(self) -> Mapping[str, TopicInfo]:
         provenance_by_topic = self._metadata_by_name.get(_TOPIC_PROVENANCE_META, {})

@@ -33,11 +33,13 @@ from adas_sim.contracts.pipeline import Pipeline
 from adas_sim.core.errors import AuthoringError, ContractError, InternalError
 
 
-def _manifest(*, component: str, inputs=(), outputs=(), period_ns: int = 0, descriptor_set: bytes = b"") -> ComponentManifest:
+def _manifest(
+    *, component: str, inputs=(), outputs=(), period_ns: int = 0, descriptor_set: bytes = b"", project: str = "base",
+) -> ComponentManifest:
     return ComponentManifest(
         component=component, version="1", abi_version=1, build_id="test",
         inputs=tuple(inputs), outputs=tuple(outputs),
-        project="base", config_bundle_sha256="", descriptor_set=descriptor_set, period_ns=period_ns,
+        project=project, config_bundle_sha256="", descriptor_set=descriptor_set, period_ns=period_ns,
     )
 
 
@@ -960,3 +962,113 @@ def test_step_propagates_a_held_producers_staleness_into_a_downstream_input_meta
     assert fresh_meta.age_s == pytest.approx(0.0)
     assert held_meta.valid is True
     assert held_meta.age_s == pytest.approx(0.01)
+
+
+# ---------------------------------------------------------------------------
+# OD-11 -- cross-component project/ego-parameter agreement
+# (sim_sil_contract.md SS9.1, sim_implementation_plan.md S-C5 Milestone 2)
+# ---------------------------------------------------------------------------
+
+
+class _FakeComponentForAgreement:
+    """Just enough of `SilComponent` for `_validate_cross_component_agreement`
+    -- it reads only `.manifest.project`, never execs."""
+
+    def __init__(self, project: str) -> None:
+        self.manifest = _manifest(component="fake", project=project)
+
+
+def _bundle_dir(tmp_path: Path, name: str, *, ego: dict | None = None) -> Path:
+    bundle_dir = tmp_path / name
+    (bundle_dir / "vehicle").mkdir(parents=True)
+    (bundle_dir / "vehicle" / "ego_params.yaml").write_text(
+        yaml.safe_dump(ego if ego is not None else {"EGO_WHEELBASE_M": 2.7}), encoding="utf-8",
+    )
+    return bundle_dir
+
+
+def test_fewer_than_two_known_bundles_is_a_no_op(tmp_path):
+    bundle_dirs = {"a": _bundle_dir(tmp_path, "a"), "b": None}
+    components = {"a": _FakeComponentForAgreement("base"), "b": _FakeComponentForAgreement("base")}
+    mixed = pipeline_mod._validate_cross_component_agreement(bundle_dirs, components, allow_mixed_projects=False)
+    assert mixed is False
+
+
+def test_agreeing_bundles_across_two_stages_pass_silently(tmp_path):
+    bundle_dirs = {
+        "a": _bundle_dir(tmp_path, "a", ego={"EGO_WHEELBASE_M": 2.7}),
+        "b": _bundle_dir(tmp_path, "b", ego={"EGO_WHEELBASE_M": 2.7}),
+    }
+    components = {"a": _FakeComponentForAgreement("base"), "b": _FakeComponentForAgreement("base")}
+    mixed = pipeline_mod._validate_cross_component_agreement(bundle_dirs, components, allow_mixed_projects=False)
+    assert mixed is False
+
+
+def test_project_mismatch_warns_by_default_and_is_suppressed_by_the_escape(tmp_path):
+    bundle_dirs = {
+        "a": _bundle_dir(tmp_path, "a", ego={"EGO_WHEELBASE_M": 2.7}),
+        "b": _bundle_dir(tmp_path, "b", ego={"EGO_WHEELBASE_M": 2.7}),
+    }
+    components = {"a": _FakeComponentForAgreement("base"), "b": _FakeComponentForAgreement("cus1")}
+
+    with pytest.warns(pipeline_mod.ProvenanceWarning):
+        mixed = pipeline_mod._validate_cross_component_agreement(bundle_dirs, components, allow_mixed_projects=False)
+    assert mixed is True
+
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # any warning raised here fails the test
+        mixed = pipeline_mod._validate_cross_component_agreement(bundle_dirs, components, allow_mixed_projects=True)
+    assert mixed is True  # still reports the mismatch was found, just doesn't warn about it
+
+
+def test_ego_parameter_mismatch_is_a_hard_error_naming_both_components_and_the_key(tmp_path):
+    bundle_dirs = {
+        "a": _bundle_dir(tmp_path, "a", ego={"EGO_WHEELBASE_M": 2.7}),
+        "b": _bundle_dir(tmp_path, "b", ego={"EGO_WHEELBASE_M": 2.9}),
+    }
+    components = {"a": _FakeComponentForAgreement("base"), "b": _FakeComponentForAgreement("base")}
+
+    with pytest.raises(AuthoringError) as excinfo:
+        pipeline_mod._validate_cross_component_agreement(bundle_dirs, components, allow_mixed_projects=False)
+
+    message = str(excinfo.value)
+    assert "EGO_WHEELBASE_M" in message
+    assert "'a'" in message and "'b'" in message
+
+
+def test_ego_parameter_mismatch_is_not_suppressed_by_allow_mixed_projects(tmp_path):
+    """`UT-C5-10`: the escape widens the project-name warning only. An escape
+    hatch that also swallowed the ego hard error would make two components
+    silently disagree about the wheelbase -- a wrong result AND a wrong
+    picture, with no legitimate reading (`OD-11`)."""
+    bundle_dirs = {
+        "a": _bundle_dir(tmp_path, "a", ego={"EGO_WHEELBASE_M": 2.7}),
+        "b": _bundle_dir(tmp_path, "b", ego={"EGO_WHEELBASE_M": 2.9}),
+    }
+    components = {"a": _FakeComponentForAgreement("base"), "b": _FakeComponentForAgreement("cus1")}
+
+    with pytest.raises(AuthoringError) as excinfo:
+        pipeline_mod._validate_cross_component_agreement(bundle_dirs, components, allow_mixed_projects=True)
+    assert "EGO_WHEELBASE_M" in str(excinfo.value)
+
+
+def test_pipeline_load_parses_allow_mixed_projects_and_exposes_mixed_projects(tmp_path):
+    """The pipeline-file-level wiring: `allow_mixed_projects:` is read at
+    `Pipeline.load` and both facts end up on the loaded `Pipeline` (`OD-11`,
+    for `core.manifest.build_manifest` to record)."""
+    consumer = _manifest(component="consumer")
+    path = tmp_path / "pipeline.yaml"
+    path.write_text(
+        yaml.safe_dump({
+            "name": "test", "version": 1, "allow_mixed_projects": True,
+            "stages": [{"name": "consumer", "mode": "simulate", "impl": "stub:consumer", "inputs": {}}],
+        }),
+        encoding="utf-8",
+    )
+
+    pipeline = Pipeline.load(path, components={"consumer": _stub("consumer", consumer)})
+
+    assert pipeline.allow_mixed_projects is True
+    assert pipeline.mixed_projects is False  # only one real bundle dir known (none, here) -- nothing to compare

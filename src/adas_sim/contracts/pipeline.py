@@ -41,6 +41,7 @@ from functools import reduce
 from math import gcd
 from pathlib import Path
 from typing import Literal
+from warnings import warn
 
 import yaml
 
@@ -51,7 +52,7 @@ from adas_sim.contracts.component import (
 from adas_sim.contracts.fault import Fault, FaultVerb, apply_fault
 from adas_sim.contracts.loader import resolve_library
 from adas_sim.contracts.override import Override, OverrideVerb, parse_override_verb
-from adas_sim.core.errors import AuthoringError, ContractError
+from adas_sim.core.errors import AuthoringError, ContractError, ProvenanceWarning
 from adas_sim.core.tick import PortValue
 from adas_sim.io.base import RecordingReader
 from adas_sim.sources.base import Source
@@ -270,15 +271,23 @@ def validate_recordable(stages: Sequence[Stage], components: Mapping[str, SilCom
 
 def _resolve_components(
     stages: Sequence[Stage], *, search: Sequence[Path], components: Mapping[str, SilComponent],
-) -> dict[str, SilComponent]:
+) -> tuple[dict[str, SilComponent], dict[str, Path | None]]:
     """`impl: dll:<stem>` / `stubdll:<stem>` load for real, through
     `resolve_library` (`P-5`) + `CtypesSilComponent`. `impl: stub:<name>`
     has no registry yet (`S-C2`) -- it must be supplied via `components=`.
-    A caller-supplied entry always wins, for any `impl:` kind."""
+    A caller-supplied entry always wins, for any `impl:` kind.
+
+    Also returns each stage's resolved **bundle directory** (`<library_dir>/
+    config`, `R-SIM-3a`) when known -- `None` for a `components=`-supplied
+    stage, since this function never sees a file path for those. `OD-11`'s
+    cross-component agreement check (`_validate_cross_component_agreement`)
+    is the only consumer; nothing else needs the raw directory."""
     resolved: dict[str, SilComponent] = {}
+    bundle_dirs: dict[str, Path | None] = {}
     for stage in stages:
         if stage.name in components:
             resolved[stage.name] = components[stage.name]
+            bundle_dirs[stage.name] = None
             continue
         if not stage.impl:
             raise AuthoringError(
@@ -288,7 +297,9 @@ def _resolve_components(
             )
         kind, _, ref = stage.impl.partition(":")
         if kind in ("dll", "stubdll"):
-            resolved[stage.name] = CtypesSilComponent(resolve_library(ref, search=search))
+            lib_path = resolve_library(ref, search=search)
+            resolved[stage.name] = CtypesSilComponent(lib_path)
+            bundle_dirs[stage.name] = lib_path.parent / "config"
         elif kind == "stub":
             raise AuthoringError(
                 expected=f"stage '{stage.name}' supplied via components=",
@@ -301,7 +312,79 @@ def _resolve_components(
                 found=stage.impl, where=f"stage '{stage.name}'",
                 hint="'legacy:' stages are not yet supported",
             )
-    return resolved
+    return resolved, bundle_dirs
+
+
+def _load_ego_params(bundle_dir: Path) -> Mapping[str, object]:
+    """The shared-vehicle-facts half of a bundle (`R-SIM-3a`): `<bundle_dir>/
+    vehicle/ego_params.yaml`, or an empty mapping if this bundle carries
+    none -- a stage whose bundle predates this file, or was packed with no
+    ego copy, contributes nothing to the comparison rather than erroring
+    (there is nothing to disagree about yet)."""
+    ego_path = bundle_dir / "vehicle" / "ego_params.yaml"
+    if not ego_path.is_file():
+        return {}
+    return yaml.safe_load(ego_path.read_text(encoding="utf-8")) or {}
+
+
+def _validate_cross_component_agreement(
+    bundle_dirs: Mapping[str, Path | None], components: Mapping[str, SilComponent], *, allow_mixed_projects: bool,
+) -> bool:
+    """`OD-11` (`sim_sil_contract.md` §9.1): every real bundle resolved into
+    one pipeline must agree on the vehicle facts it carries, or the picture
+    and the SUT disagree about the wheelbase with no legitimate reading.
+
+    **Project-name agreement is a warning, escapable** by the pipeline's own
+    `allow_mixed_projects: true` -- a deliberate cross-project experiment is
+    a real workflow (`R-SIM-3a`).
+
+    **Ego-parameter agreement is a hard load error, with NO escape** --
+    `allow_mixed_projects` widens the project-name warning only; asserting it
+    does not also suppress this is `UT-C5-10`'s own point, since an escape
+    hatch that widens beyond its stated scope is how a hard error becomes a
+    warning.
+
+    Returns whether the resolved projects actually differed, so `Pipeline`
+    can record it (`allow_mixed_projects:` is what was *requested*;
+    `mixed_projects` is what was *found* -- the two are independent facts).
+    Stages with no known bundle directory (`components=`-supplied) are
+    skipped: there is nothing on disk to compare."""
+    known = [(name, bundle_dir) for name, bundle_dir in bundle_dirs.items() if bundle_dir is not None]
+    if len(known) < 2:
+        return False
+
+    projects = {
+        name: components[name].manifest.project for name, _ in known if components[name].manifest.project
+    }
+    distinct_projects = set(projects.values())
+    mixed = len(distinct_projects) > 1
+    if mixed and not allow_mixed_projects:
+        first_name, first_project = next(iter(projects.items()))
+        for name, project in projects.items():
+            if project != first_project:
+                warn(
+                    ProvenanceWarning(
+                        f"stage '{name}' bundle is for project {project!r}, stage '{first_name}' bundle is "
+                        f"for project {first_project!r} -- set allow_mixed_projects: true if this is deliberate"
+                    )
+                )
+                break
+
+    reference_name, reference_dir = known[0]
+    reference_ego = _load_ego_params(reference_dir)
+    for name, bundle_dir in known[1:]:
+        ego = _load_ego_params(bundle_dir)
+        for key, value in reference_ego.items():
+            if key in ego and ego[key] != value:
+                raise AuthoringError(
+                    expected=f"stage '{name}' ego_params.yaml to agree with stage '{reference_name}' on '{key}'",
+                    found=f"'{name}'={ego[key]!r} vs '{reference_name}'={value!r}",
+                    where="pipeline cross-component ego-parameter agreement (OD-11)",
+                    hint="every component's config bundle carries its own copy of shared_config's "
+                         "vehicle/ego_params.yaml -- they must be identical. allow_mixed_projects "
+                         "does not, and must not, suppress this",
+                )
+    return mixed
 
 
 def _require_multiple(period_ns: int, base_grid_ns: int, *, stage_name: str) -> None:
@@ -481,12 +564,18 @@ class Pipeline:
 
     def __init__(
         self, *, name: str, stages: tuple[Stage, ...], version: int, components: Mapping[str, SilComponent],
-        faults: Sequence[Fault] = (),
+        faults: Sequence[Fault] = (), allow_mixed_projects: bool = False, mixed_projects: bool = False,
     ) -> None:
         self.name = name
         self.stages = stages
         self.version = version
         self._components = dict(components)
+        #: `OD-11`: `allow_mixed_projects` is what the pipeline file
+        #: *requested*; `mixed_projects` is what `_validate_cross_component_
+        #: agreement` actually *found*. Independent facts -- a pipeline can
+        #: request the escape and still resolve a single-project run.
+        self.allow_mixed_projects = allow_mixed_projects
+        self.mixed_projects = mixed_projects
         self.base_grid_ns = _compute_base_grid_ns(stages, self._components)
         #: `step()`'s own clock and held-value cache (`R-SIM-18`) -- reset on
         #: every `Pipeline` construction, including the copies `with_mode`
@@ -565,6 +654,7 @@ class Pipeline:
         raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         version = _resolve_version(raw)
         name = raw.get("name", path.stem)
+        allow_mixed_projects = bool(raw.get("allow_mixed_projects", False))
         stages = tuple(
             Stage(
                 name=spec["name"], mode=spec.get("mode", "simulate"), impl=spec.get("impl"),
@@ -574,10 +664,16 @@ class Pipeline:
             )
             for spec in raw.get("stages", [])
         )
-        resolved = _resolve_components(stages, search=search, components=components or {})
+        resolved, bundle_dirs = _resolve_components(stages, search=search, components=components or {})
         _validate_wiring(stages, resolved, recording, source)
         _validate_overrides(stages, resolved)
-        return cls(name=name, stages=stages, version=version, components=resolved, faults=faults)
+        mixed_projects = _validate_cross_component_agreement(
+            bundle_dirs, resolved, allow_mixed_projects=allow_mixed_projects,
+        )
+        return cls(
+            name=name, stages=stages, version=version, components=resolved, faults=faults,
+            allow_mixed_projects=allow_mixed_projects, mixed_projects=mixed_projects,
+        )
 
     def _message_classes_for(self, stage_name: str) -> Mapping[str, type]:
         if stage_name not in self._message_classes:

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import socket
+import uuid
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,6 +23,12 @@ from pathlib import Path
 from adas_sim.contracts.pipeline import Pipeline
 from adas_sim.core.ids import new_run_id
 from adas_sim.io.base import CAPTURE_TIME_MANIFEST_VERSION, ComponentBuildInfo, RunManifest
+
+#: `S-C6` (`R-SIM-24`): generated ONCE per process, at import time -- every
+#: `RunManifest` this process builds carries the same value, which is exactly
+#: `sim determinism`'s same-process signal. A per-call `uuid4()` would make
+#: two runs in one process look like two different processes.
+_PROCESS_NONCE = uuid.uuid4().hex
 
 
 def _sha256_file(path: Path) -> str:
@@ -134,4 +141,6 @@ def build_manifest(
         pipeline=pipeline.name if pipeline is not None else "",
         components=components,
         seed=seed,
+        allow_mixed_projects=pipeline.allow_mixed_projects if pipeline is not None else False,
+        process_nonce=_PROCESS_NONCE,
     )

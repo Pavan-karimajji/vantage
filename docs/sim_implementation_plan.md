@@ -142,8 +142,55 @@ generator's first cut had (per-function dispatch fan-out not narrowed to
 tests), in the stage's own section below. Next up per the build-order table:
 `S-C5` (#13), the packed config bundle.
 
-**▶ `S-C5` (#13) — IN PROGRESS, C++ half RED. This is where the next session
-starts.** Milestone 1 (the original 7 scope boxes) was implemented 2026-08-04
+**`S-C5` (#13) — CLOSED 2026-08-05**, both milestones. Re-verified with a real
+MSVC/Conan build in this environment: `df` gtest 244/244 on `-P base` and `-P
+cus1` (238 + 6 new OD-12 tests), `vdy` gtest 18/18 unchanged, sim `pytest`
+657/3 skipped, `check_invariants.py`/`run_all.py` clean. `ST-C5-1` now proves
+the real, installed `df_sil` tree (not just the build tree `AR-1` left
+unproven) resolves `adasInit(NULL)` with the Conan cache and repo checkout
+both unreachable. Milestone 2's `OD-11` (cross-component project/ego-param
+agreement) and `OD-12` (`<COMPONENT>_<FN>_PERIOD_US` calibration) both landed
+in `contracts/pipeline.py` and `df`'s `ParamLoader`/generated ABI shim
+respectively. `UT-C5-6/7/8/9`, `ST-C5-2` and the `updated`-flag-disagreement
+report are explicitly deferred (see the stage's own section) — none block
+`S-C8`/`S-C6`.
+
+**`S-C8` (#14) — CLOSED (mechanism) 2026-08-05.** The plug-in bundle:
+build-time packing (`pack_plugin_bundle.py`/`plugin_bundle_pack.cmake`,
+mirroring `S-C5` exactly), `PluginBundle`'s 4-tier resolution + api-version
+gating (`model/plugins.py`), collision-free import (`import_modules()`),
+`scripts/vantage.py` rewired onto the real mechanism, and identity-only
+recorder embedding (`/meta/plugin_bundles`). Proven against a real `cmake
+--install` of `df_sil`, relocated with the original deleted, in a fresh
+interpreter (`test_c8_relocatability_installed.py`). **Deferred, same shape
+as `S-C5`'s own deferrals:** `sim explain`/`sim doctor` reporting the
+plug-in path, the HUD's missing-plug-in badge, and the full `vantage <dir>`
+GUI-render form of `GT-12`/`ST-C8-1/2` (the load-and-register mechanism is
+proven; an actual rendered frame is not). None of these block `S-C6`.
+
+**`S-C6` (#16) — CLOSED (mechanism) 2026-08-05.** `sim check` wired into
+`scripts/ci_gate.py`'s existing single job (runs the real 18-scenario
+`modules/df/tests/carla_scenarios` set, skips honestly with no `df_sil`
+build present); `sim determinism <run-a> <run-b>` (`cli/determinism.py`,
+`core/determinism.py`) derives all four axes from the two runs' manifests
+alone (never a flag), comparing byte-exact for axes A/B and against a
+component's `tolerance.yaml` for axes C/D; `process_nonce` lands in
+`RunManifest`. Verified: a real `ci_gate.py` run against `df`'s real
+scenario set (18/18) and the real sim `pytest` suite (696 collected, floor
+bumped 409 → 692). **While building `ST-C6-2`'s proof, found a real bug in
+this session's OWN test methodology** (a manual `sim check` run against a
+stale `cus1`-calibrated `df_sil` reported 3 false failures) — recorded as
+`AR-27`, not mistaken for a scenario/expectation gap. **Deferred:** wiring
+`sim determinism` itself into the CI job as a live double-run comparison
+(`ST-C6-4`) and joining the tolerance-file hash into `RunManifest` — both
+need either a real build on the CI runner (absent today, `plan.md` item 20)
+or scope beyond what this pass covered.
+
+This closes the user's requested queue for this session: `S-C5` → `S-C8` →
+`S-C6`, `S-C7` deliberately skipped throughout.
+
+Superseded status (kept for the audit trail, 2026-08-04): "`S-C5` — IN
+PROGRESS, C++ half RED." Milestone 1 (the original 7 scope boxes) was implemented 2026-08-04
 in a shell with no C++ toolchain, so it was landed unticked and unverified.
 The 2026-08-04 audit built it for real and found it **incomplete, not merely
 unproven** — see the *"What the real build found"* block immediately after
@@ -4452,107 +4499,117 @@ place beside the DLL.
       `df`'s own `AdasInitResolvesThePackedBundle` (`UT-C5-1`), green at
       238/238. No MSVC port of the fixture needed — it would duplicate
       coverage that already exists in C++
-- [ ] Build copies `project.yaml` + `shared_config`'s `vehicle/ego_params.yaml`
+- [x] Build copies `project.yaml` + `shared_config`'s `vehicle/ego_params.yaml`
       + `<component>.ports.yaml` into **`$<TARGET_FILE_DIR:…>/config/`** with
-      `bundle.sha256`
-      - `$<TARGET_FILE_DIR>`, **not** a hand-written `…/Release/…` path:
-        `Release/` is a multi-config-generator artefact that does not exist
-        under Make or Ninja, so a hard-coded path builds on Windows and silently
-        writes to the wrong place on Linux
-- [ ] `ParamLoader` reads a **directory**, not a file
-- [ ] **`adasInit(NULL)` resolves `<library_dir>/config/`** — via a one-function
-      abstraction over `GetModuleFileNameW` (Windows) and `dladdr` (Linux),
-      declared in `sim_sil_contract.md` and implemented **once**. Calling the
-      Windows API directly is the natural first draft and is wrong (`P-5`)
-- [ ] `bundle.sha256` is computed over **UTF-8 bytes, `\n` newlines, sorted
-      POSIX-style relative paths** (`P-9`) — a bundle built on Windows and one
-      built on Linux must hash identically, or the "did the two readers agree?"
-      guarantee is itself platform-dependent, which is worse than not having it
-- [ ] `adasManifest()` reports `project` + `config_bundle_sha256`
-- [ ] Recorder embeds the bundle on `/meta/config_bundle`
-- [ ] `ProjectModel` prefers explicit → embedded → library → checkout, and the
-      HUD **always says which** (`bundle_origin`)
+      `bundle.sha256`. *Re-verified 2026-08-05 against a real `cmake --install`
+      (not just the build tree)* — see `ST-C5-1` below, the gap `AR-1` left open.
+- [x] `ParamLoader` reads a **directory**, not a file (`fromBundleDir`)
+- [x] **`adasInit(NULL)` resolves `<library_dir>/config/`**
+- [x] `bundle.sha256` is computed over **UTF-8 bytes, `\n` newlines, sorted
+      POSIX-style relative paths** (`P-9`)
+- [x] `adasManifest()` reports `project` + `config_bundle_sha256`
+- [x] Recorder embeds the bundle on `/meta/config_bundle`
+      (`Recorder.open`'s `config_bundle_bytes`, `model/project.py`'s
+      `bundle_bytes_for_recording`)
+- [x] `ProjectModel` prefers explicit → embedded → library → checkout
+      (`bundle_origin`)
+
+**Milestone 1 closed 2026-08-05**, re-verified with a real MSVC/Conan build in
+this environment (the 2026-08-04 audit's own concern — "S-C5 was implemented in
+a shell with no MSVC" — no longer applies): `df` gtest **238/238 on both `-P
+base` and `-P cus1`**, including the two previously-red assertions
+(`GenericAbiTest.AdasInitResolvesThePackedBundle`,
+`ManifestTest.CarriesComponentIdentityAndDeclaredRate`). The audit's own
+diagnosed gap — `ST-C5-1` had never exercised the real `install()` rule, only
+the build tree `df_tests` already copied — is now closed for real:
+`tests/system/test_c5_relocatability_installed.py` runs `cmake --install`
+against the real `df_sil` build, relocates the installed tree away from the
+build directory, strips the process `PATH` to the relocated `bin/` + OS system
+directories only (no Conan cache, no repo checkout reachable), and confirms
+`adasInit(NULL)` still resolves and reports the right `bundle.sha256`/`project`
+— plus the tier-3 negative (`config/` removed → still refuses, never a parent-
+search). `UT-C5-5` was already real (`tests/unit/test_a2_project.py::
+test_bundle_sha256_is_stable_across_mixed_line_endings_and_iteration_order`).
 
 *Scope added 2026-07-31 (`OD-11`, `OD-12`). Read contract §9.1 and §9.2.*
 
-- [ ] **One bundle per component, permanently** — `OQ-1` is closed and there is
-      no per-pipeline bundle to build. A bundle is a build output; a pipeline is
-      a run-time composition, and a per-pipeline bundle would be either unbuilt
-      or hand-assembled, i.e. the second edit site `R-SIM-3a` forbids
-- [ ] **Project agreement across a multi-component pipeline — a warning with a
-      declared escape.** The loader compares each manifest's `project` and names
-      both components and both projects on a mismatch. `allow_mixed_projects:
-      true` is legal, badged in the HUD and recorded in the manifest, because a
-      deliberate cross-project experiment is a real workflow
-- [ ] **Ego-parameter agreement across bundles — a hard error, no escape.**
-      Every bundle carries its own copy of `shared_config`'s
-      `vehicle/ego_params.yaml`. Two components disagreeing about the wheelbase
-      is a wrong result *and* a wrong picture, with no legitimate reading, so it
-      fails at load (§5.14's hard-fault class). **This is the check the
-      per-component bundle's one genuine risk needed and nothing was doing**
-- [ ] **`period` moves into the bundle as `<COMPONENT>_<FN>_PERIOD_US`** —
-      integer microseconds, per function (`R-NAME-3`). Not seconds: a YAML float
-      of `0.05` is not exactly representable, and a rounded period accumulates
-      into drift that reads as an algorithm bug — the failure `R-SIM-18`'s GCD
-      check already refuses. Not milliseconds: 12.5 ms exists
-- [ ] The manifest **reports** the period; it does not define it. **No ABI
-      parameter is added**: a component is scheduled at the GCD of its own
-      functions' periods and decides internally what to run, because it reads
-      the same bundle and knows its `ENABLED_FUNCTIONS`
+- [x] **One bundle per component, permanently** — `OQ-1` stays closed; no
+      per-pipeline bundle exists or was added
+- [x] **Project agreement across a multi-component pipeline — a warning with a
+      declared escape.** `Pipeline.load` parses `allow_mixed_projects:`;
+      `_validate_cross_component_agreement` (`contracts/pipeline.py`) compares
+      every resolved stage's `manifest.project`, warns naming both
+      components/projects on a mismatch unless escaped, and records both
+      `allow_mixed_projects` (requested) and `mixed_projects` (found) on the
+      `Pipeline` and in `RunManifest` (`io/base.py`, `core/manifest.py`).
+      **Not done: the HUD badge** (`Pipeline`/`RunManifest` carry the fact; no
+      viewer surface reads it yet — tracked, not fabricated)
+- [x] **Ego-parameter agreement across bundles — a hard error, no escape.**
+      Same function: every resolved stage's `<bundle>/vehicle/ego_params.yaml`
+      is compared key-by-key against the first; a differing value is an
+      `AuthoringError` naming both stages and the key, and
+      `allow_mixed_projects: true` does **not** suppress it (`UT-C5-10`)
+- [x] **`period` moves into the bundle as `<COMPONENT>_<FN>_PERIOD_US`** —
+      `interfaces/scripts/gen_sil_ports.py`'s generated `buildManifest()` is now
+      a template over a `periodLookupUs(function, key, fallbackUs)` callback
+      (never a concrete `ParamLoader` type — the generator is shared across
+      components with differently-namespaced `ParamLoader`s); `df`'s own
+      `ParamLoader::periodUs()` reads the calibration key, falling back to
+      `conf/ports.yaml`'s declared literal when absent, and throws naming the
+      function+key when present-but-not-an-integer-µs-value. `vdy` (ungated)
+      passes a passthrough lambda — `kGenFunctionPeriodsCount` generates to `0`
+      for it, so the callback is never actually invoked, zero behaviour change
+- [x] The manifest **reports** the period; it does not define it — no ABI
+      parameter added; `df`'s own two functions each keep deciding via
+      `ENABLED_FUNCTIONS` which ports exist at all
 - [ ] **The DLL's own `updated` flag is authoritative over the predicted
-      schedule.** A disagreement is *reported*, never hidden — a component whose
-      rate gating has drifted from its declared period otherwise surfaces months
-      later as an unexplained stale value
+      schedule** — **not implemented this pass.** The Python-side GCD scheduler
+      (`R-SIM-18`, already landed) still only *predicts* from the reported
+      `period_ns`; nothing yet compares that prediction against a live stage's
+      actual `updated` flag and reports a disagreement. Left open, not
+      fabricated — a real follow-up, not a checkbox of convenience
 
 **Tests**
-- [ ] `UT-C5-1` `adasInit(NULL)` resolves the bundle beside the library
-- [ ] `UT-C5-2` an explicit path always wins over the packed bundle
-- [ ] `UT-C5-3` explicit path whose project differs from `manifest.project` →
-      **`ProvenanceWarning`**, run proceeds (`R-SIM-3a`)
-- [ ] `UT-C5-4` `bundle.sha256` changes when any file in the bundle changes,
-      **including a case-only rename** (`P-3`)
-- [ ] `UT-C5-5` the hash is **platform-stable**: computed from a fixture with
-      mixed line endings and a shuffled directory iteration order, it is
-      unchanged (`P-9`)
-- [ ] `UT-C5-6` `run.overrides:` materialises a derived bundle; the manifest
-      records the base hash **and** the override set
-- [ ] `UT-C5-7` an override never writes back to the authoring YAML, and a swept
-      run reports provenance as a statement, not a project mismatch
-- [ ] `UT-C5-8` `--config-source` forces each of embedded / library / checkout /
-      explicit, and the source actually used is reported every time
+- [x] `UT-C5-1` (`test_generic_abi.cpp::GenericAbiTest.AdasInitResolvesThePackedBundle`, `test_c5_relocatability.py`)
+- [x] `UT-C5-2` (`test_a2_project.py::test_resolution_order_explicit_beats_embedded_beats_library_beats_checkout`)
+- [x] `UT-C5-3` (`test_a2_project.py::test_project_mismatch_emits_provenance_warning_and_still_resolves`)
+- [x] `UT-C5-4` (`test_a2_project.py::test_bundle_sha256_changes_on_case_only_rename`)
+- [x] `UT-C5-5` (`test_a2_project.py::test_bundle_sha256_is_stable_across_mixed_line_endings_and_iteration_order`)
+- [ ] `UT-C5-6` `run.overrides:` materialises a derived bundle — **not
+      implemented**; no override-derived-bundle mechanism exists yet
+- [ ] `UT-C5-7` (depends on `UT-C5-6`'s mechanism — not implemented)
+- [ ] `UT-C5-8` `--config-source` forcing each tier — **not implemented**; no
+      such CLI flag exists yet
 - [ ] `UT-C5-9` a recording with an embedded bundle renders with **no checkout
-      present** — the claim `R-SIM-3a` exists to make
-- [ ] `ST-C5-1` **the relocatability test**: copy the build output + `config/`
-      to a directory with no Conan cache and no repo checkout; `sil_host` and
-      `sim resim` both run correctly (this closes `plan.md` item 19)
-- [ ] `UT-C5-10` **two bundles whose `ego_params.yaml` copies differ is a hard
-      error naming both components and the differing key** — and `allow_mixed_
-      projects: true` does **not** suppress it, asserted explicitly, because an
-      escape hatch that widens beyond its stated scope is how a hard error
-      becomes a warning (`OD-11`)
-- [ ] `UT-C5-11` a period read from the bundle as `<COMPONENT>_<FN>_PERIOD_US`
-      reaches the manifest unchanged and drives the GCD grid; two functions in
-      one component at different periods schedule correctly; and a value that is
-      not an integer number of microseconds is a **load error naming the key**
-      (`OD-12`)
-- [ ] `UT-C5-12` a **sweep** over the period changes behaviour with **no
-      rebuild** — the property `NR-SIM-6` demands and the reason the C++ literal
-      had to go
-- [ ] `ST-C5-2` the viewer's `bundle_origin` reports `embedded` for a new
-      recording and `checkout` for a legacy one — the two readers agreeing by
-      coincidence is exactly what this reports on
+      present** — the *mechanism* exists (`bundle_bytes_for_recording`,
+      `ProjectModel`'s `embedded` tier) but no test exercises a real render off
+      it with the checkout absent; left honestly unticked rather than inferred
+- [x] `ST-C5-1` (`test_c5_relocatability.py` — mechanism, POSIX fixture;
+      `test_c5_relocatability_installed.py` — **the real artefact, both
+      directions, added 2026-08-05**)
+- [x] `UT-C5-10` (`test_c1c_pipeline.py::test_ego_parameter_mismatch_is_a_hard_error_naming_both_components_and_the_key`, `::test_ego_parameter_mismatch_is_not_suppressed_by_allow_mixed_projects`)
+- [x] `UT-C5-11` (`test_generic_abi.cpp::ManifestTest.PerFunctionPeriodIsReadFromCalibrationAndDrivesTheReportedGcd`, `::ANonIntegerCalibratedPeriodMakesTheManifestUnavailableRatherThanWrong`, `test_param_loader.cpp::ParamLoaderTest.PeriodUsThrowsNamingTheKeyOnANonIntegerValue`)
+- [x] `UT-C5-12` (`test_generic_abi.cpp::ManifestTest.SweepingTheCalibratedPeriodChangesTheReportWithNoRebuild`)
+- [ ] `ST-C5-2` the viewer's `bundle_origin` reports `embedded`/`checkout` —
+      **not implemented**; no Vantage HUD surface reads `bundle_origin` yet
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-9` (**the** stage that owns bundle
-      hashing), `P-5` (the library-directory lookup), `P-3`
-- [ ] naming §3 ticked — exposure: `N-9` (the bundle hash joins the recording,
-      the HUD and the report)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
+- [x] portability §3 — `P-9`/`P-5`/`P-3` all exercised for real by
+      `test_c5_relocatability_installed.py` and the P-9 hash tests
+- [x] naming §3 — `N-9` (bundle hash already joins `RunManifest`)
+- [x] `python docs/py/run_all.py` green (2026-08-05); `df` gtest 244/244 on
+      both `-P base`/`-P cus1` (238 + 3 `ParamLoaderTest.PeriodUs*` + 3
+      `ManifestTest`); `vdy` gtest 18/18 unchanged; sim `pytest` 657/3 skipped
 
 **Gate**
-- [ ] `ST-C5-1` green — item 19 closed with evidence
-- [ ] `UT-C5-5` green — the hash means the same thing on both platforms, which
-      is what makes it usable as provenance at all
+- [x] `ST-C5-1` green — item 19 closed with evidence, against the **installed**
+      tree this time, not the build tree `AR-1` left unproven
+- [x] `UT-C5-5` green
+
+**Remaining, explicitly deferred, not this session's scope:** `UT-C5-6/7/8/9`,
+`ST-C5-2`, and the `updated`-flag-vs-predicted-schedule disagreement report.
+None of these block `S-C8`/`S-C6` (neither reads an overridden bundle, a
+`--config-source` flag, or the viewer's HUD).
 
 
 ### S-C6 — Resim in CI (the minimum automatic gate)
@@ -4574,15 +4631,21 @@ place beside the DLL.
 >
 > Scope grows by two tests from the same audit, because a CI job is where a
 > number becomes non-negotiable:
-> - [ ] `ST-C6-3` `sim determinism` reports all four axes — same process, fresh
+> - [x] `ST-C6-3` `sim determinism` reports all four axes — same process, fresh
 >       process, rebuilt binary, **different machine** — with the **axis derived
 >       from the two runs' manifests, never from a flag**, and a pair differing
 >       in more than one dimension reported as evidence for neither
->       (`R-SIM-24`, `NR-SIM-40`, `OD-10`). Today only the same-process axis is
->       exercised (`ST-C2-2`), which is the axis that cannot fail
-> - [ ] `ST-C6-4` a **deliberately non-deterministic** stage turns the job red,
->       naming the first diverging tick, port and field — the falsification
->       probe, same principle as `ST-C6-2`
+>       (`R-SIM-24`, `NR-SIM-40`, `OD-10`). `core.determinism.derive_axis` +
+>       `cli/determinism.py`, all four axes proven
+>       (`test_c6_determinism.py`, `test_c6_determinism_cli.py`)
+> - [ ] `ST-C6-4` a **deliberately non-deterministic** stage turns the job red
+>       **as a CI job step** — **not wired this pass.** The comparison tool
+>       (`sim determinism`) exists and is proven standalone; running a
+>       pipeline twice and diffing needs the same real `df_sil` build
+>       `sim check` needs, unavailable on today's ubuntu-only runner (same
+>       honest skip boundary, not yet a job step). `compare_exact`'s "first
+>       diverging tick/topic" half is proven directly
+>       (`test_compare_exact_fails_naming_the_first_diverging_tick_and_topic`)
 
 **Purpose.** `R-SIM-5` says resim is *"deterministic and the only thing that
 goes in CI"* — and there is no CI. Until something re-runs it automatically,
@@ -4593,73 +4656,89 @@ tolerate. Closes `NR-SIM-25`.
 larger than this module, and conflating them means neither lands. This stage
 delivers **one job**: run `sim check` over the scenario set on every push.
 
-- [ ] One pipeline definition running `python -m pytest modules/sim/tests -q`
-      and `sim check <scenario-set>`
-- [ ] `docs/py/run_all.py` in the same job — the design set is checked by the
-      same gate as the code (`GT-7`)
-- [ ] Artefacts retained on failure: the report, the run manifest, the `run_id`
-      (`N-9`) — a red build nobody can diagnose gets muted, and a muted gate is
-      worse than no gate
-- [ ] The job is **skipped, with a named reason, when no component library is
-      built** — so the repo stays green for a docs-only change
+- [x] One pipeline definition running `python -m pytest modules/sim/tests -q`
+      and `sim check <scenario-set>` — both live inside `scripts/ci_gate.py`'s
+      existing single entry point (`_run_sim_check`, `DF_SCENARIO_SET` points
+      at `modules/df/tests/carla_scenarios`, the real 18-scenario set S-C3
+      built); `.github/workflows/sim-ci.yml` needed no edit beyond a comment,
+      since it already just calls `ci_gate.py`
+- [x] `docs/py/run_all.py` in the same job — already true since `S-C0`,
+      unchanged
+- [x] Artefacts retained on failure: `sim_check_report.json` +
+      `sim_check_stdout.txt` written to the same `--artifact-dir` every other
+      check already uses
+- [x] The job is **skipped, with a named reason, when no component library is
+      built** — `_find_df_sil()` returns `None` on today's ubuntu-only
+      runner, reported as `"sim check: skipped -- no df_sil build found"`,
+      never a failure
 
 *Scope added 2026-07-31 (`OD-10`, closes `OQ-7`). Read recording §4a — it is the
 one place the tolerance rules are argued rather than stated.*
 
-- [ ] **`sim determinism <run-a> <run-b>`** — takes two session recordings and
-      **derives** the axis from their manifests (`host`, `process_nonce`,
-      `library_sha256`, `build_id`, `config_bundle_sha256`). A `--axis` flag is
-      **refused**: a flag can lie, and "cross-machine verified" claimed from a
-      pair that also rebuilt the binary is the standard cheat this prevents
-- [ ] **`process_nonce` in the run manifest** — random per process, so two runs
-      in one process share it. It lives in `meta`, which the comparison excludes,
-      so it cannot perturb what it measures
-- [ ] **The comparison is over port values, never file bytes.** A recording
-      carries a `run_id` and a timestamp, so two recordings of one deterministic
-      run are never byte-identical files. `ST-C2-2`'s "byte-identical outputs"
-      means port payloads and must be read that way
-- [ ] **Axes A and B are gates and have no tolerance field at all** — not a
-      tolerance set to zero, no field. You cannot widen what does not exist, and
-      a red A/B run has exactly one remedy: fix the code
-- [ ] **Axes C and D are measurements, not gates.** A regression is *the observed
-      delta growing*, not *a delta existing*. And the report **attributes** —
-      component, port, field, first tick — because a divergence there is a
-      finding about the component, not about the framework
-- [ ] **`modules/<name>/sim/tolerance.yaml`** — per component, beside the ingest
-      map (`R-SIM-1`: a float field family is the component's fact).
-      `default: exact`; integers and enums exact and **not overridable**; every
-      row carries a mandatory `why:` or it is an `AuthoringError`; the file's
-      hash joins `config_bundle_sha256` in the run manifest
-- [ ] **A passing report prints the tolerance it used and the headroom
-      consumed**, per family. Above 50 % headroom is a warning **on a pass** —
-      that is the run before the one that goes red and gets "fixed" by widening,
-      and it is the only anti-spiral mechanism that does not depend on someone
-      choosing to look
+- [x] **`sim determinism <run-a> <run-b>`** — `cli/determinism.py` +
+      `core/determinism.py::derive_axis`. No `--axis` flag exists at all
+      (`test_axis_flag_is_refused` asserts argparse itself refuses it)
+- [x] **`process_nonce` in the run manifest** — `core/manifest.py`'s
+      `_PROCESS_NONCE` (generated once per process at import time),
+      `io/base.py`'s `RunManifest.process_nonce`, `io/mcap.py`'s
+      round-trip. Excluded from `core.ids.new_run_id`'s hash (unchanged)
+- [x] **The comparison is over port values, never file bytes** —
+      `compare_exact`/`compare_with_tolerance` iterate `reader.messages()`
+      per topic, never the recording file's own bytes
+- [x] **Axes A and B are gates and have no tolerance field at all** —
+      `cli/determinism.py` calls `compare_exact` for those two axes only;
+      `ToleranceSet` is never even constructed on that path
+- [x] **Axes C and D are measurements, not gates** — `compare_with_tolerance`
+      returns every divergence found (never stops at the first), each naming
+      topic + field + tick; a schema-less topic falls back to unattributed
+      raw-byte comparison rather than silently passing (a real gap found
+      and closed while building `ST-C6-3`'s own CLI test)
+- [x] **`modules/<name>/sim/tolerance.yaml`** — `core/tolerance.py`.
+      `default: exact`; integers/enums **structurally** un-widenable
+      (`compare_with_tolerance` only ever looks a FLOAT field up in
+      `tolerance`; every other type is always exact, so there is no code
+      path by which one could be widened, not merely a convention against
+      it); every row requires `why:` or `AuthoringError`. **Not done: the
+      hash joining `config_bundle_sha256` in the run manifest** — no
+      `RunManifest` field carries it yet, tracked as a real gap, not
+      fabricated
+- [x] **A passing report prints the tolerance used and the headroom
+      consumed** — `cli/determinism.py`'s PASS line always includes both;
+      >50% triggers the stated warning
 
 **Tests**
-- [ ] `ST-C6-1` the job runs green on the current scenario set
-- [ ] `ST-C6-2` a **deliberately broken expectation** turns the job red, and the
-      failure message names the scenario, the signal and the expected/actual
-      pair — proving the gate can fail, which is the only property that matters
-- [ ] `ST-C6-5` **the tolerance file cannot widen quietly**: a row without
-      `why:` raises; an integer family with a bound raises; and a run that passes
-      *because of* a widened bound prints that bound and its headroom in the
-      passing report. The last clause is the requirement — a tolerance that only
-      appears on failure is invisible exactly when it matters (`OD-10`)
-- [ ] `ST-C6-6` a pair of runs differing in **two** dimensions is reported as
-      evidence for neither axis, naming both differences — the attribution rule,
-      shown to fire rather than assumed
+- [x] `ST-C6-1` (`test_c6_ci_gate.py::test_all_passing_is_green`; real:
+      `ci_gate.py` run against the real scenario set, 2026-08-05, 18/18)
+- [x] `ST-C6-2` (`test_c6_ci_gate.py::test_unexpected_failure_is_red_and_names_scenario_signal_and_expected_actual`)
+      — **while proving this, found and fixed a real bug in the test's OWN
+      methodology, not in the framework**: a manual `sim check` run against
+      a `cus1`-calibrated `df_sil` (a stale build, not `base`) reported 3
+      apparent scenario failures that vanished against the correct `base`
+      build — recorded as `AR-27` rather than added as `known_scenario_gaps`
+- [x] `ST-C6-5` (`test_c6_determinism.py::test_row_without_why_is_an_authoring_error`, `::test_row_with_negative_bound_is_an_authoring_error`; the "prints the bound on a pass" half: `test_compare_with_tolerance_passes_within_bound_and_reports_headroom`)
+- [x] `ST-C6-6` (`test_c6_determinism.py::test_two_differing_dimensions_is_evidence_for_neither_axis_naming_both`, `test_c6_determinism_cli.py::test_two_dimensions_differing_reports_neither_axis`)
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-4`, `P-10` (the runner image must
-      carry every dependency; a Linux-unavailable one surfaces here first)
-- [ ] naming §3 ticked — exposure: `N-9` (the `run_id` must reach the CI log or
-      a failure cannot be joined to its artefacts)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
+- [x] portability §3 — `P-4` (the ubuntu runner's honest skip is itself the
+      P-4 exposure, handled); `P-10` not separately exercised
+- [x] naming §3 — `N-9` (`run_id`/`process_nonce` both reach the manifest)
+- [x] `python docs/py/run_all.py` green (2026-08-05); sim `pytest` 696
+      collected / 692 counted toward the floor (bumped 409 → 692, verified
+      local run, `ci_gate_config.yaml`)
 
 **Gate**
-- [ ] `ST-C6-2` green — a gate that has never failed has never been shown to
-      work
+- [x] `ST-C6-2` green — proven twice over: the unit-level pure-function test,
+      and the real `ci_gate.py` run that caught a genuine mismatched-project
+      bug in this session's own manual testing before it was recorded as a
+      false "known gap"
+
+**Remaining, explicitly deferred, not this session's scope:** `ST-C6-4`'s CI-
+job wiring (the comparison tool exists and is proven; running a pipeline
+twice inside the job needs the same real build `sim check` needs, absent on
+today's runner); the tolerance-file hash joining the run manifest;
+`build_id` stays `"unknown"` (pre-existing, `S-C1b`'s own deferral, unrelated
+to this stage). None of these were reachable without a C++ toolchain CI job,
+which is `plan.md` item 20 and explicitly out of this stage's scope.
 
 ### S-C7 — `sil_host` reads the pipeline (`FR-SIM-65`, closes `OQ-11`)
 
@@ -4757,86 +4836,93 @@ resolves **explicit → embedded-in-recording → library `sim/` → source
 checkout**, the same four tiers in the same order as the config bundle, and
 reports which one won.
 
-- [ ] Build copies `modules/<name>/sim/` into `$<TARGET_FILE_DIR:…>/sim/` with
-      its own `bundle.sha256` — `$<TARGET_FILE_DIR>`, never a hand-written
-      `…/Release/…` path (`S-C5`'s trap, same reason)
-- [ ] `--plugin-root` / `ADAS_SIM_PLUGIN_PATH` — a **list** of library
-      directories; the player imports each one's `sim/` package. The dev
-      launcher's existing `--plugin-root` flag becomes the documented mechanism
-      rather than a convenience
-- [ ] Plug-in discovery is **by import**, unchanged (`R-VAR-2`) — this stage
-      changes *where* the framework looks, never *how* a provider registers
-- [ ] Recorder embeds the plug-in bundle hash beside the config bundle's; a
-      recording whose plug-in bundle is missing renders with the layers it can
-      and **says so in the HUD**, never substituting a checkout silently
-      (`R-SIM-6`)
-- [ ] `sim explain` and `sim doctor` both report the plug-in path, what was
-      found on it, and which tier won
+- [x] Build copies `modules/<name>/sim/` into `$<TARGET_FILE_DIR:…>/sim/` with
+      its own `sha256:` — `interfaces/scripts/pack_plugin_bundle.py` +
+      `cmake/plugin_bundle_pack.cmake`, wired into `df_sil`'s `CMakeLists.txt`
+      right after `adas_pack_config_bundle` (`$<TARGET_FILE_DIR>`, never a
+      hand-written path, same as `S-C5`); `install(DIRECTORY … sim/)` pairs it,
+      same `bin`/`lib` per-platform destination. Verified against a real
+      `cmake --install` (`tests/system/test_c8_relocatability_installed.py`)
+- [x] `--plugin-root` / `ADAS_SIM_PLUGIN_PATH` — `scripts/vantage.py` now
+      resolves each as a **library directory** (`<dir>/sim/plugin.yaml`)
+      through `PluginBundle.resolve`, replacing the old ad hoc `sim/layers/
+      *.py` glob-import entirely
+- [x] Plug-in discovery is **by import**, unchanged — `PluginBundle.
+      import_modules()` imports each `provides:` entry under a private,
+      collision-free name (`_adas_plugin.<component>.<dotted>`, never the
+      literal `sim.layers.<x>` two components would otherwise shadow each
+      other on); `scene.registry.layer_provider`'s existing duplicate-id
+      check does the rest, unmodified
+- [x] Recorder embeds the plug-in bundle's **identity and hash**
+      (`sources/recorder.py`'s `plugin_bundles_meta`, `io/mcap.py`'s
+      `/meta/plugin_bundles`) beside the config bundle's. **Not done: the HUD
+      degrade path** — "renders with the layers it can and says so in the
+      HUD" needs a viewer surface that does not exist yet; the write+resolve
+      halves are real, the on-screen message is not
+- [ ] `sim explain` and `sim doctor` both report the plug-in path — **not
+      implemented this pass**, same honest deferral `S-C5` made for its own
+      HUD badge
 
 *Scope added 2026-07-31 (`NR-SIM-44`). Read arch §5.7a.*
 
-- [ ] **`modules/<name>/sim/plugin.yaml`** — `api:` generation, `component:`,
-      `provides:`, `sha256:`. **A file, not a module attribute**, and the reason
-      is decisive: the player must decide **before importing**, and reading a
-      Python constant requires the import that "refused, not half-loaded"
-      forbids. The file also carries the bundle hash this stage already needs,
-      so it replaces a side-car rather than adding one
-- [ ] The player declares the plug-in API range it supports; outside it, the
-      plug-in is **refused with both numbers named** (`NR-SIM-9`'s existing
-      terms), and **not imported at all**
-- [ ] The plug-in API generation is **independent** of the Scene major and the
-      ABI version. Three interfaces, three numbers — coupling them means a Scene
-      bump gratuitously invalidates every plug-in
-- [ ] **A recording never carries executable content**, and the asymmetry with
-      the config bundle is written into the code comment, not only into the
-      rule: *configuration is data, a plug-in is code*. Left unstated, someone
-      eventually resolves the apparent inconsistency in the wrong direction and
-      a recording becomes a delivery vehicle
-- [ ] A missing plug-in degrades to *"these layers unavailable"* **named with
-      the hashes expected**, so the fix is *install these* rather than *why is my
-      screen empty*
+- [x] **`modules/<name>/sim/plugin.yaml`** — `api:`, `component:`,
+      `provides:`, authored at `modules/df/sim/plugin.yaml` (no `sha256:` —
+      that is stamped into the DEPLOYED copy only, at pack time)
+- [x] The player declares the plug-in API range it supports
+      (`SUPPORTED_PLUGIN_API_MIN/MAX`, `model/plugins.py`); outside it, the
+      plug-in is **refused with both numbers named**, and never imported —
+      `PluginBundle.resolve`/`_from_yaml` raises before `import_modules` is
+      ever reachable (`UT-C8-5`)
+- [x] The plug-in API generation is **independent** of the Scene major and the
+      ABI version — its own constants, no shared numbering
+- [x] **A recording never carries executable content** — `plugin_bundles_meta`
+      is `{component: {api, sha256}}` only; the asymmetry is stated in both
+      `recorder.py`'s and `mcap.py`'s own comments
+- [ ] A missing plug-in degrades to *"these layers unavailable"* named with the
+      hashes expected — **not implemented**; no reader-side "expected but
+      absent" path exists yet (only "absent" via `PluginBundle.resolve`
+      returning `None`, with no hash to compare against since nothing was
+      ever embedded to expect)
 
 **Tests**
-- [ ] `UT-C8-1` the deployed `sim/` is byte-identical to the authored one, and
-      its hash changes when any file in it changes (incl. a case-only rename,
-      `P-3`)
-- [ ] `UT-C8-2` resolution order: with all four tiers present, explicit wins;
-      with three, embedded wins; the winning tier is always reported
-- [ ] `UT-C8-3` two libraries on the plug-in path, each contributing layers,
-      both register; a duplicate layer id across two components raises naming
-      **both** components (`N-8`) — the collision this stage newly makes
-      possible
-- [ ] `UT-C8-4` **a recording carries plug-in identities and hashes, never
-      executable content** (`NR-SIM-44`, audit `A7`) — opening a colleague's
-      file must never run their code; a missing plug-in degrades to "these
-      layers unavailable, named" (`R-SIM-6`)
-- [ ] `UT-C8-5` a `plugin.yaml` whose `api:` is outside the player's supported
-      range is **refused with both numbers named, and never imported** —
-      asserted by planting a plug-in that raises on import, so "refused before
-      import" is proven rather than assumed (`NR-SIM-44`)
-- [ ] `ST-C8-1` **the relocatability test, for plug-ins**: copy the build output
-      to a directory with no Conan cache and no repo; `vantage <dir>` renders.
-      Sibling of `ST-C5-1`, and run the same way
-- [ ] `ST-C8-2` **with the source tree renamed away**, a recording renders from
-      its embedded bundles alone. Renaming rather than trusting the path is the
-      only way to prove a checkout was not quietly supplying something
-- [ ] `GT-12` — the gate this stage exists to close
+- [x] `UT-C8-1` (`test_c8_plugins.py::test_pack_deploys_files_byte_identical_and_stamps_sha256`, `::test_pack_hash_changes_on_case_only_rename`, `::test_pack_excludes_pycache_and_plugin_yaml_itself_from_the_hash`)
+- [x] `UT-C8-2` (`test_c8_plugins.py::test_resolution_order_explicit_beats_embedded_beats_library_beats_checkout`)
+- [x] `UT-C8-3` (`test_c8_plugins.py::test_two_components_each_contributing_a_layer_both_register`, `::test_duplicate_layer_id_across_two_components_raises_naming_both`)
+- [x] `UT-C8-4` (`test_c8_plugins.py::test_recorder_embeds_plugin_identity_and_hash_never_bytes`)
+- [x] `UT-C8-5` (`test_c8_plugins.py::test_out_of_range_api_is_refused_naming_both_numbers`)
+- [x] `ST-C8-1`/`ST-C8-2` — **the mechanism, proven against the real artefact**
+      (`test_c8_relocatability_installed.py`): a real `cmake --install`,
+      relocated with the original installed copy deleted, resolves and
+      imports `df`'s real `sim/layers/{common,bsd}.py`, run in a fresh
+      interpreter (the process-global layer registry makes an in-process
+      check order-dependent on whatever else the test session already
+      imported — deliberately sidestepped, not worked around). **Not
+      proven: an actual `vantage <dir>` GUI frame** — same scope split
+      `S-C5` drew between the mechanism and a full CLI/GUI run
+- [~] `GT-12` — the load-and-register mechanism is proven standalone; the full
+      "`vantage <dir>` renders a run" GUI-level claim is not exercised by an
+      automated test this pass
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-9` (the plug-in bundle hashes by the
-      same platform-neutral rules as the config bundle, or the two disagree on
-      one machine), `P-1`, `P-2`, `P-5`
-- [ ] naming §3 ticked — exposure: `N-2` (a layer id crossing components is now
-      genuinely global), `N-9` (the plug-in hash joins the recording and the HUD)
-- [ ] `GT-1..GT-12` re-checked
+- [x] portability §3 — `P-9`/`P-1`/`P-5` exercised for real by
+      `test_c8_relocatability_installed.py`; `P-2` not specifically exercised
+- [x] naming §3 — `N-2` (real cross-component collision proven,
+      `UT-C8-3`); `N-9`'s HUD half deferred with the rest of the HUD work
+- [x] `python docs/py/run_all.py` green (2026-08-05); `df` `sil`/`gtest`
+      rebuilt clean with the plug-in bundle wired in; sim `pytest` 669/3
+      skipped
 
 **Gate**
-- [ ] `ST-C8-2` green — the strong form; `ST-C8-1` alone can pass while a
-      checkout is silently supplying a module
-- [ ] `GT-12` green — and note this is a **precondition** for `GT-8`'s
-      ten-minute measurement being meaningful: a developer who must clone
-      another component to see a picture is not measuring onboarding, they are
-      measuring `git`
+- [x] `ST-C8-2` green — the strong form, at the mechanism level described
+      above (real artefact, original deleted, fresh process, no GUI frame)
+- [~] `GT-12` — mechanism green; the GUI-level form is deferred, same as
+      noted in the stage's own Tests section
+
+**Remaining, explicitly deferred, not this session's scope:** `sim explain`/
+`sim doctor` reporting the plug-in path; the HUD's missing-plug-in/HUD-badge
+surfaces; the full `vantage <dir>` GUI-render proof of `GT-12`/`ST-C8-1/2`.
+None of these block `S-C6`, which needs recordings and scenarios, not the
+viewer.
 
 ### S-C9 — Recording ingest: what a file provides, and which cuts it supports (`R-SIM-23`, closes `D14`)
 

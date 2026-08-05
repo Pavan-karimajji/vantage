@@ -33,6 +33,7 @@ def main(argv: list[str] | None = None) -> int:
     subparsers.add_parser("run", help="drive a source and execute a pipeline, live (S-C2)", add_help=False)
     subparsers.add_parser("resim", help="execute a pipeline against a recording (S-C2)", add_help=False)
     subparsers.add_parser("check", help="evaluate expect: against a scenario set, headless (S-C3)", add_help=False)
+    subparsers.add_parser("determinism", help="compare two recordings, axis derived not flagged (S-C6)", add_help=False)
 
     args, remainder = parser.parse_known_args(argv)
     if args.verb == "doctor":
@@ -75,4 +76,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.verb == "check":
         from adas_sim.cli import check
         return check.run(remainder)
+    if args.verb == "determinism":
+        from adas_sim.cli import determinism
+        return determinism.run(remainder)
     return 1  # unreachable: every registered verb is dispatched above

@@ -121,6 +121,19 @@ class RunManifest:
     pipeline: str = ""
     components: tuple[ComponentBuildInfo, ...] = field(default_factory=tuple)
     seed: int = 0
+    #: `OD-11` (`R-SIM-3a` §9.1): whether this run's pipeline declared
+    #: `allow_mixed_projects: true` -- badges a deliberate cross-project
+    #: experiment so a reader never mistakes it for an unnoticed mismatch.
+    #: Independent of whether the components actually disagreed; recorded
+    #: whenever the escape was requested, same as any other declared choice.
+    allow_mixed_projects: bool = False
+    #: `S-C6` (`R-SIM-24`): random per PROCESS (`core.manifest._PROCESS_NONCE`,
+    #: generated once at import time), so two runs written by one process
+    #: share it -- `sim determinism`'s same-process/fresh-process
+    #: discriminator. Lives in `meta`, excluded from `new_run_id`'s hash
+    #: (`core.ids.REQUIRED_KEYS` does not name it) so it cannot perturb what
+    #: it measures.
+    process_nonce: str = ""
 
     @property
     def known(self) -> bool:

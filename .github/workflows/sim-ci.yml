@@ -12,6 +12,14 @@
 #   -- order/fixture-isolation dependent, owner S-B3 follow-up
 #   (sim_implementation_plan.md Phase C risk table). Not deselected -- it
 #   still runs; ci_gate.py tolerates that one id by name and reports it.
+#
+# S-C6: ci_gate.py's "full" mode now also runs `sim check` over df's real
+# scenario set (modules/df/tests/carla_scenarios) -- still nothing to edit
+# here, it lives inside ci_gate.py's own main(). On THIS job's runner
+# (ubuntu-latest, no C++ toolchain) it always reports "skipped -- no df_sil
+# build found", by design (S-C6's own "Must not: grow into a general CI
+# design" -- adding the toolchain job that makes this a real check is
+# plan.md item 20's scope, not this stage's).
 
 name: sim-ci
 

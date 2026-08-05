@@ -33,6 +33,7 @@ from __future__ import annotations
 import inspect
 from collections.abc import Mapping
 from pathlib import Path
+from types import MappingProxyType
 
 from adas_sim.contracts.pipeline import Pipeline, RecordVerb, _split_ref, record_policy_for
 from adas_sim.contracts.scenario import Scenario
@@ -72,6 +73,7 @@ class Recorder:
         self, pipeline: Pipeline | None, source: Source, path: Path, *, meta: RunManifest,
         source_provenance: Provenance | Mapping[str, Provenance] = Provenance.MOCKED,
         config_bundle_bytes: bytes = b"",
+        plugin_bundles_meta: Mapping[str, Mapping[str, object]] = MappingProxyType({}),
     ) -> None:
         self._pipeline = pipeline
         self._source = source
@@ -84,6 +86,12 @@ class Recorder:
         # with no `dll:`/`stubdll:` stage), the honest "nothing to embed"
         # rather than a placeholder.
         self._config_bundle_bytes = config_bundle_bytes
+        # S-C8, NR-SIM-44: per-component plug-in IDENTITY and HASH only --
+        # `{component: {"api": int, "sha256": str}}` -- never bytes. The
+        # asymmetry with config_bundle_bytes above is deliberate:
+        # configuration is data, a plug-in is code, and a recording must
+        # never become a way to run someone else's code.
+        self._plugin_bundles_meta = plugin_bundles_meta
         self._writer = writer_for(path)
         self._elapsed_ns = 0
         self._tick_index = 0
@@ -168,9 +176,12 @@ class Recorder:
         # not), so it is only ever passed when the concrete writer's own
         # signature declares it, never assumed and never silently dropped
         # when it's actually supported.
-        open_kwargs: dict[str, bytes] = {}
-        if self._config_bundle_bytes and "config_bundle_bytes" in inspect.signature(self._writer.open).parameters:
+        open_kwargs: dict[str, object] = {}
+        open_params = inspect.signature(self._writer.open).parameters
+        if self._config_bundle_bytes and "config_bundle_bytes" in open_params:
             open_kwargs["config_bundle_bytes"] = self._config_bundle_bytes
+        if self._plugin_bundles_meta and "plugin_bundles_meta" in open_params:
+            open_kwargs["plugin_bundles_meta"] = self._plugin_bundles_meta
         self._writer.open(self._path, self._meta, self._topics(), **open_kwargs)
         self._opened = True
 

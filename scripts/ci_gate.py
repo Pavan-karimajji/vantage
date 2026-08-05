@@ -29,6 +29,7 @@ a genuine test-count increase never touches this file.
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 import time
@@ -41,6 +42,18 @@ import yaml
 SCRIPT_DIR = Path(__file__).resolve().parent
 SIM_ROOT = SCRIPT_DIR.parent
 CONFIG_PATH = SCRIPT_DIR / "ci_gate_config.yaml"
+
+# S-C6: the real scenario set S-C3 built. One path, not a CLI flag -- the
+# gate always checks the same set a local `sim check` would, so "the job
+# passes" and "this script exits 0" stay one claim (this file's own opening
+# comment, extended from pytest to the scenario set).
+DF_SCENARIO_SET = SIM_ROOT.parent / "df" / "tests" / "carla_scenarios"
+_DF_SIL_SEARCH_DIRS = [
+    SIM_ROOT.parent / "df" / "build-sil-vs2026" / "src" / "platform" / "df_sil" / "Release",
+    SIM_ROOT.parent / "df" / "build-sil-vs2026" / "src" / "platform" / "df_sil" / "Debug",
+    SIM_ROOT.parent / "df" / "build-gtest-vs2026" / "src" / "platform" / "df_sil" / "Release",
+    SIM_ROOT.parent / "df" / "build-gtest-vs2026" / "src" / "platform" / "df_sil" / "Debug",
+]
 
 
 def _run_id() -> str:
@@ -123,6 +136,88 @@ def _run_pytest(artifact_dir: Path) -> tuple[bool, str]:
     return True, "\n".join(lines)
 
 
+def _find_df_sil() -> Path | None:
+    lib_name = "df_sil.dll" if sys.platform == "win32" else "libdf_sil.so"
+    for d in _DF_SIL_SEARCH_DIRS:
+        if (d / lib_name).is_file():
+            return d
+    return None
+
+
+def _first_failing_expectation(result: dict) -> dict | None:
+    for expectation in result.get("expectations", []):
+        if not expectation["passed"]:
+            return expectation
+    return None
+
+
+def evaluate_sim_check_results(results: list[dict], known_gaps: dict[str, str]) -> tuple[bool, str]:
+    """The pure, testable half of `_run_sim_check`: given `sim check`'s own
+    parsed JSON report (`check.report.format_report_json`'s shape) and the
+    `known_scenario_gaps` mapping, decides pass/fail exactly like
+    `_run_pytest`'s `known_flakes` handling does for pytest ids -- a
+    tolerated scenario is reported, never hidden, and never licenses any
+    OTHER scenario to fail quietly (`ST-C6-2`). An unexpected failure names
+    the scenario, its first failing expectation's signal, and the expected/
+    actual pair -- not just an id, so the failure is diagnosable from the
+    gate's own log alone."""
+    failed = [r["scenario_id"] for r in results if not r["skipped"] and not r["passed"]]
+    unexpected = [s for s in failed if s not in known_gaps]
+    tolerated = [s for s in failed if s in known_gaps]
+    stale_gaps = [s for s in known_gaps if s not in {r["scenario_id"] for r in results}]
+    by_id = {r["scenario_id"]: r for r in results}
+
+    lines = [f"sim check: {len(results)} scenario(s), {len(failed)} failed ({len(tolerated)} known, {len(unexpected)} unexpected)"]
+    for s in tolerated:
+        lines.append(f"event=known_scenario_gap scenario={s} note={known_gaps[s]!r} -- tolerated, not hidden")
+    for s in stale_gaps:
+        lines.append(f"event=stale_scenario_gap_config scenario={s} -- listed as a known gap but not in this run")
+    for s in unexpected:
+        expectation = _first_failing_expectation(by_id[s])
+        detail = (
+            f"signal={expectation['signal']} expected_time_s={expectation['expected_time_s']} "
+            f"actual_time_s={expectation['actual_time_s']} detail={expectation['detail']!r}"
+            if expectation is not None else "(no expectation detail available)"
+        )
+        lines.append(f"event=unexpected_scenario_failure scenario={s} {detail}")
+
+    return not unexpected, "\n".join(lines)
+
+
+def _run_sim_check(artifact_dir: Path) -> tuple[bool, str]:
+    """S-C6's own stated purpose: `sim check <scenario-set>` on every push.
+    Skipped, with a named reason, when no component library is built here
+    (today's ubuntu-only CI runner, before a C++ toolchain job exists --
+    `plan.md` item 20's scope, deliberately not grown into by this stage) --
+    that keeps the repo green for a docs-only change, and honest otherwise."""
+    lib_dir = _find_df_sil()
+    if lib_dir is None:
+        return True, "sim check: skipped -- no df_sil build found (not built on this runner yet)"
+    if not DF_SCENARIO_SET.is_dir():
+        return True, f"sim check: skipped -- scenario set not found at {DF_SCENARIO_SET} (partial clone)"
+
+    report_path = artifact_dir / "sim_check_report.json"
+    # Not `-m adas_sim.cli`: that runs cli/__init__.py as a script without
+    # calling main() (no __main__ guard there -- it is a library entry
+    # point, `sim = adas_sim.cli:main`'s console-script target, GT-9's own
+    # "the CLI is argument parsing and dispatch only" extended to "and it is
+    # invoked the same way a real `sim` install is invoked").
+    proc = subprocess.run(
+        [sys.executable, "-c", "import sys; from adas_sim.cli import main; sys.exit(main(sys.argv[1:]))",
+         "check", str(DF_SCENARIO_SET), "--search", str(lib_dir), "--report", str(report_path)],
+        cwd=SIM_ROOT, capture_output=True, text=True, encoding="utf-8",
+    )
+    (artifact_dir / "sim_check_stdout.txt").write_text(proc.stdout + proc.stderr, encoding="utf-8", newline="\n")
+
+    if not report_path.is_file():
+        return False, f"sim check: no report written -- see sim_check_stdout.txt (exit {proc.returncode})"
+
+    results = json.loads(report_path.read_text(encoding="utf-8"))
+    config = _load_config()
+    gap_notes = {g["id"]: g["note"] for g in config.get("known_scenario_gaps", [])}
+    return evaluate_sim_check_results(results, gap_notes)
+
+
 def _run_subprocess_check(cmd: list[str], cwd: Path, artifact_dir: Path, log_name: str) -> tuple[bool, str]:
     proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8")
     (artifact_dir / log_name).write_text(proc.stdout + proc.stderr, encoding="utf-8", newline="\n")
@@ -158,6 +253,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"check_invariants.py: {inv_detail}")
         ok = ok and inv_ok
+
+        sim_check_ok, sim_check_detail = _run_sim_check(artifact_dir)
+        print(sim_check_detail)
+        ok = ok and sim_check_ok
 
     docs_ok, docs_detail = _run_subprocess_check(
         [sys.executable, "docs/py/run_all.py"], SIM_ROOT, artifact_dir, "run_all.txt"

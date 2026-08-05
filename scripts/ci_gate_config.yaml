@@ -8,11 +8,13 @@
 # the same discipline applied here).
 
 pytest_floor:
-  count: 409
-  date: "2026-07-31"
+  count: 692
+  date: "2026-08-05"
   note: >
-    Measured on the full suite (410 collected) minus the one known flake
-    below. Floor established at S-C0.
+    Measured on the full suite (696 collected) minus the one known flake
+    below, after S-C5/S-C8/S-C6 landed (real-artifact relocatability tests,
+    plug-in bundle tests, determinism/ci_gate tests). Bumped from 409, which
+    was S-C0's own establishing measurement and long stale.
 
 known_flakes:
   - id: "tests/system/test_b3_viewport_controls.py::test_dragging_pans_the_viewport_and_a_second_click_still_selects"
@@ -20,3 +22,15 @@ known_flakes:
       Order/fixture-isolation dependent (sim_implementation_plan.md Phase C
       risk table, owner S-B3 follow-up). Must not be "fixed" as part of an
       unrelated stage; tolerated here by name, never silently deselected.
+
+# S-C6: same discipline as known_flakes, applied to `sim check`'s scenario
+# set -- a scenario id here is tolerated (reported, never hidden) by name;
+# any OTHER scenario failing still reddens the gate (ST-C6-2). Empty is the
+# real, verified state as of 2026-08-05: all 18 real scenarios pass against
+# a `base`-project df_sil (`sim check ... --search build-sil-vs2026/.../
+# Release`). A same-day manual run through a *cus1*-calibrated df_sil
+# (`build-gtest-vs2026`'s last build) showed 3 apparent failures --
+# confirmed to be an artefact of checking scenarios written against `base`
+# calibration against the wrong project's build, not a real scenario/
+# expectation gap, and not added here.
+known_scenario_gaps: []
