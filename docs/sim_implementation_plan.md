@@ -5646,10 +5646,67 @@ report nothing. Isolation at run granularity costs nothing per tick.
 Closes `FR-SIM-52`, `NR-SIM-21`. Readers already exist (S-A4); this stage makes
 the codec table symmetric and adds the two verbs that scale it.
 
-**Status: export/convert DONE 2026-07-30; `sim batch` deferred (scope split
-confirmed with the user — bulk pipeline execution with process isolation is
-a separate, much larger feature from the port-selectable export the user
-actually asked for).** `io/base.py`'s writer protocol and `round_trips`/
+**Status: export/convert DONE 2026-07-30; `sim batch` (isolation/crash/
+timeout half) DONE 2026-08-05, real pytest green in this WSL shell.**
+Unlike `S-C7`'s C++ work, this half is pure Python — the standalone-Python-
+3.12 venv trick (`project_wsl_toolchain_gaps` memory) unblocked a real
+`pytest` run in this same session, so this is verified, not merely written.
+`core/batch_worker.py` (new) is the per-recording subprocess entry point —
+`Pipeline.load` → `init_components` → `resim_pipeline` → `shutdown_
+components`, the same four calls `cli/resim.py` already makes for one
+recording — writing its outcome (`ok`/`fail`) as JSON before exiting.
+`core/batch.py` (new) is `run_batch`'s real engine: one fresh `subprocess.
+run` per recording (never a reused worker — `R-SIM-19`), concurrency
+bounded by `-j` via a thread pool that only supervises N subprocesses in
+flight, classification into the closed `ok`/`fail`/`crash`/`timeout` set —
+`crash` is inferred from the OUTSIDE (missing/unreadable `--out-json` plus
+an abnormal exit), never trusted from a value a dying process claims about
+itself, since a real crash never reaches the worker's own reporting code.
+`cli/batch.py` (new, registered in `cli/__init__.py`) is argument parsing
+only (`GT-9`). Two explicitly-named, non-production test hooks in
+`batch_worker.py` made `UT-D7-7`/`UT-D7-8`/`ST-D7-5` testable with no
+compiled component available in this shell: `ADAS_SIM_BATCH_TEST_STUB=
+crash|hang` (blanket) / `ADAS_SIM_BATCH_TEST_STUB_MAP="stem=crash;stem2=
+hang"` (per-recording, keyed by `--recording`'s own `.stem`) bypass
+pipeline loading entirely and die/hang on command; `--test-stub-echo NAME`
+injects a trivial zero-port `InProcessSilComponent` via `Pipeline.load`'s
+own `components=` kwarg so the real `ok` path (`ST-D7-2`/`ST-D7-3`) can run
+end to end against `tests/fixtures/tiny.mcap` with no `dll:`/`stubdll:`
+available. `tests/unit/test_d7_batch.py` (7 tests) + `tests/system/
+test_d7_batch_isolation.py` (5 tests), all green; full suite re-run clean
+at 610 passed / 28 skipped (598/28 before this stage); `scripts/
+check_invariants.py`'s four sub-checks (`check_doc_invariants`,
+`check_requirement_coverage`, `check_rules_coverage`, `check_traceability`)
+all `RESULT pass`/`RESULT ok`.
+
+**Explicitly deferred, not silently dropped, and not this pass's scope:**
+
+- **`UT-D7-9`/`--pin-builds`** — per `sim_resim_and_recording.md` §10 this
+  flag is spec'd against `sim resim`, not `sim batch` itself (a batch worker
+  could gain the same check later, sharing the mechanism once it exists).
+  It needs `library_sha256` actually computed somewhere — today `core/
+  manifest.py`'s `build_manifest` only THREADS a caller-supplied
+  `component_build_shas` mapping through to `ComponentBuildInfo`; nothing
+  computes a real hash from a resolved library path, and `cli/resim.py`
+  doesn't pass the mapping at all (every resim-produced manifest today
+  carries `library_sha256=""`). That hashing step is real, separate work.
+- **`ST-D7-6`** (a crash reproduces in-process on Bench) — needs a Bench GUI,
+  which does not exist (`S-D8` unbuilt). The recording/pipeline/last-tick/
+  stderr/`run_id` this stage's own crash classification already captures is
+  exactly what that future "Open on Bench" affordance would consume; the
+  data side is done, the GUI side is a different stage's job.
+- **`ST-D7-7`** (campaign sizing, measured) — "the numbers go in this
+  document, whatever they are" is a measurement exercise over the REAL
+  recording set (`modules/df/tests/carla_testruns/` or equivalent), not a
+  code gap; needs an environment with that set and enough wall-clock budget
+  to run `-j 1` vs `-j N` and record the scaling, deliberately not attempted
+  alongside the rest of this pass.
+- **`mode: isolated`** (the per-stage bisection escape hatch `R-SIM-19`
+  names alongside per-recording isolation) — not in this stage's own
+  checklist; `sim batch` isolates at run granularity only, which is the
+  scope `cli/batch.py`'s checklist line actually asks for.
+
+`io/base.py`'s writer protocol and `round_trips`/
 `write_only` capability flags, and `io/mcap.py`'s writer path, turned out to
 already exist (S-A4) — verified, not rebuilt. New: `io/csv.py`'s `CsvWriter`
 works directly on raw `(topic, log_time_ns, bytes)` triples, never
@@ -5702,11 +5759,10 @@ copy path is lossless, just not the "different format" half of the claim.
       `on_missing: error|blank|omit-column` (default `error`)
 - [x] The loader **refuses an export as a resim input by capability**, naming
       the file and the missing capability (`R-SIM-14`)
-- [ ] `cli/batch.py` — `sim batch <recordings…|glob|list.txt> --pipeline P
+- [x] `cli/batch.py` — `sim batch <recordings…|glob|list.txt> --pipeline P
       [--report] [-j N]`: the **same pipeline file** used interactively, one
-      report, per-recording pass/fail, continue-on-failure. **Deferred** —
-      scope split confirmed with the user, a separate session's work
-      (process isolation, crash/timeout containment, §below's own tests)
+      report, per-recording pass/fail, continue-on-failure. **2026-08-05**,
+      pytest-verified in this WSL shell (see the stage's own Status note)
 
 **Tests**
 - [x] `UT-D7-1` a port selection exports exactly the named leaf columns, in
@@ -5726,20 +5782,44 @@ copy path is lossless, just not the "different format" half of the claim.
       origin tags of every exported port (`N-9`, `R-SIM-12`) — an export
       frequently becomes the thing a report quotes
       `pandas.read_csv` with the preamble skipped by its comment character
-- [ ] `ST-D7-2` `sim batch` over ≥20 recordings produces one report with a row
-      per recording; a failing recording does not abort the run
-- [ ] `ST-D7-3` the pipeline file used by `sim resim` runs **unmodified** under
-      `sim batch` (`R-SIM-16` — the identity is the point)
-- [ ] `UT-D7-7` **a crashing stage is contained**: a stub that segfaults (or
+- [x] `ST-D7-2` `sim batch` over ≥20 recordings produces one report with a row
+      per recording; a failing recording does not abort the run.
+      `test_batch_over_20_recordings_one_report_failure_does_not_abort`
+- [x] `ST-D7-3` the pipeline file used by `sim resim` runs **unmodified** under
+      `sim batch` (`R-SIM-16` — the identity is the point).
+      `test_pipeline_runs_identically_under_resim_and_batch` — same pipeline
+      path fed to both `resim_pipeline` directly and `run_batch`, same tick
+      count both ways
+- [~] `UT-D7-7` **a crashing stage is contained**: a stub that segfaults (or
       exits non-zero) under `sim batch` marks that recording `crash`, captures
-      stderr and the last tick, and **the batch continues** (`R-SIM-19`)
-- [ ] `UT-D7-8` **a hung stage is contained**: a stub that never returns hits
+      stderr and the last tick, and **the batch continues** (`R-SIM-19`).
+      **Partial**: containment/classification/continuation/stderr capture are
+      real and tested (`test_crashing_stage_is_contained_and_classified_crash`);
+      **"the last tick" is NOT captured** — the worker has no per-tick
+      checkpoint (`resim_pipeline` returns its whole tick list at once, only
+      after every tick has run), so a process that dies mid-run leaves no
+      record of how far it got. Fixing this means either a checkpoint file
+      the worker updates after each tick, or a per-tick callback added to
+      `resim_pipeline` itself — real, separate work, grouped with `ST-D7-6`
+      below since both exist to make a crash reproducible on Bench
+- [x] `UT-D7-8` **a hung stage is contained**: a stub that never returns hits
       its per-`exec()` timeout, is reported as `timeout` — **not** as `crash`
-      and not as `fail` — and the batch continues
-- [ ] `ST-D7-5` a batch of 20 recordings with **one deliberately crashing** and
+      and not as `fail` — and the batch continues.
+      `test_hung_stage_is_contained_and_classified_timeout_not_crash_or_fail`.
+      **Interpretation stated, not silently assumed**: the timeout is
+      enforced at the SUBPROCESS level (`subprocess.run(timeout=...)`
+      killing the whole worker), not by wrapping each individual `exec()`
+      call inside it — `sim batch` isolates at run granularity (R-SIM-19's
+      own "isolation is a property of the face"), and since a resim's entire
+      body is `exec()` calls back to back, a wedged one always manifests as
+      "the subprocess never finishes," which the parent can always kill.
+      A second, in-process per-`exec()` timeout inside the worker would be
+      redundant for this face
+- [x] `ST-D7-5` a batch of 20 recordings with **one deliberately crashing** and
       **one deliberately hanging** produces a report with 18 normal outcomes and
       those two distinctly classified; exit code reflects failure without
-      hiding the successes
+      hiding the successes.
+      `test_batch_of_20_with_one_crash_one_hang_exit_code_reflects_failure`
 - [ ] `ST-D7-6` **a crash is reproducible**: the recorded recording + pipeline +
       tick + `run_id` reproduce it in-process on Bench, where a debugger can
       attach (`R-SIM-19`) — the loop that makes crashes get fixed rather than
@@ -5774,11 +5854,13 @@ copy path is lossless, just not the "different format" half of the claim.
       file touched this stage
 
 **Gate**
-- [ ] `UT-D7-5` + `ST-D7-2` + `ST-D7-3` green — an export can never be mistaken
-      for a recording, and scale uses the developer's own file. `UT-D7-5` is
-      green; `ST-D7-2`/`ST-D7-3` are `sim batch`'s own tests and stay open on
-      that basis alone, not a code gap in the export/convert half done this
-      session
+- [x] `UT-D7-5` + `ST-D7-2` + `ST-D7-3` green — an export can never be mistaken
+      for a recording, and scale uses the developer's own file. **All three
+      green as of 2026-08-05** (pytest, this WSL shell — `UT-D7-5` since
+      2026-07-30, `ST-D7-2`/`ST-D7-3` this session). `UT-D7-7`'s "last tick"
+      partial and `UT-D7-9`/`ST-D7-6`/`ST-D7-7`'s deferrals (see the stage's
+      own Status note) are real, separate open items but are not this Gate's
+      own three named tests — the Gate itself is closed
 
 ### S-D8 — **Vantage**: the workspaces, the front door, the product
 

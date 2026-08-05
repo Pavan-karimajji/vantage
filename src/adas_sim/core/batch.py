@@ -1,0 +1,191 @@
+# Copyright (c) <ORG>. All Rights Reserved.
+# Proprietary and Confidential.
+# COMPONENT: SIM
+# @author Pavan Karimajji
+
+"""`sim batch`'s real engine (S-D7, `R-SIM-19`) -- `cli/batch.py` carries no
+logic (`GT-9`), this module does. `run_batch` launches ONE fresh subprocess
+per recording (never a reused worker process -- a segfault in recording 3
+must not corrupt whatever runs recording 4) via `batch_worker.py`, and
+classifies each into the closed, never-merged three-way outcome `R-SIM-19`
+requires, plus `ok`:
+
+- **ok** -- the worker reported `{"outcome": "ok", ...}`.
+- **fail** -- the worker reported `{"outcome": "fail", ...}`: a clean,
+  expected failure (a `SimError`, or any other exception the worker's own
+  top-level `try` caught and reported before exiting).
+- **crash** -- the worker's `--out-json` is missing or unreadable AND the
+  process exited abnormally. Classified from the OUTSIDE, never from a value
+  the dying process claims about itself -- a real crash (a segfault inside a
+  `dll:`/`stubdll:` library) never reaches the worker's own reporting code.
+- **timeout** -- `subprocess.run` itself raised `TimeoutExpired`.
+
+`-j N` bounds how many of these subprocesses run concurrently (a thread pool
+supervises N `subprocess.run` calls in flight -- the concurrency is in the
+supervision, not in reusing one interpreter across recordings), but does not
+change isolation: still one subprocess per recording, always.
+"""
+
+from __future__ import annotations
+
+import functools
+import glob
+import json
+import subprocess
+import sys
+import tempfile
+import time
+from collections import Counter
+from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from pathlib import Path
+from uuid import uuid4
+
+#: The closed outcome vocabulary (R-SIM-19: "never merged"). Kept as a tuple,
+#: not an enum -- RecordingOutcome.outcome is compared/formatted as a plain
+#: string throughout this module and its report, same as Mode/RecordVerb-
+#: adjacent code elsewhere favours where no verb-specific behaviour hangs
+#: off the type itself.
+OUTCOMES = ("ok", "fail", "crash", "timeout")
+
+#: Tail of captured stderr kept per recording -- enough for `ST-D7-6`'s own
+#: "reproduce it on Bench" need (the recording/pipeline/tick/run_id do the
+#: real reproduction; this is a first-glance diagnostic only) without a
+#: multi-megabyte report from one runaway recording.
+_STDERR_EXCERPT_BYTES = 4000
+
+
+@dataclass(frozen=True, slots=True)
+class RecordingOutcome:
+    recording: Path
+    outcome: str  # one of OUTCOMES
+    duration_s: float
+    tick_count: int | None = None
+    last_tick_ns: int | None = None
+    error: str = ""
+    stderr_excerpt: str = ""
+
+
+def expand_recordings(args: Sequence[str]) -> list[Path]:
+    """Each positional CLI arg is a literal path, a glob pattern, or a
+    newline-separated list file (`sim_resim_and_recording.md`'s own
+    `<recordings...|glob|list.txt>` shape). A list file's blank lines and
+    `#`-prefixed comment lines are skipped; every other line is one path,
+    relative to the CURRENT directory (not the list file's own location --
+    matching how a shell-expanded glob argument would also resolve)."""
+    result: list[Path] = []
+    for arg in args:
+        path = Path(arg)
+        if path.suffix == ".txt" and path.is_file():
+            for line in path.read_text(encoding="utf-8").splitlines():
+                stripped = line.strip()
+                if stripped and not stripped.startswith("#"):
+                    result.append(Path(stripped))
+        elif any(ch in arg for ch in "*?["):
+            result.extend(sorted(Path(p) for p in glob.glob(arg)))
+        else:
+            result.append(path)
+    return result
+
+
+def _classify(
+    recording: Path, proc: subprocess.CompletedProcess[str] | None, out_json: Path, duration_s: float,
+    *, timed_out: bool, timeout_stderr: str,
+) -> RecordingOutcome:
+    if timed_out:
+        return RecordingOutcome(
+            recording=recording, outcome="timeout", duration_s=duration_s,
+            stderr_excerpt=timeout_stderr[-_STDERR_EXCERPT_BYTES:],
+        )
+
+    assert proc is not None  # only None when timed_out (mypy-style local invariant, not a runtime guard)
+    result: dict[str, object] | None = None
+    if out_json.is_file():
+        try:
+            result = json.loads(out_json.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            result = None
+
+    if result is not None and result.get("outcome") == "ok":
+        return RecordingOutcome(
+            recording=recording, outcome="ok", duration_s=duration_s,
+            tick_count=result.get("tick_count"), last_tick_ns=result.get("last_tick_ns"),  # type: ignore[arg-type]
+        )
+    if result is not None and result.get("outcome") == "fail":
+        return RecordingOutcome(
+            recording=recording, outcome="fail", duration_s=duration_s,
+            error=str(result.get("error", "")), stderr_excerpt=proc.stderr[-_STDERR_EXCERPT_BYTES:],
+        )
+
+    # No readable, self-reported outcome: the process died before it could
+    # write one. That is exactly what a crash looks like from the outside
+    # (R-SIM-19) -- never inferred from anything the process itself claimed.
+    return RecordingOutcome(
+        recording=recording, outcome="crash", duration_s=duration_s,
+        error=f"exit code {proc.returncode}", stderr_excerpt=proc.stderr[-_STDERR_EXCERPT_BYTES:],
+    )
+
+
+def _launch_worker(
+    recording: Path, *, pipeline_path: Path, search: tuple[Path, ...], config: Path | None, timeout_s: float,
+    test_stub_echo: tuple[str, ...], out_dir: Path,
+) -> RecordingOutcome:
+    out_json = out_dir / f"{recording.stem}-{uuid4().hex[:8]}.json"
+    cmd = [
+        sys.executable, "-m", "adas_sim.core.batch_worker",
+        "--recording", str(recording), "--pipeline", str(pipeline_path), "--out-json", str(out_json),
+    ]
+    for directory in search:
+        cmd += ["--search", str(directory)]
+    if config is not None:
+        cmd += ["--config", str(config)]
+    for name in test_stub_echo:
+        cmd += ["--test-stub-echo", name]
+
+    start = time.monotonic()
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=timeout_s)
+    except subprocess.TimeoutExpired as exc:
+        duration_s = time.monotonic() - start
+        stderr = exc.stderr if isinstance(exc.stderr, str) else ""
+        return _classify(recording, None, out_json, duration_s, timed_out=True, timeout_stderr=stderr)
+
+    duration_s = time.monotonic() - start
+    return _classify(recording, proc, out_json, duration_s, timed_out=False, timeout_stderr="")
+
+
+def run_batch(
+    recordings: Sequence[Path], pipeline_path: Path, *,
+    search: Sequence[Path] = (), config: Path | None = None, jobs: int = 1, timeout_s: float = 300.0,
+    test_stub_echo: Sequence[str] = (),
+) -> list[RecordingOutcome]:
+    """Runs `pipeline_path` -- the SAME file `sim resim` would take,
+    unmodified (`R-SIM-16`, `ST-D7-3`) -- against every recording in
+    `recordings`, one subprocess each. Returns results in `recordings`'
+    OWN order regardless of completion order (`ThreadPoolExecutor.map`'s own
+    guarantee) -- a deterministic report is worth more than a marginally
+    earlier print of whichever recording happened to finish first."""
+    with tempfile.TemporaryDirectory(prefix="adas_sim_batch_") as tmp_dir:
+        worker = functools.partial(
+            _launch_worker, pipeline_path=pipeline_path, search=tuple(search), config=config,
+            timeout_s=timeout_s, test_stub_echo=tuple(test_stub_echo), out_dir=Path(tmp_dir),
+        )
+        with ThreadPoolExecutor(max_workers=max(1, jobs)) as executor:
+            return list(executor.map(worker, recordings))
+
+
+def write_report(results: Sequence[RecordingOutcome], path: Path) -> None:
+    counts = Counter(r.outcome for r in results)
+    lines = [
+        "# sim batch report", "", f"{len(results)} recording(s)", "",
+        "| recording | outcome | duration_s | ticks | error |", "|---|---|---|---|---|",
+    ]
+    for r in results:
+        first_error_line = r.error.splitlines()[0] if r.error else ""
+        error_cell = first_error_line.replace("|", "\\|")
+        ticks_cell = "" if r.tick_count is None else str(r.tick_count)
+        lines.append(f"| {r.recording} | {r.outcome} | {r.duration_s:.2f} | {ticks_cell} | {error_cell} |")
+    lines += ["", "## summary", ""]
+    lines += [f"- {outcome}: {counts.get(outcome, 0)}" for outcome in OUTCOMES]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
