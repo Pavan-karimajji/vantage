@@ -68,6 +68,21 @@ class PipelinePanelState:
     def stages(self) -> tuple[StageView, ...]:
         return tuple(self._view(stage) for stage in self._pipeline.stages)
 
+    @property
+    def pipeline(self) -> Pipeline:
+        """The underlying `Pipeline`, unchanged -- `core.manifest.
+        write_run_manifest`'s `pipeline=` argument (stage/impl/inputs come
+        from here; only `mode` may differ, via `mode_overrides` below)."""
+        return self._pipeline
+
+    @property
+    def mode_overrides(self) -> dict[str, str]:
+        """Every stage this session actually toggled, stage name -> mode --
+        a snapshot (mutating the returned dict does not affect this state).
+        `core.manifest.write_run_manifest`'s own input for "the panel emits
+        a run manifest" (`UT-D3-4`)."""
+        return dict(self._mode_overrides)
+
     def _view(self, stage) -> StageView:
         available, reason = self._measured_availability(stage)
         mode = self._mode_overrides.get(stage.name, stage.mode)

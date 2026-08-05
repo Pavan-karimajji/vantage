@@ -17,6 +17,14 @@ tick-grouping implementation.
 CLI line, but a resim structurally needs one (which stages exist, which
 are `measured`, how they're wired) -- the same flag `sim run` already
 carries.
+
+`recording`/`--project`/`--config` are all optional (`S-D3`, `UT-D3-4`):
+each falls back to `--pipeline`'s own `recording:`/`project:`/`config:`
+key (`core.manifest.load_run_spec`) when not given explicitly, so a run
+manifest -- a pipeline file with those three extra keys, `core.manifest.
+write_run_manifest`'s own output -- is a single `--pipeline` argument away
+from a full resim, no other flag needed. An explicit CLI flag always wins
+over the file's own value.
 """
 
 from __future__ import annotations
@@ -25,7 +33,8 @@ import argparse
 from pathlib import Path
 
 from adas_sim.contracts.pipeline import Pipeline
-from adas_sim.core.manifest import build_manifest
+from adas_sim.core.errors import AuthoringError
+from adas_sim.core.manifest import build_manifest, load_run_spec
 from adas_sim.core.resim import resim_pipeline
 from adas_sim.io.base import Provenance, TopicInfo
 from adas_sim.io.registry import writer_for
@@ -34,18 +43,25 @@ from adas_sim.sources.recorder import topic_for
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="sim resim", description=__doc__)
-    parser.add_argument("recording", type=Path, help="a recording to resim against")
-    parser.add_argument("--pipeline", type=Path, required=True, help="the pipeline YAML to execute")
+    parser.add_argument(
+        "recording", type=Path, nargs="?", default=None,
+        help="a recording to resim against (falls back to --pipeline's own recording: key if omitted)",
+    )
+    parser.add_argument("--pipeline", type=Path, required=True, help="the pipeline YAML (or run manifest) to execute")
     parser.add_argument("--save", type=Path, help="write this resim's own freshly-computed tick outputs to a new recording")
     parser.add_argument(
         "--search", type=Path, action="append", default=[],
         help="a directory to search for a dll:/stubdll: stage's library (repeatable, contracts.loader.resolve_library)",
     )
-    parser.add_argument("--project", default="base")
     parser.add_argument(
-        "--config", type=Path,
+        "--project", default=None,
+        help="falls back to --pipeline's own project: key, else 'base'",
+    )
+    parser.add_argument(
+        "--config", type=Path, default=None,
         help="config path forwarded to each stage's adasInit -- adasInit(NULL)'s own bundle "
-             "resolution is S-C5, not yet built, so a real dll:/stubdll: stage needs this explicitly",
+             "resolution is S-C5, not yet built, so a real dll:/stubdll: stage needs this explicitly. "
+             "Falls back to --pipeline's own config: key",
     )
     return parser
 
@@ -74,17 +90,27 @@ def _save_outputs(pipeline: Pipeline, outputs: list[tuple[int, dict]], path: Pat
 
 def run(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    spec = load_run_spec(args.pipeline)
+    recording = args.recording if args.recording is not None else spec.recording
+    if recording is None:
+        raise AuthoringError(
+            expected="a recording (positional argument, or a recording: key in --pipeline's own file)",
+            found="neither given", where=str(args.pipeline), hint="",
+        )
+    project = args.project if args.project is not None else spec.project
+    config = args.config if args.config is not None else spec.config
+
     pipeline = Pipeline.load(args.pipeline, search=args.search)
-    pipeline.init_components(args.config)
+    pipeline.init_components(config)
     try:
-        outputs = resim_pipeline(pipeline, args.recording)
+        outputs = resim_pipeline(pipeline, recording)
     finally:
         pipeline.shutdown_components()
 
     if args.save:
         meta = build_manifest(
             pipeline=pipeline, pipeline_path=args.pipeline, run_kind="resim", source_kind="mcap",
-            project=args.project, recording_path=args.recording,
+            project=project, recording_path=recording,
         )
         _save_outputs(pipeline, outputs, args.save, meta)
         print(f"wrote {args.save}")

@@ -9,18 +9,37 @@ already built at `S-A4Δ`) for a run about to happen (`S-C2`,
 `core.ids.new_run_id`'s job, already built and already enforcing its
 `REQUIRED_KEYS`; this module's only work is gathering those keys from a
 `Pipeline` and its inputs.
+
+`RunSpec`/`load_run_spec`/`write_run_manifest` (S-D3): a DIFFERENT
+"manifest" from `RunManifest` above -- that one is post-run PROVENANCE,
+embedded in a recording after the fact, with no per-stage mode/impl
+fields at all. This one is a pre-run CONFIGURATION: which recording,
+project and config to run a pipeline against, plus this session's
+mode: overrides -- what `sim resim <manifest>` would otherwise need five
+flags for, and what `PipelinePanelState`'s toggles need a file to land in.
+Deliberately **not** a new schema (agreed with the user before building):
+a run manifest IS a pipeline YAML file, with three optional extra
+top-level keys (`recording:`/`project:`/`config:`) `Pipeline.load()`
+itself never reads. `stages:` stays the identical shape, so the SAME
+parser reads a plain pipeline file and a run manifest -- there is no
+second format to keep in sync.
 """
 
 from __future__ import annotations
 
 import hashlib
+import os
 import socket
 import uuid
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+import yaml
+
 from adas_sim.contracts.pipeline import Pipeline
+from adas_sim.core.errors import AuthoringError
 from adas_sim.core.ids import new_run_id
 from adas_sim.io.base import CAPTURE_TIME_MANIFEST_VERSION, ComponentBuildInfo, RunManifest
 
@@ -144,3 +163,89 @@ def build_manifest(
         allow_mixed_projects=pipeline.allow_mixed_projects if pipeline is not None else False,
         process_nonce=_PROCESS_NONCE,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class RunSpec:
+    """A pipeline file's own optional `recording:`/`project:`/`config:`
+    keys, resolved. `RunSpec()` (every field absent/default) is what a
+    plain pipeline file with none of these keys decodes to -- unchanged
+    from being just a pipeline definition, same "degrades and says so"
+    shape `RunManifest`'s own `manifest_version=0` uses."""
+
+    recording: Path | None = None
+    project: str = "base"
+    config: Path | None = None
+
+
+def _relative_or_raise(raw: object, *, key: str, path: Path) -> Path | None:
+    """UT-D3-6: a run manifest contains no absolute path, so it can be
+    committed, shared and replayed on another machine. Resolved relative
+    to the manifest FILE's own directory -- the manifest is what travels,
+    not the machine that wrote it."""
+    if raw is None:
+        return None
+    candidate = Path(raw)
+    if candidate.is_absolute():
+        raise AuthoringError(
+            expected=f"{key}: as a path relative to this file", found=str(candidate), where=str(path),
+            hint="run manifests are portable (P-2, UT-D3-6) -- write a path relative to the manifest's own directory",
+        )
+    return (path.resolve().parent / candidate).resolve()
+
+
+def load_run_spec(pipeline_path: Path) -> RunSpec:
+    """Reads `recording:`/`project:`/`config:` from `pipeline_path`'s own
+    top-level YAML keys, if present. Raises `AuthoringError` naming the
+    file for an absolute path in either field (`UT-D3-6`) -- never
+    silently accepted and never silently made relative."""
+    raw = yaml.safe_load(pipeline_path.read_text(encoding="utf-8")) or {}
+    return RunSpec(
+        recording=_relative_or_raise(raw.get("recording"), key="recording", path=pipeline_path),
+        project=raw.get("project", "base"),
+        config=_relative_or_raise(raw.get("config"), key="config", path=pipeline_path),
+    )
+
+
+def write_run_manifest(
+    path: Path, *, pipeline: Pipeline, mode_overrides: Mapping[str, str] | None = None,
+    recording: Path | None = None, project: str = "base", config: Path | None = None,
+) -> None:
+    """Writes `pipeline`'s stages (mode overridden per `mode_overrides`,
+    `impl:`/`inputs:` unchanged) plus `recording:`/`project:`/`config:` as
+    one pipeline YAML at `path` -- `Pipeline.load(path)` reads it back
+    unchanged (`UT-D3-5`), and `load_run_spec(path)` recovers the other
+    three (`UT-D3-4`). Paths are written relative to `path`'s own
+    directory (`UT-D3-6`) -- `os.path.relpath`, never `str(path)`.
+
+    Raises `AuthoringError` naming the stage for a non-empty `overrides:`/
+    `record:` -- this pass's `PipelinePanelState` never sets either, and
+    silently dropping an existing pipeline's own `overrides:`/`record:` on
+    round-trip would be real, silent data loss (`R-SIM-15`'s own "declared,
+    never smuggled" applies here too). Real support is separate, later work.
+    """
+    mode_overrides = mode_overrides or {}
+    stage_docs = []
+    for stage in pipeline.stages:
+        if stage.overrides or stage.record:
+            raise AuthoringError(
+                expected="a stage with no overrides:/record: (not yet supported by write_run_manifest)",
+                found=f"stage {stage.name!r} has overrides={bool(stage.overrides)} record={bool(stage.record)}",
+                where=str(path), hint="round-tripping overrides:/record: is separate, later work",
+            )
+        doc: dict[str, object] = {"name": stage.name, "mode": mode_overrides.get(stage.name, stage.mode)}
+        if stage.impl:
+            doc["impl"] = stage.impl
+        if stage.inputs:
+            doc["inputs"] = dict(stage.inputs)
+        stage_docs.append(doc)
+
+    base_dir = path.resolve().parent
+    manifest: dict[str, object] = {"version": 1, "name": pipeline.name, "stages": stage_docs}
+    if recording is not None:
+        manifest["recording"] = os.path.relpath(recording.resolve(), base_dir)
+    manifest["project"] = project
+    if config is not None:
+        manifest["config"] = os.path.relpath(config.resolve(), base_dir)
+
+    path.write_text(yaml.safe_dump(manifest, sort_keys=False), encoding="utf-8")

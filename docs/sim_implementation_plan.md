@@ -5656,6 +5656,62 @@ be replaced the day an Ubuntu machine appears.
 > Full suites re-run clean: `pytest` 728 passed / 7 skipped (was 720),
 > `check_invariants.py` clean (`GT-1,2,3,6,11`).
 
+> **Slice 2 landed the same day: the run-manifest schema, agreed with the
+> user before starting** (a real fork — see the two options put to them).
+> Chosen: a run manifest is **not** a new format. It is a pipeline YAML
+> file with three optional extra top-level keys (`recording:`/`project:`/
+> `config:`) `Pipeline.load()` already silently ignores (confirmed by
+> reading its body — `raw.get(...)` picks named keys only, no strict
+> schema). `core/manifest.py` gains `RunSpec` (the three fields, resolved),
+> `load_run_spec(pipeline_path)` (reads them, raising `AuthoringError`
+> naming the file for an absolute path — `UT-D3-6`, resolution is relative
+> to the manifest file's own directory, "the manifest is what travels"),
+> and `write_run_manifest(path, *, pipeline, mode_overrides=, recording=,
+> project=, config=)` (writes `pipeline`'s stages — mode overridden per
+> `PipelinePanelState.mode_overrides`, `impl:`/`inputs:` unchanged — plus
+> the three keys, all paths `os.path.relpath`, never `str(path)`).
+> **Refuses, rather than silently drops, a stage with a non-empty
+> `overrides:`/`record:`** — round-tripping those is real, separate work
+> this pass did not attempt, and dropping them silently would be exactly
+> the "smuggled, not declared" failure `R-SIM-15` exists to prevent.
+> `PipelinePanelState` gained `pipeline`/`mode_overrides` read-only
+> properties so a caller can feed both straight into the writer with no
+> extra glue.
+>
+> `cli/resim.py`: `recording` (positional) is now optional, `--project`/
+> `--config` default to `None` (a real sentinel, not `"base"` — needed to
+> tell "not given" from "given as its own default") — all three fall back
+> to `load_run_spec(args.pipeline)` when omitted, an explicit flag always
+> winning. `sim resim --pipeline <manifest.yaml>` alone now resimms exactly
+> as if `<recording> --project <p> --config <c>` had all been typed.
+> Missing a recording from BOTH the CLI and the manifest is a load error
+> naming the file, never a `None` propagating silently.
+>
+> 9 new tests, all real: 6 in `tests/unit/test_d3_run_manifest.py`
+> (round-trip preserves mode overrides and leaves `impl:`/other stages
+> unchanged — `UT-D3-5`; `recording:`/`project:`/`config:` recovered
+> exactly — `UT-D3-4`'s writer/reader half; a plain pipeline file with none
+> of the three keys decodes to `RunSpec()`, unchanged from before this
+> existed; an absolute path is refused naming the file — `UT-D3-6`, both
+> the write and the load direction; an existing `overrides:` block is
+> refused rather than dropped). 3 in
+> `tests/system/test_d3_run_manifest_cli.py`, against the REAL `sim resim`
+> CLI (`cli.resim.run`, `Pipeline.load`/`resim_pipeline` mocked — the real
+> entry point only resolves `dll:`/`stubdll:`, no `components=` injection
+> seam, so a genuine execution would need a built `df_sil`/`echo_stub` this
+> Python-only suite does not have; what changed and needs proof is the
+> argument-resolution logic, asserted by checking the exact recording/
+> project/config the mocks were called with — `UT-D3-4`'s CLI half): the
+> manifest alone resolves all three, an explicit CLI flag wins over the
+> manifest's own value, and a recording missing from both is a named
+> `AuthoringError`. Full suites re-run clean: `pytest` 737 passed / 7
+> skipped (was 728), `check_invariants.py` clean (`GT-1,2,3,6,11`).
+>
+> **Still not attempted**, same as slice 1's own list: `MainWindow` wiring,
+> on-disk `impl:` discovery, severed-chain UI, per-port override expansion,
+> compare-against-recorded, evidence-panel consistency (`UT-D3-3`,
+> `UT-D3-8`, `ST-D3-1`).
+
 - [ ] `app/panels/pipeline.py` — the pipeline dock, per visualization spec §13:
       one row per stage, `mode` toggle, `impl:` and overrides in a collapsed
       expert row. **Landed as `view/pipeline_panel.py` +
@@ -5675,11 +5731,10 @@ be replaced the day an Ubuntu machine appears.
 - [ ] Severed-chain auto-close surfaced with a one-line undo bar (detection is
       `UT-C1c-16`'s; acting on it is this stage's — `R-SIM-10`). **Not
       attempted this pass**
-- [ ] `core/manifest.py` round-trip: the panel emits a run manifest, the CLI
+- [x] `core/manifest.py` round-trip: the panel emits a run manifest, the CLI
       consumes it unchanged, and the CLI can emit one the panel reopens.
-      **Not attempted — the run-configuration manifest concept itself does
-      not exist yet**, see slice-1 note. This is the next real piece of work
-      for this stage, and it is schema design before it is UI
+      **Done, slice 2** — `RunSpec`/`load_run_spec`/`write_run_manifest`,
+      wired into `cli/resim.py`'s fallback resolution, see status note above
 - [ ] Console entry point in `pyproject.toml`; **no `.bat`, no `.sh`** written
       by hand. **Not attempted this pass** — `vantage = adas_sim.app:main`
       already exists from an earlier stage; nothing new needed here yet
@@ -5700,15 +5755,25 @@ be replaced the day an Ubuntu machine appears.
       passing
 - [ ] `UT-D3-3` a severed chain is flagged in the panel and the orphan stage is
       badged *"computed, not consumed"*. **Not attempted this pass**
-- [ ] `UT-D3-4` the GUI builds a valid run manifest that the CLI accepts
-      **verbatim**. **Not attempted — depends on the unbuilt run-manifest
-      schema**, see slice-1 note
-- [ ] `UT-D3-5` the reverse also holds: a manifest written by the CLI reopens in
-      the panel with every field intact — one format, two writers. **Not
-      attempted**, same dependency as `UT-D3-4`
-- [ ] `UT-D3-6` a run manifest contains **no absolute path** (`P-2`), so it can
-      be committed, shared and replayed on another machine. **Not
-      attempted**, same dependency
+- [x] `UT-D3-4` the GUI builds a valid run manifest that the CLI accepts
+      **verbatim**. `tests/unit/test_d3_run_manifest.py` (writer/reader) +
+      `tests/system/test_d3_run_manifest_cli.py` (the real CLI's own
+      fallback-resolution path), real, passing — see slice-2 note above for
+      why `Pipeline.load`/`resim_pipeline` themselves are mocked in the CLI
+      test
+- [x] `UT-D3-5` the reverse also holds: a manifest written by the CLI reopens in
+      the panel with every field intact — one format, two writers.
+      `test_ut_d3_5_stages_survive_a_write_then_load_round_trip_unchanged`,
+      real, passing (mode overrides survive, `impl:` unchanged) — "the
+      panel reopens it" specifically (parsing it back into a live
+      `PipelinePanelState` in the GUI) is not separately tested, since the
+      panel already reads any `Pipeline` uniformly regardless of which YAML
+      keys produced it; `Pipeline.load` reading the manifest back is the
+      real claim and is what's tested
+- [x] `UT-D3-6` a run manifest contains **no absolute path** (`P-2`), so it can
+      be committed, shared and replayed on another machine. Two tests: the
+      writer never emits one (string-search on the written bytes), the
+      reader refuses one naming the file. Real, passing
 - [x] `UT-D3-7` the panel names no component or function (`GT-1` as a test).
       Covered structurally by the existing mechanized `GT-1` grep over
       `src/adas_sim/**` — both new files are in scope, `check_invariants.py`
@@ -5735,9 +5800,9 @@ be replaced the day an Ubuntu machine appears.
 **Gate**
 - [ ] `UT-D3-4` + `UT-D3-5` + `ST-D3-1` green — the GUI and the CLI exchange the
       same artefact in both directions, which is what keeps them one engine
-      (`R-SIM-16`) rather than two paths that drift. **Not closed** — all
-      three depend on work slice 1 deliberately did not attempt (the
-      run-manifest schema, `MainWindow` wiring). Correctly left open
+      (`R-SIM-16`) rather than two paths that drift. **Still not closed** —
+      `UT-D3-4`/`UT-D3-5` are real and green (slice 2); `ST-D3-1` needs the
+      panel wired into `MainWindow`, not attempted in either slice
 
 ### S-D4 — Perception readiness
 
