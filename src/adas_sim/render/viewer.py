@@ -141,15 +141,17 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import numpy as np
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from adas_sim.check.expect import ExpectationResult, evaluate_scenario
+from adas_sim.contracts.pipeline import Pipeline
 from adas_sim.contracts.scenario import Scenario, load_scenario
 from adas_sim.core.history import Interaction
+from adas_sim.core.manifest import write_run_manifest
 from adas_sim.core.runner import (
     LoadCancelled, SceneCache, build_reactive_layers, build_session_from_recording, build_static_scene,
 )
@@ -833,10 +835,13 @@ class MainWindow(QtWidgets.QMainWindow):
                  preset: str | None = None,
                  initial_at_s: float | None = None,
                  scenario_path: Path | None = None,
+                 pipeline_path: Path | None = None,
+                 pipeline_search: Sequence[Path] = (),
                  parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Vantage")
         self._project = project
+        self._recording_path = recording
         #: `sim view <session> [--preset] [--at]` (`sim_api_reference.md`
         #: §10) -- applied once, in `_on_loaded`, after the workspace's own
         #: `tabs[0]` viewpoint (a command-line preset is a more specific
@@ -854,6 +859,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self._scenario: Scenario | None = (
             load_scenario(scenario_path) if scenario_path is not None else None
         )
+        #: S-D3 slice 3: explicit, never guessed, same reasoning as
+        #: `scenario_path` above -- a recording's own run manifest carries
+        #: no path back to the pipeline that produced it either. Loaded in
+        #: `_on_loaded` (needs `session.known_ports`, not available yet
+        #: here) -- a load failure degrades the dock, never the window
+        #: (see `_on_loaded`'s own try/except).
+        self._pipeline_path = pipeline_path
+        self._pipeline_search = tuple(pipeline_search)
+        self.pipeline_panel_state: PipelinePanelState | None = None
         #: signal address -> every `ExpectationResult` naming it with a
         #: drawable `window_s` (`check/expect.py`) -- several expectations
         #: can share one signal (`sim_mergein_vlat025.yaml`'s own `EXP-1`/
@@ -911,6 +925,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.inspector_panel = InspectorPanel(self.inspector_state, self)
         self.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, self.inspector_panel)
 
+        #: S-D3 slice 3: docked empty (no `pipeline_path` -> no state to
+        #: sync) until `_on_loaded` knows `session.known_ports`. Read-only
+        #: this slice -- `mode_changed` only enables "Save Run Manifest...",
+        #: it does not re-run anything (`view/pipeline_panel.py`'s own
+        #: scope note).
+        self.pipeline_panel = PipelinePanel(self)
+        self.addDockWidget(QtCore.Qt.DockWidgetArea.BottomDockWidgetArea, self.pipeline_panel)
+        self.pipeline_panel.mode_changed.connect(self._on_pipeline_mode_changed)
+
         self.timeline_state = TimelineState()
         #: address -> resolved (tick_index, value) series -- resolved once
         #: per lane-add, never per render (`Session.signal` is an O(ticks)
@@ -948,10 +971,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self._add_shortcut("[", functools.partial(self._on_jump_to_event, -1))
         self._add_shortcut("M", self._on_toggle_measure_mode)
 
+        file_menu = self.menuBar().addMenu("&File")
+        self._save_run_manifest_action = file_menu.addAction("Save Run Manifest...")
+        self._save_run_manifest_action.setEnabled(False)  # enabled once pipeline_panel_state exists (_on_loaded)
+        self._save_run_manifest_action.triggered.connect(self._on_save_run_manifest)
+
         view_menu = self.menuBar().addMenu("&View")
         view_menu.addAction(self.bev.toggleViewAction())
         view_menu.addAction(self.layers_panel.toggleViewAction())
         view_menu.addAction(self.inspector_panel.toggleViewAction())
+        view_menu.addAction(self.pipeline_panel.toggleViewAction())
         view_menu.addAction(self.timeline_strip.toggleViewAction())
 
         timeline_menu = self.menuBar().addMenu("&Timeline")
@@ -1032,6 +1061,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._stop_thread()
         self.layers_state.load(layers_state_path(self._project, session.meta.pipeline))
         self._expectation_windows = _index_expectation_windows(self._scenario, session)
+        self._load_pipeline_panel(session)
         # head_tick pinned to the last tick: the whole recording is already
         # loaded (pass 1 already ran), so there is nothing left to "execute"
         # -- `_advance_for_transport` exists only to satisfy Transport's
@@ -1055,6 +1085,51 @@ class MainWindow(QtWidgets.QMainWindow):
             # __init__), so it wins -- applied last, after the first real
             # render established `_current_tick`, and re-renders once more.
             self._on_jump_to_preset(self._initial_preset)
+
+    def _load_pipeline_panel(self, session: Session) -> None:
+        """S-D3 slice 3: read-only this pass -- loads `self._pipeline_path`
+        (real `dll:`/`stubdll:` resolution, same as the CLI) and syncs the
+        dock against `session.known_ports`. A load failure degrades the
+        DOCK, never the window: the rest of Vantage does not depend on a
+        pipeline being given at all (`pipeline_path=None` is the common
+        case, unchanged from before this slice existed)."""
+        if self._pipeline_path is None:
+            return
+        try:
+            pipeline = Pipeline.load(self._pipeline_path, search=self._pipeline_search)
+        except Exception as exc:  # noqa: BLE001 -- surfaced in the dock/status bar, never crashes the window
+            self.statusBar().showMessage(f"pipeline panel: could not load {self._pipeline_path}: {exc}", 8000)
+            return
+        self.pipeline_panel_state = PipelinePanelState(pipeline, known_ports=session.known_ports)
+        self.pipeline_panel.sync(self.pipeline_panel_state)
+        self._save_run_manifest_action.setEnabled(True)
+
+    def _on_pipeline_mode_changed(self, stage_name: str, mode: str) -> None:
+        """Read-only this slice (`view/pipeline_panel.py`'s own scope note)
+        -- nothing here re-runs anything live. Only tells the operator
+        where the toggle actually went: `File > Save Run Manifest...`."""
+        self.statusBar().showMessage(
+            f"{stage_name} -> {mode} (not re-run -- File > Save Run Manifest... to persist this choice)", 5000,
+        )
+
+    def _on_save_run_manifest(self) -> None:
+        if self.pipeline_panel_state is None or self._pipeline_path is None:
+            return
+        path_str, _filter = QtWidgets.QFileDialog.getSaveFileName(
+            self, "Save Run Manifest", str(self._pipeline_path.parent / "run_manifest.yaml"), "Pipeline YAML (*.yaml)",
+        )
+        if not path_str:
+            return
+        try:
+            write_run_manifest(
+                Path(path_str), pipeline=self.pipeline_panel_state.pipeline,
+                mode_overrides=self.pipeline_panel_state.mode_overrides,
+                recording=self._recording_path, project=self._project,
+            )
+        except Exception as exc:  # noqa: BLE001 -- a save failure is reported, never silently lost
+            self.statusBar().showMessage(f"could not save run manifest: {exc}", 8000)
+            return
+        self.statusBar().showMessage(f"wrote {path_str}", 5000)
 
     def _advance_for_transport(self, n: int, on_progress: Callable[[int, int], None], cancel: object) -> int:
         """`Transport`'s stand-in for a real SUT's `exec()` loop

@@ -5712,6 +5712,69 @@ be replaced the day an Ubuntu machine appears.
 > compare-against-recorded, evidence-panel consistency (`UT-D3-3`,
 > `UT-D3-8`, `ST-D3-1`).
 
+> **Slice 3 landed the same day: `MainWindow` wiring — read-only, agreed
+> with the user before starting** (a real fork put to them: read-only
+> integration now, vs. building the missing live-resim-to-Session
+> capability `ST-D3-1`'s literal claim needs, vs. stopping at slice 2).
+> Investigated first: no live-resim session-building path exists anywhere
+> — `build_session_from_recording` is the only session builder and only
+> reads an already-recorded file; `cli/resim.py --save` deliberately writes
+> only the freshly-simulated stages' own output, not a mergeable full
+> recording. Building that merge is real, separate, substantial work,
+> correctly left unattempted — **this slice does not close `ST-D3-1`**.
+>
+> What landed: `MainWindow` gains `pipeline_path=`/`pipeline_search=`
+> (both optional, `None`/`()` unchanged from before this slice — the
+> common case stays exactly as it was). `PipelinePanel` docks
+> (`BottomDockWidgetArea` — see the regression note below for why not
+> `Left`), synced in `_on_loaded` once `session.known_ports` is known. A
+> pipeline load failure (bad path, unresolvable `dll:`) degrades the DOCK
+> only — caught, reported in the status bar — never the window; the rest
+> of Vantage does not depend on a pipeline being given at all. A new
+> `&File` menu gained **Save Run Manifest...**, enabled once the panel has
+> a real `Pipeline` loaded: writes the CURRENT `PipelinePanelState`
+> (stages, mode overrides, the recording it's viewing, the project) via
+> slice 2's `write_run_manifest`, through a `QFileDialog` save dialog.
+> `mode_changed` does not re-run anything — it updates the status bar
+> pointing at `File > Save Run Manifest...`, honestly reflecting this
+> slice's own read-only scope. `sim view` gained `--pipeline`/`--search`
+> (`cli/view.py` → `app/gui.launch` → `MainWindow`), so this is reachable
+> from the real CLI entry point, not only from tests.
+>
+> **A real regression found and fixed before landing**: docking
+> `PipelinePanel` in `LeftDockWidgetArea` (alongside `layers_panel`, the
+> first placement tried) broke `test_b3_viewport_controls.py::test_
+> dragging_pans_the_viewport_and_a_second_click_still_selects` — every
+> dock widget in this window competes for space with no fixed central
+> widget (`BevPanel` is itself a dock, in `RightDockWidgetArea`), so a
+> third `Left`-area competitor shrank the BEV panel's width enough to
+> shift `Viewport.to_px()`'s pixel math off the test's fixture box. Full
+> suite confirmed clean before this fix (740 passed baseline minus this
+> file); confirmed broken by the addition (`git stash` + rerun proved
+> causation, not a pre-existing flake); confirmed fixed by moving the dock
+> to `BottomDockWidgetArea` instead (all 8 tests in that file green again,
+> full suite clean after).
+>
+> 3 new tests, all real, in `tests/system/test_d3_mainwindow_pipeline_
+> panel.py`: no `pipeline_path` leaves the dock empty, unchanged from
+> before (backward compatible); an unresolvable `dll:` stage degrades the
+> dock, not the window (the window still shows the recording); a REAL
+> resolvable pipeline (reusing `sil_host`'s own already-built
+> `echo_stub.dll` from this session's `S-C7` work, rather than building a
+> second trivial fixture library — skips with a named reason if that build
+> isn't present, same pattern `test_c8_relocatability_installed.py`
+> already uses for a missing `df_sil`) populates the dock for real and
+> **Save Run Manifest** writes a real, relative-path, reloadable file
+> (`QFileDialog.getSaveFileName` mocked — an offscreen test cannot show a
+> native dialog — everything downstream of the mocked return value is
+> real). Full suite re-run clean: `pytest` 740 passed / 7 skipped (was
+> 737), `check_invariants.py` clean (`GT-1,2,3,6,11`).
+>
+> **Still not attempted**: on-disk `impl:` discovery, severed-chain UI,
+> per-port override expansion, compare-against-recorded, evidence-panel
+> consistency, and the live-resim-to-Session capability `ST-D3-1` actually
+> needs (`UT-D3-3`, `UT-D3-8`, `ST-D3-1`).
+
 - [ ] `app/panels/pipeline.py` — the pipeline dock, per visualization spec §13:
       one row per stage, `mode` toggle, `impl:` and overrides in a collapsed
       expert row. **Landed as `view/pipeline_panel.py` +
@@ -5735,10 +5798,11 @@ be replaced the day an Ubuntu machine appears.
       consumes it unchanged, and the CLI can emit one the panel reopens.
       **Done, slice 2** — `RunSpec`/`load_run_spec`/`write_run_manifest`,
       wired into `cli/resim.py`'s fallback resolution, see status note above
-- [ ] Console entry point in `pyproject.toml`; **no `.bat`, no `.sh`** written
-      by hand. **Not attempted this pass** — `vantage = adas_sim.app:main`
-      already exists from an earlier stage; nothing new needed here yet
-      since the panel is not wired into `MainWindow`
+- [x] Console entry point in `pyproject.toml`; **no `.bat`, no `.sh`** written
+      by hand. `vantage = adas_sim.app:main` already existed from an
+      earlier stage; **slice 3** made the panel reachable through it for
+      real — `sim view --pipeline <p> --search <dir>` — no new launcher
+      needed or written
 
 **Tests**
 - [x] `UT-D3-1` discovery: stages from the pipeline — **done**. `impl:`
@@ -5801,8 +5865,12 @@ be replaced the day an Ubuntu machine appears.
 - [ ] `UT-D3-4` + `UT-D3-5` + `ST-D3-1` green — the GUI and the CLI exchange the
       same artefact in both directions, which is what keeps them one engine
       (`R-SIM-16`) rather than two paths that drift. **Still not closed** —
-      `UT-D3-4`/`UT-D3-5` are real and green (slice 2); `ST-D3-1` needs the
-      panel wired into `MainWindow`, not attempted in either slice
+      `UT-D3-4`/`UT-D3-5` are real and green (slice 2); `ST-D3-1` needs a
+      live-resim-to-Session capability that does not exist anywhere in the
+      framework yet (slice 3's own investigation) — the panel IS wired into
+      `MainWindow` now (slice 3), but read-only, so nothing is launchable
+      from it. This is real, separate, substantial future work, not a
+      wiring gap
 
 ### S-D4 — Perception readiness
 
