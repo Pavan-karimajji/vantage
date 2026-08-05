@@ -5616,41 +5616,114 @@ the GUI is a console entry point (`vantage = adas_sim.app:main`) so the launcher
 is generated per platform (`P-6`) — a `.bat` is Windows-only and would have to
 be replaced the day an Ubuntu machine appears.
 
+> **Slice 1 landed 2026-08-05** (same session as `S-C7`'s real verification —
+> this shell turned out to have working Qt-offscreen too, not just a
+> toolchain). Scoped deliberately narrow, agreed with the user before
+> starting: the panel **widget** only, discovery-driven, mode toggle that
+> never discards `impl:` — **not** wired into `MainWindow`, **not** the
+> on-disk `impl:` picker (nothing in this framework discovers candidate
+> component libraries from a directory yet — `sim list ports <lib>` reads
+> one manifest given an explicit path, no scan), **not** the run-manifest
+> round-trip (`core/manifest.py` has no run-*configuration* manifest concept
+> today — `RunManifest` in `io/base.py` is recording *provenance*, a
+> different thing; building one is real schema-design work, not attempted
+> here), **not** severed-chain UI, per-port override expansion, or
+> compare-against-recorded.
+>
+> What landed: `view/pipeline_panel.py` (`PipelinePanelState`, `StageView`
+> — pure Python, no Qt, mirrors `view/layers.py`'s own `LayerTreeState`
+> split) + `PipelinePanel(QtWidgets.QDockWidget)` in `render/viewer.py`
+> (mirrors `LayersPanel`'s shape: state owns decisions, the class only
+> arranges the table and dispatches). Discovery reads stages straight off
+> an already-loaded `Pipeline`; `measured` availability checks every
+> declared output port (`pipeline.manifest_for(stage).outputs`) against the
+> caller-supplied `known_ports` (the same shape `Session.known_ports`
+> already carries, so a real caller needs no new conversion). Flipping mode
+> never touches `impl:`, proven by a real toggle-and-check test, not by
+> reading the code. `impl:` itself is read-only text this pass. 8 new
+> tests, all real: 6 in `tests/unit/test_d3_pipeline_panel_state.py`
+> (`UT-D3-1` partial — stage/mode/impl discovery, not the on-disk `impl:`
+> alternatives; `UT-D3-2` both directions — available and unavailable with
+> the missing qualified port named), 2 in
+> `tests/system/test_d3_pipeline_panel_widget.py` (real offscreen Qt: the
+> table renders one row per stage, and a real `QRadioButton.click()`
+> dispatches `mode_changed` and updates `PipelinePanelState` — not just
+> that the state object reports right, matching `test_b3_offscreen_smoke.
+> py`'s own "not just what state reports" bar). `UT-D3-7` (no component
+> name in the panel) is covered structurally by the existing `GT-1` grep
+> (`src/adas_sim/**`, unchanged scope) rather than a bespoke test — the two
+> new files are inside that scope and `check_invariants.py` stayed clean.
+> Full suites re-run clean: `pytest` 728 passed / 7 skipped (was 720),
+> `check_invariants.py` clean (`GT-1,2,3,6,11`).
+
 - [ ] `app/panels/pipeline.py` — the pipeline dock, per visualization spec §13:
       one row per stage, `mode` toggle, `impl:` and overrides in a collapsed
-      expert row
-- [ ] Discovery-driven and component-agnostic: stages from the pipeline,
-      `impl:` choices from manifests on disk, `measured` availability from the
-      recording's topic index. **No component name anywhere** (`GT-1`)
+      expert row. **Landed as `view/pipeline_panel.py` +
+      `render.viewer.PipelinePanel`, not a new `app/panels/` module** — this
+      stage's own checklist path predates the real `S-B3` build, which put
+      every panel (`LayersPanel`, `InspectorPanel`, …) directly in
+      `render/viewer.py` with a paired `view/<name>.py` state module; this
+      slice followed the codebase's real convention over the checklist's
+      literal (and by now stale) path. Overrides-in-a-collapsed-row: **not
+      attempted**, see slice-1 note above
+- [ ] Discovery-driven and component-agnostic: stages from the pipeline —
+      **done**. `impl:` choices from manifests on disk — **not attempted**
+      (no on-disk discovery mechanism exists anywhere yet, see slice-1 note).
+      `measured` availability from the recording's topic index — **done**.
+      **No component name anywhere** (`GT-1`) — **done**, `check_invariants.
+      py` clean
 - [ ] Severed-chain auto-close surfaced with a one-line undo bar (detection is
-      `UT-C1c-16`'s; acting on it is this stage's — `R-SIM-10`)
+      `UT-C1c-16`'s; acting on it is this stage's — `R-SIM-10`). **Not
+      attempted this pass**
 - [ ] `core/manifest.py` round-trip: the panel emits a run manifest, the CLI
-      consumes it unchanged, and the CLI can emit one the panel reopens
+      consumes it unchanged, and the CLI can emit one the panel reopens.
+      **Not attempted — the run-configuration manifest concept itself does
+      not exist yet**, see slice-1 note. This is the next real piece of work
+      for this stage, and it is schema design before it is UI
 - [ ] Console entry point in `pyproject.toml`; **no `.bat`, no `.sh`** written
-      by hand
+      by hand. **Not attempted this pass** — `vantage = adas_sim.app:main`
+      already exists from an earlier stage; nothing new needed here yet
+      since the panel is not wired into `MainWindow`
 
 **Tests**
-- [ ] `UT-D3-1` discovery: stages from the pipeline, `impl:` choices from
-      manifests on disk, `measured` availability from the recording topic index
-- [ ] `UT-D3-2` `measured` is disabled **with a reason** when the recording
-      lacks the topics — the GUI does not offer a choice that would fail at load
+- [x] `UT-D3-1` discovery: stages from the pipeline — **done**. `impl:`
+      choices from manifests on disk — **not attempted** (no on-disk
+      discovery exists). `measured` availability from the recording topic
+      index — **done**. `tests/unit/test_d3_pipeline_panel_state.py`, real,
+      passing — ticked for the half this pass actually built; the other
+      half stays real future work, not silently claimed
+- [x] `UT-D3-2` `measured` is disabled **with a reason** when the recording
+      lacks the topics — the GUI does not offer a choice that would fail at
+      load. `tests/unit/test_d3_pipeline_panel_state.py` +
+      `tests/system/test_d3_pipeline_panel_widget.py` (the radio button
+      itself is `setEnabled(False)` with the reason as its tooltip), real,
+      passing
 - [ ] `UT-D3-3` a severed chain is flagged in the panel and the orphan stage is
-      badged *"computed, not consumed"*
+      badged *"computed, not consumed"*. **Not attempted this pass**
 - [ ] `UT-D3-4` the GUI builds a valid run manifest that the CLI accepts
-      **verbatim**
+      **verbatim**. **Not attempted — depends on the unbuilt run-manifest
+      schema**, see slice-1 note
 - [ ] `UT-D3-5` the reverse also holds: a manifest written by the CLI reopens in
-      the panel with every field intact — one format, two writers
+      the panel with every field intact — one format, two writers. **Not
+      attempted**, same dependency as `UT-D3-4`
 - [ ] `UT-D3-6` a run manifest contains **no absolute path** (`P-2`), so it can
-      be committed, shared and replayed on another machine
-- [ ] `UT-D3-7` the panel names no component or function (`GT-1` as a test)
+      be committed, shared and replayed on another machine. **Not
+      attempted**, same dependency
+- [x] `UT-D3-7` the panel names no component or function (`GT-1` as a test).
+      Covered structurally by the existing mechanized `GT-1` grep over
+      `src/adas_sim/**` — both new files are in scope, `check_invariants.py`
+      clean; no bespoke test written (would duplicate the mechanism)
 - [ ] `UT-D3-8` **the evidence panel renders the same record `sim explain`
       prints** (`FR-SIM-67`, `R-SIM-25`, `OD-6`): for one selected prim, both
       surfaces are driven by one `evidence()` call and are asserted **field by
       field**, not merely both non-empty. A field the record cannot fill reads
       `unknown` on both — never a plausible default, never blank on one side and
-      filled on the other
+      filled on the other. **Not attempted this pass** — `core/evidence.py`
+      already exists (a real prerequisite, confirmed present); this pass
+      did not touch the evidence panel at all
 - [ ] `ST-D3-1` every run in this plan is launchable from the GUI with no
-      hand-typed command
+      hand-typed command. **Not attempted** — the panel is not wired into
+      `MainWindow` this pass, so nothing is launchable from it yet
 
 **Discipline** (every stage)
 - [ ] portability §3 ticked — exposure: `P-6` (entry point, never a `.bat`),
@@ -5662,7 +5735,9 @@ be replaced the day an Ubuntu machine appears.
 **Gate**
 - [ ] `UT-D3-4` + `UT-D3-5` + `ST-D3-1` green — the GUI and the CLI exchange the
       same artefact in both directions, which is what keeps them one engine
-      (`R-SIM-16`) rather than two paths that drift
+      (`R-SIM-16`) rather than two paths that drift. **Not closed** — all
+      three depend on work slice 1 deliberately did not attempt (the
+      run-manifest schema, `MainWindow` wiring). Correctly left open
 
 ### S-D4 — Perception readiness
 

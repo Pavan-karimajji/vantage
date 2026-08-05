@@ -164,6 +164,7 @@ from adas_sim.view.inspector import InspectorState, copy_as_text
 from adas_sim.view.layers import LayerTreeState
 from adas_sim.view.hud import HudInfo, format_hud_lines, format_stale_banner, stale_ports
 from adas_sim.view.measure import MeasureState, snap_point
+from adas_sim.view.pipeline_panel import PipelinePanelState, StageView
 from adas_sim.view.plots import PlotState
 from adas_sim.view.timeline import TimelineState, event_markers
 from adas_sim.view.transport import Transport
@@ -446,6 +447,79 @@ class LayersPanel(QtWidgets.QDockWidget):
     def _on_search_changed(self, text: str) -> None:
         self.state.set_search(text)
         self._rebuild()
+
+
+class PipelinePanel(QtWidgets.QDockWidget):
+    """The pipeline panel (S-D3 slice 1, `sim_visualization_spec.md` §13):
+    one row per stage, a `mode` radio group, `impl:` shown read-only.
+    Every decision lives in `state` (`view/pipeline_panel.py`); this class
+    only arranges the table and dispatches clicks (`GT-9`), same split
+    `LayersPanel`/`InspectorPanel` already use.
+
+    **Not wired into `MainWindow` this pass** -- standalone and
+    independently testable (`sync()` + `mode_changed`), per this slice's
+    own scope note in `view/pipeline_panel.py`. Integrating it (a new dock,
+    re-running pass 1 on a mode change) is separate, later work."""
+
+    mode_changed = QtCore.Signal(str, str)  # stage name, new mode
+
+    _MODE_LABELS = (("simulate", "simulate"), ("measured", "measured"), ("off", "off"))
+
+    def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
+        super().__init__("Pipeline", parent)
+        self.setObjectName("dock.pipeline")  # stable id `saveState()`/`restoreState()` match on
+        self.state: PipelinePanelState | None = None
+        self._updating = False
+
+        self._table = QtWidgets.QTableWidget(0, 3)
+        self._table.setHorizontalHeaderLabels(["stage", "mode", "implementation"])
+        self._table.horizontalHeader().setStretchLastSection(True)
+        self._table.verticalHeader().setVisible(False)
+        self.setWidget(self._table)
+
+    def sync(self, state: PipelinePanelState) -> None:
+        self.state = state
+        self._rebuild()
+
+    def _rebuild(self) -> None:
+        assert self.state is not None
+        self._updating = True
+        views = self.state.stages()
+        self._table.setRowCount(len(views))
+        for row, view in enumerate(views):
+            self._table.setItem(row, 0, QtWidgets.QTableWidgetItem(view.name))
+            self._table.setCellWidget(row, 1, self._mode_widget(view))
+            impl_text = view.impl or "(absent)"
+            if view.mode == "measured" and not view.measured_available:
+                impl_text += f"  ⚠ {view.measured_unavailable_reason}"
+            self._table.setItem(row, 2, QtWidgets.QTableWidgetItem(impl_text))
+        self._updating = False
+
+    def _mode_widget(self, view: StageView) -> QtWidgets.QWidget:
+        container = QtWidgets.QWidget()
+        layout = QtWidgets.QHBoxLayout(container)
+        layout.setContentsMargins(2, 0, 2, 0)
+        group = QtWidgets.QButtonGroup(container)
+        for mode, label in self._MODE_LABELS:
+            button = QtWidgets.QRadioButton(label)
+            button.setChecked(mode == view.mode)
+            # measured is disabled WITH THE REASON inline (§13) -- never a
+            # choice that fails at run time -- rather than hidden, so the
+            # operator sees why, not just that it is missing.
+            if mode == "measured" and not view.measured_available:
+                button.setEnabled(False)
+                button.setToolTip(view.measured_unavailable_reason)
+            group.addButton(button)
+            layout.addWidget(button)
+            button.toggled.connect(functools.partial(self._on_mode_toggled, view.name, mode))
+        return container
+
+    def _on_mode_toggled(self, stage_name: str, mode: str, checked: bool) -> None:
+        if self._updating or not checked or self.state is None:
+            return
+        self.state.set_mode(stage_name, mode)
+        self._rebuild()
+        self.mode_changed.emit(stage_name, mode)
 
 
 class InspectorPanel(QtWidgets.QDockWidget):
