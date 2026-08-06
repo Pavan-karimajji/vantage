@@ -305,3 +305,95 @@ Recorded so it is a decision, not an omission:
 | `FR-SIM-15` — component ships a workspace | §3 (docks), viz §13b |
 | `NR-SIM-21` — mass scale | §5 |
 | `NR-SIM-9` — compatibility statement | §7 |
+
+---
+
+## 10. What shipped — reconciled 2026-08-06 (audit run 3)
+
+**This section exists because everything above it was frozen on 2026-07-28 and
+the application it specifies was built on 2026-08-06, and nothing in between
+brought the two together** (`AR-47`). `S-D8` landed the shell, the workspaces,
+the start page, the palette and the Campaign widget, wrote its detail into
+`sim_implementation_plan.md`, and left this document — the one a reader opens to
+find out what Vantage *is* — describing an intent. Every name S-D8 created
+(`VantageWindow`, `StartPage`, `CampaignWidget`, `ConsolePanel`, `ProbePanel`,
+`CommandPalette`) appears in the plan and **appeared nowhere else in the design
+set** until this section.
+
+The point of the table is not the ticks. It is the two rows that are **not**
+ticked, which nobody could have found from the plan alone, because the plan
+records what was *built* and this document records what was *promised*.
+
+| §  | Promised | Shipped | Where |
+|---|---|---|---|
+| §1 | Vantage / Bench / Campaign as one window, `Ctrl+Shift+M` toggles | ✅ | `app/shell/window.py`, `app/shell/workspace.py` |
+| §1 | No workspace token in `adas_sim/` outside `app/` | ✅ mechanised | `scripts/check_invariants.py::check_ut_d8_9` |
+| §2 | `L-1` ≤12 controls · `L-2` ≤3 steps · `L-3` ≤4 concepts | ✅ measured 8 / 2 / asserted | `UT-D8-5`, `ST-D8-2`, `UT-D8-6` |
+| §2 | `MC-5` — a real newcomer, a stopwatch | ❌ **never run** | `S-D8`'s one open gate item. See `FR-SIM-47` |
+| §3 | Transport · pipeline dock · centre · layers dock · timeline · status | ✅ (all `S-B3`/`S-D3`'s, reused unmodified) | `render/viewer.py` |
+| §3 | `Ctrl+K` palette over every action incl. closed docks | ✅ | `app/shell/palette.py` |
+| §3 | Docks closed by default: inspector, signals, log, manifest, diff | ⚠️ **partial** — `inspector` and `evidence` exist; `signals`, `log`, `manifest` and `diff` were never built and are not scheduled by any stage | `render/viewer.py` |
+| §4 | Per-port overrides, amber badge, mode toggle, severed-chain undo | ✅ (`S-D6`'s, confirmed present) | `view/pipeline_panel.py` |
+| §4 | **`sim probe` is a panel — the day-one screen** | ❌ **built and unreachable** — see below | `app/panels/probe.py` |
+| §4 | **The Python console is a dock** | ❌ **built and unreachable** — see below | `app/panels/console.py` |
+| §5 | Campaign: recording list, results table, real `run_batch` off the GUI thread | ✅ | `app/shell/campaign.py` |
+| §5 | `Open on Bench` — same recording, same pipeline | ⚠️ at tick 0, not the failing tick (`S-D8` states this) | `VantageWindow._on_open_on_bench_requested` |
+| §5 | Copyable equivalent `sim batch` invocation | ✅ | `campaign.batch_invocation_text` |
+| §5 | Campaign locked: no overrides, no mode toggles, no console | ✅ **by omission** — see the note below | `app/shell/campaign.py` |
+| §5 | *"Editing anything offers to open it on the Bench"* | ❌ **not built, not scheduled** | — |
+| §6 | Screen 1 (start page, no form) → Screen 2 (opened) → Screen 3 (moving) | ✅ | `app/shell/startpage.py` |
+| §6 | Three sample pipelines that ship with the tool | ⚠️ mechanism real, **content empty** (needs a compiled demo component) | `StartPage`'s own docstring |
+| §7 | Frozen `vantage` binary with an external plug-in path | ⚠️ `S-D5`, 3 boxes partial | `S-D5` |
+
+### The two panels that exist and are not in the product (`AR-45`)
+
+Both are **built, documented, and covered by passing system tests**, and
+**neither is reachable by a user**:
+
+- **`ConsolePanel`** is never constructed anywhere in `app/`. `window.py` does
+  not import it. Its only two references outside its own module are its own
+  test file.
+- **`ProbePanel`** is constructed by `VantageWindow` and wired
+  (`start_page.probe_requested → probe_panel.probe`) — and then never added to
+  the stack, never docked, never shown. Choosing *"Probe a Library…"* on the
+  start page loads the library and renders its port tree into a widget with no
+  parent that is never displayed.
+
+**Why the tests did not catch it.** `test_d8_probe_panel.py` and
+`test_d8_console_panel.py` both instantiate the panel directly and assert it
+behaves. That is a correct unit-level claim and it is not the claim `S-D8`'s
+checkbox makes. The gap between *"the panel works"* and *"the application
+contains the panel"* is exactly `§12.7`'s aboutness defect at widget level, and
+it matters more here than usual because of what these two panels are for: §4
+calls the probe panel **"the day-one screen for a new component and the answer
+to *what do I do first?*"**, and the console **"the pressure valve that stops
+someone forking the tool for one experiment"** — an `R-SIM-16` obligation, not a
+convenience.
+
+**It also quietly flatters `L-1`.** `UT-D8-5` counts 8 controls against a budget
+of 12; two docks that are not in the window contribute none. The limit is met
+partly because the features are absent.
+
+Owned by `S-D8` as re-opened boxes. **Not fixed by this audit** — it is
+functional source, and the audit's mandate is documents.
+
+### On Campaign's lock — one mechanism, not two (`AR-48`)
+
+`app/shell/workspace.py` defines `Workspace.require(action, allowed=)` raising
+`WorkspacePermissionError`, and its docstring calls it *"the one call site every
+permission-gated action routes through"*. **It has zero call sites in `src/`.**
+`VantageWindow.current_workspace` — the only thing that could reach it — is a
+property nothing calls.
+
+The lock is nevertheless real, and `S-D8`'s own checkbox says how: *"locked by
+omission, not by a disabled control — `CampaignWidget` never constructs an
+override affordance, a mode toggle or a console at all."* **That is the stronger
+mechanism and it is the one to keep** — there is nothing to grey out, so there
+is nothing to bypass.
+
+So the finding is not "Campaign is unlocked". It is that **two mechanisms were
+built for one job and the dead one is the one that is tested**: `UT-D8-2` proves
+the wording of an exception no code path can raise. Either `require()` acquires
+its call sites or its docstring stops claiming them; `UT-D8-2` should follow
+whichever survives. Recorded rather than decided, because deleting a permission
+check is exactly the kind of edit that should not happen inside an audit.

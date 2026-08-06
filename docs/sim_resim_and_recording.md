@@ -166,6 +166,31 @@ the likely form of a real vehicle measurement), **CarMaker results**
 (§5.12's T3 converter), **rosbag2**, and whatever a future toolchain brings.
 Each is a codec; none is an architecture change.
 
+> **The claim above is no longer an argument — a second codec exists**
+> *(reconciled 2026-08-06, audit run 3, `AR-49`)*. `S-C9`'s `ST-C9-3` landed
+> `io/jsonl.py`, and the interesting part is what it cost and what it did
+> **not** touch: the shared reader/writer machinery moved to `io/base.py`
+> first, `io/mcap.py` shrank by ~110 lines, and `jsonl` registered by
+> extension. Nothing above the line changed — no `Session`, pipeline, Scene,
+> viewer or expectation learned that a second format exists. **That is
+> `NR-SIM-20`'s evidence, and it is stronger than `UT-A4-7`'s** (which proves
+> the protocol is four methods on a fixture, not that a real second format
+> fits it).
+>
+> Three codecs now ship, and they are deliberately not peers: **`mcap`**
+> round-trips and is the recording format; **`jsonl`** round-trips and exists
+> to prove the model is not mcap-shaped (and to be readable in a text editor
+> when a codec is suspected); **`csv`** is `write_only=True`,
+> `round_trips=False` — an *export*, refused as a resim input by capability
+> rather than by convention (§7.2, `UT-D7-5`).
+>
+> The reader that turns a **foreign** vocabulary into ports is not a codec at
+> all — it is `R-SIM-23`'s ingest map (`io/ingest.py`, `S-C9`), declared data
+> under `modules/<name>/sim/ingest/`. Keeping the two apart is the same
+> distinction §3.0 draws between `io/` and `sources/`: a codec knows a
+> *format*, an ingest map knows a *vocabulary*, and merging them would put an
+> unversioned preprocessing step between a recording and the SUT.
+
 ### 3.1 Container — mcap today
 
 `.mcap` is the **default codec**, unchanged — it works, is Foxglove-native, and
@@ -853,7 +878,8 @@ sim resim  <recording> [--view] [--save session.mcap] [--project P]
 sim view   <session|recording> [--preset NAME] [--layers ...]
 sim render <session|recording> --at <t|tick> --out fig.png [--preset NAME]
 sim check  <scenario-set> [--report report.md]         # headless expectations
-sim diff   <sessionA> <sessionB>
+sim determinism <run-a> <run-b>                        # §4a — the AXIS is derived from
+                                                       # the two manifests, never a flag
 sim list   scenarios | recordings | pipelines | ports <component>
 
 sim probe   <lib>                                      # port set from adasManifest —

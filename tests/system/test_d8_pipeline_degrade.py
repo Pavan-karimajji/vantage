@@ -81,7 +81,12 @@ def _open_window(recording: Path, **kwargs) -> MainWindow:
 def test_degraded_summary_names_every_stage_not_just_the_first(tmp_path):
     search_dir = tmp_path / "libs"
     search_dir.mkdir()
-    (search_dir / "libfake_ok.so").write_bytes(b"")  # exists (P-5 candidate name), never actually loaded here
+    # Every platform's candidate name, because `_candidate_names` is platform-
+    # specific (`fake_ok.dll` on Windows, `libfake_ok.so`/`fake_ok.so` on
+    # POSIX): writing only the POSIX one made this assert the OPPOSITE on
+    # Windows. Never actually loaded here -- only resolved (P-5).
+    (search_dir / "libfake_ok.so").write_bytes(b"")
+    (search_dir / "fake_ok.dll").write_bytes(b"")
 
     pipeline_path = tmp_path / "mixed.yaml"
     pipeline_path.write_text(yaml.safe_dump({

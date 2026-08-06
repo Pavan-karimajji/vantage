@@ -15,13 +15,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import adas_sim.io.mcap  # noqa: F401 -- registers ".mcap"
-from adas_sim.io.base import RunManifest
-from adas_sim.io.registry import reader_for, writer_for
-from adas_sim.render.foxglove import (
+import pytest
+
+pytest.importorskip("foxglove")  # optional extra (pyproject `[foxglove]`); P-10 -- absent means skip, never a collection error
+
+import adas_sim.io.mcap  # noqa: E402,F401 -- registers ".mcap"
+from adas_sim.io.base import RunManifest  # noqa: E402
+from adas_sim.io.registry import reader_for, writer_for  # noqa: E402
+from adas_sim.render.foxglove import (  # noqa: E402
     FRAME_TRANSFORMS_TOPIC, SCENE_TOPIC, scene_recording_topics, write_scene_snapshot,
 )
-from adas_sim.scene.types import Layer, Prim, Scene
+from adas_sim.scene.types import Layer, Prim, Scene  # noqa: E402
 
 _SCENE = Scene(layers=(Layer(id="l1", group="g", prims=(
     Prim(kind="box", cx_m=1.0, cy_m=2.0, length_m=4.5, width_m=1.8, style="object.default"),

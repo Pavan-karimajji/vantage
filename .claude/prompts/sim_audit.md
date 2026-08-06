@@ -6,6 +6,9 @@ propagation rule, the ledger discipline, the five angles. This file only says
 *which documents, which ids, which commands* for `sim`. Nothing here restates
 the method; if the two ever disagree, the root method wins.
 
+**Paths** are relative to `modules/sim/` unless they begin `modules/`
+(superproject-relative) or are called out as root.
+
 ---
 
 ## 1. The document triad
@@ -75,53 +78,49 @@ then fail with `EOF when reading a line`.
 > wired to `AdasInterfaces`. A session recorded "no toolchain", landed `S-C5`
 > unverified, and it was red — the toolchain was one shell away.
 
-## 5. Root `docs/` — what is in scope for a **sim** audit
+## 5. Root `docs/` — sim's two lists
 
-The superproject `docs/` folder is the platform's history and is **mostly not
-about sim**. Measured 2026-08-04: 45 documents, **no orphans** — everything is
-cited by something — but relevance is sharply stratified. Do not sweep the
-folder; use this call.
+The root method's angle 5 stratifies the superproject's `docs/` and states the
+two module-independent classes (normative, completed-item records). This
+section names only sim's own two. Measured 2026-08-04: 45 documents, **no
+orphans** — everything is cited by something.
 
-| Class | In scope for a sim audit? |
-|---|---|
-| **Normative** — cited by `.claude/rules/*` (`sw_build_architecture.md`, `project_variant_model.md`, `build_grammar.md`, `math_library_plan.md`, `ego_params.md`, `project_scoped_params.md`, `file_header_template.md`, `conanfile_commonality_plan.md`, `clang_format_consistency_plan.md`, `interfaces_types_migration.md`, `sil_dependency_wiring_plan.md`, `partial_clone_workflow.md`, `df_sil_dll.md`, `sil_integration_host.md`) | **Only where a sim finding touches one.** They bind the platform, not sim's design. Do not audit them wholesale. |
-| **Sim-adjacent** — `ai_operational_layer_spec.md` (angle 5, governs `.claude` incl. this file), `df_sil_dll.md` + `sil_integration_host.md` + `partial_clone_workflow.md` (the ABI/host/clone contracts sim consumes), `shared_config_plan.md` (the bundle's inputs) | **Yes.** |
-| **Legacy tooling sim is replacing** — `df_carla_bridge_blueprint.md`, `df_carla_viz_plan.md`, `df_carla_mcap_replay_plan.md`, `df_carla_scenario_{architecture,layout}.md`, `df_carla_tools_relocation_plan.md` | **As Phase E retirement inventory only** — they describe what `S-E1` deletes. They are **not** design authority for `modules/sim`; do not "reconcile" sim's design against them. |
-| **Completed-item records** — `build_regression_tests.md`, `test_13_14_15.md`, `build_dispatcher.md`, `build_superbuild_aggregator_plan.md`, `interfaces_conan_dependency.md`, `conan_requires_in_build_yml.md`, `dev_gui.md`, `df_enabled_functions.md`, `df_aeb_ttc_blueprint.md` | **No.** Historical records of finished `plan.md` items. Out of scope unless a finding lands squarely in one. |
+**Sim-adjacent — in scope:** `ai_operational_layer_spec.md` (angle 5 governs
+`.claude`, including this file) · `df_sil_dll.md` + `sil_integration_host.md` +
+`partial_clone_workflow.md` (the ABI / host / clone contracts sim consumes) ·
+`shared_config_plan.md` (the bundle's inputs).
 
-Root `plan.md` **item 25** is always in scope — it is sim's entry in the
-cross-cutting backlog and drifts easily from this module's own docs.
+**Legacy tooling sim replaces — retirement inventory only, owned by `S-E1`:**
+`df_carla_bridge_blueprint.md` · `df_carla_viz_plan.md` ·
+`df_carla_mcap_replay_plan.md` · `df_carla_scenario_architecture.md` ·
+`df_carla_scenario_layout.md` · `df_carla_tools_relocation_plan.md`.
 
-## 6. If this audit adds to the operational layer
+Sim's entry in root `plan.md` is **item 25**.
 
-Place it by the root method's angle-5 test, not by where it is convenient.
-The short form: **does it stay true for another module once you swap in that
-module's files, ids and commands?** If yes, the general part is authored at
-root and this module gets a thin binding — the relationship this file already
-has with `system_audit_and_replan.md`. Keep any binding to *which files, which
-ids, which commands*; the moment it explains *how*, that text belongs at root.
+## 6. This module's half of the operational layer
+
+**Audit targets, every run:** `modules/sim/CLAUDE.md` and this file. They are
+the module half of the root method's angle 5.
 
 `modules/sim/.claude/` currently holds **only** `prompts/sim_audit.md`. Do not
 add `rules/`, `skills/`, `templates/` or `workflows/` here unless there is a
 genuine sim-only deviation — everything cross-cutting is root-canonical
-(`docs/ai_operational_layer_spec.md` §7).
+(`docs/ai_operational_layer_spec.md` §7). Placement of anything new is decided
+by the root method's angle 5; it is not restated here.
 
-## 7. Module-specific "stop and ask" — do not decide these alone
+## 7. Module-specific "stop and ask"
 
-Beyond the root method's list:
+**In addition to** the root method's `STOP AND ASK` list (which already covers
+contradicting design documents — `GT-7`, and two have disagreed here — a test
+that needs a tolerance or gate weakened, and being unable to run the real
+build):
 
-- A design document contradicts another (`GT-7`). Two have already disagreed
-  here and both read as authoritative.
 - A stage's scope appears to require changing `src/component/**`. It must not.
-- A test cannot pass without widening a tolerance, relaxing a gate, or adding
-  a `GT-1`/`GT-11` exemption.
+- The exemption a failing test wants is a `GT-1`/`GT-11` one.
 - The work needs a **seventh override verb, a sixth fault, an expression
   anywhere, or a port address spelled as a literal.** Each is a closed list
   with a written reason; reopening one is a design change, not an
   implementation choice.
-- You cannot run the real build. **Say so** — do not substitute a hand-rolled
-  compiler command. That has already produced stages reported green whose
-  build was red, and it is the most expensive mistake made here.
 
 ## 8. Known traps
 
@@ -134,3 +133,17 @@ Beyond the root method's list:
   it is — but note which direction it failed, the observation has reversed once.
 - **`tests/system/test_c5_relocatability.py` skips silently on Windows** (needs
   `g++`). A green suite on the primary dev platform does not mean it ran.
+- **A green `run_all.py` does not mean the requirements are met.**
+  `check_requirement_coverage.py` scores `UT-`/`ST-` only, so a row resting on
+  an `MC-`/`GT-`/`DC-` verifier reports on its remaining ids alone —
+  `FR-SIM-47` (`P0`) reads `proven 3/3` with `MC-5` never run. 21 of 77 rows
+  are affected. Read `sim_requirements.md` §0a's caveat table before quoting a
+  coverage number (`AR-34`; the mechanical fix is `AR-36`, blocked on `AR-35`).
+- **A ticked box does not mean the code contains the feature.** Run 3 found two
+  panels with passing system tests that the application never constructs
+  (`AR-45`), because the tests instantiate the widget directly. When a stage
+  claims a UI element, **grep for its constructor in `app/`**, not just for its
+  test.
+- **`run_all.py` has six checks, not five** — `check_verifier_discoverability.py`
+  ratchets a baseline (19). Lower it when you fix one; raising it needs a
+  written reason, like a `GT-4` floor.

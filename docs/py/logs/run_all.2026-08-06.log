@@ -4,13 +4,14 @@
 
 Design-set checks and surveys
 kind    script                                result
-------  ------------------------------------  --------------------------------------------------------------------------------------------------------------------  --
-check   check_doc_invariants.py               pass                                                                                                                  ok
-check   check_traceability.py                 pass                                                                                                                  ok
-check   check_rules_coverage.py               pass                                                                                                                  ok
-check   check_requirement_coverage.py         ok — every cited verifier resolves to a unit of work (45 proven, 10 partial, 12 unproven, 9 verified by other means)  ok
-check   check_audit_ledger.py                 ok -- 27 findings, every closed row names a landed-in target that resolves                                            ok
-survey  FR_SIM_46_reference_tool_survey.py    pass                                                                                                                  ok
-survey  FR_SIM_45_argument_binding_survey.py  pass                                                                                                                  ok
+------  ------------------------------------  -------------------------------------------------------------------------------------------------------------------  --
+check   check_doc_invariants.py               pass                                                                                                                 ok
+check   check_traceability.py                 pass                                                                                                                 ok
+check   check_rules_coverage.py               pass                                                                                                                 ok
+check   check_requirement_coverage.py         ok — every cited verifier resolves to a unit of work (51 proven, 8 partial, 12 unproven, 8 verified by other means)  ok
+check   check_verifier_discoverability.py     pass                                                                                                                 ok
+check   check_audit_ledger.py                 ok -- 51 findings, every closed row names a landed-in target that resolves                                           ok
+survey  FR_SIM_46_reference_tool_survey.py    pass                                                                                                                 ok
+survey  FR_SIM_45_argument_binding_survey.py  pass                                                                                                                 ok
 
 All checks pass. Surveys that skipped did so because the artefact they inspect is not on this machine, which is not a failure (docs/py/README.md).

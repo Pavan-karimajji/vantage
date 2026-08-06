@@ -761,7 +761,7 @@ bug, even when bad input provoked it.
 | `sim resim` | `<recording> [--view] [--save]` | S-C1c |
 | `sim view` / `render` | `<session> [--preset] [--at]` | S-B3 / S-B4 |
 | `sim check` | `<scenario-set> [--report]` | S-C3 |
-| `sim diff` | `<a> <b>` | S-D1 |
+| `sim determinism` | `<run-a> <run-b>` — the axis is **derived from the two runs' manifests**, never a flag (§4a of [sim_resim_and_recording.md](sim_resim_and_recording.md), `OD-10`) | S-C6 |
 | `sim list` | `ports\|topics\|layers\|signals\|scenarios\|pipelines` | S-D6 |
 | `sim probe` | `<lib>` | S-D6 |
 | `sim explain` | `<name> [--session] [--at <tick>]` | S-B2Δ (seed) / S-D6 |
@@ -772,6 +772,23 @@ bug, even when bad input provoked it.
 
 Entry point: `sim = adas_sim.cli:main` in `pyproject.toml` — so the launcher is
 generated per platform rather than written by us (`P-6`).
+
+> **`sim diff` was this table's fourteenth row until 2026-08-06 and never
+> existed** (`AR-44`). It was superseded on 2026-07-31 by `OD-10`/`NR-SIM-40`,
+> which replaced *"diff two sessions"* with *"compare two runs along the axis
+> their manifests imply"* — a stronger verb with a written refusal of the
+> `--axis` flag, because **a flag can lie about which axis you measured**. No
+> stage ever scheduled `sim diff`, nothing implements it, and it appeared in
+> two normative documents for six days as a promised verb. `sim determinism`
+> is what it became. *(The **`diff` dock** in `sim_player.md` §3's
+> closed-by-default list is a different thing and is unaffected — a panel that
+> shows a comparison, not a CLI verb.)*
+>
+> **This table is now mechanically checked** against `cli/__init__.py`'s
+> registered subparsers by `DC-9` in `docs/py/check_doc_invariants.py`, in both
+> directions — a verb registered without a row here fails, and a row here with
+> no verb fails. That is the check that would have caught both halves of this
+> on the day each happened.
 
 ---
 

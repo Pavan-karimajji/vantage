@@ -26,11 +26,13 @@ from pathlib import Path
 import pytest
 from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
 
-import foxglove.messages as fg
-from adas_sim.render.foxglove import (
+pytest.importorskip("foxglove")  # optional extra (pyproject `[foxglove]`); P-10 -- absent means skip, never a collection error
+
+import foxglove.messages as fg  # noqa: E402
+from adas_sim.render.foxglove import (  # noqa: E402
     frame_transforms_for, referenced_frames, scene_entity_for_layer, scene_update,
 )
-from adas_sim.scene.types import Layer, Prim, PrimKind, Scene
+from adas_sim.scene.types import Layer, Prim, PrimKind, Scene  # noqa: E402
 
 _SCENE_DIR = Path(__file__).resolve().parents[2] / "src" / "adas_sim" / "scene"
 

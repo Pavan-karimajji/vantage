@@ -1071,3 +1071,73 @@ core calibration workflow. *Let the pipeline set the rate* — `R-SIM-18`'s stat
 reason stands: the picture would be free to disagree with the ECU. *Per component
 only, revisit if functions diverge* — the revisit is a schema change plus a
 semantics change to `updated`, which is the definition of expensive-later.
+
+---
+
+## 10. What a component owes the framework — the checklist (`NR-SIM-48`)
+
+*Added 2026-08-06 by sim audit run 3 (`AR-43`).* `R-SIM-16` says *"a component
+onboards itself"*. That is only true if what **onboarded** means is written
+down, and until this section it was not — it was spread across `R-SIM-20`,
+`R-SIM-22`, `R-SIM-23`, `R-SIM-24` and `R-SIM-3a`, one obligation each, with no
+place a component could be checked against all of them at once.
+
+**The measurement that produced this section.** `vdy` is a real second
+component on the generic ABI — `S-C1d`'s own second-component proof, 18/18
+gtest — and it carries **no `modules/vdy/sim/` directory at all**. Neither does
+`perception-core`. So every component-side obligation below is satisfied
+**exactly once, by `df`**. A rule proven once has been *implemented*; it has not
+been *shown to generalise*, and the component it was designed against is the
+worst possible witness for it.
+
+### The table
+
+| # | Artifact | Required? | Rule | `df` | `vdy` | `perception-core` |
+|---|---|---|---|---|---|---|
+| 1 | `conf/build.yml` — variants, requires, platforms | **required** | `R-VAR-3` | ✅ | ✅ | ✅ |
+| 2 | `conf/ports.yaml` — the ONE port declaration | **required** | `R-SIM-22` | ✅ | ✅ | ✅ *(2026-08-06)* |
+| 3 | `src/component/**` port structs the generator reads | **required** | `R-SIM-22` | ✅ | ✅ | ✅ *(2026-08-06)* |
+| 4 | `src/platform/<name>_sil/` — the generated generic-ABI shim | **required** | `R-SIM-4`, `R-SIM-22` | ✅ | ✅ | ❌ **absent** |
+| 5 | `src/project/<p>/default.yaml` — calibration | **required** | `R-VAR-4` | ✅ | ✅ | ✅ *(2026-08-06)* |
+| 6 | Config bundle packed beside the library | **required** | `R-SIM-3a` | ✅ | ✅ | ❌ (follows 4) |
+| 7 | `<COMPONENT>_<FN>_PERIOD_US` in calibration | **required** | `OD-12`, `R-SIM-18` | ✅ | ✅ | ✅ *(declared; unread until 4)* |
+| 8 | `sim/plugin.yaml` + `sim/layers/**` | **conditional** | `R-SIM-20` | ✅ | ➖ *legitimately none* | ✅ *(2026-08-06)* |
+| 9 | `sim/ingest/**` — the map for foreign recordings | **conditional** | `R-SIM-23` | ✅ | ➖ | ❌ *(none yet; no foreign recordings)* |
+| 10 | `sim/pipelines/**` | optional | `R-SIM-16` | ✅ | ❌ | ❌ |
+| 11 | `sim/viewpoints.yaml`, `sim/sensor_models/**` | optional | `R-SIM-9`, `FR-SIM-15` | ✅ | ❌ | ❌ |
+| 12 | **`sim/tolerance.yaml`** — determinism bounds | **conditional** | `R-SIM-24` | ❌ | ❌ | ❌ |
+| 13 | Scenarios with `expect:` blocks | **conditional** | `R-SIM-8`, `CR-SIM-3` | ✅ *(18)* | ❌ | ❌ |
+
+Legend: ✅ present · ❌ missing · ➖ **legitimately** absent, and that
+distinction is the whole point of the table.
+
+### Three readings of it, in order of how much they matter
+
+**1. Row 12 is a gap for every component, including `df`.** `R-SIM-24` mandates
+a per-component tolerance file with `default: exact`, integers and enums
+non-overridable, and **a mandatory `why:` on every row**. It exists **nowhere in
+the repository**. So determinism axes C (rebuilt binary) and D (different
+machine) — the two the rule declares *measured and tracked* rather than gated —
+have **no declared bound to compare against, for anybody**. `sim determinism`
+ships and works; what it reads on those two axes is absent, so the axes it was
+built to measure are the axes it cannot currently report a verdict on.
+
+**2. Row 8's `➖` for `vdy` is correct and must stay expressible.** `vdy`
+produces `VehDyn` — a state vector, not geometry. It has nothing to draw, so it
+needs no layer provider, and a checklist that failed it for that would be
+wrong. **This is why `NR-SIM-48` is deliberately not a gate.** The value is that
+an absence becomes *declared* rather than *unnoticed* — `R-SIM-23`'s `absent:`
+discipline, one level up.
+
+**3. Row 4 is `perception-core`'s only real blocker**, and it is the one thing
+audit run 3 deliberately did not write, because it could not compile it. See
+`modules/perception-core/docs/perception_core_decomposition.md` §4 for the exact
+remaining file list and the exact build commands.
+
+### How this stops being prose
+
+`ST-D6-4` (`S-D6`): **`sim doctor --component <name>`** reports a component
+against this table, run against `df`, `vdy` and `perception-core`, producing the
+**same shape** of report and naming each absence with whether it is legitimate
+or a gap. A checklist nobody runs is a checklist that describes the day it was
+written.

@@ -28,6 +28,7 @@ CHECKS = [
     "check_traceability.py",
     "check_rules_coverage.py",
     "check_requirement_coverage.py",
+    "check_verifier_discoverability.py",
     "check_audit_ledger.py",
 ]
 SURVEYS = [

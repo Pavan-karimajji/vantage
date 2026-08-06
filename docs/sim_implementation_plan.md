@@ -689,8 +689,91 @@ toggle, `sim probe`, the severed-chain badge. Building the engine at `S-D6`
 instead would mean `S-C3`'s fault injection has no grammar to reuse, and the
 verbs would be written twice.
 
-### ▶▶ RESUME MARKER — 2026-08-06 session. Start here now; the 2026-08-04
-### box below is kept as the audit trail that got the queue to this point.
+### ▶▶ RESUME MARKER — 2026-08-06 **audit run 3**. Start here.
+
+**Measured this run, Windows/MSVC:** `pytest` **960 passed / 9 skipped / 0
+failed**, `check_invariants.py` clean, `docs/py/run_all.py` all checks pass
+(now **six**, see below). The queue is **unchanged** — run 3 found no plan
+defect and resequenced nothing. What changed is what the documents *say*, and
+three things you should not re-derive.
+
+**1. The three decisions waiting on you, not on work.** Recorded here rather
+than silently answered:
+
+| Decision | Why it is yours |
+|---|---|
+| **Does `perception-core` split into computer-vision + fusion?** | It gates `S-D4`'s own gate — `R-SIM-10`'s central invariant, the architecture's main claim. The decomposition-neutral outer shape landed 2026-08-06 (`AR-46`); the ABI shim deliberately did not. `modules/perception-core/docs/perception_core_decomposition.md` lays out both options and what each costs. **`FR-SIM-71` was added so the decision stays cheap while open** |
+| **Three new requirements — accept, amend or reject** | `FR-SIM-71` (a component may split without invalidating recordings), `NR-SIM-47` (a measured claim names its platform), `NR-SIM-48` (the component-side checklist). All three are `sim_requirements.md` §13, each traced to a gap this run measured. They are **flagged for review, not assumed accepted** |
+| **`MC-5`, `GT-14`, `S-D1`'s gate** | Unchanged and unchangeable by work: a stopwatch and a first-time tester; two people's names and one number; a human opening Foxglove Studio. **If there is no second person, that is the answer and it belongs at `GT-14`** |
+
+**2. Two things that read as done and are not.** Both are `S-D8`'s, both have
+ticked boxes, and neither is visible from the plan alone:
+
+- **`ConsolePanel` and `ProbePanel` are built, tested — and unreachable**
+  (`AR-45`). The console is never constructed anywhere in `app/`; the probe
+  panel is constructed, wired, and never shown. `sim_player.md` §4 calls them
+  the *day-one screen* and the *pressure valve that stops someone forking the
+  tool*. Their tests instantiate the panels directly, which is why the suite is
+  green.
+- **A real config bundle reports its project as the string `"config"`**
+  (`AR-51`), so `R-SIM-3a`'s mismatch warning fires on every correct bundle —
+  visible four times in the current test run. `ProjectModel` reads the
+  directory name; `contracts/pipeline.py` correctly reads the DLL's manifest.
+  Two answers, and the wrong one is what the HUD shows.
+
+**3. `run_all.py` gained a sixth check**, and one baseline you must not raise
+casually: `check_verifier_discoverability.py` ratchets the number of ticked
+verifier ids that appear in **no source file** (**19** today, `AR-50`). **Never
+untick a box to satisfy it** — all 19 are real, passing tests; the id is simply
+not written where the test lives.
+
+**Next, unchanged:** `S-D4`'s remaining 6 boxes and `S-D5`'s 3 partials, or
+Phase E (blocked on every Phase A–D gate; `S-E1`'s table is the authority).
+`S-E3` gained four items from this run (`AR-35`, `AR-36`, `AR-49`, `AR-50`).
+
+Findings index: [sim_audit_log.md](sim_audit_log.md) — run 3 is `AR-34`..`AR-51`,
+**seven open**, each naming its owner.
+
+> **If your job is *"fix the audit findings"* rather than *"build the next
+> stage"*, do not start here.** Go to [sim_audit_log.md](sim_audit_log.md)'s
+> **▶▶ run 3 fix queue** — it is an ordered, seven-row worklist with the exact
+> owner, command and acceptance condition per row, ramped from mechanical to
+> judgement. Come back to this document for the *owning stage* of whichever row
+> you are on; that is where the `**Must not**` constraints live.
+
+### ▶▶ RESUME MARKER — 2026-08-06 **audit** (run 2). Superseded by run 3 above.
+### The two boxes below are the audit trail that got the queue to this point.
+
+**Nothing is blocked, and the queue is unchanged by this audit** — it found no
+plan defect and resequenced nothing. What it changed is what you can *believe*:
+
+1. **`S-C7` is verified, not believed** (`AR-33`). Its three never-compiled C++
+   files build and pass on Windows/MSVC, 16/16. The instruction the previous
+   marker addressed to "the first real Windows/MSVC session" is **done** — do
+   not run it again as if it were still open.
+2. **The suite's real number on Windows is 959 passed / 9 skipped / 1 known
+   flake**, `check_invariants.py` clean, `run_all.py` all-pass. The previously
+   recorded *"952 / 29 / 1 flake"* was a **Linux** number (`AR-31`); both are
+   now stated with their platform.
+3. **Three defects were fixed in the audit** (`AR-28`, `AR-29`, `AR-30`) — all
+   Windows- or tooling-visible only, none affecting the design or the order.
+
+**Next, unchanged from the previous marker:** the remaining Phase D stages'
+own small open items — **`S-D4`** (Perception readiness, 6 boxes) and
+**`S-D5`** (3 partial) — or Phase E (retirement), which stays blocked on every
+Phase A–D stage's gate; `S-E1`'s table is the authority on which.
+
+**Still needing a human, not work** (unchanged, do not re-derive):
+- `MC-5` — `S-D8`'s onboarding stopwatch check, needs a real tester.
+- `GT-14` — needs two people's names and one measured number. If there is no
+  second person, **that is the answer and it should be written at the gate**.
+- `S-D1`'s gate — blocked on a human opening Foxglove Studio (`MC-3`).
+
+**One standing instruction this audit earned the hard way (`AR-31`):** when a
+stage records a suite number, record **which platform** produced it. Phase D
+was landed entirely from a Linux shell and read as green everywhere; the
+Windows re-run found two real defects in an hour. `ST-E3-5` owns making this
+routine rather than incidental.
 
 **`S-C5` (#13), `S-C8` (#14), `S-C7` (#15) and `S-C9` (#8, Block 1) are all
 now closed** — every checkbox and every `UT-`/`ST-` id in each stage's own
@@ -711,6 +794,19 @@ three new files build and pass** before treating `S-C7` as verified rather
 than "believed correct, awaiting compilation" — the exact distinction
 `S-C5`'s own 2026-08-04 audit box below exists to warn against blurring.
 
+> **RESOLVED 2026-08-06 by the audit (`AR-33`) — this was that session.**
+> `scripts/build.py sil_host -t gtest -p vs2026 -P base` on Windows/MSVC:
+> **16/16 pass**, including all three previously-uncompiled files —
+> `PipelineStep.MultiRateHoldsTheLastRealValueBetweenDueTicks`,
+> `ResimMeasured.MeasuredStageIsInjectedFromTheRecordingNeverFromItsOwnExec`
+> and `TwoStageResim.DfPlusStubdllRunsEndToEndWithNoMainCppEdit` (the
+> `echo_stub.cpp` extension). Hand-tracing held: **zero compilation errors and
+> zero assertion failures.** `S-C7` is now *verified*, not *believed*. Note
+> what made this cheap to close: the caveat named the exact command and the
+> exact acceptance condition, so the session that could run it did not have to
+> reconstruct what "verified" would mean. That is the pattern worth copying
+> whenever a stage lands without its toolchain.
+
 **`S-C6` (#16), the last Block-2 stage, turned out already closed** — its own
 Gate was `[x]` before this session touched it; the only open items were
 `ST-C6-4` (a real CI job step needing a C++ toolchain runner, `plan.md` item
@@ -729,6 +825,22 @@ panel.py`'s `skipif` lacked a `sys.platform` guard, so a stale Windows-built
 a named skip — the full suite is now 1 pre-existing flake away from fully
 green in this shell (952 passed / 29 skipped / 1 flake, `ST-D8-1`'s own
 evidence).
+
+> **Windows re-run, 2026-08-06 audit (`AR-31`) — "in this shell" was doing
+> real work in that sentence.** Phase D (`S-D1`/`S-D6`/`S-D7`/`S-D8`) was
+> verified in a WSL/Linux shell only, and the Windows half of `P-1`..`P-10`
+> was never re-run. It found **two defects the Linux run could not see**:
+> `AR-28` (two `S-D1` test modules hard-import the optional `foxglove` extra
+> at module scope, so on any interpreter without it the suite is *Interrupted
+> at collection* — 0 tests run, not 2 failures — which also makes the
+> `core-only-smoke` CI job red by construction) and `AR-29` (`S-D8`'s
+> `test_d8_pipeline_degrade.py` wrote only the POSIX candidate name
+> `libfake_ok.so`, so on Windows `_candidate_names` looked for `fake_ok.dll`,
+> the stage never resolved, and the assertion inverted). Both fixed and
+> re-verified. **Windows now: 959 passed / 9 skipped / 1 flake** (the same
+> documented `test_b3_viewport_controls` fixture-isolation flake, which passes
+> in isolation). `ST-E3-5` owns keeping both platforms measured; this note
+> exists so the next reader does not read one shell's number as the suite's.
 
 **Next:** the remaining Phase D stages' own small open items —
 `S-D4` (Perception readiness, 6 boxes), `S-D5` (3 partial) — or Phase E
@@ -6492,6 +6604,20 @@ change — its declared field set was already sufficient. 7 new tests
       identical across `truth` / stand-in / real-upstream, for the same
       scenario — the test `R-SIM-10` was written for. **Correctly
       un-attempted** — see Status note
+- [ ] `ST-D4-3` **a split absorbs into an ingest map, not into source**
+      (`FR-SIM-71`, added by audit run 3 — `AR-41`). A recording produced
+      against a **single**-component perception manifest drives a
+      **two**-component pipeline through `modules/<name>/sim/ingest/` alone:
+      no layer provider edited, no `self.<port>` binding changed, no
+      re-recording, and `sim probe` reports the feasible cuts of both shapes
+      from the same file. **Blocked on the same thing `ST-D4-1`/`ST-D4-2` are**
+      — a second real perception component — but written now, deliberately, on
+      this stage's own "writing the system test early is the specification the
+      second component is built against" principle. **This is the test that
+      keeps `perception-core`'s decomposition (one component vs.
+      computer-vision + fusion) a cheap decision instead of an expensive one**,
+      and the owner has stated it is undecided. The `perception-core` lean
+      structure landed by audit run 3 (`AR-46`) is the shape it binds to
 
 **Discipline** (every stage)
 - [x] portability §3 ticked — exposure: `P-8` (projection maths must not
@@ -7047,6 +7173,18 @@ a self-timed session.
       equal `build_manifest` results (same explicit `clock=`, since
       `created_utc` is the one field two real calls would otherwise
       legitimately differ on)
+- [ ] `ST-D6-4` **`sim doctor --component <name>` reports a component against
+      the component-side checklist** (`NR-SIM-48`, added by audit run 3 —
+      `AR-43`). Run against `df`, `vdy` and `perception-core` it produces the
+      **same shape** of report, and names each absence with whether that
+      absence is **legitimate** (`vdy` has nothing to draw, so no layer
+      provider is correct) or a **gap** (no `tolerance.yaml` anywhere means
+      `R-SIM-24`'s axis-C/D comparison has no bound to read). The checklist
+      itself is prose in `sim_sil_contract.md` §12; this box is where it stops
+      being prose. **Deliberately not a gate** — a gate here would fail `vdy`
+      for not shipping layers it has no reason to ship; the value is that an
+      absence becomes *declared* rather than *unnoticed*, which is `R-SIM-23`'s
+      `absent:` one level up
 
 **Discipline** (every stage)
 - [x] portability §3 ticked — exposure: `P-5` (`sim probe` and `sim doctor` are the tools that *explain* library resolution, so they must exercise every pattern — both now do, `sim doctor` via `resolve_library_report`), `P-2`
@@ -7490,7 +7628,12 @@ load instead of skipping) — fixed as part of proving `ST-D8-1` for real.
 - [x] `UT-D8-4` (`test_d8_batch_invocation.py`, all three: round-trips
       recordings/pipeline, search/config/jobs, and a path containing a space —
       through the REAL `cli.batch.build_parser()`, never a re-implementation)
-- [x] `UT-D8-5`/`UT-D8-6` (`test_d8_lean_limits.py`, five tests)
+- [x] `UT-D8-5` (`test_d8_lean_limits.py`, the widget-count budget half)
+- [x] `UT-D8-6` (`test_d8_lean_limits.py`, the wording half) — **one id per
+      checkbox line**: `check_requirement_coverage.py` defines a test by *"a
+      checkbox whose first token is the id"*, so a second id sharing a line is
+      invisible to it, and the requirement citing it reports an unresolvable
+      verifier (`AR-30`).
 - [x] `UT-D8-7` — scoped: `Pipeline.load()` is atomic by design
       (`contracts/pipeline.py`, out of this stage's own "must not touch a
       pipeline panel" bound), so `MainWindow._degraded_pipeline_summary`
@@ -7810,6 +7953,40 @@ separate gates below, and two of them cannot be automated.
       codec re-scoped to its own trigger (`FR-SIM-50`)
 - [ ] **The requirements register is re-read end to end**, and every row's
       `Verified by` is confirmed to name a test that now exists and passes
+
+**Added by audit run 3, 2026-08-06 — four items, one theme: the gates that
+score the other gates cannot themselves be scored**
+
+- [ ] **Give every `GT-` a checkbox** (`AR-35`). Seven of fourteen — `GT-3`,
+      `GT-8`, `GT-9`, `GT-10`, `GT-11`, `GT-13`, `GT-14` — are cited as
+      `Verified by` targets by real requirements and are defined in §2 as prose
+      blocks with **nowhere to record a state**. `MC-1..MC-5` already have
+      checkboxes, which is exactly why their states are readable. **Adds a
+      state, rewrites no prose.** The consequence today: `GT-13`'s own founding
+      principle — *"a requirement nobody can fail is a requirement that will be
+      declared satisfied"* — currently applies to `GT-13`
+- [ ] **Then extend `check_requirement_coverage.py` to score `MC-`/`GT-`/`DC-`**
+      (`AR-36`, blocked on the item above). Today it scores `UT-`/`ST-` only, so
+      **21 of 77 rows rest partly on verifiers it cannot see** and `FR-SIM-47`
+      (`P0`) reads `proven 3/3` while `MC-5` has never been run. A fourth
+      column, *"unscored verifiers and their state"*, is the whole change.
+      Shipping it before the checkboxes exist would print `[?]` eleven times and
+      teach everyone to ignore it. See `sim_requirements.md` §0a's caveat table
+- [ ] **Work the undiscoverable-verifier baseline down from 19** (`AR-50`).
+      `docs/py/check_verifier_discoverability.py` (new, in `run_all.py`) ratchets
+      it: a run finding more than `BASELINE` fails. **Do not untick a box to fix
+      one** — all 19 are real, passing tests; what is missing is the id written
+      where the test lives. Lower `BASELINE` in the same commit that fixes one
+- [ ] **Re-assess `OQ-14` with the measurement it now has** (`AR-49`). It asked
+      whether ~600 KB of normative prose across ten documents is still worth
+      maintaining, and predicted the failure as *"documents that silently stop
+      being maintained rather than a decision to stop maintaining them."*
+      **That happened, between 2026-08-03 and 2026-08-06**: every artefact name
+      created by `S-C9`/`S-D6`/`S-D7`/`S-D8` appears in this plan and in no
+      other design document, and this plan is now larger than the eight it
+      executes combined. Re-assess against that, not against a worry — and note
+      that the answer may legitimately be *"fold two documents into this one"*
+      rather than *"write more prose"*
 
 **Tests**
 - [ ] `ST-E3-1` `check_invariants.py` exits 0

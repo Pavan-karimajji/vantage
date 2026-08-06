@@ -40,9 +40,22 @@ PLAN = DOCS_DIR / "sim_implementation_plan.md"
 #:   DC-<n>                           design-document invariants, implemented
 #:                                    by docs/py/check_doc_invariants.py
 ID_RE = re.compile(r"\b((?:UT|ST)-[A-Z]\d[a-z]?|GT|MC|DC)-(\d+)(?:\.\.(\d+))?\b")
-#: DC ids live in the checker, not the plan; declare them here so a requirement
-#: may cite one without the plan having to redefine it.
-DC_IDS = {f"DC-{n}" for n in range(1, 9)}
+#: DC ids live in the checker, not the plan, so a requirement may cite one
+#: without the plan having to redefine it. **Derived from the implementation,
+#: never restated here** -- this was `range(1, 9)`, a hand-kept second copy that
+#: went stale the moment audit run 3 added `DC-9`, and the failure it produced
+#: read as "the plan does not define DC-9" rather than "this list is out of
+#: date". Reading the checker's own `rep.heading("DC-n ...")` calls makes the
+#: implementation the single source, which is the discipline `R-SIM-22` states
+#: for generated code and `AR-34`/`AR-40` found violated twice in the register.
+def _dc_ids() -> set[str]:
+    src = (DOCS_DIR / "py" / "check_doc_invariants.py")
+    if not src.is_file():                      # defensive: keep the check usable
+        return {f"DC-{n}" for n in range(1, 10)}
+    return set(re.findall(r'rep\.heading\("(DC-\d+)\b', src.read_text(encoding="utf-8")))
+
+
+DC_IDS = _dc_ids()
 #: A requirement heading: "### FR-SIM-46 -- title"
 REQ_HEAD_RE = re.compile(r"^### ((?:FR|NR|CR)-SIM-\d+[a-z]?) +(?:--|—) *(.*)$", re.M)
 #: A stage heading: "### S-D6 -- title"

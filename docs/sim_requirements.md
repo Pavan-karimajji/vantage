@@ -107,6 +107,47 @@ will be declared satisfied*.
   docstring that over-claims coverage is the same failure with the polarity
   reversed.
 
+### The measurement, 2026-08-06 (audit run 3) — and the caveat that outranks it
+
+| Priority | proven | partial | unproven | no test id | parked | total |
+|---|---|---|---|---|---|---|
+| **P0** | 9 | 6 | 1 | 1 | 0 | **17** |
+| **P1** | 41 | 2 | 8 | 8 | 1 | **60** |
+| **Total** | **50** | **8** | **9** | **9** | **1** | **77** |
+
+Phases C and D closed between 2026-08-03 and 2026-08-06 and the `P0` row
+inverted: **the 2026-08-04 reading of "ten of seventeen `P0` rows have zero
+verifiers done" is no longer true and must not be quoted.** It is kept above as
+the measurement it was on the day it was taken.
+
+> **⚠ The number above is an over-report, and by a knowable amount
+> (`AR-34`).** `check_requirement_coverage.py` scores **only `UT-`/`ST-` ids**.
+> `MC-`, `GT-` and `DC-` verifiers are cited-but-not-scored — which was a
+> reasonable simplification when every `P0` was unproven anyway, and is
+> actively misleading now that most are not. **21 of the 77 rows cite at least
+> one verifier the check cannot score**, and a row whose *unscorable* verifier
+> is the one that actually decides it still reports `proven`:
+>
+> | Row | Reports | Rests unscored on | Why it matters |
+> |---|---|---|---|
+> | **`FR-SIM-47`** (`P0`) | `proven 3/3` | **`MC-5` `[ ]`** and `GT-8` (**no checkbox anywhere**) | The row's own `Verified by` names `MC-5` *first*. "The UI is lean and not frightening" is the one claim that decides adoption, and its deciding check has never been run |
+> | **`FR-SIM-46`** (`P0`) | `partial 2/3` | `GT-8`, `GT-9` (no checkbox) | True state is worse than reported, not better |
+> | **`NR-SIM-41`** (`P0`) | `proven 1/1` | `GT-13` (no checkbox) | `GT-13` is the *milestone measurement* gate — the one added to catch exactly this |
+> | **`FR-SIM-64`** (`P0`) | `proven 2/2` | `GT-12` `[~]` | Partial gate, full-proven row |
+> | **`NR-SIM-12`** (`P0`) | `unproven 0/1` | `GT-10` (no checkbox), `GT-12` `[~]` | Correctly the worst row; its gates are also unrepresentable |
+> | **`CR-SIM-2`** (`P0`) | `partial 1/2` | `GT-11` (no checkbox) | |
+> | `FR-SIM-10`, `FR-SIM-11`, `CR-SIM-11`, `FR-SIM-61`, `FR-SIM-63`, `CR-SIM-30`, `NR-SIM-45` | `no test id` | their **only** verifiers | Seven rows are invisible to the report by construction, not by accident |
+>
+> **Six of fourteen `GT-` ids and all four `DC-` ids have no checkbox anywhere
+> in the plan** (`GT-3`, `GT-8`, `GT-9`, `GT-10`, `GT-11`, `GT-13`, `GT-14`;
+> `DC-1`, `DC-4`, `DC-5`, `DC-6`), so their state is not merely unscored — it
+> is **unrepresentable**. That is a plan defect, not a register one, and it is
+> owned by `S-E3` (`AR-35`).
+>
+> Until `AR-34` lands, read the table above as *"every **code** verifier is
+> ticked"*, never as *"the requirement is met"*. The two are the same sentence
+> only for rows that cite no gate and no manual check.
+
 ---
 
 ## 1. Architecture & scalability
@@ -344,6 +385,22 @@ unprompted), `UT-D8-5` (control count in the default layout), `UT-D8-6`
 (a fully normal run shows no provenance, bundle or capability notice at
 all), `ST-D8-2` (three actions to a moving picture), `GT-8`.
 **Priority.** `P0` — if it is not usable, nothing else in this register matters. **Status.** frozen.
+
+> **This row's headline verifier has never been run, and the coverage report
+> says `proven 3/3` anyway (`AR-34`, 2026-08-06).** `MC-5` is `[ ]` in `S-D8`
+> — correctly, since it needs a stopwatch and a real first-time human, which no
+> agent session can perform or fabricate — and `GT-8` has no checkbox anywhere
+> in the plan to be ticked in. What *is* proven is the three **code** limits:
+> `L-1` measured at 8 controls against a budget of 12, `L-2` at 2 actions
+> against 3, `L-3` asserted as the absence of abnormal wording on a normal run.
+>
+> **Those three are necessary and are not sufficient, and the gap is the whole
+> requirement.** A window can satisfy every numeric limit and still be
+> frightening; the origin quote is about a feeling, and `MC-5` is the only
+> instrument in this register that measures one. **So this row is `P0`,
+> code-complete, and unverified — and the register must keep saying so** until
+> a human runs `MC-5`. Do not read the coverage table's `proven` here.
+> `S-D8`'s Gate names the same thing as its one open item.
 
 ### FR-SIM-49 — Naming conventions must be appropriate for debugging
 **Requirement.** The naming conventions are not only for tidiness — they must
@@ -1073,10 +1130,33 @@ before the first real campaign: per-recording size at the current port set,
 wall-clock per resim, parallelism model for `sim batch -j`, and a retention
 policy (what is kept as a baseline, what is regenerable, what is deleted).
 **Verified by.** `ST-D7-7` — a measured campaign over the real recording set,
-with its numbers written into the implementation plan.
+with its numbers written into the implementation plan. **`ST-D7-7` proves the
+two halves this row says are *superseded*, and nothing about the half it says
+survives** — see the correction below.
 **Priority.** `P1` — a campaign that fills a disk mid-run fails worse than one
 that was never started. **Status.** **`open` — narrowed 2026-07-31 to
 retention.**
+
+> **⚠ Correction, audit run 3, 2026-08-06 (`AR-40`) — this row's only verifier
+> is not about this row's only surviving claim.** `ST-D7-7` is ticked and real
+> (measured 2026-08-06: 7 recordings / 33.1 MB, `-j1` 1.383 s per recording,
+> `-j7` 0.362 s, 3.82× scaling), and it measures **throughput and size** —
+> precisely the two parts the narrowing below hands to `NR-SIM-41` and
+> `NR-SIM-42`. It measures **retention** — what is kept as a baseline, what is
+> regenerable, what is deleted — not at all, and cannot: retention is a policy,
+> not a number a run can produce. So this row reports `proven` in
+> `check_requirement_coverage.py` while the only thing it still owns is
+> undesigned. **This is `§12.7`'s defect shape a fourth time** (a verifier id
+> bound to a real, passing test on an adjacent subject) and it is the exact
+> failure that check's own docstring says it cannot catch.
+>
+> **The fix is not to widen `ST-D7-7`.** Retention is `OQ-8`, it is an
+> operations decision with an owner outside this plan, and a test cannot
+> produce it. This row therefore keeps `ST-D7-7` as evidence for the
+> *superseded* halves, explicitly labelled, and carries **no verifier for
+> retention** — which is what makes the register honest and what `NR-SIM-24`'s
+> own *"writing a test id here for work that has no design would make the
+> register look covered when it is not"* already got right.
 
 > **Narrowed, not closed, and this is a deliberate disagreement with the audit.**
 > §12.4 recommends *"superseded by `NR-SIM-42`; close it rather than carrying
@@ -1093,13 +1173,26 @@ retention.**
 (`R-SIM-6`), so a divergence can be *detected* — but nothing lets you re-run
 against the earlier build to confirm it. Detection without reproduction is half a
 regression workflow.
-**Answered by.** **Partially.** The recording embeds the hashes; what is missing
-is a way to point a pipeline at a stored artefact for that hash. The likely shape
-is a Conan package reference in `impl:` rather than a bare stem, which costs one
-resolver and no new concept — but it is not designed.
-**Verified by.** *(none yet — deliberately. Writing a test id here for work
-that has no design would make the register look covered when it is not.)*
-**Priority.** `P1`. **Status.** **`open`.**
+**Answered by.** **Designed 2026-07-31 (`OQ-9`), and the valuable half is
+built.** Two halves were separated there: (a) a `pkg:` form in `impl:` beside
+the file form, so a pipeline can *address* a stored artefact; and (b)
+`--pin-builds`, which **verifies** each resolved library against the
+`library_sha256` the recording already records and refuses on mismatch.
+(b) shipped in `S-D7` and is the half that carries the requirement's own
+sentence — *"detection without reproduction is half a regression workflow"* —
+because a resim that silently ran a different binary is the failure being
+guarded. (a) remains undesigned and unscheduled: it needs an artefact store
+this project does not have (`plan.md` item 20).
+**Verified by.** `UT-D7-9` (`--pin-builds` verifies rather than merely
+addresses; a locally built DLL is reported as honestly unpinnable),
+`ST-D7-1`-family CLI coverage in `test_d7_pin_builds_cli.py`. **No verifier for
+the `pkg:` half** — deliberately, on this row's own original reasoning: a test
+id for undesigned work makes the register look covered when it is not.
+**Priority.** `P1`. **Status.** **`partial` — corrected 2026-08-06 by audit run
+3 (`AR-38`), which found this row reading `open` with "none yet" while
+`UT-D7-9` had been ticked and green since 2026-08-06.** The row had gone stale
+in *two* steps at once: the design landed at `OQ-9` on 2026-07-31 and the code
+landed in `S-D7`, and neither propagated here.
 
 ### CR-SIM-23 — A pipeline file must carry a schema version
 **Requirement.** Derived: scenarios have a v1-to-v2 upgrader; pipelines have no
@@ -1253,6 +1346,29 @@ per component, which is correct while `df`'s functions all run at 20 Hz; the
 manifest's `PortSpec` is the natural place for a per-function period if AEB and
 BSD ever diverge, and nothing in `R-SIM-18`'s GCD scheduler assumes otherwise.
 
+> **Both halves are now closed — this ask is fully answered (`AR-39`, audit run
+> 3, 2026-08-06).** The text above is preserved as the ask was written, because
+> the *"keep open"* instruction is what produced the right answer; but neither
+> sentence is current:
+>
+> - **"`df` declares it as a C++ literal"** — no longer true. `OQ-12`/`OD-12`
+>   closed 2026-07-31 and shipped in `S-C1aΔ2` + `S-C1d` + `S-C5`: the period
+>   is read from the config bundle as `<COMPONENT>_<FN>_PERIOD_US` (integer
+>   microseconds, `R-NAME-3`) through `df`'s `ParamLoader`, and reported
+>   through the generated manifest. A sweep changes it with no rebuild
+>   (`NR-SIM-6`), which was the asker's own point.
+> - **"Today `period_ns` is per component"** — no longer true either.
+>   `PortSpec.period_us` landed in `interfaces`' `component_manifest.proto`
+>   (`S-C1aΔ2`, build-order #11) and is read through in
+>   `contracts/component.py`. AEB and BSD may now diverge without a schema
+>   change, which is exactly why `OD-12` decided it *before* they did: moving
+>   it later would have changed the manifest schema, the scheduler's unit of
+>   dueness, and every consumer's `updated`/`age_s` reasoning at once.
+>
+> **No ABI parameter was added** to get either. Left stale for two days after
+> the work landed, which is the drift this ask's own "keep an eye on these"
+> instruction was meant to prevent.
+
 #### DF-2 — Headless Vantage, for cloud or local automation
 **Origin.** *"We need to create a headless running concept for this simulation
 in vantage to enable automation in cloud or local pc."*
@@ -1306,7 +1422,8 @@ a scenario list wrapped around it, never a second schema.
 | ~~OQ-11~~ | ~~`sil_host` has no generic pipeline-file reader~~ — **closed 2026-07-31** in favour of building it (`FR-SIM-65`, stage `S-C7`). Two documents disagreed about whether the capability existed, which is a `GT-7` failure; the honest options were build it or stop claiming it | arch §9, `S-C7` |
 | ~~OQ-12~~ | ~~`period_ns` is a C++ literal, and a cycle time is calibration~~ — **closed 2026-07-31** (`OD-12`): yes to the bundle, **and yes to per-function**, decided now because moving later changes the manifest schema, the scheduler's unit of dueness and every consumer's `updated`/`age_s` reasoning. Declared in **integer microseconds** (`<COMPONENT>_<FN>_PERIOD_US`) because a YAML float of seconds re-introduces the rounding drift `R-SIM-18` refuses. **No ABI parameter is added**: the component is scheduled at the GCD of its own functions' periods and decides internally what to run; the DLL's `updated` flag is authoritative over the predicted schedule, so a disagreement is a *reported finding* | contract §9.2, `DF-1` |
 | ~~OQ-13~~ | ~~Concept count per contribution~~ — **diagnosed and closed 2026-07-31, without removing an API.** Counting honestly, the ten are not ten: themes are a theme-author's concept, frames default to `ego`, `derived`/`assumed_geometry` matter only when something is unusual, and the three grep gates are one sentence and do not even apply to `modules/<name>/sim/`. **The unavoidable core is four** — decorator, `ctx`, `Prim`, style token — which is exactly `FR-SIM-47`'s `L-3` limit. So the defect is in the *presentation*, not the API: `.claude/templates/sim_layer_provider.py` teaches all ten at once (and still imports a decorator that was removed). Actions: a canonical minimal layer of ≤15 lines mentioning none of the six optional concepts, and `derived`/`assumed_geometry` presented as **one** idea with two cases — *the value was reconstructed* vs *the shape was assumed* — rather than two independent flags. `GT-8` keeps measuring the consequence; the cause now has a target | `GT-8`, `FR-SIM-47` |
-| OQ-15 | **Should the interactive viewer exist at all?** `render/` + `view/` + `viewer.py` are ~3,000 of 8,300 lines — **36% of the codebase spent on the least differentiated part.** Foxglove and rerun already render a scene graph, and `R-SIM-13`'s "the viewer renders a `Session`" plus `S-D1`'s `SceneUpdate` export mean adopting one is already a supported path. The differentiator is the pipeline engine and the `mode:`/`impl:` matrix, not the window. `S-B3` is built and is not the question; **`S-D5` (package the player) and `S-D8` (Vantage as a product) are not**, and they are the expensive half. Decide before `S-D5`, not during it | `NR-SIM-46`, `S-D5` |
+| ~~OQ-15~~ | ~~**Should the interactive viewer exist at all?**~~ — **closed 2026-08-05** by the decision recorded in full at `NR-SIM-46`: keep the Qt shell as a *console*, promote `S-D1` (Foxglove `SceneUpdate`) to the interop surface, scope `S-D5` to the console form, defer `S-D2`. The rejected alternative — adopt an external viewer as primary and collapse `S-D5`/`S-D8` into a Foxglove extension — is rejected because it cannot supply the pipeline panel, the measured/simulate matrix, the severed-chain badge, `Open on Bench` or the evidence panel, **none of which is scene rendering**. `FR-SIM-70` stands as written and its renegotiation clause did not trigger. *(Struck 2026-08-06, `AR-37`: the decision was taken on 08-05 and recorded at `NR-SIM-46`, but this row was left open — so the register said "undecided" and "decided" in two places for a day. The original wording is preserved below for the argument it makes.)* Original: | `NR-SIM-46`, `S-D5` |
+| ~~OQ-15 (as written 2026-07-31)~~ | ~~**Should the interactive viewer exist at all?** `render/` + `view/` + `viewer.py` are ~3,000 of 8,300 lines — **36% of the codebase spent on the least differentiated part.** Foxglove and rerun already render a scene graph, and `R-SIM-13`'s "the viewer renders a `Session`" plus `S-D1`'s `SceneUpdate` export mean adopting one is already a supported path. The differentiator is the pipeline engine and the `mode:`/`impl:` matrix, not the window. `S-B3` is built and is not the question; **`S-D5` (package the player) and `S-D8` (Vantage as a product) are not**, and they are the expensive half. Decide before `S-D5`, not during it | `NR-SIM-46`, `S-D5` |
 | OQ-14 | **The design set is larger than the code it describes** (~600 KB of normative prose across ten documents vs. ~8,300 lines of Python; the implementation plan alone is 3,745 lines). Every stage re-ticks two discipline checklists and twelve global gates. That overhead has been worth it so far — `S-A3`'s and `S-C1a`'s findings were both caught *by* the discipline — but it is not obviously worth it at Phase E, and the honest failure mode is documents that silently stop being maintained rather than a decision to stop maintaining them. Re-assess at `S-E3` | plan §0 |
 
 ---
@@ -2000,3 +2117,137 @@ memory of a 4,000-line plan and are exactly the kind of thing that looks right.
 The cheap discipline: **after adding a requirement, open the test it cites and
 read it.** Two of eleven were wrong here — a rate high enough that "it passed
 the checker" was never sufficient evidence.
+
+---
+
+## 13. Requirements this audit adds — run 3, 2026-08-06
+
+Added under the commissioning instruction *"if you strongly feel few more
+requirements or dimensions are expected to be added, you are free to add new
+ones."* Three, and **each one is the written form of a gap this run measured**
+rather than a dimension imagined for completeness — §12's own *"an audit that
+only adds is an audit that will be ignored"* applies to this section too. Each
+names what it costs and what it does **not** ask for.
+
+Their verification state is deliberately `unproven` on arrival. They are
+**flagged for the owner's review** at the plan's resume marker rather than
+assumed accepted.
+
+### FR-SIM-71 — A component may be split in two without invalidating recordings, pipelines, plug-ins or expectations
+**Requirement.** Splitting one component into two (or merging two into one) must
+be absorbable by **declared data**, not by re-recording, re-authoring every
+pipeline, or editing plug-in source. The tool must be able to answer *"this
+recording was produced before the split; can it still drive the post-split
+pipeline, and at which cuts?"* — and answer it **before** the run, not by
+failing one.
+**Origin.** 2026-08-06, from the commissioner directly: *"perception-core for me
+is a genuine blocker, because I didn't decide yet if it has to be further
+divided like computer-vision + fusion kind of architecture."* This is a live,
+undecided architectural question owned by a person, and every day it stays
+undecided is a day the framework can accidentally design it out.
+**Why this is not already covered.** `FR-SIM-2` ("one framework, N components")
+says the framework absorbs *more* components; it says nothing about the identity
+of an existing one changing. And three shipped mechanisms are all keyed to a
+component's identity in a way a split breaks:
+- **`R-SIM-4`** — port names are `<function>.<port>`, and a stage's address in a
+  pipeline is its stage name. A split renames stages.
+- **`R-SIM-21`** — a plug-in binds `self.<port>`, resolved *against its own
+  component's manifest*. If `perception-core` becomes `computer-vision` +
+  `fusion`, every `self.` in every provider resolves against a manifest that no
+  longer declares half of what it did.
+- **`R-SIM-6`** — a recording's topics are port names. Every recording made
+  before a split names ports of a component that no longer exists.
+**Answered by.** **Nothing new is needed, and that is the finding worth
+recording** — `R-SIM-23`'s ingest map is already the right mechanism: it is
+declared data owned by whoever owns the recordings, it maps topic → port with a
+`proto_type` check, it declares `absent:` explicitly, and `sim probe` already
+derives the feasible-cut set from it before a run. A split is exactly the case
+it was designed for, arriving from an unexpected direction. What is missing is
+that **nobody has stated this**, so the next person to touch `R-SIM-21`'s
+resolver or the manifest's identity field has no reason to preserve it, and the
+first pipeline written after a split will be hand-edited instead.
+**Verified by.** `ST-D4-3` (new, `S-D4`) — a recording produced against a
+single-component manifest drives a two-component pipeline through an ingest map
+alone, with **no edit to any layer provider and no re-recording**, and
+`sim probe` reports the feasible cuts of both shapes from the same file.
+**Priority.** `P1` — it does not block today's work, and it becomes very
+expensive the day the decision is taken if it was not held open.
+**Status.** **`open` — the requirement is stated, its verifier is written and
+unbuilt.** Deliberately not marked `frozen`: the mechanism is believed
+sufficient and has never been exercised.
+
+> **What this does *not* ask for.** Not a rename-refactoring tool, not automatic
+> migration of old pipelines, and **not a decision about `perception-core`'s
+> decomposition** — that stays the owner's. It asks only that the decision
+> remain cheap for as long as it is undecided.
+
+### NR-SIM-47 — A measured claim names the platform and the shell that produced it
+**Requirement.** Any number recorded as evidence — a suite result, a gate
+result, a throughput figure, a build outcome — states **which platform and which
+shell** produced it. A bare number is read as the system's state on every
+platform, which is how a green suite on one OS becomes a claim about both.
+**Origin.** Audit runs 2 and 3. Run 2 (`AR-31`) found the whole of Phase D
+verified in a WSL/Linux shell only; the Windows re-run found two real defects in
+an hour, one of which (`AR-28`) meant the suite **produced no result at all**
+rather than failing visibly. Run 1 found the mirror image: a session recorded
+*"no compiler here"* and landed `S-C5` red, when the toolchain was one shell
+away. **The same sentence covers both directions** — check the other shell
+before believing a number *or* an absence.
+**Answered by.** `P-1`..`P-10` already require the *behaviour* to be portable;
+this requires the *evidence* to say where it came from. Two mechanisms, neither
+new: `Report` already stamps `# platform` / `# python` into every
+`docs/py/logs/*.log`, and `ST-E3-5` already owns dual-platform running. What is
+added is that a **stage's own prose** carries it too — the failure mode is a
+narrative sentence in the plan, not a log.
+**Verified by.** `ST-E3-5`, extended: both platforms measured **and** every
+stage's recorded number carrying the platform that produced it.
+
+> **A second, mechanical verifier is proposed and deliberately not cited yet.**
+> A new `DC-` document invariant — *a stage note stating a pass/fail count names
+> a platform* — is the right shape (the failure mode is a narrative sentence in
+> a stage, not a log,
+> and `Report` already stamps every `docs/py/logs/*.log` with `# platform`).
+> It is **not** listed above because it does not exist, and citing an unwritten
+> id is the exact defect `NR-SIM-24`'s own original wording named: *"writing a
+> test id here for work that has no design would make the register look covered
+> when it is not."* It belongs to `S-E3` alongside `ST-E3-5`.
+>
+> Take the number from `check_doc_invariants.py`'s own table when writing it,
+> never from the highest one you remember — three were added after this
+> register last quoted a number, the most recent by this same audit run
+> (`AR-44`). `check_traceability.py` now **derives** the valid `DC-` set from
+> that file rather than restating it, so the two can no longer disagree; it
+> previously carried a hardcoded `range(1, 9)` that went stale the same hour a
+> new invariant landed.
+**Priority.** `P1`. **Status.** `open`.
+
+### NR-SIM-48 — What a component owes the framework is a checklist, and a second component proves it
+**Requirement.** The obligations a component takes on to participate — the
+generic ABI shim, `conf/ports.yaml`, the config bundle, the plug-in bundle, the
+ingest map, the tolerance file, its scenarios — must exist as **one enumerated
+checklist**, and at least one component other than `df` must be measured against
+it. "A component onboards itself" (`R-SIM-16`) is only true if what "onboarded"
+means is written down.
+**Origin.** Audit run 3, from a measurement: `vdy` is a real second component on
+the generic ABI (`S-C1d`'s own second-component proof, 18/18 gtest) and it
+carries **no `sim/` directory at all** — no layer provider, no `plugin.yaml`, no
+ingest map, no `tolerance.yaml`, no viewpoints, no pipeline. Neither does
+`perception-core`. So every component-side obligation in `R-SIM-20`, `R-SIM-23`
+and `R-SIM-24` is proven **exactly once, by `df`**, and a rule proven once is a
+rule that has been *implemented*, not one that has been *shown to generalise*.
+**Answered by.** A checklist in `sim_sil_contract.md`, with a **required /
+optional / conditional** column — because most of these genuinely are optional
+(`vdy` has nothing to draw, so it needs no layer provider, and saying so is the
+point). Plus `sim doctor --component <name>` reporting a component against it,
+which is where the checklist stops being prose.
+**Verified by.** `ST-D6-4` (new, `S-D6`) — `sim doctor --component` run against
+`df`, `vdy` and `perception-core` produces the same shape of report, and names
+each absence with whether it is legitimate.
+**Priority.** `P1` — it is not blocking, and it is the difference between three
+components and N.
+**Status.** `open`.
+
+> **Deliberately not a gate.** A gate here would fail `vdy` for not shipping
+> layers it has no reason to ship. The checklist's value is that an absence
+> becomes **declared** rather than **unnoticed** — the same distinction
+> `R-SIM-23`'s `absent:` draws, applied one level up.

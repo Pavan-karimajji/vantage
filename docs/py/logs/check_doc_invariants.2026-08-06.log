@@ -1,9 +1,9 @@
 # check_doc_invariants
-# platform  linux
-# python    3.12.8
+# platform  win32
+# python    3.12.10
 
-Checking DC-1..DC-7 over the design set
-14 documents, 9 scripts
+Checking DC-1..DC-9 over the design set
+14 documents, 10 scripts
 
 DC-1  internal markdown links resolve
 -------------------------------------
@@ -35,6 +35,10 @@ ok    framework-owned scripts name no driving function
 
 DC-8  requirement ids are unique
 --------------------------------
-ok    all 77 requirement ids unique
+ok    all 80 requirement ids unique
+
+DC-9  the CLI surface table matches cli/__init__.py, both ways
+--------------------------------------------------------------
+ok    all 14 CLI verbs documented, and no phantom verbs
 
 RESULT  pass

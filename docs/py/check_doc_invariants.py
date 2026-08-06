@@ -3,7 +3,7 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""Check: invariants over the design documents themselves -- ``DC-1`` .. ``DC-7``.
+"""Check: invariants over the design documents themselves -- ``DC-1`` .. ``DC-9``.
 
 Some requirements are satisfied by a *document* or by the *shape of the tree*,
 not by a unit test: "make the split clear", "a module's docs live with the
@@ -21,6 +21,7 @@ the requirements register cites these ids exactly as it cites ``UT-``/``ST-``.
 | DC-6 | work is on a feature branch, not a default branch |
 | DC-7 | no framework-owned script names a driving function (R-SIM-1 guard) |
 | DC-8 | no requirement id is defined twice |
+| DC-9 | the CLI surface table and the registered verbs agree, in both directions |
 
 ``DC-2`` and ``DC-7`` are the portability and layering guards: an absolute
 ``C:\\...`` path in a design document is an instruction that cannot be followed
@@ -68,7 +69,7 @@ def _scripts() -> list:
 
 def main() -> int:
     rep = Report("check_doc_invariants")
-    rep.line("Checking DC-1..DC-7 over the design set")
+    rep.line("Checking DC-1..DC-9 over the design set")
 
     docs = _docs()
     rep.line(f"{len(docs)} documents, {len(_scripts())} scripts")
@@ -212,6 +213,44 @@ def main() -> int:
                 seen[rid] = n
         if not dupes:
             rep.ok(f"all {len(seen)} requirement ids unique")
+
+    # -- DC-9: the CLI surface table matches the registered verbs ----------
+    # Added by audit run 3 (`AR-44`) after BOTH directions failed at once and
+    # neither was noticed for six days:
+    #   * `sim diff` sat in sim_api_reference.md section 10 and in the recording
+    #     contract's verb block as a promised verb. No stage ever scheduled it,
+    #     nothing implements it, and `OD-10` had superseded it on 2026-07-31
+    #     with `sim determinism` -- a stronger verb whose axis is DERIVED from
+    #     two manifests rather than asserted by a flag, "because a flag can
+    #     lie". A documented verb that does not exist is worse than an
+    #     undocumented one: a reader plans around it.
+    #   * `sim determinism` shipped in `S-C6` and was never added to the table.
+    # sim_api_reference.md's own header calls a signature there "a contract",
+    # so both halves are contract defects, and both are trivially mechanical.
+    rep.heading("DC-9  the CLI surface table matches cli/__init__.py, both ways")
+    api = DOCS_DIR / "sim_api_reference.md"
+    cli_init = SIM_DIR / "src" / "adas_sim" / "cli" / "__init__.py"
+    if not api.is_file() or not cli_init.is_file():
+        rep.line("  skipped -- sim_api_reference.md or cli/__init__.py not present")
+    else:
+        registered = set(re.findall(r'add_parser\("([a-z_]+)"', cli_init.read_text(encoding="utf-8")))
+        api_text = api.read_text(encoding="utf-8")
+        start = api_text.find("## 10. CLI surface")
+        table = api_text[start:api_text.find("\nEntry point", start)] if start >= 0 else ""
+        # Rows are `| `sim <verb>` | ...`; one row legitimately documents two
+        # verbs that share a parser shape (`sim view` / `render`).
+        documented = set(re.findall(r"`sim ([a-z_]+)`", table)) | set(re.findall(r"/ `([a-z_]+)`", table))
+        if not documented:
+            rep.fail("could not parse the CLI surface table in sim_api_reference.md section 10")
+        else:
+            for verb in sorted(registered - documented):
+                rep.fail(f"`sim {verb}` is registered in cli/__init__.py and has no row "
+                         "in sim_api_reference.md section 10")
+            for verb in sorted(documented - registered):
+                rep.fail(f"`sim {verb}` has a row in sim_api_reference.md section 10 and is "
+                         "registered nowhere -- a documented verb that does not exist")
+            if registered == documented:
+                rep.ok(f"all {len(registered)} CLI verbs documented, and no phantom verbs")
 
     return rep.finish()
 
