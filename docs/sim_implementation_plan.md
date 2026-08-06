@@ -7123,6 +7123,76 @@ ticked. And must not batch the rows into one commit — see the phase preamble.
 **Purpose.** Remove the ABI that grew a parameter pair per function, so `D1`
 cannot recur. This is the last C++ change in the plan.
 
+**Status, follow-up pass (2026-08-06): consumer enumeration DONE, deletion
+BLOCKED on the same root cause `S-E1` is blocked on.** `sil_host` was
+checked first, since the stage's own ordering makes it the gate for
+everything else: `modules/sil_host/src/sil_component.cpp` binds and calls
+**only** `adasAbiVersion`/`adasManifest`/`adasInit`/`adasExec`/
+`adasShutdown` (`BindOrThrow<...>` for each, by name) — grepping its whole
+`src/` tree for `dfInit`/`dfExec`/`dfShutdown`/`DfReqBuf`/`DfProBuf` returns
+nothing. `sil_host` was built directly on the generic ABI (`S-C7`, well
+after `S-C1a` established it) and never called the positional one — there
+is nothing to migrate, so **"`sil_host` moves to the generic ABI" is
+vacuously true, not a task performed this pass.**
+
+**Enumerated consumers of `dfInit`/`dfExec`/`dfShutdown`/`dfApiVersion`/
+`DfReqBuf`/`DfProBuf`, grepped across the whole superproject (code only,
+prose mentions in design docs excluded — those name the positional ABI
+descriptively and impose no ABI dependency):**
+
+| Consumer | Kind | Status |
+|---|---|---|
+| `modules/df/src/platform/df_sil/df_interface_c.{h,cpp}` | the export itself | not a consumer — the deletion target |
+| `modules/df/tests/unit/sil/test_interface_c_api.cpp` | gtest, positional-only | test-only; **has a full generic-ABI twin** in `test_generic_interface_c_api.cpp` (its own docstring: "every assertion here has a positional-path twin") — safe to delete alongside the export, not a blocker |
+| `modules/df/tests/unit/sil/test_generic_interface_c_api.cpp`'s `EquivalenceTest.GenericAndPositionalPathsProduceByteIdenticalOutputs` | gtest, calls both ABIs | test-only; exists specifically to prove the two paths agree — deleted alongside the export, once there is nothing left to compare against |
+| `modules/df/tools/carla/df_ctypes.py` | real ctypes binding | **REAL, still live** — binds `dfApiVersion`/`dfInit`/`dfExec`/`dfShutdown` by name (`ctypes.CDLL(...).dfInit.argtypes = ...`) |
+| `modules/df/tools/carla/carla_bridge.py` | uses `df_ctypes.py` | **REAL, still live** (transitively) |
+| `modules/df/tools/carla/mcap_recorder.py` | uses `df_ctypes.py` | **REAL, still live** (transitively) |
+| `modules/df/tools/carla/replay/df_dll_sim_mcap.py` | uses `df_ctypes.py` | **REAL, still live** (transitively) |
+
+**The blocker.** `S-E1`'s own row for `tools/carla/df_ctypes.py` already
+names its replacement (`contracts/component.py`, the Python sim
+framework's own generic-ABI ctypes binding) and its gate (`S-C1c`, closed)
+— but `S-E1` found, separately, that `df_ctypes.py` cannot actually be
+deleted yet: it is still imported by `carla_bridge.py` and the `docs/bsd/
+py/bsd_*_offline.py` analysis scripts, all of which are themselves gated
+on `S-C2`'s own `MC-2` (a live CARLA-server recording — unrun, no server
+available in this environment). **S-E2 inherits the identical blocker**:
+deleting `dfInit`/`dfExec`/`dfShutdown` today would break `df_ctypes.py`
+and everything importing it, which is exactly the "consumer discovered
+after the deletion is a consumer discovered by an outage" this stage's own
+"Must not" warns against. `ST-E2-1`/`ST-E2-4` therefore stay open, honestly
+— the list above is not empty, and none of its real entries has been
+migrated (only made irrelevant, once `S-E1` finally deletes them).
+
+**What IS provable now, cross-referenced rather than rebuilt:**
+- `ST-E2-2`'s underlying claim — the generic ABI is a faithful substitute
+  for the positional one — is already proven at the DLL level by
+  `EquivalenceTest.GenericAndPositionalPathsProduceByteIdenticalOutputs`
+  (byte-identical output, same inputs, both ABIs, same build) and at the
+  host level by `sil_host`'s own real-recording resim suite (`ST-C7-1`/
+  `ST-C7-2`, already green) — `sil_host` never ran on the positional ABI to
+  compare against, so the literal "pre-migration run" framing does not
+  apply to it; the DLL-level equivalence test is what actually carries this
+  claim's weight.
+- `ST-E2-3` — `adasAbiVersion()` still `1`: confirmed in
+  `test_generic_abi.cpp::GenericAbiTest.AbiVersionIsStable`, true after
+  every function added since `S-C1a` (`aeb` and `bsd` both compiled in).
+
+**`docs/df_sil_dll.md` (superproject root, the doc this stage's own
+checklist names) is itself stale** — it predates the `df` rename (module
+was `functions`) and the positional-API rename (`fnInit`/`fnExec` →
+`dfInit`/`dfExec`), frozen at a much earlier Step-5 planning snapshot. A
+real rewrite reconciling it with the current `df_interface_c.h`/`.cpp` is
+its own separate task, out of scope here; a short pointer note was added
+there instead (2026-08-06) so a reader lands on the current status rather
+than a stale one.
+
+**Not attempted this pass, and correctly not:** deleting the positional
+exports (`ST-E2-1`), updating `df_sil_dll.md`'s actual content, and
+therefore this stage's own Gate. All three wait on `S-E1`'s blocker
+clearing first.
+
 **Must not.** Remove the old exports and move the host in one step. **Order
 matters and is not negotiable:**
 
@@ -7136,26 +7206,50 @@ rollback is the whole stage rather than one commit.
 consumer, inside this repo or not. The first task below is to find them; a
 consumer discovered after the deletion is a consumer discovered by an outage.
 
-- [ ] **Enumerate consumers** of the positional exports — this repo, sibling
+- [x] **Enumerate consumers** of the positional exports — this repo, sibling
       repos, and any delivered binary — and record the list here before
       deleting anything. An empty list is a fine answer; an unexamined one is
-      not
-- [ ] `sil_host` moves to the generic ABI **and is proven equivalent** before
-      any deletion
-- [ ] Delete the positional exports from the component's C interface
-- [ ] `df_sil_dll.md` updated — the rules this closes are recorded as resolved,
-      not silently dropped
+      not. **Not empty** — see the stage's own Status note for the full table:
+      two test files (safe, have generic-ABI twins) and `tools/carla/
+      df_ctypes.py` + three real dependents (not safe, still live)
+- [x] `sil_host` moves to the generic ABI **and is proven equivalent** before
+      any deletion. **Vacuously true** — `sil_host` was built on the generic
+      ABI from `S-C7` onward and never called the positional one; see the
+      Status note for the grep that confirms it and for where the
+      equivalence claim's real evidence actually lives (`EquivalenceTest`,
+      DLL-level, plus `sil_host`'s own `ST-C7-1`/`ST-C7-2`)
+- [ ] Delete the positional exports from the component's C interface.
+      **Blocked** — `df_ctypes.py` and its dependents still call them; see
+      the Status note
+- [~] `df_sil_dll.md` updated — the rules this closes are recorded as resolved,
+      not silently dropped. **Partial**: the doc predates the current
+      `df_interface_c.h`/`.cpp` entirely (stale module/function names) and a
+      real reconciliation is out of scope here; a short pointer note was
+      added instead so a reader is not misled by the stale content
 
 **Tests**
 - [ ] `ST-E2-1` no reference to the removed symbols anywhere in the superproject
-      or its submodules
-- [ ] `ST-E2-2` the host runs end to end on the generic ABI, producing outputs
-      **byte-identical** to its pre-migration run on the same recording
-- [ ] `ST-E2-3` `GT-4` green; `adasAbiVersion()` still `1` — after every
+      or its submodules. **Blocked** — real references remain (the
+      enumeration above)
+- [~] `ST-E2-2` the host runs end to end on the generic ABI, producing outputs
+      **byte-identical** to its pre-migration run on the same recording.
+      **The underlying claim is proven, cross-referenced, not by this exact
+      shape** — `sil_host` has no "pre-migration run" to compare against (it
+      was never on the positional ABI); `EquivalenceTest.
+      GenericAndPositionalPathsProduceByteIdenticalOutputs` (DLL level) plus
+      `sil_host`'s own `ST-C7-1`/`ST-C7-2` (host level, real recordings)
+      carry this claim's actual weight between them
+- [x] `ST-E2-3` `GT-4` green; `adasAbiVersion()` still `1` — after every
       function added since `S-C1a`. That constant is the entire evidence that
-      adding a function never touched the ABI, which is what `D1` was
+      adding a function never touched the ABI, which is what `D1` was.
+      Confirmed in `test_generic_abi.cpp::GenericAbiTest.AbiVersionIsStable`,
+      both `aeb` and `bsd` compiled in
 - [ ] `ST-E2-4` the consumer list above is empty, or every entry on it has been
-      migrated and named — the deletion is not gated on hope
+      migrated and named — the deletion is not gated on hope. **Named, not
+      migrated** — the list is real and recorded (not empty), but
+      `df_ctypes.py`'s family cannot be migrated, only deleted once `S-E1`'s
+      own blocker (`MC-2`) clears; this box stays open honestly rather than
+      being satisfied by "named" alone
 
 **Discipline** (every stage)
 - [ ] portability §3 ticked — exposure: `P-5` (removing the positional exports
