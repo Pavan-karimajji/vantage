@@ -345,10 +345,20 @@ records what was *built* and this document records what was *promised*.
 | §6 | Three sample pipelines that ship with the tool | ⚠️ mechanism real, **content empty** (needs a compiled demo component) | `StartPage`'s own docstring |
 | §7 | Frozen `vantage` binary with an external plug-in path | ⚠️ `S-D5`, 3 boxes partial | `S-D5` |
 
-### The two panels that exist and are not in the product (`AR-45`)
+### The two panels that exist and are not in the product (`AR-45`, fixed 2026-08-06)
 
-Both are **built, documented, and covered by passing system tests**, and
-**neither is reachable by a user**:
+**Fixed, fix queue row 5.** `VantageWindow` now adds `ProbePanel` to its
+stacked widget and switches to it when `probe_requested` fires; it constructs
+one `ConsolePanel` and docks it onto Bench, rebinding `session`/`pipeline` off
+a new `MainWindow.session_ready` signal so the console is never stale across a
+reopened recording. `scene` stays honestly unbound — no single "current scene"
+object exists on `MainWindow` to bind live yet, a separate, smaller fix.
+Verified by two new tests in `tests/system/test_d8_window.py`. The account
+below is kept as the record of what was wrong and why the existing tests
+missed it.
+
+Both were **built, documented, and covered by passing system tests**, and
+**neither was reachable by a user**:
 
 - **`ConsolePanel`** is never constructed anywhere in `app/`. `window.py` does
   not import it. Its only two references outside its own module are its own
@@ -374,8 +384,8 @@ convenience.
 of 12; two docks that are not in the window contribute none. The limit is met
 partly because the features are absent.
 
-Owned by `S-D8` as re-opened boxes. **Not fixed by this audit** — it is
-functional source, and the audit's mandate is documents.
+Owned by `S-D8`; both boxes re-closed 2026-08-06 (`AR-45`, fix queue row 5 —
+functional source, so not fixed by the audit itself, which is documents-only).
 
 ### On Campaign's lock — one mechanism, not two (`AR-48`)
 

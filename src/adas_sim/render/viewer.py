@@ -1011,6 +1011,17 @@ class MainWindow(QtWidgets.QMainWindow):
     layers/inspector/timeline/plots/pipeline dock in alongside it as later
     slices land."""
 
+    #: `app/shell/window.py` (outside this module, `R-SIM-13`-adjacent -- it
+    #: wraps this window, never the other way round) needs to know when
+    #: `session`/`pipeline_panel_state` stop being `None`, e.g. to rebind a
+    #: dock's live namespace (`AR-45`) -- this module carries no opinion
+    #: about which dock or why (`UT-D8-9`: no workspace/product name outside
+    #: `app/`). Emitted once, at the end of `_on_loaded`, so a caller
+    #: connecting AFTER construction still gets it -- `_worker.loaded`
+    #: itself is private and single-subscriber by convention (`_on_loaded`
+    #: is its one real consumer).
+    session_ready = QtCore.Signal()
+
     def __init__(self, recording: Path, *, project: str = "base",
                  workspace_path: Path | None = None,
                  ego_state_signals: dict[str, str] | None = None,
@@ -1349,6 +1360,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # __init__), so it wins -- applied last, after the first real
             # render established `_current_tick`, and re-renders once more.
             self._on_jump_to_preset(self._initial_preset)
+        self.session_ready.emit()
 
     def _load_pipeline_panel(self, session: Session) -> None:
         """S-D3 slice 3: read-only this pass -- loads `self._pipeline_path`

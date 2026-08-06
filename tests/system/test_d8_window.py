@@ -267,6 +267,66 @@ def test_probe_requested_from_the_start_page_reaches_the_probe_panel(tmp_path):
     assert len(received) == 1
 
 
+def test_ar45_probe_panel_is_in_the_window_and_shown_on_probe(tmp_path):
+    """`AR-45`: the panel behaving is not the claim -- the window must
+    actually CONTAIN it and switch to it, or `"Probe a Library…"` renders
+    into a widget nobody sees. `test_probe_requested_from_the_start_page_
+    reaches_the_probe_panel` above only ever proved the former."""
+    set_high_dpi_policy()
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    window = VantageWindow()
+
+    assert window._stack.indexOf(window._probe_panel) != -1
+
+    window._start_page.probe_requested.emit(tmp_path / "no_such.dll")
+
+    assert window._stack.currentWidget() is window._probe_panel
+
+
+def test_ar45_console_panel_is_a_real_dock_on_bench(tmp_path):
+    """`AR-45`: `ConsolePanel` must be constructed AND reachable -- before
+    this fix it was never even imported by `window.py`."""
+    set_high_dpi_policy()
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    window = VantageWindow()
+    recording = tmp_path / "rec.mcap"
+    _write_synthetic_recording(recording)
+
+    window.open_recording(recording)
+    _pump_until_loaded(window)
+
+    docks = window.bench.findChildren(QtWidgets.QDockWidget)
+    console_docks = [d for d in docks if d.widget() is window._console_panel]
+    assert len(console_docks) == 1
+
+
+def test_ar45_console_panel_survives_and_rebinds_across_a_reopened_recording(tmp_path):
+    """`AR-45` + `ConsolePanel`'s own promise ("`update_namespace` rebinds
+    ... without a new console instance"): the SAME `ConsolePanel` persists
+    across two different recordings, and its namespace ends up bound to
+    the second `Session`, never the first or a stale `None`."""
+    set_high_dpi_policy()
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    window = VantageWindow()
+    first = tmp_path / "first.mcap"
+    second = tmp_path / "second.mcap"
+    _write_synthetic_recording(first)
+    _write_synthetic_recording(second)
+
+    window.open_recording(first)
+    _pump_until_loaded(window)
+    console = window._console_panel
+    first_session = window.bench.session
+    assert console.namespace["session"] is first_session
+
+    window.open_recording(second)
+    _pump_until_loaded(window)
+
+    assert window._console_panel is console  # never rebuilt
+    assert console.namespace["session"] is window.bench.session
+    assert console.namespace["session"] is not first_session
+
+
 def test_ut_d8_3_open_on_bench_reopens_the_same_recording_and_pipeline(tmp_path):
     """`UT-D8-3`: `Open on Bench` reconstructs recording + pipeline (the
     exact failing-tick attribution needs `sim check`'s own expectation

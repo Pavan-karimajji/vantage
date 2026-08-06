@@ -42,8 +42,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
-from PySide6 import QtGui, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
+from adas_sim.app.panels.console import ConsolePanel
 from adas_sim.app.panels.probe import ProbePanel
 from adas_sim.app.shell.campaign import CampaignWidget
 from adas_sim.app.shell.palette import install_shortcut
@@ -78,14 +79,23 @@ class VantageWindow(QtWidgets.QMainWindow):
         self.campaign = CampaignWidget()
         self.campaign.open_on_bench_requested.connect(self._on_open_on_bench_requested)
         self._probe_panel = ProbePanel()
+        #: `AR-45`: `sim_player.md` §4 -- "the pressure valve that stops
+        #: someone forking the tool for one experiment." ONE instance,
+        #: constructed here and never rebuilt, so its transcript/history
+        #: survives every reopened recording (`_attach_console_dock`
+        #: rebuilds only the `QDockWidget` wrapping it, since that dies
+        #: with the old `self.bench`); `update_namespace` rebinds
+        #: `session`/`pipeline` in place instead.
+        self._console_panel = ConsolePanel()
         self._start_page = StartPage(recent_files=load_recent_files(), sample_pipelines=sample_pipelines)
         self._start_page.open_recording_requested.connect(self.open_recording)
-        self._start_page.probe_requested.connect(self._probe_panel.probe)
+        self._start_page.probe_requested.connect(self._on_probe_requested)
         self._start_page.sample_pipeline_requested.connect(self._on_sample_pipeline_requested)
 
         self._stack = QtWidgets.QStackedWidget()
         self._stack.addWidget(self._start_page)
         self._stack.addWidget(self.campaign)
+        self._stack.addWidget(self._probe_panel)
         self.setCentralWidget(self._stack)
 
         self._workspace_name: WorkspaceName = "bench"
@@ -136,6 +146,7 @@ class VantageWindow(QtWidgets.QMainWindow):
         one recording, one way in."""
         if self.bench is not None:
             self._stack.removeWidget(self.bench)
+            self._detach_console_dock()
             self.bench.close()
         self.bench = MainWindow(
             recording, project=project if project is not None else self._default_project,
@@ -143,9 +154,54 @@ class VantageWindow(QtWidgets.QMainWindow):
             pipeline_path=pipeline_path, pipeline_search=self._pipeline_search, pipeline_config=self._pipeline_config,
         )
         self._stack.insertWidget(0, self.bench)
+        self._attach_console_dock()
         add_recent_file(recording)
         self._start_page.set_recent_files(load_recent_files())
         self.switch_to("bench")
+
+    def _detach_console_dock(self) -> None:
+        """The old `self.bench` is about to be closed and discarded, and a
+        `QDockWidget` deletes its own widget along with itself -- without
+        this, the persistent `self._console_panel` `_attach_console_dock`
+        promises would die with the dock wrapping it. `takeCentralWidget`'s
+        own idiom, applied to a dock: reparent the survivor out first."""
+        dock = self._console_panel.parentWidget()
+        if dock is not None:
+            dock.setWidget(None)  # type: ignore[arg-type]
+
+    def _attach_console_dock(self) -> None:
+        """`AR-45`: Bench-only by construction -- Campaign is a separate
+        stack page (`app/shell/campaign.py`) that never gets a dock at all,
+        the same "locked by omission" discipline it already uses for
+        overrides and mode toggles. The `QDockWidget` wrapper is rebuilt
+        per `self.bench` (it dies with the old one, closed above,
+        `_detach_console_dock`); the `ConsolePanel` it wraps is not.
+        `session`/`pipeline` are rebound once immediately (both `None`
+        until the load finishes) and again on `MainWindow.session_ready`,
+        so the console is never left pointing at a stale or absent
+        session."""
+        dock = QtWidgets.QDockWidget("Console", self.bench)
+        dock.setObjectName("consoleDock")
+        dock.setWidget(self._console_panel)
+        self.bench.addDockWidget(QtCore.Qt.DockWidgetArea.BottomDockWidgetArea, dock)
+        self.bench.session_ready.connect(self._on_bench_session_ready)
+        self._rebind_console_namespace()
+
+    def _on_bench_session_ready(self) -> None:
+        self._rebind_console_namespace()
+
+    def _rebind_console_namespace(self) -> None:
+        if self.bench is not None:
+            self._console_panel.update_namespace(
+                session=self.bench.session, pipeline=self.bench.pipeline_panel_state,
+            )
+
+    def _on_probe_requested(self, path: Path) -> None:
+        """`AR-45`: `sim_player.md` §4 -- "the day-one screen for a new
+        component." Probing and showing are two calls, not one, so a
+        caller (a test) can still probe without the stack switch."""
+        self._probe_panel.probe(path)
+        self._stack.setCurrentWidget(self._probe_panel)
 
     def _on_sample_pipeline_requested(self, sample: SamplePipeline) -> None:
         self.open_recording(sample.recording_path, pipeline_path=sample.pipeline_path)

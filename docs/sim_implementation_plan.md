@@ -7640,11 +7640,35 @@ load instead of skipping) — fixed as part of proving `ST-D8-1` for real.
 - [x] `app/panels/probe.py` — `ProbePanel`: drag-and-drop or `Probe a
       Library…`, reuses `contracts.component.CtypesSilComponent` directly
       (the exact load `cli/probe.py` performs, never a re-parse of its text
-      output), renders every input/output port in a tree
+      output), renders every input/output port in a tree.
+      **Re-opened and re-closed 2026-08-06 (`AR-45`, fix queue row 5):** the
+      panel was built and wired to `probe_requested`, but never added to
+      `window.py`'s `QStackedWidget` — probing rendered into a widget
+      nobody saw, a defect the panel's own unit tests could not catch
+      because they instantiate it directly. `VantageWindow` now adds it to
+      `_stack` and `_on_probe_requested` switches to it (`test_ar45_probe_
+      panel_is_in_the_window_and_shown_on_probe`)
 - [x] `app/panels/console.py` — `ConsolePanel`: `code.InteractiveInterpreter`
       (stdlib, no `qtconsole`/IPython dependency), `update_namespace` rebinds
       `session`/`pipeline`/`scene` in place across a new recording without a
-      new console instance
+      new console instance.
+      **Re-opened and re-closed 2026-08-06 (`AR-45`):** never constructed
+      anywhere in `app/`, `window.py` did not import it. `VantageWindow` now
+      constructs ONE instance and docks it onto `self.bench` (Bench-only, by
+      omission — Campaign never gets one, same discipline `CampaignWidget`
+      already uses); `session`/`pipeline` rebind via a new `MainWindow.
+      session_ready` signal (`render/viewer.py`) so the console is never
+      stale, and the dock wrapping it is rebuilt per reopened recording
+      while the panel itself — and its transcript — persists
+      (`test_ar45_console_panel_is_a_real_dock_on_bench`, `test_ar45_
+      console_panel_survives_and_rebinds_across_a_reopened_recording`).
+      `scene` is **not** bound — no single "current scene" object exists on
+      `MainWindow` to bind live (scenes are built per-tick via
+      `SceneCache.get`), left honestly absent rather than bound to
+      something stale; a real fix is a `MainWindow` accessor, separate work.
+      `UT-D8-5` (`L-1`, transport-row control count) re-run: still 8,
+      unaffected — it counts `TransportBar`'s own toolbar, and a dock is
+      not a transport control
 
 **Campaign workspace**
 - [x] `app/shell/campaign.py` — `CampaignWidget`: a recording list + results
