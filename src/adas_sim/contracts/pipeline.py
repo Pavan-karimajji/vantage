@@ -131,6 +131,28 @@ class SeveredChain:
     downstream_port: str
 
 
+@dataclass(frozen=True, slots=True)
+class ScheduleDisagreement:
+    """`R-SIM-18`'s own closing line: "the DLL's own `updated` flag is
+    authoritative over the predicted schedule ... a disagreement is
+    reported, never hidden." One port, one due tick, one mismatch --
+    `Pipeline.step` predicted `predicted_due` from that port's own
+    declared `PortSpec.period_us` (never the component-level GCD, which
+    only gates whether `exec()` is called at all); `actual_updated` is
+    whether the real ABI actually reported that port as refreshed this
+    call (`CtypesSilComponent._collect_outputs`'s own `port.updated`,
+    surviving as simple presence in `exec()`'s returned mapping). A
+    component whose rate gating has drifted from its declared period
+    otherwise surfaces months later as an unexplained stale value --
+    this is the mechanism that instead surfaces it the tick it happens."""
+
+    tick_index: int
+    stage: str
+    port: str
+    predicted_due: bool
+    actual_updated: bool
+
+
 def _split_ref(ref: str) -> tuple[str, str]:
     """`"perception-core.gen_object_list"` -> `("perception-core",
     "gen_object_list")`. Splits on the FIRST dot only: a port name may itself
@@ -609,6 +631,12 @@ class Pipeline:
         #: `_override_first_seen`, reset on every construction.
         self._faults = tuple(faults)
         self._fault_first_active: dict[str, float | None] = {}
+        #: `R-SIM-18`'s own closing line, `ScheduleDisagreement`'s own
+        #: docstring -- every due-tick mismatch between a port's declared
+        #: `period_us` and the real ABI's own `updated` flag, accumulated
+        #: for this `Pipeline` instance's whole life. Reset on every
+        #: construction, same reasoning as `_last_output`/`_last_due_ns`.
+        self._schedule_disagreements: list[ScheduleDisagreement] = []
         #: One shared tick counter for `Fault.active_at`'s `after_tick` --
         #: `step()` already tracks elapsed time in `_elapsed_ns`; `exec()`
         #: gains the same accumulation here so both entry points can time
@@ -666,6 +694,14 @@ class Pipeline:
         overrides (`UT-D6-2`) -- `_faults` itself stays private, this is
         the one sanctioned read."""
         return self._faults
+
+    @property
+    def schedule_disagreements(self) -> tuple[ScheduleDisagreement, ...]:
+        """Every `ScheduleDisagreement` `step()` has found so far, in the
+        order found -- read-only, same "the one sanctioned read" reasoning
+        `faults` states above; `_schedule_disagreements` itself stays
+        private and append-only."""
+        return tuple(self._schedule_disagreements)
 
     @classmethod
     def parse_stages(cls, path: Path) -> tuple[Stage, ...]:
@@ -943,6 +979,7 @@ class Pipeline:
                                 input_meta[port_name] = InputMeta(valid=True, age_s=producer_hold_age_s)
                     self._apply_input_overrides(stage, inputs)
                     computed = self._components[stage.name].exec(dt_ns, inputs, input_meta)
+                    self._check_schedule_disagreements(stage.name, manifest, computed)
                 fresh[stage.name] = computed
                 self._last_output[stage.name] = computed
                 self._last_due_ns[stage.name] = self._elapsed_ns
@@ -966,6 +1003,43 @@ class Pipeline:
                         name=qualified, message=None, origin="unknown", valid=False, updated=False,
                     )
         return result
+
+    def _check_schedule_disagreements(
+        self, stage_name: str, manifest: ComponentManifest, computed: Mapping[str, bytes],
+    ) -> None:
+        """`R-SIM-18`'s closing line, `ScheduleDisagreement`'s own
+        docstring on why this checks each port's own `period_us` rather
+        than `manifest.period_ns` (the component-level GCD that already
+        decided whether `exec()` ran at all this tick -- gating multiple
+        functions at different real rates through one call is normal and
+        NOT itself a disagreement). `period_us == 0` (undeclared) predicts
+        "always due," the same convention `PortSpec.period_us`'s own
+        docstring states, so an undeclared port can never disagree.
+        `computed` already lost the ABI's raw `updated` int
+        (`CtypesSilComponent._collect_outputs`'s own docstring) -- but
+        never the fact, since a port that came back `updated=0` is simply
+        absent from `computed`, so presence IS the actual flag here.
+        `ProvenanceWarning`, immediately -- "reported, never hidden" means
+        visible the tick it happens, not only queryable after the fact
+        (`schedule_disagreements` is the queryable half, for a caller that
+        wants the full list rather than a live warning stream)."""
+        for port_spec in manifest.outputs:
+            if port_spec.period_us == 0:
+                continue
+            port_period_ns = port_spec.period_us * 1000
+            predicted_due = self._elapsed_ns % port_period_ns == 0
+            actual_updated = port_spec.name in computed
+            if predicted_due == actual_updated:
+                continue
+            self._schedule_disagreements.append(ScheduleDisagreement(
+                tick_index=self._tick_index - 1, stage=stage_name, port=port_spec.name,
+                predicted_due=predicted_due, actual_updated=actual_updated,
+            ))
+            warn(ProvenanceWarning(
+                f"stage '{stage_name}' port '{port_spec.name}': declared period_us={port_spec.period_us} "
+                f"predicted due={predicted_due} at tick {self._tick_index - 1}, but the ABI's own updated "
+                f"flag reported {actual_updated} -- rate gating has drifted from the declared period"
+            ))
 
     def severed_chains(self) -> tuple[SeveredChain, ...]:
         """A `measured` stage between two `simulate` stages on one data path

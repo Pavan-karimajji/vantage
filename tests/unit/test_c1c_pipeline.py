@@ -30,7 +30,7 @@ from adas_sim.contracts.component import ComponentManifest, InProcessSilComponen
 from adas_sim.contracts.fault import Fault, FaultVerb
 from adas_sim.contracts.override import Override, OverrideVerb
 from adas_sim.contracts.pipeline import Pipeline
-from adas_sim.core.errors import AuthoringError, ContractError, InternalError
+from adas_sim.core.errors import AuthoringError, ContractError, InternalError, ProvenanceWarning
 
 
 def _manifest(
@@ -962,6 +962,90 @@ def test_step_propagates_a_held_producers_staleness_into_a_downstream_input_meta
     assert fresh_meta.age_s == pytest.approx(0.0)
     assert held_meta.valid is True
     assert held_meta.age_s == pytest.approx(0.01)
+
+
+def test_schedule_disagreement_detected_when_a_due_port_is_not_actually_updated(tmp_path):
+    """`R-SIM-18`'s closing line ("the DLL's own updated flag is
+    authoritative ... a disagreement is reported, never hidden"): the
+    port's own declared `period_us` predicts due on every tick here (it
+    equals the base grid); the stand-in's second call withholds the port
+    anyway (simulating a real ABI reporting `updated=0`), which `step()`
+    must surface rather than silently treat as an ordinary held value."""
+    calls = {"n": 0}
+
+    def fn(dt_ns, inputs):
+        calls["n"] += 1
+        return {} if calls["n"] == 2 else {"out": b"x"}
+
+    manifest = _manifest(
+        component="stage", outputs=[PortSpec(name="out", proto_type="test.A", period_us=50_000)],
+        period_ns=50_000_000,
+    )
+    stages = [{"name": "stage", "mode": "simulate", "impl": "stub:stage", "inputs": {}}]
+    path = _write_pipeline(tmp_path, stages)
+    component = InProcessSilComponent("stage", manifest, fn)
+    component.init()
+    pipeline = Pipeline.load(path, components={"stage": component})
+
+    with pytest.warns(ProvenanceWarning, match="stage 'stage' port 'out'"):
+        pipeline.step(50_000_000, {})
+        pipeline.step(50_000_000, {})
+
+    disagreements = pipeline.schedule_disagreements
+    assert len(disagreements) == 1
+    d = disagreements[0]
+    assert (d.stage, d.port, d.predicted_due, d.actual_updated) == ("stage", "out", True, False)
+    assert d.tick_index == 1  # 0-indexed: the second step() call
+
+
+def test_no_schedule_disagreement_when_the_actual_flag_agrees_with_the_declared_period(tmp_path):
+    manifest = _manifest(
+        component="stage", outputs=[PortSpec(name="out", proto_type="test.A", period_us=50_000)],
+        period_ns=50_000_000,
+    )
+    stages = [{"name": "stage", "mode": "simulate", "impl": "stub:stage", "inputs": {}}]
+    path = _write_pipeline(tmp_path, stages)
+    component = InProcessSilComponent("stage", manifest, lambda dt_ns, inputs: {"out": b"x"})
+    component.init()
+    pipeline = Pipeline.load(path, components={"stage": component})
+
+    pipeline.step(50_000_000, {})
+    pipeline.step(50_000_000, {})
+
+    assert pipeline.schedule_disagreements == ()
+
+
+def test_schedule_disagreement_never_checked_for_an_undeclared_port_period(tmp_path):
+    """`period_us == 0` is "undeclared," not "always due at the fastest
+    possible rate" -- an undeclared port can never disagree, the same
+    convention `PortSpec.period_us`'s own docstring already states for
+    `ComponentManifest.period_ns`."""
+    manifest = _manifest(component="stage", outputs=[PortSpec(name="out", proto_type="test.A")])
+    stages = [{"name": "stage", "mode": "simulate", "impl": "stub:stage", "inputs": {}}]
+    path = _write_pipeline(tmp_path, stages)
+    component = InProcessSilComponent("stage", manifest, lambda dt_ns, inputs: {})  # never returns "out"
+    component.init()
+    pipeline = Pipeline.load(path, components={"stage": component})
+
+    pipeline.step(50_000_000, {})
+
+    assert pipeline.schedule_disagreements == ()
+
+
+def test_schedule_disagreement_not_checked_for_a_measured_stage(tmp_path):
+    """A `measured` stage injects fixture data -- there is no real ABI
+    `exec()` call at all for it to disagree with (`_check_schedule_
+    disagreements` is only ever called from the live-`exec()` branch)."""
+    manifest = _manifest(component="stage", outputs=[PortSpec(name="out", proto_type="test.A", period_us=50_000)])
+    stages = [{"name": "stage", "mode": "measured", "impl": "stub:stage", "inputs": {}}]
+    path = _write_pipeline(tmp_path, stages)
+    component = InProcessSilComponent("stage", manifest, lambda dt_ns, inputs: {"out": b"x"})
+    component.init()
+    pipeline = Pipeline.load(path, components={"stage": component})
+
+    pipeline.step(50_000_000, {}, measured={"stage": {}})  # withheld -- would disagree if checked at all
+
+    assert pipeline.schedule_disagreements == ()
 
 
 # ---------------------------------------------------------------------------

@@ -4971,12 +4971,34 @@ test_bundle_sha256_is_stable_across_mixed_line_endings_and_iteration_order`).
 - [x] The manifest **reports** the period; it does not define it — no ABI
       parameter added; `df`'s own two functions each keep deciding via
       `ENABLED_FUNCTIONS` which ports exist at all
-- [ ] **The DLL's own `updated` flag is authoritative over the predicted
-      schedule** — **not implemented this pass.** The Python-side GCD scheduler
-      (`R-SIM-18`, already landed) still only *predicts* from the reported
-      `period_ns`; nothing yet compares that prediction against a live stage's
-      actual `updated` flag and reports a disagreement. Left open, not
-      fabricated — a real follow-up, not a checkbox of convenience
+- [x] **The DLL's own `updated` flag is authoritative over the predicted
+      schedule**, landed 2026-08-06. `contracts/pipeline.py`'s `Pipeline.
+      _check_schedule_disagreements`, called right after every real
+      (non-`measured`) `exec()`: for each declared output `PortSpec` with a
+      real `period_us` (undeclared/`0` can never disagree, same convention
+      `ComponentManifest.period_ns` already uses), predicts due from THAT
+      PORT's own period — never `manifest.period_ns`, the component-level
+      GCD that only gates whether `exec()` runs at all, since one call
+      legitimately updates some functions' ports and not others (multi-rate
+      inside one component is normal, not a disagreement) — and compares
+      against whether the ABI's real `updated` flag actually reported it
+      (`CtypesSilComponent._collect_outputs` already turns `updated=0` into
+      simple absence from `exec()`'s returned mapping, so presence IS the
+      real flag). A mismatch is reported twice: immediately as a
+      `ProvenanceWarning` naming stage/port/tick ("reported, never hidden"
+      means visible the tick it happens), and durably on the new
+      `Pipeline.schedule_disagreements` property (`ScheduleDisagreement`,
+      accumulated for the pipeline's whole life, reset on every
+      construction like `_last_output`/`_last_due_ns`).
+      Tests: `test_c1c_pipeline.py::test_schedule_disagreement_detected_when_a_due_port_is_not_actually_updated`,
+      `::test_no_schedule_disagreement_when_the_actual_flag_agrees_with_the_declared_period`,
+      `::test_schedule_disagreement_never_checked_for_an_undeclared_port_period`,
+      `::test_schedule_disagreement_not_checked_for_a_measured_stage`.
+      **Not done, deliberately:** no CLI/HUD surface reads
+      `schedule_disagreements` yet (no test drives a real multi-rate `df`
+      DLL to produce one for real in this pass) — the mechanism and its
+      query surface exist; a reporting UI is separate, later work, same
+      "left open, not fabricated" distinction this item already drew.
 
 **Tests**
 - [x] `UT-C5-1` (`test_generic_abi.cpp::GenericAbiTest.AdasInitResolvesThePackedBundle`, `test_c5_relocatability.py`)
@@ -4984,9 +5006,58 @@ test_bundle_sha256_is_stable_across_mixed_line_endings_and_iteration_order`).
 - [x] `UT-C5-3` (`test_a2_project.py::test_project_mismatch_emits_provenance_warning_and_still_resolves`)
 - [x] `UT-C5-4` (`test_a2_project.py::test_bundle_sha256_changes_on_case_only_rename`)
 - [x] `UT-C5-5` (`test_a2_project.py::test_bundle_sha256_is_stable_across_mixed_line_endings_and_iteration_order`)
-- [ ] `UT-C5-6` `run.overrides:` materialises a derived bundle — **not
-      implemented**; no override-derived-bundle mechanism exists yet
-- [ ] `UT-C5-7` (depends on `UT-C5-6`'s mechanism — not implemented)
+- [x] `UT-C5-6` `run.overrides:` materialises a derived bundle, landed
+      2026-08-06 (`NR-SIM-6`, arch §5.6 "Overrides and sweeps").
+      `model/project.py`'s `materialize_derived_bundle(base_bundle_dir,
+      overrides, dest_dir)`: copies the base bundle, then for each
+      `run.overrides:` address (a dotted path — a real `default.yaml`
+      nests one level by function, `aeb: {AEB_..: ..}`, so
+      `"aeb.AEB_TTC_PRE_WARNING_THRESHOLD_S"` is the actual YAML path, not
+      a label; a single-segment address matches a flat file, e.g.
+      `vehicle/ego_params.yaml`) searches every bundle YAML file
+      generically (no function name known to the framework, `R-SIM-1`)
+      for the one where that path already resolves to a value — zero or
+      more than one match is an `AuthoringError` naming the address and
+      every candidate (an override may change an existing value, never
+      create one, `R-SIM-15`'s discipline extended to bundle calibration).
+      Recomputes `bundle.sha256` the same way the real build does. New
+      `io/base.py` schema: `BundleOverrideRecord`, `RunManifest.
+      bundle_overrides`/`base_config_bundle_sha256` (mirrors `OverrideRecord`/
+      `FaultRecord`'s own "declared, never smuggled" legibility, `S-D6`/
+      `S-C3`), serialized in `io/mcap.py`.
+      Tests: `test_c5_overrides.py::test_materialize_derived_bundle_patches_a_nested_calibration_key`,
+      `::test_materialize_derived_bundle_resolves_a_flat_single_segment_address`,
+      `::test_materialize_derived_bundle_changes_the_hash_and_never_touches_the_base`,
+      `::test_materialize_derived_bundle_raises_naming_the_address_when_the_key_is_unknown`,
+      `::test_materialize_derived_bundle_raises_naming_every_candidate_on_an_ambiguous_key`.
+- [x] `UT-C5-7`, landed 2026-08-06. `core/manifest.py`'s `RunSpec` gained
+      an `overrides:` field (`load_run_spec` reads a run manifest's own
+      top-level `overrides:` key, distinct from a pipeline STAGE's
+      `overrides:`, `R-SIM-15`'s port-value mechanism — this one is
+      run-wide and bundle-level); `resolve_swept_config(config, overrides,
+      project=)` is the wiring: a passthrough when `overrides` is empty
+      (the common case pays nothing), else requires a real `config:`
+      directory to derive FROM (no tier-resolution — sweeping "whatever
+      `adasInit(NULL)` would have found" would derive from a directory
+      this process never inspected, an `AuthoringError` if `config` is
+      `None`), materialises the derived bundle into a scratch dir, and
+      returns it as `effective_config` for the caller to forward to
+      `Pipeline.init_components`. Wired into `cli/resim.py`'s `run()`
+      (scratch dir cleaned up in the existing `finally:` alongside
+      `shutdown_components`); `--save`'s `build_manifest` call now passes
+      `bundle_overrides=`/`base_bundle_sha=`, so a swept resim's manifest
+      states "bundle `<hash>` + N overrides" per arch §5.6.
+      Tests: `test_c5_overrides.py::test_resolve_swept_config_with_no_overrides_is_a_passthrough`,
+      `::test_resolve_swept_config_requires_a_base_config_to_sweep`,
+      `::test_resolve_swept_config_derives_a_real_directory_the_caller_must_forward`,
+      `::test_a_swept_config_reaches_the_components_own_init` (a
+      `components=`-supplied double proving the DERIVED directory, not
+      the original `config:`, is what a real component's `init()` sees —
+      no DLL needed, same precedent `test_c3_fault_hud_widget.py` sets).
+      **Not done, deliberately, same "left open" pattern this stage
+      already uses:** `write_run_manifest` (the GUI's own path) does not
+      yet round-trip `overrides:` — no Vantage UI sets a bundle sweep this
+      pass, so there is nothing yet that would silently lose it.
 - [x] `UT-C5-8` `--config-source` forcing each tier, landed 2026-08-06.
       `ProjectModel.resolve(force=...)` (`model/project.py`) resolves EXACTLY
       the named tier — `"checkout"` goes straight to `_resolve_checkout`;
@@ -5059,15 +5130,9 @@ test_bundle_sha256_is_stable_across_mixed_line_endings_and_iteration_order`).
       tree this time, not the build tree `AR-1` left unproven
 - [x] `UT-C5-5` green
 
-**Remaining:** `UT-C5-6/7` (`run.overrides:` derived bundle — no mechanism
-exists) and the `updated`-flag-vs-predicted-schedule disagreement report.
-`UT-C5-8`/`UT-C5-9` and `ST-C5-2` landed 2026-08-06 (above; sim `pytest`
-833 passed / 27 skipped / 3 failed in this WSL shell — the 3 failures
-pre-date this session's changes, confirmed by reproducing them against
-`fe13770` unmodified: `test_d3_mainwindow_pipeline_panel.py`'s two
-`echo_stub.dll`-dependent tests, no usable Windows-built DLL in this
-Linux shell, and one flaky `QTest` drag simulation in
-`test_b3_viewport_controls.py`). Neither remaining item blocks `S-C8`/`S-C6`.
+**S-C5 is now fully closed** — every item and every `UT-C5-*`/`ST-C5-*`
+landed 2026-08-06 (above), including `UT-C5-6/7`, `ST-C5-2`, and the
+`updated`-flag-vs-predicted-schedule disagreement report.
 
 
 ### S-C6 — Resim in CI (the minimum automatic gate)

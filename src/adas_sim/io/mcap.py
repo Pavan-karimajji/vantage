@@ -26,6 +26,7 @@ from mcap.writer import Writer as _McapWriter
 
 from adas_sim.io.base import (
     CAPTURE_TIME_MANIFEST_VERSION,
+    BundleOverrideRecord,
     Capabilities,
     ComponentBuildInfo,
     FaultRecord,
@@ -96,6 +97,10 @@ def _manifest_to_dict(manifest: RunManifest) -> dict:
             }
             for f in manifest.faults
         ],
+        "bundle_overrides": [
+            {"address": o.address, "value": o.value} for o in manifest.bundle_overrides
+        ],
+        "base_config_bundle_sha256": manifest.base_config_bundle_sha256,
     }
 
 
@@ -130,6 +135,10 @@ def _manifest_from_dict(data: dict) -> RunManifest:
         )
         for f in data.get("faults", ())
     )
+    bundle_overrides = tuple(
+        BundleOverrideRecord(address=o["address"], value=o.get("value"))
+        for o in data.get("bundle_overrides", ())
+    )
     return RunManifest(
         manifest_version=data.get("manifest_version", 0),
         run_id=data.get("run_id", ""),
@@ -150,6 +159,8 @@ def _manifest_from_dict(data: dict) -> RunManifest:
         overrides=overrides,
         record_policies=record_policies,
         faults=faults,
+        bundle_overrides=bundle_overrides,
+        base_config_bundle_sha256=data.get("base_config_bundle_sha256", ""),
     )
 
 

@@ -124,6 +124,23 @@ class OverrideRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class BundleOverrideRecord:
+    """One declared `run.overrides:` entry -- `NR-SIM-6`'s calibration
+    sweep, exactly as it appears in the run manifest. A DIFFERENT
+    mechanism from `OverrideRecord` above: that one is a per-STAGE PORT
+    value (`R-SIM-15`, applied at `exec()` time); this one is a run-wide
+    BUNDLE calibration key (`model.project.materialize_derived_bundle`,
+    applied once at `adasInit` time, before any stage exists). No `stage`
+    field -- one derived bundle is shared by every stage `init_components`
+    initialises (`Pipeline.init_components`'s single `config_path`), and
+    no `verb` -- a bundle override always sets the key to `value`, the
+    sweep vocabulary arch §5.6 defines has no `hold`/`offset`/`scale`."""
+
+    address: str
+    value: object = None
+
+
+@dataclass(frozen=True, slots=True)
 class FaultRecord:
     """One declared `run.faults:` entry, exactly as it appears in the run
     manifest -- `R-SIM-15`'s "declared, never smuggled" extended from
@@ -196,6 +213,19 @@ class RunManifest:
     #: manifest" -- see `FaultRecord`'s own docstring for why there is no
     #: topic-level tag alongside it.
     faults: tuple[FaultRecord, ...] = field(default_factory=tuple)
+    #: `NR-SIM-6`, `UT-C5-6/7`: this run's declared `run.overrides:` (the
+    #: BUNDLE-calibration sweep set, `BundleOverrideRecord`'s own
+    #: docstring on how this differs from `overrides` above). Empty for
+    #: every run that declared none -- the common case, unchanged.
+    bundle_overrides: tuple[BundleOverrideRecord, ...] = field(default_factory=tuple)
+    #: The pre-override bundle's own `bundle.sha256`, recorded ALONGSIDE
+    #: each stage's `ComponentBuildInfo.config_bundle_sha256` (which, for a
+    #: swept run, reports the DERIVED bundle actually used) -- arch §5.6's
+    #: "records both the base bundle's hash and the override set," so "a
+    #: swept run is `bundle <hash> + 1 override`" is a statement a reader
+    #: can make from this manifest alone. `""` whenever `bundle_overrides`
+    #: is empty -- there is no second hash to distinguish from the first.
+    base_config_bundle_sha256: str = ""
     seed: int = 0
     #: `OD-11` (`R-SIM-3a` §9.1): whether this run's pipeline declared
     #: `allow_mixed_projects: true` -- badges a deliberate cross-project

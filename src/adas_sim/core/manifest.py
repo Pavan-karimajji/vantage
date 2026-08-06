@@ -30,9 +30,10 @@ from __future__ import annotations
 import hashlib
 import os
 import socket
+import tempfile
 import uuid
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from warnings import warn
@@ -44,6 +45,7 @@ from adas_sim.core.errors import AuthoringError, ContractError, ProvenanceWarnin
 from adas_sim.core.ids import new_run_id
 from adas_sim.io.base import (
     CAPTURE_TIME_MANIFEST_VERSION,
+    BundleOverrideRecord,
     ComponentBuildInfo,
     FaultRecord,
     OverrideRecord,
@@ -51,6 +53,7 @@ from adas_sim.io.base import (
     RunManifest,
 )
 from adas_sim.io.registry import reader_for
+from adas_sim.model.project import ProjectModel, materialize_derived_bundle
 
 #: `S-C6` (`R-SIM-24`): generated ONCE per process, at import time -- every
 #: `RunManifest` this process builds carries the same value, which is exactly
@@ -113,6 +116,21 @@ def _fault_records(pipeline: Pipeline) -> tuple[FaultRecord, ...]:
     )
 
 
+def _bundle_overrides_repr(bundle_overrides: Mapping[str, object]) -> str:
+    """A stable text form of a declared `run.overrides:` set -- part of
+    `new_run_id`'s hashed input set, same reasoning `_faults_repr` gives:
+    two runs differing only in which calibration keys were swept must
+    never collide on one run id (`NR-SIM-6`)."""
+    return "|".join(f"{key}={value}" for key, value in sorted(bundle_overrides.items()))
+
+
+def _bundle_override_records(bundle_overrides: Mapping[str, object]) -> tuple[BundleOverrideRecord, ...]:
+    """The same declared overrides `_bundle_overrides_repr` hashes, as the
+    structured, actually-readable form `RunManifest.bundle_overrides`
+    carries (`UT-C5-6/7`)."""
+    return tuple(BundleOverrideRecord(address=key, value=value) for key, value in sorted(bundle_overrides.items()))
+
+
 def _record_policy_records(pipeline: Pipeline) -> tuple[RecordPolicyRecord, ...]:
     """Every non-`off` stage's own declared output ports, each with its
     resolved `record:` policy (`UT-C2-12`, `NR-SIM-42`) -- written for
@@ -150,6 +168,8 @@ def build_manifest(
     component_bundle_shas: Mapping[str, str] | None = None,
     config_bundle_embedded: bool = False,
     bundle_sha: str = "",
+    bundle_overrides: Mapping[str, object] | None = None,
+    base_bundle_sha: str = "",
     seed: int = 0,
     host: str = "",
     clock: datetime | None = None,
@@ -180,15 +200,26 @@ def build_manifest(
     pipeline at all, only a `Source` -- `pipeline_sha`/`overrides_repr`
     then fall back to `""`, real honest values for a run this framework
     genuinely did not wire through a pipeline file, not placeholders for
-    one it forgot to pass."""
+    one it forgot to pass.
+
+    `bundle_overrides`/`base_bundle_sha` (`NR-SIM-6`, `UT-C5-6/7`): this
+    run's declared `run.overrides:` calibration-sweep set and the ORIGINAL
+    bundle's hash it was derived from (`model.project.
+    materialize_derived_bundle`) -- a DIFFERENT pair from `bundle_sha`
+    above, which already reports whatever bundle was actually resolved
+    (the derived one, for a swept run). Empty/`""` for the common case of
+    no sweep, same "degrades and says so" shape every other optional
+    provenance field here uses."""
     component_build_shas = component_build_shas or {}
     component_bundle_paths = component_bundle_paths or {}
     component_bundle_shas = component_bundle_shas or {}
+    bundle_overrides = bundle_overrides or {}
     pipeline_sha = _sha256_file(pipeline_path) if pipeline_path is not None and pipeline_path.exists() else ""
     recording_sha = _sha256_file(recording_path) if recording_path is not None and recording_path.exists() else ""
     scenario_sha = _sha256_file(scenario_path) if scenario_path is not None and scenario_path.exists() else ""
     overrides_repr = _overrides_repr(pipeline) if pipeline is not None else ""
     faults_repr = _faults_repr(pipeline) if pipeline is not None else ""
+    bundle_overrides_repr = _bundle_overrides_repr(bundle_overrides)
 
     run_id = new_run_id(
         inputs={
@@ -199,6 +230,7 @@ def build_manifest(
             "bundle_sha": bundle_sha,
             "overrides_repr": overrides_repr,
             "faults_repr": faults_repr,
+            "bundle_overrides_repr": bundle_overrides_repr,
             "seed": str(seed),
         },
         clock=clock,
@@ -233,6 +265,8 @@ def build_manifest(
         overrides=_override_records(pipeline) if pipeline is not None else (),
         record_policies=tuple(_record_policy_records(pipeline)) if pipeline is not None else (),
         faults=_fault_records(pipeline) if pipeline is not None else (),
+        bundle_overrides=_bundle_override_records(bundle_overrides),
+        base_config_bundle_sha256=base_bundle_sha if bundle_overrides else "",
         seed=seed,
         allow_mixed_projects=pipeline.allow_mixed_projects if pipeline is not None else False,
         process_nonce=_PROCESS_NONCE,
@@ -345,6 +379,11 @@ class RunSpec:
     recording: Path | None = None
     project: str = "base"
     config: Path | None = None
+    #: `NR-SIM-6`, `UT-C5-6/7`: this run manifest's own top-level
+    #: `overrides:` key -- the BUNDLE calibration sweep (arch §5.6),
+    #: distinct from a pipeline stage's `overrides:` (`Stage.overrides`,
+    #: a port value). Empty for every plain pipeline file, unchanged.
+    overrides: Mapping[str, object] = field(default_factory=dict)
 
 
 def _relative_or_raise(raw: object, *, key: str, path: Path) -> Path | None:
@@ -373,6 +412,59 @@ def load_run_spec(pipeline_path: Path) -> RunSpec:
         recording=_relative_or_raise(raw.get("recording"), key="recording", path=pipeline_path),
         project=raw.get("project", "base"),
         config=_relative_or_raise(raw.get("config"), key="config", path=pipeline_path),
+        overrides=dict(raw.get("overrides") or {}),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedRunConfig:
+    """`resolve_swept_config`'s own result. `effective_config` is what a
+    caller must forward to `Pipeline.init_components` -- unchanged from
+    the `config` it was given when no sweep was declared.
+    `scratch_dir`, when not `None`, is a directory the CALLER now owns and
+    must remove after the run (same lifetime discipline `render/
+    viewer.py`'s own `_resim_scratch_dir` uses) -- this function only ever
+    creates it, never cleans it up."""
+
+    effective_config: Path | None
+    base_bundle_sha: str = ""
+    scratch_dir: Path | None = None
+
+
+def resolve_swept_config(config: Path | None, overrides: Mapping[str, object], *, project: str) -> ResolvedRunConfig:
+    """`NR-SIM-6`'s wiring: a caller that resolved `config`/`overrides`
+    from a `RunSpec` (`cli/resim.py`) calls this ONCE, before
+    `init_components`, turning a declared `run.overrides:` sweep into the
+    real derived-bundle mechanism (`model.project.
+    materialize_derived_bundle`).
+
+    `overrides` empty (the overwhelming common case): passthrough --
+    `effective_config is config`, no scratch directory created, a plain
+    run pays nothing for a feature it never asked for.
+
+    `overrides` non-empty: `config` MUST already name a real base bundle
+    directory -- there is no tier-resolution here (`ProjectModel.
+    resolve`'s embedded/library/checkout tiers answer "what would the SUT
+    read with no override at all", a different question); sweeping
+    "whatever `adasInit(NULL)` would have found" would derive from a
+    directory this process never actually inspected. A missing `config` is
+    therefore an `AuthoringError`, never a silent fall-through to some
+    other tier."""
+    if not overrides:
+        return ResolvedRunConfig(effective_config=config)
+    if config is None:
+        raise AuthoringError(
+            expected="a base config bundle directory to sweep (--config, or the run manifest's own config: key)",
+            found="no config given",
+            where="run.overrides:",
+            hint="run.overrides: derives a swept bundle FROM a real one -- point --config at the bundle "
+                 "adasInit would otherwise read, then declare the sweep on top of it",
+        )
+    base_model = ProjectModel.resolve(explicit=config, project=project)
+    scratch_dir = Path(tempfile.mkdtemp(prefix="adas_sim_derived_bundle_"))
+    materialize_derived_bundle(config, overrides, scratch_dir)
+    return ResolvedRunConfig(
+        effective_config=scratch_dir, base_bundle_sha=base_model.bundle_sha256, scratch_dir=scratch_dir,
     )
 
 

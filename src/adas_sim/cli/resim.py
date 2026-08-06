@@ -30,11 +30,18 @@ over the file's own value.
 from __future__ import annotations
 
 import argparse
+import shutil
 from pathlib import Path
 
 from adas_sim.contracts.pipeline import Pipeline
 from adas_sim.core.errors import AuthoringError
-from adas_sim.core.manifest import build_manifest, check_library_provenance, load_run_spec, verify_pinned_builds
+from adas_sim.core.manifest import (
+    build_manifest,
+    check_library_provenance,
+    load_run_spec,
+    resolve_swept_config,
+    verify_pinned_builds,
+)
 from adas_sim.core.resim import resim_pipeline
 from adas_sim.io.base import Provenance, TopicInfo
 from adas_sim.io.registry import writer_for
@@ -111,6 +118,13 @@ def run(argv: list[str] | None = None) -> int:
     project = args.project if args.project is not None else spec.project
     config = args.config if args.config is not None else spec.config
 
+    # NR-SIM-6, UT-C5-6/7: a declared run.overrides: (spec.overrides) derives
+    # a swept bundle from `config` -- `resolved.effective_config` is what
+    # actually reaches adasInit, `config` itself is unchanged when no sweep
+    # was declared (resolve_swept_config's own passthrough).
+    resolved = resolve_swept_config(config, spec.overrides, project=project)
+    config = resolved.effective_config
+
     pipeline = Pipeline.load(args.pipeline, search=args.search)
     if args.pin_builds:
         verify_pinned_builds(pipeline, recording)
@@ -124,11 +138,14 @@ def run(argv: list[str] | None = None) -> int:
         outputs = resim_pipeline(pipeline, recording)
     finally:
         pipeline.shutdown_components()
+        if resolved.scratch_dir is not None:
+            shutil.rmtree(resolved.scratch_dir, ignore_errors=True)
 
     if args.save:
         meta = build_manifest(
             pipeline=pipeline, pipeline_path=args.pipeline, run_kind="resim", source_kind="mcap",
             project=project, recording_path=recording, component_build_shas=pipeline.component_build_shas(),
+            bundle_overrides=spec.overrides, base_bundle_sha=resolved.base_bundle_sha,
         )
         _save_outputs(pipeline, outputs, args.save, meta)
         print(f"wrote {args.save}")

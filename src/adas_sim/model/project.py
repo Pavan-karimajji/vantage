@@ -29,6 +29,8 @@ speculative, not free).
 from __future__ import annotations
 
 import hashlib
+import shutil
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -107,6 +109,82 @@ def _single_file_sha256(path: Path) -> str:
     directory that was never assembled."""
     normalized = path.read_text(encoding="utf-8").replace("\r\n", "\n")
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+_MISSING = object()
+
+
+def _get_nested(doc: object, path: tuple[str, ...]) -> object:
+    node = doc
+    for part in path:
+        if not isinstance(node, dict) or part not in node:
+            return _MISSING
+        node = node[part]
+    return node
+
+
+def _set_nested(doc: dict, path: tuple[str, ...], value: object) -> None:
+    node = doc
+    for part in path[:-1]:
+        node = node[part]
+    node[path[-1]] = value
+
+
+def materialize_derived_bundle(base_bundle_dir: Path, overrides: Mapping[str, object], dest_dir: Path) -> str:
+    """`NR-SIM-6`, `UT-C5-6`: the calibration-sweep mechanism arch §5.6
+    ("Overrides and sweeps") names -- `run.overrides:` must not force a
+    rebuild, so a sweep run derives a NEW bundle directory from the packed
+    one plus the override set, instead of editing either.
+
+    `overrides` keys are `run.overrides:` addresses, e.g.
+    `"<function>.<CALIBRATION_KEY>"` -- a real per-function `default.yaml`
+    (`df`'s own, `src/project/<p>/default.yaml`) nests exactly this way,
+    one top-level key per function, so a dotted address IS the YAML path,
+    not a label: `("<function>", "<CALIBRATION_KEY>")`. A single-segment
+    address (`"EGO_WHEELBASE_M"`) matches a flat file the same walk
+    (`vehicle/ego_params.yaml` has no nesting). This module still learns
+    no function name from any of this (`R-SIM-1` — no such literal
+    appears here, checked by the same `GT-1` grep this docstring is
+    written to keep passing) -- it resolves generically, by searching
+    every YAML file already in `base_bundle_dir` for the one where that
+    exact path already resolves to a value. Same discipline `R-SIM-15`
+    states for a port override: **an override may change an existing
+    value, never create a new key** -- a path present in zero files, or
+    in more than one, is an `AuthoringError` naming the address and every
+    candidate found (an ambiguous match is exactly as unsafe as a missing
+    one, never guessed).
+
+    Copies every file first (so an unrelated file -- `<component>.ports.
+    yaml`, anything else the build packed -- survives untouched), then
+    rewrites only the files actually patched, then recomputes and rewrites
+    `bundle.sha256` the same way the real build does (`_bundle_sha256`) --
+    a derived bundle is shaped exactly like a packed one, never a
+    look-alike. Returns the derived bundle's own hash, so a caller can
+    record both it and `base_bundle_dir`'s (`R-SIM-3a`'s "provenance stays
+    exact"): `dest_dir`'s own lifetime is the caller's choice, same as
+    `extract_embedded_bundle`."""
+    shutil.copytree(base_bundle_dir, dest_dir, dirs_exist_ok=True)
+    yaml_files = sorted(p for p in dest_dir.rglob("*.yaml"))
+    docs = {path: (yaml.safe_load(path.read_text(encoding="utf-8")) or {}) for path in yaml_files}
+    touched: set[Path] = set()
+    for address, value in overrides.items():
+        path_parts = tuple(address.split("."))
+        candidates = [path for path, doc in docs.items() if _get_nested(doc, path_parts) is not _MISSING]
+        if len(candidates) != 1:
+            raise AuthoringError(
+                expected=f"exactly one bundle file already declaring {address!r}",
+                found=f"{len(candidates)} match(es): {[p.name for p in candidates]}",
+                where=f"run.overrides {address!r} against {base_bundle_dir}",
+                hint="a run.overrides: entry can only change a calibration key the bundle "
+                     "already declares, in exactly one file -- it never creates a new key",
+            )
+        _set_nested(docs[candidates[0]], path_parts, value)
+        touched.add(candidates[0])
+    for path in touched:
+        path.write_text(yaml.safe_dump(docs[path], sort_keys=False), encoding="utf-8", newline="\n")
+    sha = _bundle_sha256(dest_dir)
+    (dest_dir / "bundle.sha256").write_text(sha + "\n", encoding="utf-8", newline="\n")
+    return sha
 
 
 def bundle_bytes_for_recording(bundle_dir: Path) -> bytes:
