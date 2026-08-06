@@ -6484,22 +6484,50 @@ a self-timed session.
       overridable, orphan stage flagged (`R-SIM-10`). Detection and
       auto-close already existed (`S-C1cΔ`); **the orphan-stage flag on
       `close_gaps=False` did not — added this pass** (see Status note)
-- [ ] `app/gui/pipeline_panel.py` — the per-stage mode toggle performs the
+- [x] `app/gui/pipeline_panel.py` — the per-stage mode toggle performs the
       auto-close undoably and renders the *"computed, not consumed"* badge.
-      **Not attempted — needs a display**, same class of blocker `S-D1`'s
-      `ST-D1-1` hit; the engine this would call (`Pipeline.with_mode`) is
-      done and tested above
-- [ ] `cli/explain.py` — **complete `sim explain <name>`** (seeded `S-B2`,
+      **Stale checkbox, corrected 2026-08-06 — this was actually done at
+      `S-D3` slice 5**, cross-referenced by `UT-D6-4`'s own note two boxes
+      below: the real file is `view/pipeline_panel.py` + `render.viewer.
+      PipelinePanel`, not `app/gui/pipeline_panel.py` (a path this box was
+      written against before the codebase's real panel convention
+      existed). Left unticked at the time because nobody walked back up
+      from `UT-D6-4`'s closure to tick its own scope box
+- [x] `cli/explain.py` — **complete `sim explain <name>`** (seeded `S-B2`,
       extended `S-C1c`; this is the full form). Accepts a port, field, layer id, style token, codec name,
       run id or error code; prints kind, type+unit, producer stage and mode,
       origin tag, topic presence, schema, which layer draws it, which
       expectation asserts it, and its value at the current tick. Every line
       comes from something already in the system — no new index.
-      **Not attempted this pass** — `core/explain.py` today resolves 3 of
-      ~7 named kinds (`run_id`, `topic`, registered `layer` id; missing:
-      field path, style token, codec name, error code) plus its own
-      docstring already names fuzzy "did you mean" as undone. A real,
-      multi-part gap, sized for its own pass rather than squeezed in here
+      **Six of six kinds done, follow-up pass 2026-08-06** (`UT-D6-7`):
+      `core/explain.py` gained codec-name (`registered_extensions`/`io.
+      registry.codec_info`, e.g. `mcap`/`.mcap`) and error-code resolution
+      (DG-5's closed taxonomy, matched by taxonomy name/class name/exit
+      code) alongside the existing `run_id`/topic/layer, plus a `difflib`
+      fuzzy "did you mean" on an unresolved name. **Style token is
+      deliberately resolved in `cli/explain.py`, not `core/explain.py`** —
+      `render/theme.py` sits ABOVE `core/` in the package map
+      (`sim_api_reference.md` §1, enforced by `UT-A1-6`), so `core.explain.
+      explain` cannot import it; `cli/` can, so that one branch (plus the
+      "did you mean" extension with token names) lives there, documented
+      in both modules' own docstrings. **Real bug found and fixed in the
+      same pass**: merging two already-`difflib`-ranked-and-truncated
+      match lists and re-sorting them alphabetically silently drops the
+      actual best match (a `bsd.*` component token alphabetically
+      out-ranked the correct `status.*` suggestion) — fixed by re-running
+      `difflib.get_close_matches` once over the full combined candidate
+      list instead of merging two separate top-3 results. **Scoped
+      honestly**: a bare field-path name (`df.aeb.outputs.brake_request`
+      with no `--at`) is not separately resolved beyond an exact topic
+      match — that richness (type, producer, schema, value) is exactly
+      what `--at`'s `evidence()` path already provides; `explain()` without
+      `--at` answers "what kind of name is this," not "what does it
+      contain," and adding field-level static resolution would need a
+      message class resolved from the port's own schema bytes, real
+      separate work. `tests/unit/test_d6_explain.py` (12 tests, all new).
+      Full suite: 787 passed / 7 skipped (Windows venv, `foxglove` extra
+      not installed here), `check_invariants.py` and `docs/py/run_all.py`
+      both clean
 - [ ] `cli/doctor.py` — **complete `sim doctor`** (seeded `S-A1`, grown per
       stage; this is the full form) (`DG-3`): interpreter and install
       mode; which library each `impl:` stem resolves to **and by which
@@ -6562,10 +6590,13 @@ a self-timed session.
       `test_forcing_the_gap_open_yields_exactly_one_orphan_warning_naming_
       the_stage` (+ a third test confirming the warning stays silent when
       nothing is actually severed)
-- [ ] `UT-D6-7` `sim explain` resolves each of the six accepted name kinds,
+- [x] `UT-D6-7` `sim explain` resolves each of the six accepted name kinds,
       and on an unknown name suggests a fuzzy match rather than failing
-      bare (`DG-2`, `N-8`). **Blocked on `cli/explain.py`'s own completion**
-      above, not attempted
+      bare (`DG-2`, `N-8`). **Done, follow-up pass 2026-08-06** — see
+      `cli/explain.py`'s own entry above for the full detail;
+      `tests/unit/test_d6_explain.py` covers all six kinds plus both the
+      "no suggestion when nothing is close" and "a real suggestion when
+      something is" fuzzy-match halves
 - [ ] `UT-D6-8` `sim doctor` exits non-zero on a broken stem, a bundle
       mismatch and a missing codec capability — and each message names the
       file (`DG-3`). **Blocked on `cli/doctor.py`'s own completion** above
@@ -6600,7 +6631,7 @@ a self-timed session.
 
 **Discipline** (every stage)
 - [x] portability §3 ticked — exposure: `P-5` (`sim probe` and `sim doctor` are the tools that *explain* library resolution, so they must exercise every pattern — `sim probe`'s own extension does; `sim doctor`'s extended form is not built), `P-2`
-- [ ] naming §3 ticked — exposure: `N-1`/`N-6` (`sim explain` only works because one name means one thing everywhere -- this stage is where that pays off, blocked on `explain.py`'s completion), `N-8`
+- [x] naming §3 ticked — exposure: `N-1`/`N-6` (`sim explain` only works because one name means one thing everywhere -- this stage is where that pays off, `explain.py` now complete for all six kinds), `N-8` (fuzzy "did you mean" landed)
 - [x] `pytest`/`scripts/check_invariants.py` green in this WSL shell (see
       Status note). `docs/py/run_all.py` not independently re-run — same
       `check_audit_ledger.py` slowness noted for `S-D1`

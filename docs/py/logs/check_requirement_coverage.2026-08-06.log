@@ -38,10 +38,10 @@ NR-SIM-45  no test id  0/0   The tool must be survivable by someone who d  -
 Partial — some verifiers proven, some not
 -----------------------------------------
 id         pri  done  requirement                                   outstanding verifiers
----------  ---  ----  --------------------------------------------  -------------------------
+---------  ---  ----  --------------------------------------------  ---------------------
 FR-SIM-3   P1   1/2   Scale to perception                           ST-D4-1
 FR-SIM-15  P1   1/2   A component ships a default workspace         UT-B3-11
-FR-SIM-49  P1   6/9   Naming conventions must be appropriate for d  UT-D6-7, UT-D6-8, UT-D8-8
+FR-SIM-49  P1   7/9   Naming conventions must be appropriate for d  UT-D6-8, UT-D8-8
 FR-SIM-43  P1   1/2   Two sides: producing a recording vs executin  ST-C2-1
 FR-SIM-66  P0   2/3   Vantage must adapt to recordings it did not   ST-C9-2
 FR-SIM-45  P1   2/3   A developer must be able to tweak individual  UT-D6-2

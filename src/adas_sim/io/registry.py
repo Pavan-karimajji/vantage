@@ -55,8 +55,28 @@ def register(
         _WRITERS[ext] = writer
 
 
-def _registered_extensions() -> list[str]:
+def registered_extensions() -> list[str]:
     return sorted(set(_READERS) | set(_WRITERS) | set(_BUILTIN_CODEC_MODULES))
+
+
+def codec_info(ext: str) -> dict[str, object] | None:
+    """Best-effort, no-file-needed answer to "what does this codec do" --
+    `sim explain <codec name>`'s own need (`DG-2`, `UT-D6-7`). `None` when
+    `ext` names no registered codec at all. A reader factory IS the reader
+    class (`capabilities` is a class attribute, no instantiation, no I/O);
+    a writer factory is called with no arguments to reach the same
+    attribute off the instance -- every registered writer's own `__init__`
+    opens nothing until `.open()` is called (`io/mcap.py`/`io/csv.py`'s own
+    `_new_writer`)."""
+    if not is_registered_recording_extension(ext):
+        return None
+    _load_builtin(ext)
+    has_reader = ext in _READERS
+    has_writer = ext in _WRITERS
+    capabilities = getattr(_READERS[ext], "capabilities", None) if has_reader else None
+    if capabilities is None and has_writer:
+        capabilities = _WRITERS[ext]().capabilities
+    return {"extension": ext, "has_reader": has_reader, "has_writer": has_writer, "capabilities": capabilities}
 
 
 def is_registered_recording_extension(suffix: str) -> bool:
@@ -66,7 +86,7 @@ def is_registered_recording_extension(suffix: str) -> bool:
     is a component library" WITHOUT paying `_load_builtin`'s import cost or
     `reader_for`'s own capability-mismatch error for the library case, which
     is not an error here, just the other branch."""
-    return suffix in _registered_extensions()
+    return suffix in registered_extensions()
 
 
 def reader_for(path: Path) -> RecordingReader:
@@ -84,7 +104,7 @@ def reader_for(path: Path) -> RecordingReader:
                 where=str(path), hint="an export (e.g. CSV) is lossy and terminal; use the recording it was exported from",
             )
         raise AuthoringError(
-            expected=f"a registered extension: {_registered_extensions()}", found=repr(path.suffix),
+            expected=f"a registered extension: {registered_extensions()}", found=repr(path.suffix),
             where=str(path), hint="register a codec for this extension, or use one already registered",
         )
     return factory(path)
@@ -100,7 +120,7 @@ def writer_for(path: Path) -> RecordingWriter:
                 where=str(path), hint="this extension has no registered writer",
             )
         raise AuthoringError(
-            expected=f"a registered extension: {_registered_extensions()}", found=repr(path.suffix),
+            expected=f"a registered extension: {registered_extensions()}", found=repr(path.suffix),
             where=str(path), hint="register a codec for this extension, or use one already registered",
         )
     return factory()
