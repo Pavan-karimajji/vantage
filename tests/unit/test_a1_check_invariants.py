@@ -16,7 +16,7 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from check_invariants import check_gt1, check_gt3, check_gt11, run_all  # noqa: E402
+from check_invariants import check_gt1, check_gt3, check_gt11, check_ut_d8_9, run_all  # noqa: E402
 
 
 def test_check_gt1_passes_on_an_empty_tree(tmp_path):
@@ -38,7 +38,7 @@ def test_check_gt1_fails_on_a_deliberately_planted_function_identifier(tmp_path)
 
 
 def test_run_all_is_clean_on_the_current_skeleton():
-    """All five gates (GT-1, GT-2, GT-3, GT-6, GT-11) hold on the tree as it stands."""
+    """All six checks (GT-1, GT-2, GT-3, GT-6, GT-11, UT-D8-9) hold on the tree as it stands."""
     assert run_all() == []
 
 
@@ -79,3 +79,40 @@ def test_st_c4_1_no_sensor_pose_or_class_footprint_literal_in_bsd_layers():
     `test_run_all_is_clean_on_the_current_skeleton`) is the mechanised grep
     this stage's own gate names."""
     assert check_gt3() == []
+
+
+def test_check_ut_d8_9_passes_on_an_empty_tree(tmp_path):
+    assert check_ut_d8_9(src_root=tmp_path) == []
+
+
+def test_check_ut_d8_9_passes_on_the_current_skeleton():
+    """`S-D8`: no `Vantage`/`Bench`/`Campaign` token in `adas_sim/` outside `app/`."""
+    assert check_ut_d8_9() == []
+
+
+def test_check_ut_d8_9_fails_on_a_workspace_token_outside_app(tmp_path):
+    (tmp_path / "app").mkdir()
+    (tmp_path / "core").mkdir()
+    (tmp_path / "core" / "session.py").write_text('# only in the Bench workspace\n', encoding="utf-8")
+    findings = check_ut_d8_9(src_root=tmp_path)
+    assert findings
+    assert "UT-D8-9" in findings[0]
+
+
+def test_check_ut_d8_9_allows_the_token_inside_app(tmp_path):
+    app_dir = tmp_path / "app"
+    app_dir.mkdir()
+    (app_dir / "window.py").write_text('WORKSPACE_NAME = "Bench"\n', encoding="utf-8")
+    assert check_ut_d8_9(src_root=tmp_path) == []
+
+
+def test_check_ut_d8_9_is_case_sensitive_so_ordinary_english_survives(tmp_path):
+    """"bench"/"campaign" (lowercase) are ordinary English words ("a test
+    bench", "workbench") -- only the capitalized product/workspace token
+    is a real finding, matching how the names actually appear at their
+    real point of use (`sim_player.md`)."""
+    (tmp_path / "core").mkdir()
+    (tmp_path / "core" / "example.py").write_text(
+        "# run this scenario on the test bench before the campaign starts\n", encoding="utf-8",
+    )
+    assert check_ut_d8_9(src_root=tmp_path) == []

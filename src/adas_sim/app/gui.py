@@ -36,5 +36,6 @@ def launch(
         preset=preset, initial_at_s=at_s, scenario_path=scenario_path,
         pipeline_path=pipeline_path, pipeline_search=pipeline_search, pipeline_config=pipeline_config,
     )
+    window.setWindowTitle("Vantage")  # the brand is app/'s to attach (UT-D8-9)
     window.show()
     return app.exec()

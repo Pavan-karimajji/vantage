@@ -70,6 +70,14 @@ _REQUIRES_ARG = re.compile(r"requires\s*=\s*[\(\[]([^)\]]*)[\)\]]")
 _PORT_CALL_ARG = re.compile(r"\.port\(([^)]*)\)")
 _GT11_EXEMPT_PREFIXES = ("self.", "source.")
 
+# UT-D8-9 (S-D8, sim_player.md's own naming rule): no workspace/product token
+# outside app/. Case-SENSITIVE, unlike GT-1's tokens -- "Vantage"/"Bench"/
+# "Campaign" are ordinary English words in lowercase ("a Bench" vs. "a test
+# bench", "workbench"), so matching case-insensitively would flag legitimate
+# prose; the actual product/workspace names are always capitalized at their
+# point of use (sim_player.md itself: "Vantage", "Bench", "Campaign").
+_WORKSPACE_TOKENS = re.compile(r"(?<![A-Za-z0-9])(Vantage|Bench|Campaign)(?![A-Za-z0-9])")
+
 
 def _iter_py_files(root: Path):
     if not root.is_dir():
@@ -145,6 +153,25 @@ def check_gt11(superproject_root: Path = SUPERPROJECT_ROOT) -> list[str]:
     return findings
 
 
+def check_ut_d8_9(src_root: Path = SRC_ROOT) -> list[str]:
+    """`UT-D8-9` (`S-D8`) -- no `Vantage`/`Bench`/`Campaign` token anywhere
+    in `adas_sim/` outside `app/` (`sim_player.md`'s own naming rule: "no
+    workspace name appears in `adas_sim/` outside `app/`" -- the engine
+    must not know which workspace is open, same discipline `GT-1` applies
+    to a driving function's name). Scoped exactly like `GT-2`/`GT-3` scope
+    to their own subtrees -- everything under `src_root` except `app/`
+    itself, which is the one place these tokens are the whole point."""
+    findings = []
+    app_dir = (src_root / "app").resolve()
+    for path in _iter_py_files(src_root):
+        if app_dir in path.resolve().parents or path.resolve() == app_dir:
+            continue
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if _WORKSPACE_TOKENS.search(line):
+                findings.append(f"UT-D8-9 {path}:{lineno}: workspace/product token outside app/: {line.strip()!r}")
+    return findings
+
+
 def run_all(src_root: Path = SRC_ROOT, superproject_root: Path = SUPERPROJECT_ROOT) -> list[str]:
     return [
         *check_gt1(src_root),
@@ -152,6 +179,7 @@ def run_all(src_root: Path = SRC_ROOT, superproject_root: Path = SUPERPROJECT_RO
         *check_gt3(src_root, superproject_root),
         *check_gt6(src_root),
         *check_gt11(superproject_root),
+        *check_ut_d8_9(src_root),
     ]
 
 
@@ -162,7 +190,7 @@ def main(argv: list[str] | None = None) -> int:
     if findings:
         print(f"\n{len(findings)} invariant violation(s)")
         return 1
-    print("GT-1, GT-2, GT-3, GT-6, GT-11: clean")
+    print("GT-1, GT-2, GT-3, GT-6, GT-11, UT-D8-9: clean")
     return 0
 
 

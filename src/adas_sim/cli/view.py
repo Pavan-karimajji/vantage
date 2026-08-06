@@ -4,7 +4,7 @@
 # @author Pavan Karimajji
 
 """`sim view <session> [--preset] [--at]` (`sim_api_reference.md` §10) --
-argument parsing only (`GT-9`); launching Vantage is `app/gui.launch`'s
+argument parsing only (`GT-9`); launching the GUI is `app/gui.launch`'s
 job, not this module's -- **not** `app/cli.py`, since `app/` is the GUI
 and holds no logic of its own either."""
 

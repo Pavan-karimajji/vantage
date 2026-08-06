@@ -3,7 +3,7 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""adas_sim - the simulation & visualization framework (Vantage).
+"""adas_sim - the simulation & visualization framework.
 
 Component-agnostic (R-SIM-1): drives component SIL libraries against live or
 recorded stimuli, records runs, and renders them. See

@@ -36,7 +36,7 @@ class CutFeasibility:
     computed from `Session.provides`/`Session.absent` and the stage's own
     component manifest, never a load-time assertion (`contracts/pipeline.py`'s
     own `_validate_wiring` is that; this is the "what's possible" report
-    `sim probe` and the Bench start page read *before* choosing one)."""
+    `sim probe` and the developer start page read *before* choosing one)."""
 
     stage: str
     feasible: bool

@@ -25,7 +25,7 @@ def main(argv: list[str] | None = None) -> int:
     subparsers.add_parser("doctor", help="report the environment (DG-3)")
     subparsers.add_parser("explain", help="explain any name in the system (DG-2)", add_help=False)
     subparsers.add_parser("probe", help="what a recording provides, and what it doesn't (S-C9)", add_help=False)
-    subparsers.add_parser("view", help="open Vantage on a recording (S-B3)", add_help=False)
+    subparsers.add_parser("view", help="open the GUI viewer on a recording (S-B3)", add_help=False)
     subparsers.add_parser("render", help="headless snapshot to a PNG (S-B3)", add_help=False)
     subparsers.add_parser("convert", help="recording -> recording (S-D7)", add_help=False)
     subparsers.add_parser("export", help="recording -> CSV, port-selectable (S-D7)", add_help=False)

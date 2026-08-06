@@ -96,9 +96,8 @@ def render_distribution(
 ) -> np.ndarray:
     """`distribution` (§7.4): a signal's spread over the whole session (the
     single-session reading of "over a whole run" -- a scenario-*set*
-    distribution, e.g. onset time across many recordings, is `S-D`
-    Campaign territory and needs more than one `Session` in scope, not
-    built here)."""
+    distribution, e.g. onset time across many recordings, needs more than
+    one `Session` in scope, not built here)."""
     fig, ax = _figure(size_px)
     if values:
         ax.hist(values, bins=bins, color=_POINT_COLOR, edgecolor=_BG)

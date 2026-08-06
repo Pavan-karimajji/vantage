@@ -5,7 +5,7 @@
 
 """`sim batch`'s per-recording subprocess entry point (S-D7, `R-SIM-19`).
 
-`core/batch.py` launches ONE of these per recording (`sim batch`/Campaign
+`core/batch.py` launches ONE of these per recording (`sim batch`
 isolates at run granularity, never per tick) via `sys.executable -m
 adas_sim.core.batch_worker`. This module does exactly one recording's worth
 of `Pipeline.load` -> `init_components` -> `resim_pipeline` -> `shutdown_

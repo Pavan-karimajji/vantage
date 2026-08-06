@@ -19,7 +19,7 @@ hand-maintained.
 Answers "what does this file/library provide, and what is it known not to"
 *before* a run starts (`R-SIM-23`'s own framing for the recording half) --
 the same facts `sim_implementation_plan.md` S-C9 asks the (not-yet-built)
-Bench start page to grey cuts by, and the same facts a from-scratch
+developer start page to grey cuts by, and the same facts a from-scratch
 component onboards itself with (`R-SIM-16`: "a new component is probed,
 wired and run without one edit inside `modules/sim`").
 """

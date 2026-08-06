@@ -3,7 +3,7 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""Vantage's Qt shell -- foundation slice (`sim_implementation_plan.md` S-B3).
+"""The GUI viewer's Qt shell -- foundation slice (`sim_implementation_plan.md` S-B3).
 Qt starts here and never below this line (`UT-B3-17`): pass 1 lives in
 `core/runner.py`, Scene assembly in `core/runner.build_scene`, rasterising in
 `render/bev.py` -- none of them import Qt, so this module is the only place
@@ -1004,10 +1004,11 @@ def _index_expectation_windows(
 
 
 class MainWindow(QtWidgets.QMainWindow):
-    """Vantage's window (`sim_player.md` names the application). A
-    **dockable peer-panel grid** (`sim_visualization_spec.md` §11.1) -- today
-    just the BEV panel; layers/inspector/timeline/plots/pipeline dock in
-    alongside it as later slices land."""
+    """The GUI viewer's window (branded and workspace-wrapped by `app/`,
+    `sim_player.md` names the product). A **dockable peer-panel grid**
+    (`sim_visualization_spec.md` §11.1) -- today just the BEV panel;
+    layers/inspector/timeline/plots/pipeline dock in alongside it as later
+    slices land."""
 
     def __init__(self, recording: Path, *, project: str = "base",
                  workspace_path: Path | None = None,
@@ -1021,7 +1022,12 @@ class MainWindow(QtWidgets.QMainWindow):
                  pipeline_config: Path | None = None,
                  parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Vantage")
+        # No product name set here (UT-D8-9) -- this module is outside
+        # app/, so the brand is the caller's to attach (app/gui.py for a
+        # standalone `sim view`, app/shell/window.py when this becomes the
+        # interactive workspace's own content). A window with no title set
+        # is still a real, usable window; it is simply nameless until
+        # someone in app/ names it.
         self._project = project
         self._recording_path = recording
         #: `sim view <session> [--preset] [--at]` (`sim_api_reference.md`
@@ -1239,6 +1245,14 @@ class MainWindow(QtWidgets.QMainWindow):
     def session(self) -> Session | None:
         return self._session
 
+    @property
+    def pipeline_path(self) -> Path | None:
+        """The pipeline file this window was opened with -- `app/shell/
+        window.py`'s own `UT-D8-1` needs to read this from outside without
+        reaching into a private attribute (`R-SIM-16` made checkable: a
+        workspace switch must never change this file's own bytes)."""
+        return self._pipeline_path
+
     def request_cancel_load(self) -> None:
         self._worker.request_cancel()
 
@@ -1339,8 +1353,8 @@ class MainWindow(QtWidgets.QMainWindow):
         """S-D3 slice 3: read-only this pass -- loads `self._pipeline_path`
         (real `dll:`/`stubdll:` resolution, same as the CLI) and syncs the
         dock against `session.known_ports`. A load failure degrades the
-        DOCK, never the window: the rest of Vantage does not depend on a
-        pipeline being given at all (`pipeline_path=None` is the common
+        DOCK, never the window: the rest of this window does not depend on
+        a pipeline being given at all (`pipeline_path=None` is the common
         case, unchanged from before this slice existed)."""
         if self._pipeline_path is None:
             return

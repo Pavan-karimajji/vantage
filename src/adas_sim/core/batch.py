@@ -50,8 +50,8 @@ from uuid import uuid4
 OUTCOMES = ("ok", "fail", "crash", "timeout")
 
 #: Tail of captured stderr kept per recording -- enough for `ST-D7-6`'s own
-#: "reproduce it on Bench" need (the recording/pipeline/tick/run_id do the
-#: real reproduction; this is a first-glance diagnostic only) without a
+#: "reproduce it interactively" need (the recording/pipeline/tick/run_id do
+#: the real reproduction; this is a first-glance diagnostic only) without a
 #: multi-megabyte report from one runaway recording.
 _STDERR_EXCERPT_BYTES = 4000
 

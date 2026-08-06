@@ -5,7 +5,7 @@
 
 """S-B4: interval capture to `.mp4`, the video counterpart of
 `render/capture.py`'s single-frame `snapshot()` -- a customer with no
-Vantage install still needs to *see* a run, not just a still (deferred:
+GUI install still needs to *see* a run, not just a still (deferred:
 `imageio[ffmpeg]`, `pyproject.toml`'s `video` extra, pulls a portable
 ffmpeg with no system install).
 

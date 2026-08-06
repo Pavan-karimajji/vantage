@@ -229,7 +229,7 @@ class _MixedFrameLayer(ValueError):
 def scene_entity_for_layer(layer: Layer, theme: Theme) -> fg.SceneEntity:
     """One `SceneEntity` per `Layer` -- id unchanged (`N-2`), so toggling
     this entity off in Foxglove Studio is exactly toggling this layer off in
-    Vantage. `frame_id` is the layer's OWN prims' frame (`"ego"` for an
+    the GUI viewer. `frame_id` is the layer's OWN prims' frame (`"ego"` for an
     empty layer) -- every prim in the layer must share it; see
     `_MixedFrameLayer`. Prims within the layer are emitted in DECLARATION
     order into each bucket (`UT-D1-3`: never a set/dict-iteration order)."""
