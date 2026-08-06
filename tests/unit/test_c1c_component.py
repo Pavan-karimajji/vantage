@@ -67,7 +67,7 @@ def _real_df_component() -> CtypesSilComponent:
 
 
 def test_abi_version_mismatch_raises_naming_both_versions(monkeypatch):
-    """UT-C1c-1."""
+    """UT-C1c-1 / UT-D5-1."""
     path = _real_df_sil_path()
     if path is None:
         pytest.skip(_SKIP_REASON)

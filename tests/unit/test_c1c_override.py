@@ -51,8 +51,9 @@ def test_parse_override_verb_accepts_every_closed_member():
 
 
 def test_parse_override_verb_outside_the_closed_four_is_a_load_error_not_a_warning():
-    """UT-C1c-17: a verb outside the closed four is an `AuthoringError`
-    (`R-SIM-15`) -- never a silently-accepted extension point."""
+    """UT-C1c-17 / UT-D6-1: a verb outside the closed four is an
+    `AuthoringError` (`R-SIM-15`) -- never a silently-accepted extension
+    point."""
     with pytest.raises(AuthoringError) as excinfo:
         parse_override_verb("interpolate", where="stage 'df' overrides 'egoDyn.vx'")
     message = str(excinfo.value)

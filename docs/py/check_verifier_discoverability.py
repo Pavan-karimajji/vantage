@@ -54,7 +54,9 @@ MODULES = SIM_DIR.parent
 #: rather than the id, and the rest are Python tests the plan cites by function
 #: name (`UT-C5-2` -> `test_a2_project.py::test_resolution_order_...`), which is
 #: a legitimate citation in the plan and still leaves the code end blank.
-BASELINE = 19
+#: All 19 threaded back to their implementing code 2026-08-06 (`AR-50`,
+#: fix queue row 1) -- lowered to 0.
+BASELINE = 0
 
 #: A checkbox that DEFINES a test id: the id is its first token. `> ` prefixes
 #: are allowed (several stages quote their scope inside blockquotes), and `~`

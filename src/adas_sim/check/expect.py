@@ -320,7 +320,10 @@ def _missing_within_s(where: str) -> float:
 def _series(ticks: Sequence[Tick], address: str, *, project: str) -> tuple[tuple[float, object], ...]:
     """`address`'s value at every tick, as `(t_s, value)` pairs -- the same
     resolver `core.signals.resolve_series` uses, indexed by time instead of
-    tick position (a predicate reasons in seconds, `within_s`'s own unit)."""
+    tick position (a predicate reasons in seconds, `within_s`'s own unit).
+    UT-C3-6: calling `resolve_tick` directly here, the same function a plot
+    panel calls, is the one-address-space proof -- there is no second
+    resolver for `expect:` predicates."""
     needs_ctx = address in registered_signals()
     model = ProjectModel.resolve(project=project) if needs_ctx else None
     out: list[tuple[float, object]] = []

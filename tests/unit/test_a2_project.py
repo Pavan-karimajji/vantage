@@ -49,8 +49,8 @@ def _make_bundle(root: Path, name: str, *, project: str, length: float, width: f
 
 
 def test_resolution_order_explicit_beats_embedded_beats_library_beats_checkout(tmp_path):
-    """UT-A2-7: with all four sources present, explicit wins; with three, the
-    embedded bundle wins; bundle_origin reports which."""
+    """UT-A2-7 / UT-C5-2: with all four sources present, explicit wins; with
+    three, the embedded bundle wins; bundle_origin reports which."""
     explicit_dir = _make_bundle(tmp_path, "explicit", project="fx", length=1.0, width=1.0, wheelbase=1.0, overhang=0.1)
     embedded_dir = _make_bundle(tmp_path, "embedded", project="fx", length=2.0, width=2.0, wheelbase=2.0, overhang=0.2)
     library_dir = _make_bundle(tmp_path, "library", project="fx", length=3.0, width=3.0, wheelbase=3.0, overhang=0.3)
@@ -73,8 +73,9 @@ def test_resolution_order_explicit_beats_embedded_beats_library_beats_checkout(t
 
 
 def test_project_mismatch_emits_provenance_warning_and_still_resolves(tmp_path):
-    """UT-A2-10: a project mismatch degrades visibly (a warning) and the run
-    continues -- it never raises and never silently substitutes (R-SIM-3a)."""
+    """UT-A2-10 / UT-C5-3: a project mismatch degrades visibly (a warning) and
+    the run continues -- it never raises and never silently substitutes
+    (R-SIM-3a)."""
     other_project_dir = _make_bundle(
         tmp_path, "other", project="cus1", length=5.0, width=5.0, wheelbase=5.0, overhang=0.5
     )

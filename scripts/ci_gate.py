@@ -46,7 +46,9 @@ CONFIG_PATH = SCRIPT_DIR / "ci_gate_config.yaml"
 # S-C6: the real scenario set S-C3 built. One path, not a CLI flag -- the
 # gate always checks the same set a local `sim check` would, so "the job
 # passes" and "this script exits 0" stay one claim (this file's own opening
-# comment, extended from pytest to the scenario set).
+# comment, extended from pytest to the scenario set). `ST-C3-1`: this is the
+# real path that loads all 18 scenarios under v2 -- no dedicated test
+# duplicates the load, this run against the real files IS the proof.
 DF_SCENARIO_SET = SIM_ROOT.parent / "df" / "tests" / "carla_scenarios"
 _DF_SIL_SEARCH_DIRS = [
     SIM_ROOT.parent / "df" / "build-sil-vs2026" / "src" / "platform" / "df_sil" / "Release",

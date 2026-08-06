@@ -3,12 +3,13 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""S-D3 slice 5 system test (`UT-D3-3`): the real Qt `PipelinePanel`
-(`render/viewer.py`) reflects `PipelinePanelState`'s severed-chain
-auto-close -- a one-line undo bar appears naming what moved, and clicking
-it renders the *"computed, not consumed"* badge on the orphaned stage's
-row. Same offscreen-platform discipline as `test_d3_pipeline_panel_widget.
-py` (`P-7`); same fixture topology as `test_d3_severed_chain_panel.py`
+"""S-D3 slice 5 system test (`UT-D3-3`, `UT-D6-4`): the real Qt
+`PipelinePanel` (`render/viewer.py`) reflects `PipelinePanelState`'s
+severed-chain auto-close -- a one-line undo bar appears naming what moved,
+and clicking it renders the *"computed, not consumed"* badge on the
+orphaned stage's row. Same offscreen-platform discipline as
+`test_d3_pipeline_panel_widget.py` (`P-7`); same fixture topology as
+`test_d3_severed_chain_panel.py`
 (`upstream(simulate) -> measured(measured) -> downstream(measured)`).
 """
 

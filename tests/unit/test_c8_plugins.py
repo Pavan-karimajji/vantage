@@ -128,6 +128,7 @@ def test_resolve_returns_none_when_no_tier_has_a_plugin_yaml(tmp_path):
 
 
 def test_out_of_range_api_is_refused_naming_both_numbers(tmp_path):
+    """UT-D5-4."""
     root = tmp_path / "bad_api"
     _write(root / "plugin.yaml", yaml.safe_dump({"api": 999, "component": "bad", "provides": ["sim.layers.explodes"]}))
     _write(root / "layers" / "__init__.py", "")
@@ -216,6 +217,7 @@ def test_sim_explain_reports_no_plugin_fields_for_a_first_party_layer():
 
 
 def test_two_components_each_contributing_a_layer_both_register(tmp_path):
+    """UT-D5-3."""
     a = _plugin_with_layer_module(
         tmp_path, name="compA", dotted="sim.layers.a",
         source=(

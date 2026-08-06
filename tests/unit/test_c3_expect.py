@@ -83,6 +83,7 @@ def test_parses_becomes():
 
 
 def test_becomes_without_within_s_is_a_schema_error():
+    """UT-C3-3."""
     with pytest.raises(AuthoringError, match="within_s"):
         parse_expectation({"id": "E1", "signal": "s", "becomes": 1, "of": "marker.entry"}, where="t")
 
@@ -128,6 +129,8 @@ def test_missing_id_is_a_schema_error():
 
 
 def test_equals_always_passes_and_fails():
+    """UT-C3-5: a failing result carries the actual value and actual time
+    next to the expected ones."""
     ticks = _ticks([1, 1, 1, 1])
     exp = parse_expectation({"id": "E", "signal": "widget.outputs.value", "equals": 1, "always": True}, where="t")
     assert evaluate_expectation(exp, ticks, markers={}).passed is True
@@ -300,6 +303,8 @@ def test_resolve_constant_anchor():
 
 
 def test_resolve_becomes_anchor():
+    """UT-C3-7 (1/2): a predicate-form anchor resolves to the first tick
+    satisfying it."""
     marker = Marker(id="m", at=BecomesAnchor(signal="widget.outputs.value", value=1))
     ticks = _ticks([0, 0, 1, 1])
     assert resolve_marker(marker, ticks) == pytest.approx(0.2)
@@ -312,6 +317,7 @@ def test_resolve_becomes_anchor_never_satisfied_raises():
 
 
 def test_resolve_crosses_anchor_rising_and_falling():
+    """UT-C3-7 (2/2)."""
     rising = Marker(id="r", at=CrossesAnchor(signal="widget.outputs.value", threshold=0.5, direction="rising"))
     falling = Marker(id="f", at=CrossesAnchor(signal="widget.outputs.value", threshold=0.5, direction="falling"))
     ticks = _ticks([0.0, 0.2, 0.6, 1.0, 0.4, 0.1])

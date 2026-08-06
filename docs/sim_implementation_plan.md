@@ -7972,11 +7972,15 @@ score the other gates cannot themselves be scored**
       column, *"unscored verifiers and their state"*, is the whole change.
       Shipping it before the checkboxes exist would print `[?]` eleven times and
       teach everyone to ignore it. See `sim_requirements.md` §0a's caveat table
-- [ ] **Work the undiscoverable-verifier baseline down from 19** (`AR-50`).
+- [x] **Work the undiscoverable-verifier baseline down from 19** (`AR-50`).
       `docs/py/check_verifier_discoverability.py` (new, in `run_all.py`) ratchets
       it: a run finding more than `BASELINE` fails. **Do not untick a box to fix
       one** — all 19 are real, passing tests; what is missing is the id written
-      where the test lives. Lower `BASELINE` in the same commit that fixes one
+      where the test lives. Lower `BASELINE` in the same commit that fixes one.
+      **Done 2026-08-06**: all 19 threaded back to their implementing test/build
+      site (Python docstrings, C++ gtest comments, and — for the three ids with
+      no dedicated automated test, `ST-C1a-1`/`ST-C3-1`/`UT-C1b-7` — the
+      build/CI script that IS the verification), `BASELINE` lowered to 0.
 - [ ] **Re-assess `OQ-14` with the measurement it now has** (`AR-49`). It asked
       whether ~600 KB of normative prose across ten documents is still worth
       maintaining, and predicted the failure as *"documents that silently stop

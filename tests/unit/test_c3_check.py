@@ -363,5 +363,7 @@ def test_write_report_dispatches_by_extension(tmp_path):
 
 
 def test_suite_passed_is_false_if_any_scenario_fails():
+    """ST-C3-2 (unit half): suite_passed both ways -- all-pass is True, one
+    failure is False."""
     assert suite_passed([_fake_result("a", passed=True)]) is True
     assert suite_passed([_fake_result("a", passed=True), _fake_result("b", passed=False)]) is False

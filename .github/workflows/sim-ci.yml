@@ -1,4 +1,7 @@
-# S-C0 -- the automatic gate (docs/sim_implementation_plan.md).
+# S-C0 -- the automatic gate (docs/sim_implementation_plan.md). `ST-C0-1`: this
+# job runs green on the current tree, with `ci_gate_config.yaml`'s pytest_floor
+# equal to the number actually observed the day it was set -- no aspirational
+# floor.
 #
 # Thin wrapper only: every real check lives in scripts/ci_gate.py, which is
 # invoked identically here and by hand, so this file owns triggers and

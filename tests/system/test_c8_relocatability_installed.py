@@ -3,7 +3,7 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji <Pavan.Karimajji@larsentoubro.com>
 
-"""`ST-C8-1`/`ST-C8-2` (`sim_implementation_plan.md` S-C8): the plug-in
+"""`ST-C8-1`/`ST-C8-2`/`ST-D5-3` (`sim_implementation_plan.md` S-C8): the plug-in
 bundle's relocatability proof, sibling of `test_c5_relocatability_installed.
 py` and run the same way -- a real `df_sil` `cmake --install`, relocated away
 from the build tree, with the original installed copy removed before

@@ -3,7 +3,9 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""S-D6 `sim probe <lib>` (`docs/sim_implementation_plan.md`, `sim_learn.md`
+"""S-D6 `sim probe <lib>` (`docs/sim_implementation_plan.md`, `sim_learn.md`,
+`ST-D5-2` -- one of the cross-referenced witnesses that the player discovers a
+component's ports from its manifest with no rebuild --
 SS5's own worked example: `sim probe ./df_sil.dll` and `sim probe
 <recording>.mcap` share ONE verb). No C++/Conan toolchain exists in this
 shell to build a real component (`df_sil` etc.), so this proves the REAL
