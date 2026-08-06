@@ -10,7 +10,7 @@ Summary
 priority  proven  partial  unproven  no test id  parked  total
 --------  ------  -------  --------  ----------  ------  -----
 P0        7       7        2         1           0       17
-P1        37      3        11        8           1       60
+P1        38      3        10        8           1       60
 P2        0       0        0         0           0       0
 
 P0 requirements — the tool is not usable without these
@@ -50,4 +50,4 @@ NR-SIM-22  P0   3/4   A component that crashes or hangs must not t  ST-D7-6
 NR-SIM-40  P0   1/2   Determinism must be measured across the axes  ST-C6-4
 FR-SIM-67  P0   2/3   Every rendered value is traceable to the byt  ST-D6-3
 
-RESULT  ok — every cited verifier resolves to a unit of work (44 proven, 10 partial, 13 unproven, 9 verified by other means)
+RESULT  ok — every cited verifier resolves to a unit of work (45 proven, 10 partial, 12 unproven, 9 verified by other means)

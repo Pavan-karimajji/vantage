@@ -17,12 +17,16 @@ no DLL at all in `tests/unit/test_d6_doctor.py`.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
 import pytest
 
 from adas_sim.cli import doctor
+from adas_sim.io.base import RunManifest
+from adas_sim.io.registry import writer_for
+from adas_sim.model.project import bundle_bytes_for_recording
 
 SIM_ROOT = Path(__file__).resolve().parent.parent.parent
 MODULES_ROOT = SIM_ROOT.parent
@@ -122,3 +126,67 @@ def test_doctor_reports_feasible_cuts_for_the_real_recording():
     )
     assert "feasible_cuts" in report["recording"]
     assert report["recording"]["feasible_cuts"][0]["stage"] == "df"
+
+
+# UT-C5-8: --config-source forces the bundle-agreement check onto exactly
+# one tier, against the real df_sil.dll build (no fixture library can stand
+# in -- _bundle_diagnoses only ever loads a real CtypesSilComponent).
+
+def _origin_forced(out: str, origin: str) -> bool:
+    return re.search(rf"viewer_bundle_origin\s+{origin}\b", out) is not None
+
+
+def test_doctor_config_source_library_forces_the_library_tier(capsys):
+    # No --config given -- forcing "library" must still resolve, from the
+    # config/ packed beside the resolved dll itself, and (being the exact
+    # bundle that dll was built with) must agree.
+    exit_code = doctor.run([
+        "--pipeline", str(_PIPELINE_PATH), "--search", str(_DF_SIL_DIR),
+        "--config-source", "library",
+    ])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert _origin_forced(out, "library")
+
+
+def test_doctor_config_source_checkout_forces_the_checkout_tier(capsys):
+    # The checkout tier hashes a single shared_config file, never the real
+    # packed bundle -- shapes differ, so this is not expected to agree; the
+    # point is that "checkout" was the tier actually consulted.
+    doctor.run([
+        "--pipeline", str(_PIPELINE_PATH), "--search", str(_DF_SIL_DIR),
+        "--config-source", "checkout",
+    ])
+    out = capsys.readouterr().out
+    assert _origin_forced(out, "checkout")
+
+
+def test_doctor_config_source_embedded_resolves_from_the_recordings_own_bundle(tmp_path, capsys):
+    # The fixture recordings under carla_testruns predate config-bundle
+    # embedding (their config_bundle_bytes() is empty) -- a real, separate
+    # gap, not this test's concern. Write a throwaway recording that DOES
+    # embed the real library's own bundle, so --config-source embedded has
+    # something genuine to force against and must agree exactly (same
+    # bytes, both sides).
+    recording = tmp_path / "embedded_bundle.mcap"
+    writer = writer_for(recording)
+    writer.open(recording, RunManifest(manifest_version=2), {}, config_bundle_bytes=bundle_bytes_for_recording(_DF_SIL_CONFIG))
+    writer.close()
+
+    exit_code = doctor.run([
+        "--pipeline", str(_PIPELINE_PATH), "--search", str(_DF_SIL_DIR),
+        "--recording", str(recording), "--config-source", "embedded",
+    ])
+    out = capsys.readouterr().out
+    assert _origin_forced(out, "embedded")
+    assert exit_code == 0
+
+
+def test_doctor_config_source_embedded_without_a_recording_is_a_problem_naming_the_tier(capsys):
+    exit_code = doctor.run([
+        "--pipeline", str(_PIPELINE_PATH), "--search", str(_DF_SIL_DIR),
+        "--config-source", "embedded",
+    ])
+    out = capsys.readouterr().out
+    assert exit_code != 0
+    assert "--config-source embedded could not resolve" in out

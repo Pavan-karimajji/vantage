@@ -17,8 +17,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from adas_sim.core.errors import ProvenanceWarning
-from adas_sim.model.project import ProjectModel, bundle_bytes_for_recording
+from adas_sim.core.errors import AuthoringError, ProvenanceWarning
+from adas_sim.model.project import ProjectModel, bundle_bytes_for_recording, extract_embedded_bundle
 
 #: modules/interfaces/scripts, sibling submodule -- not a pip dependency of
 #: adas_sim (R-SIM-11: a component's build must not require adas_sim, and
@@ -84,6 +84,65 @@ def test_project_mismatch_emits_provenance_warning_and_still_resolves(tmp_path):
 
     assert resolved.project == "cus1"
     assert resolved.ego().length_m == 5.0
+
+
+def test_config_source_force_embedded_wins_over_a_higher_priority_explicit(tmp_path):
+    """UT-C5-8: `force="embedded"` (`--config-source embedded`) resolves
+    the recording's own bundle even though an `explicit` bundle -- which
+    would normally win -- is also given. Forcing a tier is not merely a
+    priority nudge; it is a different tier selected outright."""
+    explicit_dir = _make_bundle(tmp_path, "explicit", project="fx", length=1.0, width=1.0, wheelbase=1.0, overhang=0.1)
+    embedded_dir = _make_bundle(tmp_path, "embedded", project="fx", length=2.0, width=2.0, wheelbase=2.0, overhang=0.2)
+
+    resolved = ProjectModel.resolve(explicit=explicit_dir, recording=embedded_dir, project="fx", force="embedded")
+    assert resolved.bundle_origin == "embedded"
+    assert resolved.ego().length_m == 2.0
+
+
+def test_config_source_force_checkout_ignores_every_other_source(tmp_path):
+    explicit_dir = _make_bundle(tmp_path, "explicit", project="base", length=9.0, width=9.0, wheelbase=9.0, overhang=0.9)
+
+    resolved = ProjectModel.resolve(explicit=explicit_dir, project="base", force="checkout")
+    assert resolved.bundle_origin == "checkout"
+    assert resolved.ego().length_m != 9.0  # the real checkout value, not the ignored explicit one
+
+
+def test_config_source_force_raises_naming_the_forced_tier_when_nothing_is_there(tmp_path):
+    """`R-SIM-3a`'s "an override that is silent recreates the exact
+    confusion the bundle exists to remove" -- forcing a tier that has
+    nothing to resolve must fail loudly, never silently fall through to
+    another tier the caller did not ask for."""
+    with pytest.raises(AuthoringError, match="embedded"):
+        ProjectModel.resolve(project="base", force="embedded")  # no recording= given at all
+
+
+def test_config_source_force_raises_when_the_forced_directory_has_no_bundle(tmp_path):
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+    with pytest.raises(AuthoringError, match="library"):
+        ProjectModel.resolve(library_dir=empty_dir, project="base", force="library")
+
+
+def test_embedded_bundle_bytes_extracted_from_a_recording_resolve_with_no_checkout(tmp_path):
+    """UT-C5-9: a recording's own embedded bundle bytes -- the actual
+    thing `Recorder.open`'s `config_bundle_bytes` embeds and `RecordingReader.
+    config_bundle_bytes()` reads back -- round-trip through
+    `extract_embedded_bundle` into a real directory `ProjectModel.resolve`
+    can read, with no checkout ever consulted (a nonexistent project name
+    proves the checkout tier was never reached, not merely unused)."""
+    source_bundle = _make_bundle(
+        tmp_path, "source", project="fx", length=4.0, width=1.5, wheelbase=2.5, overhang=0.4,
+    )
+    embedded_bytes = bundle_bytes_for_recording(source_bundle)
+
+    extracted_dir = tmp_path / "extracted_from_recording"
+    extract_embedded_bundle(embedded_bytes, extracted_dir)
+
+    resolved = ProjectModel.resolve(recording=extracted_dir, project="no_such_project_UT_C5_9")
+    assert resolved.bundle_origin == "embedded"
+    assert resolved.project == "fx"
+    assert resolved.ego().length_m == 4.0
+    assert resolved.ego().wheelbase_m == 2.5
 
 
 def _make_real_bundle(bundle_dir: Path, *, newline: str = "\n") -> None:

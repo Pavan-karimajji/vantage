@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from adas_sim.cli import doctor as doctor_cli
 from adas_sim.contracts.pipeline import Pipeline
 from adas_sim.core.diagnostics import doctor_report
@@ -87,3 +89,8 @@ def test_doctor_cli_exits_non_zero_on_a_broken_stem(tmp_path, capsys):
 
 def test_doctor_cli_exits_zero_with_no_flags():
     assert doctor_cli.run([]) == 0
+
+
+def test_doctor_cli_rejects_an_unknown_config_source():
+    with pytest.raises(SystemExit):
+        doctor_cli.build_parser().parse_args(["--config-source", "nonsense"])

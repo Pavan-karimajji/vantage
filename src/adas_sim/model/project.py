@@ -36,7 +36,7 @@ from warnings import warn
 
 import yaml
 
-from adas_sim.core.errors import ProvenanceWarning
+from adas_sim.core.errors import AuthoringError, ProvenanceWarning
 from adas_sim.model.ego import SHARED_CONFIG_PROJECTS, EgoModel
 
 #: `sim_api_reference.md` §6 declares only `"embedded" | "library" |
@@ -126,6 +126,23 @@ def bundle_bytes_for_recording(bundle_dir: Path) -> bytes:
     return yaml.safe_dump(mapping, sort_keys=True).encode("utf-8")
 
 
+def extract_embedded_bundle(config_bundle_bytes: bytes, dest_dir: Path) -> None:
+    """The inverse of `bundle_bytes_for_recording` (`UT-C5-9`): writes a
+    recording's own embedded config-bundle bytes (`RecordingReader.
+    config_bundle_bytes()`, `/meta/config_bundle`) back out as real files
+    under `dest_dir`, so `ProjectModel.resolve(recording=dest_dir)` has an
+    actual directory to read -- the "embedded" tier's missing half.
+    `bundle_bytes_for_recording` writes bytes INTO a recording; nothing
+    wrote them back OUT until this. `dest_dir` is the caller's own choice
+    (a temp directory, typically) -- this function only ever writes inside
+    it, never decides its lifetime."""
+    mapping = yaml.safe_load(config_bundle_bytes.decode("utf-8")) or {}
+    for relpath, content in mapping.items():
+        path = dest_dir / relpath
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8", newline="\n")
+
+
 @dataclass(frozen=True, slots=True)
 class ProjectModel:
     project: str
@@ -140,6 +157,28 @@ class ProjectModel:
         return self._ego
 
     @classmethod
+    def _resolve_one(cls, origin: BundleOrigin, bundle_dir: Path, *, project: str) -> ProjectModel | None:
+        found = _bundle_ego(bundle_dir)
+        if found is None:
+            return None
+        resolved_project, ego = found
+        if resolved_project != project:
+            warn(
+                ProvenanceWarning(
+                    f"{origin} bundle at {bundle_dir} is for project {resolved_project!r}, "
+                    f"not the requested {project!r}"
+                )
+            )
+        sha = _bundle_sha256(bundle_dir)
+        return cls(project=resolved_project, bundle_sha256=sha, bundle_origin=origin, _ego=ego)
+
+    @classmethod
+    def _resolve_checkout(cls, project: str) -> ProjectModel:
+        ego = EgoModel.load(project)
+        sha = _single_file_sha256(SHARED_CONFIG_PROJECTS / project / "vehicle" / "ego_params.yaml")
+        return cls(project=project, bundle_sha256=sha, bundle_origin="checkout", _ego=ego)
+
+    @classmethod
     def resolve(
         cls,
         *,
@@ -147,6 +186,7 @@ class ProjectModel:
         library_dir: Path | None = None,
         explicit: Path | None = None,
         project: str = "base",
+        force: Literal["embedded", "library", "checkout"] | None = None,
     ) -> ProjectModel:
         """`project` is the source-checkout fallback's project name (R-VAR-4:
         `base` is the no-specific-program default) and, for the other three
@@ -154,24 +194,42 @@ class ProjectModel:
         manifest names a different project emits `ProvenanceWarning` and
         still resolves (R-SIM-3a), it never raises and never silently
         substitutes.
+
+        `force`, when given, skips the normal explicit -> embedded ->
+        library -> checkout priority order and resolves EXACTLY the named
+        tier (`UT-C5-8`, `--config-source embedded|library|checkout` on
+        the CLI, `sim_architecture.md` §5.6) -- a caller forcing
+        `"embedded"` genuinely wants the recording's OWN bundle even if a
+        newer library bundle is also available, and a forced tier that
+        cannot actually resolve is a **hard failure, never a silent
+        fall-through to a different tier** (the same "an override that is
+        silent recreates the exact confusion the bundle exists to
+        remove" reasoning `R-SIM-3a` already states for a project
+        mismatch). `explicit=<path>` already covers the CLI's fourth form,
+        `--config-source <path>` -- there is no `force="explicit"`, since
+        an explicit path already IS the override, not a tier selection.
         """
+        if force is not None:
+            if force == "checkout":
+                return cls._resolve_checkout(project)
+            bundle_dir = recording if force == "embedded" else library_dir
+            if bundle_dir is not None:
+                resolved = cls._resolve_one(force, Path(bundle_dir), project=project)
+                if resolved is not None:
+                    return resolved
+            raise AuthoringError(
+                expected=f"a real bundle to force --config-source {force} against",
+                found="no bundle there" if bundle_dir is not None else f"no {force} source was given at all",
+                where="adas_sim.model.project.ProjectModel.resolve",
+                hint=f"--config-source {force} was forced but that tier has nothing to resolve -- "
+                     "point it at a real bundle, or drop the forced source",
+            )
+
         for origin, bundle_dir in (("explicit", explicit), ("embedded", recording), ("library", library_dir)):
             if bundle_dir is None:
                 continue
-            found = _bundle_ego(Path(bundle_dir))
-            if found is None:
-                continue
-            resolved_project, ego = found
-            if resolved_project != project:
-                warn(
-                    ProvenanceWarning(
-                        f"{origin} bundle at {bundle_dir} is for project {resolved_project!r}, "
-                        f"not the requested {project!r}"
-                    )
-                )
-            sha = _bundle_sha256(Path(bundle_dir))
-            return cls(project=resolved_project, bundle_sha256=sha, bundle_origin=origin, _ego=ego)
+            resolved = cls._resolve_one(origin, Path(bundle_dir), project=project)
+            if resolved is not None:
+                return resolved
 
-        ego = EgoModel.load(project)
-        sha = _single_file_sha256(SHARED_CONFIG_PROJECTS / project / "vehicle" / "ego_params.yaml")
-        return cls(project=project, bundle_sha256=sha, bundle_origin="checkout", _ego=ego)
+        return cls._resolve_checkout(project)

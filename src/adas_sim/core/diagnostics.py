@@ -31,18 +31,18 @@ the S-A1 report plus the (input-independent) codec table:
   the config bundle (`R-SIM-3a`'s core fear) -- the SUT's own real
   `config_bundle_sha256` (read by actually loading the resolved library,
   same as `sim probe`) compared against `model.project.ProjectModel`'s own
-  resolution using the SAME `--config`/library-packed bundle. **Scoped
-  honestly**: the "embedded in recording" tier is not compared here --
-  `ProjectModel.resolve`'s `recording=` parameter expects a bundle
-  DIRECTORY already extracted to disk, and nothing in this codebase
-  extracts one from a recording's own embedded bundle bytes yet
-  (`model/project.py`'s own docstring: no generic bundle-directory
-  accessor exists); comparing the two tiers that ARE real and wired --
-  explicit `--config` and the library-packed bundle -- is the actual
-  claim `sim resim --config` exercises.
+  resolution using the SAME `--config`/library-packed bundle.
 - `--recording` (with `--pipeline`): which cuts the recording supports
   (`Session.feasible_cuts`, `R-SIM-12`/`R-SIM-23`), and whether the
   recording's own extension is even readable at all.
+- `--config-source embedded|library|checkout` (`UT-C5-8`): forces the
+  bundle-agreement check above to compare against exactly one tier rather
+  than the normal explicit -> embedded -> library -> checkout priority
+  order -- `model.project.ProjectModel.resolve`'s own `force=` parameter,
+  `--recording`'s embedded bundle bytes extracted to a temp directory via
+  `model.project.extract_embedded_bundle` (`UT-C5-9`) when `embedded` is
+  forced. A forced tier that cannot resolve is reported as a problem
+  naming the tier, never silently ignored.
 
 `"problems"` collects every finding that would break a real run --
 `UT-D6-8`'s own three: a broken `impl:` stem, a bundle disagreement, and an
@@ -57,14 +57,23 @@ import sys
 from collections.abc import Sequence
 from importlib import metadata
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from typing import Literal
 
 from adas_sim.contracts.component import CtypesSilComponent
 from adas_sim.contracts.loader import resolve_library_report
 from adas_sim.contracts.pipeline import Pipeline, Stage
-from adas_sim.core.errors import SimError
+from adas_sim.core.errors import AuthoringError, SimError
 from adas_sim.core.session import Session
-from adas_sim.io.registry import codec_info, is_registered_recording_extension, registered_extensions
-from adas_sim.model.project import ProjectModel
+from adas_sim.io.registry import (
+    codec_info,
+    is_registered_recording_extension,
+    reader_for,
+    registered_extensions,
+)
+from adas_sim.model.project import ProjectModel, extract_embedded_bundle
+
+ConfigSource = Literal["embedded", "library", "checkout"]
 
 
 def _install_mode() -> str:
@@ -103,7 +112,9 @@ def _library_diagnoses(stages: Sequence[Stage], search: Sequence[Path]) -> list[
 
 
 def _bundle_diagnoses(
-    library_diagnoses: Sequence[dict[str, object]], *, config_path: Path | None, project: str,
+    library_diagnoses: Sequence[dict[str, object]], *,
+    config_path: Path | None, project: str, config_source: ConfigSource | None = None,
+    embedded_bundle_dir: Path | None = None,
 ) -> list[dict[str, object]]:
     results: list[dict[str, object]] = []
     for entry in library_diagnoses:
@@ -119,7 +130,17 @@ def _bundle_diagnoses(
             })
             continue
         bundle_dir = lib_path.parent / "config"
-        viewer = ProjectModel.resolve(explicit=config_path, library_dir=bundle_dir, project=project)
+        try:
+            viewer = ProjectModel.resolve(
+                explicit=config_path, library_dir=bundle_dir, recording=embedded_bundle_dir,
+                project=project, force=config_source,
+            )
+        except AuthoringError as exc:
+            results.append({
+                "stage": entry["stage"], "ok": False,
+                "detail": f"--config-source {config_source} could not resolve: {exc}",
+            })
+            continue
         agree = bool(sut_sha) and sut_sha == viewer.bundle_sha256
         results.append({
             "stage": entry["stage"],
@@ -166,6 +187,7 @@ def doctor_report(
     recording_path: Path | None = None,
     config_path: Path | None = None,
     project: str = "base",
+    config_source: ConfigSource | None = None,
 ) -> dict[str, object]:
     """Gather `sim doctor`'s facts (DG-3). With no arguments, exactly the
     S-A1 slice (interpreter, install mode, platform, console encoding, line
@@ -208,7 +230,24 @@ def doctor_report(
             report["pipeline_load_error"] = str(exc)
             problems.append(f"pipeline '{pipeline_path}' failed to load: {exc}")
         else:
-            bundles = _bundle_diagnoses(libraries, config_path=config_path, project=project)
+            # --config-source embedded (UT-C5-8) needs a real directory to
+            # compare against, not the recording file itself -- extract its
+            # embedded bundle bytes (UT-C5-9's own mechanism) into a temp
+            # dir that lives only for the duration of this one comparison.
+            with TemporaryDirectory(prefix="adas_sim_doctor_bundle_") as tmp_dir:
+                embedded_bundle_dir: Path | None = None
+                if config_source == "embedded" and recording_path is not None:
+                    reader = reader_for(recording_path)
+                    try:
+                        bundle_bytes = getattr(reader, "config_bundle_bytes", lambda: b"")()
+                    finally:
+                        reader.close()
+                    embedded_bundle_dir = Path(tmp_dir)
+                    extract_embedded_bundle(bundle_bytes, embedded_bundle_dir)
+                bundles = _bundle_diagnoses(
+                    libraries, config_path=config_path, project=project,
+                    config_source=config_source, embedded_bundle_dir=embedded_bundle_dir,
+                )
             report["bundles"] = bundles
             for entry in bundles:
                 if not entry["ok"]:

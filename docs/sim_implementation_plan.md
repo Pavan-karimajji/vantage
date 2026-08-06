@@ -151,9 +151,9 @@ unproven) resolves `adasInit(NULL)` with the Conan cache and repo checkout
 both unreachable. Milestone 2's `OD-11` (cross-component project/ego-param
 agreement) and `OD-12` (`<COMPONENT>_<FN>_PERIOD_US` calibration) both landed
 in `contracts/pipeline.py` and `df`'s `ParamLoader`/generated ABI shim
-respectively. `UT-C5-6/7/8/9`, `ST-C5-2` and the `updated`-flag-disagreement
-report are explicitly deferred (see the stage's own section) — none block
-`S-C8`/`S-C6`.
+respectively. `UT-C5-8/9` landed 2026-08-06; `UT-C5-6/7`, `ST-C5-2` and the
+`updated`-flag-disagreement report remain (see the stage's own section) — none
+block `S-C8`/`S-C6`.
 
 **`S-C8` (#14) — CLOSED (mechanism) 2026-08-05.** The plug-in bundle:
 build-time packing (`pack_plugin_bundle.py`/`plugin_bundle_pack.cmake`,
@@ -4987,12 +4987,41 @@ test_bundle_sha256_is_stable_across_mixed_line_endings_and_iteration_order`).
 - [ ] `UT-C5-6` `run.overrides:` materialises a derived bundle — **not
       implemented**; no override-derived-bundle mechanism exists yet
 - [ ] `UT-C5-7` (depends on `UT-C5-6`'s mechanism — not implemented)
-- [ ] `UT-C5-8` `--config-source` forcing each tier — **not implemented**; no
-      such CLI flag exists yet
-- [ ] `UT-C5-9` a recording with an embedded bundle renders with **no checkout
-      present** — the *mechanism* exists (`bundle_bytes_for_recording`,
-      `ProjectModel`'s `embedded` tier) but no test exercises a real render off
-      it with the checkout absent; left honestly unticked rather than inferred
+- [x] `UT-C5-8` `--config-source` forcing each tier, landed 2026-08-06.
+      `ProjectModel.resolve(force=...)` (`model/project.py`) resolves EXACTLY
+      the named tier — `"checkout"` goes straight to `_resolve_checkout`;
+      `"embedded"`/`"library"` try only their own directory and raise
+      `AuthoringError` naming the forced tier (never falling through to
+      another tier) when nothing resolves there. Wired into `sim doctor
+      --config-source embedded|library|checkout` (the only real integration
+      point today — neither `sim view` nor `sim render` passes `recording=`/
+      `library_dir=` into `ProjectModel.resolve` at all yet, so there is
+      nothing there to force). `core/diagnostics.py`'s `doctor_report()`
+      extracts `--recording`'s embedded bundle into a `TemporaryDirectory`
+      via `extract_embedded_bundle` (`UT-C5-9`) when `embedded` is forced, so
+      the comparison has a real directory to read.
+      Tests: `test_a2_project.py::test_config_source_force_embedded_wins_over_a_higher_priority_explicit`,
+      `::test_config_source_force_checkout_ignores_every_other_source`,
+      `::test_config_source_force_raises_naming_the_forced_tier_when_nothing_is_there`,
+      `::test_config_source_force_raises_when_the_forced_directory_has_no_bundle`;
+      `test_d6_doctor.py::test_doctor_cli_rejects_an_unknown_config_source`;
+      `test_d6_doctor_cli.py::test_doctor_config_source_library_forces_the_library_tier`,
+      `::test_doctor_config_source_checkout_forces_the_checkout_tier`,
+      `::test_doctor_config_source_embedded_resolves_from_the_recordings_own_bundle`,
+      `::test_doctor_config_source_embedded_without_a_recording_is_a_problem_naming_the_tier`
+      (the last four against the real `df_sil.dll`, skip elsewhere)
+- [x] `UT-C5-9` a recording with an embedded bundle renders with **no checkout
+      present**, landed 2026-08-06. The *mechanism* existed
+      (`bundle_bytes_for_recording`, `ProjectModel`'s `embedded` tier) but
+      nothing ever extracted a recording's embedded bytes back into a real
+      directory — `ProjectModel.resolve(recording=...)` needs a directory, not
+      bytes, so the embedded tier was unreachable from an actual recording.
+      Added `extract_embedded_bundle(config_bundle_bytes, dest_dir)`
+      (`model/project.py`) — the inverse of `bundle_bytes_for_recording`.
+      Test: `test_a2_project.py::test_embedded_bundle_bytes_extracted_from_a_recording_resolve_with_no_checkout`
+      (writes fixture bundle bytes, extracts to a directory with no matching
+      `shared_config` checkout project, resolves with `bundle_origin ==
+      "embedded"`)
 - [x] `ST-C5-1` (`test_c5_relocatability.py` — mechanism, POSIX fixture;
       `test_c5_relocatability_installed.py` — **the real artefact, both
       directions, added 2026-08-05**)
@@ -5015,10 +5044,11 @@ test_bundle_sha256_is_stable_across_mixed_line_endings_and_iteration_order`).
       tree this time, not the build tree `AR-1` left unproven
 - [x] `UT-C5-5` green
 
-**Remaining, explicitly deferred, not this session's scope:** `UT-C5-6/7/8/9`,
-`ST-C5-2`, and the `updated`-flag-vs-predicted-schedule disagreement report.
-None of these block `S-C8`/`S-C6` (neither reads an overridden bundle, a
-`--config-source` flag, or the viewer's HUD).
+**Remaining:** `UT-C5-6/7` (`run.overrides:` derived bundle — no mechanism
+exists), `ST-C5-2` (viewer HUD `bundle_origin` badge), and the `updated`-flag-
+vs-predicted-schedule disagreement report. `UT-C5-8`/`UT-C5-9` landed
+2026-08-06 (above). None of the remaining items block `S-C8`/`S-C6` (neither
+reads an overridden bundle, or the viewer's HUD).
 
 
 ### S-C6 — Resim in CI (the minimum automatic gate)
