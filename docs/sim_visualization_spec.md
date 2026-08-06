@@ -605,6 +605,26 @@ The earlier attempt at this failed on a transform-tree bug (`../../../docs/df_ca
 structure that prevents that class of bug: the frame is a required field on
 every prim, and the frame graph is emitted once from the project model.
 
+**Shipped, reconciled 2026-08-06 (`AR-49`).** `render/foxglove.py`
+(`S-D1`, 2026-08-05): `scene_update`/`scene_entity_for_layer` map all 11
+`PrimKind`s to Foxglove scene entities, one per `Layer` with `id =
+Layer.id` unchanged; `frame_transforms_for` publishes the frame graph
+once, closing the exact stranding bug named above (a referenced frame now
+always publishes something). **Scoped, and stated here as scope, not as
+done**: the transforms are **static identity only** — real dynamic pose
+composition (`core/tick.py`'s `Tick` composed with a project's resolved
+mounting poses) is the "Phase D4" scope §11.4 below already names, so this
+closes the *stranding* bug, not the *pose* bug (a referenced frame exists,
+it is not yet where the sensor really sits). Heatmap/image prims map to a
+labelled placeholder — Foxglove's `SceneEntity` has no bulk-data
+primitive, `R-SIM-2` already keeps that payload out of the Scene, and this
+is a permanent limitation, not a stopgap. `write_scene_snapshot` (the
+recorded-channel half, closing `D8`) is tested and callable but **not yet
+wired into the live recorder tick loop** — a separate integration, left
+open rather than claimed. `ST-D1-1`/`MC-3` (a human opening Foxglove
+Studio against the real output) is the one thing this reconciliation
+cannot close from a shell with no Foxglove Studio to open.
+
 ### 11.4 Image / camera view
 
 Projects Scene prims onto a camera frame using `model.cameras` intrinsics and
@@ -619,6 +639,18 @@ mounted camera's calibration is runtime configuration, so it goes wherever the
 component that reads it keeps its calibration (`shared_config` only if a second
 component needs the same camera). A *simulated* CARLA camera's placement is not
 that, and stays with the chase-view code in `sources/carla`. Scoped for Phase D4.
+
+**Shipped, reconciled 2026-08-06 (`AR-49`).** `render/image_view.py`
+(`S-D4`, 2026-08-05): `project_point`/`unproject_pixel` (pinhole
+projection), `project_box` reading a `kind="box"` `Prim`'s own fields —
+the identical `Prim` the BEV already draws, so "the two views cannot
+disagree" holds by construction, not by cross-checking two derivations.
+`CameraModel` (`model/cameras.py`, `S-A2`) needed no completion — its
+declared field set was already sufficient. `ProjectedPoint` is a new,
+`_px`-suffixed dataclass, never reusing a `CameraModel`/`Prim` field's
+bare stem (`N-4`). **Lens distortion handling stays not built** — the one
+half of this paragraph's own "needs, and does not have today" that is
+still true after `S-D4`.
 
 ---
 

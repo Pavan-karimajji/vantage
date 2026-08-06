@@ -249,6 +249,36 @@ that need a built library and naming why.
 
 ---
 
+## 4a. Reconciled against real measurement — 2026-08-06 (`AR-49`)
+
+This document had never been checked against a real cross-environment
+measurement since it was written (2026-07-28). **§0's own premise still
+holds** — there is no real Ubuntu machine, so the six-step bring-up in §4
+stays a plan, not a result, and nothing here claims otherwise.
+
+What *is* now measured, and is the closest real evidence this repo can
+produce before Ubuntu arrives: `NR-SIM-47` (added by this same audit run,
+`AR-42`) was born from exactly this document's own concern, one level
+down — not Windows-vs-Ubuntu but **WSL/Linux-shell-vs-Windows-shell**,
+the two environments this checkout actually runs in today. Audit runs 1–3
+hit real, distinct defects checking one against the other: run 1 found a
+session that recorded *"no compiler here"* in a shell one hop from the
+toolchain (`S-C5` landed red for a day on a false absence); run 2
+(`AR-28`, `AR-29`, `AR-31`) found the whole of Phase D verified only in a
+WSL shell, and the Windows re-run found two real defects the WSL run
+could not see, one of which meant the suite produced no result at all
+rather than failing visibly. **The lesson generalises**: check the other
+shell before believing a number *or* an absence — which is `NR-SIM-47`'s
+own wording, this document's §0 contract applied to the environment axis
+rather than the platform one.
+
+This is evidence about **shell**, not about **Ubuntu** — a real Linux
+distribution remains an open, larger, unmeasured gap, honestly stated as
+such and not narrowed by the above. `ST-D8-1` (§4's own gate) is still
+what would close it, and is still not run.
+
+---
+
 ## 5. What is deliberately *not* promised
 
 - **Bit-identical numerical results across platforms.** Different compilers and

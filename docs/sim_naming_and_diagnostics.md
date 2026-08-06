@@ -338,6 +338,19 @@ means one thing everywhere, one lookup can join all of it.
 a **run id** and an **error code**, and for an unknown name it does a
 fuzzy match and suggests (`N-8`'s "did you mean").
 
+**Shipped, reconciled 2026-08-06 (`AR-49`).** `cli/explain.py` (`S-D6`,
+follow-up pass 2026-08-06, `UT-D6-7`): all six accepted name kinds now
+resolve — port/field/layer/run-id were already there from `S-B2`/`S-C1c`;
+codec name and error code were added in this pass, alongside a
+`difflib`-based fuzzy "did you mean" on an unresolved name (a real
+duplicate-suggestion bug was found and fixed while landing it — see
+`sim_implementation_plan.md` `S-D6` for the mechanism). **Scoped
+honestly, still true today**: a bare field-path name with no `--at` is
+not separately resolved beyond an exact topic match; that richness
+(type, producer, schema, value) is exactly what `--at`'s `evidence()`
+path already provides, and adding it would need a message class resolved
+from the port's own schema bytes — real, separate work, not attempted.
+
 ### DG-3 — `sim doctor` — explain the environment before anything runs
 
 The first command to run when something is inexplicable. It answers the
@@ -354,6 +367,17 @@ questions that produce the most wasted hours, and each answer names a file:
 
 Exit non-zero on anything that would break a run, so it is usable in CI as a
 pre-flight.
+
+**Shipped, reconciled 2026-08-06 (`AR-49`).** `cli/doctor.py` (`S-D6`,
+follow-up pass 2026-08-06, `UT-D6-8`) is the full form above: `--pipeline`/
+`--search`/`--config`/`--recording`/`--project` flags, each firing its own
+optional check; codec capabilities are always reported (no flag needed).
+**A real design gap was found and fixed landing it**: `Pipeline.load`
+itself used to raise on the first unresolvable `impl:` stem, which would
+have made "which stem is broken" undiagnosable — exactly the condition
+this verb exists to report — fixed by a new `Pipeline.parse_stages`
+(reads stage declarations with no component resolution) so a broken stem
+is reported instead of crashing `sim doctor` before it can say anything.
 
 ### DG-4 — Every degrade is announced with its name and its cause
 

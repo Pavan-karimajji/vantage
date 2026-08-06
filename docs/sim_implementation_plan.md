@@ -706,15 +706,15 @@ than silently answered:
 | **Three new requirements — accept, amend or reject** | `FR-SIM-71` (a component may split without invalidating recordings), `NR-SIM-47` (a measured claim names its platform), `NR-SIM-48` (the component-side checklist). All three are `sim_requirements.md` §13, each traced to a gap this run measured. They are **flagged for review, not assumed accepted** |
 | **`MC-5`, `GT-14`, `S-D1`'s gate** | Unchanged and unchangeable by work: a stopwatch and a first-time tester; two people's names and one number; a human opening Foxglove Studio. **If there is no second person, that is the answer and it belongs at `GT-14`** |
 
-**2. One thing that read as done and was not** (fixed 2026-08-06, fix queue
-row 4 — kept here since the other is still open):
+**2. Run 3's fix queue is fully closed, 2026-08-06** — all seven rows,
+`AR-50`/`AR-35`/`AR-36`/`AR-51`/`AR-45`/`AR-48`/`AR-49`. Two worth restating
+because they read as done before they were:
 
-- **`ConsolePanel` and `ProbePanel` are built, tested — and unreachable**
-  (`AR-45`). The console is never constructed anywhere in `app/`; the probe
-  panel is constructed, wired, and never shown. `sim_player.md` §4 calls them
-  the *day-one screen* and the *pressure valve that stops someone forking the
-  tool*. Their tests instantiate the panels directly, which is why the suite is
-  green.
+- ~~`ConsolePanel` and `ProbePanel` are built, tested — and unreachable~~
+  (`AR-45`, **fixed** — `VantageWindow` now adds `ProbePanel` to its stack and
+  switches to it on `probe_requested`, and docks one persistent `ConsolePanel`
+  onto Bench, rebinding `session`/`pipeline` off a new `MainWindow.
+  session_ready` signal).
 - ~~A real config bundle reports its project as the string `"config"`~~
   (`AR-51`, **fixed** — `ProjectModel` now takes the loaded library's own
   `adasManifest().project` via a new `known_project` parameter, or reports
@@ -723,24 +723,24 @@ row 4 — kept here since the other is still open):
 
 **3. `run_all.py` gained a sixth check**, and one baseline you must not raise
 casually: `check_verifier_discoverability.py` ratchets the number of ticked
-verifier ids that appear in **no source file** (**19** today, `AR-50`). **Never
-untick a box to satisfy it** — all 19 are real, passing tests; the id is simply
-not written where the test lives.
+verifier ids that appear in **no source file** — **0 today** (`AR-50`, lowered
+from 19). **Never untick a box to satisfy it** if it ever rises again — thread
+the id back to its implementing test/build site instead.
 
 **Next, unchanged:** `S-D4`'s remaining 6 boxes and `S-D5`'s 3 partials, or
 Phase E (blocked on every Phase A–D gate; `S-E1`'s table is the authority).
-`S-E3` gained four items from this run (`AR-35`, `AR-36`, `AR-49`, `AR-50`).
+`S-E3` gained five items from this run (`AR-35`, `AR-36`, `AR-49`, `AR-50`, and
+`OQ-14`'s own re-assessment, decided under `AR-49`).
 
-Findings index: [sim_audit_log.md](sim_audit_log.md) — run 3 is `AR-34`..`AR-51`;
-the fix queue has closed `AR-50`, `AR-35`, `AR-36`, `AR-51` so far, **three
-still open** (`AR-45`, `AR-48`, `AR-49`), each naming its owner.
+Findings index: [sim_audit_log.md](sim_audit_log.md) — run 3 is `AR-34`..`AR-51`,
+**zero open**, every row closed and re-verified.
 
 > **If your job is *"fix the audit findings"* rather than *"build the next
-> stage"*, do not start here.** Go to [sim_audit_log.md](sim_audit_log.md)'s
-> **▶▶ run 3 fix queue** — it is an ordered, seven-row worklist with the exact
-> owner, command and acceptance condition per row, ramped from mechanical to
-> judgement. Come back to this document for the *owning stage* of whichever row
-> you are on; that is where the `**Must not**` constraints live.
+> stage"*, do not start here — the run 3 fix queue is empty.** The next audit
+> run appends to [sim_audit_log.md](sim_audit_log.md) rather than reopening it
+> (the method's own reconciliation-first discipline). Come back to this
+> document for the *owning stage* of any future row; that is where the
+> `**Must not**` constraints live.
 
 ### ▶▶ RESUME MARKER — 2026-08-06 **audit** (run 2). Superseded by run 3 above.
 ### The two boxes below are the audit trail that got the queue to this point.
@@ -8085,7 +8085,7 @@ score the other gates cannot themselves be scored**
       site (Python docstrings, C++ gtest comments, and — for the three ids with
       no dedicated automated test, `ST-C1a-1`/`ST-C3-1`/`UT-C1b-7` — the
       build/CI script that IS the verification), `BASELINE` lowered to 0.
-- [ ] **Re-assess `OQ-14` with the measurement it now has** (`AR-49`). It asked
+- [x] **Re-assess `OQ-14` with the measurement it now has** (`AR-49`). It asked
       whether ~600 KB of normative prose across ten documents is still worth
       maintaining, and predicted the failure as *"documents that silently stop
       being maintained rather than a decision to stop maintaining them."*
@@ -8094,7 +8094,17 @@ score the other gates cannot themselves be scored**
       other design document, and this plan is now larger than the eight it
       executes combined. Re-assess against that, not against a worry — and note
       that the answer may legitimately be *"fold two documents into this one"*
-      rather than *"write more prose"*
+      rather than *"write more prose"*.
+      **Decided 2026-08-06 (fix queue row 7, owner's own call):** reconcile,
+      do not fold. Each of the four documents `AR-49` named gained a "what
+      shipped, reconciled" account against the plan's own record — the same
+      pattern `AR-47` already used for `sim_player.md` §10 and `AR-44` for
+      `sim_api_reference.md` §10 — rather than being merged into this plan.
+      `OQ-14`'s own prediction stands as the reason to keep doing this
+      regularly (a design doc left unreconciled for four days is what
+      produced this exact finding); the mechanism to catch the next drift
+      earlier is future work, not decided here. **Not folding is itself the
+      decision** — `OQ-14` is answered, not deferred again
 
 **Tests**
 - [ ] `ST-E3-1` `check_invariants.py` exits 0
@@ -8244,7 +8254,7 @@ previous run was ignored — which is itself a finding.
 | **Phase C touches production C++** | Every C++ change is additive until S-E2; both ABIs live and are tested against each other. |
 | **No CI** | The test command is the gate and is cited in each commit. Wiring CI is `plan.md` item 12, unblocked by this work. |
 | **`modules/sim` unpublished** | Until `adas-sim` is published, a checkout is needed; that is the same interim state `interfaces` and `shared_config` already live in. |
-| **The design set outgrows the code** *(added 2026-07-31, `OQ-14`)* | ~600 KB of normative prose across ten documents describes ~8,300 lines of Python; this plan alone is 3,745 lines and every stage re-ticks two checklists and twelve gates. The discipline has paid for itself so far — `S-A3`'s `Prim` finding and `S-C1a`'s `BUILD_TESTING` finding were both caught *by* it — but the honest failure mode is documents that quietly stop being maintained rather than a decision to stop maintaining them. Mitigation: `GT-7` is a stage gate, `docs/py/run_all.py` is mechanical, and `sim_learn.md` gives a reader one entry point instead of ten. Re-assess at `S-E3`. |
+| **The design set outgrows the code** *(added 2026-07-31, `OQ-14`; **decided 2026-08-06**)* | ~600 KB of normative prose across ten documents describes ~8,300 lines of Python; this plan alone is 3,745 lines and every stage re-ticks two checklists and twelve gates. The discipline has paid for itself so far — `S-A3`'s `Prim` finding and `S-C1a`'s `BUILD_TESTING` finding were both caught *by* it — but the honest failure mode is documents that quietly stop being maintained rather than a decision to stop maintaining them. Mitigation: `GT-7` is a stage gate, `docs/py/run_all.py` is mechanical, and `sim_learn.md` gives a reader one entry point instead of ten. **Re-assessed at `S-E3` (`AR-49`, fix queue row 7): the predicted failure happened exactly as written** (measured, `AR-49`: every `S-C9`/`S-D6`/`S-D7`/`S-D8` artefact name appeared in this plan and no other document). **Decision: reconcile, do not fold** — each affected document gains a "what shipped" account against this plan instead of being merged into it. `OQ-14` closed in `sim_requirements.md` §11. |
 | **Ten concepts to draw one rectangle** *(added 2026-07-31, `OQ-13`; **diagnosed and mitigated the same day**)* | Counting honestly, the ten are not ten. Themes are a theme-author's concept; frames default to `ego`; `derived`/`assumed_geometry` matter only when something is unusual; the three grep gates are one sentence and **do not even apply** to `modules/<name>/sim/`. The unavoidable core is **four** — decorator, `ctx`, `Prim`, style token — which is exactly `FR-SIM-47`'s `L-3` limit. So the defect was in the *presentation*, not the API: the template taught all ten at once and imported a decorator that no longer exists. Mitigation, landed: a canonical minimal provider of ≤15 lines that mentions none of the six optional concepts, with everything else moved below a second heading. `GT-8` still measures the consequence. |
 | **`S-B2Δ` changes a frozen core type 410 tests already use** *(added 2026-07-31, `OD-13`)* | Making `PortValue.message` lazily parsed and `age_s` derived is the most invasive item of the resolution pass, and it is the one place a mechanical change can quietly alter behaviour rather than fail. Mitigation: it lands **after** `S-A4Δ` (so the capture stamp exists first) and **before** `S-C2` (so no recording is written against the old shape); `UT-B2-14` proves not-parsing is *observable* rather than merely claimed; and the full suite is the regression net — a count below 410 means something broke, per `S-C0`'s recorded floor. |
 | **A requirement can cite a test that exists and proves something else** *(added 2026-07-31, §12.7)* | Two of the eleven test ids the 2026-07-31 audit attached to its new requirements pointed at real tests about unrelated subjects (`FR-SIM-67`→`UT-D3-5`, `NR-SIM-43`→`UT-D4-3`). `check_traceability.py` verifies existence, uniqueness and filing — it **cannot** verify aboutness, and no mechanical check can before the tests exist. The register therefore read as fully traced while two `P0`/`P1` rows were verified by nothing. Mitigation, and it is a habit rather than a tool: **after adding a requirement, open the test it cites and read it.** Same shape as `D13` — a name written by hand, bound to its target by nothing, failing silently. |
