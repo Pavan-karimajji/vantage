@@ -32,6 +32,7 @@ second test proves the early-return guards (no pipeline, already running).
 from __future__ import annotations
 
 import os
+import sys
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -56,6 +57,21 @@ from adas_sim.scene.types import Layer, Prim  # noqa: E402
 _ECHO_STUB_DIR = Path(__file__).resolve().parents[4] / "ws" / "sil_host-base-gtest-vs2026" / "tests" / "Release"
 _TICK_COUNT = 3
 _DT_NS = 50_000_000
+
+# ST-D8-1: `echo_stub.dll` is a Windows PE binary (S-C7's own build) -- a
+# stale copy left over from an earlier Windows session can exist on a
+# non-Windows checkout (this repo's own WSL shell, found 2026-08-06) and
+# pass the file-existence check while being unloadable by ctypes.CDLL on
+# this platform. Checking sys.platform FIRST (same precedent test_d7_
+# pin_builds_cli.py/test_c7_cross_host_resim.py already set) turns that
+# into a graceful, named skip instead of a bare assertion failure --
+# "skipping exactly the integration tests that need a library and naming
+# why" is ST-D8-1's own literal wording.
+_SKIP_REASON = (
+    f"Windows-only (echo_stub.dll is a PE binary) needs sil_host's echo_stub.dll built at "
+    f"{_ECHO_STUB_DIR} (scripts/build.py sil_host -t gtest -p vs2026 -P base)"
+)
+_ECHO_STUB_UNAVAILABLE = sys.platform != "win32" or not (_ECHO_STUB_DIR / "echo_stub.dll").is_file()
 
 
 @layer_provider("test.d3.ego", group="test")
@@ -141,10 +157,7 @@ def test_an_unresolvable_dll_stage_degrades_the_dock_not_the_window(tmp_path):
     assert not window._save_run_manifest_action.isEnabled()
 
 
-@pytest.mark.skipif(
-    not (_ECHO_STUB_DIR / "echo_stub.dll").is_file(),
-    reason=f"needs sil_host's echo_stub.dll built at {_ECHO_STUB_DIR} (scripts/build.py sil_host -t gtest -p vs2026 -P base)",
-)
+@pytest.mark.skipif(_ECHO_STUB_UNAVAILABLE, reason=_SKIP_REASON)
 def test_a_real_resolvable_pipeline_populates_the_dock_and_save_run_manifest_writes_a_real_file(tmp_path):
     recording = tmp_path / "test_d3.mcap"
     _write_synthetic_recording(recording)
@@ -175,10 +188,7 @@ def test_a_real_resolvable_pipeline_populates_the_dock_and_save_run_manifest_wri
     assert not Path(written["recording"]).is_absolute()
 
 
-@pytest.mark.skipif(
-    not (_ECHO_STUB_DIR / "echo_stub.dll").is_file(),
-    reason=f"needs sil_host's echo_stub.dll built at {_ECHO_STUB_DIR} (scripts/build.py sil_host -t gtest -p vs2026 -P base)",
-)
+@pytest.mark.skipif(_ECHO_STUB_UNAVAILABLE, reason=_SKIP_REASON)
 def test_st_d3_1_clicking_run_executes_the_pipeline_and_the_result_becomes_the_viewed_session(tmp_path):
     recording = tmp_path / "test_d3.mcap"
     _write_synthetic_recording(recording)

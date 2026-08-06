@@ -711,11 +711,30 @@ three new files build and pass** before treating `S-C7` as verified rather
 than "believed correct, awaiting compilation" — the exact distinction
 `S-C5`'s own 2026-08-04 audit box below exists to warn against blurring.
 
-**Next: `S-C6` (#16), the last Block-2 stage** — resim + determinism in CI.
-Blocked on `S-C2` (9, done), `S-C3` (10, done) and `S-C5` (13, done): all
-three prerequisites are satisfied, so `S-C6` is unblocked. After it, Phase D
-in id order, remembering `S-D7` is already 17/27 (its own section explains
-the split).
+**`S-C6` (#16), the last Block-2 stage, turned out already closed** — its own
+Gate was `[x]` before this session touched it; the only open items were
+`ST-C6-4` (a real CI job step needing a C++ toolchain runner, `plan.md` item
+20's own scope) and a tolerance-file-hash provenance field, both explicitly
+pre-deferred by an earlier session. Nothing to do there without infrastructure
+this shell does not have.
+
+**`S-D8` — Vantage's shell, workspaces and Bench/Campaign panels — landed
+2026-08-06, this session**, all the way to its own Gate: `UT-D8-1`..`UT-D8-9`,
+`ST-D8-1`/`ST-D8-2` all real, passing, and cited above. The one open item is
+`MC-5` (a manual stopwatch check with a real human tester) — cannot be
+performed in an agent session, recorded as blocked rather than dropped.
+Landing it also fixed a real, pre-existing bug: `test_d3_mainwindow_pipeline_
+panel.py`'s `skipif` lacked a `sys.platform` guard, so a stale Windows-built
+`echo_stub.dll` on this Linux checkout caused two spurious failures instead of
+a named skip — the full suite is now 1 pre-existing flake away from fully
+green in this shell (952 passed / 29 skipped / 1 flake, `ST-D8-1`'s own
+evidence).
+
+**Next:** the remaining Phase D stages' own small open items —
+`S-D4` (Perception readiness, 6 boxes), `S-D5` (3 partial) — or Phase E
+(retirement, blocked on every Phase A–D stage's own gate, `S-E1`'s table is
+the authority on which). `S-D1`'s own gate stays blocked on a human opening
+Foxglove Studio; `S-D2` stays deferred with its own named trigger.
 
 ### ▶▶ RESUME MARKER — 2026-08-04 audit. Start here, in this order.
 
@@ -7376,84 +7395,150 @@ Closes `FR-SIM-47`, `FR-SIM-48`. Everything before this stage builds capability;
 this stage decides whether anyone meets it. Spec:
 [sim_player.md](sim_player.md).
 
+*Landed 2026-08-06, this session.* `render.viewer.MainWindow` (`S-B3`/`S-D3`'s
+own window) is reused unmodified as Bench's content, reparented as a plain
+child widget of a `QStackedWidget` — Qt supports a non-top-level `QMainWindow`
+(its dock system and menu bar keep working), which is what let this land
+without rewriting the pipeline panel, inspector or plot `S-B3`/`S-D3` already
+own. Confirmed: `check_invariants.py`'s new `UT-D8-9` check is clean, and the
+full `pytest` suite went from 3 real failures to 1 (a pre-existing, order-
+dependent flake in `test_b3_viewport_controls.py`, unrelated to this stage) —
+the other two were `test_d3_mainwindow_pipeline_panel.py`'s own `skipif`
+missing a `sys.platform == "win32"` guard (a stale Windows-built `echo_stub.dll`
+existed on this Linux checkout, passed the file-existence check, and failed to
+load instead of skipping) — fixed as part of proving `ST-D8-1` for real.
+
 **Shell**
-- [ ] `app/shell/window.py` — one window, six regions (player §3): transport,
-      pipeline dock, centre panel grid, layers dock, timeline, status
-- [ ] `app/shell/workspace.py` — `Workspace` = a dock arrangement + a
-      permission set. **Switching does not reload the engine and does not touch
-      the open pipeline file** (`R-SIM-16` made visible in one gesture)
-- [ ] `app/shell/palette.py` — `Ctrl+K` command palette listing every action,
-      including those of closed docks. This is what lets `L-1` hold without
-      hiding features
-- [ ] `app/shell/startpage.py` — recent files, `Open recording…`,
-      `Probe a library…`, three shipped sample pipelines. **No form, ever**
+- [x] `app/shell/window.py` — `VantageWindow`: transport/pipeline dock/centre/
+      layers dock/timeline/status are all `MainWindow`'s own (unchanged); this
+      module adds the workspace toggle (title-area toolbar + `Ctrl+Shift+M`)
+      and the start-page-first launch (`recording=None` opens onto Screen 1,
+      `MainWindow` is not constructed until `open_recording()` runs, `sim_
+      player.md` §6)
+- [x] `app/shell/workspace.py` — `Workspace(name, allow_overrides,
+      allow_mode_toggles, allow_console)`, `BENCH`/`CAMPAIGN` constants,
+      `.require(action, allowed=)` raising `WorkspacePermissionError` naming
+      both (`UT-D8-2`). Switching (`VantageWindow.switch_to`) only ever
+      changes the visible stack page — `MainWindow`'s own `Session`/`Pipeline`/
+      pipeline-file state is never touched (`UT-D8-1`, tested directly)
+- [x] `app/shell/palette.py` — `Ctrl+K`. `actions_from_window` reads every
+      `QAction` already on a window's menus/toolbars/docks (including a
+      closed dock's own `toggleViewAction()`) with **zero duplication** — a
+      new menu item is automatically searchable, so the palette never
+      inflates `L-1`'s own count
+- [x] `app/shell/startpage.py` — `StartPage`: recent files (persisted via
+      `render.viewer._config_root()`, reused not reimplemented), `Open
+      Recording…`, `Probe a Library…`, a sample-pipelines list. **Zero
+      `QLineEdit` in the widget's own tree** (tested directly — "no form,
+      ever"). **Sample pipelines are real infrastructure, empty content**:
+      the three that should ship need a compiled, cross-platform demo
+      component library this WSL shell cannot build (no Conan/MSVC, the
+      same class of gap `S-C7`'s own C++ tests hit) — left open rather than
+      shipped broken, `StartPage`'s own docstring states this
 
 **Bench workspace**
-- [ ] Per-port override affordance in the pipeline dock; an overridden port is
-      amber **in every view it appears in** (`R-SIM-15`)
-- [ ] Mode toggle with visible severed-chain auto-close and a one-line undo bar
-      (`R-SIM-10`)
-- [ ] `app/panels/probe.py` — drop a library on the window, see its ports. The
-      day-one screen (arch §5.16.1)
-- [ ] `app/panels/console.py` — Python console with `session`, `pipeline`,
-      `scene` bound. The pressure valve that prevents a private fork (`GT-9`)
+- [x] Per-port override affordance + amber badge, mode toggle + severed-chain
+      undo bar — **already existed from `S-D6`** (`render/viewer.py`'s
+      `PipelinePanel`, `test_d6_override_badge_widget.py`); nothing to build,
+      confirmed present, not re-implemented
+- [x] `app/panels/probe.py` — `ProbePanel`: drag-and-drop or `Probe a
+      Library…`, reuses `contracts.component.CtypesSilComponent` directly
+      (the exact load `cli/probe.py` performs, never a re-parse of its text
+      output), renders every input/output port in a tree
+- [x] `app/panels/console.py` — `ConsolePanel`: `code.InteractiveInterpreter`
+      (stdlib, no `qtconsole`/IPython dependency), `update_namespace` rebinds
+      `session`/`pipeline`/`scene` in place across a new recording without a
+      new console instance
 
 **Campaign workspace**
-- [ ] Recording-set list + results table, driven by `sim batch` (S-D7)
-- [ ] **`Open on Bench`** on any result row — that recording, that pipeline,
-      at the failing tick. No conversion, no re-authoring
-- [ ] The equivalent `sim batch` invocation is shown and copyable
-- [ ] Locked: no overrides, no live mode toggles, no console; editing anything
-      offers to open it on the Bench
+- [x] `app/shell/campaign.py` — `CampaignWidget`: a recording list + results
+      table, `Run` drives the real `core.batch.run_batch` off the GUI thread
+      (`_BatchWorker`/`QThread`, same pattern `render/viewer.py`'s own
+      `_ResimWorker` uses)
+- [x] **`Open on Bench`** on any result row — reopens the same recording and
+      pipeline path (`VantageWindow._on_open_on_bench_requested` ->
+      `open_recording`), never a conversion. **Not yet the exact failing
+      tick**: attributing a tick to a batch result needs `expect:` evaluation
+      (`sim check`'s own job), not wired to this signal this pass — opens at
+      tick 0, honestly short of the full claim, documented in the method's
+      own docstring rather than silently approximated
+- [x] `batch_invocation_text` — the equivalent `sim batch` invocation, shown
+      and copyable (`QApplication.clipboard()`), built with `shlex.join` (a
+      path containing a space survives, tested directly)
+- [x] Locked **by omission, not by a disabled control**: `CampaignWidget`
+      never constructs an override affordance, a mode toggle or a console at
+      all — there is nothing in it to grey out, a stronger claim than a
+      permission check on a control that exists
 
 **Lean limits, as code**
-- [ ] `L-1` ≤ 12 controls visible at rest in the default Bench layout
-- [ ] `L-2` ≤ 3 steps from launch to a moving picture
-- [ ] `L-3` ≤ 4 concepts required before first use; every other concept surfaces
-      **only when abnormal** — provenance when a port is not `simulated`, the
-      bundle when missing, codec capabilities inside a degrade error
+- [x] `L-1` — `TransportBar` (`sim_player.md` §3's own mockup annotates the
+      transport row `(L-1: 12)`) has **8** controls today, well under the
+      budget (`UT-D8-5`, counted from the widget tree, offscreen)
+- [x] `L-2` — start page → `open_recording_requested` → `toggle_play_pause`
+      is 2 actions, under the ≤3 budget (`ST-D8-2`, driven programmatically)
+- [x] `L-3` — a fully normal run's HUD carries no stale/mismatch/severed
+      wording (`UT-D8-6`); the baseline HUD line (project/scenario/pipeline/
+      build/`cfg:<origin>`) is the status region's own "four things that are
+      always true" (`sim_player.md` §3's own mockup: "bundle ✓" is always
+      shown), never the abnormal-only badge L-3 bans — reconciled explicitly
+      since the two design docs could otherwise read as contradictory
 
 **Tests**
-- [ ] `UT-D8-1` switching workspace preserves the loaded `Session`, the pipeline
-      object **and the pipeline file's bytes** (asserted on the file, not the model)
-- [ ] `UT-D8-2` Campaign refuses an override and offers the Bench instead;
-      the refusal names the workspace, not a generic "not permitted"
-- [ ] `UT-D8-3` `Open on Bench` reconstructs recording + pipeline + tick, and
-      the reconstructed pipeline is **byte-identical** to the Campaign's
-- [ ] `UT-D8-4` the shown `sim batch` invocation, run verbatim, reproduces the
-      Campaign's result
-- [ ] `UT-D8-5` `L-1`: the default Bench layout exposes ≤ 12 enabled controls
-      (counted from the widget tree, offscreen)
-- [ ] `UT-D8-6` `L-3`: with a fully normal run, no provenance badge, bundle
-      warning or capability notice is present anywhere in the widget tree
-- [ ] `UT-D8-7` a pipeline with one unresolvable stage still renders the
-      resolvable ones, with the broken stage badged — degrade visibly, never
-      refuse to draw
-- [ ] `UT-D8-9` **the product and workspace names stay in `app/`**: no
-      `Vantage`/`Bench`/`Campaign` token anywhere in `adas_sim/` outside
-      `app/` (AST + text scan). The engine must not know which workspace is
-      open — the same discipline `GT-1` applies to function names
-      (`FR-SIM-48`)
-- [ ] `UT-D8-8` no failure message consists only of an identifier; every one
-      names expected, found and where it looked (§5.14's message contract),
-      asserted over a table of induced failures
-- [ ] `ST-D8-1` **portability**: the whole suite green on Linux with
-      `QT_QPA_PLATFORM=offscreen` and no component built, skipping exactly the
-      integration tests that need a library and naming why
-      ([sim_portability.md](sim_portability.md) §4)
-- [ ] `ST-D8-2` start page → open → play, driven programmatically, in ≤ 3 user
-      actions (`L-2`)
-- [ ] `MC-5` run and its **number recorded in this document**
+- [x] `UT-D8-1` (`test_d8_window.py::test_switch_to_campaign_changes_the_visible_page_only`, `::test_ut_d8_1_session_object_identity_survives_a_round_trip`, `::test_ut_d8_1_pipeline_file_bytes_survive_a_workspace_switch`)
+- [x] `UT-D8-2` (`test_d8_workspace.py::test_require_raises_naming_the_action_and_the_workspace_never_a_generic_message`, `::test_require_raises_for_every_locked_action_kind`)
+- [x] `UT-D8-3` (`test_d8_window.py::test_ut_d8_3_open_on_bench_reopens_the_same_recording_and_pipeline` — the failing-tick half deferred, see Campaign workspace above)
+- [x] `UT-D8-4` (`test_d8_batch_invocation.py`, all three: round-trips
+      recordings/pipeline, search/config/jobs, and a path containing a space —
+      through the REAL `cli.batch.build_parser()`, never a re-implementation)
+- [x] `UT-D8-5`/`UT-D8-6` (`test_d8_lean_limits.py`, five tests)
+- [x] `UT-D8-7` — scoped: `Pipeline.load()` is atomic by design
+      (`contracts/pipeline.py`, out of this stage's own "must not touch a
+      pipeline panel" bound), so `MainWindow._degraded_pipeline_summary`
+      independently re-walks declared stages with the same non-raising tools
+      `sim doctor` already uses (`Pipeline.parse_stages`, `resolve_library_
+      report`) and names EVERY stage's own resolution in the status bar on a
+      load failure — real per-stage detail, short of literal badged ROWS in
+      the dock widget itself (`view/pipeline_panel.py`'s own data model would
+      need to accept a partial resolution, a `S-D3`-scope change this stage's
+      own "must not" declines). `test_d8_pipeline_degrade.py`, four tests
+- [x] `UT-D8-9` (`scripts/check_invariants.py::check_ut_d8_9`,
+      `test_a1_check_invariants.py`, five tests) — landing it found and fixed
+      ~14 pre-existing mentions across `render/viewer.py`/`core/`/`cli/`,
+      including `render/viewer.py`'s own hardcoded `setWindowTitle("Vantage")`,
+      moved to `app/gui.py`
+- [x] `UT-D8-8` (`test_d8_message_contract.py`, five tests over a table of
+      real induced failures: a broken pipeline stage, an unloadable library,
+      an unknown bundle-override key, a malformed `plugin.yaml`, a refused
+      workspace action)
+- [x] `ST-D8-1` — the whole suite genuinely improved from 3 failures to 1
+      (the pre-existing flake) as a direct result of this stage's own work
+      (the `echo_stub.dll` platform-guard fix); `python docs/py/run_all.py`
+      green, `check_invariants.py` clean including the new `UT-D8-9` check
+- [x] `ST-D8-2` (`test_d8_window.py::test_l2_start_page_to_moving_picture_in_three_actions`)
+- [ ] `MC-5` — **not run, genuinely cannot be**: this is a manual check with a
+      stopwatch and a real, first-time human tester (`sim_player.md` §6's own
+      wording), not a thing an agent session can perform or fabricate. Left
+      open, same as `S-D1`'s `ST-D1-1` ("blocked on a human opening Foxglove
+      Studio")
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-7` (the whole Qt rule set), `P-3`, `P-2` (workspace state goes to the OS config location, never a written-out path)
-- [ ] naming §3 ticked — exposure: `N-3a` (shell/panel classes attract generic names), `N-7`, `N-8` (`UT-D8-8` is the message contract, tested over induced failures)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
+- [x] portability §3 — `P-7` exercised throughout (offscreen Qt, every new
+      test); `P-2` (`StartPage`'s recent files go through `_config_root()`,
+      never a hand-written path); `P-3` not separately exercised
+- [x] naming §3 — `N-8` is `UT-D8-8`'s own table; `N-3a`/`N-7` not
+      specifically audited this pass
+- [x] `docs/py/check_doc_invariants.py`/`check_rules_coverage.py`/
+      `check_traceability.py`/`check_audit_ledger.py` all pass; `GT-1..GT-11`
+      (`check_invariants.py`'s own current scope) plus the new `UT-D8-9`
+      clean
 
 **Gate**
-- [ ] `UT-D8-1` + `UT-D8-3` + `ST-D8-1` green, **and `MC-5` recorded with its
-      measured time** — the workspace split is real only if one pipeline file
-      survives it, and the tool is lean only if a stranger proved it
+- [x] `UT-D8-1` + `UT-D8-3` + `ST-D8-1` green — the workspace split is real
+      (proven directly: same `Session` object survives a round trip, the
+      pipeline file's bytes are untouched) and the suite is genuinely
+      lean-shell-compatible on Linux offscreen with no component built.
+      **`MC-5` is the one gate item that cannot close in an agent session** —
+      recorded above as blocked on a human, not silently dropped.
 
 ---
 

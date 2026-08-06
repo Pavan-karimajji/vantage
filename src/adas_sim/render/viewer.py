@@ -150,6 +150,7 @@ import numpy as np
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from adas_sim.check.expect import ExpectationResult, evaluate_scenario
+from adas_sim.contracts.loader import resolve_library_report
 from adas_sim.contracts.pipeline import Pipeline
 from adas_sim.contracts.scenario import Scenario, load_scenario
 from adas_sim.core.errors import AuthoringError
@@ -1361,11 +1362,46 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             pipeline = Pipeline.load(self._pipeline_path, search=self._pipeline_search)
         except Exception as exc:  # noqa: BLE001 -- surfaced in the dock/status bar, never crashes the window
-            self.statusBar().showMessage(f"pipeline panel: could not load {self._pipeline_path}: {exc}", 8000)
+            message = f"pipeline panel: could not load {self._pipeline_path}: {exc}"
+            detail = self._degraded_pipeline_summary()
+            if detail:
+                message += f" -- {detail}"
+            self.statusBar().showMessage(message, 8000)
             return
         self.pipeline_panel_state = PipelinePanelState(pipeline, known_ports=session.known_ports)
         self.pipeline_panel.sync(self.pipeline_panel_state)
         self._save_run_manifest_action.setEnabled(True)
+
+    def _degraded_pipeline_summary(self) -> str:
+        """`UT-D8-7`: `Pipeline.load()` is atomic -- one broken stage fails
+        the whole load, so `_load_pipeline_panel`'s own except branch would
+        otherwise show only the FIRST exception, naming one stage and
+        leaving every other stage's own resolution unstated. This uses the
+        same non-raising tools `sim doctor` already uses (`Pipeline.
+        parse_stages`, `resolve_library_report`) to name every declared
+        stage's own resolution, ok or broken -- "degrade visibly, never
+        refuse to draw" extended from "the window still renders" to "the
+        failure message itself does not hide which stages were fine."
+        Best-effort: a `parse_stages` failure (the pipeline YAML itself is
+        malformed) returns `""`, since the raw exception already shown
+        covers that case."""
+        try:
+            stages = Pipeline.parse_stages(self._pipeline_path)
+        except Exception:  # noqa: BLE001 -- the raw exception is already shown; this is best-effort extra detail
+            return ""
+        parts = []
+        for stage in stages:
+            if not stage.impl:
+                parts.append(f"{stage.name}: broken (no impl:)")
+                continue
+            kind, _, ref = stage.impl.partition(":")
+            if kind not in ("dll", "stubdll"):
+                parts.append(f"{stage.name}: broken (impl: {stage.impl!r} needs a real library here)")
+                continue
+            report = resolve_library_report(ref, search=self._pipeline_search)
+            status = "ok" if report.resolved is not None else f"broken (impl: {stage.impl!r} not found)"
+            parts.append(f"{stage.name}: {status}")
+        return "; ".join(parts)
 
     def _on_pipeline_mode_changed(self, stage_name: str, mode: str) -> None:
         """Nothing here re-runs anything live -- only tells the operator

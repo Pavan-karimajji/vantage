@@ -165,3 +165,127 @@ def test_close_event_cleans_up_the_embedded_bench_window(tmp_path):
     _write_synthetic_recording(recording)
     window = _open_window(recording)
     window.close()  # must not raise, must run MainWindow's own cleanup
+
+
+# ---------------------------------------------------------------------------
+# Screen 1 -> Screen 2 (sim_player.md S6, ST-D8-2's own L-2 claim):
+# recording=None opens onto the start page; MainWindow does not exist
+# until open_recording() actually runs.
+# ---------------------------------------------------------------------------
+
+
+def test_no_recording_given_opens_onto_the_start_page():
+    set_high_dpi_policy()
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    window = VantageWindow()
+    assert window.bench is None
+    assert window._stack.currentWidget() is window._start_page
+
+
+def test_open_recording_constructs_bench_and_switches_to_it(tmp_path):
+    set_high_dpi_policy()
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    window = VantageWindow()
+    recording = tmp_path / "rec.mcap"
+    _write_synthetic_recording(recording)
+
+    window.open_recording(recording)
+    _pump_until_loaded(window)
+
+    assert window.bench is not None
+    assert window.bench.session is not None
+    assert window.workspace_name == "bench"
+    assert window._stack.currentWidget() is window.bench
+
+
+def test_l2_start_page_to_moving_picture_in_three_actions(tmp_path):
+    """`ST-D8-2`: open (action 1, `open_recording_requested`) -> playing
+    (action 2, `toggle_play_pause`) is already at or under the `L-2`
+    budget of 3 -- driven programmatically, exactly as the test's own
+    name in the plan requires."""
+    set_high_dpi_policy()
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    window = VantageWindow()
+    recording = tmp_path / "rec.mcap"
+    _write_synthetic_recording(recording)
+
+    actions = 0
+    window._start_page.open_recording_requested.emit(recording)  # action 1: open
+    actions += 1
+    _pump_until_loaded(window)
+
+    window.bench.transport_bar.toggle_play_pause()  # action 2: play
+    actions += 1
+
+    assert actions <= 3
+    assert window.bench.transport.playing is True
+
+
+def test_opening_a_recording_adds_it_to_recent_files_and_refreshes_the_start_page(tmp_path):
+    set_high_dpi_policy()
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    window = VantageWindow()
+    recording = tmp_path / "rec.mcap"
+    _write_synthetic_recording(recording)
+
+    window.open_recording(recording)
+    _pump_until_loaded(window)
+
+    from adas_sim.app.shell.startpage import load_recent_files
+    assert recording in load_recent_files()
+    assert window._start_page._recent_list.count() >= 1
+
+
+def test_sample_pipeline_requested_opens_its_recording_and_pipeline(tmp_path):
+    from adas_sim.app.shell.startpage import SamplePipeline
+
+    set_high_dpi_policy()
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    window = VantageWindow()
+    recording = tmp_path / "rec.mcap"
+    _write_synthetic_recording(recording)
+    pipeline_path = tmp_path / "pipeline.yaml"
+    pipeline_path.write_text("version: 1\nname: sample\nstages: []\n", encoding="utf-8")
+    sample = SamplePipeline(name="demo", pipeline_path=pipeline_path, recording_path=recording)
+
+    window._start_page.sample_pipeline_requested.emit(sample)
+    _pump_until_loaded(window)
+
+    assert window.bench is not None
+    assert window.bench.pipeline_path == pipeline_path
+
+
+def test_probe_requested_from_the_start_page_reaches_the_probe_panel(tmp_path):
+    set_high_dpi_policy()
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    window = VantageWindow()
+    received = []
+    window._probe_panel.load_failed.connect(received.append)
+
+    window._start_page.probe_requested.emit(tmp_path / "no_such.dll")
+
+    assert len(received) == 1
+
+
+def test_ut_d8_3_open_on_bench_reopens_the_same_recording_and_pipeline(tmp_path):
+    """`UT-D8-3`: `Open on Bench` reconstructs recording + pipeline (the
+    exact failing-tick attribution needs `sim check`'s own expectation
+    evaluation and is not wired to this signal yet, see `_on_open_on_
+    bench_requested`'s own docstring) -- the reconstructed pipeline path
+    is byte-identical to Campaign's, because it is literally the same
+    `Path`, never a converted or re-authored one."""
+    set_high_dpi_policy()
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    window = VantageWindow()
+    recording = tmp_path / "rec.mcap"
+    _write_synthetic_recording(recording)
+    pipeline_path = tmp_path / "pipeline.yaml"
+    pipeline_bytes = b"version: 1\nname: campaign\nstages: []\n"
+    pipeline_path.write_bytes(pipeline_bytes)
+
+    window.campaign.open_on_bench_requested.emit(recording, pipeline_path)
+    _pump_until_loaded(window)
+
+    assert window.workspace_name == "bench"
+    assert window.bench.pipeline_path == pipeline_path
+    assert pipeline_path.read_bytes() == pipeline_bytes  # untouched, never re-authored
