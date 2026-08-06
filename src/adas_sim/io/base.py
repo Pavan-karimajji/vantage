@@ -124,6 +124,22 @@ class OverrideRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class RecordPolicyRecord:
+    """One declared output port's resolved `record:` policy, exactly as it
+    appears in the run manifest (`UT-C2-12`, `NR-SIM-42`). Written for
+    **every** declared output port, not only the exceptions -- `full` is
+    still a value, not an absence -- so a reader answers "was this
+    recording complete?" from the file alone: `R-SIM-6` degrading
+    *visibly* to "everything except these, by declaration" instead of
+    silently becoming false. `decimate_n` is `0` unless `verb == "decimate"`
+    (mirrors `contracts.pipeline.RecordPolicy.decimate_n`, `None` there)."""
+
+    port: str
+    verb: str
+    decimate_n: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class RunManifest:
     """The run manifest (sim_resim_and_recording.md §2), written into the
     recording and every snapshot sidecar. `RunManifest()` (every field at its
@@ -149,6 +165,10 @@ class RunManifest:
     #: `UT-D6-2`) -- previously only hashed into `run_id` (`core.manifest.
     #: _overrides_repr`), never actually readable from a written manifest.
     overrides: tuple[OverrideRecord, ...] = field(default_factory=tuple)
+    #: `UT-C2-12`: every declared output port's resolved `record:` policy,
+    #: for every non-`off` stage -- see `RecordPolicyRecord`'s own
+    #: docstring for why `full` is written too, not only the exceptions.
+    record_policies: tuple[RecordPolicyRecord, ...] = field(default_factory=tuple)
     seed: int = 0
     #: `OD-11` (`R-SIM-3a` §9.1): whether this run's pipeline declared
     #: `allow_mixed_projects: true` -- badges a deliberate cross-project

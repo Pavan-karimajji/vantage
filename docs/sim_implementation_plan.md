@@ -4385,10 +4385,10 @@ substantially built and tested. Verified against real code and a real
 done under an identical "looks untouched" doc): every file below exists,
 substantial, and 54 of this stage's own unit + system tests pass. Ticked
 accordingly, each against its real test file. Two real, previously
-unbuilt gaps survived this pass and are called out where they are, not
-silently ticked: `UT-C2-12` (record-policy visibility in the recording's
-own metadata) and `UT-C2-9` (manifest-mismatch hard error / library-hash
-warning at resim time — **closed in this same pass**, see its own entry).
+unbuilt gaps survived this pass — `UT-C2-9` (manifest-mismatch hard error
+/ library-hash warning at resim time) and `UT-C2-12` (record-policy
+visibility in the recording's own metadata) — **both closed in this same
+pass**, see their own entries below.
 
 - [x] `sources/base.py` — the `Source` Protocol; `emits()` declares what this
       world can produce, so a pipeline asking for a level the source cannot
@@ -4415,15 +4415,11 @@ warning at resim time — **closed in this same pass**, see its own entry).
       — `full` (the default) · `{decimate: n}` · `excluded`. **No global
       switch**, deliberately: a global switch is how everything ends up excluded
       by one person in a hurry
-- [ ] **The policy is written into the recording's meta for *every* declared
+- [x] **The policy is written into the recording's meta for *every* declared
       port, not only the exceptions**, so a reader answers *"was this
       complete?"* from the file alone. This is what makes `R-SIM-6` degrade
       *visibly* to "everything except these, by declaration" instead of silently
-      becoming false. **Confirmed still a real gap, not stale docs** —
-      `Recorder` uses the policy internally (`record_policy_for`) to decide
-      what to write, but never writes the policy itself anywhere; an
-      excluded port simply never appears as a topic, indistinguishable
-      from "never wired." This is `UT-C2-12`'s own claim — tracked there
+      becoming false. **Done, 2026-08-06** — see `UT-C2-12`'s own entry below
 - [x] **An excluded port feeds `R-SIM-23`'s feasible-cut query, not a second
       mechanism.** To a later run an excluded port is indistinguishable from one
       the recording never had, which is the case `S-C9` already computes.
@@ -4492,12 +4488,26 @@ warning at resim time — **closed in this same pass**, see its own entry).
       `tests/unit/test_c2_source.py`
 - [x] `UT-C2-11` no module under `sources/` launches a process through a shell
       or names an absolute path (`P-2`, `P-6`). `tests/unit/test_c2_carla_portability.py`
-- [ ] `UT-C2-12` **per-port record policy** (`NR-SIM-42`, audit `A3`): a port
+- [x] `UT-C2-12` **per-port record policy** (`NR-SIM-42`, audit `A3`): a port
       declared `excluded` or `decimated` is honoured **and named in the
       recording's own metadata**, so `R-SIM-6`'s "everything the SUT reads was
       recorded" degrades *visibly* to "everything except these, by declaration"
-      rather than silently becoming false. **Real, unbuilt gap** — tracked
-      as its own item, next in this pass
+      rather than silently becoming false. **Done, 2026-08-06 — a real,
+      previously unbuilt gap**, not stale docs: `Recorder` already used the
+      policy internally (`record_policy_for`) to decide what to physically
+      write, but never wrote the policy itself anywhere — an excluded port
+      simply never appeared as a topic, indistinguishable from "never
+      wired." `RunManifest.record_policies` (new field, `io/base.py`'s new
+      `RecordPolicyRecord`: `port`/`verb`/`decimate_n`) is built by
+      `core.manifest._record_policy_records` from every non-`off` stage's
+      own declared output ports — `full` is written too, not only the
+      exceptions, which is the whole claim — and round-tripped through
+      `io/mcap.py`. Flows automatically through the real `sim run --record`
+      path: `cli/run.py` already passed `pipeline=` to `build_manifest`
+      before this pass, so no CLI/`Recorder` change was needed beyond the
+      manifest schema itself. `tests/unit/test_c2_manifest.py` (+4),
+      `tests/unit/test_a4_mcap.py`'s own `UT-A4-3` round-trip extended to
+      cover `full`/`excluded`/`decimate` together
 - [x] `UT-C2-13` the recorder writes **capture and reception time** separately
       (`CR-SIM-4`); an injected latency error model is recoverable from the
       recording, which is the whole reason the second stamp exists.

@@ -16,6 +16,7 @@ from adas_sim.io.base import (
     ComponentBuildInfo,
     OverrideRecord,
     Provenance,
+    RecordPolicyRecord,
     RunManifest,
     TopicInfo,
     group_by_log_time,
@@ -72,7 +73,9 @@ def test_meta_blocks_round_trip(tmp_path):
     """UT-A4-3: manifest, config_bundle, topic_provenance. Also covers
     `UT-D6-2`'s own round-trip claim: `RunManifest.overrides` -- including
     a `None` value (`hold`/`select`/`drop` carry none) -- survives the
-    write/read cycle unchanged, part of this same equality check."""
+    write/read cycle unchanged, part of this same equality check. And
+    `UT-C2-12`'s: `RunManifest.record_policies`, including a `full` entry
+    (written, not omitted) alongside `excluded`/`decimate`."""
     path = tmp_path / "sample.mcap"
     manifest = RunManifest(
         manifest_version=1, run_id="20260729T000000Z-abc12345", run_kind="resim",
@@ -80,6 +83,11 @@ def test_meta_blocks_round_trip(tmp_path):
         overrides=(
             OverrideRecord(stage="df", address="egoDyn.vx", verb="const", value=5.0),
             OverrideRecord(stage="df", address="egoDyn", verb="hold", value=None),
+        ),
+        record_policies=(
+            RecordPolicyRecord(port="df.aeb.outputs", verb="full"),
+            RecordPolicyRecord(port="df.bsd.outputs", verb="excluded"),
+            RecordPolicyRecord(port="df.camera_front", verb="decimate", decimate_n=10),
         ),
     )
     _write_sample(path, manifest=manifest, config_bundle_bytes=b"EGO_LENGTH_M: 4.5\n", messages=[("/source/veh_dyn", 0, b"\x00")])

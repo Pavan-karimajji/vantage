@@ -39,10 +39,16 @@ from warnings import warn
 
 import yaml
 
-from adas_sim.contracts.pipeline import Pipeline
+from adas_sim.contracts.pipeline import Pipeline, record_policy_for
 from adas_sim.core.errors import AuthoringError, ContractError, ProvenanceWarning
 from adas_sim.core.ids import new_run_id
-from adas_sim.io.base import CAPTURE_TIME_MANIFEST_VERSION, ComponentBuildInfo, OverrideRecord, RunManifest
+from adas_sim.io.base import (
+    CAPTURE_TIME_MANIFEST_VERSION,
+    ComponentBuildInfo,
+    OverrideRecord,
+    RecordPolicyRecord,
+    RunManifest,
+)
 from adas_sim.io.registry import reader_for
 
 #: `S-C6` (`R-SIM-24`): generated ONCE per process, at import time -- every
@@ -77,6 +83,28 @@ def _override_records(pipeline: Pipeline) -> tuple[OverrideRecord, ...]:
         OverrideRecord(stage=stage.name, address=key, verb=override.verb.value, value=override.value)
         for stage in pipeline.stages for key, override in sorted(stage.overrides.items())
     )
+
+
+def _record_policy_records(pipeline: Pipeline) -> tuple[RecordPolicyRecord, ...]:
+    """Every non-`off` stage's own declared output ports, each with its
+    resolved `record:` policy (`UT-C2-12`, `NR-SIM-42`) -- written for
+    `full` ports too, not only `excluded`/`decimated` ones, so a reader
+    answers "was this recording complete?" from the manifest alone.
+    `sources/recorder.py` is a DIFFERENT concern (it decides what to
+    physically WRITE for a port, honouring the same policy) -- this is the
+    declaration, always complete regardless of what got written."""
+    records: list[RecordPolicyRecord] = []
+    for stage in pipeline.stages:
+        if stage.mode == "off":
+            continue
+        manifest = pipeline.manifest_for(stage.name)
+        for port_spec in manifest.outputs:
+            policy = record_policy_for(stage, port_spec.name)
+            records.append(RecordPolicyRecord(
+                port=f"{stage.name}.{port_spec.name}", verb=policy.verb.value,
+                decimate_n=policy.decimate_n or 0,
+            ))
+    return records
 
 
 def build_manifest(
@@ -173,6 +201,7 @@ def build_manifest(
         pipeline=pipeline.name if pipeline is not None else "",
         components=components,
         overrides=_override_records(pipeline) if pipeline is not None else (),
+        record_policies=tuple(_record_policy_records(pipeline)) if pipeline is not None else (),
         seed=seed,
         allow_mixed_projects=pipeline.allow_mixed_projects if pipeline is not None else False,
         process_nonce=_PROCESS_NONCE,

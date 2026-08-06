@@ -33,13 +33,17 @@ def _stub(name: str, manifest: ComponentManifest) -> InProcessSilComponent:
     return component
 
 
-def _pipeline(tmp_path: Path, *, overrides: dict | None = None) -> tuple[Pipeline, Path]:
+def _pipeline(
+    tmp_path: Path, *, overrides: dict | None = None, record: dict | None = None,
+) -> tuple[Pipeline, Path]:
     stage = {
         "name": "under_test", "mode": "simulate", "impl": "stub:under_test",
         "inputs": {"egoDyn": "source.veh_dyn"},
     }
     if overrides:
         stage["overrides"] = overrides
+    if record:
+        stage["record"] = record
     path = tmp_path / "pipeline.yaml"
     path.write_text(yaml.safe_dump({"name": "test", "stages": [stage]}, sort_keys=False), encoding="utf-8")
     manifest = _manifest(
@@ -123,6 +127,40 @@ def test_manifest_carries_a_const_override_with_its_value(tmp_path):
 def test_manifest_overrides_are_empty_with_no_pipeline():
     manifest = build_manifest(run_kind="sim", source_kind="synthetic", clock=_CLOCK)
     assert manifest.overrides == ()
+
+
+def test_manifest_records_the_full_policy_by_default_not_only_exceptions(tmp_path):
+    """UT-C2-12: `full` is written too, not omitted -- a reader must be
+    able to tell "recorded in full, by declaration" from "nothing here
+    ever said anything about this port," which are different facts."""
+    pipeline, path = _pipeline(tmp_path)  # no record: block at all
+    manifest = build_manifest(pipeline=pipeline, pipeline_path=path, run_kind="sim", source_kind="synthetic", clock=_CLOCK)
+
+    assert len(manifest.record_policies) == 1
+    record = manifest.record_policies[0]
+    assert record.port == "under_test.verdict"
+    assert record.verb == "full"
+    assert record.decimate_n == 0
+
+
+def test_manifest_records_an_excluded_port_rather_than_omitting_it(tmp_path):
+    pipeline, path = _pipeline(tmp_path, record={"verdict": "excluded"})
+    manifest = build_manifest(pipeline=pipeline, pipeline_path=path, run_kind="sim", source_kind="synthetic", clock=_CLOCK)
+
+    assert manifest.record_policies[0].verb == "excluded"
+
+
+def test_manifest_records_a_decimated_port_with_its_n(tmp_path):
+    pipeline, path = _pipeline(tmp_path, record={"verdict": {"decimate": 10}})
+    manifest = build_manifest(pipeline=pipeline, pipeline_path=path, run_kind="sim", source_kind="synthetic", clock=_CLOCK)
+
+    assert manifest.record_policies[0].verb == "decimate"
+    assert manifest.record_policies[0].decimate_n == 10
+
+
+def test_manifest_record_policies_are_empty_with_no_pipeline():
+    manifest = build_manifest(run_kind="sim", source_kind="synthetic", clock=_CLOCK)
+    assert manifest.record_policies == ()
 
 
 def test_off_stage_is_excluded_from_components(tmp_path):

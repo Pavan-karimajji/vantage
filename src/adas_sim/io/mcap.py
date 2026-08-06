@@ -30,6 +30,7 @@ from adas_sim.io.base import (
     ComponentBuildInfo,
     OverrideRecord,
     Provenance,
+    RecordPolicyRecord,
     RunManifest,
     TopicInfo,
 )
@@ -83,6 +84,10 @@ def _manifest_to_dict(manifest: RunManifest) -> dict:
             {"stage": o.stage, "address": o.address, "verb": o.verb, "value": o.value}
             for o in manifest.overrides
         ],
+        "record_policies": [
+            {"port": r.port, "verb": r.verb, "decimate_n": r.decimate_n}
+            for r in manifest.record_policies
+        ],
     }
 
 
@@ -106,6 +111,10 @@ def _manifest_from_dict(data: dict) -> RunManifest:
         OverrideRecord(stage=o["stage"], address=o["address"], verb=o["verb"], value=o.get("value"))
         for o in data.get("overrides", ())
     )
+    record_policies = tuple(
+        RecordPolicyRecord(port=r["port"], verb=r["verb"], decimate_n=r.get("decimate_n", 0))
+        for r in data.get("record_policies", ())
+    )
     return RunManifest(
         manifest_version=data.get("manifest_version", 0),
         run_id=data.get("run_id", ""),
@@ -124,6 +133,7 @@ def _manifest_from_dict(data: dict) -> RunManifest:
         process_nonce=data.get("process_nonce", ""),
         components=components,
         overrides=overrides,
+        record_policies=record_policies,
     )
 
 
