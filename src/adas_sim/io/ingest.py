@@ -227,6 +227,13 @@ class IngestRecordingReader:
     def meta(self) -> RunManifest:
         return self._inner.meta()
 
+    def config_bundle_bytes(self) -> bytes:
+        """Forwards to the wrapped reader's own extra (`io/mcap.py`'s own
+        docstring: "beyond the `RecordingReader` Protocol's minimum") --
+        `b""` for a codec that never implemented it (`io/csv.py`), same as
+        calling it directly would report."""
+        return getattr(self._inner, "config_bundle_bytes", lambda: b"")()
+
     def topics(self) -> Mapping[str, TopicInfo]:
         remapped: dict[str, TopicInfo] = {}
         for name, info in self._inner.topics().items():

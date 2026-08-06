@@ -111,6 +111,7 @@ def build_session_from_recording(
     try:
         topics = reader.topics()
         manifest = reader.meta()
+        config_bundle_bytes = reader.config_bundle_bytes()
         # Materialised once (`S-A4Δ`'s 4-tuple): `group_by_log_time` groups
         # on `log_time_ns` and drops `capture_time_ns` after (it is a
         # scheduling primitive shared with the resim path), so capture time
@@ -159,6 +160,7 @@ def build_session_from_recording(
             known_ports=frozenset(_topic_to_port_name(topic) for topic in topics),
             provides={p.manifest_port: p for p in reader.provides},
             absent={a.port: a for a in reader.absent},
+            config_bundle_bytes=config_bundle_bytes,
         )
     finally:
         reader.close()
@@ -168,10 +170,13 @@ def _resolve_tick_index(session: Session, tick_index: int) -> int:
     return tick_index if tick_index >= 0 else len(session) + tick_index
 
 
-def _build_layer_ctx(session: Session, tick_index: int, *, project: str, interaction: Interaction) -> LayerCtx:
+def _build_layer_ctx(
+    session: Session, tick_index: int, *, project: str, interaction: Interaction,
+    model: ProjectModel | None = None,
+) -> LayerCtx:
     index = _resolve_tick_index(session, tick_index)
     return LayerCtx(
-        model=ProjectModel.resolve(project=project),
+        model=model if model is not None else ProjectModel.resolve(project=project),
         history=HistoryView(_ticks=tuple(session.ticks[: index + 1])),
         frames=FrameTree(session.at(index).pose),
         interaction=interaction,
@@ -199,6 +204,7 @@ def _reactive_layers(ctx: LayerCtx) -> tuple[Layer, ...]:
 
 def build_scene(
     session: Session, tick_index: int, *, project: str = "base", interaction: Interaction = _NO_INTERACTION,
+    model: ProjectModel | None = None,
 ) -> Scene:
     """Pass 2a: assemble one tick's `Scene` from every currently-registered
     layer provider (`scene/registry.py`) -- discovery by import, never a
@@ -212,23 +218,34 @@ def build_scene(
     on them without this function needing either. `interaction` defaults to
     a no-op, so every caller that predates `S-B3` slice 3 is unaffected; a
     real caller only needs it to feed a provider declaring `reacts_to`.
+
+    `model`, when given, is used as-is instead of re-resolving `project`
+    (`ST-C5-2`) -- a caller rendering many ticks off one loaded session
+    (the live viewer) resolves its `ProjectModel` once, off the session's
+    own embedded bundle (`Session.config_bundle_bytes`) if it carries one,
+    rather than paying `ProjectModel.resolve`'s checkout-only default on
+    every single tick. `None` (every other caller: `capture.py`, `clip.py`,
+    every test) reproduces the exact prior behaviour.
     """
     index = _resolve_tick_index(session, tick_index)
-    ctx = _build_layer_ctx(session, tick_index, project=project, interaction=interaction)
+    ctx = _build_layer_ctx(session, tick_index, project=project, interaction=interaction, model=model)
     layers = _static_layers(ctx) + _reactive_layers(ctx)
     return Scene(t_s=session.at(index).t_s, layers=layers)
 
 
-def build_static_scene(session: Session, tick_index: int, *, project: str = "base") -> Scene:
+def build_static_scene(
+    session: Session, tick_index: int, *, project: str = "base", model: ProjectModel | None = None,
+) -> Scene:
     """`SceneCache`'s base tier: only providers that declared no
     `reacts_to`, so an interaction change never has to re-run them."""
-    ctx = _build_layer_ctx(session, tick_index, project=project, interaction=_NO_INTERACTION)
+    ctx = _build_layer_ctx(session, tick_index, project=project, interaction=_NO_INTERACTION, model=model)
     index = _resolve_tick_index(session, tick_index)
     return Scene(t_s=session.at(index).t_s, layers=_static_layers(ctx))
 
 
 def build_reactive_layers(
     session: Session, tick_index: int, *, project: str = "base", interaction: Interaction = _NO_INTERACTION,
+    model: ProjectModel | None = None,
 ) -> tuple[Layer, ...]:
     """`SceneCache`'s interaction-keyed tier: only providers that declared
     `reacts_to` (`sim_visualization_spec.md` §7.5)."""

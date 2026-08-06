@@ -161,6 +161,7 @@ from adas_sim.core.runner import (
 )
 from adas_sim.core.session import Session
 from adas_sim.core.signals import resolve_tick
+from adas_sim.model.project import ProjectModel, extract_embedded_bundle
 from adas_sim.render.bev import anchor_points_m, hit_test, render_scene, scene_bounds_m
 from adas_sim.render.plots import render_distribution, render_xy
 from adas_sim.render.theme import Theme
@@ -1062,6 +1063,16 @@ class MainWindow(QtWidgets.QMainWindow):
         #: Lazily created on the first Run -- one scratch dir per window,
         #: reused (overwritten) across runs, removed in `closeEvent`.
         self._resim_scratch_dir: Path | None = None
+        #: `ST-C5-2`: resolved once per loaded session in `_on_loaded`
+        #: (`_resolve_project_model`), never re-resolved per tick -- fed
+        #: into `build_static_scene`/`build_reactive_layers` as `model=`
+        #: and into the HUD as `bundle_origin` (`R-SIM-3a`).
+        self._project_model: ProjectModel | None = None
+        #: Backing directory for `_project_model` when it came from a
+        #: recording's own embedded bundle (`extract_embedded_bundle` needs
+        #: a real directory, not bytes) -- one per window, replaced on each
+        #: `_on_loaded`, removed in `closeEvent`.
+        self._project_model_scratch_dir: Path | None = None
         #: signal address -> every `ExpectationResult` naming it with a
         #: drawable `window_s` (`check/expect.py`) -- several expectations
         #: can share one signal (`sim_mergein_vlat025.yaml`'s own `EXP-1`/
@@ -1250,6 +1261,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._stop_resim_thread()
         if self._resim_scratch_dir is not None:
             shutil.rmtree(self._resim_scratch_dir, ignore_errors=True)
+        if self._project_model_scratch_dir is not None:
+            shutil.rmtree(self._project_model_scratch_dir, ignore_errors=True)
         super().closeEvent(event)
 
     def _stop_thread(self) -> None:
@@ -1267,8 +1280,31 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_progress(self, done: int, total: int) -> None:
         self.statusBar().showMessage(f"loading... {done}/{total}")
 
+    def _resolve_project_model(self, session: Session) -> ProjectModel:
+        """`ST-C5-2`, `R-SIM-3a`: resolved once per loaded session, off the
+        session's own embedded bundle when it carries one -- never
+        re-opening the recording file, `Session.config_bundle_bytes` is
+        already in memory (`S-C5`/`R-SIM-6`) -- so every tick's
+        `build_static_scene`/`build_reactive_layers` call reuses one
+        `ProjectModel` instead of paying `resolve()`'s checkout-only
+        default per tick (`core/runner.py`'s own `build_scene(model=...)`
+        docstring). The viewer has no `library_dir`/`explicit` source of
+        its own (`R-SIM-13`: it only ever holds a `Session`) -- `embedded`
+        vs `checkout` are the two tiers reachable here, matching this
+        stage's own scope note. A previous session's scratch directory is
+        removed first -- one temp dir per window, not one per load."""
+        if self._project_model_scratch_dir is not None:
+            shutil.rmtree(self._project_model_scratch_dir, ignore_errors=True)
+            self._project_model_scratch_dir = None
+        if not session.config_bundle_bytes:
+            return ProjectModel.resolve(project=self._project)
+        self._project_model_scratch_dir = Path(tempfile.mkdtemp(prefix="adas_sim_bundle_"))
+        extract_embedded_bundle(session.config_bundle_bytes, self._project_model_scratch_dir)
+        return ProjectModel.resolve(recording=self._project_model_scratch_dir, project=self._project)
+
     def _on_loaded(self, session: Session) -> None:
         self._session = session
+        self._project_model = self._resolve_project_model(session)
         self.evidence_state = EvidencePanelState(session)  # UT-D3-8
         self._scene_cache = SceneCache(self._build_scene_for_cache, build_reactive=self._build_reactive_for_cache)
         self._stop_thread()
@@ -1455,13 +1491,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _build_scene_for_cache(self, tick_index: int, layer_selection: frozenset[str], theme: str) -> object:
         del layer_selection, theme  # Scene assembly needs neither -- see build_scene's own docstring
-        return build_static_scene(self._session, tick_index, project=self._project)
+        return build_static_scene(self._session, tick_index, project=self._project, model=self._project_model)
 
     def _build_reactive_for_cache(
         self, tick_index: int, layer_selection: frozenset[str], theme: str, interaction: Interaction,
     ) -> tuple:
         del layer_selection, theme
-        return build_reactive_layers(self._session, tick_index, project=self._project, interaction=interaction)
+        return build_reactive_layers(
+            self._session, tick_index, project=self._project, interaction=interaction, model=self._project_model,
+        )
 
     def render_tick(self, tick_index: int, *, interaction: Interaction = Interaction()) -> None:
         """GUI-thread only: reads `_scene_cache`, never re-runs pass 1.
@@ -1528,11 +1566,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 if isinstance(value, (int, float)) and not isinstance(value, bool):
                     ego_state[field_name] = value
         build_id = self._session.meta.components[0].build_id if self._session.meta.components else ""
+        bundle_origin = self._project_model.bundle_origin if self._project_model is not None else None
         info = HudInfo(
             scale_px_per_m=self.bev.viewport.scale_px_per_m, t_s=tick.t_s,
             tick_index=tick_index, head_tick=self.transport.head_tick if self.transport else tick_index,
             project=self._project, scenario=self._session.meta.scenario,
-            pipeline=self._session.meta.pipeline, build_id=build_id, ego_state=ego_state,
+            pipeline=self._session.meta.pipeline, build_id=build_id, bundle_origin=bundle_origin,
+            ego_state=ego_state,
         )
         banner = format_stale_banner(stale_ports(tick, self._max_age_s))
         return format_hud_lines(info), banner

@@ -90,6 +90,12 @@ class Session:
     #: keyed by port name -- named at load, never discovered as a tick-0
     #: failure (`R-SIM-23`'s own "a known hole declared is a startup answer").
     absent: Mapping[str, AbsentPort] = field(default_factory=dict)
+    #: `S-C5`/`ST-C5-2`: this recording's own embedded config bundle, straight
+    #: from `RecordingReader.config_bundle_bytes()` (`R-SIM-6`) -- `b""` when
+    #: the recording predates bundle embedding or the codec never wrote one.
+    #: A viewer resolves its `ProjectModel`'s `embedded` tier from this
+    #: (`model.project.extract_embedded_bundle`), never by re-opening the file.
+    config_bundle_bytes: bytes = b""
 
     def __post_init__(self) -> None:
         # Session is immutable (UT-B2-11): pass 2 must not be able to

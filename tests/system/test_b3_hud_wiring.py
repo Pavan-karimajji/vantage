@@ -18,6 +18,10 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+import shutil
+import tempfile
+from pathlib import Path
+
 import pytest
 
 pytest.importorskip("PySide6")
@@ -26,6 +30,7 @@ from PySide6 import QtCore, QtWidgets  # noqa: E402
 from adas_sim.io.base import ComponentBuildInfo, Provenance, RunManifest, TopicInfo  # noqa: E402
 from adas_sim.io.registry import writer_for  # noqa: E402
 import adas_sim.io.mcap  # noqa: E402,F401 -- registers the ".mcap" codec
+from adas_sim.model.project import bundle_bytes_for_recording  # noqa: E402
 import adas_sim.render.viewer as viewer_module  # noqa: E402
 from adas_sim.render.viewer import MainWindow, set_high_dpi_policy  # noqa: E402
 
@@ -41,7 +46,7 @@ def _isolated_config(tmp_path, monkeypatch):
     return root
 
 
-def _write_synthetic_recording(out_path) -> None:
+def _write_synthetic_recording(out_path, *, config_bundle_bytes: bytes = b"") -> None:
     manifest = RunManifest(
         manifest_version=1, run_id="test-b3-hud", run_kind="resim",
         created_utc="2026-07-30T00:00:00Z", source_kind="synthetic",
@@ -50,7 +55,7 @@ def _write_synthetic_recording(out_path) -> None:
     )
     topics = {"/test/marker": TopicInfo(schema_name="", provenance=Provenance.UNKNOWN)}
     writer = writer_for(out_path)
-    writer.open(out_path, manifest, topics, config_bundle_bytes=b"")
+    writer.open(out_path, manifest, topics, config_bundle_bytes=config_bundle_bytes)
     for tick in range(_TICK_COUNT):
         writer.write("/test/marker", tick * _DT_NS, bytes([tick % 256]))
     writer.close()
@@ -146,3 +151,44 @@ def test_max_age_not_exceeded_no_banner(tmp_path):
     window = _open_window(recording, max_age_s={"test.marker": 999.0})
     _lines, banner = window._hud_and_stale_banner(0)
     assert banner is None
+
+
+def _make_bundle_bytes(*, project: str) -> bytes:
+    """A minimal S-C5-shaped bundle -- `ProjectModel`'s `_bundle_ego` only
+    requires `vehicle/ego_params.yaml` (`test_a2_project.py::_make_bundle`
+    builds the same shape on disk; this serializes it straight to bytes,
+    the way `Recorder.open` embeds a real build's bundle, `R-SIM-6`)."""
+    tmp_dir = Path(tempfile.mkdtemp(prefix="adas_sim_hud_bundle_src_"))
+    try:
+        (tmp_dir / "vehicle").mkdir()
+        (tmp_dir / "vehicle" / "ego_params.yaml").write_text(
+            "EGO_LENGTH_M: 4.5\nEGO_WIDTH_M: 1.8\nEGO_WHEELBASE_M: 2.7\nEGO_OVERHANG_FRONT_M: 0.9\n",
+            encoding="utf-8",
+        )
+        (tmp_dir / "manifest.yaml").write_text(f"project: {project}\n", encoding="utf-8")
+        return bundle_bytes_for_recording(tmp_dir)
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def test_hud_reports_checkout_bundle_origin_when_the_recording_carries_no_bundle(tmp_path):
+    """`ST-C5-2`: a recording with no embedded bundle (the common case
+    today, `config_bundle_bytes=b""`) resolves the viewer's `ProjectModel`
+    off the source checkout, and the HUD line names that tier explicitly
+    (`R-SIM-3a` -- never silently substituted, never left unstated)."""
+    recording = tmp_path / "rec.mcap"
+    _write_synthetic_recording(recording)
+    window = _open_window(recording)
+    lines, _banner = window._hud_and_stale_banner(0)
+    assert "cfg:checkout" in lines[2]
+
+
+def test_hud_reports_embedded_bundle_origin_when_the_recording_carries_its_own_bundle(tmp_path):
+    """`ST-C5-2`'s own claim: opening a recording with an embedded bundle
+    (`UT-C5-9`'s mechanism) reports `bundle_origin == "embedded"` in the
+    HUD -- no checkout project needs to exist for this to be true."""
+    recording = tmp_path / "rec.mcap"
+    _write_synthetic_recording(recording, config_bundle_bytes=_make_bundle_bytes(project=_PROJECT))
+    window = _open_window(recording)
+    lines, _banner = window._hud_and_stale_banner(0)
+    assert "cfg:embedded" in lines[2]

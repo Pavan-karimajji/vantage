@@ -1,6 +1,6 @@
 # check_traceability
-# platform  win32
-# python    3.12.10
+# platform  linux
+# python    3.12.8
 
 Checking: requirements <-> tests <-> stages
 plan defines 351 test/gate ids across 32 stages, plus 8 document checks

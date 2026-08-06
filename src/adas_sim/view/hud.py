@@ -41,6 +41,13 @@ class HudInfo:
     scenario: str
     pipeline: str
     build_id: str
+    #: `ST-C5-2`, `R-SIM-3a`: which tier the viewer's `ProjectModel` actually
+    #: resolved from -- `"embedded"` / `"library"` / `"checkout"` /
+    #: `"explicit"` -- so two readers agreeing is never a coincidence.
+    #: `None` means "no `ProjectModel` supplied" (a caller that predates
+    #: this field, e.g. `render/capture.py`'s frame-only path), distinct
+    #: from a resolved model that always states its own origin.
+    bundle_origin: str | None = None
     #: `{"vx": ..., "ax": ..., "yaw_rate": ..., "ay": ...}` (`R-COORD-2`'s
     #: own frozen ego-state vocabulary -- no `vy`, `ay` is a passthrough).
     #: `None` (not an empty dict) means "not configured", distinct from a
@@ -53,10 +60,13 @@ def format_hud_lines(info: HudInfo) -> tuple[str, ...]:
     calibration: scale, `t = .. · tick ..`, the compact project line, and
     -- only if `info.ego_state` was actually supplied -- the ego state
     line."""
+    project_line = f"{info.project} · {info.scenario} · {info.pipeline} · {info.build_id}"
+    if info.bundle_origin is not None:
+        project_line += f" · cfg:{info.bundle_origin}"
     lines = [
         f"scale {info.scale_px_per_m:.1f} px/m",
         f"t = {info.t_s:.2f}s · tick {info.tick_index}/{info.head_tick}",
-        f"{info.project} · {info.scenario} · {info.pipeline} · {info.build_id}",
+        project_line,
     ]
     if info.ego_state:
         parts = []

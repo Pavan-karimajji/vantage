@@ -1,6 +1,6 @@
 # check_rules_coverage
-# platform  win32
-# python    3.12.10
+# platform  linux
+# python    3.12.8
 
 Checking: rule <-> requirement <-> stage
 26 rules declared

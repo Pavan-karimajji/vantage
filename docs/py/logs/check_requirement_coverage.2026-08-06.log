@@ -1,6 +1,6 @@
 # check_requirement_coverage
-# platform  win32
-# python    3.12.10
+# platform  linux
+# python    3.12.8
 
 Requirement verification coverage, derived from the plan's ticks
 77 requirements; 332 test ids defined in the plan

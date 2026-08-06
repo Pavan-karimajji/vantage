@@ -5028,8 +5028,23 @@ test_bundle_sha256_is_stable_across_mixed_line_endings_and_iteration_order`).
 - [x] `UT-C5-10` (`test_c1c_pipeline.py::test_ego_parameter_mismatch_is_a_hard_error_naming_both_components_and_the_key`, `::test_ego_parameter_mismatch_is_not_suppressed_by_allow_mixed_projects`)
 - [x] `UT-C5-11` (`test_generic_abi.cpp::ManifestTest.PerFunctionPeriodIsReadFromCalibrationAndDrivesTheReportedGcd`, `::ANonIntegerCalibratedPeriodMakesTheManifestUnavailableRatherThanWrong`, `test_param_loader.cpp::ParamLoaderTest.PeriodUsThrowsNamingTheKeyOnANonIntegerValue`)
 - [x] `UT-C5-12` (`test_generic_abi.cpp::ManifestTest.SweepingTheCalibratedPeriodChangesTheReportWithNoRebuild`)
-- [ ] `ST-C5-2` the viewer's `bundle_origin` reports `embedded`/`checkout` —
-      **not implemented**; no Vantage HUD surface reads `bundle_origin` yet
+- [x] `ST-C5-2` the viewer's `bundle_origin` reports `embedded`/`checkout`,
+      landed 2026-08-06. `render/viewer.py`'s `MainWindow._resolve_project_model`
+      resolves one `ProjectModel` per loaded session (`_on_loaded`), off the
+      session's own `Session.config_bundle_bytes` (`UT-C5-9`'s
+      `extract_embedded_bundle`, into a scratch dir cleaned up on the next
+      load and in `closeEvent`) when the recording carries a bundle, else
+      the checkout tier — the two sources reachable from a bare `Session`
+      (`R-SIM-13`: no `library_dir`/`explicit` source of its own). Threaded
+      into `build_static_scene`/`build_reactive_layers` as `model=` so every
+      tick reuses the one resolved `ProjectModel` instead of paying
+      `resolve()`'s checkout-only default per tick (`core/runner.py`'s own
+      `build_scene(model=...)` docstring, `S-C5`'s earlier half of this
+      change). `view/hud.py`'s `HudInfo` gained `bundle_origin: str | None`,
+      appended to the HUD's project line as `cfg:<origin>` when supplied
+      (`R-SIM-3a`: "the chosen origin is ... shown in the HUD").
+      Tests: `test_b3_hud_wiring.py::test_hud_reports_checkout_bundle_origin_when_the_recording_carries_no_bundle`,
+      `::test_hud_reports_embedded_bundle_origin_when_the_recording_carries_its_own_bundle`.
 
 **Discipline** (every stage)
 - [x] portability §3 — `P-9`/`P-5`/`P-3` all exercised for real by
@@ -5045,10 +5060,14 @@ test_bundle_sha256_is_stable_across_mixed_line_endings_and_iteration_order`).
 - [x] `UT-C5-5` green
 
 **Remaining:** `UT-C5-6/7` (`run.overrides:` derived bundle — no mechanism
-exists), `ST-C5-2` (viewer HUD `bundle_origin` badge), and the `updated`-flag-
-vs-predicted-schedule disagreement report. `UT-C5-8`/`UT-C5-9` landed
-2026-08-06 (above). None of the remaining items block `S-C8`/`S-C6` (neither
-reads an overridden bundle, or the viewer's HUD).
+exists) and the `updated`-flag-vs-predicted-schedule disagreement report.
+`UT-C5-8`/`UT-C5-9` and `ST-C5-2` landed 2026-08-06 (above; sim `pytest`
+833 passed / 27 skipped / 3 failed in this WSL shell — the 3 failures
+pre-date this session's changes, confirmed by reproducing them against
+`fe13770` unmodified: `test_d3_mainwindow_pipeline_panel.py`'s two
+`echo_stub.dll`-dependent tests, no usable Windows-built DLL in this
+Linux shell, and one flaky `QTest` drag simulation in
+`test_b3_viewport_controls.py`). Neither remaining item blocks `S-C8`/`S-C6`.
 
 
 ### S-C6 — Resim in CI (the minimum automatic gate)
