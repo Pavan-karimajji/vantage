@@ -1045,6 +1045,18 @@ continuously, not completed once, so an empty `- [ ]` here does not mean
 "not done" the way it does inside a stage. `GT-11` is ticked because it
 records a one-off mechanisation, not a re-check.
 
+**The backtick-quoted `` `GT-n` `` checkboxes nested under seven gates below
+are new (`AR-35`, 2026-08-06).** `GT-3`, `GT-8`, `GT-9`, `GT-10`, `GT-11`,
+`GT-13`, `GT-14` are cited as `Verified by` targets by real requirements but,
+until now, had nowhere `check_requirement_coverage.py` could read a state from
+— its `DEFN_RE` looks for a checkbox whose first token is a backtick-quoted
+id, the same shape `UT-`/`ST-` ids and `MC-1..MC-5` already use, and the bold
+prose bullets above do not match it. This is pure plumbing, giving `AR-36`
+something to resolve against: it adds a state, it does not restate a gate,
+and **none are ticked here** — a real tick still belongs at the stage or
+milestone that actually re-checks the gate (`S-E3` for the milestone
+measurements), never at this line.
+
 - [ ] **GT-1 — no function names in the framework.**
       `grep -rniE '\b(aeb|bsd|lca|acc|ldw|lka)\b' modules/sim/src` returns
       nothing (`R-SIM-1`).
@@ -1062,6 +1074,7 @@ records a one-off mechanisation, not a re-check.
       `modules/*/sim/layers/` (`R-SIM-2`).
 - [ ] **GT-3 — no physical constant in a layer provider or renderer.** No
       literal vehicle/sensor dimension outside `model/` (`R-SIM-3`).
+      - [ ] `GT-3`
 - [ ] **GT-4 — the build matrix stays green.** *Widened 2026-07-31 from one
       component to every component that declares a `gtest` target
       (`NR-SIM-12`).* Each row's `ctest` count is at or above its **measured**
@@ -1127,6 +1140,7 @@ records a one-off mechanisation, not a re-check.
       Measured: _______ min.** Blank fields at `S-E3` mean this was never
       run, which is a different and worse outcome than a number over target. This is the gate that decides whether anyone
       writes a private player; no feature substitutes for it.
+      - [ ] `GT-8`
 - [ ] **GT-9 — no logic in the app layer.** `modules/sim/src/adas_sim/cli/` and
       `…/app/` contain argument parsing, layout and dispatch only. Every
       capability is reachable in ≲3 lines from a plain script
@@ -1135,6 +1149,7 @@ records a one-off mechanisation, not a re-check.
       **This gate is also what keeps headless automation free** (`DF-2`): the
       moment a capability is reachable only through the window, running in cloud
       or CI stops being a consequence and becomes a port.
+      - [ ] `GT-9`
 
 *The three gates below were added by the 2026-07-31 review. Each closes a
 boundary the first nine watched from only one side.*
@@ -1172,6 +1187,7 @@ boundary the first nine watched from only one side.*
       and the one configuration nobody could run is the one where that choice
       breaks. Every `-t gtest` number in `GT-4` above was measured in a full
       checkout and none of them would have caught it.
+      - [ ] `GT-10`
 - [x] **GT-11 — no port address is a literal outside the component that
       declares it.** A scan over every `modules/*/sim/**` plug-in, scenario
       `expect:` block, workspace and viewpoint file for a spelled port address
@@ -1190,6 +1206,7 @@ boundary the first nine watched from only one side.*
       is a legitimate silent empty layer in Block 1's global-registry world,
       since "does not exist" and "this run never wired the component" are the
       same observation without a live manifest.
+      - [ ] `GT-11`
 *The two gates below were added by the 2026-07-31 adversarial audit
 (`sim_requirements.md` §12). Both exist because the claim they guard was
 previously carried by prose alone.*
@@ -1201,6 +1218,7 @@ previously carried by prose alone.*
       determinism across all four axes (`NR-SIM-40`). A blank is a finding, not
       an omission — *"a requirement nobody can fail is a requirement that will
       be declared satisfied"* (§12 preamble).
+      - [ ] `GT-13`
 - [ ] **GT-14 — someone who did not build it can change it.** A named owner and
       a named second reader, plus a **measured maintainer-onboarding number**:
       time for a second person to land a reviewed change touching a rule, a
@@ -1226,6 +1244,7 @@ previously carried by prose alone.*
       > *(`GT-13`'s blanks are **not** in this category and need no decision:
       > every number it wants is behind `S-D7`'s batch half, `S-C6` or the
       > player. They fill themselves as those land.)*
+      - [ ] `GT-14`
 - [ ] **GT-12 — the player runs standalone, against libraries it has never
       heard of.** `vantage <dir>` on a directory containing only built
       artefacts — DLL, `config/`, `sim/` — renders a run with **no repository
@@ -1233,6 +1252,22 @@ previously carried by prose alone.*
       player** (`R-SIM-20`, `FR-SIM-64`, `FR-SIM-70`). Verified on a copied
       output tree with the source tree renamed away, which is the only way to
       prove a checkout was not silently supplying something.
+
+### Document invariants cited by requirements (`DC-`)
+
+`DC-1`..`DC-9` are all mechanised in `docs/py/check_doc_invariants.py` and
+re-checked on every `docs/py/run_all.py` — see that script's own module
+docstring for what each one asserts. Four of them (`DC-1`, `DC-4`, `DC-5`,
+`DC-6`) are cited as `Verified by` targets by real requirements, and — like
+the seven `GT-` ids above — had no checkbox anywhere for
+`check_requirement_coverage.py` to read a state from (`AR-35`). Same
+plumbing, same rule: this adds a state, it is not a second implementation of
+the check, and none are ticked here.
+
+- [ ] `DC-1`
+- [ ] `DC-4`
+- [ ] `DC-5`
+- [ ] `DC-6`
 
 ---
 
@@ -7957,14 +7992,18 @@ separate gates below, and two of them cannot be automated.
 **Added by audit run 3, 2026-08-06 — four items, one theme: the gates that
 score the other gates cannot themselves be scored**
 
-- [ ] **Give every `GT-` a checkbox** (`AR-35`). Seven of fourteen — `GT-3`,
+- [x] **Give every `GT-` a checkbox** (`AR-35`). Seven of fourteen — `GT-3`,
       `GT-8`, `GT-9`, `GT-10`, `GT-11`, `GT-13`, `GT-14` — are cited as
       `Verified by` targets by real requirements and are defined in §2 as prose
       blocks with **nowhere to record a state**. `MC-1..MC-5` already have
       checkboxes, which is exactly why their states are readable. **Adds a
       state, rewrites no prose.** The consequence today: `GT-13`'s own founding
       principle — *"a requirement nobody can fail is a requirement that will be
-      declared satisfied"* — currently applies to `GT-13`
+      declared satisfied"* — currently applies to `GT-13`. **Done 2026-08-06**:
+      a backtick-quoted `` `GT-n` `` checkbox nested under each of the seven,
+      plus the four `DC-` ids (`DC-1`/`DC-4`/`DC-5`/`DC-6`, same finding, same
+      fix) in a new §2 subsection — eleven total, none ticked, no gate prose
+      rewritten
 - [ ] **Then extend `check_requirement_coverage.py` to score `MC-`/`GT-`/`DC-`**
       (`AR-36`, blocked on the item above). Today it scores `UT-`/`ST-` only, so
       **21 of 77 rows rest partly on verifiers it cannot see** and `FR-SIM-47`
