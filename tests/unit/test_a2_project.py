@@ -88,16 +88,43 @@ def test_project_mismatch_emits_provenance_warning_and_still_resolves(tmp_path):
     assert resolved.ego().length_m == 5.0
 
 
-def test_manifestless_library_bundle_reports_unknown_never_the_directory_name(tmp_path):
+def test_manifestless_library_bundle_reports_unknown_and_does_not_warn(tmp_path):
     """UT-C5-3 (`AR-51`): a real `S-C5`-packed bundle carries no
     `manifest.yaml`. Named "config" -- the exact directory name every real
     build packs into, and the value `ProjectModel` used to fall back to
     (`bundle_dir.name`) before this fix. Without a `known_project`, the
-    honest answer is `"unknown"` (`R-SIM-25`), never that directory name."""
+    honest answer is `"unknown"` (`R-SIM-25`), never that directory name.
+
+    **And it must NOT warn** -- `AR-51`'s second half, which reversed this
+    test's original assertion. `unknown` is an **absence**, not a
+    **disagreement**: warning here printed *"is for project 'unknown', not
+    the requested 'base'"*, which asserts a conflict between a value and a
+    value we have just said we do not have. Three reasons it is wrong, in
+    order:
+
+    1. **The claim is false.** We do not know the bundle is not `base`.
+    2. **It fires on every real packed bundle** on every path that does not
+       supply `known_project`, which is the always-on condition
+       `R-SIM-3a`/`NR-SIM-4` exist to prevent -- a warning that is always on
+       trains a reader to ignore the one that matters. Measured: suite
+       warnings went 8 -> 10 when the first half landed, in the direction
+       the finding existed to reverse, including on fixtures whose directory
+       name matched the request and which were silent before it.
+    3. **The disclosure already exists and is the sanctioned one.**
+       `resolved.project == "unknown"` reaches the HUD and the run manifest.
+       `R-SIM-25` asks for `unknown` in the field; it does not ask for a
+       warning on top of it.
+
+    A *genuine* mismatch is unaffected and still warns -- see
+    `test_manifestless_library_bundle_known_project_mismatch_still_warns`
+    below, and `test_project_mismatch_emits_provenance_warning_and_still_
+    resolves` above. Those two are what `R-SIM-3a` actually requires.
+    """
     library_dir = tmp_path / "config"
     _make_real_bundle(library_dir)
 
-    with pytest.warns(ProvenanceWarning):
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", ProvenanceWarning)
         resolved = ProjectModel.resolve(library_dir=library_dir, project="base")
 
     assert resolved.project == "unknown"

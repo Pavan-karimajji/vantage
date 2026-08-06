@@ -51,6 +51,14 @@ from adas_sim.model.ego import SHARED_CONFIG_PROJECTS, EgoModel
 #: added here as a fourth literal.
 BundleOrigin = Literal["explicit", "embedded", "library", "checkout"]
 
+#: What a bundle's project reads when nothing authoritative says (`R-SIM-25`,
+#: `NR-SIM-4`: "a field the tool cannot fill reads `unknown`, never a
+#: plausible-looking default"). A named constant rather than three string
+#: literals because `_resolve_one` must be able to ask *"is this an absence?"*
+#: -- and a comparison against a spelled `"unknown"` is exactly the kind of
+#: literal that drifts from the value it is testing (`AR-51`).
+UNKNOWN_PROJECT = "unknown"
+
 
 def _bundle_ego(bundle_dir: Path, *, known_project: str | None = None) -> tuple[str, EgoModel] | None:
     """A bundle-shaped directory: `<dir>/vehicle/ego_params.yaml`, optionally
@@ -78,9 +86,9 @@ def _bundle_ego(bundle_dir: Path, *, known_project: str | None = None) -> tuple[
     manifest_path = bundle_dir / "manifest.yaml"
     if manifest_path.is_file():
         manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
-        project = str(manifest.get("project", known_project or "unknown"))
+        project = str(manifest.get("project", known_project or UNKNOWN_PROJECT))
     else:
-        project = known_project or "unknown"
+        project = known_project or UNKNOWN_PROJECT
     return project, EgoModel.from_yaml_file(ego_path, project=project)
 
 
@@ -248,7 +256,25 @@ class ProjectModel:
         if found is None:
             return None
         resolved_project, ego = found
-        if resolved_project != project:
+        # `unknown` is an ABSENCE, never a DISAGREEMENT (`AR-51`, second half,
+        # 2026-08-06). `AR-51`'s first half stopped `bundle_dir.name` being
+        # reported as a project and fell back to `"unknown"` -- correct, and
+        # `R-SIM-25` requires exactly that. But leaving the comparison below
+        # unguarded turned the absence into a mismatch claim: a real packed
+        # bundle with no `known_project` supplied warned *"is for project
+        # 'unknown', not the requested 'base'"*, which asserts a conflict
+        # between a value and a value we have just said we do not have. It
+        # also fired on fixtures whose directory name matched the request and
+        # which were therefore silent BEFORE the first half landed -- suite
+        # warnings went 8 -> 10, in the direction the finding existed to fix.
+        #
+        # The cry-wolf failure `R-SIM-3a`/`NR-SIM-4` guard against is not about
+        # which string is printed: it is that a warning which is always on
+        # trains a reader to ignore the one signal that matters. A caller that
+        # wants the project checked supplies `known_project`; one that cannot
+        # gets `unknown` on the model and in the HUD, which is the honest
+        # answer and needs no warning to say so.
+        if resolved_project != project and resolved_project != UNKNOWN_PROJECT:
             warn(
                 ProvenanceWarning(
                     f"{origin} bundle at {bundle_dir} is for project {resolved_project!r}, "

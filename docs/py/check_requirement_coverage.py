@@ -20,7 +20,12 @@ done*, and this script is the join.
 
 What it reports, per requirement: how many of its cited ``UT-``/``ST-`` ids are
 ticked in the plan, bucketed as ``proven`` / ``partial`` / ``unproven`` /
-``no test id``, summarised by priority. The `P0` line is the one to read: a
+``no test id``, summarised by priority. A fifth state, ``proven*``, means
+every *code* verifier is ticked while an unscored one is not -- the row is
+code-complete and not verified, and the asterisk is there so the claim cannot
+be quoted without it (``AR-36``, second half). It counts as proven in the
+summary: the asterisk qualifies a claim, it is not a sixth bucket.
+The `P0` line is the one to read: a
 `P0` requirement with no proven verifier is the register's own definition of
 *"the tool is not usable without it"* colliding with *"nothing demonstrates
 it"*.
@@ -155,6 +160,17 @@ def main() -> int:
             f"{o}:{'x' if other_ticked.get(o) else ('?' if o not in other_ticked else ' ')}"
             for o in other_ids) or "-"
 
+        # An unscored verifier that is NOT ticked is an outstanding one, and a
+        # row carrying one must not read a bare `proven` (`AR-36`, second half,
+        # 2026-08-06). The fourth column above discloses it, and a column is
+        # weaker than the field a reader actually scans -- `FR-SIM-47` (`P0`,
+        # "the UI must be lean and not frightening") read `proven 3/3` with
+        # `MC-5` never run and `GT-8` having no checkbox at all, which is the
+        # precise misreading `AR-34` was raised for. `proven*` keeps the
+        # summary counts and the state vocabulary intact (nothing downstream
+        # re-buckets) while making the claim unquotable without its asterisk.
+        unscored_outstanding = [o for o in other_ids if not other_ticked.get(o)]
+
         if parked:
             state = "parked"
         elif not ids:
@@ -162,7 +178,7 @@ def main() -> int:
         elif not done:
             state = "unproven"
         elif len(done) == len(ids):
-            state = "proven"
+            state = "proven*" if unscored_outstanding else "proven"
         else:
             state = "partial"
         rows.append((level, rid, title, state, len(done), len(ids),
@@ -173,7 +189,11 @@ def main() -> int:
     rep.table(
         ["priority", "proven", "partial", "unproven", "no test id", "parked", "total"],
         [[lvl,
-          sum(1 for r in rows if r[0] == lvl and r[3] == "proven"),
+          # `proven*` (an unscored verifier outstanding) still counts as
+          # proven HERE -- the asterisk qualifies the claim, it is not a
+          # sixth bucket, and a row vanishing from every column would stop
+          # the totals summing.
+          sum(1 for r in rows if r[0] == lvl and r[3].startswith("proven")),
           sum(1 for r in rows if r[0] == lvl and r[3] == "partial"),
           sum(1 for r in rows if r[0] == lvl and r[3] == "unproven"),
           sum(1 for r in rows if r[0] == lvl and r[3] == "no test id"),
@@ -184,6 +204,8 @@ def main() -> int:
 
     rep.heading("P0 requirements — the tool is not usable without these")
     rep.line("unscored verifiers: MC-/GT-/DC- ids, `x`=ticked `?`=no checkbox anywhere yet")
+    rep.line("state `proven*` = every CODE verifier is ticked and an unscored one is NOT "
+             "-- read the last column before quoting the row (AR-34/AR-36)")
     rep.table(
         ["id", "state", "done", "requirement", "outstanding verifiers", "unscored verifiers"],
         [[r[1], r[3], f"{r[4]}/{r[5]}", r[2][:44], ", ".join(r[6]) or "-", r[7]]
@@ -205,7 +227,7 @@ def main() -> int:
         rep.failures.extend(failures)
     else:
         rep.line("RESULT  ok — every cited verifier resolves to a unit of work "
-                 f"({by_state['proven']} proven, {by_state['partial']} partial, "
+                 f"({by_state['proven'] + by_state['proven*']} proven, {by_state['partial']} partial, "
                  f"{by_state['unproven']} unproven, "
                  f"{by_state['no test id']} verified by other means)")
     rep.write_log()
