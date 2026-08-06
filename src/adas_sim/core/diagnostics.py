@@ -129,18 +129,25 @@ def _bundle_diagnoses(
             continue  # nothing to load -- the library finding above already reports the real problem
         lib_path = Path(str(entry["resolved"]))
         try:
-            sut_sha = CtypesSilComponent(lib_path).manifest.config_bundle_sha256
+            sut_manifest = CtypesSilComponent(lib_path).manifest
         except SimError as exc:
             results.append({
                 "stage": entry["stage"], "ok": False,
                 "detail": f"could not load {lib_path} to read its manifest: {exc}",
             })
             continue
+        sut_sha = sut_manifest.config_bundle_sha256
         bundle_dir = lib_path.parent / "config"
         try:
+            # known_project=sut_manifest.project (AR-51): a real S-C5-packed
+            # bundle carries no manifest.yaml of its own, so without this the
+            # library tier fell back to bundle_dir.name ("config", the
+            # directory every build packs into) and ProvenanceWarning fired
+            # on every correct bundle. The loaded library's own manifest is
+            # the one place that project genuinely lives.
             viewer = ProjectModel.resolve(
                 explicit=config_path, library_dir=bundle_dir, recording=embedded_bundle_dir,
-                project=project, force=config_source,
+                project=project, force=config_source, known_project=sut_manifest.project,
             )
         except AuthoringError as exc:
             results.append({

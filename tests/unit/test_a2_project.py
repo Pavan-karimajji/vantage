@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import sys
+import warnings
 from pathlib import Path
 
 import pytest
@@ -85,6 +86,52 @@ def test_project_mismatch_emits_provenance_warning_and_still_resolves(tmp_path):
 
     assert resolved.project == "cus1"
     assert resolved.ego().length_m == 5.0
+
+
+def test_manifestless_library_bundle_reports_unknown_never_the_directory_name(tmp_path):
+    """UT-C5-3 (`AR-51`): a real `S-C5`-packed bundle carries no
+    `manifest.yaml`. Named "config" -- the exact directory name every real
+    build packs into, and the value `ProjectModel` used to fall back to
+    (`bundle_dir.name`) before this fix. Without a `known_project`, the
+    honest answer is `"unknown"` (`R-SIM-25`), never that directory name."""
+    library_dir = tmp_path / "config"
+    _make_real_bundle(library_dir)
+
+    with pytest.warns(ProvenanceWarning):
+        resolved = ProjectModel.resolve(library_dir=library_dir, project="base")
+
+    assert resolved.project == "unknown"
+    assert resolved.project != "config"
+
+
+def test_manifestless_library_bundle_uses_known_project_and_never_warns_when_it_matches(tmp_path):
+    """UT-C5-3 (`AR-51`): a caller that already loaded the component
+    (`core/diagnostics.py`'s `_bundle_diagnoses`) supplies `known_project`
+    from the DLL's own `adasManifest().project`. A correct real bundle then
+    resolves to the real project and `ProvenanceWarning` does not fire --
+    the defect measured four times against the real `df_sil` build tree."""
+    library_dir = tmp_path / "config"
+    _make_real_bundle(library_dir)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", ProvenanceWarning)
+        resolved = ProjectModel.resolve(library_dir=library_dir, project="base", known_project="base")
+
+    assert resolved.project == "base"
+
+
+def test_manifestless_library_bundle_known_project_mismatch_still_warns(tmp_path):
+    """UT-C5-3 (`AR-51`): `known_project` reports the truth, it does not
+    silence a real mismatch -- a library genuinely built for `cus1` loaded
+    against a run requesting `base` still warns, exactly as `R-SIM-3a`
+    requires."""
+    library_dir = tmp_path / "config"
+    _make_real_bundle(library_dir)
+
+    with pytest.warns(ProvenanceWarning):
+        resolved = ProjectModel.resolve(library_dir=library_dir, project="base", known_project="cus1")
+
+    assert resolved.project == "cus1"
 
 
 def test_config_source_force_embedded_wins_over_a_higher_priority_explicit(tmp_path):

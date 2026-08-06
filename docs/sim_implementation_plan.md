@@ -706,8 +706,8 @@ than silently answered:
 | **Three new requirements — accept, amend or reject** | `FR-SIM-71` (a component may split without invalidating recordings), `NR-SIM-47` (a measured claim names its platform), `NR-SIM-48` (the component-side checklist). All three are `sim_requirements.md` §13, each traced to a gap this run measured. They are **flagged for review, not assumed accepted** |
 | **`MC-5`, `GT-14`, `S-D1`'s gate** | Unchanged and unchangeable by work: a stopwatch and a first-time tester; two people's names and one number; a human opening Foxglove Studio. **If there is no second person, that is the answer and it belongs at `GT-14`** |
 
-**2. Two things that read as done and are not.** Both are `S-D8`'s, both have
-ticked boxes, and neither is visible from the plan alone:
+**2. One thing that read as done and was not** (fixed 2026-08-06, fix queue
+row 4 — kept here since the other is still open):
 
 - **`ConsolePanel` and `ProbePanel` are built, tested — and unreachable**
   (`AR-45`). The console is never constructed anywhere in `app/`; the probe
@@ -715,11 +715,11 @@ ticked boxes, and neither is visible from the plan alone:
   the *day-one screen* and the *pressure valve that stops someone forking the
   tool*. Their tests instantiate the panels directly, which is why the suite is
   green.
-- **A real config bundle reports its project as the string `"config"`**
-  (`AR-51`), so `R-SIM-3a`'s mismatch warning fires on every correct bundle —
-  visible four times in the current test run. `ProjectModel` reads the
-  directory name; `contracts/pipeline.py` correctly reads the DLL's manifest.
-  Two answers, and the wrong one is what the HUD shows.
+- ~~A real config bundle reports its project as the string `"config"`~~
+  (`AR-51`, **fixed** — `ProjectModel` now takes the loaded library's own
+  `adasManifest().project` via a new `known_project` parameter, or reports
+  `"unknown"`, never the directory name; the 4 warnings against the real
+  `df_sil` build tree are gone).
 
 **3. `run_all.py` gained a sixth check**, and one baseline you must not raise
 casually: `check_verifier_discoverability.py` ratchets the number of ticked
@@ -731,8 +731,9 @@ not written where the test lives.
 Phase E (blocked on every Phase A–D gate; `S-E1`'s table is the authority).
 `S-E3` gained four items from this run (`AR-35`, `AR-36`, `AR-49`, `AR-50`).
 
-Findings index: [sim_audit_log.md](sim_audit_log.md) — run 3 is `AR-34`..`AR-51`,
-**seven open**, each naming its owner.
+Findings index: [sim_audit_log.md](sim_audit_log.md) — run 3 is `AR-34`..`AR-51`;
+the fix queue has closed `AR-50`, `AR-35`, `AR-36`, `AR-51` so far, **three
+still open** (`AR-45`, `AR-48`, `AR-49`), each naming its owner.
 
 > **If your job is *"fix the audit findings"* rather than *"build the next
 > stage"*, do not start here.** Go to [sim_audit_log.md](sim_audit_log.md)'s
@@ -5152,6 +5153,28 @@ test_bundle_sha256_is_stable_across_mixed_line_endings_and_iteration_order`).
       is compared key-by-key against the first; a differing value is an
       `AuthoringError` naming both stages and the key, and
       `allow_mixed_projects: true` does **not** suppress it (`UT-C5-10`)
+- [x] **Re-opened 2026-08-06, `AR-51`: a real bundle's project came from
+      `bundle_dir.name`, not from anywhere real.** A real `S-C5`-packed
+      bundle carries no `manifest.yaml`, so `_bundle_ego` fell back to the
+      directory name -- always `"config"` for a real `<library_dir>/config/`
+      bundle -- and `R-SIM-3a`'s mismatch warning fired on every correct
+      real bundle (measured: 4 times against the real `df_sil` build tree).
+      The docstring's own deferral (*"real cross-component project-agreement
+      checking is S-C5's addendum scope, deferred"*) had already been closed
+      by `OD-11` (2026-08-05) when this was found -- the deferral it pointed
+      at no longer existed. Fixed: `ProjectModel.resolve`/`_resolve_one`/
+      `_bundle_ego` gained `known_project` -- the loaded library's own
+      `adasManifest().project`, supplied by `core/diagnostics.py::
+      _bundle_diagnoses` (the only real caller resolving a `library_dir`
+      against an already-loaded component). A manifest-less bundle with no
+      `known_project` reports `"unknown"` (`R-SIM-25`), never
+      `bundle_dir.name`; a `manifest.yaml` already present always wins.
+      Verified directly: the 4 real-bundle warnings are gone (`pytest
+      modules/sim/tests/system/test_d6_doctor_cli.py -q` -- 0 warnings,
+      was 4); `UT-C5-3` extended with a manifest-less fixture named `config`
+      (the real bug's exact shape, which its existing `manifest.yaml`-backed
+      fixture never exercised) proving `"unknown"` without `known_project`,
+      the real project with it, and a genuine mismatch still warning
 - [x] **`period` moves into the bundle as `<COMPONENT>_<FN>_PERIOD_US`** —
       `interfaces/scripts/gen_sil_ports.py`'s generated `buildManifest()` is now
       a template over a `periodLookupUs(function, key, fallbackUs)` callback

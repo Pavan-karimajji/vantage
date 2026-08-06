@@ -52,7 +52,7 @@ from adas_sim.model.ego import SHARED_CONFIG_PROJECTS, EgoModel
 BundleOrigin = Literal["explicit", "embedded", "library", "checkout"]
 
 
-def _bundle_ego(bundle_dir: Path) -> tuple[str, EgoModel] | None:
+def _bundle_ego(bundle_dir: Path, *, known_project: str | None = None) -> tuple[str, EgoModel] | None:
     """A bundle-shaped directory: `<dir>/vehicle/ego_params.yaml`, optionally
     `<dir>/manifest.yaml` naming its project. `None` if the shape isn't
     present -- callers fall through to the next tier.
@@ -60,21 +60,27 @@ def _bundle_ego(bundle_dir: Path) -> tuple[str, EgoModel] | None:
     A real S-C5-packed bundle carries no `manifest.yaml` (the checked-in
     `<component>.ports.yaml` deliberately excludes `project:` too -- build-
     variant data must not churn a checked-in file, `test_generic_abi.cpp`'s
-    `EmbeddedManifestAgreesWithCheckedInPortsYaml`), so `project` falls back
-    to `bundle_dir.name` there -- meaningless for a real `.../config/`
-    directory. The only place a real bundle's built project genuinely lives
-    is the loaded library's own `adasManifest()`. Real cross-component
-    project-agreement checking is `S-C5`'s addendum scope (`OD-11`),
-    deferred; `manifest.yaml` stays only to keep this module's own
-    synthetic-fixture tests (`UT-A2-7`, `UT-A2-10`) meaningful."""
+    `EmbeddedManifestAgreesWithCheckedInPortsYaml`), so a real `.../config/`
+    directory has no project name to read from its own bytes at all. The only
+    place a real bundle's built project genuinely lives is the loaded
+    library's own `adasManifest()` -- `known_project` is that value, supplied
+    by a caller that already loaded the component (`core/diagnostics.py`'s
+    `_bundle_diagnoses`, `S-C5` addendum `OD-11`). **`bundle_dir.name` is
+    never used as a project** (`R-SIM-25`, `AR-51`, 2026-08-06) -- it is a
+    plausible-looking default from an accident of a path, exactly the shape
+    that rule forbids. Falls back to `"unknown"` when neither a
+    `manifest.yaml` nor a `known_project` is available. `manifest.yaml` stays
+    only to keep this module's own synthetic-fixture tests (`UT-A2-7`,
+    `UT-A2-10`) meaningful."""
     ego_path = bundle_dir / "vehicle" / "ego_params.yaml"
     if not ego_path.is_file():
         return None
-    project = bundle_dir.name
     manifest_path = bundle_dir / "manifest.yaml"
     if manifest_path.is_file():
         manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
-        project = str(manifest.get("project", project))
+        project = str(manifest.get("project", known_project or "unknown"))
+    else:
+        project = known_project or "unknown"
     return project, EgoModel.from_yaml_file(ego_path, project=project)
 
 
@@ -235,8 +241,10 @@ class ProjectModel:
         return self._ego
 
     @classmethod
-    def _resolve_one(cls, origin: BundleOrigin, bundle_dir: Path, *, project: str) -> ProjectModel | None:
-        found = _bundle_ego(bundle_dir)
+    def _resolve_one(
+        cls, origin: BundleOrigin, bundle_dir: Path, *, project: str, known_project: str | None = None,
+    ) -> ProjectModel | None:
+        found = _bundle_ego(bundle_dir, known_project=known_project)
         if found is None:
             return None
         resolved_project, ego = found
@@ -265,6 +273,7 @@ class ProjectModel:
         explicit: Path | None = None,
         project: str = "base",
         force: Literal["embedded", "library", "checkout"] | None = None,
+        known_project: str | None = None,
     ) -> ProjectModel:
         """`project` is the source-checkout fallback's project name (R-VAR-4:
         `base` is the no-specific-program default) and, for the other three
@@ -272,6 +281,17 @@ class ProjectModel:
         manifest names a different project emits `ProvenanceWarning` and
         still resolves (R-SIM-3a), it never raises and never silently
         substitutes.
+
+        `known_project`, when given, is what a real bundle without its own
+        `manifest.yaml` (every `S-C5`-packed one) reports as its project --
+        the loaded library's own `adasManifest().project` (`AR-51`), supplied
+        by a caller that already has it (`core/diagnostics.py`, which passes
+        it whichever tier ends up resolving: `--config` pointed at the same
+        library-packed bundle is still that library's own project, not a
+        second, different bundle). A manifest.yaml already present always
+        wins over it (a fixture deliberately testing a mismatch is
+        unaffected). Omitted, a manifest-less bundle reports `"unknown"`,
+        never `bundle_dir.name`.
 
         `force`, when given, skips the normal explicit -> embedded ->
         library -> checkout priority order and resolves EXACTLY the named
@@ -292,7 +312,7 @@ class ProjectModel:
                 return cls._resolve_checkout(project)
             bundle_dir = recording if force == "embedded" else library_dir
             if bundle_dir is not None:
-                resolved = cls._resolve_one(force, Path(bundle_dir), project=project)
+                resolved = cls._resolve_one(force, Path(bundle_dir), project=project, known_project=known_project)
                 if resolved is not None:
                     return resolved
             raise AuthoringError(
@@ -306,7 +326,7 @@ class ProjectModel:
         for origin, bundle_dir in (("explicit", explicit), ("embedded", recording), ("library", library_dir)):
             if bundle_dir is None:
                 continue
-            resolved = cls._resolve_one(origin, Path(bundle_dir), project=project)
+            resolved = cls._resolve_one(origin, Path(bundle_dir), project=project, known_project=known_project)
             if resolved is not None:
                 return resolved
 
