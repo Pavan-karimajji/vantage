@@ -387,11 +387,21 @@ partly because the features are absent.
 Owned by `S-D8`; both boxes re-closed 2026-08-06 (`AR-45`, fix queue row 5 —
 functional source, so not fixed by the audit itself, which is documents-only).
 
-### On Campaign's lock — one mechanism, not two (`AR-48`)
+### On Campaign's lock — one mechanism, not two (`AR-48`, fixed 2026-08-06)
+
+**Fixed, fix queue row 6, the safe default.** Locked-by-omission is kept as the
+real mechanism; `Workspace.require()`'s docstring no longer claims call sites it
+does not have, and `UT-D8-2` is repointed at a new mechanical test
+(`test_d8_campaign.py::test_ut_d8_2_locked_by_omission_no_mode_toggle_and_no_console`)
+proving `CampaignWidget`'s widget tree carries no mode-toggle radio button and
+no console-named widget. `require()`'s own tests stay — its correctness is real,
+just unused in production — and the alternative (wiring real call sites into
+`CampaignWidget`) was not taken, since that is a design change this row was not
+asked to make. The account below is kept as the record of the original finding.
 
 `app/shell/workspace.py` defines `Workspace.require(action, allowed=)` raising
-`WorkspacePermissionError`, and its docstring calls it *"the one call site every
-permission-gated action routes through"*. **It has zero call sites in `src/`.**
+`WorkspacePermissionError`, and its docstring called it *"the one call site every
+permission-gated action routes through"*. **It had zero call sites in `src/`.**
 `VantageWindow.current_workspace` — the only thing that could reach it — is a
 property nothing calls.
 
@@ -401,9 +411,9 @@ override affordance, a mode toggle or a console at all."* **That is the stronger
 mechanism and it is the one to keep** — there is nothing to grey out, so there
 is nothing to bypass.
 
-So the finding is not "Campaign is unlocked". It is that **two mechanisms were
-built for one job and the dead one is the one that is tested**: `UT-D8-2` proves
-the wording of an exception no code path can raise. Either `require()` acquires
-its call sites or its docstring stops claiming them; `UT-D8-2` should follow
-whichever survives. Recorded rather than decided, because deleting a permission
-check is exactly the kind of edit that should not happen inside an audit.
+So the finding was not "Campaign is unlocked". It was that **two mechanisms were
+built for one job and the dead one was the one that was tested**: `UT-D8-2`
+proved the wording of an exception no code path can raise. Either `require()`
+acquires its call sites or its docstring stops claiming them; `UT-D8-2` follows
+whichever survives — the docstring's claim was dropped, `UT-D8-2` now follows
+the omission mechanism.

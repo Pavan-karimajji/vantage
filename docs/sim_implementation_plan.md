@@ -7705,7 +7705,18 @@ load instead of skipping) — fixed as part of proving `ST-D8-1` for real.
 
 **Tests**
 - [x] `UT-D8-1` (`test_d8_window.py::test_switch_to_campaign_changes_the_visible_page_only`, `::test_ut_d8_1_session_object_identity_survives_a_round_trip`, `::test_ut_d8_1_pipeline_file_bytes_survive_a_workspace_switch`)
-- [x] `UT-D8-2` (`test_d8_workspace.py::test_require_raises_naming_the_action_and_the_workspace_never_a_generic_message`, `::test_require_raises_for_every_locked_action_kind`)
+- [x] `UT-D8-2` (`test_d8_workspace.py::test_require_raises_naming_the_action_and_the_workspace_never_a_generic_message`, `::test_require_raises_for_every_locked_action_kind`).
+      **Repointed 2026-08-06 (`AR-48`, fix queue row 6):** those two prove
+      `Workspace.require()`'s own correctness, real but with zero call
+      sites in `src/` — the mechanism the lock is ACTUALLY enforced by is
+      `CampaignWidget` never constructing an override affordance, a mode
+      toggle or a console at all, now proven mechanically by
+      `test_d8_campaign.py::test_ut_d8_2_locked_by_omission_no_mode_
+      toggle_and_no_console`. Kept, not deleted — `require()`'s own
+      correctness is still real and still worth having tested. Safe
+      default taken (not the alternative): `require()`'s docstring
+      corrected to state it has no call sites today rather than wiring
+      call sites into `CampaignWidget`, which would be a design change
 - [x] `UT-D8-3` (`test_d8_window.py::test_ut_d8_3_open_on_bench_reopens_the_same_recording_and_pipeline` — the failing-tick half deferred, see Campaign workspace above)
 - [x] `UT-D8-4` (`test_d8_batch_invocation.py`, all three: round-trips
       recordings/pipeline, search/config/jobs, and a path containing a space —

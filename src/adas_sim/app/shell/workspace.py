@@ -75,11 +75,22 @@ class Workspace:
         return f"<Workspace {self.name!r} locked={self.locked}>"
 
     def require(self, action: str, *, allowed: bool) -> None:
-        """The one call site every permission-gated action routes through
-        (`override`, `mode toggle`, `open console`) -- `allowed` is the
-        caller's own already-computed answer (`self.allow_overrides`, …),
-        passed in rather than looked up by a string key, so a typo in the
-        action name can never accidentally bypass the real check."""
+        """The mechanism a permission-gated action WOULD route through, if
+        `CampaignWidget` ever grew an override affordance, a mode toggle or
+        a console it had to grey out -- `allowed` is the caller's own
+        already-computed answer (`self.allow_overrides`, …), passed in
+        rather than looked up by a string key, so a typo in the action name
+        can never accidentally bypass the real check.
+
+        **Has zero call sites in `src/` today (`AR-48`, 2026-08-06).**
+        `CampaignWidget` locks the stronger way instead -- it never
+        constructs an override affordance, a mode toggle or a console dock
+        at all, so there is nothing here to grey out and nothing to bypass.
+        That is the mechanism actually proven by `UT-D8-2`
+        (`test_d8_campaign.py`); this method's own correctness (a refused
+        action names the workspace, never a generic message) is real and
+        tested (`test_d8_workspace.py`), but unused in production until a
+        real disableable control exists to call it."""
         if not allowed:
             raise WorkspacePermissionError(action=action, workspace=self.name)
 

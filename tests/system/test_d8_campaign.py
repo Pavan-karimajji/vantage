@@ -128,6 +128,23 @@ def test_run_button_drives_run_batch_off_the_gui_thread_and_populates_results(mo
     assert widget._results_table.item(0, 1).text() == "ok"
 
 
+def test_ut_d8_2_locked_by_omission_no_mode_toggle_and_no_console():
+    """`UT-D8-2` (`AR-48`, repointed 2026-08-06): the claim that matters is
+    not that `Workspace.require()` raises correctly in isolation
+    (`test_d8_workspace.py` already proves that) -- it is that `Campaign
+    Widget` never constructs a control there is anything to grey out. Mode
+    toggles are `QRadioButton`s (`render/viewer.py::PipelinePanel`'s own
+    `_mode_button` pattern); the console is a `ConsolePanel`, identifiable
+    by its own `objectName()` regardless of which dock wraps it."""
+    _app()
+    widget = CampaignWidget()
+    widget.load_recording_set([Path("a.mcap")], Path("p.yaml"))
+    widget.show_results([RecordingOutcome(recording=Path("a.mcap"), outcome="ok", duration_s=0.1)])
+
+    assert widget.findChildren(QtWidgets.QRadioButton) == []
+    assert not any(w.objectName() == "ConsolePanel" for w in widget.findChildren(QtWidgets.QWidget))
+
+
 def test_run_failure_is_reported_and_never_crashes(monkeypatch):
     _app()
 
