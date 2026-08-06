@@ -33,7 +33,7 @@ _WRITERS: dict[str, Callable[[], RecordingWriter]] = {}
 #: manual smoke test happened to do itself, masking the gap. `reader_for`/
 #: `writer_for` are the one place this framework actually needs a codec, so
 #: they are the one place it is loaded.
-_BUILTIN_CODEC_MODULES = {".mcap": "adas_sim.io.mcap", ".csv": "adas_sim.io.csv"}
+_BUILTIN_CODEC_MODULES = {".mcap": "adas_sim.io.mcap", ".csv": "adas_sim.io.csv", ".jsonl": "adas_sim.io.jsonl"}
 
 
 def _load_builtin(ext: str) -> None:

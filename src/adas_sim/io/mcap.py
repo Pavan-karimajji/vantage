@@ -26,15 +26,12 @@ from mcap.writer import Writer as _McapWriter
 
 from adas_sim.io.base import (
     CAPTURE_TIME_MANIFEST_VERSION,
-    BundleOverrideRecord,
     Capabilities,
-    ComponentBuildInfo,
-    FaultRecord,
-    OverrideRecord,
     Provenance,
-    RecordPolicyRecord,
     RunManifest,
     TopicInfo,
+    manifest_from_dict,
+    manifest_to_dict,
 )
 from adas_sim.io.registry import register
 
@@ -48,120 +45,6 @@ _CONFIG_BUNDLE_META = "config_bundle"
 _PLUGIN_BUNDLES_META = "plugin_bundles"
 _TOPIC_PROVENANCE_META = "topic_provenance"
 _PROVENANCE_VALUES = frozenset(p.value for p in Provenance)
-
-
-def _manifest_to_dict(manifest: RunManifest) -> dict:
-    return {
-        "manifest_version": manifest.manifest_version,
-        "run_id": manifest.run_id,
-        "run_kind": manifest.run_kind,
-        "created_utc": manifest.created_utc,
-        "host": manifest.host,
-        "source_kind": manifest.source_kind,
-        "scenario": manifest.scenario,
-        "scenario_sha256": manifest.scenario_sha256,
-        "recording": manifest.recording,
-        "recording_sha256": manifest.recording_sha256,
-        "project": manifest.project,
-        "pipeline": manifest.pipeline,
-        "seed": manifest.seed,
-        "allow_mixed_projects": manifest.allow_mixed_projects,
-        "process_nonce": manifest.process_nonce,
-        "components": [
-            {
-                "name": c.name,
-                "library_sha256": c.library_sha256,
-                "build_id": c.build_id,
-                "abi_version": c.abi_version,
-                "manifest_sha256": c.manifest_sha256,
-                "config_bundle": c.config_bundle,
-                "config_bundle_sha256": c.config_bundle_sha256,
-                "config_bundle_embedded": c.config_bundle_embedded,
-                "enabled_functions": list(c.enabled_functions),
-                "package_ref": c.package_ref,
-            }
-            for c in manifest.components
-        ],
-        "overrides": [
-            {"stage": o.stage, "address": o.address, "verb": o.verb, "value": o.value}
-            for o in manifest.overrides
-        ],
-        "record_policies": [
-            {"port": r.port, "verb": r.verb, "decimate_n": r.decimate_n}
-            for r in manifest.record_policies
-        ],
-        "faults": [
-            {
-                "verb": f.verb, "address": f.address, "value": f.value,
-                "from_s": f.from_s, "to_s": f.to_s, "after_tick": f.after_tick,
-            }
-            for f in manifest.faults
-        ],
-        "bundle_overrides": [
-            {"address": o.address, "value": o.value} for o in manifest.bundle_overrides
-        ],
-        "base_config_bundle_sha256": manifest.base_config_bundle_sha256,
-    }
-
-
-def _manifest_from_dict(data: dict) -> RunManifest:
-    components = tuple(
-        ComponentBuildInfo(
-            name=c["name"],
-            library_sha256=c.get("library_sha256", ""),
-            build_id=c.get("build_id", ""),
-            abi_version=c.get("abi_version", 0),
-            manifest_sha256=c.get("manifest_sha256", ""),
-            config_bundle=c.get("config_bundle", ""),
-            config_bundle_sha256=c.get("config_bundle_sha256", ""),
-            config_bundle_embedded=c.get("config_bundle_embedded", False),
-            enabled_functions=tuple(c.get("enabled_functions", ())),
-            package_ref=c.get("package_ref", ""),
-        )
-        for c in data.get("components", ())
-    )
-    overrides = tuple(
-        OverrideRecord(stage=o["stage"], address=o["address"], verb=o["verb"], value=o.get("value"))
-        for o in data.get("overrides", ())
-    )
-    record_policies = tuple(
-        RecordPolicyRecord(port=r["port"], verb=r["verb"], decimate_n=r.get("decimate_n", 0))
-        for r in data.get("record_policies", ())
-    )
-    faults = tuple(
-        FaultRecord(
-            verb=f["verb"], address=f["address"], value=f.get("value"),
-            from_s=f.get("from_s"), to_s=f.get("to_s"), after_tick=f.get("after_tick"),
-        )
-        for f in data.get("faults", ())
-    )
-    bundle_overrides = tuple(
-        BundleOverrideRecord(address=o["address"], value=o.get("value"))
-        for o in data.get("bundle_overrides", ())
-    )
-    return RunManifest(
-        manifest_version=data.get("manifest_version", 0),
-        run_id=data.get("run_id", ""),
-        run_kind=data.get("run_kind", ""),
-        created_utc=data.get("created_utc", ""),
-        host=data.get("host", ""),
-        source_kind=data.get("source_kind", ""),
-        scenario=data.get("scenario", ""),
-        scenario_sha256=data.get("scenario_sha256", ""),
-        recording=data.get("recording", ""),
-        recording_sha256=data.get("recording_sha256", ""),
-        project=data.get("project", ""),
-        pipeline=data.get("pipeline", ""),
-        seed=data.get("seed", 0),
-        allow_mixed_projects=data.get("allow_mixed_projects", False),
-        process_nonce=data.get("process_nonce", ""),
-        components=components,
-        overrides=overrides,
-        record_policies=record_policies,
-        faults=faults,
-        bundle_overrides=bundle_overrides,
-        base_config_bundle_sha256=data.get("base_config_bundle_sha256", ""),
-    )
 
 
 class McapWriter:
@@ -201,7 +84,7 @@ class McapWriter:
             self._channel_ids[topic] = channel_id
 
         if meta.known:
-            self._writer.add_metadata(_MANIFEST_META, {"yaml": yaml.safe_dump(_manifest_to_dict(meta), sort_keys=True)})
+            self._writer.add_metadata(_MANIFEST_META, {"yaml": yaml.safe_dump(manifest_to_dict(meta), sort_keys=True)})
         if config_bundle_bytes:
             self._writer.add_metadata(_CONFIG_BUNDLE_META, {"yaml": config_bundle_bytes.decode("utf-8")})
         if plugin_bundles_meta:
@@ -249,7 +132,7 @@ class McapReader:
         block = self._metadata_by_name.get(_MANIFEST_META)
         if block is None:
             return RunManifest()
-        return _manifest_from_dict(yaml.safe_load(block["yaml"]))
+        return manifest_from_dict(yaml.safe_load(block["yaml"]))
 
     def config_bundle_bytes(self) -> bytes:
         """Extra, beyond the `RecordingReader` Protocol's minimum (api

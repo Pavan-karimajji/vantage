@@ -5634,18 +5634,47 @@ own best test.
       `ST-C1c-1`'s hardcoded bridge is deleted and the test still passes —
       `tests/system/test_c1c_resim_equivalence.py`, green against the real
       `df_sil.dll` and real recordings on this machine
-- [ ] `ST-C9-2` **dimension 2, proven with a second shape**: a synthetic
-      recording carrying a *different* stage's ports (perception-shaped, no
-      objects) drives a two-stage pipeline with perception `measured`, using
-      only its own ingest map and **zero framework change**. Until a real
-      perception recording exists this is synthetic, and the test says so.
-      **Not written** — needs a synthetic perception-shaped recording fixture
-      and a two-stage pipeline; left open rather than guessed at
-- [ ] `ST-C9-3` **dimension 1 costs nothing here**: the same ingest map, applied
-      over a second registered format, yields an identical port set — evidence
-      that format and depth are genuinely orthogonal. **Not written** — no
-      second recording format is registered yet to prove this against; left
-      open rather than guessed at
+- [x] `ST-C9-2` **dimension 2, proven with a second shape**, landed
+      2026-08-06. `tests/system/test_c9_synthetic_perception.py`: a
+      synthetic recording carrying `perception/raw_objects` (no `df`-style
+      objects at all) drives a real two-stage `Pipeline` (`perception`
+      `measured`, `consumer` `simulate`, wired `in: perception.objects`)
+      through the real `core.resim.resim_pipeline` — the exact function
+      `sim resim` calls — with `discover_ingest_maps` monkeypatched to an
+      in-memory `IngestMap` for this synthetic, framework-agnostic family
+      (no real component owns "perception" here, so there is nothing to
+      write a real `sim/ingest/*.yaml` file for). The consumer's own
+      `exec()` receives the recording's real per-tick bytes, proving the
+      measured injection travels through the ingest map's rename into a
+      live `simulate` stage, not just into the outer per-tick `outputs`
+      dict. A second test proves the query half too (`Session.
+      feasible_cuts` reports the perception cut feasible with the ingest
+      map applied). Deliberately synthetic — the test's own name says so,
+      same as the plan's own scope note required.
+- [x] `ST-C9-3` **dimension 1 costs nothing here**, landed 2026-08-06.
+      `io/jsonl.py` — a genuinely second registered codec (`R-SIM-14`'s
+      "~4 methods each" promise), not a test-only fixture: human-readable,
+      one JSON header line + one line per message, reusing
+      `manifest_to_dict`/`manifest_from_dict` (moved from being
+      `io/mcap.py`-private to `io/base.py`-public at this same stage,
+      specifically so two codecs share one `RunManifest` (de)serialization
+      instead of silently drifting apart the next time a field is added —
+      `UT-C5-6/7`'s own `bundle_overrides` addition already needed
+      updating in exactly one place because of this). Registered for
+      `.jsonl` in `io/registry.py`'s `_BUILTIN_CODEC_MODULES`, full
+      `RecordingReader`/`RecordingWriter` Protocol, `round_trips=True`.
+      `tests/unit/test_c9_second_codec.py`: the SAME `IngestMap`, applied
+      via `IngestRecordingReader` over an `.mcap` recording and a
+      `.jsonl` recording of equivalent content, yields an **identical**
+      resolved port set (topic names, provenance, log_time_ns, bytes) —
+      the architectural claim `io/ingest.py`'s own docstring already made
+      ("works identically for mcap, MF4 or a CarMaker codec"), proven
+      against a second real codec for the first time. A second test
+      proves the unclaimed-topic passthrough on both codecs too.
+      `tests/unit/test_c9_jsonl.py` covers the codec itself (round-trip,
+      capabilities, the two-clock `capture_time_ns` contract, a malformed
+      line naming its own line number) — 12 tests total across both files,
+      all real, compiled, and passing (no DLL needed).
 
 **Discipline** (every stage)
 - [x] portability §3 ticked — exposure: `P-3` (topic names are matched exactly,
@@ -5679,6 +5708,10 @@ the point they're incomplete rather than silently left as blank checkboxes.
 Everything else in this stage is implemented, tested against real artifacts
 where one exists (`df_sil.dll`, real recordings, the real checked-in
 `df_sil.ports.yaml`), and green.
+
+**`ST-C9-2`/`ST-C9-3` landed 2026-08-06** (above) — `S-C9` now has only the
+Bench-start-page wiring left open, which needs `S-B3`/`S-D8` (not built) to
+exist at all, same as already noted.
 
 ---
 
