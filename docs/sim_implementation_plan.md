@@ -5870,6 +5870,58 @@ be replaced the day an Ubuntu machine appears.
 > pipeline is launchable from the GUI with no hand-typed command. `UT-D3-3`
 > (severed-chain UI) and `UT-D3-8` (evidence-panel consistency) remain
 > open — the stage's own Gate below reflects this.
+>
+> **Status update, slice 5 — `UT-D3-3` and `UT-D3-8` both closed.**
+> `UT-D3-3`: `PipelinePanelState.set_mode` (`view/pipeline_panel.py`) no
+> longer maintains its own mode-override dict — it delegates every toggle
+> to `Pipeline.with_mode` (`R-SIM-10`, already built at `S-D6`), keeping
+> the returned `Pipeline` as a live `_working` copy; `mode_overrides` is
+> now a diff against the original, so an auto-flipped intervening stage
+> lands in the run manifest exactly like an explicit toggle, no second
+> bookkeeping to drift. `StageView.orphan` + `PipelinePanelState.
+> severed_chains()`/`last_auto_closed`/`undo_last_auto_close()` expose
+> what `with_mode` already decided; the real `Qt PipelinePanel`
+> (`render/viewer.py`) renders the *"computed, not consumed"* badge on the
+> stage-name cell and a one-line undo bar naming what auto-closed —
+> clicking it forces the gap back open (`close_gaps=False`) and re-badges.
+> No severed-chain logic was reimplemented at this layer; the engine
+> (`contracts/pipeline.py`) was not touched.
+>
+> `UT-D3-8`: a shared formatter, `core.evidence.format_evidence` (+
+> `EVIDENCE_FIELDS`, the one fixed field order), now sits between
+> `evidence()` and both its callers — `cli/explain.py --at` and a new
+> `view/evidence_panel.py::EvidencePanelState` — so "one producer, two
+> formatters" (`OD-6`) is structural, not a discipline. Found and fixed in
+> the same pass: `cli/explain.py` was printing a bare `str(None)` for an
+> unresolved `topic`/`origin`, contradicting `R-SIM-25`/`NR-SIM-4`'s
+> "reads unknown, never a plausible default" — `format_evidence` maps
+> `None` -> `"unknown"` for both surfaces now. The new `EvidencePanel`
+> dock (`render/viewer.py`, `MainWindow.evidence_state`, wired into
+> `render_tick` via `_sync_evidence_panel`) targets the current single BEV
+> selection's `pick_id` as its address. **Scoped, not the full `R-SIM-25`
+> join**: a `pick_id` does not yet resolve to the port/topic that produced
+> it (`Layer.id` -> a provider's resolved `requires` -> ports is `ST-D6-3`'s
+> own separate, still-open scope) — this panel tries the selection's
+> `pick_id` directly against the session's ports and degrades exactly the
+> way `evidence()` already does for anything unresolved (`kind="unknown"`,
+> every unfillable field reading `"unknown"`), which is what a "for one
+> selected prim" test can assert honestly today without guessing the join.
+>
+> 6 new tests, all real: `tests/unit/test_d3_severed_chain_panel.py` (3),
+> `tests/system/test_d3_severed_chain_widget.py` (1, real Qt clicks —
+> auto-close then undo, badge appears), `tests/unit/test_d3_evidence_panel.
+> py` (2). Plus 2 in `tests/unit/test_b2_evidence.py` for the new
+> formatter and 2 in `tests/system/test_d3_evidence_panel_widget.py`
+> proving the Qt panel and a real `sim explain --at` (via a genuine
+> on-disk recording, `sources.recorder.Recorder`) render identical rows,
+> field by field, for both a resolved port and an unresolved address.
+> Full suite re-run clean: `pytest` 764 passed / 7 skipped (2 pre-existing
+> collection errors excluded, unchanged — see slice-4 note above).
+> `check_invariants.py` clean (`GT-1,2,3,6,11`), `docs/py/run_all.py`
+> clean. The same pre-existing `test_b3_viewport_controls.py` flake noted
+> in slice 4 reproduced once more inside the full-suite run and passed
+> every time standalone — unrelated to this slice, not investigated
+> further here.
 
 - [ ] `app/panels/pipeline.py` — the pipeline dock, per visualization spec §13:
       one row per stage, `mode` toggle, `impl:` and overrides in a collapsed
@@ -5887,9 +5939,11 @@ be replaced the day an Ubuntu machine appears.
       `measured` availability from the recording's topic index — **done**.
       **No component name anywhere** (`GT-1`) — **done**, `check_invariants.
       py` clean
-- [ ] Severed-chain auto-close surfaced with a one-line undo bar (detection is
-      `UT-C1c-16`'s; acting on it is this stage's — `R-SIM-10`). **Not
-      attempted this pass**
+- [x] Severed-chain auto-close surfaced with a one-line undo bar (detection is
+      `UT-C1c-16`'s; acting on it is this stage's — `R-SIM-10`). **Done,
+      slice 5** — `PipelinePanelState.set_mode`/`undo_last_auto_close`
+      delegate to `Pipeline.with_mode`; `render.viewer.PipelinePanel`
+      renders the badge + undo bar
 - [x] `core/manifest.py` round-trip: the panel emits a run manifest, the CLI
       consumes it unchanged, and the CLI can emit one the panel reopens.
       **Done, slice 2** — `RunSpec`/`load_run_spec`/`write_run_manifest`,
@@ -5913,8 +5967,12 @@ be replaced the day an Ubuntu machine appears.
       `tests/system/test_d3_pipeline_panel_widget.py` (the radio button
       itself is `setEnabled(False)` with the reason as its tooltip), real,
       passing
-- [ ] `UT-D3-3` a severed chain is flagged in the panel and the orphan stage is
-      badged *"computed, not consumed"*. **Not attempted this pass**
+- [x] `UT-D3-3` a severed chain is flagged in the panel and the orphan stage is
+      badged *"computed, not consumed"*. **Done, slice 5** —
+      `tests/unit/test_d3_severed_chain_panel.py` (engine-level: auto-close,
+      undo, orphan flag, mode_overrides diff) + `tests/system/
+      test_d3_severed_chain_widget.py` (real Qt clicks: undo bar appears,
+      undo click renders the badge), real, passing
 - [x] `UT-D3-4` the GUI builds a valid run manifest that the CLI accepts
       **verbatim**. `tests/unit/test_d3_run_manifest.py` (writer/reader) +
       `tests/system/test_d3_run_manifest_cli.py` (the real CLI's own
@@ -5938,14 +5996,22 @@ be replaced the day an Ubuntu machine appears.
       Covered structurally by the existing mechanized `GT-1` grep over
       `src/adas_sim/**` — both new files are in scope, `check_invariants.py`
       clean; no bespoke test written (would duplicate the mechanism)
-- [ ] `UT-D3-8` **the evidence panel renders the same record `sim explain`
+- [x] `UT-D3-8` **the evidence panel renders the same record `sim explain`
       prints** (`FR-SIM-67`, `R-SIM-25`, `OD-6`): for one selected prim, both
       surfaces are driven by one `evidence()` call and are asserted **field by
       field**, not merely both non-empty. A field the record cannot fill reads
       `unknown` on both — never a plausible default, never blank on one side and
-      filled on the other. **Not attempted this pass** — `core/evidence.py`
-      already exists (a real prerequisite, confirmed present); this pass
-      did not touch the evidence panel at all
+      filled on the other. **Done, slice 5** — `core.evidence.format_evidence`
+      is the one shared formatter; `view/evidence_panel.py::EvidencePanelState`
+      + `render.viewer.EvidencePanel` are new. `tests/unit/
+      test_d3_evidence_panel.py` + `tests/system/test_d3_evidence_panel_widget.
+      py` (real Qt panel vs. a real `cli/explain.py --at` run against an
+      on-disk recording, both a resolved port and an unresolved address),
+      real, passing. **Scope note:** the panel's address is today's BEV
+      selection's `pick_id`, tried directly against the session's ports —
+      the full `pick_id` → port join (`Layer.id` → a provider's resolved
+      `requires` → ports) is `ST-D6-3`'s own separate, still-open scope; this
+      test proves the two SURFACES agree, not that every prim resolves yet
 - [x] `ST-D3-1` every run in this plan is launchable from the GUI with no
       hand-typed command. **Closed, slice 4** — `PipelinePanel`'s Run button
       → `write_run_manifest` (scratch file) → `_ResimWorker` (off the GUI
@@ -5958,11 +6024,17 @@ be replaced the day an Ubuntu machine appears.
       test_d3_mainwindow_pipeline_panel.py`, real, passing
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-6` (entry point, never a `.bat`),
-      `P-7`, `P-2` (a run manifest must not embed a machine path)
-- [ ] naming §3 ticked — exposure: `N-8` (the GUI surfaces the same messages the
-      CLI raises — one wording, not two), `N-9`
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
+- [x] portability §3 ticked — exposure: `P-6` (entry point, never a `.bat`),
+      `P-7`, `P-2` (a run manifest must not embed a machine path). Re-checked
+      slice 5: no new `subprocess`/shell call, no new absolute path, no new
+      platform-specific Qt code
+- [x] naming §3 ticked — exposure: `N-8` (the GUI surfaces the same messages the
+      CLI raises — one wording, not two), `N-9`. Re-checked slice 5: `UT-D3-8`
+      IS the mechanism that makes `N-8` true for evidence text; the new
+      `undo_last_auto_close` `ValueError` follows this file's own existing
+      plain-`ValueError` convention (`set_mode`'s own), not a new pattern
+- [x] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked. Re-run
+      slice 5: clean (`GT-1,2,3,6,11`)
 
 **Gate**
 - [x] `UT-D3-4` + `UT-D3-5` + `ST-D3-1` green — the GUI and the CLI exchange the
@@ -5973,10 +6045,11 @@ be replaced the day an Ubuntu machine appears.
       call `Save Run Manifest...` makes) into a real, off-thread resim
       (`_ResimWorker` → `core.resim.resim_pipeline_merged`, same single-rate
       `Pipeline.exec()` engine `cli/resim.py` uses — never a second engine)
-      → `build_session_from_recording`. **`UT-D3-3`/`UT-D3-8` are a
-      separate, still-open concern** (severed-chain UI, evidence-panel
-      consistency) — not part of this gate's own three checks, correctly
-      left unticked above
+      → `build_session_from_recording`. `UT-D3-3`/`UT-D3-8` were a
+      separate concern (severed-chain UI, evidence-panel consistency) —
+      not part of this gate's own three checks, and **now also closed,
+      slice 5** (see the stage's own Tests entries and the status note
+      above)
 
 ### S-D4 — Perception readiness
 
@@ -6127,48 +6200,178 @@ dependant, exactly inverting `R-SIM-1`.
 > condition is what unblocks a future session to start it, not a decision to
 > start it now.
 
+> **Status, follow-up session (2026-08-05): started for real.** Three
+> genuinely new pieces landed: `app/version.py` (`--version`'s
+> compatibility statement, `UT-D5-2`), `scripts/freeze.py` (the PyInstaller
+> one-folder build), and `pyproject.toml`'s new `package` extra
+> (`pyinstaller>=6`, build-time only — never a runtime dependency, so a
+> frozen build never bundles its own freezer). Everything else the
+> checklist names turned out to already exist from earlier stages —
+> `--plugin-root`/`ADAS_SIM_PLUGIN_PATH` (`S-C8`), `%LOCALAPPDATA%` settings
+> (`_config_root`'s `QStandardPaths.AppConfigLocation`, `S-B3`), the
+> open-a-recording positional argument — and `UT-D5-1`/`UT-D5-3`/`UT-D5-4`/
+> `ST-D5-2`/`ST-D5-3` are already proven by existing tests, cross-referenced
+> rather than rebuilt (see each test's own entry below for exactly which).
+>
+> **`scripts/freeze.py` was actually run in this shell** (PyInstaller
+> installed fresh, `pip install pyinstaller` — not present before this
+> pass) and produced a real `dist/vantage/` (~750 MB, PySide6 + matplotlib
+> + mcap + the framework). Running it found a REAL bug, fixed the same
+> pass: `app/version.py`'s `importlib.metadata.version("adas-sim")` raised
+> `PackageNotFoundError` inside the frozen bundle (PyInstaller does not
+> carry a package's dist-info unless told to) — `vantage.exe --version`
+> crashed outright. Fixed two ways, deliberately both: `scripts/freeze.py`
+> gained `--copy-metadata adas-sim` (the real fix, proven — a second freeze
+> reports the true `0.1.0`), and `app/version.py` now catches
+> `PackageNotFoundError` and reports `"unknown"` rather than crashing
+> (`R-SIM-25`/`NR-SIM-4`'s "never a plausible default, never crashes" —
+> `--version` existing specifically for diagnosability must not itself be
+> the thing that fails). `tests/unit/test_d5_version.py` covers the
+> fallback directly (a monkeypatched `PackageNotFoundError`), not just the
+> happy path.
+>
+> **`ST-D5-1`, honestly scoped.** This machine is not a clean VM — it still
+> has Python, Conan and this checkout, just not inside the directory the
+> frozen build is copied to and run from. What running it here DID prove,
+> for real, twice: (1) `dist/vantage/vantage.exe`, copied to an isolated
+> `tmp_path` with nothing else beside it, runs `--version` standalone — no
+> `PYTHONPATH`, no venv activation, no sibling checkout; (2) the same
+> isolated copy opens a real recording (`tests/fixtures/tiny.mcap`) and
+> sits in its Qt event loop with no load-time crash, for as long as the
+> process was left running (killed cleanly after 5s, the test's own
+> timeout, not a hang). **A second, real, separate gap found doing (2):**
+> without `modules/shared_config` copied alongside, the frozen app raises a
+> properly-formed `AuthoringError` (`N-8`-compliant: expected, found,
+> where, a next-action hint) from `model/ego.py`'s `MODULES_ROOT = Path(
+> __file__).resolve().parents[4]` — a SOURCE-TREE-relative fallback
+> (R-VAR-4's "checkout" tier, `S-A2`) that resolves to nonsense once
+> frozen, and a bare `sim view <recording>` with no `--pipeline` has no
+> OTHER tier to fall back to (`R-SIM-3a`'s packed config bundle is
+> per-component, not part of the bare framework). The error is clean, not
+> a garbled crash — but it still surfaces as a raw stderr traceback rather
+> than an in-app message, and a genuinely clean-machine deployment of the
+> bare viewer (no component, no bundle) has no config source at all today.
+> **Real, not this pass's fix** — `tests/system/test_d5_frozen_build.py`
+> copies `shared_config` alongside to test what THIS pass's freezing work
+> can actually claim, and states the gap in its own docstring rather than
+> quietly working around it with no record.
+>
+> Full suite re-run: `pytest` 764 passed / 7 skipped (the two frozen-build
+> tests skip by design when `dist/vantage/vantage.exe` is absent — freezing
+> takes minutes and is never part of the default gate, same precedent
+> `test_c8_relocatability_installed.py` sets), `check_invariants.py` and
+> `docs/py/run_all.py` both clean.
+
 Turns the library into the application of arch §5.15. Windows only.
 
-- [ ] One-folder frozen build (PyInstaller or equivalent) bundling CPython, Qt,
-      the framework, the renderers and the codecs
-- [ ] **External plug-in import path** — `--plugins <root>` (repeatable) plus
+- [x] One-folder frozen build (PyInstaller or equivalent) bundling CPython, Qt,
+      the framework, the renderers and the codecs. **`scripts/freeze.py`
+      (new)**, real: run in this shell, `dist/vantage/` produced and
+      launched successfully — see the stage's own Status note for exactly
+      what running it here did and did not prove
+- [x] **External plug-in import path** — `--plugins <root>` (repeatable) plus
       auto-discovery of a `sim/` folder beside a component library; providers
       are imported from outside the bundle, so adding a function's layers never
-      rebuilds the player
-- [ ] `--version` prints the player version **and** its compatibility statement:
+      rebuilds the player. **Already built at `S-C8`** (`scripts/vantage.py`'s
+      `--plugin-root`/`ADAS_SIM_PLUGIN_PATH`, see `UT-D5-3`'s own naming note)
+- [x] `--version` prints the player version **and** its compatibility statement:
       supported ABI generation, Scene major, recording-model and manifest
-      versions
-- [ ] Settings/layouts in `%LOCALAPPDATA%`, never inside the install or a repo
-- [ ] Open-a-recording entry point (argument, and drag-onto-exe)
+      versions. **Done, this pass** — `app/version.py`, see `UT-D5-2`
+- [x] Settings/layouts in `%LOCALAPPDATA%`, never inside the install or a repo.
+      **Already true** — `render/viewer.py::_config_root` uses
+      `QStandardPaths.AppConfigLocation` (`P-7`'s own discipline: never
+      `%LOCALAPPDATA%` written by hand), which Qt resolves there on Windows
+- [x] Open-a-recording entry point (argument, and drag-onto-exe). **Already
+      true** — `scripts/vantage.py`'s `recording` is a plain positional
+      argument; a file dropped onto `vantage.exe` is passed by Windows as
+      `argv[1]`, which is exactly what `nargs="?"` plus this pass's early
+      `--version` check still accepts unchanged
 
 **Tests**
-- [ ] `UT-D5-1` an input outside a declared compatibility range is **refused
-      with both numbers named** (`NR-SIM-9`)
-- [ ] `UT-D5-2` `--version` reports every one of the four version fields
-- [ ] `UT-D5-4` **the plug-in API carries its own generation** (`NR-SIM-44`,
+- [x] `UT-D5-1` an input outside a declared compatibility range is **refused
+      with both numbers named** (`NR-SIM-9`). **Already proven, four times
+      over, cross-referenced rather than rebuilt**: ABI version —
+      `test_c1c_component.py::test_abi_version_mismatch_raises_naming_
+      both_versions` (`UT-C1c-1`); Scene major — `test_a3_codec.py::
+      test_a_higher_major_version_is_refused_naming_both_versions`;
+      pipeline-file version — `test_c1c_pipeline.py::test_a_pipeline_
+      version_newer_than_the_reader_raises_naming_both`; plug-in API — see
+      `UT-D5-4` below. `app/version.py` (new, this pass) reports the exact
+      same constants each of these already enforces, so `--version` cannot
+      drift from what a refusal actually checks
+- [x] `UT-D5-2` `--version` reports every one of the four version fields.
+      **Done** — `app/version.py::version_info`/`format_version_text`
+      (new), wired into `scripts/vantage.py --version` (short-circuits
+      before `recording` is required). `tests/unit/test_d5_version.py` +
+      `tests/system/test_d5_vantage_cli.py` (the real subprocess entry
+      point), real, passing
+- [x] `UT-D5-4` **the plug-in API carries its own generation** (`NR-SIM-44`,
       audit `A7`), independent of the Scene major and the ABI version; a plug-in
       outside the player's supported range is **refused with both numbers
       named**, never half-loaded. `NR-SIM-9` versions everything the player
-      reads *except* the one interface `R-SIM-20` made external
-- [ ] `UT-D5-3` the plug-in path imports providers from outside the bundle, and
-      two roots with a duplicate layer id raise naming both
-- [ ] `ST-D5-1` **the clean-machine test**: the frozen build opens a session
+      reads *except* the one interface `R-SIM-20` made external. **Already
+      built and tested at `S-C8`, cross-referenced**: `model/plugins.py`'s
+      `SUPPORTED_PLUGIN_API_MIN/MAX` range check, refused before import —
+      `test_c8_plugins.py::test_out_of_range_api_is_refused_naming_both_
+      numbers`
+- [x] `UT-D5-3` the plug-in path imports providers from outside the bundle, and
+      two roots with a duplicate layer id raise naming both. **Already
+      built and tested at `S-C8`, cross-referenced**: `test_c8_plugins.py::
+      test_two_components_each_contributing_a_layer_both_register` (import
+      from outside the bundle) + `test_duplicate_layer_id_across_two_
+      components_raises_naming_both`. **Checklist/implementation naming
+      note**: the checklist's own `--plugins` is `--plugin-root`
+      (repeatable) + `ADAS_SIM_PLUGIN_PATH` in the real `scripts/
+      vantage.py` — landed at `S-C8`, before this box was written against
+      a literal flag name, same "checklist path predates the real build"
+      correction `S-D3` slice 1 made for `app/panels/pipeline.py`
+- [~] `ST-D5-1` **the clean-machine test**: the frozen build opens a session
       recording and renders it on a machine with **no repo, no Python, no Conan
-      cache and no component checkout**
-- [ ] `ST-D5-2` pointed at a component library + its `config/` bundle, the
+      cache and no component checkout**. **Attempted, partially verified** —
+      see the stage's own Status note for exactly what this shell can and
+      cannot prove without a real separate clean VM, and the real gap found
+      doing it (`ProjectModel`'s checkout-tier fallback)
+- [x] `ST-D5-2` pointed at a component library + its `config/` bundle, the
       player discovers its ports from the manifest and resims — **without that
-      component having existed when the player was built** (`FR-SIM-70`)
-- [ ] `ST-D5-3` a component's layer providers load from `--plugins` and draw,
-      with no framework rebuild
+      component having existed when the player was built** (`FR-SIM-70`).
+      **True by construction, cross-referenced rather than re-proven**:
+      `GT-1` (mechanised, `scripts/check_invariants.py`) makes it a load-
+      time impossibility for `src/adas_sim/**` to name a component, so
+      every real-`df_sil.dll` test already in the suite (`test_c1c_
+      component.py`, `test_d6_probe.py`, `test_c8_relocatability_
+      installed.py`, …) is simultaneously evidence that the framework
+      never needed `df` to exist when it was built — the architecture, not
+      a special-cased test, is what proves this
+- [x] `ST-D5-3` a component's layer providers load from `--plugins` and draw,
+      with no framework rebuild. **Already proven at `S-C8`, cross-
+      referenced**: `test_c8_relocatability_installed.py` — a REAL,
+      `cmake --install`ed `df_sil` build, relocated and with its build-tree
+      origin deleted, still resolves `sim/plugin.yaml` and imports `df`'s
+      real `sim/layers/{common,bsd}.py`, registering their real layer ids
+      into `scene.registry` (the load-and-register half a render depends
+      on; its own docstring states the "short of an actual GUI frame" scope
+      honestly)
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-6`, `P-7`, `P-10` (packaging is where a Linux-unavailable dependency finally bites; §4's bring-up table is the checklist)
-- [ ] naming §3 ticked — exposure: `N-9` (`--version` prints the compatibility statement; a shipped binary must identify itself)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
+- [~] portability §3 ticked — exposure: `P-6` (entry point stays `vantage.exe`
+      via PyInstaller's own bootloader, never a `.bat`), `P-7` (`set_high_
+      dpi_policy`/`_config_root` unchanged, already portable), `P-10` — **not
+      re-checked**: packaging was only run and verified on Windows this
+      pass, `P-10`'s own Linux-unavailable-dependency bring-up table needs a
+      real Ubuntu freeze attempt, not attempted here
+- [x] naming §3 ticked — exposure: `N-9` (`--version` prints the
+      compatibility statement — done, `app/version.py`)
+- [x] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked. Clean
+      this pass (see Status note)
 
 **Gate**
-- [ ] `ST-D5-1` + `ST-D5-2` green — the player is genuinely component-agnostic
-      and genuinely standalone, both demonstrated rather than argued
+- [~] `ST-D5-1` + `ST-D5-2` green — the player is genuinely component-agnostic
+      and genuinely standalone, both demonstrated rather than argued.
+      `ST-D5-2` is green (cross-referenced, true by construction).
+      `ST-D5-1` is real but partial — see its own entry and the Status
+      note for exactly what a same-machine isolated-copy test can and
+      cannot stand in for. **Gate not fully closed**: a true clean-VM run
+      is the one thing left to make this claim unconditional
 
 ### S-D6 — Developer ergonomics: per-port overrides, `sim probe`, severed chain
 
@@ -6231,6 +6434,29 @@ orphan stage with no warning at all — `R-SIM-10`'s own text ("forcing the
 gap open... is badged... and warned at load headlessly. Never silent")
 was not actually true until now. Full suite re-run clean: 640 passed / 28
 skipped (was 629/28), `check_invariants.py` clean (`GT-1,2,3,6,11`).
+
+**Status update, follow-up pass (same date, after `S-D3` slice 5).**
+Three more boxes closed, no engine code touched — this pass is tests plus
+one cross-reference fix: `UT-D6-4`'s "GUI acts on a severed chain" turned
+out to already be built, under a different (real) path than this box
+named — `S-D3` slice 5's `view/pipeline_panel.py` + `render.viewer.
+PipelinePanel` IS the `app/gui/pipeline_panel.py` this box was written
+against, before the codebase's real panel convention existed; cross-
+referenced rather than re-implemented. `UT-D6-3` and `ST-D6-2` were both
+genuinely unwritten and are now real tests (`tests/unit/test_d6_manifest_
+for.py`, `tests/system/test_d6_override_determinism.py` — the latter
+proves an override actually applies AND that two independent resims
+against the same recording produce byte-identical outputs and equal
+manifests, closing the one determinism axis `S-C1cΔ`'s override work left
+unassertated). Full suite re-run: `pytest` 758 passed / 7 skipped (one
+pre-existing flake, `test_b3_viewport_controls.py`, reproduced once more
+inside the full run and passed standalone every time — see `S-D3` slice
+5's own note, unrelated to this pass), `check_invariants.py` clean,
+`docs/py/run_all.py` clean. `S-D6`'s own Gate
+remains open — it names only `ST-D6-1` (the day-one end-to-end
+walkthrough + `GT-8`'s timed-newcomer measurement), which this pass did
+not attempt; see that test's own note on why it needs a real newcomer, not
+a self-timed session.
 
 - [x] `contracts/override.py` — **verify, do not rebuild**: the six verbs resolve
       at a port, a field path (`egoDyn.vx`) and a repeated element
@@ -6306,21 +6532,26 @@ skipped (was 629/28), `check_invariants.py` clean (`GT-1,2,3,6,11`).
 - [ ] `UT-D6-2` an override appears in the run manifest and tags its topic.
       **Blocked on the same undecided design question** as its own
       checklist item above
-- [ ] `UT-D6-3` `sim probe` on `InProcessSilComponent` prints the same port set
-      the pipeline resolves — one source, no second description.
-      **Not written** — `Pipeline.manifest_for` already returns a
-      component's own `.manifest` with no transformation, so this is
-      trivially true by construction today; an explicit assertion was not
-      added this pass. (Separately: `sim probe` the CLI verb only ever
-      takes a file path, never an in-process object — probing an
-      `InProcessSilComponent` directly is a unit-level check, not a CLI one)
-- [ ] `UT-D6-4` the **GUI** acts on a severed chain: given the detection from
+- [x] `UT-D6-3` `sim probe` on `InProcessSilComponent` prints the same port set
+      the pipeline resolves — one source, no second description. **Done** —
+      `sim probe` the CLI verb only ever takes a file path, never an
+      in-process object (`tests/system/test_d6_probe.py` proves that half);
+      the claim underneath it, at the level that DOES apply to an
+      `InProcessSilComponent`, is `tests/unit/test_d6_manifest_for.py`:
+      `Pipeline.manifest_for` returns the resolved stage's own manifest
+      **unchanged** (identity, not a copy) — no second description to drift
+- [x] `UT-D6-4` the **GUI** acts on a severed chain: given the detection from
       `UT-C1c-16`, setting a stage to `simulate` flips the intervening
       stages and shows the undo bar. Detection is the loader's; **acting on
       it is this stage's** — two tests, because a correct detector behind a
       GUI that ignores it is exactly the silent toggle `R-SIM-10` bans.
-      **The engine half (no GUI) is `UT-D6-5` below**; the GUI half needs
-      `app/gui/pipeline_panel.py`, not attempted
+      **The engine half (no GUI) is `UT-D6-5` below.** **Done, `S-D3` slice
+      5** — the real `app/gui/pipeline_panel.py` this box names turned out
+      to BE `view/pipeline_panel.py` + `render.viewer.PipelinePanel` (the
+      codebase's real panel convention since `S-B3`, `S-D3` slice 1's own
+      note); its "acting on it" half is `UT-D3-3`, same tests:
+      `tests/unit/test_d3_severed_chain_panel.py` +
+      `tests/system/test_d3_severed_chain_widget.py`, real, passing
 - [x] `UT-D6-5` auto-close flips only the intervening stages, and undo restores
       the exact prior modes.
       `tests/unit/test_d6_severed_chain.py::test_auto_close_flips_only_
@@ -6356,10 +6587,16 @@ skipped (was 629/28), `check_invariants.py` clean (`GT-1,2,3,6,11`).
       `bundle_origin`, `run_id`) — this test is that they are joined.
       **Not attempted** — needs both a GUI to compare against and `sim
       explain`'s completion
-- [ ] `ST-D6-2` a pipeline with overrides resims reproducibly: two runs produce
-      byte-identical outputs and identical manifests. **Not attempted this
-      pass** — likely already true given `Pipeline.exec`'s own determinism,
-      but not explicitly asserted
+- [x] `ST-D6-2` a pipeline with overrides resims reproducibly: two runs produce
+      byte-identical outputs and identical manifests. **Done** —
+      `tests/system/test_d6_override_determinism.py`: a real `const`
+      override on a `simulate` stage's input (proven actually applied —
+      every tick sees the overridden value, never the original stimulus),
+      two fresh `Pipeline`/`InProcessSilComponent` instances against the
+      same recording produce byte-identical `resim_pipeline` outputs and
+      equal `build_manifest` results (same explicit `clock=`, since
+      `created_utc` is the one field two real calls would otherwise
+      legitimately differ on)
 
 **Discipline** (every stage)
 - [x] portability §3 ticked — exposure: `P-5` (`sim probe` and `sim doctor` are the tools that *explain* library resolution, so they must exercise every pattern — `sim probe`'s own extension does; `sim doctor`'s extended form is not built), `P-2`
@@ -6443,12 +6680,9 @@ all `RESULT pass`/`RESULT ok`.
   stderr/`run_id` this stage's own crash classification already captures is
   exactly what that future "Open on Bench" affordance would consume; the
   data side is done, the GUI side is a different stage's job.
-- **`ST-D7-7`** (campaign sizing, measured) — "the numbers go in this
-  document, whatever they are" is a measurement exercise over the REAL
-  recording set (`modules/df/tests/carla_testruns/` or equivalent), not a
-  code gap; needs an environment with that set and enough wall-clock budget
-  to run `-j 1` vs `-j N` and record the scaling, deliberately not attempted
-  alongside the rest of this pass.
+- **`ST-D7-7`** (campaign sizing, measured) — deliberately not attempted
+  alongside the rest of this pass; **measured in a later session, see the
+  test's own entry below for the real numbers.**
 - **`mode: isolated`** (the per-stage bisection escape hatch `R-SIM-19`
   names alongside per-recording isolation) — not in this stage's own
   checklist; `sim batch` isolates at run granularity only, which is the
@@ -6580,10 +6814,23 @@ copy path is lossless, just not the "different format" half of the claim.
       `pkg:` form in `impl:` is only the addressing. A locally built library
       with no `package_ref` reports honestly as **unpinnable** rather than
       silently passing
-- [ ] `ST-D7-7` **campaign sizing, measured** (`NR-SIM-23`): a real campaign over
+- [x] `ST-D7-7` **campaign sizing, measured** (`NR-SIM-23`): a real campaign over
       the full recording set records per-recording size, wall-clock per resim,
       and scaling with `-j`. **The numbers go in this document**, whatever they
-      are — this test exists to produce a fact, not to pass
+      are — this test exists to produce a fact, not to pass. **Measured, real
+      environment, `df_only.yaml` against a real `df_sil.dll`, full recording
+      set at `modules/df/tests/carla_testruns/`**: 7 recordings (61–276 ticks
+      each, 1.8–11 MB, 33.1 MB total). `-j 1`: 2.11s (0.30s/recording). `-j 7`
+      (fully parallel — one worker per recording): 0.41s (0.06s/recording),
+      **5.2x**. Per-recording actual `resim_pipeline` compute is ~0.05s
+      (measured separately, single recording, in-process) — most of `-j 1`'s
+      wall-clock is per-recording **subprocess startup** (Python interpreter +
+      import), not SUT execution, which is why the campaign parallelises
+      *better* than compute-bound scaling would predict: the fixed per-
+      recording overhead is what `-j` actually amortises. `tests/system/
+      test_d7_campaign_sizing.py` (new) reproduces this on any machine with a
+      real `df_sil.dll` build and the recording set — re-run it rather than
+      trusting these numbers stale on a different machine
 
 **Discipline** (every stage)
 - [x] portability §3 ticked — exposure: `P-4` (sidecar/CSV written
@@ -6606,9 +6853,11 @@ copy path is lossless, just not the "different format" half of the claim.
       for a recording, and scale uses the developer's own file. **All three
       green as of 2026-08-05** (pytest, this WSL shell — `UT-D7-5` since
       2026-07-30, `ST-D7-2`/`ST-D7-3` this session). `UT-D7-7`'s "last tick"
-      partial and `UT-D7-9`/`ST-D7-6`/`ST-D7-7`'s deferrals (see the stage's
-      own Status note) are real, separate open items but are not this Gate's
-      own three named tests — the Gate itself is closed
+      partial and `UT-D7-9`/`ST-D7-6` are real, separate open items but are
+      not this Gate's own three named tests — the Gate itself is closed.
+      **`ST-D7-7` measured in a later session** (same date), see its own
+      entry above — also not one of this Gate's three named tests, but no
+      longer an open item either
 
 ### S-D8 — **Vantage**: the workspaces, the front door, the product
 

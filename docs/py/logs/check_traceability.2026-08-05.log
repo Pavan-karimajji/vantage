@@ -17,7 +17,7 @@ ok    every stage-scoped test id maps to a declared stage
 
 2b. Test ids are unique
 -----------------------
-ok    all 245 test definitions unique
+ok    all 240 test definitions unique
 
 2c. Tests are filed under the stage they name
 ---------------------------------------------

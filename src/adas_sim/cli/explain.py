@@ -16,7 +16,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from adas_sim.core.evidence import evidence
+from adas_sim.core.evidence import evidence, format_evidence
 from adas_sim.core.explain import explain
 from adas_sim.core.runner import build_session_from_recording
 
@@ -35,8 +35,8 @@ def run(argv: list[str] | None = None) -> int:
 
     if args.at is not None:
         record = evidence(args.name, session, args.at)
-        for field in ("address", "kind", "value", "tick", "t_ns", "topic", "origin", "run_id"):
-            print(f"{field:<20} {getattr(record, field)}")
+        for field, text in format_evidence(record):  # UT-D3-8: the GUI evidence panel shares this formatter
+            print(f"{field:<20} {text}")
         return 0 if record.kind != "unknown" else 1
 
     facts = explain(args.name, session)

@@ -166,6 +166,7 @@ from adas_sim.render.plots import render_distribution, render_xy
 from adas_sim.render.theme import Theme
 from adas_sim.render.timeline import px_to_tick, render_timeline
 from adas_sim.scene.types import Layer, Scene
+from adas_sim.view.evidence_panel import EvidencePanelState
 from adas_sim.view.inspector import InspectorState, copy_as_text
 from adas_sim.view.layers import LayerTreeState
 from adas_sim.view.hud import HudInfo, format_hud_lines, format_stale_banner, stale_ports
@@ -515,7 +516,15 @@ class PipelinePanel(QtWidgets.QDockWidget):
     once `sync()` has given this panel a real state. Emitting is this
     class's whole contribution; `MainWindow` owns what "run" actually does
     (write a temp run manifest, execute, reload as the viewed `Session`) --
-    same split as `mode_changed` already uses, `GT-9`."""
+    same split as `mode_changed` already uses, `GT-9`.
+
+    **Slice 5: severed-chain badge + one-line undo bar** (`UT-D3-3`,
+    `R-SIM-10`). Auto-close happens inside `state.set_mode` itself (it
+    delegates to `Pipeline.with_mode`); this class only reflects the
+    result -- an orphaned stage's row gets the *"computed, not consumed"*
+    badge, and a bar appears naming whatever `set_mode` just auto-flipped,
+    with the one action `R-SIM-10` promises: undo, forcing the gap back
+    open. No state of its own beyond what `state` already carries."""
 
     mode_changed = QtCore.Signal(str, str)  # stage name, new mode
     run_requested = QtCore.Signal()
@@ -537,6 +546,20 @@ class PipelinePanel(QtWidgets.QDockWidget):
         self._table.horizontalHeader().setStretchLastSection(True)
         self._table.verticalHeader().setVisible(False)
         layout.addWidget(self._table)
+
+        #: `UT-D3-3`'s one-line undo bar -- hidden except right after a
+        #: toggle that auto-closed a severed chain (`_rebuild` shows/hides
+        #: it every call, driven entirely by `state.last_auto_closed`).
+        self._undo_bar = QtWidgets.QWidget()
+        undo_layout = QtWidgets.QHBoxLayout(self._undo_bar)
+        undo_layout.setContentsMargins(4, 2, 4, 2)
+        self._undo_label = QtWidgets.QLabel("")
+        undo_layout.addWidget(self._undo_label, stretch=1)
+        self._undo_button = QtWidgets.QPushButton("Undo")
+        self._undo_button.clicked.connect(self._on_undo_clicked)
+        undo_layout.addWidget(self._undo_button)
+        self._undo_bar.setVisible(False)
+        layout.addWidget(self._undo_bar)
 
         self._run_button = QtWidgets.QPushButton("Run")
         self._run_button.setEnabled(False)  # no state yet -- see sync()
@@ -562,13 +585,36 @@ class PipelinePanel(QtWidgets.QDockWidget):
         views = self.state.stages()
         self._table.setRowCount(len(views))
         for row, view in enumerate(views):
-            self._table.setItem(row, 0, QtWidgets.QTableWidgetItem(view.name))
+            name_text = f"{view.name}  ⚠ computed, not consumed" if view.orphan else view.name
+            self._table.setItem(row, 0, QtWidgets.QTableWidgetItem(name_text))
             self._table.setCellWidget(row, 1, self._mode_widget(view))
             impl_text = view.impl or "(absent)"
             if view.mode == "measured" and not view.measured_available:
                 impl_text += f"  ⚠ {view.measured_unavailable_reason}"
             self._table.setItem(row, 2, QtWidgets.QTableWidgetItem(impl_text))
         self._updating = False
+        self._sync_undo_bar()
+
+    def _sync_undo_bar(self) -> None:
+        """`UT-D3-3`: visible exactly when the last toggle auto-closed a
+        gap (`state.last_auto_closed`), naming what moved -- gone again on
+        the very next toggle or once undone, same lifetime as a toast."""
+        assert self.state is not None
+        auto_closed = self.state.last_auto_closed
+        if not auto_closed:
+            self._undo_bar.setVisible(False)
+            return
+        self._undo_label.setText(f"auto-closed to reconnect the chain: {', '.join(auto_closed)} -> simulate")
+        self._undo_bar.setVisible(True)
+
+    def _on_undo_clicked(self) -> None:
+        assert self.state is not None
+        reverted = self.state.last_auto_closed
+        self.state.undo_last_auto_close()
+        self._rebuild()
+        for view in self.state.stages():
+            if view.name in reverted:
+                self.mode_changed.emit(view.name, view.mode)
 
     def _mode_widget(self, view: StageView) -> QtWidgets.QWidget:
         container = QtWidgets.QWidget()
@@ -651,6 +697,39 @@ class InspectorPanel(QtWidgets.QDockWidget):
             entry = next(e for e in self.state.entries(self._last_scene, self._last_selection)
                          if e.pick_id == pick_id)
             QtWidgets.QApplication.clipboard().setText(copy_as_text(entry))
+
+
+class EvidencePanel(QtWidgets.QDockWidget):
+    """The docked evidence panel (S-D3 slice 5, `UT-D3-8`, `R-SIM-25`): one
+    selected address's full `evidence()` record, rendered field by field --
+    the IDENTICAL rows `sim explain <name> --at <tick>` prints
+    (`core.evidence.format_evidence`, `OD-6`'s "one producer, two
+    formatters"). Resolution lives in `state` (`view/evidence_panel.py`);
+    this class only arranges the table (`GT-9`)."""
+
+    def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
+        super().__init__("Evidence", parent)
+        self.setObjectName("dock.evidence")  # stable id `saveState()`/`restoreState()` match on
+        self.state: EvidencePanelState | None = None
+
+        self._table = QtWidgets.QTableWidget(0, 2)
+        self._table.setHorizontalHeaderLabels(["field", "value"])
+        self._table.horizontalHeader().setStretchLastSection(True)
+        self._table.verticalHeader().setVisible(False)
+        self.setWidget(self._table)
+
+    def sync(self, state: EvidencePanelState, address: str | None, tick: int) -> None:
+        """`address=None` (nothing selected) clears the table -- never a
+        stale row from a previous selection."""
+        self.state = state
+        if address is None:
+            self._table.setRowCount(0)
+            return
+        view = state.view_for(address, tick)
+        self._table.setRowCount(len(view.rows))
+        for row, (field, text) in enumerate(view.rows):
+            self._table.setItem(row, 0, QtWidgets.QTableWidgetItem(field))
+            self._table.setItem(row, 1, QtWidgets.QTableWidgetItem(text))
 
 
 #: `0.1x` .. `8x` (`sim_visualization_spec.md` §5's own table); "as fast as
@@ -1012,6 +1091,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.inspector_panel = InspectorPanel(self.inspector_state, self)
         self.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, self.inspector_panel)
 
+        #: `UT-D3-8`: `None` until `_on_loaded` has a real `Session` to
+        #: wrap -- `render_tick` skips syncing this panel until then, same
+        #: "docked empty" gating `pipeline_panel` uses (see its own note).
+        self.evidence_state: EvidencePanelState | None = None
+        self.evidence_panel = EvidencePanel(self)
+        self.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, self.evidence_panel)
+
         #: S-D3 slice 3: docked empty (no `pipeline_path` -> no state to
         #: sync) until `_on_loaded` knows `session.known_ports`.
         #: Slice 4 (`ST-D3-1`) adds a real "Run" -- `run_requested`.
@@ -1066,6 +1152,7 @@ class MainWindow(QtWidgets.QMainWindow):
         view_menu.addAction(self.bev.toggleViewAction())
         view_menu.addAction(self.layers_panel.toggleViewAction())
         view_menu.addAction(self.inspector_panel.toggleViewAction())
+        view_menu.addAction(self.evidence_panel.toggleViewAction())
         view_menu.addAction(self.pipeline_panel.toggleViewAction())
         view_menu.addAction(self.timeline_strip.toggleViewAction())
 
@@ -1154,6 +1241,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _on_loaded(self, session: Session) -> None:
         self._session = session
+        self.evidence_state = EvidencePanelState(session)  # UT-D3-8
         self._scene_cache = SceneCache(self._build_scene_for_cache, build_reactive=self._build_reactive_for_cache)
         self._stop_thread()
         self.layers_state.load(layers_state_path(self._project, session.meta.pipeline))
@@ -1382,8 +1470,21 @@ class MainWindow(QtWidgets.QMainWindow):
             scene, layers=tuple(layer for layer in scene.layers if layer.id in layer_selection),
         )
         self.inspector_panel.sync(visible_scene, self._selection)
+        self._sync_evidence_panel(tick_index)
         self._rerender_timeline()
         self._rerender_plots()
+
+    def _sync_evidence_panel(self, tick_index: int) -> None:
+        """`UT-D3-8`: targets the current single selection's `pick_id` as
+        its address, tried directly against the session's own ports
+        (`view/evidence_panel.py`'s own docstring on why a `pick_id` and a
+        port address are not yet the same join, `ST-D6-3`). More than one
+        selected entity has no single "the" address -- the panel clears
+        rather than guessing which one."""
+        if self.evidence_state is None:
+            return
+        address = next(iter(self._selection)) if len(self._selection) == 1 else None
+        self.evidence_panel.sync(self.evidence_state, address, tick_index)
 
     def _hud_and_stale_banner(self, tick_index: int) -> tuple[tuple[str, ...], str | None]:
         """§10: everything the framework itself knows (scale, time, tick,

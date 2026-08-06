@@ -79,3 +79,22 @@ def evidence(address: str, session: Session, tick: int) -> Evidence:
         address=address, kind="unknown", value="",
         tick=tick, t_ns=current.t_ns, topic=None, origin=None, run_id=session.run_id,
     )
+
+
+#: The one fixed field order both `cli/explain.py --at` and the GUI
+#: evidence panel (`UT-D3-8`, `view/evidence_panel.py`) render.
+EVIDENCE_FIELDS = ("address", "kind", "value", "tick", "t_ns", "topic", "origin", "run_id")
+
+
+def format_evidence(record: Evidence) -> tuple[tuple[str, str], ...]:
+    """`record`'s fields as `(name, text)` pairs, in `EVIDENCE_FIELDS`
+    order -- the one formatter both surfaces call (`OD-6`'s "one producer,
+    two formatters"), so they cannot render an `Evidence` differently by
+    accident. A field this stage could not fill (`None`) prints
+    `"unknown"` -- never Python's bare `"None"`, and never blank on one
+    surface while the other shows a value (`R-SIM-25`, `NR-SIM-4`)."""
+    return tuple((field, _format_field(getattr(record, field))) for field in EVIDENCE_FIELDS)
+
+
+def _format_field(value: object) -> str:
+    return "unknown" if value is None else str(value)

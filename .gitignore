@@ -7,6 +7,11 @@ build/
 dist/
 .venv/
 venv/
+# S-D5: PyInstaller auto-writes this beside the entry point it's given
+# (scripts/freeze.py's own invocation) -- a regenerated build artifact,
+# same reasoning as build/dist above, and it embeds an absolute machine
+# path (P-2) so it must never be committed.
+/vantage.spec
 
 # Test / tooling caches
 .pytest_cache/

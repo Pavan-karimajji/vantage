@@ -47,7 +47,11 @@ def _register_plugin_root(library_dir: Path) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="vantage", description=__doc__)
-    parser.add_argument("recording", type=Path)
+    parser.add_argument(
+        "--version", action="store_true",
+        help="print the player version and its compatibility statement (S-D5, UT-D5-2), then exit",
+    )
+    parser.add_argument("recording", type=Path, nargs="?")
     parser.add_argument(
         "--plugin-root", type=Path, action="append", default=[],
         help="a component's built library directory (carries sim/plugin.yaml, packed by the build); repeatable",
@@ -56,11 +60,32 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--workspace", type=Path, default=None)
     parser.add_argument("--preset", default=None)
     parser.add_argument("--at", type=float, default=None)
+    parser.add_argument(
+        "--pipeline", type=Path, default=None,
+        help="S-D3: shows the pipeline panel and its Run button (sim_implementation_plan.md ST-D3-1)",
+    )
+    parser.add_argument(
+        "--search", type=Path, action="append", default=[],
+        help="a directory to search for --pipeline's dll:/stubdll: stages (repeatable)",
+    )
+    parser.add_argument(
+        "--config", type=Path, default=None,
+        help="config path forwarded to --pipeline's adasInit for a real Run -- same 'adasInit(NULL) bundle "
+             "auto-resolution is not built yet' caveat as sim resim --config",
+    )
     return parser
 
 
 def main() -> int:
-    args = build_parser().parse_args()
+    parser = build_parser()
+    args = parser.parse_args()
+
+    if args.version:
+        from adas_sim.app.version import format_version_text
+        print(format_version_text())
+        return 0
+    if args.recording is None:
+        parser.error("the following arguments are required: recording")
 
     plugin_roots = list(args.plugin_root)
     env_path = os.environ.get("ADAS_SIM_PLUGIN_PATH", "")
@@ -74,6 +99,7 @@ def main() -> int:
     return launch(
         args.recording, project=args.project, workspace_path=args.workspace,
         preset=args.preset, at_s=args.at,
+        pipeline_path=args.pipeline, pipeline_search=args.search, pipeline_config=args.config,
     )
 
 

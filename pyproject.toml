@@ -21,6 +21,11 @@ figures = ["matplotlib>=3.8"]
 video = ["imageio[ffmpeg]>=2.34"]
 foxglove = ["foxglove-sdk>=0.25"]
 dev = ["pytest>=8", "pytest-cov", "pandas>=2"]
+# S-D5: the one-folder frozen build's own build-time tool -- never a
+# runtime dependency of adas_sim itself, so it stays out of `dependencies`
+# and out of every other extra (a frozen build cannot bundle its own
+# freezer).
+package = ["pyinstaller>=6"]
 
 [project.scripts]
 # The launcher is generated per platform by the installer, not written by us
