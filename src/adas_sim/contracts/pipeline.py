@@ -658,6 +658,25 @@ class Pipeline:
         }
 
     @classmethod
+    def parse_stages(cls, path: Path) -> tuple[Stage, ...]:
+        """The stage-declaration half of `load()` -- no component
+        resolution, so no `dll:`/`stubdll:` lookup and nothing here can
+        raise on a missing library. `sim doctor`'s own need (`UT-D6-8`):
+        report EVERY stage's `impl:` resolution, even when one of them is
+        broken, rather than the whole pipeline failing to load before any
+        diagnosis happens (`_resolve_components` is the part that raises)."""
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        return tuple(
+            Stage(
+                name=spec["name"], mode=spec.get("mode", "simulate"), impl=spec.get("impl"),
+                inputs=dict(spec.get("inputs", {})),
+                overrides=_parse_overrides(spec.get("overrides", {}), stage_name=spec["name"]),
+                record=_parse_record(spec.get("record", {}), stage_name=spec["name"]),
+            )
+            for spec in raw.get("stages", [])
+        )
+
+    @classmethod
     def load(
         cls, path: Path, *, search: Sequence[Path] = (),
         components: Mapping[str, SilComponent] | None = None,
@@ -680,15 +699,7 @@ class Pipeline:
         version = _resolve_version(raw)
         name = raw.get("name", path.stem)
         allow_mixed_projects = bool(raw.get("allow_mixed_projects", False))
-        stages = tuple(
-            Stage(
-                name=spec["name"], mode=spec.get("mode", "simulate"), impl=spec.get("impl"),
-                inputs=dict(spec.get("inputs", {})),
-                overrides=_parse_overrides(spec.get("overrides", {}), stage_name=spec["name"]),
-                record=_parse_record(spec.get("record", {}), stage_name=spec["name"]),
-            )
-            for spec in raw.get("stages", [])
-        )
+        stages = cls.parse_stages(path)
         resolved, bundle_dirs, library_paths = _resolve_components(stages, search=search, components=components or {})
         _validate_wiring(stages, resolved, recording, source)
         _validate_overrides(stages, resolved)

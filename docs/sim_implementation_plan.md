@@ -6528,7 +6528,7 @@ a self-timed session.
       Full suite: 787 passed / 7 skipped (Windows venv, `foxglove` extra
       not installed here), `check_invariants.py` and `docs/py/run_all.py`
       both clean
-- [ ] `cli/doctor.py` — **complete `sim doctor`** (seeded `S-A1`, grown per
+- [x] `cli/doctor.py` — **complete `sim doctor`** (seeded `S-A1`, grown per
       stage; this is the full form) (`DG-3`): interpreter and install
       mode; which library each `impl:` stem resolves to **and by which
       pattern, listing every directory searched** (`P-5`); which config
@@ -6536,11 +6536,46 @@ a self-timed session.
       viewer and the SUT would agree** (`R-SIM-3a`); codec capabilities;
       which cuts a recording supports; platform, line endings, console
       encoding (`P-4`). Non-zero exit on anything that would break a run.
-      **Not attempted this pass** — `core/diagnostics.py` today reports
-      only the `S-A1` slice (interpreter/install mode/platform/encoding);
-      the extended form needs `sim doctor` to accept a `--pipeline`/
-      `--search`/`--recording` to have something concrete to diagnose,
-      which is itself new CLI surface, not just more facts
+      **Done, follow-up pass 2026-08-06** (`UT-D6-8`): `sim doctor` gains
+      `--pipeline`/`--search`/`--config`/`--recording`/`--project`. Codec
+      capabilities (`io.registry.codec_info`) are always reported, no flag
+      needed; the other three fire only when given enough to check.
+      **Real design gap found and fixed in the same pass**: `Pipeline.load`
+      itself raises on the first stage whose `impl:` stem does not resolve
+      (`_resolve_components`), which would have made "a broken stem"
+      undiagnosable — the exact condition `sim doctor` exists to report
+      would instead crash it. Fixed by splitting `Pipeline.parse_stages`
+      (new classmethod, no component resolution) out of `Pipeline.load`,
+      so library resolution is checked first, off the raw stage
+      declarations, before `Pipeline.load` is even attempted (itself now
+      wrapped so a load failure past that point is reported, not raised).
+      `contracts.loader.resolve_library_report` (new, alongside
+      `resolve_library`) answers "which directory and pattern matched"
+      on SUCCESS too, which the raise-only-on-failure original cannot.
+      Config-bundle agreement loads the resolved library for real (same as
+      `sim probe`) to read its own `config_bundle_sha256` and compares it
+      against `model.project.ProjectModel`'s viewer-side resolution over
+      the same `--config`/library-packed bundle. **Scoped honestly**: the
+      "embedded in recording" bundle tier is not compared — nothing in
+      this codebase extracts a bundle from a recording's embedded bytes to
+      a directory yet, so only the two tiers that are actually wired
+      (explicit `--config`, library-packed) are checked; this is the exact
+      pair `sim resim --config` exercises. Recording diagnostics reuse
+      `Session.feasible_cuts` (already built at `S-C9`) for "which cuts
+      this recording supports." `tests/unit/test_d6_doctor.py` (7 tests, no
+      DLL needed) + `tests/system/test_d6_doctor_cli.py` (6 tests, real
+      `df_sil.dll`: a healthy pipeline exits 0; a broken stem, a real
+      bundle mismatch — a second, different but real bundle, not a
+      tampered hash — and an unregistered/write-only recording extension
+      each exit non-zero naming the file). Full suite: 799 passed / 7
+      skipped (Windows venv, `foxglove` extra not installed here, one
+      pre-existing flake — `test_b3_viewport_controls.py`, reproduced and
+      confirmed passing standalone, same as prior sessions' own note),
+      `check_invariants.py` and `docs/py/run_all.py` both clean. One
+      unrelated boundary violation caught and fixed along the way:
+      `core/diagnostics.py`'s own docstring named a format ("mcap")
+      outside `io/`, tripping `UT-A4-11`/`R-SIM-14`'s mechanised check —
+      reworded, no logic change
 - [x] `cli/list.py` — `sim list ports|topics|layers|signals` (`DG-1`).
       **Filename is `cli/list_cmd.py`, not `cli/list.py`** — see the Status
       note's own bug story for why. `signals` is scoped to the PORT-level
@@ -6597,9 +6632,12 @@ a self-timed session.
       `tests/unit/test_d6_explain.py` covers all six kinds plus both the
       "no suggestion when nothing is close" and "a real suggestion when
       something is" fuzzy-match halves
-- [ ] `UT-D6-8` `sim doctor` exits non-zero on a broken stem, a bundle
+- [x] `UT-D6-8` `sim doctor` exits non-zero on a broken stem, a bundle
       mismatch and a missing codec capability — and each message names the
-      file (`DG-3`). **Blocked on `cli/doctor.py`'s own completion** above
+      file (`DG-3`). **Done, follow-up pass 2026-08-06** — see
+      `cli/doctor.py`'s own entry above for the full detail; all three
+      cases proven against a real `df_sil.dll` in
+      `tests/system/test_d6_doctor_cli.py`
 - [ ] `ST-D6-1` **day one, end to end**: a fresh component library with only a
       manifest is probed, wired into a five-line pipeline, run against
       `tiny.mcap`, and its outputs appear in a recording — **no edit anywhere in
@@ -6630,7 +6668,7 @@ a self-timed session.
       legitimately differ on)
 
 **Discipline** (every stage)
-- [x] portability §3 ticked — exposure: `P-5` (`sim probe` and `sim doctor` are the tools that *explain* library resolution, so they must exercise every pattern — `sim probe`'s own extension does; `sim doctor`'s extended form is not built), `P-2`
+- [x] portability §3 ticked — exposure: `P-5` (`sim probe` and `sim doctor` are the tools that *explain* library resolution, so they must exercise every pattern — both now do, `sim doctor` via `resolve_library_report`), `P-2`
 - [x] naming §3 ticked — exposure: `N-1`/`N-6` (`sim explain` only works because one name means one thing everywhere -- this stage is where that pays off, `explain.py` now complete for all six kinds), `N-8` (fuzzy "did you mean" landed)
 - [x] `pytest`/`scripts/check_invariants.py` green in this WSL shell (see
       Status note). `docs/py/run_all.py` not independently re-run — same
