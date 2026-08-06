@@ -108,6 +108,22 @@ class ComponentBuildInfo:
 
 
 @dataclass(frozen=True, slots=True)
+class OverrideRecord:
+    """One declared override, exactly as it appears in the run manifest --
+    `R-SIM-15`'s own "declared, never smuggled," made legible rather than
+    only hashed (`S-D6`, `UT-D6-2`). `stage`/`address`/`verb`/`value`
+    mirror `contracts.pipeline.Stage.overrides`' own keys 1:1, never
+    re-derived -- `core.manifest.build_manifest` is the one place a
+    `Pipeline`'s overrides become this shape. `value` is `None` for a verb
+    that carries none (`hold`/`select`/`drop`, `contracts/override.py`)."""
+
+    stage: str
+    address: str
+    verb: str
+    value: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class RunManifest:
     """The run manifest (sim_resim_and_recording.md §2), written into the
     recording and every snapshot sidecar. `RunManifest()` (every field at its
@@ -129,6 +145,10 @@ class RunManifest:
     project: str = ""
     pipeline: str = ""
     components: tuple[ComponentBuildInfo, ...] = field(default_factory=tuple)
+    #: `R-SIM-15`'s "declared, never smuggled," made legible (`S-D6`,
+    #: `UT-D6-2`) -- previously only hashed into `run_id` (`core.manifest.
+    #: _overrides_repr`), never actually readable from a written manifest.
+    overrides: tuple[OverrideRecord, ...] = field(default_factory=tuple)
     seed: int = 0
     #: `OD-11` (`R-SIM-3a` §9.1): whether this run's pipeline declared
     #: `allow_mixed_projects: true` -- badges a deliberate cross-project

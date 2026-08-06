@@ -28,6 +28,7 @@ from adas_sim.io.base import (
     CAPTURE_TIME_MANIFEST_VERSION,
     Capabilities,
     ComponentBuildInfo,
+    OverrideRecord,
     Provenance,
     RunManifest,
     TopicInfo,
@@ -78,6 +79,10 @@ def _manifest_to_dict(manifest: RunManifest) -> dict:
             }
             for c in manifest.components
         ],
+        "overrides": [
+            {"stage": o.stage, "address": o.address, "verb": o.verb, "value": o.value}
+            for o in manifest.overrides
+        ],
     }
 
 
@@ -97,6 +102,10 @@ def _manifest_from_dict(data: dict) -> RunManifest:
         )
         for c in data.get("components", ())
     )
+    overrides = tuple(
+        OverrideRecord(stage=o["stage"], address=o["address"], verb=o["verb"], value=o.get("value"))
+        for o in data.get("overrides", ())
+    )
     return RunManifest(
         manifest_version=data.get("manifest_version", 0),
         run_id=data.get("run_id", ""),
@@ -114,6 +123,7 @@ def _manifest_from_dict(data: dict) -> RunManifest:
         allow_mixed_projects=data.get("allow_mixed_projects", False),
         process_nonce=data.get("process_nonce", ""),
         components=components,
+        overrides=overrides,
     )
 
 

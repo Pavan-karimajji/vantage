@@ -41,7 +41,7 @@ import yaml
 from adas_sim.contracts.pipeline import Pipeline
 from adas_sim.core.errors import AuthoringError, ContractError
 from adas_sim.core.ids import new_run_id
-from adas_sim.io.base import CAPTURE_TIME_MANIFEST_VERSION, ComponentBuildInfo, RunManifest
+from adas_sim.io.base import CAPTURE_TIME_MANIFEST_VERSION, ComponentBuildInfo, OverrideRecord, RunManifest
 from adas_sim.io.registry import reader_for
 
 #: `S-C6` (`R-SIM-24`): generated ONCE per process, at import time -- every
@@ -65,6 +65,17 @@ def _overrides_repr(pipeline: Pipeline) -> str:
         for stage in pipeline.stages for key, override in sorted(stage.overrides.items())
     ]
     return "|".join(parts)
+
+
+def _override_records(pipeline: Pipeline) -> tuple[OverrideRecord, ...]:
+    """The same declared overrides `_overrides_repr` hashes, as the
+    structured, actually-readable form `RunManifest.overrides` carries
+    (`S-D6`, `UT-D6-2`) -- same sort order, so the two never disagree
+    about which override came first."""
+    return tuple(
+        OverrideRecord(stage=stage.name, address=key, verb=override.verb.value, value=override.value)
+        for stage in pipeline.stages for key, override in sorted(stage.overrides.items())
+    )
 
 
 def build_manifest(
@@ -160,6 +171,7 @@ def build_manifest(
         project=project,
         pipeline=pipeline.name if pipeline is not None else "",
         components=components,
+        overrides=_override_records(pipeline) if pipeline is not None else (),
         seed=seed,
         allow_mixed_projects=pipeline.allow_mixed_projects if pipeline is not None else False,
         process_nonce=_PROCESS_NONCE,

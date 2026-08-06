@@ -96,6 +96,35 @@ def test_run_id_differs_when_overrides_differ(tmp_path):
     assert plain_manifest.run_id != overridden_manifest.run_id
 
 
+def test_manifest_overrides_are_legible_not_only_hashed(tmp_path):
+    """UT-D6-2: `R-SIM-15`'s "declared, never smuggled" made legible --
+    previously an override only affected `run_id`'s hash (the test above),
+    with no way to read back WHICH override actually applied from the
+    manifest itself."""
+    pipeline, path = _pipeline(tmp_path, overrides={"egoDyn": {"verb": "hold"}})
+    manifest = build_manifest(pipeline=pipeline, pipeline_path=path, run_kind="sim", source_kind="synthetic", clock=_CLOCK)
+
+    assert len(manifest.overrides) == 1
+    record = manifest.overrides[0]
+    assert record.stage == "under_test"
+    assert record.address == "egoDyn"
+    assert record.verb == "hold"
+    assert record.value is None  # hold carries no value
+
+
+def test_manifest_carries_a_const_override_with_its_value(tmp_path):
+    pipeline, path = _pipeline(tmp_path, overrides={"egoDyn": {"verb": "const", "value": 5.0}})
+    manifest = build_manifest(pipeline=pipeline, pipeline_path=path, run_kind="sim", source_kind="synthetic", clock=_CLOCK)
+
+    assert manifest.overrides[0].verb == "const"
+    assert manifest.overrides[0].value == 5.0
+
+
+def test_manifest_overrides_are_empty_with_no_pipeline():
+    manifest = build_manifest(run_kind="sim", source_kind="synthetic", clock=_CLOCK)
+    assert manifest.overrides == ()
+
+
 def test_off_stage_is_excluded_from_components(tmp_path):
     stages = [
         {"name": "under_test", "mode": "simulate", "impl": "stub:under_test", "inputs": {}},

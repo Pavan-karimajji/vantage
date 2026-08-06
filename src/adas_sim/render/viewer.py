@@ -592,6 +592,8 @@ class PipelinePanel(QtWidgets.QDockWidget):
             impl_text = view.impl or "(absent)"
             if view.mode == "measured" and not view.measured_available:
                 impl_text += f"  ⚠ {view.measured_unavailable_reason}"
+            if view.overridden:
+                impl_text += "  ⚙ input overridden"
             self._table.setItem(row, 2, QtWidgets.QTableWidgetItem(impl_text))
         self._updating = False
         self._sync_undo_bar()

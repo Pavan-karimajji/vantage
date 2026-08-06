@@ -14,6 +14,7 @@ from mcap.writer import Writer as RawMcapWriter
 from adas_sim.io.base import (
     CAPTURE_TIME_MANIFEST_VERSION,
     ComponentBuildInfo,
+    OverrideRecord,
     Provenance,
     RunManifest,
     TopicInfo,
@@ -68,11 +69,18 @@ def test_topics_returns_schema_and_provenance_for_each(tmp_path):
 
 
 def test_meta_blocks_round_trip(tmp_path):
-    """UT-A4-3: manifest, config_bundle, topic_provenance."""
+    """UT-A4-3: manifest, config_bundle, topic_provenance. Also covers
+    `UT-D6-2`'s own round-trip claim: `RunManifest.overrides` -- including
+    a `None` value (`hold`/`select`/`drop` carry none) -- survives the
+    write/read cycle unchanged, part of this same equality check."""
     path = tmp_path / "sample.mcap"
     manifest = RunManifest(
         manifest_version=1, run_id="20260729T000000Z-abc12345", run_kind="resim",
         project="base", seed=7, components=(ComponentBuildInfo(name="df", library_sha256="ab" * 32),),
+        overrides=(
+            OverrideRecord(stage="df", address="egoDyn.vx", verb="const", value=5.0),
+            OverrideRecord(stage="df", address="egoDyn", verb="hold", value=None),
+        ),
     )
     _write_sample(path, manifest=manifest, config_bundle_bytes=b"EGO_LENGTH_M: 4.5\n", messages=[("/source/veh_dyn", 0, b"\x00")])
 

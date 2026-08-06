@@ -68,6 +68,15 @@ class StageView:
     measured_available: bool
     measured_unavailable_reason: str  # "" exactly when measured_available
     orphan: bool = False
+    #: `True` when this stage declares at least one port-value override
+    #: (`contracts/override.py`'s six verbs, `S-C1cΔ`) -- the panel's cue
+    #: to render an "input overridden" badge (`R-SIM-15`). Read directly
+    #: from `Stage.overrides`, never from a topic's provenance tag: an
+    #: override modifies a CONSUMING stage's own input bytes right before
+    #: `exec()` sees them, but the RECORDED topic is the PRODUCER's
+    #: unmodified output (`S-D6`, `UT-D6-2`'s own design finding) -- no
+    #: topic exists that this badge could legitimately read from instead.
+    overridden: bool = False
 
 
 class PipelinePanelState:
@@ -134,7 +143,7 @@ class PipelinePanelState:
         return StageView(
             name=stage.name, mode=stage.mode, impl=stage.impl,
             measured_available=available, measured_unavailable_reason=reason,
-            orphan=orphan,
+            orphan=orphan, overridden=bool(stage.overrides),
         )
 
     def _measured_availability(self, stage: Stage) -> tuple[bool, str]:

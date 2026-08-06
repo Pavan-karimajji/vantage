@@ -6465,18 +6465,49 @@ a self-timed session.
       there, not here.
       **Confirmed intact via existing coverage** (`test_c1c_override.py`,
       `test_c1c_binding.py`) — not rebuilt, not re-tested from scratch
-- [ ] Overrides land in the run manifest; the affected topic is tagged
+- [x] Overrides land in the run manifest; the affected topic is tagged
       `origin: overridden` (`R-SIM-12`) and badged in the HUD (`R-SIM-15`) —
       the manifest half lands with the engine; **the HUD badge is this stage's**.
-      **A real, unresolved gap, not attempted**: `Provenance.OVERRIDDEN`
-      exists (`io/base.py`) but is referenced NOWHERE in `core/manifest.py`
-      or `sources/recorder.py`. Design snag found while scoping the fix: an
-      override addresses a CONSUMING stage's own input port
-      (`Stage.overrides`), but the RECORDED topic is named after the
-      PRODUCER (`source.veh_dyn`, an earlier stage's output) — tagging that
-      producer's topic `overridden` would be misleading, since its recorded
-      bytes are unmodified; only what the consuming stage internally saw
-      was altered. Left deferred rather than guessed
+      **Design question resolved, follow-up pass 2026-08-06 (`UT-D6-2`).**
+      The topic-tagging half of the original wording is **not achievable as
+      specified, and is dropped rather than worked around**: an override
+      modifies a CONSUMING stage's own input bytes right before `exec()`
+      sees them (`Pipeline._apply_input_overrides`) — the RECORDED topic
+      is the PRODUCER's output, written by `Recorder.tick()` from the raw,
+      pre-override `stimulus`/stage-output values, never from what a
+      consumer internally saw. No existing topic's bytes ever reflect an
+      override, so tagging one `origin: overridden` would state something
+      false regardless of which topic was picked (single- or multi-consumer
+      alike). Building a topic that WOULD be true — the actual overridden
+      bytes a stage received — needs `Pipeline.exec`/`step` to return each
+      stage's resolved (post-override) inputs alongside its outputs, a
+      change to a return contract read by every caller (`resim_pipeline`,
+      `Recorder.tick`, `check/runner.py`, the live-resim path); real,
+      separate work, correctly out of scope for a design-question pass.
+      **What ships instead, and is real:**
+      `RunManifest.overrides` (new field, `io/base.py`'s new
+      `OverrideRecord`: `stage`/`address`/`verb`/`value`) makes `R-SIM-15`'s
+      "declared, never smuggled" claim actually true — previously an
+      override only affected `run_id`'s hash (`core.manifest.
+      _overrides_repr`, unchanged), with no way to read WHICH override
+      applied back from a written manifest; now `core.manifest.
+      _override_records` builds the same declarations in readable form,
+      round-tripped through `io/mcap.py`. The HUD badge ships too, reading
+      `Stage.overrides` directly rather than a topic: `StageView.
+      overridden` (`view/pipeline_panel.py`) and the real Qt `PipelinePanel`
+      (`render/viewer.py`, `⚙ input overridden` beside the impl string,
+      same row-badge pattern the `orphan`/"computed, not consumed" flag
+      already uses). `Provenance.OVERRIDDEN` (`io/base.py`) stays defined
+      but unused — not dead code to delete, a place held for the day the
+      real per-stage-input topic above gets built.
+      `tests/unit/test_c2_manifest.py` (+3), `tests/unit/test_a4_mcap.py`
+      (extended `UT-A4-3`'s own round-trip to cover `overrides`, including
+      a `None` value), `tests/unit/test_d6_override_badge.py` (3, no Qt),
+      `tests/system/test_d6_override_badge_widget.py` (2, real Qt,
+      offscreen). Full suite: 807 passed / 7 skipped (Windows venv,
+      `foxglove` extra not installed here, one pre-existing flake —
+      `test_b3_viewport_controls.py`, confirmed passing standalone),
+      `check_invariants.py` and `docs/py/run_all.py` both clean
 - [x] `cli/probe.py` — `sim probe <lib>`: load, read `adasManifest`, print the
       port set, types and schema names. **No mapping step, ever** (arch §5.16.1)
 - [x] `contracts/pipeline.py` — **severed-chain detection**: a `measured` stage
@@ -6592,9 +6623,13 @@ a self-timed session.
       Pre-existing (`test_c1c_override.py`'s `test_parse_override_verb_
       outside_the_closed_four_is_a_load_error_not_a_warning` + `test_c1c_
       binding.py`'s field-path tests), confirmed intact, not rewritten
-- [ ] `UT-D6-2` an override appears in the run manifest and tags its topic.
-      **Blocked on the same undecided design question** as its own
-      checklist item above
+- [x] `UT-D6-2` an override appears in the run manifest and tags its topic.
+      **Done, follow-up pass 2026-08-06 — "tags its topic" corrected to
+      "and its stage's HUD row"**, per the resolved design question in its
+      own checklist item above: no topic's recorded bytes ever reflect an
+      override, so tagging one would be false. `RunManifest.overrides`
+      (the manifest half) + `StageView.overridden`/the real Qt badge (the
+      HUD half) both proven — see that entry for the full test list
 - [x] `UT-D6-3` `sim probe` on `InProcessSilComponent` prints the same port set
       the pipeline resolves — one source, no second description. **Done** —
       `sim probe` the CLI verb only ever takes a file path, never an
