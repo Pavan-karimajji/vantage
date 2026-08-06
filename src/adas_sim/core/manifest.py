@@ -39,9 +39,10 @@ from pathlib import Path
 import yaml
 
 from adas_sim.contracts.pipeline import Pipeline
-from adas_sim.core.errors import AuthoringError
+from adas_sim.core.errors import AuthoringError, ContractError
 from adas_sim.core.ids import new_run_id
 from adas_sim.io.base import CAPTURE_TIME_MANIFEST_VERSION, ComponentBuildInfo, RunManifest
+from adas_sim.io.registry import reader_for
 
 #: `S-C6` (`R-SIM-24`): generated ONCE per process, at import time -- every
 #: `RunManifest` this process builds carries the same value, which is exactly
@@ -163,6 +164,58 @@ def build_manifest(
         allow_mixed_projects=pipeline.allow_mixed_projects if pipeline is not None else False,
         process_nonce=_PROCESS_NONCE,
     )
+
+
+def verify_pinned_builds(pipeline: Pipeline, recording_path: Path) -> None:
+    """`sim resim --pin-builds` (`UT-D7-9`, `OQ-9`/`NR-SIM-24`,
+    `sim_resim_and_recording.md` "Pinning a resim to the build that
+    produced it"): refuses to start rather than silently resim against a
+    different build than the one that produced `recording_path`.
+
+    Reads `recording_path`'s OWN embedded run manifest (`RecordingReader.
+    meta()`, `R-SIM-6`) for each `mode: simulate` stage's previously
+    recorded `library_sha256`, and compares it against `pipeline`'s
+    CURRENTLY resolved library (`Pipeline.component_build_shas`) for that
+    same stage. A `components=`-supplied stage (no file on disk, e.g. a
+    test's `InProcessSilComponent`) has nothing to verify and is skipped --
+    same reasoning `_validate_cross_component_agreement` already uses for
+    the bundle-directory check.
+
+    Verification, not addressing (`impl: pkg:` still does not exist) -- a
+    package reference alone would prove nothing anyway (`ComponentBuildInfo.
+    package_ref`'s own docstring); the byte hash is the actual claim. **The
+    honest limit is a refusal, not a silent pass**: a stage the recording
+    carries no `library_sha256` for (an older recording, or one whose
+    library was never resim'd for real) is reported as **unpinnable**
+    rather than treated as a match -- the entire point of this flag is a
+    hard guarantee, and treating "unknown" as "fine" would defeat it
+    (`R-SIM-25`/`NR-SIM-4`)."""
+    reader = reader_for(recording_path)
+    try:
+        recorded_shas = {c.name: c.library_sha256 for c in reader.meta().components}
+    finally:
+        reader.close()
+    current_shas = pipeline.component_build_shas()
+
+    for stage in pipeline.stages:
+        if stage.mode != "simulate" or stage.name not in current_shas:
+            continue
+        current_sha = current_shas[stage.name]
+        recorded_sha = recorded_shas.get(stage.name, "")
+        if not recorded_sha:
+            raise ContractError(
+                expected="a library_sha256 this recording was pinned against",
+                found="none -- this recording carries no verifiable build hash for this stage",
+                where=f"stage '{stage.name}' ({recording_path})",
+                hint="unpinnable: record a new baseline with a real dll:/stubdll: build, or drop --pin-builds",
+            )
+        if recorded_sha != current_sha:
+            raise ContractError(
+                expected=f"library_sha256={recorded_sha} (the build that produced this recording)",
+                found=f"library_sha256={current_sha} (the build currently resolved)",
+                where=f"stage '{stage.name}' ({recording_path})",
+                hint="rebuild to match, or point --search at the matching artifact",
+            )
 
 
 @dataclass(frozen=True, slots=True)

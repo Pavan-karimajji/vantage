@@ -63,6 +63,7 @@ def run(argv: list[str] | None = None) -> int:
             meta = build_manifest(
                 pipeline=pipeline, pipeline_path=args.pipeline, run_kind="sim", source_kind=source.name,
                 project=args.project, scenario_name=scenario.id, scenario_path=args.scenario,
+                component_build_shas=pipeline.component_build_shas(),
             )
             recorder = Recorder(pipeline, source, args.record, meta=meta)
             recorder.open(scenario)

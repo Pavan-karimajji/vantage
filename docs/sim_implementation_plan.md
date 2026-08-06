@@ -6820,14 +6820,56 @@ copy path is lossless, just not the "different format" half of the claim.
       tick + `run_id` reproduce it in-process on Bench, where a debugger can
       attach (`R-SIM-19`) — the loop that makes crashes get fixed rather than
       retried
-- [ ] `UT-D7-9` **`--pin-builds` verifies, it does not merely address**
+- [x] `UT-D7-9` **`--pin-builds` verifies, it does not merely address**
       (`OQ-9`, `NR-SIM-24`): resolving a component to an artefact whose
       `library_sha256` differs from the recording's **refuses to start**, naming
       both hashes. A package reference alone proves nothing — a version can be
       rebuilt and re-uploaded — so the verification is the requirement and the
       `pkg:` form in `impl:` is only the addressing. A locally built library
       with no `package_ref` reports honestly as **unpinnable** rather than
-      silently passing
+      silently passing. **Verification half DONE, follow-up pass; addressing
+      half deliberately not attempted — see below.**
+      `Pipeline.component_build_shas` (`contracts/pipeline.py`) is the real
+      hash the stage's own status note said nothing computed: `_resolve_
+      components` now also returns each `dll:`/`stubdll:` stage's resolved
+      library **file path** (`library_paths`, `bundle_dirs`'s own sibling),
+      hashed on demand -- a `components=`-supplied stage has no file and is
+      simply absent from the result, never an empty string standing in for a
+      real one. `core.manifest.build_manifest`'s `component_build_shas` kwarg
+      is now wired from real callers (`cli/resim.py`, `cli/run.py`,
+      `render/viewer.py`) instead of always defaulting to `{}` — every
+      resim/run-produced manifest carries a real `library_sha256` per stage
+      today, closing the exact gap named above ("`cli/resim.py` doesn't pass
+      the mapping at all"). `core.manifest.verify_pinned_builds` (new) is
+      `--pin-builds`'s own engine: reads the INPUT recording's own embedded
+      run manifest (`RecordingReader.meta()`, `R-SIM-6`) for each `mode:
+      simulate` stage's previously recorded `library_sha256`, compares it
+      against the pipeline's CURRENTLY resolved library, and raises
+      `ContractError` naming both hashes on a mismatch — **or** naming the
+      stage as **unpinnable** when the recording carries no hash for it at
+      all (the honest-limit case, `R-SIM-25`/`NR-SIM-4`: unknown is refused,
+      never treated as a match). Wired into `sim resim --pin-builds`, checked
+      before `init_components` (fails fast, no component ever initialised
+      against a build it was refused). `ComponentBuildInfo.package_ref: str
+      = ""` (new field, `io/base.py` + `io/mcap.py` round-trip) gives a
+      recording written today a place for it, but **the `impl: pkg:<ref>`
+      addressing half, and any Conan-package/artifact-store resolution, is
+      NOT built** — there is no real Conan package for `df_sil` to address
+      that way yet, and the doc's own framing already separates this out as
+      "no new concept" but genuinely separate work from "the valuable half"
+      this pass closes. Every `package_ref` written today is therefore
+      honestly empty ("built locally"), which is the true state, not a
+      placeholder.
+      `tests/unit/test_d7_pin_builds.py` (6 tests, no DLL needed — a plain
+      temp file stands in for a resolved library, since the hashing/
+      comparison logic never looks inside it) + `tests/system/
+      test_d7_pin_builds_cli.py` (2 tests, real `df_sil.dll` + a real
+      recording: `sim resim --save` now embeds a real hash, and re-resim
+      with `--pin-builds` passes against its own output and refuses against
+      a tampered one, naming the stale hash). Full suite: 775 passed / 7
+      skipped (Windows venv, `foxglove` extra not installed here — same 2
+      files this venv has always skipped), `check_invariants.py` and
+      `docs/py/run_all.py` both clean.
 - [x] `ST-D7-7` **campaign sizing, measured** (`NR-SIM-23`): a real campaign over
       the full recording set records per-recording size, wall-clock per resim,
       and scaling with `-j`. **The numbers go in this document**, whatever they
@@ -6866,13 +6908,14 @@ copy path is lossless, just not the "different format" half of the claim.
 - [x] `UT-D7-5` + `ST-D7-2` + `ST-D7-3` green — an export can never be mistaken
       for a recording, and scale uses the developer's own file. **All three
       green as of 2026-08-05** (pytest, this WSL shell — `UT-D7-5` since
-      2026-07-30, `ST-D7-2`/`ST-D7-3` this session). `UT-D7-9`/`ST-D7-6` are
-      real, separate open items but are not this Gate's own three named
-      tests — the Gate itself is closed.
+      2026-07-30, `ST-D7-2`/`ST-D7-3` this session). `ST-D7-6` is a real,
+      separate open item (needs a Bench GUI, `S-D8` unbuilt) but is not this
+      Gate's own three named tests — the Gate itself is closed.
       **`ST-D7-7` measured in a later session** (same date), see its own
       entry above — also not one of this Gate's three named tests, but no
-      longer an open item either. **`UT-D7-7`'s own "last tick" gap closed in
-      a follow-up pass** (Windows venv), see its own entry above
+      longer an open item either. **`UT-D7-7`'s own "last tick" gap and
+      `UT-D7-9`'s own verification half both closed in follow-up passes**
+      (Windows venv), see their own entries above
 
 ### S-D8 — **Vantage**: the workspaces, the front door, the product
 

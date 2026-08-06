@@ -96,6 +96,15 @@ class ComponentBuildInfo:
     config_bundle_sha256: str = ""
     config_bundle_embedded: bool = False
     enabled_functions: tuple[str, ...] = ()
+    #: `impl: pkg:<ref>`'s own addressing (`sim_resim_and_recording.md`
+    #: "Pinning a resim to the build that produced it", `OQ-9`/`NR-SIM-24`).
+    #: Empty when the library was built locally -- today, always, since no
+    #: `pkg:` resolver exists yet. A real value alone would prove nothing
+    #: (a package can be rebuilt and re-uploaded under the same reference);
+    #: `library_sha256` above is the actual verification, `--pin-builds`'s
+    #: own job. Kept as a field now so a recording written today already
+    #: has a place for it, rather than retrofitting the schema later.
+    package_ref: str = ""
 
 
 @dataclass(frozen=True, slots=True)

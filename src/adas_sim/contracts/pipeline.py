@@ -34,6 +34,7 @@ models); only the world model's own output can be faulted. `InputMeta`
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -271,23 +272,27 @@ def validate_recordable(stages: Sequence[Stage], components: Mapping[str, SilCom
 
 def _resolve_components(
     stages: Sequence[Stage], *, search: Sequence[Path], components: Mapping[str, SilComponent],
-) -> tuple[dict[str, SilComponent], dict[str, Path | None]]:
+) -> tuple[dict[str, SilComponent], dict[str, Path | None], dict[str, Path | None]]:
     """`impl: dll:<stem>` / `stubdll:<stem>` load for real, through
     `resolve_library` (`P-5`) + `CtypesSilComponent`. `impl: stub:<name>`
     has no registry yet (`S-C2`) -- it must be supplied via `components=`.
     A caller-supplied entry always wins, for any `impl:` kind.
 
     Also returns each stage's resolved **bundle directory** (`<library_dir>/
-    config`, `R-SIM-3a`) when known -- `None` for a `components=`-supplied
-    stage, since this function never sees a file path for those. `OD-11`'s
-    cross-component agreement check (`_validate_cross_component_agreement`)
-    is the only consumer; nothing else needs the raw directory."""
+    config`, `R-SIM-3a`) and the raw **library file path** itself, both
+    `None` for a `components=`-supplied stage, since this function never
+    sees a file path for those. `OD-11`'s cross-component agreement check
+    (`_validate_cross_component_agreement`) is the bundle directory's only
+    consumer; the library path is `Pipeline.component_build_shas`'s
+    (`UT-D7-9`, `NR-SIM-24`)."""
     resolved: dict[str, SilComponent] = {}
     bundle_dirs: dict[str, Path | None] = {}
+    library_paths: dict[str, Path | None] = {}
     for stage in stages:
         if stage.name in components:
             resolved[stage.name] = components[stage.name]
             bundle_dirs[stage.name] = None
+            library_paths[stage.name] = None
             continue
         if not stage.impl:
             raise AuthoringError(
@@ -300,6 +305,7 @@ def _resolve_components(
             lib_path = resolve_library(ref, search=search)
             resolved[stage.name] = CtypesSilComponent(lib_path)
             bundle_dirs[stage.name] = lib_path.parent / "config"
+            library_paths[stage.name] = lib_path
         elif kind == "stub":
             raise AuthoringError(
                 expected=f"stage '{stage.name}' supplied via components=",
@@ -312,7 +318,7 @@ def _resolve_components(
                 found=stage.impl, where=f"stage '{stage.name}'",
                 hint="'legacy:' stages are not yet supported",
             )
-    return resolved, bundle_dirs
+    return resolved, bundle_dirs, library_paths
 
 
 def _load_ego_params(bundle_dir: Path) -> Mapping[str, object]:
@@ -565,11 +571,17 @@ class Pipeline:
     def __init__(
         self, *, name: str, stages: tuple[Stage, ...], version: int, components: Mapping[str, SilComponent],
         faults: Sequence[Fault] = (), allow_mixed_projects: bool = False, mixed_projects: bool = False,
+        library_paths: Mapping[str, Path | None] | None = None,
     ) -> None:
         self.name = name
         self.stages = stages
         self.version = version
         self._components = dict(components)
+        #: `dll:`/`stubdll:` stages' resolved library file, keyed by stage
+        #: name -- `None` (absent from a `components=`-supplied stage) same
+        #: as `bundle_dirs` in `_resolve_components`. `component_build_shas`
+        #: is the only consumer (`UT-D7-9`, `NR-SIM-24`).
+        self.library_paths: dict[str, Path | None] = dict(library_paths or {})
         #: `OD-11`: `allow_mixed_projects` is what the pipeline file
         #: *requested*; `mixed_projects` is what `_validate_cross_component_
         #: agreement` actually *found*. Independent facts -- a pipeline can
@@ -632,6 +644,19 @@ class Pipeline:
         for component in self._components.values():
             component.shutdown()
 
+    def component_build_shas(self) -> dict[str, str]:
+        """`sha256` of each `dll:`/`stubdll:` stage's resolved library file,
+        keyed by stage name -- the real value `core.manifest.build_manifest`'s
+        `component_build_shas` kwarg needs (`UT-D7-9`, `NR-SIM-24`), closing
+        the gap `S-D7`'s own status note named: "nothing computes a real
+        hash from a resolved library path". A `components=`-supplied stage
+        has no file on disk and is simply absent from the result -- there is
+        nothing to hash, not an empty string standing in for a real one."""
+        return {
+            name: hashlib.sha256(path.read_bytes()).hexdigest()
+            for name, path in self.library_paths.items() if path is not None
+        }
+
     @classmethod
     def load(
         cls, path: Path, *, search: Sequence[Path] = (),
@@ -664,7 +689,7 @@ class Pipeline:
             )
             for spec in raw.get("stages", [])
         )
-        resolved, bundle_dirs = _resolve_components(stages, search=search, components=components or {})
+        resolved, bundle_dirs, library_paths = _resolve_components(stages, search=search, components=components or {})
         _validate_wiring(stages, resolved, recording, source)
         _validate_overrides(stages, resolved)
         mixed_projects = _validate_cross_component_agreement(
@@ -672,7 +697,7 @@ class Pipeline:
         )
         return cls(
             name=name, stages=stages, version=version, components=resolved, faults=faults,
-            allow_mixed_projects=allow_mixed_projects, mixed_projects=mixed_projects,
+            allow_mixed_projects=allow_mixed_projects, mixed_projects=mixed_projects, library_paths=library_paths,
         )
 
     def _message_classes_for(self, stage_name: str) -> Mapping[str, type]:
@@ -979,7 +1004,7 @@ class Pipeline:
         )
         result = Pipeline(
             name=self.name, stages=new_stages, version=self.version, components=self._components,
-            faults=self._faults,
+            faults=self._faults, library_paths=self.library_paths,
         )
         to_close = {
             chain.measured for chain in result.severed_chains() if stage in (chain.upstream, chain.measured, chain.downstream)
@@ -997,7 +1022,10 @@ class Pipeline:
             if s.name in to_close else s
             for s in new_stages
         )
-        return Pipeline(name=self.name, stages=closed_stages, version=self.version, components=self._components)
+        return Pipeline(
+            name=self.name, stages=closed_stages, version=self.version, components=self._components,
+            library_paths=self.library_paths,
+        )
 
     def to_yaml(self) -> str:
         data = {

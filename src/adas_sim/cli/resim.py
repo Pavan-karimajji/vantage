@@ -34,7 +34,7 @@ from pathlib import Path
 
 from adas_sim.contracts.pipeline import Pipeline
 from adas_sim.core.errors import AuthoringError
-from adas_sim.core.manifest import build_manifest, load_run_spec
+from adas_sim.core.manifest import build_manifest, load_run_spec, verify_pinned_builds
 from adas_sim.core.resim import resim_pipeline
 from adas_sim.io.base import Provenance, TopicInfo
 from adas_sim.io.registry import writer_for
@@ -62,6 +62,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="config path forwarded to each stage's adasInit -- adasInit(NULL)'s own bundle "
              "resolution is S-C5, not yet built, so a real dll:/stubdll: stage needs this explicitly. "
              "Falls back to --pipeline's own config: key",
+    )
+    parser.add_argument(
+        "--pin-builds", action="store_true",
+        help="refuse to start unless every mode: simulate stage's currently-resolved library "
+             "byte-matches the recording's own recorded library_sha256 (NR-SIM-24, OQ-9)",
     )
     return parser
 
@@ -107,6 +112,8 @@ def run(argv: list[str] | None = None) -> int:
     config = args.config if args.config is not None else spec.config
 
     pipeline = Pipeline.load(args.pipeline, search=args.search)
+    if args.pin_builds:
+        verify_pinned_builds(pipeline, recording)
     pipeline.init_components(config)
     try:
         outputs = resim_pipeline(pipeline, recording)
@@ -116,7 +123,7 @@ def run(argv: list[str] | None = None) -> int:
     if args.save:
         meta = build_manifest(
             pipeline=pipeline, pipeline_path=args.pipeline, run_kind="resim", source_kind="mcap",
-            project=project, recording_path=recording,
+            project=project, recording_path=recording, component_build_shas=pipeline.component_build_shas(),
         )
         _save_outputs(pipeline, outputs, args.save, meta)
         print(f"wrote {args.save}")

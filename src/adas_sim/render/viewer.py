@@ -290,6 +290,7 @@ class _ResimWorker(QtCore.QObject):
                 meta = build_manifest(
                     pipeline=pipeline, pipeline_path=self._pipeline_path, run_kind="resim", source_kind="mcap",
                     project=self._project, recording_path=self._recording_path,
+                    component_build_shas=pipeline.component_build_shas(),
                 )
                 resim_pipeline_merged(pipeline, self._recording_path, self._out_path, meta=meta)
             finally:

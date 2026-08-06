@@ -74,6 +74,7 @@ def _manifest_to_dict(manifest: RunManifest) -> dict:
                 "config_bundle_sha256": c.config_bundle_sha256,
                 "config_bundle_embedded": c.config_bundle_embedded,
                 "enabled_functions": list(c.enabled_functions),
+                "package_ref": c.package_ref,
             }
             for c in manifest.components
         ],
@@ -92,6 +93,7 @@ def _manifest_from_dict(data: dict) -> RunManifest:
             config_bundle_sha256=c.get("config_bundle_sha256", ""),
             config_bundle_embedded=c.get("config_bundle_embedded", False),
             enabled_functions=tuple(c.get("enabled_functions", ())),
+            package_ref=c.get("package_ref", ""),
         )
         for c in data.get("components", ())
     )
