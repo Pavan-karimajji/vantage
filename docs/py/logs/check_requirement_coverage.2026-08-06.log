@@ -9,8 +9,8 @@ Summary
 -------
 priority  proven  partial  unproven  no test id  parked  total
 --------  ------  -------  --------  ----------  ------  -----
-P0        5       8        3         1           0       17
-P1        34      4        13        8           1       60
+P0        6       8        2         1           0       17
+P1        37      3        11        8           1       60
 P2        0       0        0         0           0       0
 
 P0 requirements — the tool is not usable without these
@@ -30,9 +30,9 @@ NR-SIM-22  partial     3/4   A component that crashes or hangs must not t  ST-D7
 CR-SIM-23  proven      2/2   A pipeline file must carry a schema version   -
 NR-SIM-40  partial     1/2   Determinism must be measured across the axes  ST-C6-4
 NR-SIM-41  proven      1/1   Per-tick cost and campaign throughput are bu  -
-NR-SIM-42  unproven    0/2   Recording volume is bounded by declared per-  ST-C2-3, UT-C2-12
+NR-SIM-42  partial     1/2   Recording volume is bounded by declared per-  UT-C2-12
 FR-SIM-67  partial     2/3   Every rendered value is traceable to the byt  ST-D6-3
-CR-SIM-4   partial     1/2   A message carries capture time and reception  UT-C2-13
+CR-SIM-4   proven      2/2   A message carries capture time and reception  -
 NR-SIM-45  no test id  0/0   The tool must be survivable by someone who d  -
 
 Partial — some verifiers proven, some not
@@ -42,14 +42,13 @@ id         pri  done  requirement                                   outstanding 
 FR-SIM-3   P1   1/2   Scale to perception                           ST-D4-1
 FR-SIM-15  P1   1/2   A component ships a default workspace         UT-B3-11
 FR-SIM-49  P1   8/9   Naming conventions must be appropriate for d  UT-D8-8
-FR-SIM-43  P1   1/2   Two sides: producing a recording vs executin  ST-C2-1
 FR-SIM-66  P0   2/3   Vantage must adapt to recordings it did not   ST-C9-2
 FR-SIM-46  P0   2/3   One tool, not a developer tool and a project  ST-D6-1
 FR-SIM-70  P0   2/3   The outcome is a **player application**, not  ST-D5-1
 CR-SIM-2   P0   1/2   A plug-in never spells a port address; it bi  UT-C1c-22
 NR-SIM-22  P0   3/4   A component that crashes or hangs must not t  ST-D7-6
 NR-SIM-40  P0   1/2   Determinism must be measured across the axes  ST-C6-4
+NR-SIM-42  P0   1/2   Recording volume is bounded by declared per-  UT-C2-12
 FR-SIM-67  P0   2/3   Every rendered value is traceable to the byt  ST-D6-3
-CR-SIM-4   P0   1/2   A message carries capture time and reception  UT-C2-13
 
-RESULT  ok — every cited verifier resolves to a unit of work (39 proven, 12 partial, 16 unproven, 9 verified by other means)
+RESULT  ok — every cited verifier resolves to a unit of work (43 proven, 11 partial, 13 unproven, 9 verified by other means)

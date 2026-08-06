@@ -4066,8 +4066,13 @@ order #5.**
 **Gate**
 - [x] `ST-C1c-1` green over every recording — the generic path is proven
       equivalent before anything depends on it exclusively
-- [ ] `GT-6` green — the framework imports no generated bindings, tested by
-      making them unimportable rather than by inspection
+- [x] `GT-6` green — the framework imports no generated bindings, tested by
+      making them unimportable rather than by inspection. **Stale checkbox,
+      corrected 2026-08-06**: `scripts/check_invariants.py` has reported
+      `GT-6` clean every run this whole session (`GT-1, GT-2, GT-3, GT-6,
+      GT-11: clean`) — the mechanised check (`scripts/check_invariants.py::
+      check_gt6`, scanning for a component/generated-binding import under
+      `src/adas_sim`) was simply never ticked here after it started passing
 
 **Delta — added 2026-07-31 (`R-SIM-21`).** `Pipeline` already knows every
 manifest in a run and already builds the concrete address
@@ -4372,28 +4377,41 @@ code-generation framework. One generator, one input schema, one output file.
 original keeps working until `S-E1` deletes it, gated on this stage's tests.
 Nothing in `sources/` may name a driving function (`GT-1`).
 
-- [ ] `sources/base.py` — the `Source` Protocol; `emits()` declares what this
+**Status: checkbox archaeology, 2026-08-06.** This whole section read as
+untouched — every box unticked, no status note — despite the stage being
+substantially built and tested. Verified against real code and a real
+`pytest` run rather than trusted on sight (the same discipline the
+2026-08-04 audit applied to `S-D7`, which turned out to be 17 of 27 boxes
+done under an identical "looks untouched" doc): every file below exists,
+substantial, and 54 of this stage's own unit + system tests pass. Ticked
+accordingly, each against its real test file. Two real, previously
+unbuilt gaps survived this pass and are called out where they are, not
+silently ticked: `UT-C2-12` (record-policy visibility in the recording's
+own metadata) and `UT-C2-9` (manifest-mismatch hard error / library-hash
+warning at resim time — **closed in this same pass**, see its own entry).
+
+- [x] `sources/base.py` — the `Source` Protocol; `emits()` declares what this
       world can produce, so a pipeline asking for a level the source cannot
       emit is a **startup error naming both ends** (`R-SIM-10`)
-- [ ] `sources/<world>/` — connection, spawn, lane advance, actor behaviour,
+- [x] `sources/<world>/` — connection, spawn, lane advance, actor behaviour,
       frame conversion, chase transform — the engine, **verbatim in behaviour**.
       Behavioural equivalence is the point; tidiness is not
-- [ ] `sources/<world>/mocks.py` — world-model to port synthesis, tagged
+- [x] `sources/<world>/mocks.py` — world-model to port synthesis, tagged
       `mocked`; ground truth tagged `truth` (`R-SIM-12`)
-- [ ] `sources/<world>/catalogue.yaml` — blueprint to classification/dimensions
-- [ ] `sources/synthetic.py` — scripted stimuli, no world model. **This is the
+- [x] `sources/<world>/catalogue.yaml` — blueprint to classification/dimensions
+- [x] `sources/synthetic.py` — scripted stimuli, no world model. **This is the
       one every framework test uses**, so it must land with the others rather
       than after them
-- [ ] `core/manifest.py` — the run manifest (recording doc §2), carrying the
+- [x] `core/manifest.py` — the run manifest (recording doc §2), carrying the
       `run_id` (`N-9`)
-- [ ] Recorder derives its topic list **from the pipeline's port manifests**
+- [x] Recorder derives its topic list **from the pipeline's port manifests**
       (`R-SIM-6`) and writes every stage's inputs *and* outputs — so "did we
       record everything the SUT reads?" is true by construction rather than by
       diligence
 
 *Scope added 2026-07-31 (`NR-SIM-42`, `OD-9`). Read recording §3.6 and §3.3.*
 
-- [ ] **Per-port `record:` policy**, declared in the pipeline beside the wiring
+- [x] **Per-port `record:` policy**, declared in the pipeline beside the wiring
       — `full` (the default) · `{decimate: n}` · `excluded`. **No global
       switch**, deliberately: a global switch is how everything ends up excluded
       by one person in a hurry
@@ -4401,82 +4419,130 @@ Nothing in `sources/` may name a driving function (`GT-1`).
       port, not only the exceptions**, so a reader answers *"was this
       complete?"* from the file alone. This is what makes `R-SIM-6` degrade
       *visibly* to "everything except these, by declaration" instead of silently
-      becoming false
-- [ ] **An excluded port feeds `R-SIM-23`'s feasible-cut query, not a second
+      becoming false. **Confirmed still a real gap, not stale docs** —
+      `Recorder` uses the policy internally (`record_policy_for`) to decide
+      what to write, but never writes the policy itself anywhere; an
+      excluded port simply never appears as a topic, indistinguishable
+      from "never wired." This is `UT-C2-12`'s own claim — tracked there
+- [x] **An excluded port feeds `R-SIM-23`'s feasible-cut query, not a second
       mechanism.** To a later run an excluded port is indistinguishable from one
-      the recording never had, which is the case `S-C9` already computes
-- [ ] **Two different times, two different answers.** At *record* time,
+      the recording never had, which is the case `S-C9` already computes.
+      True by construction — `Session.feasible_cuts` treats "port missing
+      because excluded" and "port missing because never wired" identically,
+      since both are simply absent from the recording's topic index;
+      nothing here needed its own code
+- [x] **Two different times, two different answers.** At *record* time,
       declaring a stage `simulate` while excluding or decimating an input it
       consumes is a **load error** — you would be recording a run whose own
       inputs you are not keeping. At *resim* time the same file is not an error,
       merely a cut `sim probe` reports as infeasible
-- [ ] The recorder writes **both stamps** (`S-A4Δ`): reception from the
+- [x] The recorder writes **both stamps** (`S-A4Δ`): reception from the
       schedule, capture from the source or the error model that produced the
       value
-- [ ] Size estimate before starting: an upper bound from each port's
+- [x] Size estimate before starting: an upper bound from each port's
       `max_bytes` × ticks × recordings, **labelled as an upper bound**, revised
       from the measured rate after the first hundred ticks. Both numbers,
       both labelled — a single confident figure that turns out to be either is
       worse than neither
-- [ ] `cli/record.py`, `cli/run.py`, `cli/resim.py` — argument parsing only.
+- [x] `cli/record.py`, `cli/run.py`, `cli/resim.py` — argument parsing only.
       **Not `app/cli.py`**: `app/` is the GUI and holds no logic (`GT-9`), and
       the package map is asserted by `UT-A1-9`
 
 **Tests**
-- [ ] `UT-C2-1` frame conversion — the existing sign conventions, re-asserted
-      (world to ego, right-to-left flip, `R-COORD-1`)
-- [ ] `UT-C2-2` lane-advance heading ramp + yaw-rate averaging against a
-      **mocked** world — the technique already proven for the original
-- [ ] `UT-C2-3` angle difference across the ±180° seam
-- [ ] `UT-C2-4` lateral-profile phases incl. `raised_cosine` displacement =
-      `rate * duration / 2`
-- [ ] `UT-C2-5` run manifest contains every declared field; hashes are stable
-- [ ] `UT-C2-6` the recorder's topic list **equals** the union of the pipeline's
-      declared ports — no port silently unrecorded (`R-SIM-6`)
-- [ ] `UT-C2-7` the previously-unrecorded ego-signal port is recorded — the
-      determinism hole in recording doc §4 is closed
-- [ ] `UT-C2-8` provenance tags: mocked ports `mocked`, world truth `truth`,
-      component outputs `simulated` (`R-SIM-12`)
-- [ ] `UT-C2-9` a resim against a recording whose port manifest differs is a
+- [x] `UT-C2-1` frame conversion — the existing sign conventions, re-asserted
+      (world to ego, right-to-left flip, `R-COORD-1`).
+      `tests/unit/test_c2_carla_frame_convert.py`
+- [x] `UT-C2-2` lane-advance heading ramp + yaw-rate averaging against a
+      **mocked** world — the technique already proven for the original.
+      `tests/unit/test_c2_carla_actor_behaviour.py`
+- [x] `UT-C2-3` angle difference across the ±180° seam. Same file
+- [x] `UT-C2-4` lateral-profile phases incl. `raised_cosine` displacement =
+      `rate * duration / 2`. Same file
+- [x] `UT-C2-5` run manifest contains every declared field; hashes are stable.
+      `tests/unit/test_c2_manifest.py`
+- [x] `UT-C2-6` the recorder's topic list **equals** the union of the pipeline's
+      declared ports — no port silently unrecorded (`R-SIM-6`).
+      `tests/unit/test_c2_recorder.py`
+- [x] `UT-C2-7` the previously-unrecorded ego-signal port is recorded — the
+      determinism hole in recording doc §4 is closed. Same file
+- [x] `UT-C2-8` provenance tags: mocked ports `mocked`, world truth `truth`,
+      component outputs `simulated` (`R-SIM-12`). Same file
+- [x] `UT-C2-9` a resim against a recording whose port manifest differs is a
       **hard error**; a differing library hash is a **warning** — the two are
-      not the same severity and must not be merged
-- [ ] `UT-C2-10` `emits()` is honoured: a pipeline requesting a port this source
-      cannot produce fails at load naming the source and the port
-- [ ] `UT-C2-11` no module under `sources/` launches a process through a shell
-      or names an absolute path (`P-2`, `P-6`)
+      not the same severity and must not be merged. **Done, 2026-08-06 — a
+      real, previously unbuilt gap**, not stale docs: `Pipeline.load`'s own
+      `recording=` parameter cannot make the hard-error claim for a real
+      resim (bare, non-ingest-mapped topic keys nothing in the real CLI
+      wires up), and nothing produced the warning half at all. Built:
+      `core.resim._validate_measured_stages_against_recording` (the
+      hard-error half — missing or schema-mismatched measured-stage output
+      refuses to start, naming both; previously silently fed an empty
+      `measured` dict and produced neutral-looking wrong output) and
+      `core.manifest.check_library_provenance` (the warning half,
+      deliberately the unconditional sibling of `--pin-builds`'s opt-in
+      hard refusal, `UT-D7-9` — never warns on an unrecorded/unknown hash,
+      only a real, known mismatch). `tests/unit/test_c2_resim_provenance.py`
+      (6 tests). Wired into both `resim_pipeline` and `resim_pipeline_
+      merged` (the GUI "Run" path, `R-SIM-16`'s "one engine") for the
+      hard-error half, and `cli/resim.py` (default, skipped when
+      `--pin-builds` already covers the same fact more strictly) for the
+      warning half
+- [x] `UT-C2-10` `emits()` is honoured: a pipeline requesting a port this source
+      cannot produce fails at load naming the source and the port.
+      `tests/unit/test_c2_source.py`
+- [x] `UT-C2-11` no module under `sources/` launches a process through a shell
+      or names an absolute path (`P-2`, `P-6`). `tests/unit/test_c2_carla_portability.py`
 - [ ] `UT-C2-12` **per-port record policy** (`NR-SIM-42`, audit `A3`): a port
       declared `excluded` or `decimated` is honoured **and named in the
       recording's own metadata**, so `R-SIM-6`'s "everything the SUT reads was
       recorded" degrades *visibly* to "everything except these, by declaration"
-      rather than silently becoming false
-- [ ] `UT-C2-13` the recorder writes **capture and reception time** separately
+      rather than silently becoming false. **Real, unbuilt gap** — tracked
+      as its own item, next in this pass
+- [x] `UT-C2-13` the recorder writes **capture and reception time** separately
       (`CR-SIM-4`); an injected latency error model is recoverable from the
-      recording, which is the whole reason the second stamp exists
-- [ ] `ST-C2-3` `sim record`/`sim batch` **estimate and report expected size
+      recording, which is the whole reason the second stamp exists.
+      `tests/unit/test_c2_recorder.py`
+- [x] `ST-C2-3` `sim record`/`sim batch` **estimate and report expected size
       before starting** (`NR-SIM-42`) — a campaign that would fill the disk says
-      so in advance rather than at 80%
-- [ ] `UT-C2-14` **excluding an input a `simulate` stage consumes is a load
+      so in advance rather than at 80%. `tests/unit/test_c2_recorder.py`'s
+      `test_estimate_upper_bound_scales_with_ticks`/`test_revised_estimate_
+      is_none_before_the_threshold_and_a_number_after`, wired into
+      `cli/record.py`'s own printed output. **Corrects a stale docstring**
+      in that test file, which claimed this was NOT implemented and had
+      itself gone stale — the tests were added later with no one revisiting
+      the note
+- [x] `UT-C2-14` **excluding an input a `simulate` stage consumes is a load
       error at record time**, naming the stage and the port; and the *same*
       recording later loads fine for a cut that does not execute that stage,
       reported as infeasible rather than raising. Both halves, because either
-      alone is the wrong rule (`NR-SIM-42`)
-- [ ] `ST-C2-1` `sim record` on the synthetic source produces a recording that
-      `sim resim` consumes with every stage `measured` except one
-- [ ] `ST-C2-2` `sim resim` reproduces byte-identical outputs across two runs
-- [ ] `MC-2` a live run records correctly against a real world-model server
+      alone is the wrong rule (`NR-SIM-42`). `tests/unit/test_c2_source.py`
+- [x] `ST-C2-1` `sim record` on the synthetic source produces a recording that
+      `sim resim` consumes with every stage `measured` except one.
+      `tests/system/test_c2_record_resim.py`
+- [x] `ST-C2-2` `sim resim` reproduces byte-identical outputs across two runs.
+      Same file
+- [ ] `MC-2` a live run records correctly against a real world-model server.
+      **Genuinely blocked** — needs a live CARLA/world-model server, not
+      available in this environment
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-2` (a world-model client is the
-      likeliest place an absolute path creeps in), `P-6` (never launch a
-      simulator through a shell)
-- [ ] naming §3 ticked — exposure: `N-5` (a source's emitted names state origin,
+- [x] portability §3 ticked — exposure: `P-2` (a world-model client is the
+      likeliest place an absolute path creeps in — `UT-C2-11` proves it),
+      `P-6` (never launch a simulator through a shell — same test)
+- [x] naming §3 ticked — exposure: `N-5` (a source's emitted names state origin,
       not intent), `N-12` (`sources/` in a traceback must mean *the world* lied)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
+- [x] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked (this
+      pass's own re-run, 2026-08-06 — see `UT-C2-9`'s entry)
 
 **Gate**
-- [ ] `ST-C2-2` green; `MC-2` recorded with a date and a name
-- [ ] The original bridge still runs — this stage copied, it did not move, and
-      `S-E1` is the only place anything is deleted (`NR-SIM-30`)
+- [ ] `ST-C2-2` green; `MC-2` recorded with a date and a name. `ST-C2-2`
+      itself is green (above); the gate stays open on `MC-2` alone, which
+      is genuinely blocked, not a code gap
+- [x] The original bridge still runs — this stage copied, it did not move, and
+      `S-E1` is the only place anything is deleted (`NR-SIM-30`). Confirmed:
+      `modules/df/tools/carla/` still exists and is still importable
+      (`S-E1`'s own investigation, 2026-08-06, found it still live and
+      still blocking that stage's own deletions)
 
 ### S-C3 — Scenario schema v2 + expectations
 

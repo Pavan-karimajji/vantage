@@ -4,17 +4,23 @@
 # @author Pavan Karimajji
 
 """S-C2 slice 3: `sources/recorder.py` -- `UT-C2-5` (via `core/manifest.py`,
-`test_c2_manifest.py`), `UT-C2-6`, `UT-C2-7`, `UT-C2-8`, `UT-C2-13`
-(`sim_implementation_plan.md`). `UT-C2-9` (manifest-mismatch vs.
-library-hash-mismatch severity) is a resim-time check, `S-C2` slice 4's
-own tests.
+`test_c2_manifest.py`), `UT-C2-6`, `UT-C2-7`, `UT-C2-8`, `UT-C2-13`,
+`ST-C2-3` (`sim_implementation_plan.md`). `UT-C2-9` (manifest-mismatch vs.
+library-hash-mismatch severity) is a resim-time check --
+`tests/unit/test_c2_resim_provenance.py`, built 2026-08-06 (`core.resim.
+_validate_measured_stages_against_recording` + `core.manifest.
+check_library_provenance`), not this file's own concern.
 
-`ST-C2-3` (size estimate reported before a run) was listed here and is NOT
-implemented -- no test function in this file asserts it, and the plan's box is
-correctly unticked. Removed rather than left standing (AR-8): a docstring that
-claims a verifier is the same defect as a verifier that names no test, and it
-is worse here because the claim reads as coverage. Re-add the id in the same
-commit that adds the test."""
+**Correction, 2026-08-06:** this docstring previously claimed `ST-C2-3`
+was NOT implemented and removed the id "rather than left standing." That
+claim itself went stale -- `test_estimate_upper_bound_scales_with_ticks`/
+`test_revised_estimate_is_none_before_the_threshold_and_a_number_after`
+below exercise exactly this (`Recorder.estimate_upper_bound_bytes`/
+`revised_estimate_bytes`, wired into `cli/record.py`'s own printed
+output), and were added without this note being revisited -- the same
+"claims coverage, verifier names no test" defect `AR-8` warns about, just
+inverted: a verifier existed and the docstring denying it was the stale
+artifact this time."""
 
 from __future__ import annotations
 

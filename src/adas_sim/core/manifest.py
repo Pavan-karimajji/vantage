@@ -35,11 +35,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from warnings import warn
 
 import yaml
 
 from adas_sim.contracts.pipeline import Pipeline
-from adas_sim.core.errors import AuthoringError, ContractError
+from adas_sim.core.errors import AuthoringError, ContractError, ProvenanceWarning
 from adas_sim.core.ids import new_run_id
 from adas_sim.io.base import CAPTURE_TIME_MANIFEST_VERSION, ComponentBuildInfo, OverrideRecord, RunManifest
 from adas_sim.io.registry import reader_for
@@ -228,6 +229,49 @@ def verify_pinned_builds(pipeline: Pipeline, recording_path: Path) -> None:
                 where=f"stage '{stage.name}' ({recording_path})",
                 hint="rebuild to match, or point --search at the matching artifact",
             )
+
+
+def check_library_provenance(pipeline: Pipeline, recording_path: Path) -> None:
+    """`UT-C2-9`'s own warning half: "a differing library hash is a
+    **warning**" -- the default, unconditional check every resim gets,
+    unlike `verify_pinned_builds` above (`--pin-builds`'s own opt-in HARD
+    refusal). Same comparison, deliberately different severity: detection
+    is always on; escalating a mismatch into a gate is a choice the caller
+    makes, not this function's.
+
+    **Never warns on "unknown."** A recording with no recorded
+    `library_sha256` for a stage (the overwhelming majority of recordings
+    made before `UT-D7-9` started populating it for real) is silent here --
+    `verify_pinned_builds` is where "unknown" gets treated as a refusal;
+    warning on it by default would make every ordinary resim noisy for a
+    fact nobody withheld, only never recorded (`R-SIM-25`/`NR-SIM-4`: a
+    missing fact and a contradicting one are different statements).
+
+    **No file opened at all when there is nothing to check** -- a pipeline
+    with no `mode: simulate` stage (every stage `measured`/`off`, or a
+    pure-mock/test double) has no library to compare, so this returns
+    before touching `recording_path`, not after opening it and finding
+    nothing."""
+    if not any(stage.mode == "simulate" for stage in pipeline.stages):
+        return
+    reader = reader_for(recording_path)
+    try:
+        recorded_shas = {c.name: c.library_sha256 for c in reader.meta().components}
+    finally:
+        reader.close()
+    current_shas = pipeline.component_build_shas()
+
+    for stage in pipeline.stages:
+        if stage.mode != "simulate" or stage.name not in current_shas:
+            continue
+        current_sha = current_shas[stage.name]
+        recorded_sha = recorded_shas.get(stage.name, "")
+        if recorded_sha and recorded_sha != current_sha:
+            warn(ProvenanceWarning(
+                f"stage '{stage.name}': library_sha256 differs from the recording that produced it "
+                f"(recorded {recorded_sha}, resolved {current_sha}) -- results may not reproduce it exactly "
+                f"({recording_path})"
+            ))
 
 
 @dataclass(frozen=True, slots=True)

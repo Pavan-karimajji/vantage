@@ -29,10 +29,11 @@ gives for not importing `sources/recorder.py`'s inverse.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 from adas_sim.contracts.pipeline import Pipeline, _split_ref
+from adas_sim.core.errors import AuthoringError
 from adas_sim.io.base import Provenance, RunManifest, TopicInfo, group_by_log_time
 from adas_sim.io.ingest import IngestRecordingReader, discover_ingest_maps
 from adas_sim.io.registry import reader_for, writer_for
@@ -40,6 +41,46 @@ from adas_sim.io.registry import reader_for, writer_for
 
 def _topic_to_port_name(topic: str) -> str:
     return ".".join(topic.strip("/").split("/"))
+
+
+def _validate_measured_stages_against_recording(
+    pipeline: Pipeline, topics: Mapping[str, TopicInfo], port_name_of: Mapping[str, str],
+) -> None:
+    """`UT-C2-9`'s own hard-error half: a resim against a recording whose
+    port manifest differs from a `mode: measured` stage's own declared
+    outputs -- missing entirely, or a schema/`proto_type` mismatch --
+    refuses to start, naming both. `Pipeline.load`'s own `recording=`
+    parameter cannot do this for a real resim: it expects bare,
+    non-ingest-mapped topic keys (a vestige from before `S-C9`'s ingest
+    maps existed), and nothing in this codebase's real CLI ever wires it
+    up -- silently proceeding today means a measured stage with a missing
+    or mismatched output is fed an empty `measured` dict and produces
+    neutral/wrong output with no symptom (the tick loop below's own
+    `if ... in port_payloads` guard). This runs against the SAME
+    ingest-mapped topic index `resim_pipeline` already built -- no second
+    reader, no full `Session` decode just to pre-flight one resim."""
+    available = {port: topics[topic] for topic, port in port_name_of.items()}
+    for stage in pipeline.stages:
+        if stage.mode != "measured":
+            continue
+        manifest = pipeline.manifest_for(stage.name)
+        for port_spec in manifest.outputs:
+            qualified = f"{stage.name}.{port_spec.name}"
+            info = available.get(qualified)
+            if info is None:
+                raise AuthoringError(
+                    expected=f"the recording to contain stage '{stage.name}''s output '{port_spec.name}'",
+                    found="missing", where=f"stage '{stage.name}' (mode: measured)",
+                    hint="record this stage's outputs, or set mode: simulate or off",
+                )
+            if info.schema_name and port_spec.proto_type and info.schema_name != port_spec.proto_type:
+                raise AuthoringError(
+                    expected=f"'{qualified}' to carry {port_spec.proto_type!r}",
+                    found=f"the recording carries {info.schema_name!r}",
+                    where=f"stage '{stage.name}' (mode: measured)",
+                    hint="this recording was produced by a different component manifest -- "
+                         "resim against a matching recording",
+                )
 
 
 def _port_name_to_topic(name: str) -> str:
@@ -89,6 +130,7 @@ def resim_pipeline(
         # ingest map already remapped to its final port name (S-C9), and
         # the slash->dot conversion for one this framework recorded itself.
         port_name_of = {topic: _topic_to_port_name(topic) for topic in topics}
+        _validate_measured_stages_against_recording(pipeline, topics, port_name_of)
         messages = list(reader.messages())
         groups = list(group_by_log_time(messages, expected_topics=topics.keys()))
 
@@ -150,6 +192,7 @@ def resim_pipeline_merged(pipeline: Pipeline, recording_path: Path, out_path: Pa
     try:
         topics = reader.topics()
         port_name_of = {topic: _topic_to_port_name(topic) for topic in topics}
+        _validate_measured_stages_against_recording(pipeline, topics, port_name_of)
 
         # A simulate stage's own output topics take over their channel
         # entirely -- the merged file must never carry both the base

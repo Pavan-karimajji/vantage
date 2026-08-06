@@ -34,7 +34,7 @@ from pathlib import Path
 
 from adas_sim.contracts.pipeline import Pipeline
 from adas_sim.core.errors import AuthoringError
-from adas_sim.core.manifest import build_manifest, load_run_spec, verify_pinned_builds
+from adas_sim.core.manifest import build_manifest, check_library_provenance, load_run_spec, verify_pinned_builds
 from adas_sim.core.resim import resim_pipeline
 from adas_sim.io.base import Provenance, TopicInfo
 from adas_sim.io.registry import writer_for
@@ -114,6 +114,11 @@ def run(argv: list[str] | None = None) -> int:
     pipeline = Pipeline.load(args.pipeline, search=args.search)
     if args.pin_builds:
         verify_pinned_builds(pipeline, recording)
+    else:
+        # UT-C2-9's own default: a differing library hash is a WARNING,
+        # not a refusal -- --pin-builds already covers the harder claim
+        # above, so this only runs when that opt-in gate wasn't asked for.
+        check_library_provenance(pipeline, recording)
     pipeline.init_components(config)
     try:
         outputs = resim_pipeline(pipeline, recording)
