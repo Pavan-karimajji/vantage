@@ -124,6 +124,29 @@ class OverrideRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class FaultRecord:
+    """One declared `run.faults:` entry, exactly as it appears in the run
+    manifest -- `R-SIM-15`'s "declared, never smuggled" extended from
+    overrides to faults (`S-C3`'s own status note: "a fault is declared in
+    `run.faults:`, lands in the run manifest"). Mirrors `contracts.fault.
+    Fault`'s own fields 1:1; `verb` is the string value of `FaultVerb`.
+    **No topic tag exists for this, by the same finding `UT-D6-2` made for
+    overrides**: a fault mutates the STIMULUS right before a stage sees it
+    (`Pipeline._apply_stimulus_faults`), but the recorded `source.*` topic
+    is `Recorder.tick`'s own raw, pre-fault `stimulus` -- no recorded
+    topic's bytes ever reflect a fault, so `origin: overridden` on a topic
+    would state something false. This manifest field is the whole
+    "declared, never smuggled" claim; there is no second, topic-level one."""
+
+    verb: str
+    address: str
+    value: float | None = None
+    from_s: float | None = None
+    to_s: float | None = None
+    after_tick: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class RecordPolicyRecord:
     """One declared output port's resolved `record:` policy, exactly as it
     appears in the run manifest (`UT-C2-12`, `NR-SIM-42`). Written for
@@ -169,6 +192,10 @@ class RunManifest:
     #: for every non-`off` stage -- see `RecordPolicyRecord`'s own
     #: docstring for why `full` is written too, not only the exceptions.
     record_policies: tuple[RecordPolicyRecord, ...] = field(default_factory=tuple)
+    #: `S-C3`'s own "a fault is declared in run.faults:, lands in the run
+    #: manifest" -- see `FaultRecord`'s own docstring for why there is no
+    #: topic-level tag alongside it.
+    faults: tuple[FaultRecord, ...] = field(default_factory=tuple)
     seed: int = 0
     #: `OD-11` (`R-SIM-3a` §9.1): whether this run's pipeline declared
     #: `allow_mixed_projects: true` -- badges a deliberate cross-project

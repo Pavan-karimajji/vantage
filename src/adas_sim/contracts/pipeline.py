@@ -657,6 +657,16 @@ class Pipeline:
             for name, path in self.library_paths.items() if path is not None
         }
 
+    @property
+    def faults(self) -> tuple[Fault, ...]:
+        """This run's own `run.faults:` (`S-C3`, `sim_scenarios_and_
+        expectations.md` SS9.2), read-only. Public so `core.manifest.
+        build_manifest` can make `R-SIM-15`'s "declared, never smuggled"
+        claim legible for faults the same way it already does for
+        overrides (`UT-D6-2`) -- `_faults` itself stays private, this is
+        the one sanctioned read."""
+        return self._faults
+
     @classmethod
     def parse_stages(cls, path: Path) -> tuple[Stage, ...]:
         """The stage-declaration half of `load()` -- no component

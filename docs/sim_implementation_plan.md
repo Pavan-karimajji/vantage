@@ -4664,15 +4664,38 @@ review.
       matched against the stimulus map's own keys directly, and `corrupt`'s
       message class is resolved by tracing which stage wires
       `source.<port>` (`Pipeline._message_cls_for_source_port`)
-- [ ] A fault is declared in `run.faults:`, lands in the run manifest, tags its
+- [x] A fault is declared in `run.faults:`, lands in the run manifest, tags its
       topic `origin: overridden` and is badged in the HUD. **The origin enum
       stays at five** — fault-versus-override is a *record* question, answered
-      by the manifest, not a provenance grade. **Still not done**: the
-      2026-08-03 follow-up above wires a fault's *behavioural effect*
-      (pipeline/resim), not its *record* — `apply_fault` already tags its
-      result `origin="overridden"` (`R-SIM-12`), but `Pipeline`'s stimulus
-      is bytes-only and that tag is discarded before it could reach a
-      recorder's topic metadata, the run manifest, or a HUD badge
+      by the manifest, not a provenance grade. **Done, follow-up pass
+      2026-08-06 — the "tags its topic" half corrected to "and a run-level
+      HUD summary," same design finding `UT-D6-2` made for overrides**: a
+      fault mutates the STIMULUS right before a stage sees it
+      (`Pipeline._apply_stimulus_faults`), but the recorded `source.*`
+      topic is `Recorder.tick`'s own raw, pre-fault `stimulus` — no
+      recorded topic's bytes ever reflect a fault, so `origin: overridden`
+      on a topic would state something false, exactly the reasoning
+      `UT-D6-2` already worked out for overrides, extended here rather than
+      re-derived. `RunManifest.faults` (new field, `io/base.py`'s new
+      `FaultRecord`: `verb`/`address`/`value`/`from_s`/`to_s`/`after_tick`,
+      mirroring `contracts.fault.Fault` 1:1) is built by `core.manifest.
+      _fault_records`, hashed into `run_id` via `_faults_repr` (same
+      reasoning `_overrides_repr` already gives — not added to `core.ids.
+      REQUIRED_KEYS`, since `new_run_id` hashes every key it is given and
+      `build_manifest` is its only caller), and round-tripped through
+      `io/mcap.py`. `Pipeline.faults` (new public property) is the one
+      sanctioned read of the previously-private `_faults`. **The HUD half
+      is a run-level summary label in the real Qt `PipelinePanel`
+      (`render/viewer.py`), not a per-stage badge** — unlike an override,
+      a fault targets the stimulus generically, never one particular
+      stage's own row, so there is no single row to attach it to the way
+      the override badge does. `tests/unit/test_c3_fault_manifest.py`
+      (6 tests) + `tests/system/test_c3_fault_hud_widget.py` (2, real Qt,
+      offscreen) + `tests/unit/test_a4_mcap.py`'s own `UT-A4-3` round-trip
+      extended to cover `faults` too. Full suite: 825 passed / 7 skipped
+      (Windows venv, `foxglove` extra not installed here, one pre-existing
+      flake, confirmed passing standalone), `check_invariants.py` and
+      `docs/py/run_all.py` both clean
 - [x] `delay` requires `S-A4Δ`. With one clock there is nowhere to put the
       original instant, which is the clearest case of the two-clock change
       paying for something beyond itself. *2026-08-03:* `apply_fault`'s

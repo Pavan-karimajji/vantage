@@ -28,6 +28,7 @@ from adas_sim.io.base import (
     CAPTURE_TIME_MANIFEST_VERSION,
     Capabilities,
     ComponentBuildInfo,
+    FaultRecord,
     OverrideRecord,
     Provenance,
     RecordPolicyRecord,
@@ -88,6 +89,13 @@ def _manifest_to_dict(manifest: RunManifest) -> dict:
             {"port": r.port, "verb": r.verb, "decimate_n": r.decimate_n}
             for r in manifest.record_policies
         ],
+        "faults": [
+            {
+                "verb": f.verb, "address": f.address, "value": f.value,
+                "from_s": f.from_s, "to_s": f.to_s, "after_tick": f.after_tick,
+            }
+            for f in manifest.faults
+        ],
     }
 
 
@@ -115,6 +123,13 @@ def _manifest_from_dict(data: dict) -> RunManifest:
         RecordPolicyRecord(port=r["port"], verb=r["verb"], decimate_n=r.get("decimate_n", 0))
         for r in data.get("record_policies", ())
     )
+    faults = tuple(
+        FaultRecord(
+            verb=f["verb"], address=f["address"], value=f.get("value"),
+            from_s=f.get("from_s"), to_s=f.get("to_s"), after_tick=f.get("after_tick"),
+        )
+        for f in data.get("faults", ())
+    )
     return RunManifest(
         manifest_version=data.get("manifest_version", 0),
         run_id=data.get("run_id", ""),
@@ -134,6 +149,7 @@ def _manifest_from_dict(data: dict) -> RunManifest:
         components=components,
         overrides=overrides,
         record_policies=record_policies,
+        faults=faults,
     )
 
 

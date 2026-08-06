@@ -14,6 +14,7 @@ from mcap.writer import Writer as RawMcapWriter
 from adas_sim.io.base import (
     CAPTURE_TIME_MANIFEST_VERSION,
     ComponentBuildInfo,
+    FaultRecord,
     OverrideRecord,
     Provenance,
     RecordPolicyRecord,
@@ -75,7 +76,9 @@ def test_meta_blocks_round_trip(tmp_path):
     a `None` value (`hold`/`select`/`drop` carry none) -- survives the
     write/read cycle unchanged, part of this same equality check. And
     `UT-C2-12`'s: `RunManifest.record_policies`, including a `full` entry
-    (written, not omitted) alongside `excluded`/`decimate`."""
+    (written, not omitted) alongside `excluded`/`decimate`. And `S-C3`'s
+    own: `RunManifest.faults`, a `from_s`/`to_s`-windowed entry and an
+    `after_tick`-windowed one together."""
     path = tmp_path / "sample.mcap"
     manifest = RunManifest(
         manifest_version=1, run_id="20260729T000000Z-abc12345", run_kind="resim",
@@ -88,6 +91,10 @@ def test_meta_blocks_round_trip(tmp_path):
             RecordPolicyRecord(port="df.aeb.outputs", verb="full"),
             RecordPolicyRecord(port="df.bsd.outputs", verb="excluded"),
             RecordPolicyRecord(port="df.camera_front", verb="decimate", decimate_n=10),
+        ),
+        faults=(
+            FaultRecord(verb="stale", address="veh_dyn", from_s=0.0, to_s=10.0),
+            FaultRecord(verb="corrupt", address="veh_dyn.x", value=42.0, after_tick=5),
         ),
     )
     _write_sample(path, manifest=manifest, config_bundle_bytes=b"EGO_LENGTH_M: 4.5\n", messages=[("/source/veh_dyn", 0, b"\x00")])

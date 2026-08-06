@@ -562,6 +562,17 @@ class PipelinePanel(QtWidgets.QDockWidget):
         self._undo_bar.setVisible(False)
         layout.addWidget(self._undo_bar)
 
+        #: `S-C3`'s own "badged in the HUD" -- a run-level summary, not a
+        #: per-stage badge: `run.faults:` targets the STIMULUS generically,
+        #: never one particular stage (`Pipeline._apply_stimulus_faults`),
+        #: so there is no single row to attach this to the way the
+        #: override badge attaches to the stage whose input it modifies.
+        #: Hidden when `state.pipeline.faults` is empty, same lifetime
+        #: discipline the undo bar uses.
+        self._faults_label = QtWidgets.QLabel("")
+        self._faults_label.setVisible(False)
+        layout.addWidget(self._faults_label)
+
         self._run_button = QtWidgets.QPushButton("Run")
         self._run_button.setEnabled(False)  # no state yet -- see sync()
         self._run_button.clicked.connect(self.run_requested.emit)
@@ -597,6 +608,20 @@ class PipelinePanel(QtWidgets.QDockWidget):
             self._table.setItem(row, 2, QtWidgets.QTableWidgetItem(impl_text))
         self._updating = False
         self._sync_undo_bar()
+        self._sync_faults_label()
+
+    def _sync_faults_label(self) -> None:
+        """`S-C3`'s own HUD half: names every declared `run.faults:` verb
+        and address, or stays hidden when none are declared."""
+        assert self.state is not None
+        faults = self.state.pipeline.faults
+        if not faults:
+            self._faults_label.setVisible(False)
+            return
+        names = ", ".join(f"{fault.verb.value}:{fault.address}" for fault in faults)
+        plural = "fault" if len(faults) == 1 else "faults"
+        self._faults_label.setText(f"⚡ {len(faults)} {plural} declared: {names}")
+        self._faults_label.setVisible(True)
 
     def _sync_undo_bar(self) -> None:
         """`UT-D3-3`: visible exactly when the last toggle auto-closed a

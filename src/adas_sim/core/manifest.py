@@ -45,6 +45,7 @@ from adas_sim.core.ids import new_run_id
 from adas_sim.io.base import (
     CAPTURE_TIME_MANIFEST_VERSION,
     ComponentBuildInfo,
+    FaultRecord,
     OverrideRecord,
     RecordPolicyRecord,
     RunManifest,
@@ -82,6 +83,33 @@ def _override_records(pipeline: Pipeline) -> tuple[OverrideRecord, ...]:
     return tuple(
         OverrideRecord(stage=stage.name, address=key, verb=override.verb.value, value=override.value)
         for stage in pipeline.stages for key, override in sorted(stage.overrides.items())
+    )
+
+
+def _faults_repr(pipeline: Pipeline) -> str:
+    """A stable text form of every declared `run.faults:` entry -- part of
+    `new_run_id`'s hashed input set, same reasoning `_overrides_repr` gives:
+    two runs differing only in which faults were injected must never
+    collide on one run id. Not added to `core.ids.REQUIRED_KEYS` (unlike
+    `overrides_repr`) -- `new_run_id` hashes every key it is given, required
+    or not, and `build_manifest` is its only caller, so there is no second
+    call site that could forget to pass this one."""
+    parts = [
+        f"{fault.verb.value}:{fault.address}:{fault.value}:{fault.from_s}:{fault.to_s}:{fault.after_tick}"
+        for fault in pipeline.faults
+    ]
+    return "|".join(parts)
+
+
+def _fault_records(pipeline: Pipeline) -> tuple[FaultRecord, ...]:
+    """The same declared faults `_faults_repr` hashes, as the structured,
+    actually-readable form `RunManifest.faults` carries (`S-C3`)."""
+    return tuple(
+        FaultRecord(
+            verb=fault.verb.value, address=fault.address, value=fault.value,
+            from_s=fault.from_s, to_s=fault.to_s, after_tick=fault.after_tick,
+        )
+        for fault in pipeline.faults
     )
 
 
@@ -160,6 +188,7 @@ def build_manifest(
     recording_sha = _sha256_file(recording_path) if recording_path is not None and recording_path.exists() else ""
     scenario_sha = _sha256_file(scenario_path) if scenario_path is not None and scenario_path.exists() else ""
     overrides_repr = _overrides_repr(pipeline) if pipeline is not None else ""
+    faults_repr = _faults_repr(pipeline) if pipeline is not None else ""
 
     run_id = new_run_id(
         inputs={
@@ -169,6 +198,7 @@ def build_manifest(
             "component_build_shas": "|".join(f"{k}={v}" for k, v in sorted(component_build_shas.items())),
             "bundle_sha": bundle_sha,
             "overrides_repr": overrides_repr,
+            "faults_repr": faults_repr,
             "seed": str(seed),
         },
         clock=clock,
@@ -202,6 +232,7 @@ def build_manifest(
         components=components,
         overrides=_override_records(pipeline) if pipeline is not None else (),
         record_policies=tuple(_record_policy_records(pipeline)) if pipeline is not None else (),
+        faults=_fault_records(pipeline) if pipeline is not None else (),
         seed=seed,
         allow_mixed_projects=pipeline.allow_mixed_projects if pipeline is not None else False,
         process_nonce=_PROCESS_NONCE,
