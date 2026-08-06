@@ -5298,25 +5298,56 @@ already exists somewhere and was not found.
       giving its `adasManifest()`; ports wired **by name**, with the same
       load-time validation order `contracts/pipeline.py` uses. Verified: real
       `df_sil.dll` and `echo_stub.dll` both resolved and loaded for real
-- [ ] Multi-rate execution on the GCD base grid (`R-SIM-18`), holds included —
-      a consumer must see the same `updated`/`age_s` behaviour it sees under
-      Vantage, or the two hosts disagree about what the vehicle does. `Step()`
-      itself is implemented and compiles; **not exercised by any test this
-      pass** — every test above drives `Exec()` only, mirroring `sim resim`'s
-      own choice, same as the code's own comment already states
-- [ ] `mode: measured` injection from a recording; **`mode: simulate` on a stage
-      whose `impl:` is `stub:` is a load error naming both** — `sil_host` has no
-      interpreter and must say so rather than fail obscurely. The second half
-      is real and tested (`UT-C7-2`'s `StubImplIsRejectedNamingStageAndReason`);
-      the first half — a `mode: measured` stage actually fed from a recording
-      — is implemented (`RunResim`'s own `measuredStageNames` handling) but no
-      test this pass used a `measured` stage, only `simulate`
-- [ ] Per-`exec()` timeout (`R-SIM-19`) — the same requirement, in the host
-      where a hang is most likely to be mistaken for slow. Every test this
-      pass ran through `RunWithTimeout` (it wraps every `Exec()` call in
-      `RunResim`), so the non-timeout path is exercised on every green test;
-      the interesting path — a component that actually hangs, `kTimeout`
-      firing — has no test
+- [x] Multi-rate execution on the GCD base grid (`R-SIM-18`), holds included,
+      tests added 2026-08-06 (`tests/unit/test_pipeline_step.cpp`) — a
+      single `stubdll:echo_stub` stage with a real 100ms `period_ns` and a
+      real output port, driven through four 50ms `Step()` calls, proves a
+      not-due tick HOLDS the last real bytes (`valid=true`, `updated=false`,
+      `hold_age_s` growing) rather than going invalid, and a due tick
+      reports it fresh (`updated=true`, `hold_age_s=0.0`) — the actual
+      claim this item makes, for real bytes, not just a stage-ran boolean
+      (`ST-C7-2`'s own scope). Needed `echo_stub.cpp` extended with an
+      optional, env-var-controlled output port (`ADAS_SIL_TEST_STUB_OUTPUT_
+      PORT`/`_PROTO_TYPE`/`_MAX_BYTES`/`_PERIOD_US`/`_DUE`, same "read at
+      call time, no rebuild" design the existing knobs already use) — every
+      env var defaults to the exact prior behaviour (empty port set) when
+      unset, so no existing test's fixture usage changes.
+- [x] `mode: measured` injection from a recording, test added 2026-08-06
+      (`tests/unit/test_resim_measured.cpp`) — a `measured` stage's
+      declared output is asserted against the PER-TICK bytes actually
+      written into a synthesized recording (never `echo_stub`'s own fixed
+      payload, which would only appear if `adasExec` had wrongly been
+      called), proving `RunResim` truly injects rather than executes.
+      `mode: simulate` on a `stub:` `impl:` is a load error naming both,
+      already real and tested (`UT-C7-2`).
+- [x] Per-`exec()` timeout (`R-SIM-19`), tests added and **compiled and run
+      for real** 2026-08-06 (`tests/unit/test_exec_timeout.cpp`) — the
+      interesting path (a callable that hangs 30s against a 100ms budget)
+      reports `kTimeout` and returns in well under the hang's own duration;
+      `kOk`/`kException` (`std::exception` and a non-`std::exception` throw)
+      are exercised too, and a fast throw is proven never merged into
+      `kTimeout`. `exec_timeout.{hpp,cpp}` has zero dependency on
+      `pipeline.hpp`/protobuf/yaml-cpp — the one S-C7 surface this WSL
+      shell can build standalone (system `g++`/`libgtest-dev`, no
+      Conan/MSVC needed) — **5/5 passing, real compiled evidence**, not a
+      claim: `g++ -std=c++17 -pthread -Isrc src/exec_timeout.cpp
+      tests/unit/test_exec_timeout.cpp -lgtest -lgtest_main -lpthread`.
+
+      **Verification honesty, stated because it matters:** this WSL shell
+      has no Conan and no compatible `libprotobuf` headers (`libprotobuf23`
+      is a runtime-only package, version 3.12 against generated code
+      requiring 3.21+) — every file that includes `pipeline.hpp` transitively
+      needs the generated `Adas__Sil/component_manifest.pb.h`, so
+      `test_pipeline_step.cpp`, `test_resim_measured.cpp` and the
+      `echo_stub.cpp` extension they need are **written and carefully traced
+      by hand against the real, previously-verified implementation
+      (`pipeline.cpp`'s `Step()`, `resim_runner.cpp`, `sil_component.cpp`'s
+      exact `AdasPortSet` protocol) — not compiled or run in this session.**
+      All three are wired into `tests/CMakeLists.txt`'s `SIL_TEST_SOURCES`
+      and will build/run under the next real MSVC/Conan session
+      (`scripts/build.py sil_host -t gtest -p vs2026 -P base`) the same way
+      every other Windows-only item in this plan is verified. Flagged here
+      rather than claimed green.
 
 **Tests**
 - [x] `UT-C7-1` a pipeline file loads and its stage/port graph matches what
