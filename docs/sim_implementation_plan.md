@@ -8004,13 +8004,20 @@ score the other gates cannot themselves be scored**
       plus the four `DC-` ids (`DC-1`/`DC-4`/`DC-5`/`DC-6`, same finding, same
       fix) in a new §2 subsection — eleven total, none ticked, no gate prose
       rewritten
-- [ ] **Then extend `check_requirement_coverage.py` to score `MC-`/`GT-`/`DC-`**
+- [x] **Then extend `check_requirement_coverage.py` to score `MC-`/`GT-`/`DC-`**
       (`AR-36`, blocked on the item above). Today it scores `UT-`/`ST-` only, so
       **21 of 77 rows rest partly on verifiers it cannot see** and `FR-SIM-47`
       (`P0`) reads `proven 3/3` while `MC-5` has never been run. A fourth
       column, *"unscored verifiers and their state"*, is the whole change.
       Shipping it before the checkboxes exist would print `[?]` eleven times and
-      teach everyone to ignore it. See `sim_requirements.md` §0a's caveat table
+      teach everyone to ignore it. See `sim_requirements.md` §0a's caveat table.
+      **Done 2026-08-06**: `OTHER_ID_RE`/`OTHER_DEFN_RE` extract cited
+      `MC-`/`GT-`/`DC-` ids and their checkbox state (`x`/blank/`?` for
+      no-checkbox-anywhere), reported in a new "unscored verifiers" column on
+      the `P0` and `Partial` tables — **never folded into proven/partial/
+      unproven**, which stay `UT-`/`ST-` only. `FR-SIM-47` now shows
+      `proven 3/3` next to `GT-8: , MC-5: ` in the same row, so the bare
+      `proven 3/3` a reader used to see alone is gone
 - [x] **Work the undiscoverable-verifier baseline down from 19** (`AR-50`).
       `docs/py/check_verifier_discoverability.py` (new, in `run_all.py`) ratchets
       it: a run finding more than `BASELINE` fails. **Do not untick a box to fix

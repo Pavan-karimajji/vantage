@@ -15,37 +15,38 @@ P2        0       0        0         0           0       0
 
 P0 requirements — the tool is not usable without these
 ------------------------------------------------------
-id         state       done  requirement                                   outstanding verifiers
----------  ----------  ----  --------------------------------------------  ---------------------
-CR-SIM-1   proven      1/1   The framework names no function               -
-FR-SIM-47  proven      3/3   The UI and the concept must be lean, and not  -
-FR-SIM-66  proven      3/3   Vantage must adapt to recordings it did not   -
-FR-SIM-46  partial     2/3   One tool, not a developer tool and a project  ST-D6-1
-NR-SIM-21  proven      2/2   Mass-scale runs must be expressible           -
-FR-SIM-70  partial     2/3   The outcome is a **player application**, not  ST-D5-1
-FR-SIM-64  proven      2/2   A component's plug-ins must be *delivered*,   -
-CR-SIM-2   partial     1/2   A plug-in never spells a port address; it bi  UT-C1c-22
-NR-SIM-12  unproven    0/1   A change to a shared contract must be proven  ST-E3-2
-NR-SIM-22  partial     3/4   A component that crashes or hangs must not t  ST-D7-6
-CR-SIM-23  proven      2/2   A pipeline file must carry a schema version   -
-NR-SIM-40  partial     1/2   Determinism must be measured across the axes  ST-C6-4
-NR-SIM-41  proven      1/1   Per-tick cost and campaign throughput are bu  -
-NR-SIM-42  proven      2/2   Recording volume is bounded by declared per-  -
-FR-SIM-67  partial     2/3   Every rendered value is traceable to the byt  ST-D6-3
-CR-SIM-4   proven      2/2   A message carries capture time and reception  -
-NR-SIM-45  no test id  0/0   The tool must be survivable by someone who d  -
+unscored verifiers: MC-/GT-/DC- ids, `x`=ticked `?`=no checkbox anywhere yet
+id         state       done  requirement                                   outstanding verifiers  unscored verifiers
+---------  ----------  ----  --------------------------------------------  ---------------------  ------------------------
+CR-SIM-1   proven      1/1   The framework names no function               -                      GT-1:x
+FR-SIM-47  proven      3/3   The UI and the concept must be lean, and not  -                      GT-8: , MC-5:
+FR-SIM-66  proven      3/3   Vantage must adapt to recordings it did not   -                      -
+FR-SIM-46  partial     2/3   One tool, not a developer tool and a project  ST-D6-1                GT-8: , GT-9:
+NR-SIM-21  proven      2/2   Mass-scale runs must be expressible           -                      -
+FR-SIM-70  partial     2/3   The outcome is a **player application**, not  ST-D5-1                -
+FR-SIM-64  proven      2/2   A component's plug-ins must be *delivered*,   -                      GT-12:
+CR-SIM-2   partial     1/2   A plug-in never spells a port address; it bi  UT-C1c-22              GT-11:
+NR-SIM-12  unproven    0/1   A change to a shared contract must be proven  ST-E3-2                GT-10: , GT-12: , GT-4:x
+NR-SIM-22  partial     3/4   A component that crashes or hangs must not t  ST-D7-6                -
+CR-SIM-23  proven      2/2   A pipeline file must carry a schema version   -                      -
+NR-SIM-40  partial     1/2   Determinism must be measured across the axes  ST-C6-4                -
+NR-SIM-41  proven      1/1   Per-tick cost and campaign throughput are bu  -                      GT-13:
+NR-SIM-42  proven      2/2   Recording volume is bounded by declared per-  -                      -
+FR-SIM-67  partial     2/3   Every rendered value is traceable to the byt  ST-D6-3                -
+CR-SIM-4   proven      2/2   A message carries capture time and reception  -                      -
+NR-SIM-45  no test id  0/0   The tool must be survivable by someone who d  -                      GT-14:
 
 Partial — some verifiers proven, some not
 -----------------------------------------
-id         pri  done  requirement                                   outstanding verifiers
----------  ---  ----  --------------------------------------------  ---------------------
-FR-SIM-3   P1   1/2   Scale to perception                           ST-D4-1
-FR-SIM-15  P1   1/2   A component ships a default workspace         UT-B3-11
-FR-SIM-46  P0   2/3   One tool, not a developer tool and a project  ST-D6-1
-FR-SIM-70  P0   2/3   The outcome is a **player application**, not  ST-D5-1
-CR-SIM-2   P0   1/2   A plug-in never spells a port address; it bi  UT-C1c-22
-NR-SIM-22  P0   3/4   A component that crashes or hangs must not t  ST-D7-6
-NR-SIM-40  P0   1/2   Determinism must be measured across the axes  ST-C6-4
-FR-SIM-67  P0   2/3   Every rendered value is traceable to the byt  ST-D6-3
+id         pri  done  requirement                                   outstanding verifiers  unscored verifiers
+---------  ---  ----  --------------------------------------------  ---------------------  ------------------
+FR-SIM-3   P1   1/2   Scale to perception                           ST-D4-1                -
+FR-SIM-15  P1   1/2   A component ships a default workspace         UT-B3-11               -
+FR-SIM-46  P0   2/3   One tool, not a developer tool and a project  ST-D6-1                GT-8: , GT-9:
+FR-SIM-70  P0   2/3   The outcome is a **player application**, not  ST-D5-1                -
+CR-SIM-2   P0   1/2   A plug-in never spells a port address; it bi  UT-C1c-22              GT-11:
+NR-SIM-22  P0   3/4   A component that crashes or hangs must not t  ST-D7-6                -
+NR-SIM-40  P0   1/2   Determinism must be measured across the axes  ST-C6-4                -
+FR-SIM-67  P0   2/3   Every rendered value is traceable to the byt  ST-D6-3                -
 
 RESULT  ok — every cited verifier resolves to a unit of work (51 proven, 8 partial, 12 unproven, 8 verified by other means)

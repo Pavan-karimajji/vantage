@@ -25,6 +25,20 @@ ticked in the plan, bucketed as ``proven`` / ``partial`` / ``unproven`` /
 *"the tool is not usable without it"* colliding with *"nothing demonstrates
 it"*.
 
+**A fourth column, ``unscored verifiers`` (``AR-36``, 2026-08-06).** A row can
+cite ``MC-``/``GT-``/``DC-`` ids too, and until ``AR-35`` gave them a checkbox
+(same backtick-quoted shape as ``UT-``/``ST-``) this script could not see them
+at all — worst case, ``FR-SIM-47`` read ``proven 3/3`` while ``MC-5``, the
+verifier its own text names *first*, had never been run. These ids are
+**reported, never folded into proven/partial/unproven**: they measure a
+milestone or run continuously rather than pass/fail per requirement, so
+scoring them the same way would silently change what those buckets mean for
+every row that already has one. ``x`` = ticked, blank = defined and not
+ticked (this is what ``FR-SIM-47``'s ``MC-5``/``GT-8`` read today), ``?`` = no
+checkbox anywhere yet — the state every ``MC-``/``GT-``/``DC-`` id was in
+before ``AR-35``, and still the state for any of them not among the eleven it
+gave a checkbox.
+
 **This check does not fail on low coverage.** Coverage is a status report, not
 an invariant — most rows are legitimately unproven while their phase is still
 ahead. It fails only on things that are always wrong:
@@ -57,9 +71,13 @@ from _common import DOCS_DIR, Report
 REQ = DOCS_DIR / "sim_requirements.md"
 PLAN = DOCS_DIR / "sim_implementation_plan.md"
 
-#: A code-test id. Gates (``GT-``), manual checks (``MC-``) and document
-#: invariants (``DC-``) are legitimate verifiers but have no checkbox in the
-#: plan to derive a state from, so they are counted as cited-but-not-scored.
+#: A code-test id, scored into proven/partial/unproven. Gates (``GT-``),
+#: manual checks (``MC-``) and document invariants (``DC-``) are legitimate
+#: verifiers too, but stay a separate, *unscored* column (below) rather than
+#: joining this bucket — `AR-34`'s register caveat explains why: they measure
+#: a milestone or run continuously, not a per-requirement pass/fail, so
+#: folding them into proven/partial would silently change what those words
+#: mean for every existing row.
 TEST_ID_RE = re.compile(r"\b(?:UT|ST)-[A-E]\d+[a-z]?-\d+\b")
 REQ_HEAD_RE = re.compile(r"^### ((?:FR|NR|CR)-SIM-\d+[a-z]?) +(?:--|—) *(.*)$", re.M)
 #: The line that *defines* a test: a checkbox whose first token is the id.
@@ -71,6 +89,12 @@ REQ_HEAD_RE = re.compile(r"^### ((?:FR|NR|CR)-SIM-\d+[a-z]?) +(?:--|—) *(.*)$"
 #: not-ticked, same as a blank box.
 DEFN_RE = re.compile(
     r"^\s*(?:> )?- \[([ x~])\]\s*`((?:UT|ST)-[A-E]\d+[a-z]?-\d+)`", re.M)
+#: `MC-`/`GT-`/`DC-` ids cited in a `Verified by` field, and the checkbox that
+#: defines each one's state -- same backtick-quoted shape as `DEFN_RE`, added
+#: for exactly this by `AR-35` (2026-08-06). Unscored: reported alongside the
+#: proven/partial/unproven bucket, never folded into it (`AR-36`).
+OTHER_ID_RE = re.compile(r"\b(?:MC|GT|DC)-\d+\b")
+OTHER_DEFN_RE = re.compile(r"^\s*(?:> )?- \[([ x~])\]\s*`((?:MC|GT|DC)-\d+)`", re.M)
 FIELD_RE = "\\*\\*{}\\.?\\*\\*\\s*(.*?)(?=\\*\\*[A-Z][a-z]|\\Z)"
 
 
@@ -88,6 +112,13 @@ def main() -> int:
     ticked: dict[str, bool] = {}
     for state, tid in DEFN_RE.findall(plan):
         ticked[tid] = ticked.get(tid, False) or (state == "x")
+
+    # Same, for the unscored MC-/GT-/DC- verifiers (AR-36). An id absent from
+    # this dict has no checkbox anywhere yet -- reported as `?`, not `False`,
+    # so "never defined" stays visibly different from "defined and unticked".
+    other_ticked: dict[str, bool] = {}
+    for state, oid in OTHER_DEFN_RE.findall(plan):
+        other_ticked[oid] = other_ticked.get(oid, False) or (state == "x")
 
     heads = list(REQ_HEAD_RE.finditer(reg))
     rep = Report("check_requirement_coverage")
@@ -117,6 +148,13 @@ def main() -> int:
                     f"{rid}: cites {tid}, which the plan never defines as a checkbox")
         done = [t for t in ids if ticked.get(t)]
 
+        # Unscored (AR-36): reported, never counted into proven/partial/
+        # unproven above -- `?` means no checkbox exists anywhere for it yet.
+        other_ids = sorted(set(OTHER_ID_RE.findall(verified)))
+        other_cell = ", ".join(
+            f"{o}:{'x' if other_ticked.get(o) else ('?' if o not in other_ticked else ' ')}"
+            for o in other_ids) or "-"
+
         if parked:
             state = "parked"
         elif not ids:
@@ -128,7 +166,7 @@ def main() -> int:
         else:
             state = "partial"
         rows.append((level, rid, title, state, len(done), len(ids),
-                     [t for t in ids if not ticked.get(t)]))
+                     [t for t in ids if not ticked.get(t)], other_cell))
 
     by_state = Counter(r[3] for r in rows)
     rep.heading("Summary")
@@ -145,16 +183,17 @@ def main() -> int:
     )
 
     rep.heading("P0 requirements — the tool is not usable without these")
+    rep.line("unscored verifiers: MC-/GT-/DC- ids, `x`=ticked `?`=no checkbox anywhere yet")
     rep.table(
-        ["id", "state", "done", "requirement", "outstanding verifiers"],
-        [[r[1], r[3], f"{r[4]}/{r[5]}", r[2][:44], ", ".join(r[6]) or "-"]
+        ["id", "state", "done", "requirement", "outstanding verifiers", "unscored verifiers"],
+        [[r[1], r[3], f"{r[4]}/{r[5]}", r[2][:44], ", ".join(r[6]) or "-", r[7]]
          for r in rows if r[0] == "P0"],
     )
 
     rep.heading("Partial — some verifiers proven, some not")
     rep.table(
-        ["id", "pri", "done", "requirement", "outstanding verifiers"],
-        [[r[1], r[0], f"{r[4]}/{r[5]}", r[2][:44], ", ".join(r[6])]
+        ["id", "pri", "done", "requirement", "outstanding verifiers", "unscored verifiers"],
+        [[r[1], r[0], f"{r[4]}/{r[5]}", r[2][:44], ", ".join(r[6]), r[7]]
          for r in rows if r[3] == "partial"],
     )
 
