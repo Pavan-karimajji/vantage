@@ -59,6 +59,9 @@ class VantageWindow(QtWidgets.QMainWindow):
     def __init__(
         self, recording: Path | None = None, *, project: str = "base",
         workspace_path: Path | None = None,
+        preset: str | None = None,
+        at_s: float | None = None,
+        scenario_path: Path | None = None,
         pipeline_path: Path | None = None,
         pipeline_search: Sequence[Path] = (),
         pipeline_config: Path | None = None,
@@ -94,7 +97,8 @@ class VantageWindow(QtWidgets.QMainWindow):
 
         if recording is not None:
             self.open_recording(
-                recording, project=project, workspace_path=workspace_path, pipeline_path=pipeline_path,
+                recording, project=project, workspace_path=workspace_path, preset=preset, at_s=at_s,
+                scenario_path=scenario_path, pipeline_path=pipeline_path,
             )
         else:
             self._stack.setCurrentWidget(self._start_page)
@@ -121,8 +125,8 @@ class VantageWindow(QtWidgets.QMainWindow):
 
     def open_recording(
         self, recording: Path, *, project: str | None = None,
-        workspace_path: Path | None = None, pipeline_path: Path | None = None,
-        at_s: float | None = None,
+        workspace_path: Path | None = None, preset: str | None = None, at_s: float | None = None,
+        scenario_path: Path | None = None, pipeline_path: Path | None = None,
     ) -> None:
         """Screen 1 -> Screen 2 (`sim_player.md` §6): constructs `MainWindow`
         for real (the one real engine load in this shell's life for this
@@ -135,9 +139,8 @@ class VantageWindow(QtWidgets.QMainWindow):
             self.bench.close()
         self.bench = MainWindow(
             recording, project=project if project is not None else self._default_project,
-            workspace_path=workspace_path, pipeline_path=pipeline_path,
-            pipeline_search=self._pipeline_search, pipeline_config=self._pipeline_config,
-            initial_at_s=at_s,
+            workspace_path=workspace_path, preset=preset, initial_at_s=at_s, scenario_path=scenario_path,
+            pipeline_path=pipeline_path, pipeline_search=self._pipeline_search, pipeline_config=self._pipeline_config,
         )
         self._stack.insertWidget(0, self.bench)
         add_recent_file(recording)

@@ -84,8 +84,11 @@ def main() -> int:
         from adas_sim.app.version import format_version_text
         print(format_version_text())
         return 0
-    if args.recording is None:
-        parser.error("the following arguments are required: recording")
+    # `recording` is genuinely optional (S-D8): with none given, Vantage
+    # opens onto its own start page (recent files, Open Recording…, Probe
+    # a Library…) instead of refusing to launch -- "no empty-state
+    # configuration... it opens onto either a recording or a start page",
+    # sim_player.md §2's own ban on requiring a file before anything shows.
 
     plugin_roots = list(args.plugin_root)
     env_path = os.environ.get("ADAS_SIM_PLUGIN_PATH", "")

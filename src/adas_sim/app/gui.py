@@ -4,10 +4,17 @@
 # @author Pavan Karimajji
 
 """Launches Vantage (`sim view`) -- orchestration only (`GT-9`): construct
-`QApplication`, construct `MainWindow`, run the event loop. Every decision
-`MainWindow` makes lives in `render/viewer.py`; this module exists so
-`cli/view.py` stays argument-parsing-only too (`app/` is the GUI, `cli/`
-only ever calls into it, `sim_api_reference.md` §10's own framing)."""
+`QApplication`, construct `VantageWindow` (`S-D8`'s own shell -- the
+workspace toggle, start page and Campaign, hosting `render/viewer.py`'s
+`MainWindow` as Bench's content), run the event loop. `cli/view.py`/
+`scripts/vantage.py` stay argument-parsing-only (`app/` is the GUI, `cli/`
+only ever calls into it, `sim_api_reference.md` §10's own framing).
+
+`recording=None` (`sim view` with no positional argument, or `vantage`
+with none) opens onto the start page instead of raising -- `cli/view.py`'s
+own parser still requires one today (`session` has no default), so this
+path is reachable from `scripts/vantage.py`'s own optional `recording`
+argument already, and from any future caller that wants Screen 1 first."""
 
 from __future__ import annotations
 
@@ -16,11 +23,12 @@ from pathlib import Path
 
 from PySide6 import QtWidgets
 
-from adas_sim.render.viewer import MainWindow, set_high_dpi_policy
+from adas_sim.app.shell.window import VantageWindow
+from adas_sim.render.viewer import set_high_dpi_policy
 
 
 def launch(
-    recording: Path, *, project: str = "base",
+    recording: Path | None = None, *, project: str = "base",
     workspace_path: Path | None = None,
     preset: str | None = None,
     at_s: float | None = None,
@@ -31,11 +39,10 @@ def launch(
 ) -> int:
     set_high_dpi_policy()
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
-    window = MainWindow(
+    window = VantageWindow(
         recording, project=project, workspace_path=workspace_path,
-        preset=preset, initial_at_s=at_s, scenario_path=scenario_path,
+        preset=preset, at_s=at_s, scenario_path=scenario_path,
         pipeline_path=pipeline_path, pipeline_search=pipeline_search, pipeline_config=pipeline_config,
     )
-    window.setWindowTitle("Vantage")  # the brand is app/'s to attach (UT-D8-9)
     window.show()
     return app.exec()

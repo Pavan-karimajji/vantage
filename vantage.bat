@@ -21,11 +21,11 @@ if not defined PYCMD (
 )
 
 if "%~1"=="" (
-  echo Usage: vantage.bat ^<recording.mcap^> [--plugin-root ^<component checkout^>] [--project NAME] [--preset NAME] [--at SECONDS]
+  echo No recording given -- opening Vantage's own start page ^(recent files, Open Recording..., Probe a Library...^).
+  echo Usage: vantage.bat [recording.mcap] [--plugin-root ^<component checkout^>] [--project NAME] [--preset NAME] [--at SECONDS]
   echo                    [--pipeline ^<pipeline.yaml^> --search ^<dll dir^> --config ^<config path^>]
   echo   e.g. vantage.bat C:\path\to\run.mcap --plugin-root ..\df
   echo   e.g. vantage.bat C:\path\to\run.mcap --pipeline my_pipeline.yaml --search C:\path\to\dlls
-  exit /b 1
 )
 
 "%PYCMD%" "%~dp0scripts\vantage.py" %*
