@@ -5442,9 +5442,30 @@ reports which one won.
       degrade path** — "renders with the layers it can and says so in the
       HUD" needs a viewer surface that does not exist yet; the write+resolve
       halves are real, the on-screen message is not
-- [ ] `sim explain` and `sim doctor` both report the plug-in path — **not
-      implemented this pass**, same honest deferral `S-C5` made for its own
-      HUD badge
+- [x] `sim explain` and `sim doctor` both report the plug-in path, landed
+      2026-08-06. `sim doctor --plugin-root`: `core/diagnostics.py`'s new
+      `_plugin_diagnoses` resolves each library-diagnosed stage's own
+      `PluginBundle` (explicit → library `sim/` → checkout — no `embedded`
+      tier, `sim doctor` diagnoses a library/pipeline, not a loaded
+      `Session`, so there is no recording to embed one in), reported under
+      `report["plugins"]`; a component with no `sim/` plug-ins is
+      `found: False`, never a problem. `sim explain <layer>`:
+      `core/explain.py`'s `kind="layer"` branch now reports
+      `plugin_component`/`plugin_path` when the layer's module name is
+      `_adas_plugin.<component>.<dotted>` (`PluginBundle.import_modules`'s
+      own naming) — `plugin_path` is that module's own real `__file__`
+      (already resolved by `importlib.util.spec_from_file_location` at
+      import time, no new plumbing needed); a first-party layer (module not
+      under `_adas_plugin`) reports neither field, never a guess
+      (`R-SIM-25`, `NR-SIM-4`).
+      Tests: `test_c8_plugins.py::test_sim_explain_reports_the_owning_component_and_real_file_path_for_a_plugin_layer`,
+      `::test_sim_explain_reports_no_plugin_fields_for_a_first_party_layer`;
+      `test_d6_doctor.py::test_plugin_diagnoses_reports_a_resolved_library_tier_bundle`,
+      `::test_plugin_diagnoses_reports_found_false_for_a_component_with_no_sim_plugins`,
+      `::test_plugin_diagnoses_skips_a_stage_whose_library_never_resolved`,
+      `::test_plugin_diagnoses_explicit_plugin_root_wins_over_the_library_tier`
+      (all real, compiled, and passing — no DLL needed, same split
+      `test_c5_overrides.py` already used for `resolve_swept_config`).
 
 *Scope added 2026-07-31 (`NR-SIM-44`). Read arch §5.7a.*
 
@@ -5501,10 +5522,11 @@ reports which one won.
 - [~] `GT-12` — mechanism green; the GUI-level form is deferred, same as
       noted in the stage's own Tests section
 
-**Remaining, explicitly deferred, not this session's scope:** `sim explain`/
-`sim doctor` reporting the plug-in path; the HUD's missing-plug-in/HUD-badge
-surfaces; the full `vantage <dir>` GUI-render proof of `GT-12`/`ST-C8-1/2`.
-None of these block `S-C6`, which needs recordings and scenarios, not the
+**Remaining, explicitly deferred, not this session's scope:** the HUD's
+missing-plug-in/HUD-badge surfaces (`sim explain`/`sim doctor` reporting the
+plug-in path landed 2026-08-06, above); the full `vantage <dir>` GUI-render
+proof of `GT-12`/`ST-C8-1/2`. Neither blocks `S-C6`, which needs recordings
+and scenarios, not the
 viewer.
 
 ### S-C9 — Recording ingest: what a file provides, and which cuts it supports (`R-SIM-23`, closes `D14`)

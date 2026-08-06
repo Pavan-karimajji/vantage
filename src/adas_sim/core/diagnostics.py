@@ -43,6 +43,12 @@ the S-A1 report plus the (input-independent) codec table:
   `model.project.extract_embedded_bundle` (`UT-C5-9`) when `embedded` is
   forced. A forced tier that cannot resolve is reported as a problem
   naming the tier, never silently ignored.
+- `--pipeline`, plus optional `--plugin-root` (`S-C8`): each resolved
+  stage's own plug-in bundle (`model.plugins.PluginBundle.resolve`,
+  explicit -> library `sim/` -> checkout -- no `embedded` tier here,
+  `_plugin_diagnoses`'s own docstring on why) -- component, api, sha256,
+  origin, root. A component with no `sim/` plug-ins is reported
+  (`found: False`), never treated as a problem.
 
 `"problems"` collects every finding that would break a real run --
 `UT-D6-8`'s own three: a broken `impl:` stem, a bundle disagreement, and an
@@ -71,6 +77,7 @@ from adas_sim.io.registry import (
     reader_for,
     registered_extensions,
 )
+from adas_sim.model.plugins import PluginBundle
 from adas_sim.model.project import ProjectModel, extract_embedded_bundle
 
 ConfigSource = Literal["embedded", "library", "checkout"]
@@ -152,6 +159,41 @@ def _bundle_diagnoses(
     return results
 
 
+def _plugin_diagnoses(
+    library_diagnoses: Sequence[dict[str, object]], *, plugin_root: Path | None = None,
+) -> list[dict[str, object]]:
+    """S-C8's own remaining item: `sim doctor` reports each resolved
+    stage's plug-in bundle -- **explicit -> library `sim/` -> checkout**
+    (`PluginBundle.resolve`, the same tiers `_bundle_diagnoses` above
+    already reports for the CONFIG bundle, R-SIM-20's "the two are the
+    same mechanism applied to configuration and to plug-ins"). No
+    `embedded` tier here (unlike the config bundle): `sim doctor` diagnoses
+    a LIBRARY/pipeline, not a loaded `Session`, so there is no recording in
+    play to embed a plug-in bundle in -- `embedded` stays `ProjectModel`'s
+    own concern. A component with no `sim/` plug-ins at any tier is a
+    legitimate state (`PluginBundle.resolve`'s own docstring), reported as
+    `found: False`, never added to `problems`."""
+    results: list[dict[str, object]] = []
+    for entry in library_diagnoses:
+        if not entry["ok"]:
+            continue  # nothing to load -- the library finding above already reports the real problem
+        lib_path = Path(str(entry["resolved"]))
+        library_plugin_dir = lib_path.parent / "sim"
+        bundle = PluginBundle.resolve(explicit=plugin_root, library_dir=library_plugin_dir)
+        if bundle is None:
+            results.append({
+                "stage": entry["stage"], "found": False,
+                "detail": f"no plugin.yaml at {plugin_root or library_plugin_dir} -- "
+                          "this component contributes no sim/ plug-ins",
+            })
+            continue
+        results.append({
+            "stage": entry["stage"], "found": True, "component": bundle.component,
+            "api": bundle.api, "sha256": bundle.sha256, "origin": bundle.origin, "root": str(bundle.root),
+        })
+    return results
+
+
 def _codec_diagnoses() -> list[dict[str, object]]:
     return [{"extension": ext, **(codec_info(ext) or {})} for ext in registered_extensions()]
 
@@ -188,6 +230,7 @@ def doctor_report(
     config_path: Path | None = None,
     project: str = "base",
     config_source: ConfigSource | None = None,
+    plugin_root: Path | None = None,
 ) -> dict[str, object]:
     """Gather `sim doctor`'s facts (DG-3). With no arguments, exactly the
     S-A1 slice (interpreter, install mode, platform, console encoding, line
@@ -256,6 +299,8 @@ def doctor_report(
                         f"viewer bundle {entry.get('viewer_bundle_sha256')} (origin={entry.get('viewer_bundle_origin')})"
                     )
                     problems.append(f"stage '{entry['stage']}': config bundle mismatch -- {detail}")
+
+            report["plugins"] = _plugin_diagnoses(libraries, plugin_root=plugin_root)
 
     if recording_path is not None:
         recording = _recording_diagnosis(recording_path, pipeline)

@@ -23,6 +23,7 @@ comment for why that one branch lives there instead of here.
 from __future__ import annotations
 
 import difflib
+import sys
 
 from adas_sim.core.session import Session
 from adas_sim.io.registry import codec_info, registered_extensions
@@ -107,12 +108,29 @@ def explain(name: str, session: Session) -> dict[str, object]:
     providers = registered_providers()
     if name in providers:
         entry = providers[name]
-        return {
+        result: dict[str, object] = {
             "kind": "layer",
             "name": name,
             "module": entry.module,
             "qualname": entry.qualname,
         }
+        # S-C8's own remaining item: report the plug-in PATH a layer's
+        # module actually loaded from. `PluginBundle.import_modules()`
+        # names every plug-in module `_adas_plugin.<component>.<dotted>`
+        # (its own docstring on why, R-SIM-1's collision-free-import
+        # discipline) -- that module is already in sys.modules by the time
+        # it could register a provider at all, and importlib set its real
+        # resolved __file__ at import time (spec_from_file_location).
+        # A layer registered by the framework's own first-party code
+        # (module not under _adas_plugin, e.g. a test fixture) has no
+        # plug-in bundle to report -- both fields stay absent rather than
+        # guessed (R-SIM-25, NR-SIM-4).
+        module_parts = entry.module.split(".")
+        if len(module_parts) >= 2 and module_parts[0] == "_adas_plugin":
+            result["plugin_component"] = module_parts[1]
+            loaded_module = sys.modules.get(entry.module)
+            result["plugin_path"] = getattr(loaded_module, "__file__", None) or "unknown"
+        return result
 
     ext = name if name.startswith(".") else f".{name}"
     info = codec_info(ext)

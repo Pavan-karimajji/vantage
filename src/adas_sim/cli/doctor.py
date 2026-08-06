@@ -12,7 +12,11 @@ config-bundle agreement, codec capabilities and recording-cut feasibility
 (DG-3, S-D6/`UT-D6-8`). `--config-source` forces the bundle-agreement check
 onto exactly one resolution tier instead of the normal priority order
 (`UT-C5-8`) -- `embedded` needs `--recording` to have something to force
-against. Non-zero exit on anything that would break a real run."""
+against. `--plugin-root` (`S-C8`) reports each resolved stage's own
+plug-in bundle -- explicit -> library `sim/` -> checkout, same tiers the
+config bundle uses minus `embedded` (`core.diagnostics._plugin_diagnoses`'s
+own docstring on why). Non-zero exit on anything that would break a real
+run."""
 
 from __future__ import annotations
 
@@ -31,6 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--recording", type=Path, default=None, help="a recording to diagnose (codec readability, feasible cuts)")
     parser.add_argument("--config", type=Path, default=None, help="an explicit config path, same meaning as sim resim --config")
+    parser.add_argument("--plugin-root", type=Path, default=None, help="an explicit plug-in bundle directory (PluginBundle.resolve's explicit tier)")
     parser.add_argument("--project", default="base", help="falls back to 'base' (R-VAR-4)")
     parser.add_argument(
         "--config-source", choices=["embedded", "library", "checkout"], default=None,
@@ -62,6 +67,7 @@ def run(argv: list[str] | None = None) -> int:
     report = doctor_report(
         pipeline_path=args.pipeline, search=args.search, recording_path=args.recording,
         config_path=args.config, project=args.project, config_source=args.config_source,
+        plugin_root=args.plugin_root,
     )
     for key, value in report.items():
         if isinstance(value, (list, dict)):

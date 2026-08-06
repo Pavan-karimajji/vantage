@@ -17,10 +17,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import yaml
 
 from adas_sim.cli import doctor as doctor_cli
 from adas_sim.contracts.pipeline import Pipeline
-from adas_sim.core.diagnostics import doctor_report
+from adas_sim.core.diagnostics import _plugin_diagnoses, doctor_report
 
 import adas_sim.io.mcap  # noqa: E402,F401 -- registers the ".mcap"/".csv" codecs
 
@@ -94,3 +95,71 @@ def test_doctor_cli_exits_zero_with_no_flags():
 def test_doctor_cli_rejects_an_unknown_config_source():
     with pytest.raises(SystemExit):
         doctor_cli.build_parser().parse_args(["--config-source", "nonsense"])
+
+
+# ---------------------------------------------------------------------------
+# S-C8's own remaining item: sim doctor reports each stage's plug-in bundle.
+# `_plugin_diagnoses` takes an already-built `library_diagnoses` list
+# directly (the same shape `_library_diagnoses` returns) rather than going
+# through `doctor_report()`'s own library RESOLUTION -- that half needs a
+# real dll:/stubdll: build (test_d6_doctor_cli.py's job); this is the pure
+# logic underneath it, same split test_c5_overrides.py already used for
+# resolve_swept_config.
+# ---------------------------------------------------------------------------
+
+
+def _library_entry(tmp_path: Path, *, stage: str = "df") -> dict[str, object]:
+    lib_dir = tmp_path / stage
+    lib_dir.mkdir(parents=True, exist_ok=True)
+    return {"stage": stage, "ok": True, "resolved": str(lib_dir / f"{stage}_sil.dll")}
+
+
+def test_plugin_diagnoses_reports_a_resolved_library_tier_bundle(tmp_path):
+    entry = _library_entry(tmp_path)
+    plugin_dir = tmp_path / "df" / "sim"
+    plugin_dir.mkdir(parents=True)
+    (plugin_dir / "plugin.yaml").write_text(
+        yaml.safe_dump({"api": 1, "component": "df", "provides": [], "sha256": "abc123"}), encoding="utf-8",
+    )
+
+    results = _plugin_diagnoses([entry])
+
+    assert results == [{
+        "stage": "df", "found": True, "component": "df", "api": 1,
+        "sha256": "abc123", "origin": "library", "root": str(plugin_dir),
+    }]
+
+
+def test_plugin_diagnoses_reports_found_false_for_a_component_with_no_sim_plugins(tmp_path):
+    entry = _library_entry(tmp_path, stage="vdy")  # no sim/plugin.yaml ever written under it
+
+    results = _plugin_diagnoses([entry])
+
+    assert len(results) == 1
+    assert results[0]["stage"] == "vdy"
+    assert results[0]["found"] is False
+    assert "no plugin.yaml" in results[0]["detail"]
+
+
+def test_plugin_diagnoses_skips_a_stage_whose_library_never_resolved(tmp_path):
+    broken_entry = {"stage": "df", "ok": False, "resolved": ""}
+    assert _plugin_diagnoses([broken_entry]) == []
+
+
+def test_plugin_diagnoses_explicit_plugin_root_wins_over_the_library_tier(tmp_path):
+    entry = _library_entry(tmp_path)
+    library_plugin_dir = tmp_path / "df" / "sim"
+    library_plugin_dir.mkdir(parents=True)
+    (library_plugin_dir / "plugin.yaml").write_text(
+        yaml.safe_dump({"api": 1, "component": "df", "provides": []}), encoding="utf-8",
+    )
+    explicit_dir = tmp_path / "explicit_override"
+    explicit_dir.mkdir()
+    (explicit_dir / "plugin.yaml").write_text(
+        yaml.safe_dump({"api": 1, "component": "df-explicit", "provides": []}), encoding="utf-8",
+    )
+
+    results = _plugin_diagnoses([entry], plugin_root=explicit_dir)
+
+    assert results[0]["origin"] == "explicit"
+    assert results[0]["component"] == "df-explicit"

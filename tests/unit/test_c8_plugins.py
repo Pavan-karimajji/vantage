@@ -20,6 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "interfaces" / "scr
 import pack_plugin_bundle  # noqa: E402
 
 from adas_sim.core.errors import AuthoringError
+from adas_sim.core.explain import explain
+from adas_sim.core.session import Session
 from adas_sim.model.plugins import PluginBundle
 from adas_sim.scene.registry import registered_providers
 
@@ -169,6 +171,48 @@ def _plugin_with_layer_module(tmp_path: Path, *, name: str, dotted: str, source:
     bundle = PluginBundle.resolve(library_dir=root)
     assert bundle is not None
     return bundle
+
+
+def test_sim_explain_reports_the_owning_component_and_real_file_path_for_a_plugin_layer(tmp_path):
+    """S-C8's own remaining item ("sim explain and sim doctor both report
+    the plug-in path"): a layer imported through the real plug-in
+    mechanism carries `_adas_plugin.<component>.<dotted>` as its module
+    name (`PluginBundle.import_modules`'s own docstring) -- `explain()`
+    parses the component out of that name and reports the module's own
+    real, resolved `__file__` (set by `importlib.util.
+    spec_from_file_location` at import time) as `plugin_path`."""
+    bundle = _plugin_with_layer_module(
+        tmp_path, name="explainComp", dotted="sim.layers.explained",
+        source=(
+            "from adas_sim.scene.registry import layer_provider\n"
+            "@layer_provider('sim.test.c8.explained')\n"
+            "def provide(ctx):\n    return ()\n"
+        ),
+    )
+    bundle.import_modules()
+
+    facts = explain("sim.test.c8.explained", Session(run_id="run-explain", name="s", ticks=()))
+
+    assert facts["kind"] == "layer"
+    assert facts["plugin_component"] == "explainComp"
+    assert facts["plugin_path"] == str(bundle.root / "layers" / "explained.py")
+
+
+def test_sim_explain_reports_no_plugin_fields_for_a_first_party_layer():
+    """A layer registered by the framework's own code (this test file
+    itself, `test.d6.explain.probe` in `test_d6_explain.py`) has no
+    plug-in bundle -- both fields must be absent, never guessed
+    (`R-SIM-25`, `NR-SIM-4`)."""
+    from adas_sim.scene.registry import layer_provider
+
+    @layer_provider("test.c8.first_party_probe")
+    def _probe(ctx):  # pragma: no cover -- never called, only registered
+        return ()
+
+    facts = explain("test.c8.first_party_probe", Session(run_id="run-explain", name="s", ticks=()))
+    assert facts["kind"] == "layer"
+    assert "plugin_component" not in facts
+    assert "plugin_path" not in facts
 
 
 def test_two_components_each_contributing_a_layer_both_register(tmp_path):
