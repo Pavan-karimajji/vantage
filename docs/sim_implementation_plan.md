@@ -727,10 +727,59 @@ verifier ids that appear in **no source file** — **0 today** (`AR-50`, lowered
 from 19). **Never untick a box to satisfy it** if it ever rises again — thread
 the id back to its implementing test/build site instead.
 
-**Next, unchanged:** `S-D4`'s remaining 6 boxes and `S-D5`'s 3 partials, or
-Phase E (blocked on every Phase A–D gate; `S-E1`'s table is the authority).
-`S-E3` gained five items from this run (`AR-35`, `AR-36`, `AR-49`, `AR-50`, and
-`OQ-14`'s own re-assessment, decided under `AR-49`).
+### ▶ THE BUILD QUEUE — do these in this order
+
+**Measured 2026-08-06: 104 boxes are unticked across 21 of 32 stages.** The
+five below are not all of it — they are roughly 12–15 boxes. They are first
+because together they close **the `P0` verification gap** and demonstrate
+`R-SIM-10`'s central invariant, which is the one claim in this architecture
+that is currently *asserted rather than shown*. Phase E is a separate, third
+block of work and is **not** in this queue; see "After the queue" below.
+
+**One row per commit.** Run all three commands from the superproject root after
+every row, using `modules/sim/.venv/Scripts/python.exe` — never a bare
+`python`:
+
+```
+… -m pytest modules/sim/tests -q
+… modules/sim/scripts/check_invariants.py
+… modules/sim/docs/py/run_all.py
+```
+
+**Baseline: 966 passed / 9 skipped / 1 failed.** The one failure is the
+documented `test_b3_viewport_controls` fixture-isolation flake (§10's risk
+table) — it passes in isolation, and it is **never yours to fix**.
+
+| Do | Work | Owner | Done when |
+|---|---|---|---|
+| **1** | **`perception-core`'s generic-ABI shim** | `modules/perception-core/docs/perception_core_decomposition.md` §4 | The five files in §4's table exist, mirroring `modules/vdy/src/platform/vdy_sil/`, and **`python scripts/build.py perception-core -t gtest -p vs2026 -P base` (and `-P cus1`) really ran and passed.** This is the highest-leverage row: it unblocks `S-D4`'s gate. **It needs a real MSVC/Conan build — `conan remote login adas-local demo -p demo` first.** If you cannot run the build, **stop and say so**; this repo has twice recorded a stage green whose build was red, and it is the most expensive mistake made here. Safe under either decomposition option — under a CV+fusion split this shim moves to `fusion` wholesale |
+| **2** | **A `tolerance` file for `df`** (`R-SIM-24`) | `S-C6`; `modules/df/sim/` | `modules/df/sim/tolerance.yaml` exists with `default: exact`, integers and enums non-overridable, **a mandatory `why:` on every row**, and its hash in the run manifest. **It exists nowhere in the repo today**, so determinism axes C and D have no declared bound for *any* component. Chips at `NR-SIM-40` (`P0`) |
+| **3** | **`ST-D6-4`** — `sim doctor --component <name>` | `S-D6`; `sim_sil_contract.md` §10 | Run against `df`, `vdy` and `perception-core` it produces the **same shape** of report and names each absence as **legitimate** (`vdy` has nothing to draw) or a **gap**. This is the check that would have caught row 2. Deliberately **not** a gate |
+| **4** | **The unblocked `P0` verifier sweep** — five rows, each its own commit | `ST-D6-1` → `S-D6` · `ST-D6-3` → `S-D6` · `ST-D7-6` → `S-D7` · `UT-C1c-22` → `S-C1c` · `ST-D5-1` → `S-D5` | Each clears one `P0` requirement (`FR-SIM-46`, `FR-SIM-67`, `NR-SIM-22`, `CR-SIM-2`, `FR-SIM-70`). Read the stage's own text for what each asserts — do not infer it from the id |
+| **5** | **Measure `GT-13`** | `S-E3`; §2's `GT-13` | `S-D7`'s throughput numbers now exist, so it is takeable. It is what clears `NR-SIM-41`'s `proven*` asterisk. **A number above target is a finding to act on, never a reason to delete the gate** |
+
+**Two lessons from the last queue, and they are about verification, not code:**
+
+1. **Verify through the mechanism, not through the call site you changed.**
+   `AR-51`'s first half was checked with the one test file exercising the one
+   caller that had been wired, so it could not see that every *other* caller
+   still misbehaved.
+2. **Watch the whole-suite warning count**, not only the tests you wrote. It
+   went 8 → 10 while a fix was believed complete, and that was the available
+   signal.
+
+**Do not attempt** (no work can close these): `MC-5` · `GT-14` · `MC-2` ·
+`MC-3` / `S-D1`'s gate. Each needs a person. `ST-C6-4` needs a CI runner with
+a C++ toolchain (`plan.md` item 20).
+
+**After the queue — Phase E, which is a third block and 48 boxes**, not a tail:
+`S-E1` (17, none started — deleting `df`'s private tooling, **gated on `MC-2`**,
+`NR-SIM-30`'s "nothing is deleted before its replacement is proven"), `S-E2`
+(9 — blocked on `df_ctypes.py`'s consumers, which the stage says can only be
+*deleted* once `S-E1` clears, never migrated), `S-E3` (22 — mostly gates that
+close when everything upstream does). `S-D2`'s 12 are **deferred with a named
+trigger** and are correctly not-now. `S-E3` gained five items from audit run 3
+(`AR-35`, `AR-36`, `AR-49`, `AR-50`, and `OQ-14`'s re-assessment).
 
 Findings index: [sim_audit_log.md](sim_audit_log.md) — run 3 is `AR-34`..`AR-51`,
 **zero open**, every row closed and re-verified.
