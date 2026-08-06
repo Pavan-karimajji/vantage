@@ -1,6 +1,6 @@
 # check_audit_ledger
-# platform  win32
-# python    3.12.10
+# platform  linux
+# python    3.12.8
 
 Audit ledger shape check -- sim_audit_log.md
 

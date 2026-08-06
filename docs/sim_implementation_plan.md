@@ -689,6 +689,34 @@ toggle, `sim probe`, the severed-chain badge. Building the engine at `S-D6`
 instead would mean `S-C3`'s fault injection has no grammar to reuse, and the
 verbs would be written twice.
 
+### ▶▶ RESUME MARKER — 2026-08-06 session. Start here now; the 2026-08-04
+### box below is kept as the audit trail that got the queue to this point.
+
+**`S-C5` (#13), `S-C8` (#14), `S-C7` (#15) and `S-C9` (#8, Block 1) are all
+now closed** — every checkbox and every `UT-`/`ST-` id in each stage's own
+section landed 2026-08-06, with real, passing tests. `S-C9` has one
+non-blocking exception: the Bench-start-page wiring, which needs `S-B3`/
+`S-D8` (not built) to exist at all, same as its own section already noted.
+
+**One honesty caveat, stated so it is not missed:** `S-C7`'s three new C++
+test files (`test_pipeline_step.cpp`, `test_resim_measured.cpp`, plus the
+`echo_stub.cpp` extension they both need) were written and hand-traced
+against the real implementation in a WSL shell with **no Conan and no
+compatible `libprotobuf` headers** — they could not be compiled or run
+there. `test_exec_timeout.cpp` (the one S-C7 surface with zero protobuf/
+yaml-cpp dependency) genuinely was compiled and run standalone, 5/5
+passing. **The first real Windows/MSVC session after this one should run
+`scripts/build.py sil_host -t gtest -p vs2026 -P base` and confirm all
+three new files build and pass** before treating `S-C7` as verified rather
+than "believed correct, awaiting compilation" — the exact distinction
+`S-C5`'s own 2026-08-04 audit box below exists to warn against blurring.
+
+**Next: `S-C6` (#16), the last Block-2 stage** — resim + determinism in CI.
+Blocked on `S-C2` (9, done), `S-C3` (10, done) and `S-C5` (13, done): all
+three prerequisites are satisfied, so `S-C6` is unblocked. After it, Phase D
+in id order, remembering `S-D7` is already 17/27 (its own section explains
+the split).
+
 ### ▶▶ RESUME MARKER — 2026-08-04 audit. Start here, in this order.
 
 **1. Finish `S-C5` (#13) — still the current stage, but no longer blocked.**
