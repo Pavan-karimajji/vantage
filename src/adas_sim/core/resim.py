@@ -29,6 +29,7 @@ gives for not importing `sources/recorder.py`'s inverse.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from adas_sim.contracts.pipeline import Pipeline, _split_ref
@@ -60,13 +61,23 @@ def _wired_source_ports(pipeline: Pipeline) -> set[str]:
     return ports
 
 
-def resim_pipeline(pipeline: Pipeline, recording_path: Path) -> list[tuple[int, dict]]:
+def resim_pipeline(
+    pipeline: Pipeline, recording_path: Path, *, on_tick: Callable[[int, int], None] | None = None,
+) -> list[tuple[int, dict]]:
     """Runs `pipeline` tick by tick against `recording_path`: `mode:
     measured` stages are fed their recorded output bytes for that tick
     (`Pipeline.exec`'s own `measured=` kwarg, `S-C1c`, unchanged);
     `mode: simulate` stages execute live. Returns `(t_ns, outputs)` per
     tick, `outputs` keyed exactly as `Pipeline.exec` returns it -- every
     stage's port bytes this tick, by stage name then port name.
+
+    `on_tick`, if given, is called `(tick_count, t_ns)` immediately after
+    each tick's own `results.append` -- i.e. only once that tick has fully
+    completed. `core/batch_worker.py` uses this to checkpoint progress to
+    disk (`UT-D7-7`'s "last tick" gap): a process a `dll:`/`stubdll:`
+    library segfaults inside never returns from this function at all, so
+    the checkpoint file, not this function's return value, is the only
+    record of how far a crashing run got.
     """
     source_ports = _wired_source_ports(pipeline)
     measured_stage_names = [stage.name for stage in pipeline.stages if stage.mode == "measured"]
@@ -104,6 +115,8 @@ def resim_pipeline(pipeline: Pipeline, recording_path: Path) -> list[tuple[int, 
 
             outputs = pipeline.exec(dt_ns, stimulus, measured=measured)
             results.append((t_ns, dict(outputs)))
+            if on_tick is not None:
+                on_tick(len(results), t_ns)
         return results
     finally:
         reader.close()

@@ -21,6 +21,13 @@ about itself, which is exactly why the parent classifies from the outside
 (missing/unreadable JSON + an abnormal exit) rather than trusting a value
 this process claims about its own death.
 
+`--checkpoint-json`, if given, is overwritten after every tick
+(`resim_pipeline`'s own `on_tick=`, `UT-D7-7`) with the tick count and
+`t_ns` reached so far. This is the ONLY record of progress that survives a
+real crash -- this process's own in-memory state dies with it, so
+`core/batch.py` reads the checkpoint file from the outside, same as it
+classifies `crash` itself from the outside.
+
 Two test-only hooks exist, both explicitly named and never reachable from a
 real `sim batch` invocation:
 
@@ -41,6 +48,13 @@ real `sim batch` invocation:
   Python cannot resolve from a bare `impl:` string). Exists so `sim batch`'s
   real end-to-end path (`ST-D7-2`/`ST-D7-3`) can be exercised with no
   compiled `dll:`/`stubdll:` component available.
+- `ADAS_SIM_BATCH_TEST_CRASH_AFTER_TICK=N` (env var) -- unlike the blanket
+  `crash` hook above (which dies before any pipeline runs at all), this one
+  lets a REAL resim run N ticks for real, then `os._exit(139)` from inside
+  `on_tick` -- the one shape the blanket hook cannot produce, and the one
+  `UT-D7-7`'s checkpoint claim actually needs: proof that `--checkpoint-json`
+  reflects real progress at the moment of death, not just "some value or
+  other."
 """
 
 from __future__ import annotations
@@ -132,11 +146,23 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--search", type=Path, action="append", default=[])
     parser.add_argument("--config", type=Path, default=None)
     parser.add_argument("--test-stub-echo", action="append", default=[], metavar="STAGE_NAME")
+    parser.add_argument("--checkpoint-json", type=Path, default=None)
     return parser
 
 
 def _write_result(out_json: Path, **fields: object) -> None:
     out_json.write_text(json.dumps(fields, sort_keys=True), encoding="utf-8")
+
+
+def _write_checkpoint(path: Path, *, tick_count: int, last_tick_ns: int) -> None:
+    """Overwritten after every tick (`UT-D7-7`) -- written to a sibling
+    `.tmp` path and `os.replace`d into place so a reader (`core/batch.py`,
+    after this process is already dead) never observes a torn write, same
+    discipline `Recorder`/writer code elsewhere in this framework uses for
+    any file another process reads concurrently."""
+    tmp_path = path.with_name(path.name + ".tmp")
+    tmp_path.write_text(json.dumps({"tick_count": tick_count, "last_tick_ns": last_tick_ns}), encoding="utf-8")
+    os.replace(tmp_path, path)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -146,20 +172,37 @@ def main(argv: list[str] | None = None) -> int:
     _maybe_run_test_hook(args.recording)  # the per-recording ADAS_SIM_BATCH_TEST_STUB_MAP case
     components = {name: _echo_component(name) for name in args.test_stub_echo} or None
 
+    crash_after_tick = os.environ.get("ADAS_SIM_BATCH_TEST_CRASH_AFTER_TICK")
+    progress: dict[str, int | None] = {"tick_count": 0, "last_tick_ns": None}
+
+    def _on_tick(tick_count: int, t_ns: int) -> None:
+        progress["tick_count"] = tick_count
+        progress["last_tick_ns"] = t_ns
+        if args.checkpoint_json is not None:
+            _write_checkpoint(args.checkpoint_json, tick_count=tick_count, last_tick_ns=t_ns)
+        if crash_after_tick is not None and tick_count == int(crash_after_tick):
+            os._exit(139)  # see ADAS_SIM_BATCH_TEST_CRASH_AFTER_TICK in this module's docstring
+
     try:
         pipeline = Pipeline.load(args.pipeline, search=tuple(args.search), components=components)
         pipeline.init_components(args.config)
         try:
-            outputs = resim_pipeline(pipeline, args.recording)
+            outputs = resim_pipeline(pipeline, args.recording, on_tick=_on_tick)
         finally:
             pipeline.shutdown_components()
     except SimError as exc:
-        _write_result(args.out_json, outcome="fail", error=str(exc))
+        _write_result(
+            args.out_json, outcome="fail", error=str(exc),
+            tick_count=progress["tick_count"], last_tick_ns=progress["last_tick_ns"],
+        )
         return 1
     except Exception as exc:  # noqa: BLE001 -- a framework bug is still a clean "fail" report,
         # never a silent process death; only os._exit (the test hook above) or a real
         # crash inside a C library skips this reporting path entirely.
-        _write_result(args.out_json, outcome="fail", error=f"{type(exc).__name__}: {exc}")
+        _write_result(
+            args.out_json, outcome="fail", error=f"{type(exc).__name__}: {exc}",
+            tick_count=progress["tick_count"], last_tick_ns=progress["last_tick_ns"],
+        )
         return 1
 
     last_tick_ns = outputs[-1][0] if outputs else None

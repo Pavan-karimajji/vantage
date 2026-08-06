@@ -89,13 +89,34 @@ def expand_recordings(args: Sequence[str]) -> list[Path]:
     return result
 
 
+def _read_checkpoint(checkpoint_json: Path) -> tuple[int | None, int | None]:
+    """`(tick_count, last_tick_ns)` from `batch_worker.py`'s own
+    `--checkpoint-json`, or `(None, None)` if it was never written or is
+    unreadable -- a crashing process can leave no checkpoint at all (it died
+    before the first tick) or, in principle, a torn one; either way this
+    reports `unknown` rather than a guessed value (`R-SIM-25`/`NR-SIM-4`).
+    The worker writes this file via `os.replace`, so a fully-written-but-
+    stale checkpoint (from a PREVIOUS tick) is the only failure mode this
+    needs to tolerate, and `json.loads` alone already handles that -- it is
+    never torn."""
+    if not checkpoint_json.is_file():
+        return None, None
+    try:
+        data = json.loads(checkpoint_json.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None, None
+    return data.get("tick_count"), data.get("last_tick_ns")
+
+
 def _classify(
-    recording: Path, proc: subprocess.CompletedProcess[str] | None, out_json: Path, duration_s: float,
-    *, timed_out: bool, timeout_stderr: str,
+    recording: Path, proc: subprocess.CompletedProcess[str] | None, out_json: Path, checkpoint_json: Path,
+    duration_s: float, *, timed_out: bool, timeout_stderr: str,
 ) -> RecordingOutcome:
     if timed_out:
+        tick_count, last_tick_ns = _read_checkpoint(checkpoint_json)
         return RecordingOutcome(
             recording=recording, outcome="timeout", duration_s=duration_s,
+            tick_count=tick_count, last_tick_ns=last_tick_ns,
             stderr_excerpt=timeout_stderr[-_STDERR_EXCERPT_BYTES:],
         )
 
@@ -115,14 +136,19 @@ def _classify(
     if result is not None and result.get("outcome") == "fail":
         return RecordingOutcome(
             recording=recording, outcome="fail", duration_s=duration_s,
+            tick_count=result.get("tick_count"), last_tick_ns=result.get("last_tick_ns"),  # type: ignore[arg-type]
             error=str(result.get("error", "")), stderr_excerpt=proc.stderr[-_STDERR_EXCERPT_BYTES:],
         )
 
     # No readable, self-reported outcome: the process died before it could
     # write one. That is exactly what a crash looks like from the outside
     # (R-SIM-19) -- never inferred from anything the process itself claimed.
+    # The checkpoint file is the one thing that CAN survive this death
+    # (UT-D7-7) -- it is written by the worker, read here by the parent.
+    tick_count, last_tick_ns = _read_checkpoint(checkpoint_json)
     return RecordingOutcome(
         recording=recording, outcome="crash", duration_s=duration_s,
+        tick_count=tick_count, last_tick_ns=last_tick_ns,
         error=f"exit code {proc.returncode}", stderr_excerpt=proc.stderr[-_STDERR_EXCERPT_BYTES:],
     )
 
@@ -132,9 +158,11 @@ def _launch_worker(
     test_stub_echo: tuple[str, ...], out_dir: Path,
 ) -> RecordingOutcome:
     out_json = out_dir / f"{recording.stem}-{uuid4().hex[:8]}.json"
+    checkpoint_json = out_dir / f"{recording.stem}-{uuid4().hex[:8]}.checkpoint.json"
     cmd = [
         sys.executable, "-m", "adas_sim.core.batch_worker",
         "--recording", str(recording), "--pipeline", str(pipeline_path), "--out-json", str(out_json),
+        "--checkpoint-json", str(checkpoint_json),
     ]
     for directory in search:
         cmd += ["--search", str(directory)]
@@ -149,10 +177,12 @@ def _launch_worker(
     except subprocess.TimeoutExpired as exc:
         duration_s = time.monotonic() - start
         stderr = exc.stderr if isinstance(exc.stderr, str) else ""
-        return _classify(recording, None, out_json, duration_s, timed_out=True, timeout_stderr=stderr)
+        return _classify(
+            recording, None, out_json, checkpoint_json, duration_s, timed_out=True, timeout_stderr=stderr,
+        )
 
     duration_s = time.monotonic() - start
-    return _classify(recording, proc, out_json, duration_s, timed_out=False, timeout_stderr="")
+    return _classify(recording, proc, out_json, checkpoint_json, duration_s, timed_out=False, timeout_stderr="")
 
 
 def run_batch(

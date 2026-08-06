@@ -6772,18 +6772,32 @@ copy path is lossless, just not the "different format" half of the claim.
       `test_pipeline_runs_identically_under_resim_and_batch` — same pipeline
       path fed to both `resim_pipeline` directly and `run_batch`, same tick
       count both ways
-- [~] `UT-D7-7` **a crashing stage is contained**: a stub that segfaults (or
+- [x] `UT-D7-7` **a crashing stage is contained**: a stub that segfaults (or
       exits non-zero) under `sim batch` marks that recording `crash`, captures
       stderr and the last tick, and **the batch continues** (`R-SIM-19`).
-      **Partial**: containment/classification/continuation/stderr capture are
-      real and tested (`test_crashing_stage_is_contained_and_classified_crash`);
-      **"the last tick" is NOT captured** — the worker has no per-tick
-      checkpoint (`resim_pipeline` returns its whole tick list at once, only
-      after every tick has run), so a process that dies mid-run leaves no
-      record of how far it got. Fixing this means either a checkpoint file
-      the worker updates after each tick, or a per-tick callback added to
-      `resim_pipeline` itself — real, separate work, grouped with `ST-D7-6`
-      below since both exist to make a crash reproducible on Bench
+      Containment/classification/continuation/stderr capture were already real
+      and tested (`test_crashing_stage_is_contained_and_classified_crash`).
+      **"The last tick" gap closed, follow-up pass**: `resim_pipeline` (`core/
+      resim.py`) gained an `on_tick=` callback, called `(tick_count, t_ns)`
+      immediately after each tick's own `results.append` — i.e. only once
+      that tick has fully completed. `batch_worker.py` uses it to overwrite a
+      `--checkpoint-json` file after every tick (`os.replace`, so a reader
+      never observes a torn write); `core/batch.py`'s `_classify` now reads
+      that file from the outside whenever the worker's own `--out-json` is
+      missing (`crash`) or the subprocess timed out (`timeout`) — exactly the
+      two cases where the worker's in-memory state died with it. New test-only
+      hook `ADAS_SIM_BATCH_TEST_CRASH_AFTER_TICK=N` lets a real resim run N
+      real ticks (unlike the blanket `crash` hook, which dies before any
+      pipeline runs at all) then die from inside `on_tick` — the one shape
+      that actually proves the checkpoint reflects real progress at the
+      moment of death. `test_crash_mid_run_reports_the_real_last_tick_via_
+      checkpoint` (new) crashes after tick 7 of `tiny.mcap`'s 20 and asserts
+      the reported `tick_count`/`last_tick_ns` against a direct, non-subprocess
+      `resim_pipeline` call. Full suite: 767 passed / 7 skipped (Windows venv,
+      `foxglove` extra not installed here — same 2 files this venv has always
+      skipped), `check_invariants.py` and `docs/py/run_all.py` both clean.
+      `ST-D7-6` (reproduce on Bench) remains separately gated on a Bench GUI
+      that does not exist yet — this pass closes only the data-capture half
 - [x] `UT-D7-8` **a hung stage is contained**: a stub that never returns hits
       its per-`exec()` timeout, is reported as `timeout` — **not** as `crash`
       and not as `fail` — and the batch continues.
@@ -6852,12 +6866,13 @@ copy path is lossless, just not the "different format" half of the claim.
 - [x] `UT-D7-5` + `ST-D7-2` + `ST-D7-3` green — an export can never be mistaken
       for a recording, and scale uses the developer's own file. **All three
       green as of 2026-08-05** (pytest, this WSL shell — `UT-D7-5` since
-      2026-07-30, `ST-D7-2`/`ST-D7-3` this session). `UT-D7-7`'s "last tick"
-      partial and `UT-D7-9`/`ST-D7-6` are real, separate open items but are
-      not this Gate's own three named tests — the Gate itself is closed.
+      2026-07-30, `ST-D7-2`/`ST-D7-3` this session). `UT-D7-9`/`ST-D7-6` are
+      real, separate open items but are not this Gate's own three named
+      tests — the Gate itself is closed.
       **`ST-D7-7` measured in a later session** (same date), see its own
       entry above — also not one of this Gate's three named tests, but no
-      longer an open item either
+      longer an open item either. **`UT-D7-7`'s own "last tick" gap closed in
+      a follow-up pass** (Windows venv), see its own entry above
 
 ### S-D8 — **Vantage**: the workspaces, the front door, the product
 

@@ -4,20 +4,25 @@
 # @author Pavan Karimajji
 
 """S-D7 `sim batch` unit tests (`docs/sim_implementation_plan.md`):
-`UT-D7-7` (a crashing stage is contained and classified `crash`),
+`UT-D7-7` (a crashing stage is contained and classified `crash`, and the
+tick it got to before dying is captured via `--checkpoint-json`),
 `UT-D7-8` (a hung stage is contained and classified `timeout`, never
 `crash`/`fail`), plus `core/batch.py`'s own building blocks
 (`expand_recordings`, order preservation, `write_report`). Uses the
 `batch_worker`'s explicitly test-only hooks (`ADAS_SIM_BATCH_TEST_STUB[_MAP]`,
-`--test-stub-echo`) -- see `core/batch_worker.py`'s own docstring for why
-these exist and why they can never fire from a real `sim batch` invocation.
+`ADAS_SIM_BATCH_TEST_CRASH_AFTER_TICK`, `--test-stub-echo`) -- see
+`core/batch_worker.py`'s own docstring for why these exist and why they can
+never fire from a real `sim batch` invocation.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
+from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent
+from adas_sim.contracts.pipeline import Pipeline
 from adas_sim.core.batch import RecordingOutcome, expand_recordings, run_batch, write_report
+from adas_sim.core.resim import resim_pipeline
 
 _TINY = Path(__file__).resolve().parent.parent / "fixtures" / "tiny.mcap"
 
@@ -67,6 +72,41 @@ def test_crashing_stage_is_contained_and_classified_crash(tmp_path, monkeypatch)
     results = run_batch([_TINY], pipeline, test_stub_echo=("echo",))
     assert results[0].outcome == "crash"
     assert "exit code" in results[0].error
+
+
+def _direct_resim_outputs(pipeline_path: Path) -> list[tuple[int, dict]]:
+    """A direct, non-subprocess resim of `_TINY` against `pipeline_path`, for
+    comparison against a batch result's own `last_tick_ns` -- same pattern
+    `test_d7_batch_isolation.py::test_pipeline_runs_identically_under_
+    resim_and_batch` already uses."""
+    manifest = ComponentManifest(
+        component="echo", version="test", abi_version=1, build_id="test-stub-echo",
+        inputs=(), outputs=(), project="", config_bundle_sha256="", descriptor_set=b"", period_ns=0,
+    )
+    component = InProcessSilComponent(name="echo", manifest=manifest, fn=lambda dt_ns, inputs: {})
+    pipeline = Pipeline.load(pipeline_path, components={"echo": component})
+    pipeline.init_components(None)
+    try:
+        return resim_pipeline(pipeline, _TINY)
+    finally:
+        pipeline.shutdown_components()
+
+
+def test_crash_mid_run_reports_the_real_last_tick_via_checkpoint(tmp_path, monkeypatch):
+    """UT-D7-7's own "last tick" gap: unlike the blanket ADAS_SIM_BATCH_TEST_STUB
+    hook (which dies before any pipeline runs), ADAS_SIM_BATCH_TEST_CRASH_AFTER_TICK
+    lets a real resim run N ticks for real -- against tiny.mcap's actual 20 --
+    then die from inside `on_tick`. The checkpoint file, written after every
+    tick and read by the parent from the outside, is what survives; the
+    worker's own in-memory state does not."""
+    monkeypatch.setenv("ADAS_SIM_BATCH_TEST_CRASH_AFTER_TICK", "7")
+    pipeline_path = _echo_pipeline(tmp_path)
+    results = run_batch([_TINY], pipeline_path, test_stub_echo=("echo",))
+    assert results[0].outcome == "crash"
+    assert results[0].tick_count == 7
+
+    direct_outputs = _direct_resim_outputs(pipeline_path)
+    assert results[0].last_tick_ns == direct_outputs[6][0]  # tick 7, 0-indexed
 
 
 def test_hung_stage_is_contained_and_classified_timeout_not_crash_or_fail(tmp_path, monkeypatch):
