@@ -587,13 +587,15 @@ reason (`R-SIM-1`: a float field family is `adas.common.VehDyn.vx`, which is the
 component's fact, not the framework's):
 
 ```yaml
-# modules/<name>/sim/tolerance.yaml
-version: 1
-default: exact                       # anything not named below is exact
-integers_and_enums: exact            # stated, not configurable
-families:
-  - {match: "*.ttc_s", abs: 1.0e-6,
-     why: "divides by a differenced velocity; last-bit sensitive under FMA"}
+# modules/<name>/sim/tolerance.yaml -- the schema core.tolerance.load_tolerance
+# actually reads (corrected 2026-08-06, sim build queue row 2; modules/df/sim/
+# tolerance.yaml is the first real one). `default: exact` and "integers/enums
+# never widen" are structural properties of `fields:`, not settable keys --
+# there is deliberately nowhere to write `default: loose`.
+fields:
+  "aebOutputs.ttc_s":
+    abs_tol: 1.0e-6
+    why: "divides by a differenced velocity; last-bit sensitive under FMA"
 ```
 
 Four mechanisms keep it honest, and the fourth is the one that actually works:
