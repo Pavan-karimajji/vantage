@@ -754,7 +754,7 @@ table) — it passes in isolation, and it is **never yours to fix**.
 |---|---|---|---|
 | **1** | ~~`perception-core`'s generic-ABI shim~~ **DONE 2026-08-06** | `modules/perception-core/docs/perception_core_decomposition.md` §4 | The five files in §4's table exist, mirroring `modules/vdy/src/platform/vdy_sil/`, and **`python scripts/build.py perception-core -t gtest -p vs2026 -P base` (and `-P cus1`) really ran and passed.** **Done**: both 11/11 gtest, `-t sil -P base` builds clean, real MSVC/Conan build (`conan remote login adas-local demo -p demo` run first). Two real pre-existing gaps found and fixed landing it (`perception_core`'s own `src/component/CMakeLists.txt` never exposed `src/` as an include root; `yaml-cpp` was never a declared Conan dependency) — full account in the owning doc's §4. **Correction to this row's own claim**: it does **not** unblock `S-D4`'s gate by itself — `adasExec` is a deliberate no-op (no algorithm exists, decomposition still undecided), so it moves the blocker from *"cannot be executed"* to *"executes and computes nothing"*, not past it. Safe under either decomposition option — under a CV+fusion split this shim moves to `fusion` wholesale |
 | **2** | ~~A `tolerance` file for `df`~~ **DONE 2026-08-06** (`R-SIM-24`) | `S-C6`; `modules/df/sim/` | `modules/df/sim/tolerance.yaml` exists with `default: exact`, integers and enums non-overridable, **a mandatory `why:` on every row**, and its hash in the run manifest. **It exists nowhere in the repo today**, so determinism axes C and D have no declared bound for *any* component. Chips at `NR-SIM-40` (`P0`). **Done**: `fields: {}` — deliberately zero rows, since no real axis-C/D divergence has been measured for `df` yet (`ST-C6-4`'s CI wiring stays not-run, per `S-C6`'s own note) and inventing a `why:` for nothing measured would be exactly `R-SIM-7`'s fabrication. What changed is real: `tolerance.sha256` is now a genuine non-empty hash instead of the `""` an absent file reports, verified directly (`load_tolerance` against the real file). **"Its hash in the run manifest"** reads as this existing mechanism (`ToleranceSet.sha256`, already surfaced by `sim determinism`'s own report line), not a new `RunManifest` field — `S-C6`'s own text already tracks that specific wiring as a separate, deferred gap ("no `RunManifest` field carries it yet"), not this row's. **Found and fixed while writing it**: `sim_resim_and_recording.md` §4a's own example schema (`families:`/`match:`/`abs:`) never matched what `core/tolerance.py` actually implemented (`fields:`/`abs_tol:`) — corrected there rather than shipping a file that matches the code but contradicts the doc (`GT-7`) |
-| **3** | **`ST-D6-4`** — `sim doctor --component <name>` | `S-D6`; `sim_sil_contract.md` §10 | Run against `df`, `vdy` and `perception-core` it produces the **same shape** of report and names each absence as **legitimate** (`vdy` has nothing to draw) or a **gap**. This is the check that would have caught row 2. Deliberately **not** a gate |
+| **3** | ~~`ST-D6-4`~~ **DONE 2026-08-06** — `sim doctor --component <name>` | `S-D6`; `sim_sil_contract.md` §10 | Run against `df`, `vdy` and `perception-core` it produces the **same shape** of report and names each absence as **legitimate** (`vdy` has nothing to draw) or a **gap**. This is the check that would have caught row 2. Deliberately **not** a gate. **Done**: `sim doctor --component <root-path>` (a real path, never a bare name — `R-SIM-11`), `core/diagnostics.py::component_checklist`. **One narrowing**: reports required-row absence as an unconditional gap, but does not itself label a conditional/optional absence legitimate-or-gap (the framework cannot know `vdy`'s own reason without hardcoding a fact about `vdy`, `R-SIM-1`'s spirit) — a human still makes that call from the report. **It found a real gap on first real run** — proving the row's own prediction true a second time: §10's table claimed `vdy` ✅ for rows 5–7, and `vdy` has no `src/project/` at all (calibration is `adas-shared-config`'s); corrected in that table |
 | **4** | **The unblocked `P0` verifier sweep** — five rows, each its own commit | `ST-D6-1` → `S-D6` · `ST-D6-3` → `S-D6` · `ST-D7-6` → `S-D7` · `UT-C1c-22` → `S-C1c` · `ST-D5-1` → `S-D5` | Each clears one `P0` requirement (`FR-SIM-46`, `FR-SIM-67`, `NR-SIM-22`, `CR-SIM-2`, `FR-SIM-70`). Read the stage's own text for what each asserts — do not infer it from the id |
 | **5** | **Measure `GT-13`** | `S-E3`; §2's `GT-13` | `S-D7`'s throughput numbers now exist, so it is takeable. It is what clears `NR-SIM-41`'s `proven*` asterisk. **A number above target is a finding to act on, never a reason to delete the gate** |
 
@@ -7284,18 +7284,38 @@ a self-timed session.
       equal `build_manifest` results (same explicit `clock=`, since
       `created_utc` is the one field two real calls would otherwise
       legitimately differ on)
-- [ ] `ST-D6-4` **`sim doctor --component <name>` reports a component against
+- [x] `ST-D6-4` **`sim doctor --component <name>` reports a component against
       the component-side checklist** (`NR-SIM-48`, added by audit run 3 —
       `AR-43`). Run against `df`, `vdy` and `perception-core` it produces the
       **same shape** of report, and names each absence with whether that
       absence is **legitimate** (`vdy` has nothing to draw, so no layer
       provider is correct) or a **gap** (no `tolerance.yaml` anywhere means
       `R-SIM-24`'s axis-C/D comparison has no bound to read). The checklist
-      itself is prose in `sim_sil_contract.md` §12; this box is where it stops
-      being prose. **Deliberately not a gate** — a gate here would fail `vdy`
-      for not shipping layers it has no reason to ship; the value is that an
-      absence becomes *declared* rather than *unnoticed*, which is `R-SIM-23`'s
-      `absent:` one level up
+      itself is prose in `sim_sil_contract.md` §10 (**corrected from a stale
+      "§12" here**); this box is where it stops being prose. **Deliberately
+      not a gate** — a gate here would fail `vdy` for not shipping layers it
+      has no reason to ship; the value is that an absence becomes *declared*
+      rather than *unnoticed*, which is `R-SIM-23`'s `absent:` one level up.
+      **Done 2026-08-06** (sim build queue row 3): `core/diagnostics.py`'s
+      `component_checklist(component_root)` + `sim doctor --component ROOT`
+      (a real path, e.g. `modules/df` — never a bare name, no superproject-
+      layout guess inside the framework, `R-SIM-11`). **One deliberate
+      narrowing of this box's own wording**: the tool reports every
+      required row's absence as an unconditional gap, but a conditional/
+      optional row's absence is reported **without** being labelled
+      legitimate-or-gap — the framework has no way to know `vdy`'s reason is
+      legitimate without hardcoding a fact about `vdy` inside `modules/sim`
+      itself, which `R-SIM-1`'s spirit forbids as surely as the literal
+      grep does. A human still makes that call, from the report, exactly as
+      §10's own "three readings" already does by hand. **Verified against
+      all three real trees, no build needed** — every row is a filesystem/
+      text check against the checked-in source, and it immediately found a
+      real, previously-unmeasured gap: §10's own table claimed `vdy` ✅ for
+      rows 5–7, and `vdy` has no `src/project/` directory at all (its
+      calibration is `adas-shared-config`'s, entirely) — corrected in that
+      table, not fixed here (real functional/build work, out of a docs-only
+      row's mandate). This is precisely the row's own framing, proven true a
+      second time: *"this is the check that would have caught row 2."*
 
 **Discipline** (every stage)
 - [x] portability §3 ticked — exposure: `P-5` (`sim probe` and `sim doctor` are the tools that *explain* library resolution, so they must exercise every pattern — both now do, `sim doctor` via `resolve_library_report`), `P-2`

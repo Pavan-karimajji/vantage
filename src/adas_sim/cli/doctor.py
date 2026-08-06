@@ -15,8 +15,15 @@ onto exactly one resolution tier instead of the normal priority order
 against. `--plugin-root` (`S-C8`) reports each resolved stage's own
 plug-in bundle -- explicit -> library `sim/` -> checkout, same tiers the
 config bundle uses minus `embedded` (`core.diagnostics._plugin_diagnoses`'s
-own docstring on why). Non-zero exit on anything that would break a real
-run."""
+own docstring on why). `--component ROOT` (`S-D6`, `ST-D6-4`,
+`sim_sil_contract.md` section 10) reports a component TREE (a path, e.g.
+`modules/df` -- never a bare name, same convention as every other flag
+here) against the thirteen-row "what a component owes the framework"
+checklist -- a required row absent is a gap, a conditional/optional row's
+absence is reported without this tool guessing whether it is legitimate
+(`core.diagnostics.component_checklist`'s own docstring on why).
+Deliberately never added to `problems` -- section 10 states this is not a
+gate. Non-zero exit on anything that would break a real run."""
 
 from __future__ import annotations
 
@@ -41,6 +48,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--config-source", choices=["embedded", "library", "checkout"], default=None,
         help="force the config-bundle agreement check onto exactly one tier (UT-C5-8); "
              "'embedded' requires --recording",
+    )
+    parser.add_argument(
+        "--component", type=Path, default=None,
+        help="a component's root directory (e.g. modules/df) -- report it against "
+             "sim_sil_contract.md section 10's thirteen-row checklist (ST-D6-4)",
     )
     return parser
 
@@ -67,7 +79,7 @@ def run(argv: list[str] | None = None) -> int:
     report = doctor_report(
         pipeline_path=args.pipeline, search=args.search, recording_path=args.recording,
         config_path=args.config, project=args.project, config_source=args.config_source,
-        plugin_root=args.plugin_root,
+        plugin_root=args.plugin_root, component_root=args.component,
     )
     for key, value in report.items():
         if isinstance(value, (list, dict)):

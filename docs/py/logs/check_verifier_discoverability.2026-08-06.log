@@ -8,7 +8,7 @@ Measured
 --------
 ticked ids  source files scanned  undiscoverable  baseline
 ----------  --------------------  --------------  --------
-297         1371                  0               0
+298         1373                  0               0
 
 ok    0 undiscoverable, exactly the declared baseline -- no growth
 

@@ -201,6 +201,103 @@ def _plugin_diagnoses(
     return results
 
 
+#: `ST-D6-4` (`sim_sil_contract.md` section 10, `NR-SIM-48`): the thirteen
+#: rows of "what a component owes the framework," stated the same way every
+#: other `sim doctor` check is -- generic over a `component_root` a caller
+#: supplies, never a hardcoded name (`R-SIM-1`). Each entry: the row's own
+#: number, a short label matching section 10's own table, whether it is
+#: `"required"`/`"conditional"`/`"optional"` (section 10's own legend), and a
+#: callable answering `present` for a given `component_root`. Required rows
+#: absent are unconditionally a gap; conditional/optional rows are reported
+#: present-or-absent WITHOUT this tool guessing "legitimate" for an absence
+#: it cannot itself justify (`vdy`'s "nothing to draw" is a fact about `vdy`,
+#: not something the framework may know, R-SIM-1) -- a human reads the
+#: report and makes that call, section 10's own "three readings" already
+#: does this by hand for `df`/`vdy`/`perception-core`.
+def _has_files(directory: Path, *, suffix: str | None = None) -> bool:
+    if not directory.is_dir():
+        return False
+    return any(p.is_file() and (suffix is None or p.suffix == suffix) for p in directory.rglob("*"))
+
+
+def _config_bundle_packed(component_root: Path, component_name: str) -> bool:
+    sil_cmake = component_root / "src" / "platform" / f"{component_name}_sil" / "CMakeLists.txt"
+    if not sil_cmake.is_file():
+        return False
+    return "adas_pack_config_bundle" in sil_cmake.read_text(encoding="utf-8", errors="replace")
+
+
+def _period_us_declared(component_root: Path) -> bool:
+    project_dir = component_root / "src" / "project"
+    if not project_dir.is_dir():
+        return False
+    for default_yaml in project_dir.glob("*/default.yaml"):
+        if "_PERIOD_US" in default_yaml.read_text(encoding="utf-8", errors="replace"):
+            return True
+    return False
+
+
+def _scenarios_with_expectations(component_root: Path) -> bool:
+    tests_dir = component_root / "tests"
+    if not tests_dir.is_dir():
+        return False
+    for scenario in tests_dir.rglob("*.yaml"):
+        if "expect:" in scenario.read_text(encoding="utf-8", errors="replace"):
+            return True
+    return False
+
+
+def component_checklist(component_root: Path) -> list[dict[str, object]]:
+    """`sim doctor --component <root>` (`ST-D6-4`): each of section 10's
+    thirteen rows, checked mechanically against a real component tree.
+    `component_root` is a path (e.g. `modules/df`), like every other
+    `sim doctor` input -- never a bare name this module would have to guess
+    a superproject layout to resolve (`R-SIM-11`). The component's own name
+    is read from `conf/ports.yaml`'s `component:` field when present (rows
+    4/6 need it to name a real directory), falling back to `component_root`'s
+    own directory name otherwise -- best-effort, stated as such, since a
+    missing `conf/ports.yaml` is itself row 2's own finding."""
+    ports_yaml = component_root / "conf" / "ports.yaml"
+    component_name = component_root.name
+    if ports_yaml.is_file():
+        for line in ports_yaml.read_text(encoding="utf-8", errors="replace").splitlines():
+            stripped = line.strip()
+            if stripped.startswith("component:"):
+                component_name = stripped.split(":", 1)[1].strip()
+                break
+
+    rows: list[tuple[int, str, str, bool]] = [
+        (1, "conf/build.yml", "required", (component_root / "conf" / "build.yml").is_file()),
+        (2, "conf/ports.yaml", "required", ports_yaml.is_file()),
+        (3, "src/component/** port structs", "required", _has_files(component_root / "src" / "component", suffix=".hpp")),
+        (4, "src/platform/<name>_sil/", "required",
+         (component_root / "src" / "platform" / f"{component_name}_sil").is_dir()),
+        (5, "src/project/<p>/default.yaml", "required",
+         any((component_root / "src" / "project").glob("*/default.yaml"))),
+        (6, "config bundle packed beside the library", "required", _config_bundle_packed(component_root, component_name)),
+        (7, "<COMPONENT>_<FN>_PERIOD_US in calibration", "required", _period_us_declared(component_root)),
+        (8, "sim/plugin.yaml + sim/layers/**", "conditional",
+         (component_root / "sim" / "plugin.yaml").is_file() and _has_files(component_root / "sim" / "layers")),
+        (9, "sim/ingest/**", "conditional", _has_files(component_root / "sim" / "ingest")),
+        (10, "sim/pipelines/**", "optional", _has_files(component_root / "sim" / "pipelines")),
+        (11, "sim/viewpoints.yaml, sim/sensor_models/**", "optional",
+         (component_root / "sim" / "viewpoints.yaml").is_file() or _has_files(component_root / "sim" / "sensor_models")),
+        (12, "sim/tolerance.yaml", "conditional", (component_root / "sim" / "tolerance.yaml").is_file()),
+        (13, "scenarios with expect: blocks", "conditional", _scenarios_with_expectations(component_root)),
+    ]
+
+    return [
+        {
+            "row": n, "artifact": artifact, "kind": kind, "present": present,
+            # Required + absent is the one case this tool CAN call unconditionally --
+            # every other absence is reported, never judged (see this function's own
+            # docstring on why).
+            "gap": kind == "required" and not present,
+        }
+        for n, artifact, kind, present in rows
+    ]
+
+
 def _codec_diagnoses() -> list[dict[str, object]]:
     return [{"extension": ext, **(codec_info(ext) or {})} for ext in registered_extensions()]
 
@@ -238,6 +335,7 @@ def doctor_report(
     project: str = "base",
     config_source: ConfigSource | None = None,
     plugin_root: Path | None = None,
+    component_root: Path | None = None,
 ) -> dict[str, object]:
     """Gather `sim doctor`'s facts (DG-3). With no arguments, exactly the
     S-A1 slice (interpreter, install mode, platform, console encoding, line
@@ -314,6 +412,13 @@ def doctor_report(
         report["recording"] = recording
         if not recording["ok"]:
             problems.append(f"recording '{recording_path}': {recording['detail']}")
+
+    if component_root is not None:
+        # ST-D6-4: deliberately NOT wired into `problems` -- section 10's
+        # own text calls this "deliberately not a gate," so a required row's
+        # absence is reported (and printed loudly by cli/doctor.py) but
+        # never makes `sim doctor`'s exit code non-zero.
+        report["component_checklist"] = component_checklist(component_root)
 
     report["problems"] = problems
     return report

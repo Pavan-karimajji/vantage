@@ -1097,10 +1097,22 @@ worst possible witness for it.
 | 1 | `conf/build.yml` — variants, requires, platforms | **required** | `R-VAR-3` | ✅ | ✅ | ✅ |
 | 2 | `conf/ports.yaml` — the ONE port declaration | **required** | `R-SIM-22` | ✅ | ✅ | ✅ *(2026-08-06)* |
 | 3 | `src/component/**` port structs the generator reads | **required** | `R-SIM-22` | ✅ | ✅ | ✅ *(2026-08-06)* |
-| 4 | `src/platform/<name>_sil/` — the generated generic-ABI shim | **required** | `R-SIM-4`, `R-SIM-22` | ✅ | ✅ | ❌ **absent** |
-| 5 | `src/project/<p>/default.yaml` — calibration | **required** | `R-VAR-4` | ✅ | ✅ | ✅ *(2026-08-06)* |
-| 6 | Config bundle packed beside the library | **required** | `R-SIM-3a` | ✅ | ✅ | ❌ (follows 4) |
-| 7 | `<COMPONENT>_<FN>_PERIOD_US` in calibration | **required** | `OD-12`, `R-SIM-18` | ✅ | ✅ | ✅ *(declared; unread until 4)* |
+| 4 | `src/platform/<name>_sil/` — the generated generic-ABI shim | **required** | `R-SIM-4`, `R-SIM-22` | ✅ | ✅ | ✅ *(2026-08-06, `ST-D6-4`'s own build queue row 1)* |
+| 5 | `src/project/<p>/default.yaml` — calibration | **required** | `R-VAR-4` | ✅ | ❌ **corrected 2026-08-06** — no `src/project/` directory exists in `vdy` at all; its ego-state calibration is read entirely from the cross-component `adas-shared-config` package instead. The `✅` above was never measured; `component_checklist` (`ST-D6-4`) is what found it | ✅ *(2026-08-06)* |
+| 6 | Config bundle packed beside the library | **required** | `R-SIM-3a` | ✅ | ❌ **corrected 2026-08-06** — `vdy_sil/CMakeLists.txt` calls no `adas_pack_config_bundle()` and nothing else packs one; `adasInit(NULL)` has nothing to resolve. Same measurement gap as row 5 | ❌ *(deliberate — mirrors `vdy_sil`, `ST-D6-4`'s build queue row 1 own account)* |
+| 7 | `<COMPONENT>_<FN>_PERIOD_US` in calibration | **required** | `OD-12`, `R-SIM-18` | ✅ | ❌ **corrected 2026-08-06** — follows row 5: no `src/project/` means no calibration file to declare it in. `vdy_interface_c.cpp`'s own `periodLookupUs` passthrough was never wrong about this — ungated, so nothing calls it — but the manifest's declared source, row 5, was never really there | ✅ *(declared, real; still unread by the generated `periodLookupUs` path — `perception-core` is ungated, same as `vdy`)* |
+
+**Rows 5–7, `vdy` column, corrected 2026-08-06 (`ST-D6-4`, sim build queue
+row 3).** The three `✅`s above were asserted, not measured, when this table
+was first written (`AR-43`) — `component_checklist()`, the mechanism this row
+built, is what actually looked and found `modules/vdy/src/project/` does not
+exist. This is not a regression: `vdy` never had it. It is the table's own
+claim that was wrong, corrected here rather than quietly left — and it is
+exactly the class of finding this checklist exists to surface (row 3's own
+framing: *"this is the check that would have caught row 2"*). **Not fixed
+here** — `vdy`'s calibration wiring is real, functional source, outside a
+docs-only row's mandate, same discipline the audit itself already applies
+elsewhere in this ledger.
 | 8 | `sim/plugin.yaml` + `sim/layers/**` | **conditional** | `R-SIM-20` | ✅ | ➖ *legitimately none* | ✅ *(2026-08-06)* |
 | 9 | `sim/ingest/**` — the map for foreign recordings | **conditional** | `R-SIM-23` | ✅ | ➖ | ❌ *(none yet; no foreign recordings)* |
 | 10 | `sim/pipelines/**` | optional | `R-SIM-16` | ✅ | ❌ | ❌ |
