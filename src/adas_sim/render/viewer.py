@@ -1049,6 +1049,7 @@ class MainWindow(QtWidgets.QMainWindow):
                  pipeline_path: Path | None = None,
                  pipeline_search: Sequence[Path] = (),
                  pipeline_config: Path | None = None,
+                 config_library_dir: Path | None = None,
                  parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
         # No product name set here (UT-D8-9) -- this module is outside
@@ -1059,6 +1060,12 @@ class MainWindow(QtWidgets.QMainWindow):
         # someone in app/ names it.
         self._project = project
         self._recording_path = recording
+        #: `AR-55` (2026-08-07): a component's DEPLOYED plug-in copy's own
+        #: `config/` directory (`scripts/vantage.py --plugin-root`), so
+        #: `_resolve_project_model` can resolve calibration from the same
+        #: bundle the SUT was packed with instead of only `embedded`/
+        #: `checkout`. `None` for the plain `sim view` entrypoint.
+        self._config_library_dir = config_library_dir
         #: `sim view <session> [--preset] [--at]` (`sim_api_reference.md`
         #: §10) -- applied once, in `_on_loaded`, after the workspace's own
         #: `tabs[0]` viewpoint (a command-line preset is a more specific
@@ -1335,19 +1342,31 @@ class MainWindow(QtWidgets.QMainWindow):
         `build_static_scene`/`build_reactive_layers` call reuses one
         `ProjectModel` instead of paying `resolve()`'s checkout-only
         default per tick (`core/runner.py`'s own `build_scene(model=...)`
-        docstring). The viewer has no `library_dir`/`explicit` source of
-        its own (`R-SIM-13`: it only ever holds a `Session`) -- `embedded`
-        vs `checkout` are the two tiers reachable here, matching this
-        stage's own scope note. A previous session's scratch directory is
-        removed first -- one temp dir per window, not one per load."""
+        docstring). **`AR-55` (2026-08-07):** the viewer has no `explicit`
+        source of its own (`R-SIM-13`: it only ever holds a `Session`), but
+        it does have `self._config_library_dir` when launched via
+        `vantage.py --plugin-root` -- a real fourth source, `library_dir=`,
+        threaded through so a component's own layer code can read the
+        calibration its DEPLOYED plug-in copy was actually packed with
+        (`ProjectModel.bundle_dir`), not only a recording's `embedded`
+        bundle or the source-checkout fallback. `explicit -> embedded ->
+        library -> checkout` is `ProjectModel.resolve`'s own priority order
+        (`R-SIM-3a`), so passing `library_dir=` unconditionally here is
+        safe even when `self._config_library_dir` is `None` (that tier is
+        then simply skipped) and even when a recording's own embedded
+        bundle also exists (embedded still wins). A previous session's
+        scratch directory is removed first -- one temp dir per window, not
+        one per load."""
         if self._project_model_scratch_dir is not None:
             shutil.rmtree(self._project_model_scratch_dir, ignore_errors=True)
             self._project_model_scratch_dir = None
         if not session.config_bundle_bytes:
-            return ProjectModel.resolve(project=self._project)
+            return ProjectModel.resolve(project=self._project, library_dir=self._config_library_dir)
         self._project_model_scratch_dir = Path(tempfile.mkdtemp(prefix="adas_sim_bundle_"))
         extract_embedded_bundle(session.config_bundle_bytes, self._project_model_scratch_dir)
-        return ProjectModel.resolve(recording=self._project_model_scratch_dir, project=self._project)
+        return ProjectModel.resolve(
+            recording=self._project_model_scratch_dir, library_dir=self._config_library_dir, project=self._project,
+        )
 
     def _on_loaded(self, session: Session) -> None:
         self._session = session

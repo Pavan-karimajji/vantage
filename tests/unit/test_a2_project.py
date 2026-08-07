@@ -73,6 +73,22 @@ def test_resolution_order_explicit_beats_embedded_beats_library_beats_checkout(t
     assert none_given.project == "base"
 
 
+def test_bundle_dir_is_the_winning_tiers_own_directory_and_none_for_checkout(tmp_path):
+    """`AR-55` (2026-08-07): `bundle_dir` is what lets a component's own
+    layer code (`df/sim/layers/bsd.py`'s calibration reader) read ITS OWN
+    calibration from the SAME directory this model resolved from, instead
+    of separately computing a source-checkout-only path. `None` only for
+    `checkout` -- that tier never resolved a packed-bundle-shaped directory
+    at all (ego came from `shared_config`'s own tree)."""
+    library_dir = _make_bundle(tmp_path, "library", project="fx", length=3.0, width=3.0, wheelbase=3.0, overhang=0.3)
+
+    resolved = ProjectModel.resolve(library_dir=library_dir, project="fx")
+    assert resolved.bundle_dir == library_dir
+
+    checkout = ProjectModel.resolve(project="base")
+    assert checkout.bundle_dir is None
+
+
 def test_project_mismatch_emits_provenance_warning_and_still_resolves(tmp_path):
     """UT-A2-10 / UT-C5-3: a project mismatch degrades visibly (a warning) and
     the run continues -- it never raises and never silently substitutes

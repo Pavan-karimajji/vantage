@@ -36,6 +36,7 @@ def launch(
     pipeline_path: Path | None = None,
     pipeline_search: Sequence[Path] = (),
     pipeline_config: Path | None = None,
+    config_library_dir: Path | None = None,
 ) -> int:
     set_high_dpi_policy()
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
@@ -43,6 +44,7 @@ def launch(
         recording, project=project, workspace_path=workspace_path,
         preset=preset, at_s=at_s, scenario_path=scenario_path,
         pipeline_path=pipeline_path, pipeline_search=pipeline_search, pipeline_config=pipeline_config,
+        config_library_dir=config_library_dir,
     )
     window.show()
     return app.exec()

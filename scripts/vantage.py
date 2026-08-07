@@ -36,13 +36,26 @@ if str(_SRC) not in sys.path:
 from adas_sim.model.plugins import PluginBundle  # noqa: E402
 
 
-def _register_plugin_root(library_dir: Path) -> None:
+def _register_plugin_root(library_dir: Path) -> Path:
+    """Imports the plug-in half (`sim/plugin.yaml`) and returns
+    `library_dir/config` -- the SAME directory the build packed this
+    component's config bundle into, beside `sim/` (`R-SIM-3a`,
+    `interfaces/scripts/pack_config_bundle.py`). `main()` uses the first
+    root's config directory as `MainWindow`'s `config_library_dir` (`AR-55`,
+    2026-08-07) -- without it, a component's own layer code (`df.bsd`'s
+    `_bsd_calibration`) has no way to read its own calibration from a
+    DEPLOYED plug-in copy, only from a source checkout (the exact bug that
+    finding named). Returned unconditionally, even if `sim/plugin.yaml` is
+    absent -- `ProjectModel.resolve` degrades a missing/empty `config/`
+    tier to the next one on its own (`_bundle_ego` returns `None` when
+    `ego_params.yaml` isn't there), so there is nothing to validate here."""
     library_dir = library_dir.resolve()
     bundle = PluginBundle.resolve(library_dir=library_dir / "sim")
     if bundle is None:
         print(f"warning: {library_dir} has no sim/plugin.yaml -- nothing to import from it", file=sys.stderr)
-        return
-    bundle.import_modules()
+    else:
+        bundle.import_modules()
+    return library_dir / "config"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -93,15 +106,24 @@ def main() -> int:
     plugin_roots = list(args.plugin_root)
     env_path = os.environ.get("ADAS_SIM_PLUGIN_PATH", "")
     plugin_roots.extend(Path(p) for p in env_path.split(os.pathsep) if p)
+    # `AR-55` (2026-08-07): the FIRST plugin root's own config/ directory
+    # (deliberately narrow -- an N-way cross-bundle agreement check across
+    # several plugin roots, R-SIM-3a's "project agreement"/"ego-parameter
+    # agreement" checks, is real future work this row does not attempt;
+    # a single component is what --plugin-root is used for in practice
+    # today, sim_learn.md section 5's own worked example).
+    config_library_dir: Path | None = None
     for root in plugin_roots:
-        _register_plugin_root(root)
+        resolved_config_dir = _register_plugin_root(root)
+        if config_library_dir is None:
+            config_library_dir = resolved_config_dir
 
     import adas_sim.io.mcap  # noqa: F401 -- registers the ".mcap" codec
     from adas_sim.app.gui import launch
 
     return launch(
         args.recording, project=args.project, workspace_path=args.workspace,
-        preset=args.preset, at_s=args.at,
+        preset=args.preset, at_s=args.at, config_library_dir=config_library_dir,
         pipeline_path=args.pipeline, pipeline_search=args.search, pipeline_config=args.config,
     )
 

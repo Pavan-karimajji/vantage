@@ -270,9 +270,9 @@ def test_changing_a_sensor_value_changes_the_drawn_fov(monkeypatch):
     })
     wide = replace(narrow, fields={**narrow.fields, "FOV_AZIMUTH_DEG": 75.0})
 
-    monkeypatch.setattr(bsd, "_bsd_sensors", lambda project: (narrow,))
+    monkeypatch.setattr(bsd, "_bsd_sensors", lambda project, bundle_dir: (narrow,))
     narrow_prims = bsd.sensor_fov_layer(ctx)[0].prims
-    monkeypatch.setattr(bsd, "_bsd_sensors", lambda project: (wide,))
+    monkeypatch.setattr(bsd, "_bsd_sensors", lambda project, bundle_dir: (wide,))
     wide_prims = bsd.sensor_fov_layer(ctx)[0].prims
 
     assert narrow_prims[0].points_m != wide_prims[0].points_m

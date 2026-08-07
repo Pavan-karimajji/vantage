@@ -5988,6 +5988,26 @@ reports which one won.
       imported — deliberately sidestepped, not worked around). **Not
       proven: an actual `vantage <dir>` GUI frame** — same scope split
       `S-C5` drew between the mechanism and a full CLI/GUI run
+      **Extended 2026-08-07 (`AR-55`):** load-and-register alone let a real
+      bug through — a driving function's own calibration reader worked from
+      a source checkout but crashed (`FileNotFoundError`) from exactly the
+      relocated/deployed copy this test proves resolves and imports. Both
+      tests now ALSO resolve `ProjectModel` off the relocated `config/`
+      directory (sibling of `sim/`, same build) and call two real
+      calibration-derived layer providers through it, asserting real prims
+      come back — the actual call that used to crash. Fixed at the root:
+      `ProjectModel` gained `bundle_dir` (the winning tier's own directory),
+      the calibration reader uses it when given and falls back to the
+      checkout-relative path only when `bundle_dir is None` (genuinely no
+      packed bundle involved), and `vantage.py`/`MainWindow`/`VantageWindow`
+      thread `--plugin-root`'s own `config/` directory through so the real
+      GUI entrypoint gets the fix too, not only this test's direct calls.
+      Also found and fixed along the way: `pack_plugin_bundle.py`'s
+      `bundle_sha256` walked the DESTINATION directory unfiltered, so a
+      `.pyc` left behind by an earlier real import (exactly what a prior
+      `vantage.py --plugin-root <build dir>` run leaves) crashed the NEXT
+      rebuild's hash step — now excludes `__pycache__` the same way the
+      copy step already did.
 - [~] `GT-12` — the load-and-register mechanism is proven standalone; the full
       "`vantage <dir>` renders a run" GUI-level claim is not exercised by an
       automated test this pass

@@ -66,6 +66,7 @@ class VantageWindow(QtWidgets.QMainWindow):
         pipeline_path: Path | None = None,
         pipeline_search: Sequence[Path] = (),
         pipeline_config: Path | None = None,
+        config_library_dir: Path | None = None,
         sample_pipelines: Sequence[SamplePipeline] = (),
         parent: QtWidgets.QWidget | None = None,
     ) -> None:
@@ -75,6 +76,13 @@ class VantageWindow(QtWidgets.QMainWindow):
         self._default_project = project
         self._pipeline_search = tuple(pipeline_search)
         self._pipeline_config = pipeline_config
+        #: `AR-55` (2026-08-07): `--plugin-root`'s own `config/` directory
+        #: (`scripts/vantage.py`), so `MainWindow`'s `ProjectModel` resolves
+        #: a DEPLOYED plug-in's calibration the SUT was actually packed
+        #: with, not only a recording's embedded bundle or the checkout
+        #: fallback. `None` for the plain `sim view` entrypoint, which has
+        #: no plugin-root concept at all.
+        self._config_library_dir = config_library_dir
 
         self.campaign = CampaignWidget()
         self.campaign.open_on_bench_requested.connect(self._on_open_on_bench_requested)
@@ -152,6 +160,7 @@ class VantageWindow(QtWidgets.QMainWindow):
             recording, project=project if project is not None else self._default_project,
             workspace_path=workspace_path, preset=preset, initial_at_s=at_s, scenario_path=scenario_path,
             pipeline_path=pipeline_path, pipeline_search=self._pipeline_search, pipeline_config=self._pipeline_config,
+            config_library_dir=self._config_library_dir,
         )
         self._stack.insertWidget(0, self.bench)
         self._attach_console_dock()

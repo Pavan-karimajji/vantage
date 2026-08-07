@@ -241,6 +241,24 @@ class ProjectModel:
     bundle_sha256: str
     bundle_origin: BundleOrigin
     _ego: EgoModel
+    #: The winning tier's own directory (`AR-55`, 2026-08-07) -- `None` for
+    #: `bundle_origin == "checkout"`, which never resolved a packed-bundle-
+    #: shaped directory at all (ego came from `shared_config`'s own tree,
+    #: `SHARED_CONFIG_PROJECTS`, not a `<library_dir>/config/`-shaped one).
+    #: For the other three tiers this IS `<...>/config/` -- a real packed
+    #: bundle carries the component's own `default.yaml` beside `vehicle/
+    #: ego_params.yaml` (`interfaces/scripts/pack_config_bundle.py`), so a
+    #: component's own layer code (e.g. a driving function's own calibration
+    #: reader) can read ITS OWN calibration from the SAME directory
+    #: `ProjectModel` already resolved, instead of separately computing a
+    #: source-checkout-only path that a deployed plug-in copy has no way to
+    #: satisfy. This is the "generic bundle-directory
+    #: accessor" this module's own top-of-file docstring named as not yet
+    #: existing -- deliberately narrow: a `Path`, not a parsed-YAML
+    #: accessor, since only the checkout/library distinction is generic;
+    #: which key means what is still entirely the component's own business
+    #: (`R-SIM-1`).
+    bundle_dir: Path | None = None
 
     def __repr__(self) -> str:
         return f"<ProjectModel {self.project!r} origin={self.bundle_origin}>"
@@ -282,7 +300,7 @@ class ProjectModel:
                 )
             )
         sha = _bundle_sha256(bundle_dir)
-        return cls(project=resolved_project, bundle_sha256=sha, bundle_origin=origin, _ego=ego)
+        return cls(project=resolved_project, bundle_sha256=sha, bundle_origin=origin, _ego=ego, bundle_dir=bundle_dir)
 
     @classmethod
     def _resolve_checkout(cls, project: str) -> ProjectModel:

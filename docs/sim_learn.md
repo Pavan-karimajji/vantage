@@ -577,10 +577,10 @@ sim resim runs/2026-07-30/bsd_ego_lane_exit.mcap --pipeline df_only.yaml
 # Did it do what the scenario says it should?  (headless, exits non-zero)
 sim check modules/df/tests/carla_scenarios/bsd/
 
-# Open it in the window -- --plugin-root is what makes df's own zones and
-# ego box actually draw (see the note right after this block: point it at
-# the CHECKOUT, not the build output, until S-C1c's own scoped gap closes)
-vantage.bat modules\df\tests\carla_testruns\bsd\bsd_ego_lane_exit.mcap --plugin-root modules\df
+# Open it in the window -- --plugin-root points at the BUILT library
+# directory (the deployed copy, R-SIM-20) and makes df's own zones and
+# ego box actually draw
+vantage.bat modules\df\tests\carla_testruns\bsd\bsd_ego_lane_exit.mcap --plugin-root modules\df\build-sil-vs2026\src\platform\df_sil\Release
 ```
 
 Two things to notice.
@@ -590,28 +590,28 @@ by asking the DLL. That is the whole design, compressed into six commands.
 
 **Every path points into `modules/df`.** That is not incidental — see below.
 
-**`--plugin-root`, verified for real, 2026-08-07 — and one honest catch.**
-This whole block used to read "once this is finished," future tense. The
-`vantage`/`sim probe`/`sim resim` half of it is real today, against a real
-`perception_core_sil.dll` and `df_sil.dll` (`sim` build queue rows 1–4).
-Running `vantage.bat` against a real BSD recording found one genuine gap
-worth knowing before you hit it yourself: `--plugin-root` is documented to
-take a component's **built library directory** — `df_sil`'s own
-`Release/sim/` copy, packed there by the build (`R-SIM-20`) — and that is
-where a real deployment should point it. But `df/sim/layers/bsd.py`'s own
-`_bsd_calibration` still reads its zone geometry relative to *itself*
-(`_DF_ROOT / "src" / "project" / ...`), and its own docstring already says
-so — *"this still reads the source checkout, not the bundle the SUT was
-initialised with... there is nothing beyond the project name to route this
-through until [`ProjectModel` gains a bundle-directory accessor]."* Point
-`--plugin-root` at the built `Release/` directory today and BSD's own
-layers crash on load with a `FileNotFoundError` reaching for a path that
-only exists inside the source tree. Point it at the checkout instead
-(`modules\df`, exactly as shown above) and everything works, because that
-is where `bsd.py` genuinely lives — no crash, real `bsd`/`df` layer groups
-appear in the Layers panel, check their boxes to draw. This is `df`'s own
-scoped gap, not `modules/sim`'s; closing it for real is "give `ProjectModel`
-a bundle-directory accessor," separate work this walkthrough only reports.
+**`--plugin-root`, verified for real, 2026-08-07 — a gap found, then closed
+the same day.** This whole block used to read "once this is finished,"
+future tense. The `vantage`/`sim probe`/`sim resim` half of it is real
+today, against a real `perception_core_sil.dll` and `df_sil.dll` (`sim`
+build queue rows 1–4). Running `vantage.bat` against a real BSD recording
+first found a genuine gap: `--plugin-root` is documented to take a
+component's **built library directory** — `df_sil`'s own `Release/sim/`
+copy, packed there by the build (`R-SIM-20`) — but `df/sim/layers/bsd.py`'s
+own `_bsd_calibration` read its zone geometry relative to *itself*
+(`_DF_ROOT / "src" / "project" / ...`), which resolves correctly for a
+source checkout but not for a deployed copy — `FileNotFoundError` on the
+very first tick (`sim_audit_log.md` `AR-55`). **Fixed the same day**:
+`ProjectModel` gained the `bundle_dir` accessor its own docstring had
+flagged as missing — the winning tier's own directory, `<library_dir>/
+config/` for a deployed copy — and `_bsd_calibration` now reads `default.
+yaml` from there when it is available, falling back to the checkout-relative
+path only when it genuinely is a checkout (`bundle_dir is None`). `vantage.py`
+threads `--plugin-root`'s own `config/` directory through to the viewer's
+`ProjectModel.resolve` the same way. Point `--plugin-root` at the built
+`Release/` directory (as shown above) or at the checkout — both work now;
+real `bsd`/`df` layer groups appear in the Layers panel either way, check
+their boxes to draw.
 
 ### Vantage authors nothing
 
