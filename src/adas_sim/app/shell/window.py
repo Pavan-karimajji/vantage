@@ -206,15 +206,17 @@ class VantageWindow(QtWidgets.QMainWindow):
     def _on_sample_pipeline_requested(self, sample: SamplePipeline) -> None:
         self.open_recording(sample.recording_path, pipeline_path=sample.pipeline_path)
 
-    def _on_open_on_bench_requested(self, recording: Path, pipeline_path: Path) -> None:
-        """`UT-D8-3`: Campaign's own escape hatch -- the SAME recording and
-        pipeline file a result row named, reopened on Bench. Not yet the
-        exact failing tick (that needs `expect:` evaluation to attribute a
-        tick to a result, `sim check`'s own job, not wired into this
-        signal this pass) -- left open rather than guessed at, same
-        discipline `StartPage`'s own docstring states for the sample
-        pipelines it does not yet ship."""
-        self.open_recording(recording, pipeline_path=pipeline_path)
+    def _on_open_on_bench_requested(self, recording: Path, pipeline_path: Path, at_s: float) -> None:
+        """`UT-D8-3`/`ST-D7-6`: Campaign's own escape hatch -- the SAME
+        recording and pipeline file a result row named, reopened on Bench,
+        seeked to `at_s` (`CampaignWidget`'s own `RecordingOutcome.
+        last_tick_ns / 1e9` for a `crash`/`timeout` row -- a fact `run_batch`
+        already captured, needing no `expect:` evaluation -- or `0.0`,
+        identical to today's tick-0 default, for every other outcome).
+        **Still open, honestly**: attributing a tick to an `ok`/`fail` result
+        against its `expect:` criteria is `sim check`'s own job and is not
+        this signal's scope -- those rows still open at tick 0."""
+        self.open_recording(recording, pipeline_path=pipeline_path, at_s=at_s if at_s > 0.0 else None)
 
     def _toggle_workspace(self) -> None:
         self.switch_to("campaign" if self._workspace_name == "bench" else "bench")

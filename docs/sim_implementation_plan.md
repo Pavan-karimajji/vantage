@@ -7464,7 +7464,10 @@ all `RESULT pass`/`RESULT ok`.
   doesn't pass the mapping at all (every resim-produced manifest today
   carries `library_sha256=""`). That hashing step is real, separate work.
 - **`ST-D7-6`** (a crash reproduces in-process on Bench) — needs a Bench GUI,
-  which does not exist (`S-D8` unbuilt). The recording/pipeline/last-tick/
+  which does not exist (`S-D8` unbuilt). **Superseded 2026-08-07: `S-D8`
+  landed `Open on Bench`, and the build queue's row 4 sub-row 3 wired the
+  crash tick through it — see `ST-D7-6`'s own checkbox below, now done.**
+  The recording/pipeline/last-tick/
   stderr/`run_id` this stage's own crash classification already captures is
   exactly what that future "Open on Bench" affordance would consume; the
   data side is done, the GUI side is a different stage's job.
@@ -7604,10 +7607,44 @@ copy path is lossless, just not the "different format" half of the claim.
       those two distinctly classified; exit code reflects failure without
       hiding the successes.
       `test_batch_of_20_with_one_crash_one_hang_exit_code_reflects_failure`
-- [ ] `ST-D7-6` **a crash is reproducible**: the recorded recording + pipeline +
+- [x] `ST-D7-6` **a crash is reproducible**: the recorded recording + pipeline +
       tick + `run_id` reproduce it in-process on Bench, where a debugger can
       attach (`R-SIM-19`) — the loop that makes crashes get fixed rather than
-      retried
+      retried. **Done 2026-08-07** (sim build queue row 4, sub-row 3), once
+      `S-D8` landed `Open on Bench` (`UT-D8-3`) to build on — the "needs a
+      Bench GUI that doesn't exist" blocker this box's own history noted is
+      resolved. `CampaignWidget.open_on_bench_requested` widened from
+      `(recording, pipeline_path)` to `(recording, pipeline_path, at_s)`:
+      `at_s = RecordingOutcome.last_tick_ns / 1e9` for the activated row, or
+      `0.0` when `last_tick_ns` is `None` — identical to `open_recording`'s
+      own pre-existing `at_s=None` default (`Session.seek_ns(0)` is tick 0
+      either way, so a plain `float` signal type needs no `None` case).
+      `window.py`'s `_on_open_on_bench_requested` threads it straight into
+      `open_recording(..., at_s=...)`, which already seeked
+      (`MainWindow.__init__`'s `initial_at_s` → `session.seek_ns` →
+      `self.transport.goto(start_tick)`) for every OTHER caller of
+      `open_recording` (a recent-file reopen, a sample pipeline) — this row
+      is wiring one more caller through an existing mechanism, not building
+      seek-on-open from nothing. The recording/pipeline reopen itself
+      predates this row (`UT-D8-3`); this closes the tick half that box's
+      own note left open. `run_id` needs no separate propagation — it
+      travels embedded in the recording file `open_recording` already
+      reopens. **Deliberately narrow, stated rather than widened
+      silently**: only a `crash`/`timeout` outcome's tick is wired, because
+      `RecordingOutcome.last_tick_ns` is a fact `run_batch` already captured
+      with no evaluation needed; an `ok`/`fail` outcome still opens at tick
+      0, because attributing ITS tick needs `expect:` evaluation
+      (`sim check`'s own job, `UT-D8-3`'s own original scope note, left
+      exactly as narrow as it already was). New/updated tests:
+      `tests/system/test_d8_campaign.py::test_double_clicking_a_crash_row_
+      emits_its_last_tick_as_at_s` (new) + its existing sibling updated for
+      the widened signal; `tests/system/test_d8_window.py::
+      test_ut_d7_6_open_on_bench_seeks_to_a_crash_results_last_tick` (new,
+      asserts `window.bench.transport.cursor` lands on the exact tick, not
+      merely that the call didn't raise) + `test_ut_d8_3_...`'s own
+      assertion extended to confirm the non-crash path still lands at
+      cursor 0. 29/29 in both files, full suite/`check_invariants.py`/
+      `run_all.py` all clean (see Status note)
 - [x] `UT-D7-9` **`--pin-builds` verifies, it does not merely address**
       (`OQ-9`, `NR-SIM-24`): resolving a component to an artefact whose
       `library_sha256` differs from the recording's **refuses to start**, naming

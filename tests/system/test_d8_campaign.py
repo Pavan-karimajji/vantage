@@ -104,9 +104,25 @@ def test_double_clicking_a_result_row_emits_open_on_bench_requested():
     widget.load_recording_set([Path("a.mcap")], Path("p.yaml"))
     widget.show_results([RecordingOutcome(recording=Path("a.mcap"), outcome="fail", duration_s=0.5)])
     received = []
-    widget.open_on_bench_requested.connect(lambda rec, pipe: received.append((rec, pipe)))
+    widget.open_on_bench_requested.connect(lambda rec, pipe, at_s: received.append((rec, pipe, at_s)))
     widget._on_result_row_activated(widget._results_table.item(0, 0))
-    assert received == [(Path("a.mcap"), Path("p.yaml"))]
+    assert received == [(Path("a.mcap"), Path("p.yaml"), 0.0)]
+
+
+def test_double_clicking_a_crash_row_emits_its_last_tick_as_at_s():
+    """`ST-D7-6`: a `crash`/`timeout` row's `last_tick_ns` is a fact
+    `run_batch` already captured -- `Open on Bench` seeks there directly,
+    no `expect:` evaluation needed."""
+    _app()
+    widget = CampaignWidget()
+    widget.load_recording_set([Path("a.mcap")], Path("p.yaml"))
+    widget.show_results([
+        RecordingOutcome(recording=Path("a.mcap"), outcome="crash", duration_s=0.5, last_tick_ns=7_500_000_000),
+    ])
+    received = []
+    widget.open_on_bench_requested.connect(lambda rec, pipe, at_s: received.append((rec, pipe, at_s)))
+    widget._on_result_row_activated(widget._results_table.item(0, 0))
+    assert received == [(Path("a.mcap"), Path("p.yaml"), 7.5)]
 
 
 def test_run_button_drives_run_batch_off_the_gui_thread_and_populates_results(monkeypatch):

@@ -93,7 +93,13 @@ class CampaignWidget(QtWidgets.QWidget):
     """`sim_player.md` §5's mockup, minus chrome: a recording list, a
     results table, a `Run` button, the copyable invocation line."""
 
-    open_on_bench_requested = QtCore.Signal(Path, Path)  # (recording, pipeline_path)
+    #: (recording, pipeline_path, at_s) -- `at_s` is `RecordingOutcome.
+    #: last_tick_ns / 1e9` for a `crash`/`timeout` result (`ST-D7-6`: that
+    #: tick is a fact `run_batch` already captured, no `expect:` evaluation
+    #: needed), else `0.0` -- identical to `open_recording`'s own `at_s=None`
+    #: default (`Session.seek_ns(0)` == tick 0 either way), so a plain
+    #: `float` signal type needs no `None` case.
+    open_on_bench_requested = QtCore.Signal(Path, Path, float)
 
     def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
@@ -221,4 +227,5 @@ class CampaignWidget(QtWidgets.QWidget):
     def _on_result_row_activated(self, item: QtWidgets.QTableWidgetItem) -> None:
         result: RecordingOutcome = item.data(QtCore.Qt.ItemDataRole.UserRole)
         if result is not None and self._pipeline_path is not None:
-            self.open_on_bench_requested.emit(result.recording, self._pipeline_path)
+            at_s = result.last_tick_ns / 1e9 if result.last_tick_ns is not None else 0.0
+            self.open_on_bench_requested.emit(result.recording, self._pipeline_path, at_s)

@@ -329,11 +329,12 @@ def test_ar45_console_panel_survives_and_rebinds_across_a_reopened_recording(tmp
 
 def test_ut_d8_3_open_on_bench_reopens_the_same_recording_and_pipeline(tmp_path):
     """`UT-D8-3`: `Open on Bench` reconstructs recording + pipeline (the
-    exact failing-tick attribution needs `sim check`'s own expectation
-    evaluation and is not wired to this signal yet, see `_on_open_on_
-    bench_requested`'s own docstring) -- the reconstructed pipeline path
-    is byte-identical to Campaign's, because it is literally the same
-    `Path`, never a converted or re-authored one."""
+    exact failing-tick attribution for an `ok`/`fail` result needs `sim
+    check`'s own expectation evaluation and is not wired to this signal --
+    see `_on_open_on_bench_requested`'s own docstring; a `crash`/`timeout`
+    result's own tick IS wired, `test_ut_d7_6_...` below) -- the
+    reconstructed pipeline path is byte-identical to Campaign's, because it
+    is literally the same `Path`, never a converted or re-authored one."""
     set_high_dpi_policy()
     QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     window = VantageWindow()
@@ -343,9 +344,28 @@ def test_ut_d8_3_open_on_bench_reopens_the_same_recording_and_pipeline(tmp_path)
     pipeline_bytes = b"version: 1\nname: campaign\nstages: []\n"
     pipeline_path.write_bytes(pipeline_bytes)
 
-    window.campaign.open_on_bench_requested.emit(recording, pipeline_path)
+    window.campaign.open_on_bench_requested.emit(recording, pipeline_path, 0.0)
     _pump_until_loaded(window)
 
     assert window.workspace_name == "bench"
     assert window.bench.pipeline_path == pipeline_path
     assert pipeline_path.read_bytes() == pipeline_bytes  # untouched, never re-authored
+    assert window.bench.transport.cursor == 0
+
+
+def test_ut_d7_6_open_on_bench_seeks_to_a_crash_results_last_tick(tmp_path):
+    """`ST-D7-6`: a crash/timeout result's own `last_tick_ns` reproduces
+    in-process on Bench AT that tick, not tick 0 -- the loop that makes a
+    crash reproducible with a debugger attached (`R-SIM-19`)."""
+    set_high_dpi_policy()
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    window = VantageWindow()
+    recording = tmp_path / "rec.mcap"
+    _write_synthetic_recording(recording)  # 3 ticks, 50ms apart: 0, 50ms, 100ms
+    pipeline_path = tmp_path / "pipeline.yaml"
+    pipeline_path.write_bytes(b"version: 1\nname: campaign\nstages: []\n")
+
+    window.campaign.open_on_bench_requested.emit(recording, pipeline_path, 0.1)  # the 100ms tick
+    _pump_until_loaded(window)
+
+    assert window.bench.transport.cursor == 2

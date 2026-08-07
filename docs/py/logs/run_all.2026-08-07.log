@@ -8,7 +8,7 @@ kind    script                                result
 check   check_doc_invariants.py               pass                                                                                                                 ok
 check   check_traceability.py                 pass                                                                                                                 ok
 check   check_rules_coverage.py               pass                                                                                                                 ok
-check   check_requirement_coverage.py         ok — every cited verifier resolves to a unit of work (54 proven, 6 partial, 11 unproven, 8 verified by other means)  ok
+check   check_requirement_coverage.py         ok — every cited verifier resolves to a unit of work (55 proven, 5 partial, 11 unproven, 8 verified by other means)  ok
 check   check_verifier_discoverability.py     pass                                                                                                                 ok
 check   check_audit_ledger.py                 ok -- 51 findings, every closed row names a landed-in target that resolves                                           ok
 survey  FR_SIM_46_reference_tool_survey.py    pass                                                                                                                 ok
