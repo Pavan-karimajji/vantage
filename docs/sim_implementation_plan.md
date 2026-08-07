@@ -756,7 +756,7 @@ table) — it passes in isolation, and it is **never yours to fix**.
 | **2** | ~~A `tolerance` file for `df`~~ **DONE 2026-08-06** (`R-SIM-24`) | `S-C6`; `modules/df/sim/` | `modules/df/sim/tolerance.yaml` exists with `default: exact`, integers and enums non-overridable, **a mandatory `why:` on every row**, and its hash in the run manifest. **It exists nowhere in the repo today**, so determinism axes C and D have no declared bound for *any* component. Chips at `NR-SIM-40` (`P0`). **Done**: `fields: {}` — deliberately zero rows, since no real axis-C/D divergence has been measured for `df` yet (`ST-C6-4`'s CI wiring stays not-run, per `S-C6`'s own note) and inventing a `why:` for nothing measured would be exactly `R-SIM-7`'s fabrication. What changed is real: `tolerance.sha256` is now a genuine non-empty hash instead of the `""` an absent file reports, verified directly (`load_tolerance` against the real file). **"Its hash in the run manifest"** reads as this existing mechanism (`ToleranceSet.sha256`, already surfaced by `sim determinism`'s own report line), not a new `RunManifest` field — `S-C6`'s own text already tracks that specific wiring as a separate, deferred gap ("no `RunManifest` field carries it yet"), not this row's. **Found and fixed while writing it**: `sim_resim_and_recording.md` §4a's own example schema (`families:`/`match:`/`abs:`) never matched what `core/tolerance.py` actually implemented (`fields:`/`abs_tol:`) — corrected there rather than shipping a file that matches the code but contradicts the doc (`GT-7`) |
 | **3** | ~~`ST-D6-4`~~ **DONE 2026-08-06** — `sim doctor --component <name>` | `S-D6`; `sim_sil_contract.md` §10 | Run against `df`, `vdy` and `perception-core` it produces the **same shape** of report and names each absence as **legitimate** (`vdy` has nothing to draw) or a **gap**. This is the check that would have caught row 2. Deliberately **not** a gate. **Done**: `sim doctor --component <root-path>` (a real path, never a bare name — `R-SIM-11`), `core/diagnostics.py::component_checklist`. **One narrowing**: reports required-row absence as an unconditional gap, but does not itself label a conditional/optional absence legitimate-or-gap (the framework cannot know `vdy`'s own reason without hardcoding a fact about `vdy`, `R-SIM-1`'s spirit) — a human still makes that call from the report. **It found a real gap on first real run** — proving the row's own prediction true a second time: §10's table claimed `vdy` ✅ for rows 5–7, and `vdy` has no `src/project/` at all (calibration is `adas-shared-config`'s); corrected in that table |
 | **4** | **The unblocked `P0` verifier sweep** — five rows, each its own commit | `ST-D6-1` → `S-D6` · `ST-D6-3` → `S-D6` · `ST-D7-6` → `S-D7` · `UT-C1c-22` → `S-C1c` · `ST-D5-1` → `S-D5` | Each clears one `P0` requirement (`FR-SIM-46`, `FR-SIM-67`, `NR-SIM-22`, `CR-SIM-2`, `FR-SIM-70`). Read the stage's own text for what each asserts — do not infer it from the id |
-| **5** | **Measure `GT-13`** | `S-E3`; §2's `GT-13` | `S-D7`'s throughput numbers now exist, so it is takeable. It is what clears `NR-SIM-41`'s `proven*` asterisk. **A number above target is a finding to act on, never a reason to delete the gate** |
+| **5** | **Measure `GT-13`** | `S-E3`; §2's `GT-13` | `S-D7`'s throughput numbers now exist, so it is takeable. It is what clears `NR-SIM-41`'s `proven*` asterisk. **A number above target is a finding to act on, never a reason to delete the gate**. **Done 2026-08-07, one caveat found doing it**: all four numbers are now real and dated in §2's `GT-13` box (frame time and same-/fresh-process determinism newly measured against a real `df_sil.dll`; campaign throughput and recording size cited from `S-D7`). **The `proven*` asterisk stays, correctly** — clearing it needs `GT-13`'s checkbox ticked, and §2's own rule is explicit that a tick there "belongs to the stage or milestone that actually re-checks the gate... never at this line" (only at `S-E3`), which this session was told not to start. The asterisk is therefore the honest state, not an oversight: two of the four axes (`rebuilt_binary`, `different_machine`) are also genuinely unmeasurable from one session on one machine, the same category of permanent blank `GT-14` already carries |
 
 **Two lessons from the last queue, and they are about verification, not code:**
 
@@ -1268,6 +1268,53 @@ previously carried by prose alone.*
       determinism across all four axes (`NR-SIM-40`). A blank is a finding, not
       an omission — *"a requirement nobody can fail is a requirement that will
       be declared satisfied"* (§12 preamble).
+
+      **Measured 2026-08-07** (sim build queue row 5), this Windows machine,
+      real `df_sil.dll` (`build-sil-vs2026`):
+      - **`NR-SIM-41` per-tick cost + campaign throughput** — cites `S-D7`'s
+        own `ST-D7-7` measurement (real, 2026-08-06, unchanged): 7 recordings
+        (61–276 ticks each, 1.8–11 MB, 33.1 MB total), `-j 1` 2.11s
+        (0.30s/recording), `-j 7` 0.41s (0.06s/recording), **5.2x**; per-tick
+        compute ~0.05s/recording once subprocess-startup overhead is
+        excluded (`test_d7_campaign_sizing.py`).
+      - **`NR-SIM-5` frame time at a stated tick count** — new this pass:
+        100 ticks of `bsd_curve_r172_passby_20260727_213847.mcap` (real `df`
+        layer providers, real geometry — never an empty Scene), `build_scene`
+        + `render_scene` per tick: **83.82ms/tick total, ~11.9 fps
+        equivalent** (`tests/system/test_e3_frame_time.py`, timed not
+        asserted, same discipline `ST-B2-2` set). Below the responsiveness
+        bar `NR-SIM-5` argues for (pass 2 is cheap, on the UI thread), but
+        the number itself — not the feeling — is now on record; a future
+        session with a slower machine or a heavier Scene should re-run this
+        test rather than trust it stale.
+      - **`NR-SIM-42` recording size for a reference run** — the same
+        `bsd_curve_r172_passby_20260727_213847.mcap` used above: **219
+        ticks, 7,541,018 bytes (7.19 MB)**; `ST-D7-7`'s 7-recording set
+        gives the campaign-scale figure (33.1 MB / 7 recordings) for the
+        aggregate case.
+      - **`NR-SIM-40` determinism, same-process and fresh-process, measured
+        for real** — new this pass: two `sim resim` calls made in-process
+        (`core.manifest._PROCESS_NONCE` identical by construction) —
+        `derive_axis` reports `same_process`, `compare_exact` **exact**
+        (0.19s for both resims, 219 ticks each); one in-process call vs. a
+        real `sim.exe resim` subprocess — `derive_axis` reports
+        `fresh_process`, `compare_exact` **exact** (0.81s)
+        (`tests/system/test_e3_determinism_measured.py`). **`rebuilt_binary`
+        and `different_machine` stay genuinely blank** — the former needs a
+        second, independently-built `df_sil.dll` from the same source (a
+        real Conan/MSVC build this pass did not run a second time — this
+        session already ran the one real MSVC build it had access to, at
+        build queue row 1), the latter needs a second machine, categorically
+        outside what one session on one checkout can produce (the same class
+        of blank `GT-14`'s own two-person requirement is, not a "didn't get
+        to it" gap).
+
+      **Not a milestone tick** — `GT-13` is a re-checked-at-`S-E3` gate, not
+      a per-stage one (this section's own table above); the numbers are now
+      real and dated, but ticking either checkbox belongs to whichever
+      session actually closes `S-E3`, per this section's own rule ("a real
+      tick still belongs at the stage or milestone that actually re-checks
+      the gate... never at this line").
       - [ ] `GT-13`
 - [ ] **GT-14 — someone who did not build it can change it.** A named owner and
       a named second reader, plus a **measured maintainer-onboarding number**:
