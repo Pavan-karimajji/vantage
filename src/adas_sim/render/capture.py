@@ -32,7 +32,32 @@ from adas_sim.model.project import ProjectModel
 from adas_sim.render.bev import render_scene, render_scene_vector
 from adas_sim.render.theme import Theme
 from adas_sim.scene.types import Prim, Scene
+from adas_sim.view.layers import LayerTreeState
 from adas_sim.view.viewport import Viewport
+
+
+def resolve_layer_selection(layer_selection: frozenset[str] | None, scene: Scene) -> frozenset[str]:
+    """`AR-58` (2026-08-07): `None` (no explicit `--layer` selection) used
+    to mean "draw literally every layer the Scene carries" all the way
+    into the rendered pixels -- which let a layer the live window hides by
+    default (`Layer.default_on=False`, e.g. `bsd.sensor_fov`, `AR-56`)
+    dominate a headless `sim render`/`sim clip` output instead, breaking
+    `NR-SIM-2`'s "one picture, many media" and `FR-SIM-13`'s "a snapshot
+    is reproducible evidence of what you saw" -- the live window and its
+    own PNG disagreed about what was on screen. `None` now resolves to
+    what a fresh `LayersPanel` shows with nothing clicked: reuses
+    `LayerTreeState` directly (the GUI's own class, `sync()` + `visible_
+    layer_ids()`) so there is exactly one implementation of "which layers
+    are on by default" -- a caller wanting literally everything passes an
+    explicit selection built from every layer id instead, never `None` as
+    a synonym for it. Both `snapshot()` and `export_clip()` call this
+    (`clip.py`'s own `S-B4` sibling), so the two exporters cannot drift
+    into two different notions of "default"."""
+    if layer_selection is not None:
+        return layer_selection
+    state = LayerTreeState()
+    state.sync(scene.layers)
+    return state.visible_layer_ids()
 
 #: matplotlib's own vector formats this module knows how to route to
 #: `render_scene_vector` -- anything else falls back to raster (`.png`).
@@ -116,6 +141,7 @@ def snapshot(
     """
     resolved_project = project or session.meta.project or "base"
     scene = build_scene(session, tick_index, project=resolved_project)
+    layer_selection = resolve_layer_selection(layer_selection, scene)
     sidecar = sidecar_dict(session, tick_index, scene, viewport, layer_selection, theme, resolved_project)
 
     if out.suffix.lower() in _VECTOR_SUFFIXES:

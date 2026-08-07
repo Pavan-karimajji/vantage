@@ -73,6 +73,10 @@ def export_clip(
         scene = build_scene(session, tick_index, project=resolved_project)
         if first_scene is None:
             first_scene = scene
+            # `AR-58`: resolved once, off the first tick, and reused for
+            # every frame -- the same reason the sidecar below uses
+            # `first_scene` rather than re-deriving anything per tick.
+            layer_selection = capture.resolve_layer_selection(layer_selection, scene)
         frames.append(render_scene(
             scene, viewport, theme, layer_selection, selection, overlay_prims, hud_lines, stale_banner,
         ))

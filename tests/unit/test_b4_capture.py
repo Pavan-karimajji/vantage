@@ -37,6 +37,16 @@ def _box_layer(ctx):
     )),)
 
 
+@layer_provider("test.b4.hidden_by_default", group="test-b4")
+def _hidden_layer(ctx):
+    del ctx
+    return (Layer(
+        id="test.b4.hidden_by_default", group="test-b4", default_on=False, prims=(
+            Prim(kind="circle", cx_m=5.0, cy_m=5.0, r_m=1.0, style="sensor.fov"),
+        ),
+    ),)
+
+
 def _session() -> Session:
     tick = Tick(index=0, t_ns=50_000_000, dt_ns=0,
                 ports={"p": PortValue(name="p", message=b"", origin="measured")}, pose=_ORIGIN_POSE)
@@ -119,6 +129,33 @@ def test_sidecar_run_id_matches_the_session(tmp_path):
 
     sidecar = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
     assert sidecar["run_id"] == session.run_id
+
+
+def test_snapshot_with_no_explicit_selection_matches_the_guis_own_default(tmp_path):
+    """`AR-58` (2026-08-07): `layer_selection=None` used to mean "draw
+    literally every layer the Scene carries" -- so a layer the live window
+    hides by default (`Layer.default_on=False`) still dominated a headless
+    snapshot, and the sidecar recorded `"layers": null`, unable to say
+    which ones. `None` now resolves through `LayerTreeState` (the GUI's
+    own class) the same way a fresh, nothing-clicked `LayersPanel` would."""
+    out = tmp_path / "fig.png"
+    capture.snapshot(_session(), 0, _viewport(), None, out)
+
+    sidecar = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+    assert sidecar["layers"] is not None  # never the unresolved "null" that named neither side
+    assert "test.b4.box" in sidecar["layers"]
+    assert "test.b4.hidden_by_default" not in sidecar["layers"]
+
+
+def test_snapshot_with_an_explicit_selection_still_overrides_the_default(tmp_path):
+    """A caller that DOES pass a real selection is unaffected -- `AR-58`
+    only changes what `None` means, never overrides an explicit choice,
+    including one that deliberately includes a `default_on=False` layer."""
+    out = tmp_path / "fig.png"
+    capture.snapshot(_session(), 0, _viewport(), frozenset({"test.b4.hidden_by_default"}), out)
+
+    sidecar = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+    assert sidecar["layers"] == ["test.b4.hidden_by_default"]
 
 
 def test_sidecar_records_bundle_origin(tmp_path):

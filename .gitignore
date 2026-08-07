@@ -59,3 +59,4 @@ Thumbs.db
 # Machine-local pointer to a reference tool installation (DC-2: no absolute
 # paths in the repo). See docs/py/_common.py:reference_tool_root().
 docs/py/reference_tool_path.txt
+scripts/gui_config.json
