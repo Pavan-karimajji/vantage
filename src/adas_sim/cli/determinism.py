@@ -3,11 +3,15 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji <Pavan.Karimajji@larsentoubro.com>
 
-"""`sim determinism <run-a> <run-b>` -- `S-C6` (`R-SIM-24`). Argument parsing
-only (`GT-9`); the real logic is `core.determinism`. Deliberately has **no**
-`--axis` flag: the axis is always derived from the two runs' own manifests --
-a flag can lie, and "cross-machine verified" claimed from a pair that also
-rebuilt the binary is the standard cheat this refuses."""
+"""`sim determinism <run_a> <run_b>` -- compare two runs.
+
+Compares port values, never file bytes. The axis compared -- same process,
+fresh process, rebuilt binary, different machine -- is **derived from the two
+run manifests**, never declared by a flag. Reports the first diverging tick,
+port and field, with the tolerance in force.
+"""
+
+# Design refs: `GT-9` · `R-SIM-24` determinism measured along the axes that break it
 
 from __future__ import annotations
 
@@ -25,8 +29,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("run_b", type=Path)
     parser.add_argument(
         "--tolerance", type=Path, default=None,
-        help="modules/<name>/sim/tolerance.yaml -- consulted only on the two MEASURED axes "
-             "(rebuilt binary, different machine); absent means default: exact everywhere",
+        help="a component's tolerance.yaml; consulted only on the two measured "
+            "axes (rebuilt binary, different machine). Absent means exact "
+            "everywhere",
     )
     parser.add_argument("--component", default="", help="component name the tolerance file belongs to (report only)")
     return parser

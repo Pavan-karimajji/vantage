@@ -73,7 +73,7 @@ def test_an_ambiguous_self_ref_raises_naming_the_plugin():
 
 
 def test_a_self_ref_matching_nothing_yields_a_named_unavailable_placeholder():
-    """`AR-53` (2026-08-07), supersedes `UT-B1-15`'s own original reading:
+    """`AR-53`, supersedes `UT-B1-15`'s own original reading:
     zero matches -- this run's known ports contain nothing this `self.<port>`
     reference could ever resolve to -- used to stay a silent empty result on
     the reasoning that "does not exist" and "hasn't arrived this tick" were

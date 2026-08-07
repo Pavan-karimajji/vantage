@@ -3,21 +3,16 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""The facts behind `sim explain` (DG-2), kept out of `cli/` (GT-9) so they
-are reachable from a plain script. **Seeded at S-B2** over what exists now: a
-session, its topics, its registered layer ids, its `run_id`. Grows at
-`S-C1c` (ports, schemas, producers) and `S-D6` (expectations, values) --
-same reasoning as `core/diagnostics.py`'s `sim doctor` seed at `S-A1`: the
-tool that explains names is needed while names are being created, not after.
+"""The facts behind `sim explain` (`DG-2`), kept out of `cli/` (`GT-9`) so they
+are reachable from a plain script.
 
-`S-D6`'s own completion (`UT-D6-7`): a codec name and an error code join
-`run_id`/topic/layer here, plus fuzzy "did you mean" (`N-8`) on a miss.
-**A style token is deliberately NOT resolved here** -- `render/theme.py`
-sits ABOVE `core/` in the package map (`sim_api_reference.md` §1, enforced
-by `UT-A1-6`'s import-direction test), so this module cannot import it.
-`cli/explain.py`, which IS allowed to import `render/`, checks style
-tokens first and extends the "did you mean" list with them -- see its own
-comment for why that one branch lives there instead of here.
+Resolves a `run_id`, topic, layer id, codec name or error code, with fuzzy
+"did you mean" on a miss (`N-8`, `UT-D6-7`).
+
+**A style token is deliberately not resolved here.** `render/theme.py` sits
+above `core/` in the package map (enforced by `UT-A1-6`'s import-direction
+test), so this module cannot import it. `cli/explain.py`, which may import
+`render/`, checks style tokens and extends the "did you mean" list with them.
 """
 
 from __future__ import annotations

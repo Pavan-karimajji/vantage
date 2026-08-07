@@ -3,58 +3,34 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`sim batch`'s per-recording subprocess entry point (S-D7, `R-SIM-19`).
+"""`sim batch`'s per-recording subprocess entry point (`S-D7`, `R-SIM-19`).
 
-`core/batch.py` launches ONE of these per recording (`sim batch`
-isolates at run granularity, never per tick) via `sys.executable -m
-adas_sim.core.batch_worker`. This module does exactly one recording's worth
-of `Pipeline.load` -> `init_components` -> `resim_pipeline` -> `shutdown_
-components` -- the same four calls `cli/resim.py` already makes for one
-recording -- and writes its outcome as JSON to `--out-json` before exiting.
+`core/batch.py` launches one of these per recording -- isolation is at run
+granularity, never per tick. This module does one recording's worth of
+`Pipeline.load` -> `init_components` -> `resim_pipeline` -> `shutdown_components`
+and writes its outcome as JSON to `--out-json`.
 
-The parent process is the one that turns "this subprocess died / hung /
-raised" into `crash`/`timeout`/`fail` (`core/batch.py`'s own job): this
-module only ever reports `ok` or `fail` for itself, because a REAL crash
-(a segfault in a `dll:`/`stubdll:` library) kills this process before it can
-write anything -- there is no code path here that could report `crash`
-about itself, which is exactly why the parent classifies from the outside
-(missing/unreadable JSON + an abnormal exit) rather than trusting a value
-this process claims about its own death.
+**It only ever reports `ok` or `fail` about itself.** A real crash kills this
+process before it can write anything, so the parent classifies
+`crash`/`timeout`/`fail` from the outside (missing JSON plus an abnormal exit)
+rather than trusting a value a dying process claims about its own death.
 
-`--checkpoint-json`, if given, is overwritten after every tick
-(`resim_pipeline`'s own `on_tick=`, `UT-D7-7`) with the tick count and
-`t_ns` reached so far. This is the ONLY record of progress that survives a
-real crash -- this process's own in-memory state dies with it, so
-`core/batch.py` reads the checkpoint file from the outside, same as it
-classifies `crash` itself from the outside.
+`--checkpoint-json` is overwritten after every tick, and is the only record of
+progress that survives a crash -- in-memory state dies with the process.
 
-Two test-only hooks exist, both explicitly named and never reachable from a
-real `sim batch` invocation:
+Three test-only hooks, never reachable from a real `sim batch`:
 
-- `ADAS_SIM_BATCH_TEST_STUB=crash|hang` (env var, checked before anything
-  else, applies to every recording this process is launched for) --
-  forces this process to die abnormally or hang forever, with NO pipeline
-  involved. Exists so `core/batch.py`'s crash/timeout CLASSIFIER can be
-  tested deterministically (`UT-D7-7`/`UT-D7-8`) without a real component
-  that can be told to segfault or spin. `ADAS_SIM_BATCH_TEST_STUB_MAP=
-  "stemA=crash;stemB=hang"` is the per-recording form (keyed by
-  `--recording`'s own `.stem`) -- lets ONE `sim batch` invocation over a
-  real recording set make specific recordings crash/hang while the rest
-  run for real (`ST-D7-5`'s "one deliberately crashing and one
-  deliberately hanging" inside a single batch).
-- `--test-stub-echo NAME` (repeatable CLI flag) -- injects a trivial,
-  zero-port `InProcessSilComponent` for stage `NAME` via `Pipeline.load`'s
-  own `components=` kwarg (the documented mechanism for supplying a stage
-  Python cannot resolve from a bare `impl:` string). Exists so `sim batch`'s
-  real end-to-end path (`ST-D7-2`/`ST-D7-3`) can be exercised with no
-  compiled `dll:`/`stubdll:` component available.
-- `ADAS_SIM_BATCH_TEST_CRASH_AFTER_TICK=N` (env var) -- unlike the blanket
-  `crash` hook above (which dies before any pipeline runs at all), this one
-  lets a REAL resim run N ticks for real, then `os._exit(139)` from inside
-  `on_tick` -- the one shape the blanket hook cannot produce, and the one
-  `UT-D7-7`'s checkpoint claim actually needs: proof that `--checkpoint-json`
-  reflects real progress at the moment of death, not just "some value or
-  other."
+- `ADAS_SIM_BATCH_TEST_STUB=crash|hang` -- die or hang with no pipeline
+  involved, so the parent's classifier can be tested without a component that
+  can be told to segfault. `ADAS_SIM_BATCH_TEST_STUB_MAP="stemA=crash;stemB=hang"`
+  is the per-recording form.
+- `--test-stub-echo NAME` -- inject a zero-port `InProcessSilComponent` for one
+  stage, so the end-to-end path (`ST-D7-2`, `ST-D7-3`) runs with no compiled
+  component available.
+- `ADAS_SIM_BATCH_TEST_CRASH_AFTER_TICK=N` -- run N ticks for real, then exit
+  abnormally from inside `on_tick`. The one shape the blanket hook cannot
+  produce, and what proves the checkpoint reflects real progress at the moment
+  of death.
 """
 
 from __future__ import annotations

@@ -7,11 +7,11 @@
 `test_c2_manifest.py`), `UT-C2-6`, `UT-C2-7`, `UT-C2-8`, `UT-C2-13`,
 `ST-C2-3` (`sim_implementation_plan.md`). `UT-C2-9` (manifest-mismatch vs.
 library-hash-mismatch severity) is a resim-time check --
-`tests/unit/test_c2_resim_provenance.py`, built 2026-08-06 (`core.resim.
+`tests/unit/test_c2_resim_provenance.py`, built (`core.resim.
 _validate_measured_stages_against_recording` + `core.manifest.
 check_library_provenance`), not this file's own concern.
 
-**Correction, 2026-08-06:** this docstring previously claimed `ST-C2-3`
+**Correction:** this docstring previously claimed `ST-C2-3`
 was NOT implemented and removed the id "rather than left standing." That
 claim itself went stale -- `test_estimate_upper_bound_scales_with_ticks`/
 `test_revised_estimate_is_none_before_the_threshold_and_a_number_after`

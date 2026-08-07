@@ -605,7 +605,7 @@ The earlier attempt at this failed on a transform-tree bug (`../../../docs/df_ca
 structure that prevents that class of bug: the frame is a required field on
 every prim, and the frame graph is emitted once from the project model.
 
-**Shipped, reconciled 2026-08-06 (`AR-49`).** `render/foxglove.py`
+**Shipped, reconciled 2026-08-06.** `render/foxglove.py`
 (`S-D1`, 2026-08-05): `scene_update`/`scene_entity_for_layer` map all 11
 `PrimKind`s to Foxglove scene entities, one per `Layer` with `id =
 Layer.id` unchanged; `frame_transforms_for` publishes the frame graph
@@ -640,7 +640,7 @@ component that reads it keeps its calibration (`shared_config` only if a second
 component needs the same camera). A *simulated* CARLA camera's placement is not
 that, and stays with the chase-view code in `sources/carla`. Scoped for Phase D4.
 
-**Shipped, reconciled 2026-08-06 (`AR-49`).** `render/image_view.py`
+**Shipped, reconciled 2026-08-06.** `render/image_view.py`
 (`S-D4`, 2026-08-05): `project_point`/`unproject_pixel` (pinhole
 projection), `project_box` reading a `kind="box"` `Prim`'s own fields —
 the identical `Prim` the BEV already draws, so "the two views cannot

@@ -48,7 +48,7 @@ def test_bulk_ref_and_derived_round_trip():
 
 
 def test_grid_spacing_lateral_m_round_trips():
-    """`AR-56` (2026-08-07): `Prim.spacing_lateral_m` (field 40) survives
+    """`AR-56`: `Prim.spacing_lateral_m` (field 40) survives
     encode/decode like every other field -- caught real by
     `test_b1_replay.py`'s own golden comparison the first time this field
     was added without a matching codec entry (`_PRIM_SCALAR_FIELDS` is the
@@ -62,7 +62,7 @@ def test_grid_spacing_lateral_m_round_trips():
 
 
 def test_layer_unavailable_round_trips():
-    """`AR-60` (2026-08-07): `Layer.unavailable` (`AR-53`, 2026-08-07) was
+    """`AR-60`: `Layer.unavailable` was
     never wired into this codec at all -- the same shape of gap as
     `spacing_lateral_m` above, caught the same way: a golden round-trip
     carrying an unavailable layer for the first time (`AR-60`'s own fix to

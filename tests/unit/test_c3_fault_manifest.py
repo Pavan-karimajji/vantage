@@ -3,7 +3,7 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""S-C3's own status-note claim, closed 2026-08-06: "a fault is declared in
+"""S-C3's own status-note claim, closed: "a fault is declared in
 `run.faults:`, lands in the run manifest" -- `R-SIM-15`'s "declared, never
 smuggled" extended from overrides (`UT-D6-2`) to faults. `contracts.fault`'s
 own behavioural-effect tests (`test_c3_fault.py`, `UT-C3-8`) are a different

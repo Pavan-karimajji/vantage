@@ -338,7 +338,7 @@ means one thing everywhere, one lookup can join all of it.
 a **run id** and an **error code**, and for an unknown name it does a
 fuzzy match and suggests (`N-8`'s "did you mean").
 
-**Shipped, reconciled 2026-08-06 (`AR-49`).** `cli/explain.py` (`S-D6`,
+**Shipped, reconciled 2026-08-06.** `cli/explain.py` (`S-D6`,
 follow-up pass 2026-08-06, `UT-D6-7`): all six accepted name kinds now
 resolve — port/field/layer/run-id were already there from `S-B2`/`S-C1c`;
 codec name and error code were added in this pass, alongside a
@@ -368,7 +368,7 @@ questions that produce the most wasted hours, and each answer names a file:
 Exit non-zero on anything that would break a run, so it is usable in CI as a
 pre-flight.
 
-**Shipped, reconciled 2026-08-06 (`AR-49`).** `cli/doctor.py` (`S-D6`,
+**Shipped, reconciled 2026-08-06.** `cli/doctor.py` (`S-D6`,
 follow-up pass 2026-08-06, `UT-D6-8`) is the full form above: `--pipeline`/
 `--search`/`--config`/`--recording`/`--project` flags, each firing its own
 optional check; codec capabilities are always reported (no flag needed).

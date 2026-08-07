@@ -3,26 +3,19 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`sim probe <lib>|<recording>` -- argument parsing and layout only
-(`GT-9`); the facts themselves come from either side. ONE verb, two kinds
-of file, auto-detected (`sim_learn.md` SS5's own worked example runs both
-a component library and a recording through this same verb -- there is
-no second verb): a registered recording-codec extension (`.mcap`/`.csv`,
-`io/registry.py`'s own table) means "what does this file provide" via
-`Session.provides`/`Session.absent` (`core/runner.py`, `S-C9`); anything
-else is tried as a component library via the generic ABI (`S-D6`,
-`sim_resim_and_recording.md` §9: `"sim probe <lib> # port set from
-adasManifest"`) -- **no mapping step, ever** (`sim_architecture.md` §5.16.1):
-the port set printed is exactly `adasManifest()`'s own bytes, decoded, never
-hand-maintained.
+"""`sim probe <lib>|<recording>` -- what does this thing provide?
 
-Answers "what does this file/library provide, and what is it known not to"
-*before* a run starts (`R-SIM-23`'s own framing for the recording half) --
-the same facts `sim_implementation_plan.md` S-C9 asks the (not-yet-built)
-developer start page to grey cuts by, and the same facts a from-scratch
-component onboards itself with (`R-SIM-16`: "a new component is probed,
-wired and run without one edit inside `modules/sim`").
+Given a component library, prints the port set read from `adasManifest()`.
+Given a recording, prints the ports it provides, the ports it is known not to
+carry, and which pipeline cuts it therefore supports.
+
+One verb, two kinds of file, told apart by extension. Answers the question
+before a run starts rather than by failing one.
 """
+
+# Design refs: `GT-9` · `R-SIM-23` feasible cuts are a property of the recording ·
+# `R-SIM-16` a component onboards itself -- the port set is `adasManifest()`'s
+# own bytes, decoded, never a hand-maintained mapping
 
 from __future__ import annotations
 

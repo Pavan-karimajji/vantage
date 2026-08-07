@@ -108,7 +108,7 @@ def test_scene_cache_reactive_tier_recomputes_only_on_interaction_change():
 
 
 def test_build_reactive_layers_forwards_model_like_build_static_scene_does(tmp_path):
-    """A real regression (found 2026-08-07 investigating a report that
+    """A real regression (found investigating a report that
     `ctx.model.bundle_dir` came back `None` in a live render):
     `build_reactive_layers`'s own `model=` parameter was never forwarded to
     `_build_layer_ctx` -- `build_scene`/`build_static_scene` both do, this

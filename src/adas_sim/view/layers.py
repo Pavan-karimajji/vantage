@@ -60,7 +60,7 @@ class LayerTreeState:
 
     def sync(self, layers: Sequence[Layer]) -> None:
         """Registers any layer id not seen before, or updates an existing
-        one's `unavailable` reason (`AR-53`) -- everything else about a
+        one's `unavailable` reason -- everything else about a
         known id is immutable once discovered. Never REMOVES a
         previously-seen id (a layer absent from one tick's `Scene` -- e.g. a
         gated provider with no port this tick -- must not vanish from the

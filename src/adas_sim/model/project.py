@@ -3,27 +3,18 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`ProjectModel.resolve(...)` -- configuration is the source of geometry
-(R-SIM-3, sim_api_reference.md §6). Resolution order **explicit ->
-embedded-in-recording -> library config/ -> source checkout**, and
-`bundle_origin` always states which (R-SIM-3a): the failure this prevents is
-the viewer and the SUT reading different files and agreeing only by
-coincidence.
+"""Configuration is the source of geometry (`R-SIM-3`, api reference §6).
 
-**Deferred, deliberately:** `ProjectModel.footprint()`/`.sensor()`/
-`.camera()` are not implemented on this class yet. Today the only calibration
-this framework may read generically is `shared_config`'s `ego_params.yaml`
-(cross-component by design, docs/shared_config_plan.md); real sensor poses
-and class footprints are calibration **owned by the consuming component**
-(R-SIM-9 -- a driving function's own sensor-pose and class-footprint
-calibration keys are that function's own data). `model/objects.py`
-and `model/sensors.py` are the reusable, component-agnostic primitives a
-component's own `S-B1` layer-provider code calls with **its own** resolved
-calibration mapping; wiring a generic path onto `ProjectModel` itself needs a
-concrete generic data source that does not exist yet, so it is not invented
-here (`sim_api_reference.md` §11: internal helpers are free, but a
-`ProjectModel.footprint`/`.sensor`/`.camera` bound to nothing real would be
-speculative, not free).
+`ProjectModel.resolve()` searches **explicit -> embedded-in-recording ->
+library `config/` -> source checkout**, and `bundle_origin` always reports
+which (`R-SIM-3a`). The failure that prevents: the viewer and the SUT reading
+different files and agreeing only by coincidence.
+
+`footprint()`/`sensor()`/`camera()` are deliberately not implemented. Real
+sensor poses and class footprints are the *consuming component's* calibration
+(`R-SIM-9`), so there is no generic source to bind them to. `model/objects.py`
+and `model/sensors.py` are the component-agnostic primitives a component's own
+layer provider calls with its own resolved calibration.
 """
 
 from __future__ import annotations
@@ -41,22 +32,13 @@ import yaml
 from adas_sim.core.errors import AuthoringError, ProvenanceWarning
 from adas_sim.model.ego import SHARED_CONFIG_PROJECTS, EgoModel
 
-#: `sim_api_reference.md` §6 declares only `"embedded" | "library" |
-#: "checkout"`, omitting the fourth, highest-priority tier its own
-#: `resolve()` docstring names ("explicit -> embedded -> library ->
-#: checkout") and `UT-A2-7` exercises ("with all four sources present,
-#: explicit wins ... bundle_origin reports which"). Recorded as a finding in
-#: docs/sim_implementation_plan.md (S-A2): a `bundle_origin` that cannot
-#: report "explicit" cannot make `UT-A2-7`'s own claim true, so "explicit" is
-#: added here as a fourth literal.
+#: Four tiers, highest priority first. API reference §6 lists only the last
+#: three; `explicit` is required for `UT-A2-7`'s claim to hold.
 BundleOrigin = Literal["explicit", "embedded", "library", "checkout"]
 
-#: What a bundle's project reads when nothing authoritative says (`R-SIM-25`,
-#: `NR-SIM-4`: "a field the tool cannot fill reads `unknown`, never a
-#: plausible-looking default"). A named constant rather than three string
-#: literals because `_resolve_one` must be able to ask *"is this an absence?"*
-#: -- and a comparison against a spelled `"unknown"` is exactly the kind of
-#: literal that drifts from the value it is testing (`AR-51`).
+#: What a bundle's project reads when nothing authoritative says so -- never a
+#: plausible-looking default (`NR-SIM-4`). Named, not spelled at each use, so
+#: `_resolve_one` can ask "is this an absence?" without a drifting literal.
 UNKNOWN_PROJECT = "unknown"
 
 
@@ -67,19 +49,16 @@ def _bundle_ego(bundle_dir: Path, *, known_project: str | None = None) -> tuple[
 
     A real S-C5-packed bundle carries no `manifest.yaml` (the checked-in
     `<component>.ports.yaml` deliberately excludes `project:` too -- build-
-    variant data must not churn a checked-in file, `test_generic_abi.cpp`'s
-    `EmbeddedManifestAgreesWithCheckedInPortsYaml`), so a real `.../config/`
-    directory has no project name to read from its own bytes at all. The only
-    place a real bundle's built project genuinely lives is the loaded
-    library's own `adasManifest()` -- `known_project` is that value, supplied
-    by a caller that already loaded the component (`core/diagnostics.py`'s
-    `_bundle_diagnoses`, `S-C5` addendum `OD-11`). **`bundle_dir.name` is
-    never used as a project** (`R-SIM-25`, `AR-51`, 2026-08-06) -- it is a
-    plausible-looking default from an accident of a path, exactly the shape
-    that rule forbids. Falls back to `"unknown"` when neither a
-    `manifest.yaml` nor a `known_project` is available. `manifest.yaml` stays
-    only to keep this module's own synthetic-fixture tests (`UT-A2-7`,
-    `UT-A2-10`) meaningful."""
+    variant data must not churn a checked-in file), so a real `config/`
+    directory has no project name in its own bytes. A real bundle's project
+    lives only in the loaded library's `adasManifest()` -- that is
+    `known_project`, passed by a caller that already loaded the component
+    (`OD-11`: one bundle per component, permanently).
+
+    **`bundle_dir.name` is never used as a project** (`R-SIM-25`, `NR-SIM-4`): it is a
+    plausible-looking default from an accident of a path. Falls back to
+    `"unknown"`. `manifest.yaml` is kept only so this module's synthetic
+    fixtures (`UT-A2-7`, `UT-A2-10`) stay meaningful."""
     ego_path = bundle_dir / "vehicle" / "ego_params.yaml"
     if not ego_path.is_file():
         return None
@@ -241,7 +220,7 @@ class ProjectModel:
     bundle_sha256: str
     bundle_origin: BundleOrigin
     _ego: EgoModel
-    #: The winning tier's own directory (`AR-55`, 2026-08-07) -- `None` for
+    #: The winning tier's own directory -- `None` for
     #: `bundle_origin == "checkout"`, which never resolved a packed-bundle-
     #: shaped directory at all (ego came from `shared_config`'s own tree,
     #: `SHARED_CONFIG_PROJECTS`, not a `<library_dir>/config/`-shaped one).
@@ -274,24 +253,9 @@ class ProjectModel:
         if found is None:
             return None
         resolved_project, ego = found
-        # `unknown` is an ABSENCE, never a DISAGREEMENT (`AR-51`, second half,
-        # 2026-08-06). `AR-51`'s first half stopped `bundle_dir.name` being
-        # reported as a project and fell back to `"unknown"` -- correct, and
-        # `R-SIM-25` requires exactly that. But leaving the comparison below
-        # unguarded turned the absence into a mismatch claim: a real packed
-        # bundle with no `known_project` supplied warned *"is for project
-        # 'unknown', not the requested 'base'"*, which asserts a conflict
-        # between a value and a value we have just said we do not have. It
-        # also fired on fixtures whose directory name matched the request and
-        # which were therefore silent BEFORE the first half landed -- suite
-        # warnings went 8 -> 10, in the direction the finding existed to fix.
-        #
-        # The cry-wolf failure `R-SIM-3a`/`NR-SIM-4` guard against is not about
-        # which string is printed: it is that a warning which is always on
-        # trains a reader to ignore the one signal that matters. A caller that
-        # wants the project checked supplies `known_project`; one that cannot
-        # gets `unknown` on the model and in the HUD, which is the honest
-        # answer and needs no warning to say so.
+        # `unknown` is an ABSENCE, never a DISAGREEMENT: comparing it against
+        # the requested project would assert a conflict between a value and a
+        # value we have just said we do not have.
         if resolved_project != project and resolved_project != UNKNOWN_PROJECT:
             warn(
                 ProvenanceWarning(
@@ -326,16 +290,12 @@ class ProjectModel:
         still resolves (R-SIM-3a), it never raises and never silently
         substitutes.
 
-        `known_project`, when given, is what a real bundle without its own
-        `manifest.yaml` (every `S-C5`-packed one) reports as its project --
-        the loaded library's own `adasManifest().project` (`AR-51`), supplied
-        by a caller that already has it (`core/diagnostics.py`, which passes
-        it whichever tier ends up resolving: `--config` pointed at the same
-        library-packed bundle is still that library's own project, not a
-        second, different bundle). A manifest.yaml already present always
-        wins over it (a fixture deliberately testing a mismatch is
-        unaffected). Omitted, a manifest-less bundle reports `"unknown"`,
-        never `bundle_dir.name`.
+        `known_project`, when given, is what a bundle without its own
+        `manifest.yaml` (every packed one) reports as its project -- the
+        loaded library's `adasManifest().project`, passed by a caller that
+        already has it. A present `manifest.yaml` always wins over it.
+        Omitted, a manifest-less bundle reports `"unknown"`, never
+        `bundle_dir.name`.
 
         `force`, when given, skips the normal explicit -> embedded ->
         library -> checkout priority order and resolves EXACTLY the named

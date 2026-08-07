@@ -41,7 +41,7 @@ def _visible_prims(scene: Scene, layer_selection: frozenset[str] | None) -> list
     return pairs
 
 
-#: `AR-56` (2026-08-07): two text labels closer than this in SCREEN pixels
+#: `AR-56`: two text labels closer than this in SCREEN pixels
 #: are a collision -- the second one is dropped rather than drawn on top of
 #: the first. A rough footprint, not real text metrics (`ax.text`'s actual
 #: rendered extent needs a draw pass to query); good enough to stop the
@@ -54,7 +54,7 @@ def _draw_text_avoiding_collisions(
     ax, x_m: float, y_m: float, text: str, *, color: str, fontsize: float, zorder: float,
     occupied_px: list[tuple[float, float]] | None, ha: str = "left", va: str = "baseline",
 ) -> None:
-    """The one place any label reaches the canvas (`AR-56`) -- grid distance
+    """The one place any label reaches the canvas -- grid distance
     labels and ordinary `text` prims both go through this, so a grid label
     and an object label mutually avoid each other rather than each having
     its own, inconsistent notion of "too close". `occupied_px=None` (the
@@ -133,7 +133,7 @@ def _draw_prim(ax, prim: Prim, theme: Theme, selected: bool = False,
         for i in range(-n_lateral, n_lateral + 1):
             d = i * spacing_lateral_m
             ax.axvline(d, color=color, linewidth=0.4, alpha=0.5, zorder=prim.z)
-        # `AR-56` (2026-08-07): distance labels anchored near the frame
+        # `AR-56`: distance labels anchored near the frame
         # MARGIN, never the crosshair -- the whole point of the fix (used
         # to sit at a fixed small offset from the origin, directly on the
         # ego box). Legible at any pan/zoom because it is computed from

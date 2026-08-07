@@ -3,7 +3,7 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`AR-52` (2026-08-07): tests for the framework's own default layer set
+"""`AR-52`: tests for the framework's own default layer set
 (`adas_sim.scene.default_layers`) -- `sim.ego`/`sim.frame`/`sim.trail`,
 moved here from `modules/df/sim/layers/common.py`'s `ego_layer`/
 `frame_layer`/`trail_layer` (`tests/unit/test_b1_df_layers.py`'s own
@@ -74,7 +74,7 @@ def test_ego_trail_out_of_order_calls_give_identical_output():
 
 
 def test_ego_trail_with_no_real_pose_source_is_named_unavailable():
-    """`AR-60` (2026-08-07), supersedes this test's own original reading: a
+    """`AR-60`, supersedes this test's own original reading: a
     recording with no ego-position ground truth (every tick's pose is the
     coordinate-origin default) transforms to the same point at every tick;
     drawing that as a trail would be a fabricated flat line -- but the
@@ -90,7 +90,7 @@ def test_ego_trail_with_no_real_pose_source_is_named_unavailable():
 
 
 def test_ego_trail_with_fewer_than_two_ticks_stays_silently_empty():
-    """The OTHER empty case (`AR-60`): too little history yet is transient
+    """The OTHER empty case: too little history yet is transient
     -- the very first tick of any recording -- and must stay a plain `()`,
     never badged as permanently unavailable."""
     ticks = (_make_tick(0),)

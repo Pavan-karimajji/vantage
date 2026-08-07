@@ -84,11 +84,10 @@ unfinished.** Normative rules: root `.claude/rules/sim.md` (`R-SIM-1..25`).
 full-scope audit. It binds the root method
 (`../../.claude/prompts/system_audit_and_replan.md`) to sim's document triad —
 `docs/sim_requirements.md` (master register) → `docs/sim_architecture.md` →
-`docs/sim_implementation_plan.md` → code. Findings land in
-`docs/sim_audit_log.md` as stable `AR-n` rows, and every actionable fix is a
-checkbox in its owning stage. `docs/py/check_audit_ledger.py` enforces that a
-requirements- or design-level finding cannot be closed without the master
-document actually being edited.
+`docs/sim_implementation_plan.md` → code. **A finding is a checkbox in the
+stage that will fix it** — there is no separate ledger. A requirements- or
+design-level finding is not closable until that master document has been
+edited; see the plan's §9a.
 
 ## AI operational layer — root-canonical
 

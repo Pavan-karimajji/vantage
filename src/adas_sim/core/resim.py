@@ -3,28 +3,23 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`resim_pipeline` -- the real, directly-testable resim engine
-(`sim_resim_and_recording.md` §9, `contracts.pipeline.Pipeline.exec` +
-`io.base.group_by_log_time`, both already built). Moved here from
-`cli/resim.py` (`S-C3`): `cli/` and `app/` carry no logic (`sim_api_reference.md`
-§1, `GT-9`), and `check/` -- which needs this same tick-by-tick execution to
-evaluate a scenario's `expect:` against a live resim -- may never import
-`cli/` (same package-map rule). `cli/resim.py` now calls this, unchanged in
-every other respect.
+"""`resim_pipeline` -- the resim engine (recording spec §9), built on
+`Pipeline.exec` + `io.base.group_by_log_time`.
 
-**Ingest-wrapped, like `core/runner.py`'s own replay path** (`S-C9`,
-`R-SIM-23`): a recording this framework did not produce (a component's
-legacy bridge export, another team's run) carries its own topic
-vocabulary, remapped to port names by whatever `modules/*/sim/ingest/*.yaml`
-matches. Skipped for a recording this framework DID produce -- its topics
-already equal port names (`R-SIM-6`), so wrapping is a no-op either way
-(`io/ingest.py`'s own docstring).
+Lives here rather than in `cli/resim.py` because `cli/` and `app/` carry no
+logic (`GT-9`), and `check/` needs this same tick-by-tick execution to
+evaluate a scenario's `expect:` against a live resim but may never import
+`cli/`.
 
-`_topic_to_port_name` is a private one-line copy of `core/runner.py`'s own
-function (the topic <-> qualified-port-name naming convention), not an
-import from it -- both modules keep their own copy rather than one
-importing the other for a one-liner, same reasoning `core/runner.py` itself
-gives for not importing `sources/recorder.py`'s inverse.
+**Ingest-wrapped**, like the replay path in `core/runner.py` (`R-SIM-23`): a
+recording this framework did not produce carries its own topic vocabulary,
+remapped to port names by whichever `modules/*/sim/ingest/*.yaml` matches.
+For a recording it did produce, topics already equal port names (`R-SIM-6`),
+so wrapping is a no-op.
+
+`_topic_to_port_name` is a deliberate one-line copy of `core/runner.py`'s
+function rather than an import -- neither module imports the other for a
+one-liner.
 """
 
 from __future__ import annotations

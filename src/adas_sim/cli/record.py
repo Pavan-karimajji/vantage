@@ -3,21 +3,17 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`sim record <scenario> -o <output>` -- argument parsing only (`GT-9`).
-Drives a `Source` and writes every port it emits; nothing is executed
-(`sim_resim_and_recording.md` §9's own table: "produces an artifact: yes,
-executes a SUT: no") -- there is no pipeline here at all, only a `Source`
-(`Recorder(pipeline=None, ...)`, `sources/recorder.py`).
+"""`sim record <scenario> -o <out>` -- produce a recording, execute nothing.
 
-`--source`/`--script` are `S-C2`'s own stand-in for scenario-driven source
-selection (a `world.<name>:` block naming which world model produced a
-scenario, `R-SIM-9`) -- reading that choice from the scenario itself
-(`contracts.scenario.Scenario.world`, built at `S-C3`) rather than a CLI
-flag is future CLI wiring, not part of the schema stage. `synthetic` needs
-a scripted YAML of per-tick bytes (`--script`, `SyntheticSource.from_yaml`);
-`carla` (`S-C2` slice 5) drives the scenario file itself and needs no
-`--script`.
+Drives a world model and writes every port it emits. No pipeline runs, so the
+result is stimulus only. Use `sim run` to record and execute in one pass.
+
+`--source synthetic` needs a scripted YAML of per-tick bytes (`--script`);
+`--source carla` drives the scenario file itself.
 """
+
+# Design refs: `GT-9` · `R-SIM-12` producing and executing are two sides ·
+# `R-SIM-9` world-model and sensor-error specifics live with the tooling
 
 from __future__ import annotations
 

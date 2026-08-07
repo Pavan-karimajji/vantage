@@ -170,7 +170,7 @@ def try_resolve_component_ref(ref: str, *, known_ports: Iterable[str], where: st
 
 
 def resolve(ref: str, *, component: str, manifest: ComponentManifest, where: str) -> str:
-    """`S-C1cΔ`'s resolver (added 2026-08-07, sim build queue row 4 sub-row
+    """`S-C1cΔ`'s resolver (added, sim build queue row 4 sub-row
     4, `UT-C1c-22`/`UT-C1c-23`) -- the one this module's own delta note
     names: `Pipeline` already knows every manifest in a run and already
     builds the concrete address (`f"{stage.name}.{port.name}"`), so

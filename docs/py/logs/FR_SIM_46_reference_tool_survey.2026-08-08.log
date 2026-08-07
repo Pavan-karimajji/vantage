@@ -1,0 +1,279 @@
+# FR_SIM_46_reference_tool_survey
+# platform  win32
+# python    3.12.10
+
+FR-SIM-46 -- reference console concept inventory vs. this architecture
+Answers: is there a concept over there with no home over here?
+root: C:\ws\conti\MBRelease
+
+1. Inventory, mapped
+--------------------
+kind        reference name                 maps to here
+----------  -----------------------------  -------------------------------------------------------
+component   MBCompBsigWriter               io/ codec (writer)               R-SIM-14 / S-D7
+component   MBCompDashboard                HUD                              viz 10
+component   MBCompDllWrapper               impl: dll:  / impl: legacy:      R-SIM-10 / arch 5.16.1
+component   MBCompExternalPython           impl: stub:                      R-SIM-10
+component   MBCompIntegratedPython         impl: stub:                    R-SIM-10
+component   MBCompRrecReader               io/ codec (reader)               R-SIM-14
+component   MBCompSignalGenerator          impl: stub: / port override     R-SIM-15
+component   MBCompSignalPlot               plots panel                      viz 7.4
+component   MBCompVideoPlayer              camera/image view                viz 11.4
+component   MBCompViewer2D                 renderer + layer providers       R-SIM-2 / R-SIM-13
+machine     MBMachineBirdsEyeViewExporter  render/ export (mp4/png)   viz 9 / S-D7
+machine     MBMachineBPLManager            sim batch (playlists)            NR-SIM-21 / S-D7
+machine     MBMachineBrowser               inspector panel                  viz 7.2
+machine     MBMachineCombinator            sim batch (parameter sweeps)     FR-SIM-45 sweeps
+machine     MBMachineDSpace                sources/ client (HIL rig)        OUT OF SCOPE, req 10
+machine     MBMachineECalBridge            sources/ client (middleware)     OUT OF SCOPE, req 10
+machine     MBMachineFalconExplorer        io/ codec (vendor format)        OUT OF SCOPE, req 10
+machine     MBMachineFileExplorer          -- (OS file dialog)
+machine     MBMachineFilesInFolder         sim batch                        NR-SIM-21 / S-D7
+machine     MBMachineHeadVisionHost        sources/ client (vendor host)    OUT OF SCOPE, req 10
+machine     MBMachineLiveCANReader         sources/ client (live bus)       OUT OF SCOPE, req 10
+machine     MBMachineMTSSnippetExtractor   sim convert (interval cut)     S-D7
+machine     MBMachineNEXT                  sources/ client (vendor stack)   OUT OF SCOPE, req 10
+machine     MBMachinePython                the framework IS a library       R-SIM-16 / GT-9
+machine     MBMachineTSF                   io/ codec (vendor format)        OUT OF SCOPE, req 10
+machine     MBMachineTSF3                  io/ codec (vendor format)        OUT OF SCOPE, req 10
+referenced  MBCompBookmarkEditor           user bookmarks on the timeline   viz 7.3 / FR-SIM-15
+referenced  MBCompBsigReader               io/ codec (reader)               R-SIM-14
+referenced  MBCompCANReader                sources/ client (live bus)       OUT OF SCOPE, req 10
+referenced  MBCompDriverSimple             actor behaviour in sources/      R-SIM-9 / S-C2
+referenced  MBCompEnvironment              world.* scenario binding         R-SIM-9
+referenced  MBCompErgReader                io/ codec (CarMaker results)     FR-SIM-50 / R-SIM-13
+referenced  MBCompKeyboardInput            live input in the loop           PARKED, FR-SIM-51
+referenced  MBCompMagnoReader              io/ codec (vendor format)        OUT OF SCOPE, req 10
+referenced  MBCompMap                      world layer provider             R-SIM-2
+referenced  MBCompOpenDrive                road-network source + world layer  OUT OF SCOPE, req 10
+referenced  MBCompSensorSimple             sensor model                     R-SIM-9
+referenced  MBCompSignalExplorer           signal explorer                  PARKED, arch 5.16.3
+referenced  MBCompSignalTable              signal table panel               viz 7.2 / 7.4
+referenced  MBCompTOPrimitive              Scene Prim (geometry from data)  R-SIM-2
+referenced  MBCompTOSimple                 mock -> recording, or stub:      R-SIM-12 / S-C2
+referenced  MBCompTOSingleTrack            mock -> recording, or stub:      R-SIM-12 / S-C2
+referenced  MBCompTOWaypoint               mock -> recording, or stub:      R-SIM-12 / S-C2
+referenced  MBCompVideoReader              io/ codec (camera stream)        R-SIM-14
+referenced  MBCompVideoWriter              capture / clip export            viz 9 / S-D7
+referenced  MBCompViewer3DX                Foxglove SceneUpdate (viz 11.3); native 3D PARKED
+referenced  MBCompViewportTransform        viewport                      viz 4
+referenced  MBCompWorldObjConverter        adapter inside a source       R-SIM-14 sources/
+
+2. Shipped example pipelines -- how a chain is actually wired
+-------------------------------------------------------------
+
+  Bsig\bsig.mbprj  (6 stages)
+      BsigReader             MBCompBsigReader.dll
+      EgoVeh                 MBCompTOPrimitive.dll
+      ObjConverter           MBCompWorldObjConverter.dll
+      VideoPlayer            MBCompVideoPlayer.dll
+      SignalTable            MBCompSignalTable.dll
+      ViewerBirdView         MBCompViewer2D.dll
+
+  BsigExplorer\bsigexplorer.mbprj  (3 stages)
+      BsigReader             MBCompBsigReader.dll
+      SignalExplorer         MBCompSignalExplorer.dll
+      SignalPlot             MBCompSignalPlot.dll
+
+  CanReader\canreader.mbprj  (5 stages)
+      CANReader              MBCompCANReader.dll
+      SignalFilter           MBCompIntegratedPython.dll
+      Signal Table           MBCompSignalTable.dll
+      Filter results         MBCompBookmarkEditor.dll
+      SignalExplorer         MBCompSignalExplorer.dll
+
+  CLSDashboard\CLSDashboard.mbprj  (6 stages)
+      ErgReader              MBCompErgReader.dll
+      OpenDrive              MBCompOpenDrive.dll
+      Ego                    MBCompTOPrimitive.dll
+      T00                    MBCompTOPrimitive.dll
+      SignalPlot             MBCompSignalPlot.dll
+      Viewer2D               MBCompViewer2D.dll
+
+  CLSdSpace\CLSdSpace.mbprj  (5 stages)
+      WorldObjConverter      MBCompWorldObjConverter.dll
+      TOPrimitive            MBCompTOPrimitive.dll
+      Viewer2D               MBCompViewer2D.dll
+      SignalExplorer         MBCompSignalExplorer.dll
+      SignalPlot             MBCompSignalPlot.dll
+
+  CLSdSpace\CLSdSpace_offline.mbprj  (5 stages)
+      RrecReader             MBCompRrecReader.dll
+      WorldObjConverter      MBCompWorldObjConverter.dll
+      TOPrimitive            MBCompTOPrimitive.dll
+      Viewer2D               MBCompViewer2D.dll
+      SignalExplorer         MBCompSignalExplorer.dll
+
+  DLLWrapper\DLLWrapper.mbprj  (2 stages)
+      BsigReader             MBCompBsigReader.dll
+      DllWrapper             MBCompDllWrapper.dll
+
+  DriverSimple\driverSimple.mbprj  (13 stages)
+      Environment            MBCompEnvironment.dll
+      Driver0                MBCompDriverSimple.dll
+      Vehicle0               MBCompTOSingleTrack.dll
+      Driver1                MBCompDriverSimple.dll
+      Vehicle1               MBCompTOSingleTrack.dll
+      Driver2                MBCompDriverSimple.dll
+      Vehicle2               MBCompTOSingleTrack.dll
+      Driver3                MBCompDriverSimple.dll
+      Vehicle3               MBCompTOSingleTrack.dll
+      Driver4                MBCompDriverSimple.dll
+      Vehicle4               MBCompTOSingleTrack.dll
+      Dashboard              MBCompDashboard.dll
+      ViewerBirdView         MBCompViewer2D.dll
+
+  Easteregg\easteregg.mbprj  (3 stages)
+      KeyboardInput          MBCompKeyboardInput.dll
+      Game                   MBCompIntegratedPython.dll
+      Viewer2D               MBCompViewer2D.dll
+
+  Easteregg2\easteregg2.mbprj  (14 stages)
+      KeyboardInput          MBCompKeyboardInput.dll
+      RaceTrack              MBCompEnvironment.dll
+      RaceTrackConnector     MBCompIntegratedPython.dll
+      OutsideTrackDrag       MBCompIntegratedPython.dll
+      TreePlanter            MBCompIntegratedPython.dll
+      Steering_Manipulator   MBCompIntegratedPython.dll
+      STM                    MBCompDllWrapper.dll
+      Game                   MBCompIntegratedPython.dll
+      RedPointMarker         MBCompIntegratedPython.dll
+      PointExporter          MBCompIntegratedPython.dll
+      CameraController       MBCompIntegratedPython.dll
+      HudMap                 MBCompViewer2D.dll
+      Dashboard              MBCompDashboard.dll
+      Viewer3DX              MBCompViewer3DX.dll
+
+  ErgExplorer\ergexplorer.mbprj  (3 stages)
+      ErgReader              MBCompErgReader.dll
+      SignalExplorer         MBCompSignalExplorer.dll
+      SignalPlot             MBCompSignalPlot.dll
+
+  ErgReader\ergreader.mbprj  (3 stages)
+      ErgReader              MBCompErgReader.dll
+      EgoVeh                 MBCompTOSimple.dll
+      ViewerBirdView         MBCompViewer2D.dll
+
+  ExternalPython\externalpython.mbprj  (2 stages)
+      ExternalPython         MBCompExternalPython.dll
+      Viewer                 MBCompViewer2D.dll
+
+  GIDAS\GIDAS.mbprj  (3 stages)
+      GIDAS                  MBCompIntegratedPython.dll
+      Viewer2D               MBCompViewer2D.dll
+      Map                    MBCompMap.dll
+
+  IntegratedPython\integratedpython.mbprj  (2 stages)
+      IntegratedPython       MBCompIntegratedPython.dll
+      Viewer                 MBCompViewer2D.dll
+
+  KeyboardControl\keyboardcontrol.mbprj  (4 stages)
+      KeyboardInput          MBCompKeyboardInput.dll
+      Ego                    MBCompTOSingleTrack.dll
+      SignalTable            MBCompSignalTable.dll
+      Viewer2D               MBCompViewer2D.dll
+
+  MagnoExplorer\MagnoExplorer.mbprj  (3 stages)
+      MagnoReader            MBCompMagnoReader.dll
+      SignalExplorer         MBCompSignalExplorer.dll
+      SignalPlot             MBCompSignalPlot.dll
+
+  Map\map.mbprj  (6 stages)
+      BsigReader             MBCompBsigReader.dll
+      Video Front            MBCompVideoPlayer.dll
+      Map Object             MBCompMap.dll
+      Map Static Color Route MBCompMap.dll
+      Map Gradient Color Route MBCompMap.dll
+      Map Discrete Color Route MBCompMap.dll
+
+  OdrTest\odrtest.mbprj  (2 stages)
+      OpenDrive              MBCompOpenDrive.dll
+      ViewerBirdView         MBCompViewer2D.dll
+
+  ReplayShowcase\ReplayShowcase.mbprj  (13 stages)
+      BsigReader             MBCompBsigReader.dll
+      VideoReader            MBCompVideoReader.dll
+      IntegratedPython       MBCompIntegratedPython.dll
+      WorldObjConverter      MBCompWorldObjConverter.dll
+      ViewportTransform      MBCompViewportTransform.dll
+      Dashboard              MBCompDashboard.dll
+      SensorSimple           MBCompSensorSimple.dll
+      Map                    MBCompMap.dll
+      Video                  MBCompViewer2D.dll
+      BirdView               MBCompViewer2D.dll
+      Viewer3D               MBCompViewer2D.dll
+      SignalPlot             MBCompSignalPlot.dll
+      SignalExplorer         MBCompSignalExplorer.dll
+
+  RrecExplorer\rrecexplorer.mbprj  (3 stages)
+      RrecReader             MBCompRrecReader.dll
+      SignalExplorer         MBCompSignalExplorer.dll
+      SignalPlot             MBCompSignalPlot.dll
+
+  VideoExport\VideoExport.mbprj  (7 stages)
+      BsigReader             MBCompBsigReader.dll
+      VideoReader            MBCompVideoReader.dll
+      WorldObjConverter      MBCompWorldObjConverter.dll
+      Dashboard              MBCompDashboard.dll
+      Ego                    MBCompTOPrimitive.dll
+      Viewer2D               MBCompViewer2D.dll
+      VideoWriter            MBCompVideoWriter.dll
+
+  VideoWriter\videowriter.mbprj  (4 stages)
+      Environment            MBCompEnvironment.dll
+      Veh                    MBCompTOSimple.dll
+      Viewer                 MBCompViewer2D.dll
+      VideoWriter            MBCompVideoWriter.dll
+
+  VirtualDevelopment\VirtualDevelopment.mbprj  (20 stages)
+      Environment            MBCompEnvironment.dll
+      KeyboardInput          MBCompKeyboardInput.dll
+      Generator              MBCompIntegratedPython.dll
+      Ego                    MBCompTOSingleTrack.dll
+      SimpleEBA              MBCompIntegratedPython.dll
+      NPC1_ParkedCar         MBCompTOPrimitive.dll
+      NPC2                   MBCompTOWaypoint.dll
+      NPC3                   MBCompTOWaypoint.dll
+      NPC4                   MBCompTOWaypoint.dll
+      NPC5                   MBCompTOWaypoint.dll
+      NPC6                   MBCompTOWaypoint.dll
+      NPC7                   MBCompTOWaypoint.dll
+      NPC8                   MBCompTOWaypoint.dll
+      NPC9                   MBCompTOWaypoint.dll
+      SignalGenerator        MBCompSignalGenerator.dll
+      Dashboard              MBCompDashboard.dll
+      ViewerBirdview         MBCompViewer2D.dll
+      Viewer3D               MBCompViewer2D.dll
+      SpeedDisplay           MBCompViewer2D.dll
+      SignalTable            MBCompSignalTable.dll
+
+  Waypoint\waypoint.mbprj  (4 stages)
+      WaypointVeh1           MBCompTOWaypoint.dll
+      WaypointVeh2           MBCompTOWaypoint.dll
+      WaypointVeh3           MBCompTOWaypoint.dll
+      Viewer                 MBCompViewer2D.dll
+
+  WebSocketInterface\WebSocketInterface.mbprj  (3 stages)
+      ErgReader              MBCompErgReader.dll
+      IntegratedPython       MBCompIntegratedPython.dll
+      SignalPlot             MBCompSignalPlot.dll
+
+3. Finding
+----------
+ok    every discovered concept maps to a stage, codec, renderer, or a recorded park/out-of-scope decision -- arch 5.16's table is complete for this release
+
+Deliberately parked: 3
+  - Foxglove SceneUpdate (viz 11.3); native 3D PARKED
+  - live input in the loop           PARKED, FR-SIM-51
+  - signal explorer                  PARKED, arch 5.16.3
+
+Deliberately out of scope (no requirement yet): 7
+  - io/ codec (vendor format)        OUT OF SCOPE, req 10
+  - road-network source + world layer  OUT OF SCOPE, req 10
+  - sources/ client (HIL rig)        OUT OF SCOPE, req 10
+  - sources/ client (live bus)       OUT OF SCOPE, req 10
+  - sources/ client (middleware)     OUT OF SCOPE, req 10
+  - sources/ client (vendor host)    OUT OF SCOPE, req 10
+  - sources/ client (vendor stack)   OUT OF SCOPE, req 10
+
+RESULT  pass

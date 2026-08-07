@@ -38,7 +38,7 @@ OUT_DIR = Path(__file__).resolve().parent / "golden"
 SAMPLE_TICKS = (0, 50, 100, 162, -1)  # -1: the last tick
 
 # `frame`/`ego`/`trail` moved to the framework's own default layer set
-# (`AR-52`, 2026-08-07, `adas_sim.scene.default_layers`) -- `df` only
+# (`AR-52`, `adas_sim.scene.default_layers`) -- `df` only
 # contributes `objects`/`hud` now.
 _PROVIDERS = (
     default_layers.frame_layer, default_layers.ego_layer, common.objects_layer,

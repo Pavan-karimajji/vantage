@@ -5,7 +5,7 @@
 
 """S-C1c system test: ST-C1c-1 and ST-C9-1 (docs/sim_implementation_plan.md).
 
-Carries TWO stage gates, which is why the ids are both named here (AR-7):
+Carries TWO stage gates, which is why the ids are both named here:
 
   - `ST-C1c-1` -- the generic ABI's correctness gate, proven once against a
     real component before anything depends on it exclusively. This file's

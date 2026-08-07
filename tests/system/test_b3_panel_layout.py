@@ -103,7 +103,7 @@ def _open_window(recording) -> MainWindow:
 
 
 def test_default_layout_matches_sim_player_section_3(tmp_path):
-    """`AR-59` (2026-08-07): a fresh window, on a profile with no saved
+    """`AR-59`: a fresh window, on a profile with no saved
     layout, used to put every one of `bev`/`inspector_panel`/
     `evidence_panel` in `RightDockWidgetArea` together -- `QMainWindow`
     tabifies same-area docks by default, so only the last one added

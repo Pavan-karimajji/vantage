@@ -4,51 +4,29 @@
 # @author Pavan Karimajji
 
 """The `Evidence` record and `evidence(address, session, tick)` (`OD-6`,
-`R-SIM-25`, `sim_architecture.md` §5.19). **Seeded here at `S-B2Δ`** over
-what a `Session` alone can answer: `run_id`, a tick's own ports and their
-origins, the run manifest. Exactly the same seeding discipline
-`core/explain.py` used at this same stage (`S-B2`) for `sim explain`'s
-static half -- this is its dynamic half, "what was this value, at this
-tick", the two together making `cli/explain.py --at` real.
+`R-SIM-25`, arch §5.19) -- "what was this value, and where did it come from".
 
-**Grows, does not get re-designed.** `sim_architecture.md` §5.19 sketches
-the destination shape -- `port`, `stage`, `overrides`, `faults`,
-`config_bundle`, `component`, `plugin` -- once those concepts exist to
-report: ports/stages at `S-C1c`, plug-ins at `S-C8`, the GUI panel at
-`S-D3`. Adding a field there is additive to this dataclass, never a
-redesign of it (`R-SIM-25`'s own "a field it cannot fill reads unknown"
-applies from the day a field is added, not before it exists to omit).
+**One producer, two formatters.** `cli/explain.py --at` and the GUI evidence
+panel both call `evidence()` and format its result; neither re-derives it.
+That is what makes "GUI and headless answer identically" structural rather
+than a discipline (`GT-9`).
 
-**`ST-D6-3` (S-D6): the `Prim.pick_id` -> port join.** A rendered prim's
-`pick_id` did not resolve to the port/topic that produced it -- `kind="prim"`
-below closes that, the "still-open half of R-SIM-25's join" `view/
-evidence_panel.py`'s own docstring named. The join reuses two pieces that
-already existed for a different reason: `scene.registry.LayerProviderEntry.
-requires` (the provider's own declared `self.<port>` refs, `R-SIM-21`,
-today used only for tick-gating) and `contracts.binding.
-try_resolve_component_ref` (the same tolerant resolver `LayerCtx.port`
-already calls). No new registry, no live-provider-call interception --
-`Layer.id` -> `registered_providers()[id].requires` -> resolved address is a
-static lookup. **Honest limit, stated rather than hidden**: `requires` is a
-provider's OWN declaration, used today for gating, not a compiler-verified
-list of every port its body reads -- a provider that calls `ctx.port(...)`
-on a port it never listed in `requires=` resolves to `topic=None` here
-(never a guess), same as an address matching nothing does elsewhere in this
-module. **Also unblocked this pass**: `config_bundle_sha256`/
-`component_build_id`, resolved from `session.meta.components` by the
-port's own stage prefix (`core.manifest.build_manifest`'s
-`ComponentBuildInfo.name = stage.name`, so `<stage>.<port>`'s stage half is
-already the lookup key) -- populated for `kind="port"` too, not only
-`kind="prim"`, since asking about a port directly should answer the same
-question a prim resolving to that port would.
+**It grows; it is not re-designed.** Arch §5.19 sketches the destination
+fields -- `port`, `stage`, `overrides`, `faults`, `config_bundle`,
+`component`, `plugin` -- to be added as those concepts come to exist. Adding
+one is additive to the dataclass. `R-SIM-25`'s "a field it cannot fill reads
+`unknown`" applies from the day a field exists, not before.
 
-**One producer, two formatters (`OD-6`).** `cli/explain.py --at` and the
-GUI evidence panel (`S-D3`, `view/evidence_panel.py`) both call `evidence()`
-and format its result -- neither re-derives it, which is what makes "GUI and
-headless answer identically" structural rather than a discipline (`GT-9`).
-`MainWindow` already passes a raw `pick_id` as `address` (`render/viewer.py`
-`_on_evidence_sync`, predating this change) -- `kind="prim"` landing here
-needed no GUI-side edit to reach it, exactly what "one producer" buys.
+**The `Prim.pick_id` -> port join** reuses two things that already existed:
+a provider's declared `requires` (`R-SIM-21`) and
+`contracts.binding.try_resolve_component_ref`. `Layer.id` -> the registered
+provider's `requires` -> resolved address is a static lookup -- no new
+registry, no interception of a live provider call.
+
+**Honest limit:** `requires` is the provider's *own declaration*, not a
+compiler-verified list of every port its body reads. A provider calling
+`ctx.port(...)` on a port it never declared resolves to `topic=None` here --
+never a guess, same as any address matching nothing.
 """
 
 from __future__ import annotations
@@ -101,30 +79,22 @@ def _component_provenance(port_address: str, session: Session) -> tuple[str | No
 
 
 def _resolve_prim(address: str, session: Session, tick: int) -> Evidence | None:
-    """`address` as a rendered `Prim.pick_id` at `tick` -- `None` when no
-    currently-registered layer provider's scene contains it (unresolvable,
-    not an error: mirrors `evidence()`'s own `kind="unknown"` degrade).
+    """Resolve `address` as a rendered `Prim.pick_id` at `tick`; `None` when no
+        registered provider's scene contains it -- unresolvable, not an error.
 
-    **Guarded by `registered_providers()`, checked before anything else.**
-    No layer plug-in imported into this process (the plain CLI and every
-    unit test that does not import one, `S-C8`'s plug-in loading being a
-    separate, larger gap this row does not close) means no `Prim` could
-    possibly exist -- returning early here skips `build_scene`'s real
-    `ProjectModel.resolve` disk I/O for the ordinary "not a prim" case,
-    the same one every non-prim address already took before this function
-    existed.
+        **Guarded by `registered_providers()` before anything else.** With no layer
+        plug-in imported into this process, no `Prim` can exist, so returning early
+        skips `build_scene`'s real disk I/O for the ordinary "not a prim" case.
 
-    **Every OTHER registered provider runs too, and its failure is not
-    this address's failure.** `registered_providers()` is one process-global
-    registry (`R-VAR-2`) shared by every component's real layers and every
-    test fixture ever imported this process -- `build_scene` calls all of
-    them, not just whichever one might own `address`. A provider crashing
-    on a session/tick it was never designed for (found for real: a
-    component's provider dereferencing a port's decoded message on a
-    session whose recording carries that port undecoded) must not be
-    reported as *this* address failing to resolve -- caught and treated the
-    same as "no matching prim", which is what it honestly is from this
-    call's point of view.
+        **Every other registered provider runs too, and its failure is not this
+        address's failure.** The registry is process-global (`R-VAR-2`), shared by
+        every component's layers and every fixture imported this process, and
+        `build_scene` calls all of them. A provider crashing on a session it was
+        never designed for -- seen for real, dereferencing a port's decoded message
+        on a recording that carries it undecoded -- must not be reported as *this*
+        address failing. Caught and treated as "no matching prim", which is what it
+        honestly is from here.
+
     """
     from adas_sim.scene.registry import registered_providers
     if not registered_providers():

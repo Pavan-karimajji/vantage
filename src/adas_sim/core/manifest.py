@@ -3,26 +3,23 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`build_manifest` -- assembles a `RunManifest` (`io.base.RunManifest`,
-already built at `S-A4Δ`) for a run about to happen (`S-C2`,
-`sim_resim_and_recording.md` §2). Thin on purpose: the run id itself is
-`core.ids.new_run_id`'s job, already built and already enforcing its
-`REQUIRED_KEYS`; this module's only work is gathering those keys from a
-`Pipeline` and its inputs.
+"""Run manifests -- two different things that share a word, kept distinct.
 
-`RunSpec`/`load_run_spec`/`write_run_manifest` (S-D3): a DIFFERENT
-"manifest" from `RunManifest` above -- that one is post-run PROVENANCE,
-embedded in a recording after the fact, with no per-stage mode/impl
-fields at all. This one is a pre-run CONFIGURATION: which recording,
-project and config to run a pipeline against, plus this session's
-mode: overrides -- what `sim resim <manifest>` would otherwise need five
-flags for, and what `PipelinePanelState`'s toggles need a file to land in.
-Deliberately **not** a new schema (agreed with the user before building):
-a run manifest IS a pipeline YAML file, with three optional extra
-top-level keys (`recording:`/`project:`/`config:`) `Pipeline.load()`
-itself never reads. `stages:` stays the identical shape, so the SAME
-parser reads a plain pipeline file and a run manifest -- there is no
-second format to keep in sync.
+`build_manifest` assembles a `RunManifest` (`io.base.RunManifest`) for a run
+about to happen: post-run **provenance** (`R-SIM-6`, recording spec §2), embedded in the recording after the
+fact, with no per-stage mode/impl fields. Thin on purpose -- the run id is
+`core.ids.new_run_id`'s job and already enforces its `REQUIRED_KEYS`; this
+only gathers those keys from a `Pipeline` and its inputs.
+
+`RunSpec`/`load_run_spec`/`write_run_manifest` are a pre-run
+**configuration**: which recording, project and config to run a pipeline
+against, plus this session's `mode:` overrides -- what `sim resim` would
+otherwise need five flags for.
+
+Deliberately **not** a second schema: a run manifest *is* a pipeline YAML
+with three optional extra top-level keys (`recording:`/`project:`/`config:`)
+that `Pipeline.load()` ignores. `stages:` keeps its identical shape, so one
+parser reads both and there is no second format to keep in sync.
 """
 
 from __future__ import annotations
@@ -174,42 +171,29 @@ def build_manifest(
     host: str = "",
     clock: datetime | None = None,
 ) -> RunManifest:
-    """`run_kind` is `"sim"` or `"resim"` (`RunManifest.run_kind`);
-    `source_kind` is `"carla"` / `"synthetic"` / ... (`Source.name`).
-    `recording_path` is the INPUT recording for a resim, absent for a fresh
-    `sim record` (there is nothing yet to hash) -- `recording_sha256` is
-    then `""`, a real, honest value for `new_run_id`'s hash, not a
-    placeholder. `component_build_shas` defaults to empty: no per-library
-    hash exists yet at `S-C2` (that's `S-C5`'s packed config bundle); a
-    caller that has one (a real `dll:` stage) supplies it keyed by stage
-    name.
+    """`run_kind` is `"sim"` or `"resim"`; `source_kind` is the `Source.name`.
 
-    `component_bundle_paths`/`component_bundle_shas` (`S-C5`, `sim_resim_
-    and_recording.md` §2's `sut.components[]`): the resolved bundle
-    directory's path and its `bundle.sha256`, per stage -- `config_bundle`
-    is a display string (the path a reader would check), never bundle
-    bytes; the bytes themselves go on the separate `/meta/config_bundle`
-    topic (`Recorder.open`'s `config_bundle_bytes`), embedded once per
-    recording, not per component. `config_bundle_embedded` states whether
-    THIS recording actually carries those bytes -- a run with a resolved
-    bundle but no recording in progress (e.g. `sim resim`'s own SUT) leaves
-    it `False`, honestly.
+        Several fields are optional and **degrade honestly rather than with a
+        placeholder** -- an empty value here is a real answer, not a forgotten one:
 
-    `pipeline`/`pipeline_path` are both optional: `sim record`
-    (`sim_resim_and_recording.md` §9's own "executes a SUT: no") has no
-    pipeline at all, only a `Source` -- `pipeline_sha`/`overrides_repr`
-    then fall back to `""`, real honest values for a run this framework
-    genuinely did not wire through a pipeline file, not placeholders for
-    one it forgot to pass.
+        - `recording_path` is the input recording for a resim, absent for a fresh
+          `sim record` (nothing exists yet to hash), so `recording_sha256` is `""`.
+        - `pipeline`/`pipeline_path` are absent for `sim record`, which has a
+          `Source` and no pipeline at all.
+        - `component_build_shas` is keyed by stage name, supplied by a caller that
+          has a real library.
+        - `component_bundle_paths`/`component_bundle_shas` are the resolved bundle
+          directory and its `bundle.sha256` per stage. `config_bundle` is a
+          **display string** -- the path a reader would check -- never bundle
+          bytes; the bytes go once per recording on the `/meta/config_bundle`
+          topic. `config_bundle_embedded` states whether *this* recording actually
+          carries them.
+        - `bundle_overrides`/`base_bundle_sha` describe a calibration sweep
+          (`NR-SIM-6`): the declared override set and the hash of the bundle it was
+          derived from. Distinct from `bundle_sha`, which reports whatever bundle
+          was actually resolved -- the derived one, for a swept run.
 
-    `bundle_overrides`/`base_bundle_sha` (`NR-SIM-6`, `UT-C5-6/7`): this
-    run's declared `run.overrides:` calibration-sweep set and the ORIGINAL
-    bundle's hash it was derived from (`model.project.
-    materialize_derived_bundle`) -- a DIFFERENT pair from `bundle_sha`
-    above, which already reports whatever bundle was actually resolved
-    (the derived one, for a swept run). Empty/`""` for the common case of
-    no sweep, same "degrades and says so" shape every other optional
-    provenance field here uses."""
+    """
     component_build_shas = component_build_shas or {}
     component_bundle_paths = component_bundle_paths or {}
     component_bundle_shas = component_bundle_shas or {}
@@ -274,29 +258,24 @@ def build_manifest(
 
 
 def verify_pinned_builds(pipeline: Pipeline, recording_path: Path) -> None:
-    """`sim resim --pin-builds` (`UT-D7-9`, `OQ-9`/`NR-SIM-24`,
-    `sim_resim_and_recording.md` "Pinning a resim to the build that
-    produced it"): refuses to start rather than silently resim against a
-    different build than the one that produced `recording_path`.
+    """`sim resim --pin-builds` (`NR-SIM-24`): refuse to start rather than
+        silently resim against a different build than the one that produced the
+        recording.
 
-    Reads `recording_path`'s OWN embedded run manifest (`RecordingReader.
-    meta()`, `R-SIM-6`) for each `mode: simulate` stage's previously
-    recorded `library_sha256`, and compares it against `pipeline`'s
-    CURRENTLY resolved library (`Pipeline.component_build_shas`) for that
-    same stage. A `components=`-supplied stage (no file on disk, e.g. a
-    test's `InProcessSilComponent`) has nothing to verify and is skipped --
-    same reasoning `_validate_cross_component_agreement` already uses for
-    the bundle-directory check.
+        Reads the recording's own embedded run manifest for each `mode: simulate`
+        stage's recorded `library_sha256` and compares it against the currently
+        resolved library for that stage. A `components=`-supplied stage has no file
+        on disk and is skipped.
 
-    Verification, not addressing (`impl: pkg:` still does not exist) -- a
-    package reference alone would prove nothing anyway (`ComponentBuildInfo.
-    package_ref`'s own docstring); the byte hash is the actual claim. **The
-    honest limit is a refusal, not a silent pass**: a stage the recording
-    carries no `library_sha256` for (an older recording, or one whose
-    library was never resim'd for real) is reported as **unpinnable**
-    rather than treated as a match -- the entire point of this flag is a
-    hard guarantee, and treating "unknown" as "fine" would defeat it
-    (`R-SIM-25`/`NR-SIM-4`)."""
+        Verification, not addressing: a package reference would prove nothing, the
+        byte hash is the claim.
+
+        **The limit is a refusal, not a silent pass.** A stage the recording
+        carries no `library_sha256` for is reported as **unpinnable**, never
+        treated as a match -- the point of the flag is a hard guarantee, and
+        reading "unknown" as "fine" would defeat it (`NR-SIM-4`).
+
+    """
     reader = reader_for(recording_path)
     try:
         recorded_shas = {c.name: c.library_sha256 for c in reader.meta().components}

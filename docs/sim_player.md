@@ -247,15 +247,14 @@ list filled in from what the Scene actually contains. **The user has configured
 nothing.** If the recording carries stage outputs, the pipeline dock shows them
 as `measured` and the picture is already complete.
 
-**If it does not** (`AR-57`, audit run 4, 2026-08-07) — the ordinary case for
+**If it does not** — the ordinary case for
 every legacy recording in this repo, which was never given a name here before
 this note — the status banner says so directly: *"STIMULUS-ONLY: no port here
 was ever a stage's own computed output — resim through a pipeline to see
 one."* `Session.has_simulated_output()` answers this from the recording's own
 `R-SIM-12` origin tags alone, with no `Pipeline` needed — the same "no
 configuration required" property Screen 2 already promises, extended to the
-one case its first sentence did not cover. A layer left unavailable
-(`AR-53`) for the same reason names its own missing port; this banner names
+one case its first sentence did not cover. A layer left unavailable for the same reason names its own missing port; this banner names
 the recording's own missing computation. Together they answer *"why is this
 picture incomplete?"* without the user opening a second tool.
 
@@ -324,7 +323,7 @@ Recorded so it is a decision, not an omission:
 
 **This section exists because everything above it was frozen on 2026-07-28 and
 the application it specifies was built on 2026-08-06, and nothing in between
-brought the two together** (`AR-47`). `S-D8` landed the shell, the workspaces,
+brought the two together**. `S-D8` landed the shell, the workspaces,
 the start page, the palette and the Campaign widget, wrote its detail into
 `sim_implementation_plan.md`, and left this document — the one a reader opens to
 find out what Vantage *is* — describing an intent. Every name S-D8 created

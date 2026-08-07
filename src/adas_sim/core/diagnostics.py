@@ -3,57 +3,33 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""Environment facts behind `sim doctor` (DG-3).
+"""Environment facts behind `sim doctor` (`DG-3`).
 
-Kept out of `cli/` (GT-9: the CLI is argument parsing and dispatch only) so
-every fact here is reachable from a plain script with no argparse involved.
-Seeded at S-A1 with the environment questions that matter before anything
-else exists; grows one field per later stage that adds something worth
-checking (pipeline/recording resolution, codec capabilities, bundle hashes).
+Kept out of `cli/` (`GT-9`) so every fact is reachable from a plain script with
+no argparse involved.
 
-**S-D6 completion (`UT-D6-8`).** `doctor_report()` gains four checks.
-Codec capabilities need no input and are always reported; the other three
-are optional and independently triggered -- each fires only when the
-caller supplies enough to check it, so `sim doctor` with no flags stays
-the S-A1 report plus the (input-independent) codec table:
+`doctor_report()` always reports the registered codecs' capabilities, which
+need no input. Everything else is triggered independently by what the caller
+supplies, so `sim doctor` with no flags stays the environment report:
 
-- every registered codec's capabilities (`io.registry.codec_info`) --
-  always reported, no flag needed.
-- `--pipeline`/`--search`: which library each `dll:`/`stubdll:` stage's
-  `impl:` stem resolves to, and by which pattern, listing every directory
-  searched (`P-5`) -- `contracts.loader.resolve_library_report`, which
-  (unlike `resolve_library`) answers this on success too. `Pipeline.
-  parse_stages` (new) reads a pipeline's stage declarations with NO
-  component resolution, precisely so a broken stem can be reported
-  instead of crashing `sim doctor` itself before `Pipeline.load`'s own
-  `_resolve_components` would otherwise raise.
-- the same, plus `--config`: whether the viewer and the SUT would agree on
-  the config bundle (`R-SIM-3a`'s core fear) -- the SUT's own real
-  `config_bundle_sha256` (read by actually loading the resolved library,
-  same as `sim probe`) compared against `model.project.ProjectModel`'s own
-  resolution using the SAME `--config`/library-packed bundle.
-- `--recording` (with `--pipeline`): which cuts the recording supports
-  (`Session.feasible_cuts`, `R-SIM-12`/`R-SIM-23`), and whether the
-  recording's own extension is even readable at all.
-- `--config-source embedded|library|checkout` (`UT-C5-8`): forces the
-  bundle-agreement check above to compare against exactly one tier rather
-  than the normal explicit -> embedded -> library -> checkout priority
-  order -- `model.project.ProjectModel.resolve`'s own `force=` parameter,
-  `--recording`'s embedded bundle bytes extracted to a temp directory via
-  `model.project.extract_embedded_bundle` (`UT-C5-9`) when `embedded` is
-  forced. A forced tier that cannot resolve is reported as a problem
-  naming the tier, never silently ignored.
-- `--pipeline`, plus optional `--plugin-root` (`S-C8`): each resolved
-  stage's own plug-in bundle (`model.plugins.PluginBundle.resolve`,
-  explicit -> library `sim/` -> checkout -- no `embedded` tier here,
-  `_plugin_diagnoses`'s own docstring on why) -- component, api, sha256,
-  origin, root. A component with no `sim/` plug-ins is reported
-  (`found: False`), never treated as a problem.
+- `--pipeline`/`--search` -- which library each `dll:`/`stubdll:` stage
+  resolves to, by which pattern, listing every directory searched (`P-5`).
+  Uses `Pipeline.parse_stages`, which reads stage declarations without
+  resolving components, so a broken stem is reported rather than crashing
+  `sim doctor` before it can report anything.
+- plus `--config` -- whether the viewer and the SUT would agree on the config
+  bundle (`R-SIM-3a`'s core fear): the SUT's real `config_bundle_sha256`,
+  read by loading the library, against `ProjectModel`'s own resolution.
+- `--config-source embedded|library|checkout` -- force that comparison onto
+  one tier instead of the normal priority order. A forced tier that cannot
+  resolve is reported as a problem naming the tier, never silently ignored.
+- `--recording` (with `--pipeline`) -- which cuts the recording supports
+  (`R-SIM-12`, `R-SIM-23`), and whether its extension is readable at all.
+- `--plugin-root` -- each stage's plug-in bundle: component, api, sha256,
+  origin, root. A component with no `sim/` plug-ins is reported, not a problem.
 
-`"problems"` collects every finding that would break a real run --
-`UT-D6-8`'s own three: a broken `impl:` stem, a bundle disagreement, and an
-unreadable recording codec -- each message naming the file. `cli/doctor.py`
-exits non-zero exactly when this list is non-empty.
+`"problems"` collects findings that would break a real run (`UT-D6-8`), each naming the
+file. `cli/doctor.py` exits non-zero exactly when that list is non-empty.
 """
 
 from __future__ import annotations
@@ -139,7 +115,7 @@ def _bundle_diagnoses(
         sut_sha = sut_manifest.config_bundle_sha256
         bundle_dir = lib_path.parent / "config"
         try:
-            # known_project=sut_manifest.project (AR-51): a real S-C5-packed
+            # known_project=sut_manifest.project: a real S-C5-packed
             # bundle carries no manifest.yaml of its own, so without this the
             # library tier fell back to bundle_dir.name ("config", the
             # directory every build packs into) and ProvenanceWarning fired

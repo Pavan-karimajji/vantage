@@ -3,26 +3,22 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`Scene` to bytes and back, **protobuf** (sim_implementation_plan.md
-S-A3): field numbering gives minor-version tolerance for free, and a
-Foxglove renderer wants the schema anyway (`S-D3`). `Scene.version` is
-`major.minor`; additive is minor.
+"""`Scene` to bytes and back, in protobuf. Field numbering buys minor-version
+tolerance for free, and a Foxglove renderer wants the schema anyway.
+`Scene.version` is `major.minor`; additive changes are minor.
 
-**No `.proto` file, no `protoc`.** The schema below is built once, at import
-time, straight from `google.protobuf.descriptor_pb2` into a private
+**No `.proto` file and no `protoc`.** The schema is built once at import time
+straight from `google.protobuf.descriptor_pb2` into a private
 `DescriptorPool` -- the same "no generated bindings required" principle
 `R-SIM-11` states for a component's messages, applied to the framework's own
-IR. `neither `protoc` nor `grpcio-tools` is available on every platform this
-runs on without a new build-time dependency (`P-10`); this way there is
-nothing to regenerate and nothing else to install.
+IR. Nothing to regenerate, and no build-time dependency that must exist on
+every platform (`P-10`).
 
-Proto2 syntax, deliberately: proto3 singular optional fields need a
-synthetic one-field oneof per field for presence-tracking (`HasField`),
-which is exactly what a hand-built descriptor should not have to reconstruct
-by hand for ~40 fields. Proto2's `optional` gives real presence natively.
-This schema is internal to `modules/sim` and is never a cross-component
-`interfaces` contract, so `R-NAME-4`'s field-naming rule (not its syntax
-choice) is what applies -- fields are snake_case, messages PascalCase.
+**Proto2 syntax, deliberately:** proto3 singular optional fields need a
+synthetic one-field oneof per field for presence tracking, which a hand-built
+descriptor should not have to reconstruct for ~40 fields. Proto2's `optional`
+gives real presence natively. This schema is internal to `modules/sim` and is
+never a cross-component `interfaces` contract.
 """
 
 from __future__ import annotations
@@ -122,7 +118,7 @@ def _build_file_descriptor() -> _dpb.FileDescriptorProto:
     # renumbered, per this file's own "permanent once shipped" rule above.
     _field(prim, "bulk", 38, _FT.TYPE_MESSAGE, type_name=f".{_PACKAGE}.BulkRef")
     _field(prim, "derived", 39, _FT.TYPE_BOOL)
-    # Field 40+ added by `AR-56` (2026-08-07) -- same append-only rule.
+    # Field 40+ added by `AR-56` -- same append-only rule.
     _field(prim, "spacing_lateral_m", 40, _FT.TYPE_DOUBLE)
 
     layer = fdp.message_type.add()
@@ -135,8 +131,8 @@ def _build_file_descriptor() -> _dpb.FileDescriptorProto:
     _field(layer, "level", 6, _FT.TYPE_INT32)
     _field(layer, "default_on", 7, _FT.TYPE_BOOL)
     _field(layer, "derived", 8, _FT.TYPE_BOOL)
-    # Field 9 added by `AR-60` (2026-08-07) -- `Layer.unavailable` (`AR-53`,
-    # 2026-08-07) was never wired into this codec at all; caught by a golden
+    # Field 9 added by `AR-60` -- `Layer.unavailable` (`AR-53`,
+    # was never wired into this codec at all; caught by a golden
     # round-trip carrying an unavailable layer for the first time.
     _field(layer, "unavailable", 9, _FT.TYPE_STRING)
 

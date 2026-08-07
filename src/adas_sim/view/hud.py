@@ -106,7 +106,7 @@ def format_stale_banner(stale: tuple[str, ...]) -> str | None:
 
 
 def format_stimulus_only_banner(has_simulated_output: bool) -> str | None:
-    """`AR-57` (2026-08-07): the "why is a component's own result missing"
+    """`AR-57`: the "why is a component's own result missing"
     answer that needs no `Pipeline` -- `sim_player.md` §6 describes only the
     case where *"the recording carries stage outputs"*; this is the
     sentence for the other case, which is every legacy recording in this

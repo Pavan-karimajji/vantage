@@ -3,22 +3,20 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji <Pavan.Karimajji@larsentoubro.com>
 
-"""`S-C6` (`R-SIM-24`): determinism, measured along the axes that break it.
+"""Determinism, measured along the axes that break it (`R-SIM-24`).
 
 `derive_axis` never takes a flag -- the axis is read off the two runs' own
 manifests (`host`, `process_nonce`, `library_sha256`, `build_id`,
 `config_bundle_sha256`), because a flag can lie: "cross-machine verified"
-claimed from a pair that also rebuilt the binary is the standard cheat this
-refuses. A pair differing in more than one of those dimensions is evidence
-for **neither** axis, and every differing dimension is named -- never
-attributed to whichever axis the caller hoped for.
+claimed from a pair that also rebuilt the binary is the cheat this refuses. A
+pair differing in more than one dimension is evidence for **neither** axis,
+and every differing dimension is named.
 
-Axes A (same-process) and B (fresh-process) are gates: **exact**, no
-tolerance field at all -- `compare_exact` is the only comparison either one
-is allowed. Axes C (rebuilt binary) and D (different machine) are
-measurements: `compare_with_tolerance` against a component's own
-`ToleranceSet` (`core.tolerance`), reporting every divergence found (not
-just the first) plus the worst headroom fraction consumed.
+Axes A (same-process) and B (fresh-process) are **gates**: exact, with no
+tolerance field at all, so `compare_exact` is the only comparison allowed.
+Axes C (rebuilt binary) and D (different machine) are **measurements**:
+`compare_with_tolerance` against the component's own `ToleranceSet`, reporting
+every divergence found plus the worst headroom fraction consumed.
 """
 
 from __future__ import annotations

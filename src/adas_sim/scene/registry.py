@@ -3,26 +3,21 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`@layer_provider` -- discovery **by import** (sim_api_reference.md §5,
-§6.4's registry note). A component adds a layer by existing: importing the
-module that defines a decorated function is what registers it, so there is no
-central roster to keep in sync (`R-VAR-2`'s "no central roster" principle,
-extended from components to layers).
+"""`@layer_provider` -- discovery **by import** (api reference §5).
 
-**`@inspector_fields` (`S-A3`) lived here and is gone.** It only ever
-registered field *names* against the decorated function object, with no way
-to resolve *values* for a picked entity -- and since `layer_provider` may
-wrap that same function in `gated` (when `requires` is given), the
-registration key and `LayerProviderEntry.func` could silently diverge. Never
-called anywhere. Replaced (`S-B3` slice 5) by `Prim.fields`: the provider
-that builds a prim already has the raw entity in hand, so it computes the
-inspector's (name, value) pairs inline, the same pass -- one fewer moving
-part, and no identity to keep in sync.
+A component adds a layer by existing: importing the module that defines a
+decorated function is what registers it, so there is no central roster to keep
+in sync (`R-VAR-2`, extended from components to layers).
 
-**`@signal`/`registered_signals` (`S-A3`) lived here too and moved.**
-Unused anywhere until `S-B3` slice 6 needed them for real, at which point
-they belong next to the resolver that reads them -- `core/signals.py`, not
-here (`NR-SIM-8`).
+Two decorators that once lived here are gone, both deliberately:
+
+- **`@inspector_fields`** registered field *names* against the decorated
+  function with no way to resolve values, and could silently diverge from
+  `LayerProviderEntry.func` when `layer_provider` wrapped it in `gated`.
+  Replaced by `Prim.fields`: the provider already has the entity in hand, so
+  it computes the inspector pairs inline -- one fewer moving part.
+- **`@signal`/`registered_signals`** moved to `core/signals.py`, next to the
+  resolver that reads them (`NR-SIM-8`).
 """
 
 from __future__ import annotations
@@ -66,27 +61,24 @@ def layer_provider(
     layer_id: str, *, group: str = "", requires: Sequence[str] = (),
     reacts_to: Sequence[str] = (),
 ) -> Callable[[Callable[..., object]], Callable[..., object]]:
-    """Registers `func` under `layer_id`. A duplicate id raises naming
-    **both** providers (`N-8`) -- the failure this prevents is two
-    components silently drawing over the same layer id.
+    """Register `func` under `layer_id`. A duplicate id raises naming **both**
+        providers (`N-8`) -- the failure that prevents is two components silently
+        drawing over the same layer id.
 
-    `requires`, when given, **gates** the call: a `Tick` lacking one of these
-    ports yields no layers and raises nothing (`UT-B1-1`) -- the wrapped
-    function is never even called, so its body may assume every required
-    port is present and call `Tick.port(name)` (which otherwise raises)
-    without a guard of its own. The current tick is `ctx.history`'s own most
-    recent entry (`sim_api_reference.md` §5's `LayerProvider` takes one
-    argument, `ctx`; `sim_architecture.md`'s own example sketch shows a
-    second, separate `tick` parameter -- resolved by treating "now" as
-    history's last windowed tick rather than adding a second parameter,
-    since a windowed view "over ticks up to now" already has one).
+        `requires`, when given, **gates** the call: a `Tick` lacking one of those
+        ports yields no layers and raises nothing (`UT-B1-1`). The wrapped function
+        is never called, so its body may assume every required port is present and
+        call `Tick.port(name)` without a guard of its own.
 
-    `reacts_to`, when given, names which `Interaction` fields (`"cursor"`,
-    `"selection"`, `"modifiers"`, `"toggles"`) this provider's output
-    depends on (`sim_visualization_spec.md` §7.5). The provider stays a pure
-    function of `(tick, ctx)` either way -- `reacts_to` only tells
-    `core/runner.SceneCache` which tier to put it in, so a provider
-    declaring nothing is never re-rendered on a mouse move.
+        `reacts_to` names which `Interaction` fields (`"cursor"`, `"selection"`,
+        `"modifiers"`, `"toggles"`) the output depends on (viz §7.5). The provider
+        stays a pure function either way -- this only tells `SceneCache` which tier
+        to use, so a provider declaring nothing is never re-rendered on a mouse
+        move.
+
+        "Now" is `ctx.history`'s most recent entry: a windowed view over ticks up
+        to now already carries one, so there is no second `tick` parameter.
+
     """
     for field_name in reacts_to:
         if field_name not in _INTERACTION_FIELDS:
@@ -125,7 +117,7 @@ def layer_provider(
                 # sync` keeps it in the tree deliberately.
                 #
                 # A ZERO-match `requires=` entry is different (`AR-53`,
-                # 2026-08-07): manifests are live now (`sim probe`, `S-C1d`,
+                #: manifests are live now (`sim probe`, `S-C1d`,
                 # `R-SIM-23`'s ingest maps) -- "this port does not exist
                 # anywhere in this run" is no longer indistinguishable from
                 # "this run never wired that component" the way it was at
@@ -162,7 +154,7 @@ def registered_providers() -> Mapping[str, LayerProviderEntry]:
     return MappingProxyType(_PROVIDERS)
 
 
-# `AR-52` (2026-08-07): the framework ships a default layer set -- unlike a
+# `AR-52`: the framework ships a default layer set -- unlike a
 # component's plug-in (imported lazily, only if its checkout/library is on
 # the plug-in path, `model.plugins.PluginBundle`), these three are the
 # framework's OWN contribution and must be registered unconditionally,

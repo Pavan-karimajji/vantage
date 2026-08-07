@@ -121,7 +121,7 @@ verifiers done" is no longer true and must not be quoted.** It is kept above as
 the measurement it was on the day it was taken.
 
 > **⚠ The number above is an over-report, and by a knowable amount
-> (`AR-34`).** `check_requirement_coverage.py` scores **only `UT-`/`ST-` ids**.
+>.** `check_requirement_coverage.py` scores **only `UT-`/`ST-` ids**.
 > `MC-`, `GT-` and `DC-` verifiers are cited-but-not-scored — which was a
 > reasonable simplification when every `P0` was unproven anyway, and is
 > actively misleading now that most are not. **21 of the 77 rows cite at least
@@ -142,7 +142,7 @@ the measurement it was on the day it was taken.
 > in the plan** (`GT-3`, `GT-8`, `GT-9`, `GT-10`, `GT-11`, `GT-13`, `GT-14`;
 > `DC-1`, `DC-4`, `DC-5`, `DC-6`), so their state is not merely unscored — it
 > is **unrepresentable**. That is a plan defect, not a register one, and it is
-> owned by `S-E3` (`AR-35`).
+> owned by `S-E3`.
 >
 > Until `AR-34` lands, read the table above as *"every **code** verifier is
 > ticked"*, never as *"the requirement is met"*. The two are the same sentence
@@ -387,7 +387,7 @@ all), `ST-D8-2` (three actions to a moving picture), `GT-8`.
 **Priority.** `P0` — if it is not usable, nothing else in this register matters. **Status.** frozen.
 
 > **This row's headline verifier has never been run, and the coverage report
-> says `proven 3/3` anyway (`AR-34`, 2026-08-06).** `MC-5` is `[ ]` in `S-D8`
+> says `proven 3/3` anyway.** `MC-5` is `[ ]` in `S-D8`
 > — correctly, since it needs a stopwatch and a real first-time human, which no
 > agent session can perform or fabricate — and `GT-8` has no checkbox anywhere
 > in the plan to be ticked in. What *is* proven is the three **code** limits:
@@ -1137,7 +1137,7 @@ survives** — see the correction below.
 that was never started. **Status.** **`open` — narrowed 2026-07-31 to
 retention.**
 
-> **⚠ Correction, audit run 3, 2026-08-06 (`AR-40`) — this row's only verifier
+> **⚠ Correction, audit run 3, 2026-08-06 — this row's only verifier
 > is not about this row's only surviving claim.** `ST-D7-7` is ticked and real
 > (measured 2026-08-06: 7 recordings / 33.1 MB, `-j1` 1.383 s per recording,
 > `-j7` 0.362 s, 3.82× scaling), and it measures **throughput and size** —
@@ -1189,7 +1189,7 @@ addresses; a locally built DLL is reported as honestly unpinnable),
 the `pkg:` half** — deliberately, on this row's own original reasoning: a test
 id for undesigned work makes the register look covered when it is not.
 **Priority.** `P1`. **Status.** **`partial` — corrected 2026-08-06 by audit run
-3 (`AR-38`), which found this row reading `open` with "none yet" while
+3, which found this row reading `open` with "none yet" while
 `UT-D7-9` had been ticked and green since 2026-08-06.** The row had gone stale
 in *two* steps at once: the design landed at `OQ-9` on 2026-07-31 and the code
 landed in `S-D7`, and neither propagated here.
@@ -2187,9 +2187,9 @@ sufficient and has never been exercised.
 result, a throughput figure, a build outcome — states **which platform and which
 shell** produced it. A bare number is read as the system's state on every
 platform, which is how a green suite on one OS becomes a claim about both.
-**Origin.** Audit runs 2 and 3. Run 2 (`AR-31`) found the whole of Phase D
+**Origin.** Audit runs 2 and 3. Run 2 found the whole of Phase D
 verified in a WSL/Linux shell only; the Windows re-run found two real defects in
-an hour, one of which (`AR-28`) meant the suite **produced no result at all**
+an hour, one of which meant the suite **produced no result at all**
 rather than failing visibly. Run 1 found the mirror image: a session recorded
 *"no compiler here"* and landed `S-C5` red, when the toolchain was one shell
 away. **The same sentence covers both directions** — check the other shell
@@ -2216,7 +2216,7 @@ stage's recorded number carrying the platform that produced it.
 > Take the number from `check_doc_invariants.py`'s own table when writing it,
 > never from the highest one you remember — three were added after this
 > register last quoted a number, the most recent by this same audit run
-> (`AR-44`). `check_traceability.py` now **derives** the valid `DC-` set from
+>. `check_traceability.py` now **derives** the valid `DC-` set from
 > that file rather than restating it, so the two can no longer disagree; it
 > previously carried a hardcoded `range(1, 9)` that went stale the same hour a
 > new invariant landed.

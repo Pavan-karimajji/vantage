@@ -3,36 +3,26 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`PortValue`, `Tick` (sim_api_reference.md §2.2). Frozen at S-B2, moved
-ahead of `S-B1` in the actual build order (`sim_implementation_plan.md`'s own
-finding: `S-B1`'s tests need `Tick`/`LayerCtx`, which are S-B2 deliverables,
-and S-B2 has no dependency back on S-B1 -- confirmed with the user before
-writing code).
+"""`PortValue` and `Tick` (api reference §2.2).
 
-**Note on precedence.** `sim_architecture.md` §5.3's own `Tick` sketch splits
-ports into three separate mappings (`stimulus`/`observation`/`truth`); this
-stage's own checklist line says "api reference §2.2" explicitly, so the
-unified `ports: Mapping[str, PortValue]` + `.port(name)` shape below is what
-is implemented -- and it does not lose information, because `PortValue.origin`
-already carries the measured/truth/mocked/simulated/overridden tag the
-three-way split existed to express (R-SIM-12).
+Ports are one unified mapping with `.port(name)`, not the three-way
+`stimulus`/`observation`/`truth` split arch §5.3 sketches. No information is
+lost: `PortValue.origin` already carries the
+measured/truth/mocked/simulated/overridden tag that split existed to express
+(`R-SIM-12`).
 
-**`S-B2Δ`** (`OD-9`, `OD-13`) changed `PortValue` in two ways:
+Two properties worth knowing:
 
-- `message` is **lazily parsed and memoised over retained bytes** rather than
-  eagerly decoded at construction. A `Session` is then bounded by the
-  recording's own size, not by parsed-message count (`NR-SIM-41`'s
-  escalation step 1 -- "stop deserializing what nobody reads"). A caller
-  that already has a decoded object (a test, or `contracts/pipeline.py`'s
-  live SIL execution) still passes it as `message=`; only a caller passing
-  raw bytes plus `schema_bytes`/`schema_name` gets the deferred parse.
-- `age_s` **stops being a plain stored field and becomes derived**:
-  `(t_ns - capture_ns)/1e9` when the recording's own capture stamp is known
-  (`capture_ns`, from `S-A4Δ`), else whatever `hold_age_s` the caller already
-  computed from its own schedule (`R-SIM-18` -- `contracts/pipeline.py`'s
-  own multi-rate hold tracking). The two sources are **distinguishable**
-  (`capture_ns is not None` says which one fired), which is the ambiguity
-  today's bare stored float could not express (`UT-B2-13`).
+- **`message` is lazily parsed and memoised over retained bytes** (`OD-13`), so a
+  `Session` is bounded by the recording's size rather than by parsed-message
+  count (`NR-SIM-41`'s first escalation step: stop deserializing what nobody
+  reads). A caller that already has a decoded object passes `message=`; only
+  one passing raw bytes plus a schema gets the deferred parse.
+- **`age_s` is derived, not stored** (`OD-9`): `(t_ns - capture_ns)/1e9` when the
+  recording's capture stamp is known, else the `hold_age_s` the caller
+  computed from its own schedule (`R-SIM-18`). The two are distinguishable --
+  `capture_ns is not None` says which fired -- which a single stored float
+  could not express (`UT-B2-13`).
 """
 
 from __future__ import annotations

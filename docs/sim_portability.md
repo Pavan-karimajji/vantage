@@ -249,7 +249,7 @@ that need a built library and naming why.
 
 ---
 
-## 4a. Reconciled against real measurement — 2026-08-06 (`AR-49`)
+## 4a. Reconciled against real measurement — 2026-08-06
 
 This document had never been checked against a real cross-environment
 measurement since it was written (2026-07-28). **§0's own premise still
@@ -263,8 +263,7 @@ down — not Windows-vs-Ubuntu but **WSL/Linux-shell-vs-Windows-shell**,
 the two environments this checkout actually runs in today. Audit runs 1–3
 hit real, distinct defects checking one against the other: run 1 found a
 session that recorded *"no compiler here"* in a shell one hop from the
-toolchain (`S-C5` landed red for a day on a false absence); run 2
-(`AR-28`, `AR-29`, `AR-31`) found the whole of Phase D verified only in a
+toolchain (`S-C5` landed red for a day on a false absence); run 2 found the whole of Phase D verified only in a
 WSL shell, and the Windows re-run found two real defects the WSL run
 could not see, one of which meant the suite produced no result at all
 rather than failing visibly. **The lesson generalises**: check the other

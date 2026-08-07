@@ -3,13 +3,14 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`sim render <recording> --at <t> [--preset <name>] --out <fig.png|fig.svg>`
--- argument parsing only (`GT-9`); the facts come from `core/runner.py`
-(`build_session_from_recording`) and `render/capture.py` (`snapshot`, `S-B4`),
-neither of which import Qt (`UT-B3-17`) -- `sim render` therefore needs
-**no display and no PySide6 at all**, not merely an offscreen Qt platform
-(`ST-B3-1`). `snapshot` also writes the `--out` sidecar (`UT-B4-2`) and
-picks raster vs. vector from `--out`'s own suffix (`D5`)."""
+"""`sim render <recording> --at <tick>` -- headless snapshot to PNG.
+
+Renders one tick with no window, and writes a provenance sidecar naming the
+tick, project, scenario, pipeline, build hashes, viewport, layers and theme.
+Two renders of the same tick are byte-identical.
+"""
+
+# Design refs: `GT-9` · `UT-B3-17`, `UT-B4-2`, `ST-B3-1`
 
 from __future__ import annotations
 

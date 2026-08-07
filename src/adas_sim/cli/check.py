@@ -3,11 +3,14 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`sim check <scenario-set> [--report <path>]` -- headless, no rendering,
-exits non-zero on any failed expectation (`sim_scenarios_and_expectations.md`
-SS6, `sim_api_reference.md` SS10). Argument parsing only (`GT-9`);
-`check.runner.check_scenarios` is the real, directly-testable engine.
+"""`sim check <scenario-set>` -- evaluate `expect:` blocks headless.
+
+Runs every scenario in the directory and evaluates its acceptance criteria.
+Exits non-zero if any expectation fails, so it works as a CI gate. `--report`
+writes the result as a file.
 """
+
+# Design refs: `GT-9` (no logic here -- `check/` is the engine) · `R-SIM-8` expectations are data
 
 from __future__ import annotations
 
@@ -24,12 +27,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--report", type=Path, help="write the report here (.md text, or .json by extension)")
     parser.add_argument(
         "--search", type=Path, action="append", default=[],
-        help="a directory to search for a dll:/stubdll: stage's library (repeatable, contracts.loader.resolve_library)",
+        help="a directory to search for a dll:/stubdll: stage's library "
+            "(repeatable)",
     )
     parser.add_argument(
         "--config", type=Path,
-        help="config path forwarded to each stage's adasInit -- adasInit(NULL)'s own bundle "
-             "resolution is S-C5, not yet built, so a real dll:/stubdll: stage needs this explicitly",
+        help="config path forwarded to each stage's adasInit; falls back to the "
+            "bundle beside the library",
     )
     return parser
 

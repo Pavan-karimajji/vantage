@@ -774,7 +774,7 @@ Entry point: `sim = adas_sim.cli:main` in `pyproject.toml` — so the launcher i
 generated per platform rather than written by us (`P-6`).
 
 > **`sim diff` was this table's fourteenth row until 2026-08-06 and never
-> existed** (`AR-44`). It was superseded on 2026-07-31 by `OD-10`/`NR-SIM-40`,
+> existed**. It was superseded on 2026-07-31 by `OD-10`/`NR-SIM-40`,
 > which replaced *"diff two sessions"* with *"compare two runs along the axis
 > their manifests imply"* — a stronger verb with a written refusal of the
 > `--axis` flag, because **a flag can lie about which axis you measured**. No

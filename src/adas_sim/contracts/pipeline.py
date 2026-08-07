@@ -3,33 +3,32 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`Pipeline` -- ordered stages, wired by name (sim_api_reference.md SS3.3,
-sim_sil_contract.md SS4.2). Validated at LOAD, never at first tick (SS5.14):
-every input reference resolves, `mode: measured` is checked against a
-recording's topic index, a port-type mismatch and a forward reference are
-both load errors naming both ends.
+"""`Pipeline` -- ordered stages, wired by name (api reference §3.3, contract
+§4.2).
 
-`Pipeline.exec` runs one tick, single-rate: every stage executes on every
-call. `Pipeline.step` is the multi-rate-aware entry point (`R-SIM-18`): it
-advances the pipeline's own clock and only runs a stage on its due ticks,
-holding the rest -- `updated=False`, `age_s` from integer nanoseconds.
+**Validated at load, never at first tick** (§5.14): every input reference
+resolves, `mode: measured` is checked against the recording's topic index, and
+a port-type mismatch or forward reference is a load error naming both ends.
 
-Overrides (`contracts/override.py`, `contracts/binding.py`) are declared
-and load-validated (`Stage.overrides`), and -- since `S-C1cΔ` -- actually
-applied to a stage's own input bytes right before `exec()` sees them
-(`OD-8`). `Stage.overrides` itself is the "declared, never smuggled" record
-(`R-SIM-15`); tagging a recorded *topic* `origin: overridden` is `S-C2`'s
-recorder reading this same field once it exists, not a second mechanism.
+`Pipeline.exec` runs one tick single-rate -- every stage every call.
+`Pipeline.step` is the multi-rate entry point (`R-SIM-18`): it advances the
+pipeline's own clock and runs a stage only on its due ticks, holding the rest
+with `updated=False` and `age_s` from integer nanoseconds.
 
-Faults (`contracts/fault.py`) are declared at construction (`faults=`,
-scenario-scoped, not per-stage) and -- since the `S-C3` follow-up --
-applied to the STIMULUS every `exec()`/`step()` call, before the override
-above ever sees a stage's own input (`_apply_stimulus_faults`). A stage-to-
-stage or per-stage fault is out of scope (SS9.2's own rejected bus-level
-models); only the world model's own output can be faulted. `InputMeta`
-(`contracts/component.py`) carries the real `valid`/`age_s` a fault or
-`step()`'s own multi-rate holding produces through to `SilComponent.exec`
--- the field `CtypesSilComponent._build_in_portset` used to hardcode.
+**Overrides** (`contracts/override.py`, `contracts/binding.py`) are declared,
+load-validated, and applied to a stage's input bytes immediately before
+`exec()` sees them (`OD-8`). `Stage.overrides` is the "declared, never
+smuggled" record (`R-SIM-15`); tagging a recorded topic `origin: overridden` is
+the recorder reading this same field, not a second mechanism.
+
+**Faults** (`contracts/fault.py`) are scenario-scoped, declared at
+construction, and applied to the **stimulus** before any stage's own override
+runs. Stage-to-stage and per-stage faults are out of scope (scenarios §9.2's
+rejected bus-level models): only the world model's output can be faulted.
+
+`InputMeta` carries the real `valid`/`age_s` that a fault or `step()`'s
+multi-rate holding produces through to `SilComponent.exec` -- the fields the
+ctypes input builder once hardcoded.
 """
 
 from __future__ import annotations

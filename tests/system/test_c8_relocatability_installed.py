@@ -13,7 +13,7 @@ proves the deployed `sim/` bundle is self-sufficient by deleting the
 installed copy's *origin* (not just adding a second copy elsewhere) before
 ever calling `PluginBundle.resolve`.
 
-**Extended 2026-08-07 (`AR-55`):** "renders" used to mean only the
+**Extended:** "renders" used to mean only the
 load-and-register half -- `PluginBundle.resolve` + `import_modules()`
 genuinely importing `df`'s real `sim/layers/{common,bsd}.py` from the
 relocated bundle alone and registering their real layer ids into
@@ -153,7 +153,7 @@ def test_relocated_and_original_deleted_sim_bundle_still_resolves_and_imports(tm
     """ST-C8-2, the strong form: copy the installed `sim/` AND `config/`
     bundles somewhere with no relation to the build tree, delete the
     original installed copy, and confirm the relocated copies alone are
-    enough -- for both load-and-register AND render (`AR-55`)."""
+    enough -- for both load-and-register AND render."""
     sim_dir = _install_real_df_sil(tmp_path / "installed")
     config_dir = sim_dir.parent / "config"
 

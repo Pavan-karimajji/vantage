@@ -23,14 +23,6 @@ stage.**
 Normative rules: superproject `.claude/rules/sim.md` (`R-SIM-1..25`).
 Backlog entry: superproject `plan.md` item 25.
 
-**Amended 2026-07-31 by a full-set review** (foundation requirements → shipped
-code). It added two defects to the architecture (`D12`, `D13`), three rules
-(`R-SIM-20/21/22`), three global gates (`GT-10/11/12`), widened `GT-4` from one
-component to a build matrix, and added four stages (`S-C1d`, `S-C7`, `S-C8`,
-and `S-B1`'s delta). Nothing already built was invalidated; every addition
-closes a boundary that was specified on one side only. The review's own summary
-of *why* these were missed is in `S-B1`'s delta note — it generalises.
-
 ---
 
 ## 0. How to use this document
@@ -53,962 +45,137 @@ of *why* these were missed is in `S-B1`'s delta note — it generalises.
 
 ## 0a. ▶ START HERE — the implementation entry point
 
-**If you are an implementation session picking this project up, read this
-section first and start at the top of the queue. Do not scan the document for
-something that looks unfinished — the queue below is the authority on order.**
+**The queue below is the authority on order.** Do not scan the document for
+something that looks unfinished.
 
-### ⚠ Audited 2026-08-04 — read this box before the queue
+### Where the work stands
 
-A full-scope audit (`.claude/prompts/sim_system_audit_and_replan.md`) ran on a
-machine **with** MSVC 2026 + Conan + CMake and rebuilt every module in `GT-4`'s
-matrix for real. Two things changed in this document as a result:
+Phases **A**, **B**, **C** and **D** have landed. **97 boxes are open across 20
+stages**, concentrated in **Phase E** (48 — `S-E1` 17, `S-E2` 9, `S-E3` 22) and
+**`S-D2`** (12, deferred with a named trigger: a figure a headless `sim render`
+cannot produce). Phase E is gated on every Phase A–D gate; `S-E1`'s table is the
+authority on which.
 
-1. **`S-C5` is not "believed complete, unverified" — it is incomplete and
-   red.** `df` gtest is **236/238**; the two failures are `S-C5`'s own
-   assertions. One root cause, diagnosed below. Its checkboxes stay unticked
-   and it stays the current stage.
-2. **`GT-4`'s matrix was re-measured end to end** — every blank row is now
-   filled with a real number, and one row was found to be *unrunnable as
-   written*. See §2.
-3. **"Phase D not started" was wrong.** `S-D7` is **17 of 27 boxes done** —
-   `io/base.py`, `io/csv.py`, `cli/convert.py`, `cli/export.py`, `UT-D7-1..6`
-   and `ST-D7-1`/`ST-D7-4`, with 15 passing tests. It landed out of build
-   order as a by-product of `S-C5`'s recorder work and nothing recorded it, so
-   both this document and `plan.md` said Phase D was untouched. **Nothing is
-   wrong with the work** — it is real and green. What was wrong is that a
-   session reading the queue would have re-implemented it. See `S-D7`.
-4. **The master requirements register was walked row by row for the first
-   time** (audit angle 1, added to the prompt on the same date). Its findings
-   live in `sim_requirements.md` §0a, and the coverage question is now
-   mechanical — `docs/py/check_requirement_coverage.py`, wired into
-   `run_all.py`. Headline: **24 of 77 requirements proven, 12 partial, 31
-   unproven**; ten of seventeen `P0` rows have zero verifiers done.
+**Five items no work can close.** Each needs a person or infrastructure — do not
+re-derive them, and do not tick them to make a set look consistent:
 
-Everything else landed (build order #1–12) re-verified green: `pytest` 649
-passed / 3 skipped, `check_invariants.py` clean, `docs/py/run_all.py` clean,
-`GT-5` byte-identity clean across all eight machinery files.
-
-**The environment note that misled the last session is now resolved.** `S-C5`
-was implemented in a shell with no MSVC and no Conan, and its own note says so
-honestly. That shell was WSL; **this repo's Windows shell has the full
-toolchain** (`conan`, `cmake`, VS 2026 Community). A session that cannot build
-should re-check the *Windows* shell before recording "no compiler here" — in
-`S-C5`'s case the toolchain was one shell away, and the cost was a stage
-landing red without anyone knowing for a day.
-
-### The one thing to know before anything else
-
-Phases A and B are **done and green** (no compiler needed). Phase C is
-**in progress**. A concept-resolution pass on **2026-07-31** resolved
-fourteen open items and recorded them as `OD-6`…`OD-13` (`sim_architecture.md`
-§10). Those resolutions are now written into the stages below as **deltas**
-and new scope. Nothing already built was invalidated.
-
-**Landed as of 2026-08-03** (build order #1–10, i.e. all of Block 1 except
-`S-C1d`): `S-C0`, `S-A3Δ`, `S-A4Δ`, `S-B2Δ`, `S-C1cΔ`, `S-B1Δ`, `S-C4`,
-`S-C9`, `S-C2`, `S-C3`. `S-C3` landed with one gate item **not** fully
-closed — 13 of the 18 real scenarios carry `expect:`/`markers:` (3 of
-those verified against a real recording and a real compiled `df_sil`); see
-its own section and `modules/df/docs/sim_scenarios_and_expectations_migration.md`
-for exactly what's left. Same-day follow-up also wired `S-C3`'s fault
-vocabulary into `Pipeline.exec`/`step` (deferred at original landing) and
-fixed a real input-side ABI gap it surfaced (`_build_in_portset` hardcoded
-`valid`/`ageS`, discarding whatever a caller knew) — see the fault-injection
-item in `S-C3`'s own section below.
-
-**`S-C1aΔ2` (#11) landed 2026-08-04** — the first Block 2 stage, and the
-first requiring a real MSVC/Conan build in this environment (confirmed
-available: `conan`, `cmake`, MSVC/VS all present; every prior "no compiler
-here" note in this stage's own history was a different environment).
-`PortSpec` gained `period_us`/`fixed_slots` in `interfaces`' proto, read
-through in `contracts/component.py`; `df` rebuilt clean against the edited
-`interfaces` (`gtest` 233/233, real build) confirming nothing downstream
-broke. Full detail in the stage's own section below.
-
-**`S-C1d` (#12) landed 2026-08-04** — the generated ABI shim
-(`interfaces/scripts/gen_sil_ports.py` + `interfaces/cmake/
-sil_ports_generate.cmake`), closing `D12`. `df`'s hand-written port table/
-`buildManifest()`/`adasExec` dispatch is now generated from
-`modules/df/conf/ports.yaml`, proven byte-identical to the pre-refactor
-manifest for both `-P base` and `-P cus1` (`gtest` 233/233 both). `ST-C1d-1`'s
-second-component proof is **`vdy`**, not the `S-C1c` `stubdll:` echo
-component — `vdy` already carried `df`'s exact pre-`S-C1a` shape and is named
-in this stage's own purpose text; it gained the generic ABI for real (not a
-throwaway fixture), producing **its first-ever real `gtest` run** (18/18,
-`GT-4`'s previously-blank row now filled). Full detail, including the
-handle-member-naming convention this stage had to freeze and a real bug the
-generator's first cut had (per-function dispatch fan-out not narrowed to
-`ENABLED_FUNCTIONS`, caught by an actual aeb-only rebuild, not the fixture
-tests), in the stage's own section below. Next up per the build-order table:
-`S-C5` (#13), the packed config bundle.
-
-**`S-C5` (#13) — CLOSED 2026-08-05**, both milestones. Re-verified with a real
-MSVC/Conan build in this environment: `df` gtest 244/244 on `-P base` and `-P
-cus1` (238 + 6 new OD-12 tests), `vdy` gtest 18/18 unchanged, sim `pytest`
-657/3 skipped, `check_invariants.py`/`run_all.py` clean. `ST-C5-1` now proves
-the real, installed `df_sil` tree (not just the build tree `AR-1` left
-unproven) resolves `adasInit(NULL)` with the Conan cache and repo checkout
-both unreachable. Milestone 2's `OD-11` (cross-component project/ego-param
-agreement) and `OD-12` (`<COMPONENT>_<FN>_PERIOD_US` calibration) both landed
-in `contracts/pipeline.py` and `df`'s `ParamLoader`/generated ABI shim
-respectively. `UT-C5-8/9` landed 2026-08-06; `UT-C5-6/7`, `ST-C5-2` and the
-`updated`-flag-disagreement report remain (see the stage's own section) — none
-block `S-C8`/`S-C6`.
-
-**`S-C8` (#14) — CLOSED (mechanism) 2026-08-05.** The plug-in bundle:
-build-time packing (`pack_plugin_bundle.py`/`plugin_bundle_pack.cmake`,
-mirroring `S-C5` exactly), `PluginBundle`'s 4-tier resolution + api-version
-gating (`model/plugins.py`), collision-free import (`import_modules()`),
-`scripts/vantage.py` rewired onto the real mechanism, and identity-only
-recorder embedding (`/meta/plugin_bundles`). Proven against a real `cmake
---install` of `df_sil`, relocated with the original deleted, in a fresh
-interpreter (`test_c8_relocatability_installed.py`). **Deferred, same shape
-as `S-C5`'s own deferrals:** `sim explain`/`sim doctor` reporting the
-plug-in path, the HUD's missing-plug-in badge, and the full `vantage <dir>`
-GUI-render form of `GT-12`/`ST-C8-1/2` (the load-and-register mechanism is
-proven; an actual rendered frame is not). None of these block `S-C6`.
-
-**`S-C6` (#16) — CLOSED (mechanism) 2026-08-05.** `sim check` wired into
-`scripts/ci_gate.py`'s existing single job (runs the real 18-scenario
-`modules/df/tests/carla_scenarios` set, skips honestly with no `df_sil`
-build present); `sim determinism <run-a> <run-b>` (`cli/determinism.py`,
-`core/determinism.py`) derives all four axes from the two runs' manifests
-alone (never a flag), comparing byte-exact for axes A/B and against a
-component's `tolerance.yaml` for axes C/D; `process_nonce` lands in
-`RunManifest`. Verified: a real `ci_gate.py` run against `df`'s real
-scenario set (18/18) and the real sim `pytest` suite (696 collected, floor
-bumped 409 → 692). **While building `ST-C6-2`'s proof, found a real bug in
-this session's OWN test methodology** (a manual `sim check` run against a
-stale `cus1`-calibrated `df_sil` reported 3 false failures) — recorded as
-`AR-27`, not mistaken for a scenario/expectation gap. **Deferred:** wiring
-`sim determinism` itself into the CI job as a live double-run comparison
-(`ST-C6-4`) and joining the tolerance-file hash into `RunManifest` — both
-need either a real build on the CI runner (absent today, `plan.md` item 20)
-or scope beyond what this pass covered.
-
-This closes the user's requested queue for this session: `S-C5` → `S-C8` →
-`S-C6`, `S-C7` deliberately skipped throughout.
-
-**`S-C7` (#15) — IMPLEMENTED, UNVERIFIED, 2026-08-05.** A follow-up session
-picked up the literal next item in the build-order table. Same environment
-trap `S-C5`'s own history already documents, hit again: this session's shell
-is WSL, with no Conan and no MSVC (see the WSL toolchain gap noted
-elsewhere) — every file below was written and cross-checked line-by-line
-against `contracts/pipeline.py`/`contracts/component.py`/`contracts/
-loader.py`/`io/mcap.py`/`io/base.py`/`core/resim.py`, but **none of it has
-been compiled, linked, or run.** Do not tick any of this stage's checkboxes
-from this note alone — confirm each against a real build in the Windows
-shell first, exactly as `S-C5`'s own audit had to.
-
-What landed, under `modules/sil_host/src/` (new directory) plus a rewritten
-`main.cpp`:
-
-- `errors.hpp` — `SilHostError`, the expected/found/where/hint shape mirrored
-  from `adas_sim.core.errors.SimError` byte-for-byte (`N-8`).
-- `library_loader.{hpp,cpp}` — `ResolveLibrary` (P-5, mirrors
-  `contracts/loader.py` exactly) + a `DynamicLibrary` LoadLibraryW/dlopen
-  wrapper.
-- `sil_component.{hpp,cpp}` — `SilComponent`, the C++ twin of
-  `CtypesSilComponent`: binds the five ABI exports at RUN TIME (never
-  linked, since N components are resolved by stem), reads the manifest via
-  the real generated `adas::sil::ComponentManifest` (sil_host already links
-  `AdasInterfaces` and already used generated proto code in the old
-  `main.cpp` — `R-SIM-11`'s "no generated bindings" constrains the Python
-  framework specifically, not this superproject's own C++ host), grow-once
-  output buffers.
-- `pipeline.{hpp,cpp}` — `Pipeline`/`Stage`, the C++ twin of
-  `contracts/pipeline.py`, **narrowed to sil_host's own host boundary**:
-  no overrides (`R-SIM-15`), no faults, no `stub:`/live `Source` (sil_host
-  has no interpreter and no world-model client — S-C7's own "Must not").
-  Implements both `Exec()` (single-rate, mirrors `Pipeline.exec` — what
-  `sim resim` itself calls, `cli/resim.py`) and `Step()` (multi-rate,
-  GCD/hold, mirrors `Pipeline.step`, `R-SIM-18` — the checklist's own
-  "holds included" item, not exercised by the resim driver below but
-  present as the same capability the Python class carries). Deliberately
-  deferred, not silently dropped: `OD-11`'s cross-component project/
-  ego-parameter agreement check — not named in this stage's own checklist,
-  and `adasInit(NULL)`'s per-DLL bundle resolution already works without it.
-- `recording_reader.{hpp,cpp}` — reads an `.mcap` recording over the mcap
-  C++ library (conancenter `mcap/1.2.0`, newly added — see below), grouped
-  by `log_time_ns` (mirrors `io/mcap.py` + `io/base.py`'s
-  `group_by_log_time`, narrowed to port names + bytes only, no run
-  manifest/config-bundle/plugin-bundle metadata — sil_host's own resim
-  driver needs none of that provenance). **Field/method names for the mcap
-  C++ API were taken from the upstream `foxglove/mcap` headers via
-  websearch/fetch in this session, not from a locally installed copy — the
-  single highest-risk unverified surface in this pass.**
-- `exec_timeout.{hpp,cpp}` — `RunWithTimeout` (`R-SIM-19`): runs one tick's
-  worth of `Pipeline::Exec` on a detached thread with a bounded wait,
-  reporting `kOk`/`kTimeout`/`kException` as three distinct outcomes, never
-  merged. Honestly documented limit: sil_host is single-process, so a
-  genuine hang is *detected*, not *recovered from* — the hung thread is
-  abandoned, never joined.
-- `resim_runner.{hpp,cpp}` — `RunResim`, the C++ twin of
-  `core/resim.py`'s `resim_pipeline`: builds `source.*` stimulus and
-  `mode: measured` injection per recorded tick, calls `Pipeline::Exec` (the
-  same primitive `sim resim` calls) wrapped in `RunWithTimeout`. This is the
-  engine `ST-C7-1`'s byte-identical claim is actually measured against.
-- `main.cpp` (rewritten) — `<pipeline.yaml> <recording.mcap>
-  [--search-dir DIR]... [--config PATH] [--timeout-ms N]`, replacing the old
-  54-line hardcoded df+vdy demo. Adding a stage needs no edit here
-  (`ST-C7-2`'s own claim) — the file names no component.
-- `conf/build.yml` + `CMakeLists.txt` — added `yaml-cpp/0.8.0` (same version
-  `df`/`vdy` already pin, reused rather than a second YAML library),
-  `mcap/1.2.0` (conancenter — confirmed to exist there via websearch this
-  session, exact resolved version **not** confirmed from this shell),
-  `Threads` (for `exec_timeout.cpp`), and the six new source files.
-
-**What is explicitly NOT done, not silently skipped:**
-
-- `UT-C7-1`…`UT-C7-3`, `ST-C7-1`, `ST-C7-2` are **not written**. `sil_host`
-  has no gtest target today (`conf/build.yml`'s `sil:` is the one real
-  target) — adding one is itself a small build-machinery decision (a new
-  target in the frozen vocabulary, `docs/build_grammar.md`) that this pass
-  deliberately left for whoever runs the first real build, rather than
-  guessing at it unverified alongside everything else above.
-- The **portability discipline row** (`P-5`, `P-1`, `P-4`) is written to,
-  not independently exercised — `library_loader.cpp`'s Linux branch has
-  never run.
-- `GT-1..GT-12` re-check, `GT-4`'s `sil_host` row — not re-measured; both
-  need a real build.
-
-**Next session, in order:** get a real MSVC/Conan build of `sil_host`
-green (expect real compile errors — the mcap C++ API surface especially is
-the least-verified part of this pass), then work the checklist boxes above
-against that build exactly the way `S-C5`'s own audit did, then write
-`UT-C7-1..3`/`ST-C7-1`/`ST-C7-2` (deciding the gtest-target question first).
-
-**Same-day follow-up (still 2026-08-05, still WSL, still unverified): the
-gtest-target question above is answered, and `UT-C7-2`/`UT-C7-3` are
-written** (not run — same compiler caveat as everything else on this page).
-
-- `conf/build.yml` gained a `gtest:` target (both projects, aliased to
-  `sil:`'s own `platforms:`, same technique `df`'s `gtest:` already uses).
-  `CMakeLists.txt` split the pipeline-reader sources out of the `sil`
-  executable into a new `sil_core` static library, so `main.cpp` and a test
-  binary can both link it without recompiling twice or colliding on
-  `int main()`. `CMakeLists.txt` gained the `BUILD_TESTING`/
-  `add_subdirectory(tests)` guard `df`'s own root `CMakeLists.txt` already
-  has; `CMakePresets.json` gained a `gtest-vs2026` configure/build/test
-  preset triple, same shape as `df`'s.
-- `tests/fixtures/echo_stub/echo_stub.cpp` — a minimal generic-ABI component
-  (empty port set, component name + `period_ns` read from environment
-  variables at `adasManifest()` call time, never cached), the C++ twin of
-  `sim_sil_contract.md` §8's Python precedent ("a stub DLL built in-tree...
-  so the framework's tests do not depend on `df` being built"). Exists
-  because `Pipeline::Load` has **no `components=` test-injection seam** —
-  a deliberate choice (sil_host has none at run time either, "every stage is
-  either a real library or a load error") that means `UT-C7-2`'s `stubdll:`
-  half and `ST-C7-2` both need one real, resolvable library to point at.
-  Doubles as `ST-C7-2`'s own stand-in once that test is written.
-- **Found while writing `UT-C7-3`**: `RequirePeriodIsMultipleOfBaseGrid` (the
-  C++ twin of `_require_multiple`) was originally file-local to
-  `pipeline.cpp`, same as the Python function it mirrors describes about
-  itself — "a `base_grid_ns` that is genuinely the GCD of every period in
-  the set makes this tautologically always pass... there is no set of real,
-  correctly-derived periods that can ever fail it." A full `Pipeline::Load`
-  can therefore **never reach the failing branch**, exactly like the Python
-  side; `test_c1c_pipeline.py` unit-tests the guard directly rather than
-  through a real load, so `UT-C7-3` does the same — the guard was promoted
-  from an anonymous-namespace helper to a declared `adas::sil_host` function
-  (`pipeline.hpp`) specifically so a test can call it with adversarial
-  numbers with no component, no library, no YAML file at all.
-- `UT-C7-2` (`tests/unit/test_pipeline_load_errors.cpp`): `stub:` rejected
-  naming the stage and the reason; `stubdll:echo_stub` loads. `UT-C7-3`
-  (`tests/unit/test_pipeline_period_grid.cpp`): the multiple case passes,
-  the adversarial non-multiple case raises naming both numbers.
-- `main.cpp` gained `--dump-graph <pipeline.yaml>` — loads with no
-  recording (mirrors a fair `Pipeline.load(path)`-only comparison basis) and
-  prints a deterministic, line-oriented stage/port graph (declaration order
-  for stages, `std::map`'s own sorted order for each stage's inputs — never
-  hash order). This is `UT-C7-1`'s C++-side half. **What's still missing for
-  `UT-C7-1` itself: the Python-side counterpart dump and the diff that
-  actually compares them.** Deliberately not built this pass — it means
-  touching `adas_sim` itself (a second submodule) to add an equivalent
-  deterministic dump function, and doing that alongside six new,
-  uncompiled C++ files already stretched this session's error budget. The
-  shape is decided (line-oriented, sorted, no hash-order leakage — same
-  discipline `UT-A4-12`/`P-8` already require of recording writers); only
-  the second half needs writing.
-- Still not written: `ST-C7-1` (needs a real built `sil.exe` + `df_sil` +
-  a recording — no compiler in this shell), `ST-C7-2` (needs `echo_stub`
-  wired into an actual two-stage pipeline file and run end to end, same
-  blocker).
-
-**Real build achieved, same day 2026-08-05, follow-up session.** The
-"no compiler in this shell" note above was the same trap `S-C5`'s own
-history already documented once: this session's shell turned out to have a
-real MSVC/Conan/CMake toolchain after all (confirmed via `conan --version`,
-a real `scripts/build.py sil_host -t sil -p vs2026 -P base`). Two blockers
-on the way in, both environment, not code: the Conan remote needed
-`conan remote login adas-local demo -p demo` (known issue), and the
-machine's default Conan profile had `compiler.cppstd=14` against this
-project's C++17 everywhere — bumped to 17 in the profile (outside the repo,
-confirmed with the user first).
-
-With a real build, **two real defects found and fixed** in the code this
-stage's own note flagged as highest-risk (the hand-written mcap C++ API
-surface):
-- `recording_reader.cpp` never defined `MCAP_IMPLEMENTATION` — mcap's C++
-  headers are visibility-guarded (`MCAP_PUBLIC` resolves to `dllimport`
-  without it), so linking failed with ~19 unresolved externals. Fixed:
-  `#define MCAP_IMPLEMENTATION` before the one `#include <mcap/reader.hpp>`
-  that owns it, exactly per `mcap/visibility.hpp`'s own contract.
-- `RecordingReader`'s constructor called `reader.channels()` before
-  `reader.readSummary()` — `channels()` is documented as populated by
-  `readSummary()` and silently returns empty otherwise. Result: every
-  message lookup missed, `ticks_` stayed empty, and a real resim reported
-  "0 tick(s)" with no error at all — the exact silent-wrong-answer shape
-  `AR-1`/`AR-27` already found elsewhere in this project. Fixed: call
-  `reader.readSummary(ReadSummaryMethod::AllowFallbackScan)` right after
-  `open()`.
-
-**One real gap found and fixed in `adas_sim` itself**, not `sil_host`:
-`cli/resim.py` never exposed a `--search` flag, unlike `cli/check.py`/
-`cli/batch.py` which already have one — `Pipeline.load(args.pipeline)` was
-called with no search directories, so `sim resim` could never resolve a
-real (non-in-tree) `dll:`/`stubdll:` component. This blocked exactly the
-byte-identity comparison `ST-C7-1` exists to make. Fixed by adding the same
-`--search` flag `check.py` already uses, forwarded to `Pipeline.load`.
-Full sim `pytest` suite re-run clean after the change (596 passed, the two
-`foxglove`-optional-dependency collection errors pre-existing and
-unrelated).
-
-**With the build green, real evidence for every test in this stage's own
-list, run against `df`'s real, built `df_sil.dll`:**
-- `UT-C7-2`/`UT-C7-3`: real `gtest`, 4/4 pass (`stub:` rejected naming
-  stage+reason, `stubdll:echo_stub` loads; period-grid multiple/
-  non-multiple cases).
-- `UT-C7-1`: `sil.exe --dump-graph` on `df_only.yaml` and an equivalent
-  ad hoc Python dump of `Pipeline.load()`'s own structure, diffed —
-  structurally identical (`pipeline`/`base_grid_ns`/stage/`mode`/`impl`/
-  sorted inputs).
-- `ST-C7-1`: **the byte-identical claim, tested for real, with one
-  important caveat.** `main.cpp` gained `--dump-outputs` (stdout-only hex
-  dump of every tick's stage/port bytes, sorted — deliberately not an mcap
-  writer, per this stage's own "must not grow a recorder"). Ran
-  `df_only.yaml` under both `sil.exe --dump-outputs` and a matching ad hoc
-  `resim_pipeline()` Python dump, against a **freshly recorded synthetic
-  recording** (`sim record --source synthetic`, empty-but-valid protobuf
-  ticks, topics already `source.gen_object_list`/`source.veh_dyn` —
-  `R-SIM-6`'s "topics already equal port names," so no ingest map needed):
-  **byte-identical**, 10/10 ticks. **The caveat, found while choosing that
-  recording deliberately over the existing `tests/carla_testruns/` fixture:
-  `RecordingReader` has no `R-SIM-23` ingest-map support at all.** Pointed
-  at a real legacy `carla_testruns/aeb_canonical_10mps_30m.mcap` recording
-  (topics `df/gen_object_list`/`df/veh_dyn`, needing `df/sim/ingest/
-  carla_legacy.yaml`'s `provides:` to become `source.gen_object_list`/
-  `source.veh_dyn`), `sil_host` ran all 62 ticks with **zero stimulus every
-  tick** — confirmed by temporary instrumentation (`stimulus.size()=0`
-  throughout) — silently, no error, no crash. `sim resim` gets this right
-  (`IngestRecordingReader`/`discover_ingest_maps()`); `sil_host` does not.
-  **This is a new, real, separate gap, not yet in this stage's own
-  checklist** — `sil_host` cannot correctly resim any recording outside the
-  narrow set this framework wrote itself. Recorded here rather than fixed:
-  it is a real feature (parsing `modules/*/sim/ingest/*.yaml`, `matches:`/
-  `provides:` semantics) with its own deployment question (how a shipped
-  `sil_host` finds ingest maps at all, unlike a dev checkout's `modules/`
-  glob — `R-SIM-20`'s "authoring home ≠ deployed form" question, unanswered
-  for ingest maps same as it once was for plug-ins/config). **`ST-C7-1`'s
-  gate should read "byte-identical for a framework-produced recording,"
-  not unconditionally, until this lands.**
-- `ST-C7-2`: two-stage pipeline (`df: dll:df_sil` + `stub: stubdll:
-  echo_stub`), same recording, run through the unmodified `sil.exe` binary
-  with no `main.cpp` edit — loads and executes both stages correctly
-  (`echo_stub`'s own empty output set shows as no lines, `df`'s outputs
-  unaffected by the second stage's presence).
-
-**Follow-up, same day: the scratchpad verification above promoted to real,
-checked-in, automated tests** — all green against a real build:
-- `DumpGraphText()` extracted out of `main.cpp` into `graph_dump.{hpp,cpp}`
-  (new files, added to `sil_core`) so a test can call it without linking
-  `main()`. `main.cpp` now just prints `DumpGraphText(pipeline)`, unchanged
-  in behaviour (`--dump-graph`).
-- `tests/unit/test_ut_c7_1_graph_dump.cpp` (`GraphDump.
-  MatchesRealPythonLoaderGoldenDump`): loads a two-`stubdll:echo_stub`
-  fixture (no `df` dependency, same reasoning `echo_stub` itself gives) and
-  compares `DumpGraphText()`'s output against the REAL, unedited stdout of
-  a real `Pipeline.load()` run against the identical YAML — checked in as
-  a literal, not regenerated by the test.
-- `tests/system/test_st_c7_2_two_stage_resim.cpp` (`TwoStageResim.
-  DfPlusStubdllRunsEndToEndWithNoMainCppEdit`): two `stubdll:echo_stub`
-  stages, a recording synthesized in-process via `mcap::McapWriter` (no
-  checked-in binary fixture, no Python at test time) — found along the way
-  that `writer.inl` is gated independently of `reader.inl`
-  (`mcap/visibility.hpp`), and that `types.hpp`'s own `MCAP_IMPLEMENTATION`
-  guard would duplicate-define `types.inl`'s symbols if a second
-  translation unit also defined the macro; fixed by having
-  `recording_reader.cpp` implement `<mcap/mcap.hpp>` (the reader+writer
-  umbrella) once, so this test's own TU only declares (no redefinition).
-- `modules/sim/tests/system/test_c7_cross_host_resim.py`
-  (`test_st_c7_1_sil_host_and_sim_resim_produce_byte_identical_outputs`):
-  records a fresh synthetic recording (`R-SIM-6`, no ingest map needed),
-  runs it through `resim_pipeline()` (Python) and a real `sil.exe
-  --dump-outputs` subprocess (C++) against the real `df_sil.dll`, parses
-  both, asserts byte-for-byte equality. Skips with a named reason
-  (`_require_real_builds`) if `df_sil.dll`/`sil.exe` aren't built here or
-  the platform isn't Windows — same pattern
-  `test_c8_relocatability_installed.py` already uses.
-
-Full suites re-run clean after all four additions: sil_host `gtest` 6/6
-(was 4/4), sim `pytest` 720 passed / 7 skipped (was 696 collected pre-
-this-stage; `check_invariants.py` clean, `GT-1,2,3,6,11`), the new
-cross-host test passing standalone.
-
-**Follow-up, same day: the ingest-map gap fixed, not just documented.**
-New `RecordingReader` constructor parameter `ingestMapDirs` (default empty
-— unchanged behaviour for a caller that passes none) and new files
-`ingest_map.{hpp,cpp}` (`IngestMap`, `DiscoverIngestMaps`,
-`ResolveIngestOverrides` — the C++ twin of `adas_sim.io.ingest`, narrowed
-to `provides:` only, `absent:` not parsed, see `ingest_map.hpp`'s own note
-on why). **Discovery deliberately does not mirror the Python side's
-superproject-root glob** — that approach's own file header already flags
-it as a dev-checkout convention to "revisit when `S-C8` lands." `S-C8`
-landed 2026-08-05: `pack_plugin_bundle.py` copies a component's whole
-`sim/` tree beside its DLL, ingest maps included (confirmed on disk:
-`modules/df/build-sil-vs2026/.../df_sil/Release/sim/ingest/
-carla_legacy.yaml` exists from that build, not hand-copied). So
-`DiscoverIngestMaps` looks at `<dir>/sim/ingest/*.yaml` for each of the
-SAME `--search-dir` values `main.cpp` already collects for `ResolveLibrary`
-— `R-SIM-20`'s "plug-in path of library directories," not a new mechanism.
-`main.cpp` forwards `args.searchDirs` into `RecordingReader`'s
-construction; no new flag needed.
-
-**Verified against the real repro, not just a synthetic case:** re-ran
-`sil.exe --dump-outputs` on the exact legacy recording that exposed the
-bug (`aeb_canonical_10mps_30m.mcap`) — `df.aeb.outputs` now starts firing
-at tick `2333403700` ns (2.333 s), matching the scenario's own documented
-`fires_10m` marker at 2.283 s well within its declared `within_s: 0.1`
-tolerance. Before the fix this port was empty at all 62 ticks (zero
-stimulus, confirmed by instrumentation); the fix is why it now fires at
-all, and fires at the *right* time. Three new regression gtests
-(`tests/unit/test_ingest_map.cpp`, self-contained via `mcap::McapWriter`,
-no `df` dependency): an applicable map remaps its topic to the declared
-port, a non-applicable map falls back to the naive conversion unchanged,
-two applicable maps claiming the same topic is a load error naming both
-families. Full suites re-run clean: sil_host `gtest` 9/9 (was 6/6), sim
-`pytest` unaffected (720/7, the ingest fix touches no Python file).
-
-**What is still narrower than the Python side, honestly:** `absent:` is
-not parsed (nowhere to report it to yet); the strict "no keys beyond
-port:/proto_type:/origin:" authoring guard is not replicated (a typo'd key
-in an ingest map is silently ignored here, not rejected); `proto_type:`/
-`origin:` are parsed but unused. None of these affect `ST-C7-1`'s own
-claim — **the gate note above is now stale**: `ST-C7-1` holds for a
-legacy, ingest-mapped recording too, not only a framework-produced one.
-
-Superseded status (kept for the audit trail, 2026-08-04): "`S-C5` — IN
-PROGRESS, C++ half RED." Milestone 1 (the original 7 scope boxes) was implemented 2026-08-04
-in a shell with no C++ toolchain, so it was landed unticked and unverified.
-The 2026-08-04 audit built it for real and found it **incomplete, not merely
-unproven** — see the *"What the real build found"* block immediately after
-this paragraph, which is the actionable part. What landed: `interfaces/
-scripts/pack_config_bundle.py` + `cmake/config_bundle_pack.cmake` (the P-9
-hash algorithm, smoke-tested standalone: determinism, CRLF normalization,
-case-only-rename sensitivity, self-exclusion of `bundle.sha256`); `df`'s
-`module_path.{hpp,cpp}` (`resolveOwnLibraryDir`, `GetModuleHandleExW`+
-`GetModuleFileNameW`/`dladdr`, syntax-checked standalone on the Linux path
-only); `ParamLoader::fromBundleDir`/`egoParams()` (directory mode, additive
-— `dfInit`'s file-mode constructor call sites untouched); `adasInit`'s NULL
-tier now resolves `<library_dir>/config/` via the above and
-`adasManifest()` resolves `config_bundle_sha256` independently (module-
-relative, not tied to any `adasInit` call); `df_sil`'s `CMakeLists.txt`
-wired to pack the bundle POST_BUILD. New/updated gtest coverage in
-`test_generic_abi.cpp` (`AdasInitResolvesThePackedBundle`, manifest
-`config_bundle_sha256`/`project` assertions) and `test_param_loader.cpp`
-(`fromBundleDir`/`egoParams`, including the missing-directory degrade
-path) — none of it executed here, all of it unrun until a real build
-exists. On the Python side, fully implemented **and verified** (Python
-3.12 venv built ad hoc in this session, since the checked-in `.venv` is
-Windows-only and this shell's system Python was 3.10): `model/project.py`'s
-`ProjectModel` now computes the real multi-file bundle hash (was ego-file-
-only since `S-A2`) and gained `bundle_bytes_for_recording()`;
-`core/manifest.py`'s `build_manifest()` gained
-`component_bundle_paths`/`component_bundle_shas`/`config_bundle_embedded`;
-`sources/recorder.py`'s `open()` now embeds `config_bundle_bytes` on
-`/meta/config_bundle` when the concrete writer's own signature accepts it
-(checked via `inspect.signature`, since `CsvWriter.open()` does not — same
-"never silently dropped when supported" discipline `cli/convert.py`
-already set). New tests: `tests/unit/test_a2_project.py` gained the P-9
-hash-stability/case-rename/self-exclusion/cross-implementation-agreement
-cases (the last one imports `interfaces/scripts/pack_config_bundle.py`
-directly, real cross-repo proof the two independent implementations
-agree); `tests/system/test_c5_relocatability.py` proves the Python-facing
-half of `ST-C5-1` against a minimal, dependency-free fixture library
-(`tests/fixtures/c5_bundle_fixture/adas_fixture.cpp`, compiled with `g++`
-at test time) whose `adasInit`/`adasManifest` bodies deliberately mirror
-`df_interface_c.cpp`'s own S-C5 logic — evidence for the mechanism, not a
-substitute for the real `df_sil` proof. Full `pytest`/`check_invariants.py`/
-`docs/py/run_all.py` green. *(The "558 tests" originally recorded here was
-wrong — `S-C1d`, an earlier stage, had already recorded 643. Re-measured
-2026-08-04: **652 collected, 649 passed, 3 skipped.** The 3 skips are
-`tests/system/test_c5_relocatability.py`, which needs `g++` and therefore
-**skips silently on Windows** — so this stage's one Python-side system test
-does not run at all on the primary dev platform. See `P-6`/`P-10`; a
-`pytest.skip` that is unreachable on the platform the team uses is a test that
-exists only in principle.)* **Deferred by
-explicit scope choice, not started:** the 2026-07-31 addendum (`OD-11`
-project/ego-param agreement across a multi-component pipeline, `OD-12`
-`<COMPONENT>_<FN>_PERIOD_US` read from the bundle and reported per-function
-through `buildManifest()` at runtime) — `UT-C5-6/7/10/11/12`, `ST-C5-2`.
-
-#### What the real build found — `S-C5`'s actual defect (2026-08-04 audit)
-
-`python scripts/build.py df -t gtest -p vs2026 -P base` → **236/238, two
-failures**, both `S-C5`'s own new assertions:
-
-| Test | Symptom |
+| Item | Needs |
 |---|---|
-| `GenericAbiTest.AdasInitResolvesThePackedBundle` | `adasInit(nullptr)` returns `NULL` |
-| `ManifestTest.CarriesComponentIdentityAndDeclaredRate` | `config_bundle_sha256()` is `""`, expected 64 hex chars |
+| `MC-2` | a person: parity sign-off, before `S-E1` deletes anything (`NR-SIM-30`) |
+| `MC-3` / `S-D1`'s gate | a person opening Foxglove Studio |
+| `MC-5` | a person: `S-D8`'s onboarding stopwatch check |
+| `GT-14` | two people's names and one measured number. **If there is no second person, that is the answer and it belongs at the gate** |
+| `ST-C6-4` | a CI runner with a C++ toolchain (`plan.md` item 20) |
 
-**One root cause: the bundle does not travel with the DLL.** It is written
-into df_sil's *own* build directory by the `POST_BUILD` step and nowhere
-else. Two consequences, both observed on disk:
+**One owner decision is open:** whether `perception-core` splits into
+computer-vision + fusion. It gates `S-D4`'s gate, which demonstrates
+`R-SIM-10`'s central invariant — the architecture's main claim.
+`modules/perception-core/docs/perception_core_decomposition.md` lays out both
+options and their cost; `FR-SIM-71` exists to keep the decision cheap while it
+stays open.
 
-- `modules/df/tests/CMakeLists.txt:95` copies `$<TARGET_FILE:df_sil>` next to
-  `df_tests.exe` **without** `config/`. There are now two `df_sil.dll` on
-  disk — `src/platform/df_sil/Release/` (has `config/`) and `tests/Release/`
-  (does not). `resolveOwnLibraryDir()` is working *correctly*: it resolves to
-  the copy that is actually loaded, which is the one with no bundle. The test's
-  own header comment asserts the opposite and is wrong.
-- `modules/df/src/platform/df_sil/CMakeLists.txt` has **no `install()` rule
-  for `config/`** — only `install(TARGETS df_sil)`, `install(FILES
-  df_interface_c.h)` and `install(FILES df_sil.ports.yaml DESTINATION
-  share/adas-df)`. So the bundle is **absent from the Conan package**, and any
-  consumer resolving `df_sil.dll` through Conan (which is how `sil_host` gets
-  it) can never satisfy `adasInit(NULL)`.
+### Build order and its dependencies
 
-**This is the exact gap `S-C1b`'s delta already found and handed to this
-stage** — *"there is only `install(FILES … DESTINATION share/adas-df)`;
-nothing lands in `$<TARGET_FILE_DIR:df_sil>` … Recommend unticking and letting
-`S-C5` own it"*. `S-C5` then implemented the `POST_BUILD` half and not the
-`install()` half. Verified independently: `df_manifest_dump.exe` run **from**
-df_sil's own Release directory emits a correct manifest byte-identical to the
-checked-in `df_sil.ports.yaml`, so the packing logic and the hash are right —
-only the *delivery* is missing.
+Stages were built in the order below rather than in id order, because the split
+that matters to a session is *can I make progress without a compiler* —
+**Block 1 (`S-C0`, `S-A3Δ`, `S-A4Δ`, `S-B2Δ`, `S-C1cΔ`, `S-B1Δ`, `S-C4`,
+`S-C9`, `S-C2`, `S-C3`) depends on nothing in Block 2** (`S-C1aΔ2`, `S-C1d`,
+`S-C5`, `S-C8`, `S-C7`, `S-C6`), which needs a real MSVC/Conan build.
 
-**Do this, in order:**
+The dependencies that are **not** implied by ordering, and that a
+re-sequencing must respect:
 
-1. Make the bundle a first-class output that follows the library:
-   `install(DIRECTORY $<TARGET_FILE_DIR:df_sil>/config/ DESTINATION
-   bin/config)` (or the `resdirs` equivalent the `conanfile.py` already
-   declares), **and** extend `modules/df/tests/CMakeLists.txt`'s POST_BUILD
-   copy to bring `config/` with the DLL. Both, not either — they are two
-   different consumers.
-2. Re-run `python scripts/build.py df -t gtest -p vs2026 -P base` and confirm
-   **238/238**.
-3. Only then tick this stage's Milestone-1 boxes with the date.
-4. `ST-C5-1` (relocatability) is now a **real** test rather than a formality:
-   with (1) done it can copy the *installed* tree, not the build tree. It is
-   this stage's gate and it closes `plan.md` item 19.
-
-**Do not** "fix" this by making `adasInit(NULL)` search parent directories or
-the source checkout. That reintroduces exactly the silently-defaulted
-calibration `S-C1b`'s delta removed, and it would make `R-SIM-3a`'s "the two
-readers provably read the same bytes" unprovable again.
-
-**Then** Milestone 2 (the deferred `OD-11`/`OD-12` addendum above) — unchanged
-in scope, still `UT-C5-6/7/10/11/12` and `ST-C5-2`.
-
-### ▶ The build sequence — this table is the authority on order
-
-**Stage ids are stable citations and are NOT in build order** (§0 — "labels are
-stable"; renumbering would invalidate every `UT-`/`ST-` id, every commit message
-and every `Verified by` row in the register). So the id order and the build order
-differ in four places, deliberately, and each is marked below and in the stage
-itself. **Follow the `#` column, never the heading order.**
-
-Two blocks, because the split that actually matters to a session is *can I make
-progress without a compiler*. **Nothing in Block 1 depends on anything in Block
-2**, verified stage by stage — so ten consecutive stages are reachable with no
-MSVC, no Conan and no CARLA.
-
-#### Block 1 — no compiler, no world model (10 stages)
-
-**`Blocked on` is a hard dependency — starting earlier means doing the stage
-twice. `follows` is a soft one: correct but reorderable if you have a reason.**
-
-| # | Stage | Blocked on | Why here |
-|---|---|---|---|
-| **1** | `S-C0` — the automatic gate | — | Every later stage's evidence depends on a gate that runs itself. Manual verification has already failed twice here. Cheapest stage in the plan |
-| **2** | `S-A3Δ` — `BulkRef`, `Prim.derived`, layer budget | — | *Permanence*: a `Prim` that inlines a point cloud is un-fixable once `S-D4` copies it (`NR-SIM-43`) |
-| **3** | `S-A4Δ` — two clocks in the codec | — | *Permanence*: every recording written before this lands is missing a field forever (`CR-SIM-4`). Must precede #9 |
-| **4** | `S-B2Δ` — `capture_ns`, lazy parse, byte-bounded cache | 2, 3 | Needs the second stamp (3) and the byte budget (2). **The most invasive item in the pass** — a frozen core type 410 tests use (`OD-13`) |
-| **5** | `S-C1cΔ` — `select`/`drop`, the index grammar, `contracts/binding.py` | — | The override grammar is still free: verbs are parsed and load-validated but **not yet applied to any bytes**. Fixing the grammar after #9/#10 consume it means changing three consumers |
-| **6** | `S-B1Δ` — `self.<port>` binding, no disk in a provider, `ctx.now` | 5, 2 | Needs the resolver (5) and `Prim.derived` (2). Closes `D13` and `GT-11` |
-| **7** | `S-C4` — kill the duplicated calibration | *follows* 6 | Not hard-blocked. Same file set as #6 — both make `modules/df/sim/` read the right source — and doing #6 first means the constants this stage deletes already have no reader |
-| **8** | `S-C9` — recording ingest, feasible cuts | *follows* 5 | Not hard-blocked — it maps topics to ports and needs no `self.` resolution. ***Out of id order*** (before `S-C2`) because it makes today's recordings drivable — the stated primary workflow (`FR-SIM-66`, `P0`) — needs no world model, and **#10 does hard-depend on it** |
-| **9** | `S-C2` — `sources/`, the production side | 3 | Writes recordings, so the two-stamp codec (3) must already exist |
-| **10** | `S-C3` — scenario schema v2, expectations, anchors, faults | 5, 3, 8 | Faults reuse the override grammar (5); `delay` needs the capture stamp (3); `expect:` addresses need ingest (8) |
-
-#### Block 2 — a real MSVC/Conan build is required (6 stages)
-
-| # | Stage | Blocked on | Why here |
-|---|---|---|---|
-| **11** | `S-C1aΔ2` — two manifest fields in `interfaces` | — | ***New, added 2026-07-31.*** `OD-12` (per-**function** period) and `OD-8` (`fixed_slots`) both need attributes the shipped `component_manifest.proto` does not have. Discovered while sequencing: `S-C1a` ticked `period_ns` as *"component-level, not per `PortSpec`"*, which `OD-12` reverses |
-| **12** | `S-C1d` — the generated ABI shim | 11 | The generator must emit the fields (11) it is being asked to declare, or it is written twice |
-| **13** | `S-C5` — the packed config bundle | 12 | Reads `<COMPONENT>_<FN>_PERIOD_US` and reports it through the manifest built by (12) |
-| **14** | `S-C8` — the plug-in bundle | 13 | ***Out of id order*** (before `S-C6`/`S-C7`), on this stage's own instruction: *"sibling of `S-C5`, deliberately built right after it — building them apart is how they end up with two resolution orders"* |
-| **15** | `S-C7` — `sil_host` reads the pipeline | 12, 13 | Needs the generated shim and `adasInit(NULL)`'s bundle |
-| **16** | `S-C6` — resim + determinism in CI | 9, 10, 13 | Needs recordings (9), scenarios (10), and a **rebuilt binary** for determinism axis C, which only exists after (13) |
-
-Then Phase D, in id order — **`S-D5`'s entry condition (`NR-SIM-46`) was
-blocked on a decision, not on a stage; that decision was recorded 2026-08-05
-and the condition is cleared** (see `S-D5`'s own section) — and `S-D2` is
-deferred with a named trigger (a figure headless `sim render` cannot
-produce, per that same decision).
-
-> **`S-D7` is already 17/27 done** (2026-08-04 audit). Its writer/export/convert
-> half — `io/base.py`, `io/csv.py`, `cli/convert.py`, `cli/export.py`,
-> `UT-D7-1..6`, `ST-D7-1`, `ST-D7-4` — landed out of order as a by-product of
-> `S-C5`'s recorder work, with 15 passing tests. What remains is the
-> **isolation and batch** half: `sim batch`, per-recording subprocesses,
-> crash/timeout classification (`NR-SIM-22`, `P0`) and `ST-D7-2`/`ST-D7-3`/
-> `ST-D7-5..7`. Do **not** re-implement the export side; read the ticks first.
-
-#### The four id-order deviations, in one place
-
-| Built as | Id order would say | Reason |
+| Stage | Needs | Why |
 |---|---|---|
-| `S-C9` before `S-C2` | after | `S-C9` was added late; it is `P0`, compiler-free, and `S-C3` depends on it |
-| `S-C4` before `S-C9`/`S-C2` | after | Shares its file set with `S-B1Δ`; visiting `modules/df/sim/` once |
-| `S-C8` before `S-C6`/`S-C7` | after | The stage's own stated requirement — adjacency to `S-C5` |
-| `S-C1aΔ2` before `S-C1d` | — (new) | A proto field must exist before a generator emits it |
+| `S-B2Δ` | `S-A4Δ`, `S-A3Δ` | the second clock stamp and the byte budget |
+| `S-B1Δ` | `S-C1cΔ`, `S-A3Δ` | the `self.<port>` resolver and `Prim.derived` |
+| `S-C2` | `S-A4Δ` | it writes recordings, so the two-stamp codec must exist |
+| `S-C3` | `S-C1cΔ`, `S-A4Δ`, `S-C9` | faults reuse the override grammar; `delay` needs the capture stamp; `expect:` addresses need ingest |
+| `S-C1d` | `S-C1aΔ2` | a generator cannot emit a manifest field the proto lacks |
+| `S-C5` | `S-C1d` | reads `<COMPONENT>_<FN>_PERIOD_US` through the generated manifest |
+| `S-C7` | `S-C1d`, `S-C5` | needs the generated shim and `adasInit(NULL)`'s bundle |
+| `S-C6` | `S-C2`, `S-C3`, `S-C5` | needs recordings, scenarios, and a rebuilt binary for determinism axis C |
 
-**Why the deltas come first.** They are *permanence* changes — a recording
-written without a capture stamp cannot be repaired later — and they need no
-compiler, so a session proves the whole loop (edit, test, gate, commit) before
-reaching the stages where a real build is non-negotiable.
+Four stages were built **out of id order**, deliberately:
 
-**One rework trap that is already closed, stated so it is not re-opened.** The
-override *engine* (verbs, grammar, application, manifest tagging) belongs to
-**#5 `S-C1cΔ`**, not to `S-D6`. `S-D6`'s scope box that says
-`contracts/override.py` is the **developer surface** over that engine — the GUI
-toggle, `sim probe`, the severed-chain badge. Building the engine at `S-D6`
-instead would mean `S-C3`'s fault injection has no grammar to reuse, and the
-verbs would be written twice.
-
-### ▶▶ RESUME MARKER — 2026-08-06 **audit run 3**. Start here.
-
-**Measured this run, Windows/MSVC:** `pytest` **960 passed / 9 skipped / 0
-failed**, `check_invariants.py` clean, `docs/py/run_all.py` all checks pass
-(now **six**, see below). The queue is **unchanged** — run 3 found no plan
-defect and resequenced nothing. What changed is what the documents *say*, and
-three things you should not re-derive.
-
-**1. The three decisions waiting on you, not on work.** Recorded here rather
-than silently answered:
-
-| Decision | Why it is yours |
+| Built as | Reason |
 |---|---|
-| **Does `perception-core` split into computer-vision + fusion?** | It gates `S-D4`'s own gate — `R-SIM-10`'s central invariant, the architecture's main claim. The decomposition-neutral outer shape landed 2026-08-06 (`AR-46`); the ABI shim deliberately did not. `modules/perception-core/docs/perception_core_decomposition.md` lays out both options and what each costs. **`FR-SIM-71` was added so the decision stays cheap while open** |
-| **Three new requirements — accept, amend or reject** | `FR-SIM-71` (a component may split without invalidating recordings), `NR-SIM-47` (a measured claim names its platform), `NR-SIM-48` (the component-side checklist). All three are `sim_requirements.md` §13, each traced to a gap this run measured. They are **flagged for review, not assumed accepted** |
-| **`MC-5`, `GT-14`, `S-D1`'s gate** | Unchanged and unchangeable by work: a stopwatch and a first-time tester; two people's names and one number; a human opening Foxglove Studio. **If there is no second person, that is the answer and it belongs at `GT-14`** |
+| `S-C9` before `S-C2` | added late; `P0`, compiler-free, and `S-C3` depends on it |
+| `S-C4` before `S-C9`/`S-C2` | shares its file set with `S-B1Δ` — visit `modules/<n>/sim/` once |
+| `S-C8` before `S-C6`/`S-C7` | sibling of `S-C5`; built apart they grow two resolution orders |
+| `S-C1aΔ2` before `S-C1d` | a proto field must exist before a generator emits it |
 
-**2. Run 3's fix queue is fully closed, 2026-08-06** — all seven rows,
-`AR-50`/`AR-35`/`AR-36`/`AR-51`/`AR-45`/`AR-48`/`AR-49`. Two worth restating
-because they read as done before they were:
+**The deltas** (`S-A3Δ`, `S-A4Δ`, `S-B2Δ`, `S-B1Δ`, `S-C1cΔ`, `S-C1aΔ2`) are
+work, not corrections: they close *permanence* questions — a recording written
+without a capture stamp cannot be repaired later — and they need no compiler.
 
-- ~~`ConsolePanel` and `ProbePanel` are built, tested — and unreachable~~
-  (`AR-45`, **fixed** — `VantageWindow` now adds `ProbePanel` to its stack and
-  switches to it on `probe_requested`, and docks one persistent `ConsolePanel`
-  onto Bench, rebinding `session`/`pipeline` off a new `MainWindow.
-  session_ready` signal).
-- ~~A real config bundle reports its project as the string `"config"`~~
-  (`AR-51`, **fixed** — `ProjectModel` now takes the loaded library's own
-  `adasManifest().project` via a new `known_project` parameter, or reports
-  `"unknown"`, never the directory name; the 4 warnings against the real
-  `df_sil` build tree are gone).
+**One rework trap, stated so it is not re-opened.** The override *engine*
+(verbs, grammar, application, manifest tagging) belongs to `S-C1cΔ`, not to
+`S-D6`. `S-D6`'s `contracts/override.py` box is the **developer surface** over
+that engine — the GUI toggle, `sim probe`, the severed-chain badge. Building the
+engine at `S-D6` would leave `S-C3`'s fault injection with no grammar to reuse.
 
-**3. `run_all.py` gained a sixth check**, and one baseline you must not raise
-casually: `check_verifier_discoverability.py` ratchets the number of ticked
-verifier ids that appear in **no source file** — **0 today** (`AR-50`, lowered
-from 19). **Never untick a box to satisfy it** if it ever rises again — thread
-the id back to its implementing test/build site instead.
+### The per-stage loop — every time, in this order
 
-### ▶ THE BUILD QUEUE — do these in this order
-
-**Measured 2026-08-06: 104 boxes are unticked across 21 of 32 stages.** The
-five below are not all of it — they are roughly 12–15 boxes. They are first
-because together they close **the `P0` verification gap** and demonstrate
-`R-SIM-10`'s central invariant, which is the one claim in this architecture
-that is currently *asserted rather than shown*. Phase E is a separate, third
-block of work and is **not** in this queue; see "After the queue" below.
-
-**One row per commit.** Run all three commands from the superproject root after
-every row, using `modules/sim/.venv/Scripts/python.exe` — never a bare
-`python`:
-
-```
-… -m pytest modules/sim/tests -q
-… modules/sim/scripts/check_invariants.py
-… modules/sim/docs/py/run_all.py
-```
-
-**Baseline: 966 passed / 9 skipped / 1 failed.** The one failure is the
-documented `test_b3_viewport_controls` fixture-isolation flake (§10's risk
-table) — it passes in isolation, and it is **never yours to fix**.
-
-| Do | Work | Owner | Done when |
-|---|---|---|---|
-| **1** | ~~`perception-core`'s generic-ABI shim~~ **DONE 2026-08-06** | `modules/perception-core/docs/perception_core_decomposition.md` §4 | The five files in §4's table exist, mirroring `modules/vdy/src/platform/vdy_sil/`, and **`python scripts/build.py perception-core -t gtest -p vs2026 -P base` (and `-P cus1`) really ran and passed.** **Done**: both 11/11 gtest, `-t sil -P base` builds clean, real MSVC/Conan build (`conan remote login adas-local demo -p demo` run first). Two real pre-existing gaps found and fixed landing it (`perception_core`'s own `src/component/CMakeLists.txt` never exposed `src/` as an include root; `yaml-cpp` was never a declared Conan dependency) — full account in the owning doc's §4. **Correction to this row's own claim**: it does **not** unblock `S-D4`'s gate by itself — `adasExec` is a deliberate no-op (no algorithm exists, decomposition still undecided), so it moves the blocker from *"cannot be executed"* to *"executes and computes nothing"*, not past it. Safe under either decomposition option — under a CV+fusion split this shim moves to `fusion` wholesale |
-| **2** | ~~A `tolerance` file for `df`~~ **DONE 2026-08-06** (`R-SIM-24`) | `S-C6`; `modules/df/sim/` | `modules/df/sim/tolerance.yaml` exists with `default: exact`, integers and enums non-overridable, **a mandatory `why:` on every row**, and its hash in the run manifest. **It exists nowhere in the repo today**, so determinism axes C and D have no declared bound for *any* component. Chips at `NR-SIM-40` (`P0`). **Done**: `fields: {}` — deliberately zero rows, since no real axis-C/D divergence has been measured for `df` yet (`ST-C6-4`'s CI wiring stays not-run, per `S-C6`'s own note) and inventing a `why:` for nothing measured would be exactly `R-SIM-7`'s fabrication. What changed is real: `tolerance.sha256` is now a genuine non-empty hash instead of the `""` an absent file reports, verified directly (`load_tolerance` against the real file). **"Its hash in the run manifest"** reads as this existing mechanism (`ToleranceSet.sha256`, already surfaced by `sim determinism`'s own report line), not a new `RunManifest` field — `S-C6`'s own text already tracks that specific wiring as a separate, deferred gap ("no `RunManifest` field carries it yet"), not this row's. **Found and fixed while writing it**: `sim_resim_and_recording.md` §4a's own example schema (`families:`/`match:`/`abs:`) never matched what `core/tolerance.py` actually implemented (`fields:`/`abs_tol:`) — corrected there rather than shipping a file that matches the code but contradicts the doc (`GT-7`) |
-| **3** | ~~`ST-D6-4`~~ **DONE 2026-08-06** — `sim doctor --component <name>` | `S-D6`; `sim_sil_contract.md` §10 | Run against `df`, `vdy` and `perception-core` it produces the **same shape** of report and names each absence as **legitimate** (`vdy` has nothing to draw) or a **gap**. This is the check that would have caught row 2. Deliberately **not** a gate. **Done**: `sim doctor --component <root-path>` (a real path, never a bare name — `R-SIM-11`), `core/diagnostics.py::component_checklist`. **One narrowing**: reports required-row absence as an unconditional gap, but does not itself label a conditional/optional absence legitimate-or-gap (the framework cannot know `vdy`'s own reason without hardcoding a fact about `vdy`, `R-SIM-1`'s spirit) — a human still makes that call from the report. **It found a real gap on first real run** — proving the row's own prediction true a second time: §10's table claimed `vdy` ✅ for rows 5–7, and `vdy` has no `src/project/` at all (calibration is `adas-shared-config`'s); corrected in that table |
-| **4** | **The unblocked `P0` verifier sweep** — five rows, each its own commit | `ST-D6-1` → `S-D6` · `ST-D6-3` → `S-D6` · `ST-D7-6` → `S-D7` · `UT-C1c-22` → `S-C1c` · `ST-D5-1` → `S-D5` | Each clears one `P0` requirement (`FR-SIM-46`, `FR-SIM-67`, `NR-SIM-22`, `CR-SIM-2`, `FR-SIM-70`). Read the stage's own text for what each asserts — do not infer it from the id |
-| **5** | **Measure `GT-13`** | `S-E3`; §2's `GT-13` | `S-D7`'s throughput numbers now exist, so it is takeable. It is what clears `NR-SIM-41`'s `proven*` asterisk. **A number above target is a finding to act on, never a reason to delete the gate**. **Done 2026-08-07, one caveat found doing it**: all four numbers are now real and dated in §2's `GT-13` box (frame time and same-/fresh-process determinism newly measured against a real `df_sil.dll`; campaign throughput and recording size cited from `S-D7`). **The `proven*` asterisk stays, correctly** — clearing it needs `GT-13`'s checkbox ticked, and §2's own rule is explicit that a tick there "belongs to the stage or milestone that actually re-checks the gate... never at this line" (only at `S-E3`), which this session was told not to start. The asterisk is therefore the honest state, not an oversight: two of the four axes (`rebuilt_binary`, `different_machine`) are also genuinely unmeasurable from one session on one machine, the same category of permanent blank `GT-14` already carries |
-
-**Two lessons from the last queue, and they are about verification, not code:**
-
-1. **Verify through the mechanism, not through the call site you changed.**
-   `AR-51`'s first half was checked with the one test file exercising the one
-   caller that had been wired, so it could not see that every *other* caller
-   still misbehaved.
-2. **Watch the whole-suite warning count**, not only the tests you wrote. It
-   went 8 → 10 while a fix was believed complete, and that was the available
-   signal.
-3. **A test that `skip`s has not passed, and reading it is not running it.**
-   Added 2026-08-07, after `ST-D6-1` was ticked on *"verified by reading the
-   real signatures against the test's calls"* — moving a `P0` requirement to
-   `proven*` on a test that has never executed on any platform. The note
-   saying so was admirably honest and the **tick contradicted it**. When a
-   test cannot run in your shell, the box is `[~]`, and the caveat names the
-   **exact command** and the **exact acceptance condition** that closes it —
-   that is why `S-C7`'s equivalent caveat closed in one command instead of
-   needing its situation reconstructed. **Check the skip count**, not just
-   pass/fail: it moved 9 → 10 in the same run. **`ST-D6-1` closed for real
-   the same day**, on a Docker `python:3.12-slim` container, `1 passed` —
-   the lesson is kept here regardless, since it is about how a box gets
-   ticked, not about this one box's current state.
-
-**Do not attempt** (no work can close these): `MC-5` · `GT-14` · `MC-2` ·
-`MC-3` / `S-D1`'s gate. Each needs a person. `ST-C6-4` needs a CI runner with
-a C++ toolchain (`plan.md` item 20).
-
-**After the queue — Phase E, which is a third block and 48 boxes**, not a tail:
-`S-E1` (17, none started — deleting `df`'s private tooling, **gated on `MC-2`**,
-`NR-SIM-30`'s "nothing is deleted before its replacement is proven"), `S-E2`
-(9 — blocked on `df_ctypes.py`'s consumers, which the stage says can only be
-*deleted* once `S-E1` clears, never migrated), `S-E3` (22 — mostly gates that
-close when everything upstream does). `S-D2`'s 12 are **deferred with a named
-trigger** and are correctly not-now. `S-E3` gained five items from audit run 3
-(`AR-35`, `AR-36`, `AR-49`, `AR-50`, and `OQ-14`'s re-assessment).
-
-Findings index: [sim_audit_log.md](sim_audit_log.md) — run 3 is `AR-34`..`AR-51`,
-**zero open**, every row closed and re-verified.
-
-> **If your job is *"fix the audit findings"* rather than *"build the next
-> stage"*, do not start here — the run 3 fix queue is empty.** The next audit
-> run appends to [sim_audit_log.md](sim_audit_log.md) rather than reopening it
-> (the method's own reconciliation-first discipline). Come back to this
-> document for the *owning stage* of any future row; that is where the
-> `**Must not**` constraints live.
-
-### ▶▶ RESUME MARKER — 2026-08-06 **audit** (run 2). Superseded by run 3 above.
-### The two boxes below are the audit trail that got the queue to this point.
-
-**Nothing is blocked, and the queue is unchanged by this audit** — it found no
-plan defect and resequenced nothing. What it changed is what you can *believe*:
-
-1. **`S-C7` is verified, not believed** (`AR-33`). Its three never-compiled C++
-   files build and pass on Windows/MSVC, 16/16. The instruction the previous
-   marker addressed to "the first real Windows/MSVC session" is **done** — do
-   not run it again as if it were still open.
-2. **The suite's real number on Windows is 959 passed / 9 skipped / 1 known
-   flake**, `check_invariants.py` clean, `run_all.py` all-pass. The previously
-   recorded *"952 / 29 / 1 flake"* was a **Linux** number (`AR-31`); both are
-   now stated with their platform.
-3. **Three defects were fixed in the audit** (`AR-28`, `AR-29`, `AR-30`) — all
-   Windows- or tooling-visible only, none affecting the design or the order.
-
-**Next, unchanged from the previous marker:** the remaining Phase D stages'
-own small open items — **`S-D4`** (Perception readiness, 6 boxes) and
-**`S-D5`** (3 partial) — or Phase E (retirement), which stays blocked on every
-Phase A–D stage's gate; `S-E1`'s table is the authority on which.
-
-**Still needing a human, not work** (unchanged, do not re-derive):
-- `MC-5` — `S-D8`'s onboarding stopwatch check, needs a real tester.
-- `GT-14` — needs two people's names and one measured number. If there is no
-  second person, **that is the answer and it should be written at the gate**.
-- `S-D1`'s gate — blocked on a human opening Foxglove Studio (`MC-3`).
-
-**One standing instruction this audit earned the hard way (`AR-31`):** when a
-stage records a suite number, record **which platform** produced it. Phase D
-was landed entirely from a Linux shell and read as green everywhere; the
-Windows re-run found two real defects in an hour. `ST-E3-5` owns making this
-routine rather than incidental.
-
-**`S-C5` (#13), `S-C8` (#14), `S-C7` (#15) and `S-C9` (#8, Block 1) are all
-now closed** — every checkbox and every `UT-`/`ST-` id in each stage's own
-section landed 2026-08-06, with real, passing tests. `S-C9` has one
-non-blocking exception: the Bench-start-page wiring, which needs `S-B3`/
-`S-D8` (not built) to exist at all, same as its own section already noted.
-
-**One honesty caveat, stated so it is not missed:** `S-C7`'s three new C++
-test files (`test_pipeline_step.cpp`, `test_resim_measured.cpp`, plus the
-`echo_stub.cpp` extension they both need) were written and hand-traced
-against the real implementation in a WSL shell with **no Conan and no
-compatible `libprotobuf` headers** — they could not be compiled or run
-there. `test_exec_timeout.cpp` (the one S-C7 surface with zero protobuf/
-yaml-cpp dependency) genuinely was compiled and run standalone, 5/5
-passing. **The first real Windows/MSVC session after this one should run
-`scripts/build.py sil_host -t gtest -p vs2026 -P base` and confirm all
-three new files build and pass** before treating `S-C7` as verified rather
-than "believed correct, awaiting compilation" — the exact distinction
-`S-C5`'s own 2026-08-04 audit box below exists to warn against blurring.
-
-> **RESOLVED 2026-08-06 by the audit (`AR-33`) — this was that session.**
-> `scripts/build.py sil_host -t gtest -p vs2026 -P base` on Windows/MSVC:
-> **16/16 pass**, including all three previously-uncompiled files —
-> `PipelineStep.MultiRateHoldsTheLastRealValueBetweenDueTicks`,
-> `ResimMeasured.MeasuredStageIsInjectedFromTheRecordingNeverFromItsOwnExec`
-> and `TwoStageResim.DfPlusStubdllRunsEndToEndWithNoMainCppEdit` (the
-> `echo_stub.cpp` extension). Hand-tracing held: **zero compilation errors and
-> zero assertion failures.** `S-C7` is now *verified*, not *believed*. Note
-> what made this cheap to close: the caveat named the exact command and the
-> exact acceptance condition, so the session that could run it did not have to
-> reconstruct what "verified" would mean. That is the pattern worth copying
-> whenever a stage lands without its toolchain.
-
-**`S-C6` (#16), the last Block-2 stage, turned out already closed** — its own
-Gate was `[x]` before this session touched it; the only open items were
-`ST-C6-4` (a real CI job step needing a C++ toolchain runner, `plan.md` item
-20's own scope) and a tolerance-file-hash provenance field, both explicitly
-pre-deferred by an earlier session. Nothing to do there without infrastructure
-this shell does not have.
-
-**`S-D8` — Vantage's shell, workspaces and Bench/Campaign panels — landed
-2026-08-06, this session**, all the way to its own Gate: `UT-D8-1`..`UT-D8-9`,
-`ST-D8-1`/`ST-D8-2` all real, passing, and cited above. The one open item is
-`MC-5` (a manual stopwatch check with a real human tester) — cannot be
-performed in an agent session, recorded as blocked rather than dropped.
-Landing it also fixed a real, pre-existing bug: `test_d3_mainwindow_pipeline_
-panel.py`'s `skipif` lacked a `sys.platform` guard, so a stale Windows-built
-`echo_stub.dll` on this Linux checkout caused two spurious failures instead of
-a named skip — the full suite is now 1 pre-existing flake away from fully
-green in this shell (952 passed / 29 skipped / 1 flake, `ST-D8-1`'s own
-evidence).
-
-> **Windows re-run, 2026-08-06 audit (`AR-31`) — "in this shell" was doing
-> real work in that sentence.** Phase D (`S-D1`/`S-D6`/`S-D7`/`S-D8`) was
-> verified in a WSL/Linux shell only, and the Windows half of `P-1`..`P-10`
-> was never re-run. It found **two defects the Linux run could not see**:
-> `AR-28` (two `S-D1` test modules hard-import the optional `foxglove` extra
-> at module scope, so on any interpreter without it the suite is *Interrupted
-> at collection* — 0 tests run, not 2 failures — which also makes the
-> `core-only-smoke` CI job red by construction) and `AR-29` (`S-D8`'s
-> `test_d8_pipeline_degrade.py` wrote only the POSIX candidate name
-> `libfake_ok.so`, so on Windows `_candidate_names` looked for `fake_ok.dll`,
-> the stage never resolved, and the assertion inverted). Both fixed and
-> re-verified. **Windows now: 959 passed / 9 skipped / 1 flake** (the same
-> documented `test_b3_viewport_controls` fixture-isolation flake, which passes
-> in isolation). `ST-E3-5` owns keeping both platforms measured; this note
-> exists so the next reader does not read one shell's number as the suite's.
-
-**Next:** the remaining Phase D stages' own small open items —
-`S-D4` (Perception readiness, 6 boxes), `S-D5` (3 partial) — or Phase E
-(retirement, blocked on every Phase A–D stage's own gate, `S-E1`'s table is
-the authority on which). `S-D1`'s own gate stays blocked on a human opening
-Foxglove Studio; `S-D2` stays deferred with its own named trigger.
-
-### ▶▶ RESUME MARKER — 2026-08-04 audit. Start here, in this order.
-
-**1. Finish `S-C5` (#13) — still the current stage, but no longer blocked.**
-`AR-1` is fixed: the bundle now travels with the library and `df` is
-**238/238** on `-P base` and `-P cus1`. The stage sits at **2 of 34 boxes**,
-and that is a *recording* gap, not a work gap — Milestone 1 was implemented
-on 2026-08-04 and could not be ticked because the build was red. It is green
-now, so those boxes are **verifiable today**. Work them in this order:
-
-  1. **The 7 Milestone-1 scope boxes** — each is now provable against the real
-     build. Tick with the date; do not tick as a batch without checking each.
-  2. **`UT-C5-1`…`UT-C5-5`.** Several already exist as real gtests and pass
-     (`UT-C5-1` *is* `AdasInitResolvesThePackedBundle`). Confirm each one
-     asserts what its plan text says before ticking — `AR-1` found `UT-C1b-13`
-     passing for the wrong reason, and that is the failure mode here.
-  3. **`ST-C5-1`, the gate** — copy the build output plus its `config/` to a
-     directory with no Conan cache and no checkout, and run it. This closes
-     `plan.md` item 19 with evidence. *Independent of `plan.md` item 15's
-     packaging work: this copies a built output tree, not a Conan package.*
-  4. **Then Milestone 2** — the `OD-11`/`OD-12` addendum
-     (`UT-C5-6/7/10/11/12`, `ST-C5-2`), unchanged in scope.
-
-**2. Then continue the build-order table**: `S-C8` (#14) → `S-C7` (#15) →
-`S-C6` (#16), then Phase D in id order — remembering `S-D7` is already 17/27.
-
-**3. The open findings.** Every one is a row in
-[sim_audit_log.md](sim_audit_log.md) — read it there, not here, so there is one
-list and it gets reconciled. Summary of what is open and where it is owned:
-
-**3. The audit ledger is fully reconciled — nothing to triage.**
-[sim_audit_log.md](sim_audit_log.md) is at **24 findings, 0 open**: 21 closed,
-3 won't-fix. You do not need to read it to start work. Two of its closures
-carry real work that is **not** done, and both now live where they belong
-rather than in the ledger:
-
-| Where it lives now | What is left |
-|---|---|
-| **`plan.md` item 15** (reopened) | The partial-clone workflow regressed and nothing re-ran it. `interfaces`' packaging is half-fixed and `df` now configures; the remainder is the **package include layout** — generated protos are never installed, and package vs editable header prefixes disagree. A design decision, then re-verify every module |
-| **§2's `GT-14`** (this document) | Two people's names and one measured number. **The only open item no work can close** — see the flagged block at the gate |
-
-Neither blocks step 1.
-
-### The per-stage loop — do this every time, in this order
-
-1. **Read the stage** top to bottom, including its `**Must not**` blocks. Then
-   read the design sections it cites. If the stage cites
+1. **Read the stage** top to bottom, including its `**Must not**` block, then
+   the design sections it cites. If it cites
    [sim_api_reference.md](sim_api_reference.md), **a signature there is a
    contract** — type it as written.
-2. **Check the entry conditions.** A stage that says *blocked on X* is blocked;
-   do not start it.
+2. **Check the entry conditions.** A stage that says *blocked on X* is blocked.
 3. **Implement the unticked `- [ ]` scope boxes**, in the order given.
 4. **Write the stage's tests**, including the ones that must be **shown to
    fail** — a gate that has never failed has never been shown to work.
-5. **Run all four checks** from the superproject root:
+5. **Run the checks** from the superproject root, using
+   `modules/sim/.venv/Scripts/python.exe` — **never a bare `python`**, which has
+   already misled a session here. On Linux it is `modules/sim/.venv/bin/python`
+   (`P-6`).
    ```
-   modules/sim/.venv/Scripts/python.exe -m pytest modules/sim/tests -q
-   modules/sim/.venv/Scripts/python.exe modules/sim/scripts/check_invariants.py
-   modules/sim/.venv/Scripts/python.exe modules/sim/docs/py/run_all.py
+   … -m pytest modules/sim/tests -q
+   … modules/sim/scripts/check_invariants.py
+   … modules/sim/docs/py/run_all.py
    <the stage's own build command, if it has one>
    ```
-   **Use that interpreter, not a bare `python`** — a `python` on `PATH` has
-   already misled a session in this project. On Linux the venv path is
-   `modules/sim/.venv/bin/python` (`P-6`).
-6. **Tick only what you verified**, with the number and the date where the box
-   asks for one.
+6. **Tick only what you verified.** A test that `skip`s has not passed, and
+   reading it is not running it. When a test cannot run in your shell the box is
+   `[~]`, and the caveat names the **exact command** and the **exact acceptance
+   condition** that closes it. Watch the **skip** count, not only pass/fail.
 7. **Commit**, citing the stage: `feat(sim): S-C0 automatic gate + ST-C0-1..2`.
    Submodule first, then the superproject pointer (`R-GIT-1`).
 
 ### Stop and ask — do not decide these alone
 
-- A design document contradicts another design document (`GT-7`). Two documents
-  have already disagreed in this project and both read as authoritative.
+- A design document contradicts another design document (`GT-7`). Two have
+  already disagreed here, and both read as authoritative.
 - A stage's scope appears to require changing `src/component/**`. It must not.
-- A test cannot be made to pass without widening a tolerance, relaxing a gate,
-  or adding an exemption to `GT-1`/`GT-11`.
-- The work needs a fifth override verb, a sixth fault, an expression anywhere,
-  or a port address spelled as a literal. Each of those is a closed list with a
-  written reason; reopening one is a design change, not an implementation
-  choice.
-- You cannot run the real build. **Say so.** Do not substitute a hand-rolled
-  compiler command — that has already produced two stages reported green whose
-  build was red, and it is the single most expensive mistake made here.
+- A test cannot pass without widening a tolerance, relaxing a gate, or adding an
+  exemption to `GT-1`/`GT-11`.
+- The work needs a fifth override verb, a sixth fault, an expression anywhere, or
+  a port address spelled as a literal. Each is a closed list with a written
+  reason; reopening one is a design change, not an implementation choice.
+- **You cannot run the real build. Say so.** Do not substitute a hand-rolled
+  compiler command — that has produced two stages reported green whose build was
+  red, and it is the most expensive mistake made here.
 
 ### Three things that must never happen
 
-- **Never tick a box you did not verify**, and never tick a completed stage's
-  box to make a set look consistent. A ticked box is a claim that something was
-  run on a date.
+- **Never tick a box you did not verify**, and never tick one to make a set look
+  consistent. A ticked box is a claim that something was run.
 - **Never lower a `GT-4` floor.** If a count drops, behaviour changed.
 - **Never "fix" the known flake.**
   `tests/system/test_b3_viewport_controls.py::test_dragging_pans_the_viewport_and_a_second_click_still_selects`
-  fails in isolation — a fixture-isolation bug recorded in §10's risk table. It
-  is not yours unless a stage says it is.
+  fails only in-suite — a fixture-isolation bug in §10's risk table. It is not
+  yours unless a stage says it is.
+
+### Two verification habits, learned the expensive way
+
+1. **Verify through the mechanism, not through the call site you changed.** A
+   fix once passed its test because the single wired caller was the one tested;
+   every other caller still misbehaved.
+2. **Watch the whole-suite warning count**, not only your own tests.
 
 ### Where a resolution's reasoning lives
 
-The stages below say *what to build*. When you need *why*, the owning document
-is:
+The stages say *what to build*. When you need *why*:
 
 | Topic | Read |
 |---|---|
@@ -1025,28 +192,14 @@ is:
 
 ### Effort shape
 
-32 `### S-` stage sections (Phase C's first is split into four sub-stages;
-`S-C7`/`S-C8` were
-added by the 2026-07-31 review, `S-C0` by the 2026-07-31 concept-resolution
-pass), plus six **deltas** to already-complete stages — `S-A3Δ`, `S-A4Δ`,
-`S-B2Δ`, `S-B1Δ`, `S-C1cΔ`, `S-C1aΔ2` — which are work, not corrections: they
-close model-level questions that are cheap now and permanent if deferred. A and
-B touch **no C++ and no DLL at all** — the entire viewer is built and tested
-against recorded files. C is the only phase that changes production C++. E only
-deletes.
-
-**Ten of the sixteen remaining Phase C items need no compiler at all**, and none
-of them depends on one that does — see §0a's two blocks. That is not a
-convenience: it is what lets a session make ten stages of verified progress
-before the first stage where a substitute toolchain would silently produce a
-green report and a red build.
-
-**Phase C carries 13 of the 32 stage sections and all of the C++ risk**, which is why it
-reads as the hardest part of this document. One sentence organises it: *a
-component's DLL must be able to answer three questions — what ports do I have,
-what configuration am I using, and run one tick — and everything else in Phase C
-is building the things that ask those three questions.*
-[sim_learn.md](sim_learn.md) §3 expands that into the stage table.
+32 `### S-` stage sections plus six deltas. **A and B touch no C++ and no DLL at
+all** — the entire viewer is built and tested against recorded files. **C is the
+only phase that changes production C++** and carries all of the C++ risk, which
+is why it reads as the hardest part of this document. One sentence organises it:
+*a component's DLL must answer three questions — what ports do I have, what
+configuration am I using, and run one tick — and everything else in Phase C
+builds the things that ask them.* [sim_learn.md](sim_learn.md) §3 expands that.
+**E only deletes.**
 
 ---
 
@@ -1079,18 +232,23 @@ is building the things that ask those three questions.*
 
 ## 2. Global gates — re-checked at the end of every stage
 
-These are the invariants that make the architecture true rather than aspirational.
-A stage that breaks one is not done.
+These are the invariants that make the architecture true rather than
+aspirational. A stage that breaks one is not done.
 
-### What "`GT-1..GT-12` re-checked" in a stage's Discipline block means
+**Unticked boxes here are the normal state.** These gates are re-checked
+continuously, not completed once, so an empty `- [ ]` in this section does not
+mean "not done" the way it does inside a stage. The nested backtick-quoted
+`` `GT-n` ``/`` `DC-n` `` checkboxes exist so
+`check_requirement_coverage.py` can read a state for gates that requirements
+cite; **a real tick belongs at the stage or milestone that re-checks the gate**
+— `S-E3` for the milestone measurements — never at this line.
 
-*Clarified 2026-08-04 by the full-scope audit — this was ambiguous, not wrong,
-and the ambiguity was hiding two gates.* There are **fourteen** gates
-(`GT-1`…`GT-14`), but every stage's Discipline line says `GT-1..GT-12`. That
-literal range is **not** the whole set, and mass-editing it to `GT-1..GT-14`
-would be worse: it would retroactively claim that already-ticked stages
-re-checked `GT-13`/`GT-14`, which none of them did. The honest split, which is
-what the gates' own content already implies:
+### What a stage's "`GT-1..GT-12` re-checked" line means
+
+There are **fourteen** gates but every stage's Discipline line says
+`GT-1..GT-12`. That literal range is not the whole set, and mass-editing it to
+`GT-1..GT-14` would retroactively claim already-ticked stages re-checked
+`GT-13`/`GT-14`, which none did.
 
 | Class | Gates | When |
 |---|---|---|
@@ -1099,292 +257,154 @@ what the gates' own content already implies:
 | **Per-stage, when a build is touched** | `GT-4` | any stage that compiles anything |
 | **Milestone measurements, recorded once** | `GT-8`, `GT-10`, `GT-12`, `GT-13`, `GT-14` | at `S-E3`, or when the stage that owns them lands |
 
-So a stage's `GT-1..GT-12` line means **the first three rows**. `GT-13`/`GT-14`
-were never per-stage gates — they measure the project, not a change. Read them
-at `S-E3`, and note that `GT-13`'s blanks *are* its finding.
+A stage's line means the first three rows. `GT-13`/`GT-14` measure the project,
+not a change — read them at `S-E3`, where `GT-13`'s blanks *are* its finding.
 
-**Unticked boxes below are the normal state.** These gates are re-checked
-continuously, not completed once, so an empty `- [ ]` here does not mean
-"not done" the way it does inside a stage. `GT-11` is ticked because it
-records a one-off mechanisation, not a re-check.
+### The gates
 
-**The backtick-quoted `` `GT-n` `` checkboxes nested under seven gates below
-are new (`AR-35`, 2026-08-06).** `GT-3`, `GT-8`, `GT-9`, `GT-10`, `GT-11`,
-`GT-13`, `GT-14` are cited as `Verified by` targets by real requirements but,
-until now, had nowhere `check_requirement_coverage.py` could read a state from
-— its `DEFN_RE` looks for a checkbox whose first token is a backtick-quoted
-id, the same shape `UT-`/`ST-` ids and `MC-1..MC-5` already use, and the bold
-prose bullets above do not match it. This is pure plumbing, giving `AR-36`
-something to resolve against: it adds a state, it does not restate a gate,
-and **none are ticked here** — a real tick still belongs at the stage or
-milestone that actually re-checks the gate (`S-E3` for the milestone
-measurements), never at this line.
-
-- [ ] **GT-1 — no function names in the framework.**
-      `grep -rniE '\b(aeb|bsd|lca|acc|ldw|lka)\b' modules/sim/src` returns
-      nothing (`R-SIM-1`).
-      **Finding (S-A1):** this literal command has a word-boundary gap --
-      `\b` treats `_` as a word character, so it does **not** match a banned
-      token embedded in a snake_case/ALL_CAPS identifier (`BSD_SENSOR_0_...`,
-      exactly `R-NAME-3`'s own calibration-key shape). Verified:
-      `grep -niE '\bbsd\b'` misses a file containing only
-      `BSD_ZONE_WIDTH_M = 2.0`. `scripts/check_invariants.py`'s `check_gt1`
-      uses an alnum lookaround instead so the underscore-prefixed case is
-      caught; run that script, not the literal grep above, when checking this
-      gate by hand.
-- [ ] **GT-2 — no renderer in a layer provider.** No
-      `cv2`/`matplotlib`/`PySide6`/`foxglove` import under any
-      `modules/*/sim/layers/` (`R-SIM-2`).
+- [ ] **GT-1 — no function names in the framework.** No `aeb`/`bsd`/`lca`/
+      `acc`/`ldw`/`lka` anywhere under `modules/sim/src` (`R-SIM-1`).
+      **Run `scripts/check_invariants.py`, not a hand-written `grep -E '\b…'`**
+      — `\b` treats `_` as a word character, so the literal grep misses a token
+      inside a snake_case or ALL_CAPS identifier, which is exactly
+      `R-NAME-3`'s calibration-key shape. `check_gt1` uses an alnum lookaround.
+- [ ] **GT-2 — no renderer in a layer provider.** No `cv2`/`matplotlib`/
+      `PySide6`/`foxglove` import under any `modules/*/sim/layers/` (`R-SIM-2`).
 - [ ] **GT-3 — no physical constant in a layer provider or renderer.** No
-      literal vehicle/sensor dimension outside `model/` (`R-SIM-3`).
+      literal vehicle or sensor dimension outside `model/` (`R-SIM-3`).
       - [ ] `GT-3`
-- [ ] **GT-4 — the build matrix stays green.** *Widened 2026-07-31 from one
-      component to every component that declares a `gtest` target
-      (`NR-SIM-12`).* Each row's `ctest` count is at or above its **measured**
-      floor **and every test in it passes**. Never lower a floor.
+- [ ] **GT-4 — the build matrix stays green.** Every component declaring a
+      `gtest` target: its `ctest` count is at or above its measured floor **and
+      every test in it passes** (`NR-SIM-12`). **Never lower a floor** — a
+      dropped count means behaviour changed. Both clauses are required: count
+      catches deleted tests, pass catches broken ones.
 
-      **The pass clause was added 2026-08-04 and is not cosmetic.** As
-      originally written this gate said only *"count is at or above its
-      measured floor"*, and on that reading `df`'s current **236/238 with two
-      failures** *passes* — 238 ≥ 233. A gate that a red build satisfies is
-      not a gate. Count catches deleted tests; pass catches broken ones; both
-      are required.
+      | Module | Command | Floor |
+      |---|---|---|
+      | `df` | `scripts/build.py df -t gtest -p vs2026 -P base` | **233** |
+      | `interfaces` | `scripts/build.py interfaces -t gtest -p vs2026 -P base` | **10** |
+      | `mathlib` | `scripts/build.py mathlib -t gtest -p vs2026 -P base` | **29** |
+      | `vdy` | `scripts/build.py vdy -t gtest -p vs2026 -P base` | **18** |
+      | `perception-core` | `scripts/build.py perception-core -t gtest -p vs2026 -P base` | **2** |
+      | `sil_host` | `scripts/build.py sil_host -t sil -p vs2026 -P base`, then run `sil.exe` **under `conanrun.bat`** | builds; run exits 0 |
 
-      | Module | Command | Floor | Measured |
-      |---|---|---|---|
-      | `df` | `scripts/build.py df -t gtest -p vs2026 -P base` | **233** | **2026-08-04 audit: 238 run, 236 pass, 2 FAIL** (`S-C5`, see §0a) — count above floor, **gate RED on the pass clause** |
-      | `interfaces` | `scripts/build.py interfaces -t gtest -p vs2026 -P base` | **10** | 2026-08-04 audit: 10/10 (floor raised from 6 — `S-C1aΔ2` added the `ComponentManifest` cases) |
-      | `mathlib` | `scripts/build.py mathlib -t gtest -p vs2026 -P base` | **29** | 2026-08-04 audit: 29/29 on `-P base` and `-P cus1` — **first real number.** The row was previously un-runnable (`conf/build.yml` declared only `sil`/`package`, so `-t gtest` exited *"unknown target"*); `AR-2` wired the target and implemented `TC-U1`/`U2`/`U3` + `TC-D2`. **Its first link found a real latent defect** — `e_atan2f.c`/`e_powf.c` referenced `fabsf` while `s_fabsf.c`'s definition was renamed to `__olm_fabsf`, unresolved at link. Nothing had ever linked mathlib's float path: `df` uses the double overloads, and mathlib had no test target. Exactly the blindness this row exists for |
-      | `vdy` | `scripts/build.py vdy -t gtest -p vs2026 -P base` | **18** | 2026-08-04 audit: 18/18 (confirms `S-C1d`'s number) |
-      | `perception-core` | `scripts/build.py perception-core -t gtest -p vs2026 -P base` | **2** | 2026-08-04 audit: 2/2 — **first real number**, replacing "never run" |
-      | `sil_host` | `scripts/build.py sil_host -t sil -p vs2026 -P base`, then run `sil.exe` **under `conanrun.bat`** | builds; runs exit 0 | 2026-08-04 audit: builds clean; `sil.exe` exits 0 and ticks `df`+`vdy` |
+      Use the **dispatcher** form above, not `modules/<m>/build.bat` — only the
+      dispatcher resolves the project. `sil_host`'s `-t sil` **only builds**;
+      `Release/sil.exe` launched bare fails with `STATUS_DLL_NOT_FOUND` because
+      its dependencies come from the Conan package, so run it under the
+      generated `conanrun.bat` or the row measures nothing.
 
-      **Two corrections to how this row set is run** (2026-08-04):
-      *(a)* the commands were written as `modules/<m>/build.bat …`; the
-      dispatcher form above is the one that actually resolves the project and
-      is what was run. *(b)* the `sil_host` row said *"(builds + runs)"*, but
-      `-t sil` **only builds** — launching `Release/sil.exe` bare fails with
-      `STATUS_DLL_NOT_FOUND` because its dependencies come from the Conan
-      package, not from beside the exe. It runs correctly under the generated
-      `conanrun.bat`. Recording "exit 0" from a build-only command was
-      measuring the wrong thing.
-
-      **Why one row was not enough.** Both Phase C defects that actually escaped
-      were cross-module and would have passed a `df`-only gate: an `interfaces`
-      change broke `df`'s CMake **generate** (review defect 1), and a
-      link-visibility change in `df_sil`'s installed public header reached every
-      consumer of `AdasDf::AdasDf` (defect 10). A shared contract lives in
-      `interfaces`; a gate that watches one consumer of it is watching the wrong
-      thing. Blank rows were **the honest state**, not an omission — and the
-      2026-08-04 audit filled every one of them, which is how the `mathlib` row
-      turned out to be un-runnable rather than merely unmeasured. A blank that
-      survives long enough stops reading as "we have not measured this" and
-      starts reading as "this is fine"; measure them at the first opportunity,
-      not at the first stage that happens to touch a shared contract.
-
-      **The recorded number must be a number someone ran.** `df`'s sat at "90/90
-      as of 2026-07-24" until the 2026-07-30 review, i.e. a floor 138 tests
-      below actual — a gate that cannot fail is not a gate, and the staleness
-      was invisible precisely because every stage in between ticked it from a
-      standalone harness rather than from `ctest`.
+      **Why one row is not enough:** both Phase C defects that escaped were
+      cross-module and would have passed a `df`-only gate — an `interfaces`
+      change broke `df`'s CMake generate, and a link-visibility change in
+      `df_sil`'s installed public header reached every consumer of
+      `AdasDf::AdasDf`. A shared contract lives in `interfaces`; a gate
+      watching one consumer watches the wrong thing.
 - [ ] **GT-5 — build machinery untouched.** `diff -q` of `conanfile.py`,
       `scripts/build.py`, `build.bat`/`.sh`, `scripts/build_gui.py`,
       `.clang-format` against another component is silent (`R-BUILD-1..6`).
 - [ ] **GT-6 — the framework imports no component.** `modules/sim` never
       imports from `modules/df` or `interfaces`' generated bindings
       (`R-SIM-11`).
-- [ ] **GT-7 — docs match code.** Any behaviour that contradicts a design doc
-      is either a code bug or a doc bug; fix one, in the same commit.
+- [ ] **GT-7 — docs match code.** Any behaviour contradicting a design doc is
+      either a code bug or a doc bug; fix one, in the same commit.
 - [ ] **GT-8 — time to first picture, measured.** A developer with **only their
       own component checked out** gets a rendered run from a recording in
       **under 10 minutes**, editing nothing in `modules/sim`. Timed on a real
-      newcomer, recorded with the date and the person's role — not asserted
-      (`R-SIM-16`, `FR-SIM-46`). **Owner: _______   Date run: _______
-      Measured: _______ min.** Blank fields at `S-E3` mean this was never
-      run, which is a different and worse outcome than a number over target. This is the gate that decides whether anyone
-      writes a private player; no feature substitutes for it.
+      newcomer and recorded with the person's role — not asserted
+      (`FR-SIM-46`). **Owner: ______  Measured: ______ min.** A blank at `S-E3`
+      is worse than a number over target. This is the gate that decides whether
+      anyone writes a private player.
       - [ ] `GT-8`
-- [ ] **GT-9 — no logic in the app layer.** `modules/sim/src/adas_sim/cli/` and
-      `…/app/` contain argument parsing, layout and dispatch only. Every
-      capability is reachable in ≲3 lines from a plain script
-      (`Session.open`, `SilComponent`, a provider, a codec) — checked by a test
-      that imports each without touching the CLI (`R-SIM-16`).
-      **This gate is also what keeps headless automation free** (`DF-2`): the
-      moment a capability is reachable only through the window, running in cloud
-      or CI stops being a consequence and becomes a port.
+- [ ] **GT-9 — no logic in the app layer.** `cli/` and `app/` hold argument
+      parsing, layout and dispatch only; every capability is reachable in ≲3
+      lines from a plain script (`Session.open`, `SilComponent`, a provider, a
+      codec), checked by a test that imports each without touching the CLI
+      (`R-SIM-16`). This is also what keeps headless automation free: the moment
+      a capability is reachable only through the window, running in CI stops
+      being a consequence and becomes a port.
       - [ ] `GT-9`
-
-*The three gates below were added by the 2026-07-31 review. Each closes a
-boundary the first nine watched from only one side.*
-
 - [ ] **GT-10 — every module builds standalone.** From a clean partial clone of
       that module alone plus its declared Conan `requires:` — no sibling
       checkout on disk — each module in `GT-4`'s matrix configures and builds
       (`docs/partial_clone_workflow.md`, `R-VAR-2`, `NR-SIM-12`). Run per
-      module, recorded with a date.
+      module; a **separate `CONAN_HOME`** is mandatory, because this repo's
+      normal Conan home registers every `adas-*` package editable and resolves
+      them from the working checkout — the exact configuration that hides the
+      failure this gate looks for.
 
-      **First run ever, 2026-08-04 (`AR-5`).** Method: fresh `git clone` of the
-      superproject into an empty directory, `git submodule update --init` for
-      **one** module only, and a **separate `CONAN_HOME`** — the last part
-      matters, because this repo's normal Conan home has every `adas-*` package
-      registered *editable*, which resolves them from the working checkout and
-      is precisely the configuration that hides the failure below.
-
-      | Module | Result |
-      |---|---|
-      | `mathlib` | **PASS** — configures, builds, links with no sibling checkout and an empty cache |
-      | `df` | **FAIL** — CMake configure error: `include could not find requested file: sil_ports_generate` / `config_bundle_pack`, then `Unknown CMake command "adas_generate_sil_ports"` |
-
-      **Root cause of the `df` failure, diagnosed not guessed (`AR-24`):**
-      `interfaces`' `package_info()` declares `builddirs = ["cmake"]`, but
-      `modules/interfaces/CMakeLists.txt` installs `cpp/`, `include/` and
-      `proto/` and **never `cmake/`** — so `package()`'s `CMake(self).install()`
-      produces a package whose declared build dir does not exist, and
-      `include(sil_ports_generate)` finds nothing. Not staleness: the package
-      resolved and downloaded from `adas-local` fine. The recipe's own comment
-      called it — *"untested by this stage (today's only exercised path is
-      editable mode), kept symmetric on principle"*. It was symmetric and wrong.
-
-      **This is the gate working on its first run.** `S-C1d` added the generator
-      to `interfaces` specifically *because* `GT-10` requires standalone builds,
-      and the one configuration nobody could run is the one where that choice
-      breaks. Every `-t gtest` number in `GT-4` above was measured in a full
-      checkout and none of them would have caught it.
+      Its first run found a real one: `interfaces`' `package_info()` declared
+      `builddirs = ["cmake"]` while its `CMakeLists.txt` never installed
+      `cmake/`, so `include(sil_ports_generate)` found nothing and `df` failed
+      to configure. **Fixed** (`interfaces/CMakeLists.txt` now installs
+      `cmake/`); the full matrix re-run is owed at `S-E3`.
       - [ ] `GT-10`
 - [x] **GT-11 — no port address is a literal outside the component that
       declares it.** A scan over every `modules/*/sim/**` plug-in, scenario
       `expect:` block, workspace and viewpoint file for a spelled port address
-      (`<word>.<word>.<word>` matching a manifest port) returns nothing; every
-      such reference is component-relative (`self.<port>`) and resolved at load
-      (`R-SIM-21`). **And the resolution failure is loud**: a plug-in requiring
-      a port no manifest declares raises `AuthoringError`, never renders an
-      empty layer. *Extends `GT-1`, which guards the framework and stops exactly
-      at the boundary where `D13` lives — the framework hardcodes no port name
-      and never did; the plug-in does.*
-      *2026-07-31 (`S-B1Δ`):* mechanised in `scripts/check_invariants.py`'s
-      `check_gt11` — only `expect:`/workspace/viewpoint files don't exist yet
-      (later stages), so today it scans `requires=(...)`/`.port(...)` arguments.
-      **The loud/silent split is narrower than first written here** (see
-      `S-B1Δ`'s own finding): only an *ambiguous* match raises; a *zero*-match
-      is a legitimate silent empty layer in Block 1's global-registry world,
-      since "does not exist" and "this run never wired the component" are the
-      same observation without a live manifest.
-      **Decided 2026-08-07 (`AR-54`, fix queue row 6):** `GT-11`'s
-      `_GT11_EXEMPT_PREFIXES = ("self.", "source.")` was flagged as
-      possibly ungrounded — `source` looks, at a glance, like a spelled
-      pipeline-authoring choice the way `df.bsd.outputs` was. It is not:
-      `contracts/pipeline.py` treats `source` as a reserved producer
-      keyword (`producer_name == "source"`), never a stage a pipeline
-      author could rename, so `R-SIM-21`'s own worry does not apply to it.
-      Justified in writing at `R-SIM-21` itself, with the real, narrower
-      limitation it does carry (`source.<port>` doesn't *resolve* the way
-      `self.<port>` does — it stops matching if the same data is ever
-      stage-computed instead of source-fed) recorded there as a deferred,
-      not-yet-live concern rather than fixed now.
-      - [x] `GT-11`
-*The two gates below were added by the 2026-07-31 adversarial audit
-(`sim_requirements.md` §12). Both exist because the claim they guard was
-previously carried by prose alone.*
+      returns nothing; every such reference is component-relative
+      (`self.<port>`) and resolved at load (`R-SIM-21`). Extends `GT-1`, which
+      guards the framework and stops exactly at the boundary where `D13` lives.
+      Mechanised in `check_invariants.py`'s `check_gt11`.
 
+      Two boundaries worth knowing: only an **ambiguous** match raises — a
+      *zero*-match is a legitimate silent empty layer, since "does not exist"
+      and "this run never wired the component" are the same observation without
+      a live manifest. And `source.` joins `self.` in
+      `_GT11_EXEMPT_PREFIXES` because `contracts/pipeline.py` treats `source` as
+      a **reserved producer keyword**, never a stage name an author could
+      rename; its narrower real limitation is recorded at `R-SIM-21`.
+      - [x] `GT-11`
+- [ ] **GT-12 — the player runs standalone, against libraries it has never
+      heard of.** `vantage <dir>` on a directory holding only built artefacts —
+      DLL, `config/`, `sim/` — renders a run with **no repository checked out,
+      no `PYTHONPATH`, and no component-specific import in the player**
+      (`R-SIM-20`, `FR-SIM-64`, `FR-SIM-70`). Verify on a copied output tree
+      with the source tree renamed away; that is the only way to prove a
+      checkout was not silently supplying something.
 - [ ] **GT-13 — the numbers exist.** Every quantitative claim the register makes
-      has a **measured number with a date and a machine**: per-tick cost and
+      carries a **measured number with a date and a machine**: per-tick cost and
       campaign throughput (`NR-SIM-41`), frame time at a stated tick count
       (`NR-SIM-5`), recording size for a reference run (`NR-SIM-42`),
-      determinism across all four axes (`NR-SIM-40`). A blank is a finding, not
-      an omission — *"a requirement nobody can fail is a requirement that will
-      be declared satisfied"* (§12 preamble).
+      determinism across all four axes (`NR-SIM-40`). *A requirement nobody can
+      fail is a requirement that will be declared satisfied* — so a blank is a
+      finding, and **a number above target is a finding to act on, never a
+      reason to delete the gate**.
 
-      **Measured 2026-08-07** (sim build queue row 5), this Windows machine,
-      real `df_sil.dll` (`build-sil-vs2026`):
-      - **`NR-SIM-41` per-tick cost + campaign throughput** — cites `S-D7`'s
-        own `ST-D7-7` measurement (real, 2026-08-06, unchanged): 7 recordings
-        (61–276 ticks each, 1.8–11 MB, 33.1 MB total), `-j 1` 2.11s
-        (0.30s/recording), `-j 7` 0.41s (0.06s/recording), **5.2x**; per-tick
-        compute ~0.05s/recording once subprocess-startup overhead is
-        excluded (`test_d7_campaign_sizing.py`).
-      - **`NR-SIM-5` frame time at a stated tick count** — new this pass:
-        100 ticks of `bsd_curve_r172_passby_20260727_213847.mcap` (real `df`
-        layer providers, real geometry — never an empty Scene), `build_scene`
-        + `render_scene` per tick: **83.82ms/tick total, ~11.9 fps
-        equivalent** (`tests/system/test_e3_frame_time.py`, timed not
-        asserted, same discipline `ST-B2-2` set). Below the responsiveness
-        bar `NR-SIM-5` argues for (pass 2 is cheap, on the UI thread), but
-        the number itself — not the feeling — is now on record; a future
-        session with a slower machine or a heavier Scene should re-run this
-        test rather than trust it stale.
-      - **`NR-SIM-42` recording size for a reference run** — the same
-        `bsd_curve_r172_passby_20260727_213847.mcap` used above: **219
-        ticks, 7,541,018 bytes (7.19 MB)**; `ST-D7-7`'s 7-recording set
-        gives the campaign-scale figure (33.1 MB / 7 recordings) for the
-        aggregate case.
-      - **`NR-SIM-40` determinism, same-process and fresh-process, measured
-        for real** — new this pass: two `sim resim` calls made in-process
-        (`core.manifest._PROCESS_NONCE` identical by construction) —
-        `derive_axis` reports `same_process`, `compare_exact` **exact**
-        (0.19s for both resims, 219 ticks each); one in-process call vs. a
-        real `sim.exe resim` subprocess — `derive_axis` reports
-        `fresh_process`, `compare_exact` **exact** (0.81s)
-        (`tests/system/test_e3_determinism_measured.py`). **`rebuilt_binary`
-        and `different_machine` stay genuinely blank** — the former needs a
-        second, independently-built `df_sil.dll` from the same source (a
-        real Conan/MSVC build this pass did not run a second time — this
-        session already ran the one real MSVC build it had access to, at
-        build queue row 1), the latter needs a second machine, categorically
-        outside what one session on one checkout can produce (the same class
-        of blank `GT-14`'s own two-person requirement is, not a "didn't get
-        to it" gap).
+      | Claim | Measured |
+      |---|---|
+      | `NR-SIM-41` throughput | 7 recordings / 33.1 MB: `-j 1` 2.11s, `-j 7` 0.41s, **5.2×**; ~0.05s/recording compute excluding subprocess startup (`ST-D7-7`) |
+      | `NR-SIM-5` frame time | 100 ticks, real layer providers: **83.8 ms/tick**, ≈11.9 fps (`test_e3_frame_time.py`) |
+      | `NR-SIM-42` recording size | 219 ticks → **7.19 MB** for the reference run |
+      | `NR-SIM-40` determinism | `same_process` **exact**; `fresh_process` **exact** (`test_e3_determinism_measured.py`) |
+      | `NR-SIM-40` axes C/D | **blank** — `rebuilt_binary` needs a second independent build, `different_machine` needs a second machine |
 
-      **Not a milestone tick** — `GT-13` is a re-checked-at-`S-E3` gate, not
-      a per-stage one (this section's own table above); the numbers are now
-      real and dated, but ticking either checkbox belongs to whichever
-      session actually closes `S-E3`, per this section's own rule ("a real
-      tick still belongs at the stage or milestone that actually re-checks
-      the gate... never at this line").
+      Re-run these rather than trusting them stale on different hardware.
       - [ ] `GT-13`
 - [ ] **GT-14 — someone who did not build it can change it.** A named owner and
       a named second reader, plus a **measured maintainer-onboarding number**:
-      time for a second person to land a reviewed change touching a rule, a
+      the time for a second person to land a reviewed change touching a rule, a
       stage and a test (`NR-SIM-45`). Peer of `GT-8`, which measures a *user*.
-      **Owner: _______  Second reader: _______  Date run: _______
-      Measured: _______ h.** The most probable ending for this project is an
-      ownership failure, not a design failure, and this is the only gate that
-      looks at it.
+      **Owner: ______  Second reader: ______  Measured: ______ h.**
 
-      > **⚠ THIS IS THE ONE OPEN ITEM NO WORK CAN CLOSE** *(raised 2026-08-04 by
-      > the audit, `AR-4`, now tracked here rather than in the ledger).* Every
-      > other finding from the audit was either fixed or handed to a stage.
-      > These four blanks cannot be: they need **two people's names** and one
-      > measured number. Nothing in the build order produces them, so they will
-      > still be blank at `S-E3` unless someone fills them deliberately.
-      >
-      > **If there is no second person, that is the answer and it should be
-      > written here**, not discovered at `S-E3`. A single-maintainer project is
-      > a legitimate state; an unexamined one is what this gate exists to catch.
-      > `NR-SIM-45`'s own framing — *"the tool must be survivable by someone who
-      > did not build it"* — is falsifiable only against a real second reader.
-      >
-      > *(`GT-13`'s blanks are **not** in this category and need no decision:
-      > every number it wants is behind `S-D7`'s batch half, `S-C6` or the
-      > player. They fill themselves as those land.)*
+      > **The one open item no work can close.** These blanks need two people's
+      > names and one measured number; nothing in the build order produces them,
+      > so they will still be blank at `S-E3` unless someone fills them
+      > deliberately. **If there is no second person, that is the answer and it
+      > should be written here**, not discovered at `S-E3`. A single-maintainer
+      > project is a legitimate state; an unexamined one is what this gate
+      > exists to catch. The most probable ending for this project is an
+      > ownership failure, not a design failure, and this is the only gate that
+      > looks at it.
       - [ ] `GT-14`
-- [ ] **GT-12 — the player runs standalone, against libraries it has never
-      heard of.** `vantage <dir>` on a directory containing only built
-      artefacts — DLL, `config/`, `sim/` — renders a run with **no repository
-      checked out, no `PYTHONPATH`, and no component-specific import in the
-      player** (`R-SIM-20`, `FR-SIM-64`, `FR-SIM-70`). Verified on a copied
-      output tree with the source tree renamed away, which is the only way to
-      prove a checkout was not silently supplying something.
 
 ### Document invariants cited by requirements (`DC-`)
 
-`DC-1`..`DC-9` are all mechanised in `docs/py/check_doc_invariants.py` and
-re-checked on every `docs/py/run_all.py` — see that script's own module
-docstring for what each one asserts. Four of them (`DC-1`, `DC-4`, `DC-5`,
-`DC-6`) are cited as `Verified by` targets by real requirements, and — like
-the seven `GT-` ids above — had no checkbox anywhere for
-`check_requirement_coverage.py` to read a state from (`AR-35`). Same
-plumbing, same rule: this adds a state, it is not a second implementation of
-the check, and none are ticked here.
+`DC-1`..`DC-9` are mechanised in `docs/py/check_doc_invariants.py` and re-run by
+`docs/py/run_all.py`; that script's module docstring is the authority on what
+each asserts. The four checkboxes below exist only so
+`check_requirement_coverage.py` can read a state for the ones requirements
+cite — they are not a second implementation of the check.
 
 - [ ] `DC-1`
 - [ ] `DC-4`
@@ -1462,16 +482,6 @@ impression is not a measurement.
 
 ### S-A1 — `modules/sim` package skeleton
 
-**Status: DONE — implemented and verified 2026-07-29.**
-`pytest modules/sim/tests -q`: **25 passed**. `python docs/py/run_all.py`:
-green. `scripts/check_invariants.py`: clean (GT-1, GT-2, GT-3, GT-6). Two
-findings below (GT-1's grep gap; a stale `CLAUDE.md` claim), no behaviour
-change to anything outside `modules/sim`. Env: `py -3.12` (not the `python` on
-`PATH`, which resolves to 3.14 — the exact trap §1 warns about); dependencies
-installed into a dedicated `modules/sim/.venv`, not the global interpreter
-(user's choice, not the global site-packages, so nothing outside this module
-was touched).
-
 **Purpose.** The tree, the packaging, the error taxonomy, the run id and the
 log line — everything every later stage imports. Nothing here has behaviour
 worth demonstrating; it exists so that nothing later has to invent a name.
@@ -1498,30 +508,9 @@ worth demonstrating; it exists so that nothing later has to invent a name.
       recipe following `shared_config`'s shape exactly
       (`docs/shared_config_plan.md` §3.2/§3.3) — copied byte-identical
       (`diff -q` against `modules/shared_config/conanfile.py` is silent, `GT-5`)
-      **Finding:** making this conanfile actually load/build required a minimal
-      `CMakeLists.txt` (`project(adas-sim LANGUAGES NONE)`, no `install()`),
-      a `VERSION` file and `conf/build.yml` (`recipe.type: unknown`,
-      `variants.base: {}`) — none of which S-A1's checklist names individually,
-      because the byte-identical recipe's `set_name()`/`set_version()`/
-      `build()` read them unconditionally, even for `package_type: unknown`.
-      `modules/sim/CLAUDE.md` currently says *"No compiled artifact, so no
-      CMakeLists.txt/build.bat — same shape as shared_config"*, but
-      `shared_config` itself was reshaped 2026-07-20 (its own `conf/build.yml`
-      comment) to **add** a real `CMakeLists.txt`/`build.bat` for exactly this
-      reason — the CLAUDE.md line describes shared_config's *pre*-reshape
-      shape and is now stale. `build.bat`/`build.sh`/`scripts/build.py`/
-      `scripts/build_gui.py`/`.clang-format` were **not** added here: S-A1
-      doesn't call for them and `sim` has no CMake build a developer would
-      launch via `build.bat <part> <platform>` (nothing compiles). Whether
-      `R-BUILD-1..6`'s "byte-identical everywhere" should extend those files to
-      a pure-Python component too is an open question for a maintainer to
-      decide, not assumed here.
 - [x] `tests/{unit,system,integration,fixtures}/` + `conftest.py`
 - [x] `scripts/check_invariants.py` — implements GT-1, GT-2, GT-3, GT-6, and
-      **is itself tested** by `UT-A1-3`. **Finding:** GT-1's own literal grep
-      (§2 above) has a word-boundary gap on underscore-joined identifiers;
-      `check_gt1` here uses an alnum lookaround instead so it actually catches
-      `BSD_SENSOR_0_...`-shaped leaks
+      **is itself tested** by `UT-A1-3`.
 - [x] `core/errors.py` — the **closed** taxonomy of `DG-5` / api reference §9:
       `AuthoringError` (exit 2) · `EnvironmentError_` (3) · `ContractError` (4)
       · `InternalError` (70), all deriving `SimError`, whose constructor takes
@@ -1579,15 +568,8 @@ worth demonstrating; it exists so that nothing later has to invent a name.
       left registered editable afterward, alongside `df`/`vdy`/`mathlib`/
       `shared_config`)
 
-**Discipline** (every stage)
-- [x] [sim_portability.md](sim_portability.md) §3 ticked — exposure here:
-      `P-2` (no absolute paths), `P-4` (console + file encoding), `P-6` (entry
-      point, not a `.bat`), `P-10` (every dep has a Linux wheel)
-- [x] [sim_naming_and_diagnostics.md](sim_naming_and_diagnostics.md) §3 ticked —
-      exposure here: `N-3` (this stage names the modules; a generic name added
-      now is permanent), `N-7`, `N-8`, `N-10`
-- [x] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked (`GT-4`/`GT-8`
-      not applicable yet — no C++ touched, no viewer exists)
+**Discipline**
+- [x] portability §3 (`P-2`, `P-4`, `P-6`, `P-10`) · naming §3 (`N-3`, `N-7`, `N-8`, `N-10`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [x] `pytest modules/sim/tests -q` green (25 passed); `GT-1..GT-3`, `GT-6` pass; and
@@ -1595,15 +577,6 @@ worth demonstrating; it exists so that nothing later has to invent a name.
       cheapest moment to make that true and the most expensive to retrofit
 
 ### S-A2 — `model/` — configuration is the source of geometry
-
-**Status: DONE — implemented and verified 2026-07-29.**
-`pytest modules/sim/tests -q`: **41 passed** (25 from S-A1 + 16 new).
-`scripts/check_invariants.py`: clean. `python docs/py/run_all.py`: green.
-Three findings below (a GT-1 self-violation caught and fixed; a `bundle_origin`
-literal missing its own "explicit" tier; `ST-A2-1`'s `SensorModel` half has no
-real baseline to compare against) and one deliberate scope cut
-(`ProjectModel.footprint`/`.sensor`/`.camera` deferred — see `model/project.py`'s
-module docstring).
 
 **Purpose.** Every number that describes the physical world comes from resolved
 YAML, never a module constant. Implements `R-SIM-3`, closes **D3**. Ports the
@@ -1626,22 +599,6 @@ touched files (`ego.py`, `project.py`, `sensors.py`) — the same discipline
       source checkout**, and `bundle_origin` **always states which**
       (`R-SIM-3a`). The failure this prevents: the viewer and the SUT reading
       different files and agreeing only by coincidence.
-      **Finding:** api reference §6 types `bundle_origin` as
-      `Literal["embedded", "library", "checkout"]` — three values for four
-      tiers, omitting "explicit" even though `resolve()`'s own docstring and
-      `UT-A2-7` require reporting it as the winner. Added `"explicit"` as a
-      fourth literal (`model/project.py`'s `BundleOrigin`); without it
-      `bundle_origin` cannot make `UT-A2-7`'s own claim true.
-      **Deferred:** `.footprint()`/`.sensor()`/`.camera()` are not
-      implemented on `ProjectModel` — there is no generic, cross-component
-      calibration source for class-footprint/sensor data today (`R-SIM-9`:
-      real sensor poses and class footprints are calibration **owned by the
-      consuming component**). `model/objects.py`/`model/sensors.py` below are
-      the reusable, component-agnostic primitives a component's own `S-B1`
-      layer-provider code calls with its own resolved calibration; wiring a
-      generic path onto `ProjectModel` needs a concrete data source that does
-      not exist yet, so it was not invented. Revisit once a component
-      actually calls these from `S-B1`
 - [x] `model/ego.py` — `EgoModel`: `x_front = wheelbase + overhang_front`,
       `x_rear = x_front - length`, `half_width = width/2`. Frame per `R-COORD-1`
       (origin at rear-axle centre, +x forward, +y left)
@@ -1691,23 +648,10 @@ touched files (`ego.py`, `project.py`, `sensors.py`) — the same discipline
 - [x] `ST-A2-1` **equivalence with the code being replaced** — for every project,
       `EgoModel` and `SensorModel` values equal what the existing `bsdviz`
       modules produce today (skipped, with a named reason, if `modules/df` is
-      absent). **Finding:** only `EgoModel` has a real baseline. The existing
-      viz layer's sensor module (`bsdviz/sensors.py`) has no YAML-driven
-      counterpart to compare against — its five nominal poses are hardcoded
-      Stage-2 design constants used for coverage validation, never read from
-      a project's own sensor-calibration keys. `ST-A2-1` as implemented
-      equivalence-tests `EgoModel` only, for all three projects; comparing
-      `SensorModel` against unrelated hardcoded poses would produce a pass or
-      fail that means nothing
+      absent).
 
-**Discipline** (every stage)
-- [x] portability §3 ticked — exposure: `P-1`, `P-3` (case-sensitive key and
-      file lookup is first exercised here), `P-4`
-- [x] naming §3 ticked — exposure: `N-4` (every geometry value carries a unit
-      suffix; a bare `width` is the defect that produces a plausible wrong
-      picture), `N-8`
-- [x] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked (`GT-4`/`GT-8`
-      still not applicable — no C++ touched, no viewer exists)
+**Discipline**
+- [x] portability §3 (`P-1`, `P-3`, `P-4`) · naming §3 (`N-4`, `N-8`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [x] `ST-A2-1` green for all three projects — the replacement is provably
@@ -1716,22 +660,6 @@ touched files (`ego.py`, `project.py`, `sensors.py`) — the same discipline
       here and still be wrong
 
 ### S-A3 — `scene/` types + `render/theme.py`
-
-**Status: DONE — implemented and verified 2026-07-29.**
-`pytest modules/sim/tests -q`: **67 passed** (41 from S-A1/A2 + 26 new).
-`scripts/check_invariants.py`: clean. `python docs/py/run_all.py`: green.
-The biggest single finding of any stage so far: **`sim_api_reference.md` §5's
-`Prim`/`Layer` contract itself was wrong** (narrower than the two docs that
-actually specify this IR) — resolved with the user before writing code, not
-after. See the `Prim`/`Layer` bullet below and §5's own correction note.
-Three more findings: a real protobuf precision bug caught by `UT-A3-2` itself
-(not reasoned in advance); two more GT-1 self-violations (this module keeps
-finding them in its own prose, same shape as S-A2's); and `status.*` turned
-out not to be a gated categorical set after all. Colour values for
-`object.classification.*`/`status.*` are reused verbatim from this session's
-own validated data-visualization reference palette (`render/theme.py`'s own
-module docstring records the provenance) rather than re-derived from
-scratch.
 
 **Purpose.** The central IR (`R-SIM-2`). Everything upstream produces `Scene`;
 everything downstream consumes it. Getting this wrong is the one mistake that
@@ -1785,19 +713,6 @@ both permanent once `S-D4` builds on them:
       and visualization spec §2. Every prim carries `frame`, `style`, `pick_id`,
       `z`, `alpha`. `width_px`/`offset_px` are **the only** pixel fields, and
       exist because legibility is not physical (`R-SIM-2`).
-      **Finding, resolved before writing code:** api reference §5's own `Prim`
-      (7 kinds, generic `coords: tuple[float, ...]`, no `pick_id`/`z`/`alpha`)
-      contradicted `sim_visualization_spec.md` §2 and `sim_architecture.md`
-      §5.3 (the master doc), both specifying an 11-kind catalogue
-      (`Polyline/Polygon/Box/Circle/Ellipse/Points/Arrow/Text/Grid/Heatmap/Image`)
-      that api reference's shape cannot even represent (a `Heatmap`'s 2D array,
-      an `Image`'s bytes). Checked with the user rather than picked silently;
-      confirmed the richer catalogue, implemented as **one** `Prim` dataclass
-      with a closed `kind: Literal[...]` and per-kind fields defaulting to
-      `None` (matching `sim_architecture.md`'s own sketch: "one of: Polyline
-      Polygon Box Circle Points Text Arrow Grid Heatmap Image"), not 11
-      subclasses — this is also what lets `UT-B1-10` (later) hit-test through
-      one path. Api reference §5 corrected in the same commit (`GT-7`)
 - [x] `scene/frames.py` — the frame graph: `ego` (default, `R-COORD-1`),
       `world`, `sensor:<id>`, `image:<cam>`. Composition is static (model) plus
       dynamic (`tick.pose`).
@@ -1828,20 +743,11 @@ both permanent once `S-D4` builds on them:
       descriptor should not have to reconstruct by hand; proto2's `optional`
       gives real `HasField` presence natively, and this schema is internal to
       `modules/sim`, never a cross-component `interfaces` contract.
-      **Finding (caught by `UT-A3-2` failing, not reasoned in advance):** every
-      real-valued field was first typed `TYPE_FLOAT` (protobuf's 32-bit single
-      precision) against a 64-bit Python `float` — round-tripping a plain
-      `0.1` came back as `~0.10000000149011612`. Fixed to `TYPE_DOUBLE`
-      throughout
 - [x] `render/theme.py` — the token table for `dark`/`light`/`print`/`forced`.
       36 tokens across the framework-owned namespaces only (`frame.* ego.*
       object.* status.* sensor.* truth.* measure.*`) — a component's own
       `<fn>.*` tokens are registered from its own `modules/<name>/sim/` at
-      `S-B1` (`R-SIM-1`). **Finding:** an early docstring draft named a
-      concrete example token from a driving function's own namespace, which
-      `check_invariants.py` correctly flagged as a second `GT-1`
-      self-violation (same shape as the one found in `S-A2`) — paraphrased
-      without the example
+      `S-B1` (`R-SIM-1`).
 - [x] `render/palette_check.py` — the six-check validator over each categorical
       set (visualization spec §3.4), runnable as `python -m`. Ported from this
       session's own data-visualization skill's `validate_palette.py` (same
@@ -1851,17 +757,6 @@ both permanent once `S-D4` builds on them:
       one addition: any categorical pair in the 6-8 ΔE floor band must have a
       **named** secondary encoding recorded in `render/theme.py`, checked by
       `check_named_secondary_encoding`, or it fails rather than merely warns.
-      **Finding:** `status.*` is **not** a six-check-gated categorical set —
-      re-reading `sim_visualization_spec.md` §3.4, its three named examples are
-      "object classifications, function namespaces, timeline signal lanes",
-      and status is validated by convention (contrast, distinctness from the
-      series colours) in the reference palette this session's colours are
-      drawn from, never by the OKLCH lightness-band/CVD gate. Tried gating it
-      first; it failed the lightness band, chroma floor and normal-vision
-      floor outright (`warning`/`serious` sit 13.6 ΔE apart, below the 15
-      floor) — removed from `CATEGORICAL_SETS` rather than reshuffled to force
-      a pass, since forcing it would mean picking status colours for OKLCH
-      banding instead of for the red/amber/green convention they need to carry
 
 **Tests**
 - [x] `UT-A3-1` every prim type constructs and is immutable (assignment raises)
@@ -1903,14 +798,8 @@ both permanent once `S-D4` builds on them:
 - [x] `ST-A3-1` `python -m adas_sim.render.palette_check` exits 0 for `dark` and
       `light`; every pair in the 6-8 dE band has a **named** secondary encoding
 
-**Discipline** (every stage)
-- [x] portability §3 ticked — exposure: `P-4` (the codec writes bytes; encoding
-      and newline must be explicit or goldens differ across platforms), `P-8`
-      (any prim ordering that reaches bytes is sorted)
-- [x] naming §3 ticked — exposure: `N-2` (a `Layer.id` is fully qualified and
-      reaches the viewer, a log line and a golden), `N-3`, `N-8`
-- [x] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked (`GT-4`/`GT-8`
-      still not applicable — no C++ touched, no viewer exists)
+**Discipline**
+- [x] portability §3 (`P-4`, `P-8`) · naming §3 (`N-2`, `N-3`, `N-8`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [x] `ST-A3-1` green — the palette is validated by computation, not taste; and
@@ -1918,20 +807,6 @@ both permanent once `S-D4` builds on them:
       will eventually hold one
 
 ### S-A4 — `io/mcap` codec
-
-**Status: DONE — implemented and verified 2026-07-29.**
-`pytest modules/sim/tests -q`: **82 passed** (67 from S-A1..A3 + 15 new).
-`scripts/check_invariants.py`: clean. `python docs/py/run_all.py`: green.
-Real `.mcap` I/O via the `mcap` package (no protoc needed here either — mcap
-ships a plain Python API). Verified against the **real** recordings under
-`modules/df/tests/carla_testruns/` (`ST-A4-1`/`ST-A4-2` ran for real, not
-skipped) — the legacy topic names and shapes assumed below (`df/gen_object_list`,
-`df/veh_dyn`, `carla/chase_camera`, `df/aeb_outputs`) are exactly what those
-files contain, confirmed by reading one with the raw `mcap` reader before
-writing `io/legacy.py`. One real design tension surfaced and resolved: `io/legacy.py`
-cannot do its job without containing two function-prefixed strings that `GT-1`
-bans everywhere else, resolved by a narrow, named exception (see its own
-bullet) rather than obfuscating the strings or leaving the mapping incomplete.
 
 **Purpose.** Prove `R-SIM-14`'s claim — a recording is a *model*, a format is a
 *codec* of ~4 methods — by building the first one and nothing else.
@@ -2001,21 +876,6 @@ correction is what decides the `None` rule below.
       `Capabilities` (incl. `round_trips`, `write_only`), `TopicInfo`,
       `Provenance` enum (`measured|truth|mocked|simulated|overridden|unknown`),
       per api reference §4.
-      **Note on precedence:** `sim_resim_and_recording.md` §3.0 sketches an
-      earlier, rougher shape for these two Protocols
-      (`read()`/`declare()`/`put_meta()`, `meta(block: str) -> bytes | None`).
-      This stage's own checklist line says "per api reference §4" explicitly,
-      so api reference's shape is what is implemented — the recording doc's
-      sketch is superseded (the "why"), not contradicted, unlike `S-A3`'s
-      `Prim`/`Layer` finding where both master docs agreed against api
-      reference. No user check needed this time; the plan itself already
-      resolves the precedence.
-      Also added: `group_by_log_time()`, a small format-agnostic grouping
-      helper (`log_time_ns -> {topic: payload}`, plus the missing-topic set)
-      -- `UT-A4-9` needs *something* that detects an incomplete tick, and the
-      full `Tick`/`Session` machinery is `S-B2`'s, not this stage's; this is
-      the format-independent piece of that idea usable now, over the model,
-      never a format
 - [x] `io/registry.py` — `register(ext, reader=, writer=)`, lookup by extension;
       unknown extension raises naming **the extension and every registered one**
 - [x] `io/mcap.py` — the default codec; all capabilities true. Real
@@ -2026,30 +886,8 @@ correction is what decides the `None` rule below.
       synthesises the missing `VehSig` (recording doc §8). **This is the one
       sanctioned name translation** (`N-6`), declared as data and printed by
       `sim explain`.
-      **Finding:** this file's entire job is recognising real legacy topic
-      names on disk, and two of the five (`df/aeb_outputs`, `df/bsd_outputs`,
-      confirmed against a real export recording) are function-prefixed by
-      construction — not framework prose repeating a function's name, but
-      what the bytes on disk actually say. `GT-1`'s ban has no carve-out for
-      "this is data, not logic". Rather than obfuscate the strings (dishonest,
-      harder to read, no real safety gained) or ship an incomplete mapping,
-      extended `N-6`'s own "one sanctioned exception" framing to `GT-1`:
-      `check_invariants.py`'s `check_gt1` now names `legacy.py` specifically
-      as exempt (not a general pattern), and a test
-      (`test_the_gt1_exemption_is_narrow_and_legacy_py_genuinely_needs_it`)
-      asserts the exemption is exactly one filename and that the file still
-      genuinely needs it, so the exemption cannot silently go stale.
-      **VehSig synthesis is scoped to declaring the topic, not the payload:**
-      reconstructing a real populated `VehSig` message would need
-      `interfaces`' generated bindings, which this framework must never
-      require (`R-SIM-11`) — deferred to when a real consumer needs it
 - [x] `tests/fixtures/make_tiny_mcap.py` + the generated `tiny.mcap` — generated
       by a checked-in script, never hand-crafted, so it can be regenerated.
-      **Finding:** `modules/sim/.gitignore` had a blanket `*.mcap` rule (local
-      run output is never committed) that would have silently excluded the one
-      `.mcap` this stage explicitly wants committed. Added a `!tests/fixtures/tiny.mcap`
-      negation line, caught by checking `git status`/`git check-ignore` before
-      assuming the file would actually be tracked, not after
 
 **Tests**
 - [x] `UT-A4-1` write N messages, read back identical `(topic, log_time, bytes)`
@@ -2104,19 +942,13 @@ correction is what decides the `None` rule below.
 - [x] `ST-A4-2` read, write, read yields an identical topic/message set — ran
       for real against `tests/fixtures/tiny.mcap`
 
-**Discipline** (every stage)
-- [x] portability §3 ticked — exposure: `P-4` (explicit newline on every write),
-      `P-8` (sorted topic order; integer `log_time_ns`, never a float), `P-1`
-- [x] naming §3 ticked — exposure: `N-6` (this stage is where a translation
-      table would first be tempting), `N-2`, `N-8`
-- [x] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked (`GT-4`/`GT-8`
-      still not applicable — no C++ touched, no viewer exists)
+**Discipline**
+- [x] portability §3 (`P-1`, `P-4`, `P-8`) · naming §3 (`N-2`, `N-6`, `N-8`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [x] `ST-A4-1` green across every existing recording, and `UT-A4-11` +
       `UT-A4-12` green — nothing outside `io/` knows a format exists, and a
       recording is reproducible byte for byte
-
 
 ---
 
@@ -2141,32 +973,7 @@ Two consequences worth holding on to:
   viewer renders a `Session` (`R-SIM-13`) and nothing else, and it is easiest to
   keep that true while a `Session` is the only thing that exists.
 
-**Finding — build order within Phase B is `S-B2` then `S-B1`, not as
-numbered.** `S-B1`'s own tests (`UT-B1-1`, `UT-B1-2`, `UT-B1-11`, `UT-B1-12`,
-`UT-B1-13`) require `Tick` and `LayerCtx` (= `HistoryView` + `FrameTree`),
-which are `S-B2`'s deliverables (`core/tick.py`, `core/history.py`) —
-`LayerProvider.__call__(self, ctx: LayerCtx)` cannot even type-check before
-they exist. `S-B2`, in turn, has no dependency back on `S-B1` at all: `Tick`/
-`Session`/`Runner`/`Transport` operate purely on raw recording data from
-`io/`, never on a `Scene` or a layer provider. Confirmed with the user before
-writing any code (the same weight as `S-A3`'s `Prim`/`Layer` finding, not
-something to pick silently) — built `S-B2` first, `S-B1` next. The stage
-**labels** stay as numbered (`S-B1`/`S-B2` are stable citations, per §0); only
-the build order and this document's section order below are swapped.
-
 ### S-B2 — `Session` + time transport
-
-**Status: DONE — implemented and verified 2026-07-29.**
-`pytest modules/sim/tests -q`: **101 passed** (82 from Phase A + 19 new).
-`scripts/check_invariants.py`: clean. `python docs/py/run_all.py`: green.
-Built *before* `S-B1` in this document's own order (see the finding just
-above `S-B1`/`S-B2` in this section). `ST-B2-2` ran for real against the
-largest recording under `modules/df/tests/carla_testruns/`
-(`bsd_ego_lane_exit.mcap`, 276 ticks, 0.195 s — a number, not a threshold, no
-baseline exists yet). Several real findings below, including two more GT-1
-self-violations (this document's own reference examples keep being the
-trap) and one genuine bug caught only by manually running the CLI, not by
-any unit test.
 
 **Purpose.** Split executing from viewing, which is what makes backwards seek
 possible at all. Closes **D7**; delivers the *scrolling* requirement
@@ -2245,23 +1052,6 @@ concept instead of adding one.
 - [x] `core/tick.py` — `PortValue` (message + `age_s`/`valid`/`updated`/
       `origin`), `Tick` with **integer `t_ns`/`dt_ns`** and `pose`
       (api reference §2.2).
-      **Finding (contract, resolved without a user check — the plan's own
-      checklist line names api reference explicitly):** `sim_architecture.md`
-      §5.3's own `Tick` sketch splits ports into three mappings
-      (`stimulus`/`observation`/`truth`) instead of api reference's unified
-      `ports: Mapping[str, PortValue]` + `.port(name)`. Implemented the
-      unified shape, per this line's own "(api reference §2.2)" citation —
-      the same precedence rule `S-A4`'s `io/base.py` used. No information is
-      lost: `PortValue.origin` already carries the measured/truth/mocked/
-      simulated/overridden tag the three-way split existed to express.
-      **Finding:** api reference's own `Origin` literal has five values, no
-      `"unknown"` — but `io.base.Provenance` has six (added at `S-A4` for
-      exactly the no-meta-recording case, `R-SIM-6`). Extended `Origin` to
-      six values too, mirroring `Provenance`, rather than fabricating a
-      specific origin tag for a `Tick` built from a no-meta recording.
-      **Finding:** a second `GT-1` self-violation, again a copied doc
-      example (`"df.aeb.outputs"` in `PortValue.name`'s own comment) —
-      caught by `check_invariants.py`, paraphrased to `"<component>.<port>"`
 - [x] `core/history.py` — `HistoryView`, a read-only windowed view over earlier
       ticks, and `FrameTree` composing static (model) + dynamic (`tick.pose`)
       transforms — together these are `LayerCtx`. **A windowed view, not the
@@ -2275,13 +1065,6 @@ concept instead of adding one.
       component's own layer provider (`S-B1`) supplies one
 - [x] `core/session.py` — `Session`, `at(i)`, `seek_ns(t_ns)`, `events`,
       `deterministic`.
-      **Finding:** api reference's own `Session` sketch types
-      `events: Sequence[Event]` without qualifying which `Event` — but
-      `core/logging.py` already has one (the closed log-line vocabulary,
-      `N-10`, from `S-A1`). A timeline marker (a state transition, a
-      bookmark) is a different concept from a log event; naming both
-      classes `Event` is exactly the collision `N-3` bans. Named the new one
-      `SessionEvent`
 - [x] `core/runner.py` — pass 1 for the replay case; pass 2 is the renderer.
       Pass 1 groups raw `(topic, log_time_ns, bytes)` triples into `Tick`s
       via `io.base.group_by_log_time` (`S-A4`'s own `UT-A4-9` helper),
@@ -2305,21 +1088,6 @@ concept instead of adding one.
 - [x] Scene cache keyed by `(tick, layer_selection, theme)`, with a **stated
       bound** — an unbounded cache over a 36 000-tick session is `OQ-6` arriving
       early. (`core/runner.SceneCache`, above.)
-      **Finding — a real bug, caught only by manually running the CLI, not by
-      any unit test:** `cli explain` failed with "no registered extension"
-      even though `io/mcap.py` plainly registers `.mcap`, because nothing on
-      the import path from `cli` to `io.registry` ever imports
-      `adas_sim.io.mcap` -- every earlier manual smoke test in this session
-      had papered over the gap by importing it by hand first. Fixed with a
-      **lazy** codec-loading map in `io/registry.py`
-      (`_BUILTIN_CODEC_MODULES`): `reader_for`/`writer_for` import the
-      built-in module for an extension on first lookup, so `import
-      adas_sim.io` still never imports `mcap` (`UT-A1-2` stays green) while
-      the CLI actually works. The same fix uncovered a second regression:
-      `core/runner.py`'s module-level `google.protobuf` import was pulled in
-      transitively through `cli.explain` -> `core.runner`, also breaking
-      `UT-A1-2` -- moved the import inside `decode_message()`, since only
-      decoding an actual schema needs it
 
 **Tests**
 - [x] `UT-B2-1` `seek_time` maps a time to the correct tick at boundaries
@@ -2375,23 +1143,9 @@ concept instead of adding one.
 - [x] `ST-B2-3` **rewind then recompute-from-0 is exact**: recomputing to tick
       *N* reproduces the original tick *N* byte-for-byte on a deterministic
       resim.
-      **Finding — scoped honestly, not asserted beyond what Phase B can
-      prove:** in Phase B there is no real SUT execution (no C++, no DLL) —
-      `Session.ticks` is pre-built once and never mutated, so a naive
-      `session.at(150) == session.at(150)` assertion would pass trivially
-      even with a broken `Transport`. Implemented instead as: the exec
-      stand-in's **visited-position sequence** is identical, in order,
-      across the pre-rewind pass and the post-`RECOMPUTE_FROM_ZERO` pass.
-      The stronger claim — recomputed tick *data* is byte-identical — needs
-      a real pipeline that can produce new data per run, which is `S-C1+`
 
-**Discipline** (every stage)
-- [x] portability §3 ticked — exposure: `P-8` (integer `t_ns` throughout; a
-      float seconds accumulator here is what makes resim non-reproducible)
-- [x] naming §3 ticked — exposure: `N-7` (`Session`/`Tick`/`Transport` reprs are
-      what a debugger shows during a seek bug), `N-10` (`tick=` on every line)
-- [x] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked (`GT-4`/`GT-8`
-      still not applicable — no C++ touched, no viewer exists)
+**Discipline**
+- [x] portability §3 (`P-8`) · naming §3 (`N-7`, `N-10`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [x] `UT-B2-2` + `ST-B2-1` green; the "forward only, no rewind" caveat is
@@ -2400,32 +1154,6 @@ concept instead of adding one.
       claim later in this plan, and it is cheapest to establish here
 
 ### S-B1 — Layer providers + parity render
-
-**Status: DONE — `MC-1` closed 2026-07-29** (see `MC-1` below; Owner: Pavan
-Karimajji, Result: Pass, with a non-blocking follow-up on warning-label
-spacing). A first pair of
-renders went out for that look and came back with three findings, addressed
-in the **correction round** below the checklist — the trail fix is the
-significant one. `pytest modules/sim/tests -q`: **125 passed** (101 from
-Phase A/S-B2 + 24 new, after the correction round's own added test).
-`scripts/check_invariants.py`: clean. `python docs/py/run_all.py`: green.
-First stage touching a second repo (`modules/df`): `sim/`, `sim/layers/
-{common,bsd}.py`, `sim/viewpoints.yaml` are new there, nothing existing was
-edited. Verified against the real recordings under
-`modules/df/tests/carla_testruns/` throughout, including one with real
-`BsdOutputs` (`exports/bsd_curve_r172_passby_20260727_213847.mcap`) — read it
-with the raw `mcap`/generated-bindings readers *before* writing any layer
-code, the same discipline `S-A4` used.
-
-**Scope reduction, named up front:** `tools/carla/replay/viz.py`'s BSD
-overlays are five; only the zone rectangle and the warning band are ported
-here. The unobservable-region heatmap needs `bsdviz.sensors`' hardcoded
-per-project sensor poses, which have no home in `ProjectModel` (`S-A2`'s own
-scoping: real sensor calibration is a component's own data, not generic);
-per-object scenario tags are a smaller, deferred addition. No `UT-B1-*` test
-needs either. `MC-1`'s parity claim is scoped to what is actually built —
-`sim/layers/common.py`'s ego/objects/frame/HUD/trail plus `bsd.py`'s
-zone/warning — not full pixel parity with every one of `viz.py`'s overlays.
 
 **Purpose.** Prove the Scene IR carries a real function's picture. Closes
 **D2**, **D5**. First stage that touches a component repo — **adding, never
@@ -2442,36 +1170,6 @@ removing**.
 
 - [x] `modules/<name>/sim/layers/common.py` — ego body, objects, grid/frame
       furniture, HUD fields (the component-generic half).
-      **Superseded 2026-08-07 (`AR-52`):** ego body, grid/frame furniture and
-      the ego trail moved out of `df.common` into the framework's own
-      `adas_sim.scene.default_layers` (`sim.ego`/`sim.frame`/`sim.trail`) —
-      all three read only `ctx.model`/`ctx.history`, never a port, so every
-      component needed them and only `df` had them; a `vdy`- or
-      `perception-core`-only run drew nothing at all until this moved.
-      `objects`/`hud` stayed in `df.common` (both need a real, component-
-      wired port — `source.gen_object_list`/`source.veh_dyn` — that a
-      framework-level provider has no "self" identity to resolve against,
-      `R-SIM-21`). Landed in `scene/default_layers.py`,
-      `scene/registry.py` (unconditional import), `tests/unit/
-      test_b1_default_layers.py`; golden fixtures regenerated
-      (`tests/fixtures/golden/*.scene.bin`, layer ids `df.common.ego` →
-      `sim.ego` etc.).
-      **Finding, a real `GT-1`/`GT-3` bug pair:** the object-classification
-      footprint table and its fallback were first written as literal
-      `Footprint(length_m=..., width_m=...)` values directly in this file —
-      exactly the "module constant instead of resolved config" `R-SIM-3`
-      exists to prevent, and `check_invariants.py`'s `GT-3` caught it
-      correctly. Fixed by moving a generic, cross-function
-      `DEFAULT_CLASS_FOOTPRINTS`/`DEFAULT_FALLBACK_FOOTPRINT` into
-      `model/objects.py` (`GT-3`-exempt, `model/` is precisely where a
-      physical constant may live) — every entry marked
-      `assumed_geometry=True`, since no project's calibration actually
-      covers car/truck/pedestrian today (only a driving function's own
-      class-specific subset, e.g. a two-wheeler size). Chasing this also
-      caught two `GT-3` **false positives** in the same file
-      (`width_m=2.0 * ego.half_width_m`'s coefficient, and `width_px=1.5`,
-      the sanctioned pixel exception) — fixed in `check_invariants.py`
-      itself, not worked around
 - [x] `modules/<name>/sim/layers/<fn>.py` — one file per function; each is the
       *only* place that function's picture is described. Built `bsd.py`
       (zone + warning band; see the scope-reduction note above)
@@ -2489,18 +1187,6 @@ removing**.
       and never below this line. Built on matplotlib's `Agg` backend (already
       a real dependency, the "figures" extra) rather than a from-scratch
       rasteriser.
-      **Two real rendering bugs, both found only by looking at an actual
-      render, not by reasoning about the code:** (1) an "unfilled" polygon
-      drawn via `ax.fill(..., alpha=0)` went **fully** invisible — matplotlib
-      applies one alpha to face *and* edge — so the BSD zone rectangle
-      never appeared; fixed by drawing a `Polygon` patch with
-      `facecolor="none"` instead. (2) the world-X/world-Y axis-limit helpers
-      had their spans and axes swapped, silently flipping left/right in
-      every rendered scene with no exception anywhere to catch it; both
-      found by rendering a real tick and looking at where the zone and the
-      warning-side labels actually landed, confirmed correct once the
-      render showed the right-side object correctly pairing with the
-      right-side warning
 - [x] `view/viewport.py` — `Viewport`, follow modes, presets, zoom-about-cursor
 
 **Also required, not in the original checklist (found while wiring the
@@ -2542,23 +1228,10 @@ above):**
       `derived=True` and render with the `derived` style variant
 - [x] `UT-B1-8` padding slots in a fixed-size object list produce no prims — the
       classic "50 objects at the origin" picture.
-      **Finding:** `GenObjectList.num_of_used_objects` is present in the
-      schema but **not populated** by the recordings actually on disk (stuck
-      at `0` even with a real object in slot 0, confirmed by decoding a real
-      tick before writing the provider) — used the same origin-based padding
-      test (`f_dist_x == 0 and f_dist_y == 0`) `viz.py`'s own
-      `_is_padding_slot` already relies on instead of the schema field
 - [x] `UT-B1-9` viewport: metre-pixel-metre round-trips; zoom about the cursor
       keeps the cursor's world point fixed; scale clamps at its declared bounds
 - [x] `UT-B1-10` renderer hit-test resolves to the prim actually drawn — one
       hit-test path, not one per prim type.
-      **Finding (documented limitation, not fixed):** the shared hit-test
-      uses an axis-aligned bounding box per prim, which over-approximates a
-      diagonal `polyline`/`polygon` — a point well clear of a diagonal line
-      can still register as a hit on it if another prim's tight bbox
-      doesn't also claim the point first. Acceptable for a BEV of mostly
-      axis-following boxes/circles; revisit if a real diagonal-heavy layer
-      makes it a practical problem
 - [x] `UT-B1-11` a provider reads `age_s`/`valid` off a `PortValue` and a stale
       port changes what it draws — the metadata survives the boundary.
       (No existing provider did this until this test asked for one --
@@ -2602,11 +1275,6 @@ above):**
       the ego status line to crowd at this zoom level — worth a spacing look
       next time `bsd.warning` is touched.
 
-**Correction round (2026-07-29) — human review of the first `MC-1` renders.**
-Three points came back from actually looking at the tick-0 and tick-162
-images sent for `MC-1`, triaged one at a time against "is this a real gap
-already required, or a new idea" rather than built blind:
-
 1. **No coordinate/distance references on the grid.** A real gap, not scope
    creep — `sim_visualization_spec.md` §3.2 already declared the
    `frame.grid_label` token (`frame.* origin, axis, grid, grid_label,
@@ -2618,7 +1286,7 @@ already required, or a new idea" rather than built blind:
    (BSD/lane scale, not highway scale), so 10m reads as too coarse there.
    Labels are bare numbers (`"10"`, not `"10m"`) — the axis is metres
    throughout, stated once rather than repeated on every tick.
-   **Superseded 2026-08-07 (`AR-56`):** this fixed pass drew every label at
+   **Superseded 2026-08-07:** this fixed pass drew every label at
    a small, fixed metre offset from the coordinate origin (`y_m=0.4`/
    `x_m=0.4`) — legible in isolation, but sitting directly on the ego box
    and any near-origin object once actually rendered end to end, confirmed
@@ -2662,7 +1330,7 @@ already required, or a new idea" rather than built blind:
    and `df.common.frame` grew from 6 to 46 prims (the new grid labels; back
    down to 6 as of `AR-56`, 2026-08-07 — the labels are the renderer's own
    now, not baked prims).
-   **Corrected 2026-08-07 (`AR-60`):** "honestly draws no trail at all"
+   **Corrected 2026-08-07:** "honestly draws no trail at all"
    above was the SAME silent-empty-layer pattern `AR-53` eliminated for
    `bsd.warning` on the very same day, just not recognised as one yet at
    the time this paragraph was written — a layer absent from the Scene
@@ -2675,15 +1343,8 @@ already required, or a new idea" rather than built blind:
    golden fixture — the first ever to carry an unavailable *layer* — went
    red until that was fixed too.
 
-**Discipline** (every stage)
-- [x] portability §3 ticked — exposure: `P-1`, `P-3` (a viewpoint or layer file
-      referenced with the wrong case works here and fails on Ubuntu)
-- [x] naming §3 ticked — exposure: `N-2` (layer ids are fully qualified and
-      reach the layer panel, goldens and `sim explain`), `N-3b` (no layer id may
-      be a prefix of another, or solo/mute selects the wrong set)
-- [x] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked (`GT-4`
-      unaffected — no `src/component/**` file touched; `GT-8` still not
-      applicable, no packaged player exists)
+**Discipline**
+- [x] portability §3 (`P-1`, `P-3`) · naming §3 (`N-2`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [x] `ST-B1-1` + `MC-1` — parity proven before anything new is added. **The
@@ -2736,20 +1397,6 @@ lines of `modules/df/sim/`, all in the same shape:
       "does not exist anywhere, ever" check needs a live component manifest —
       out of reach until `S-C8`/`S-D3`'s per-session plug-in scoping exists —
       and is recorded here as a scoped gap, not solved by this stage.
-      **Superseded 2026-08-07 (`AR-53`, audit run 4): the scoped gap closed
-      for real — "raises loudly" was the wrong fix (it would crash every
-      layer provider rendering a recording that simply does not include the
-      component it draws for, the ordinary case), but silent `()` was also
-      wrong once manifests went live (`S-C1d`, 2026-08-04): "does not exist"
-      and "this run never wired that component" no longer need a live
-      manifest to distinguish from "the plug-in author is watching a badge
-      say so." A zero-match `requires=` entry now returns a ONE-element
-      tuple carrying a placeholder `Layer(prims=(), unavailable=<reason>)`
-      instead of `()` — named in the layer list, never dropped, never
-      crashing, and never claiming a value nobody published. The "resolved
-      but not yet arrived this tick" case is genuinely different (transient,
-      will populate) and is UNCHANGED, still a silent `()`. See `scene/
-      registry.py`'s `gated()` and `scene/types.py`'s `Layer.unavailable`
 - [x] **A layer provider reads disk** — `_bsd_calibration()` calls
       `path.read_text()` on `df`'s project YAML **per tick**, which `R-SIM-2`
       forbids outright ("a provider never touches disk") and which bypasses
@@ -2767,7 +1414,7 @@ lines of `modules/df/sim/`, all in the same shape:
       `self.<port>` `requires=` entry ambiguous across this run's known ports
       raises naming the plug-in; one matching zero ports, or matching but not
       yet present this tick, stays a silent empty result without raising
-      (`test_b1_registry_gating.py`). **Revised 2026-08-07 (`AR-53`)**: "zero
+      (`test_b1_registry_gating.py`). **Revised 2026-08-07**: "zero
       ports" no longer stays silent — see the superseded note above —
       `test_b1_registry_gating.py`'s own test for that case is renamed
       `test_a_self_ref_matching_nothing_yields_a_named_unavailable_placeholder`
@@ -2791,14 +1438,7 @@ it was a documentation one — but one line of it is real ergonomics:*
       four core concepts (decorator, `ctx`, `Prim`, style token), with every
       optional idea below a second heading. *(Rewritten 2026-07-31 — the previous
       version taught all ten at once and imported `@inspector_fields`, which no
-      longer exists.)* **Finding:** the rewrite itself did not match the real
-      API — `ctx.now.port(...)` (resolution needs `known_ports`, which a bare
-      `Tick` doesn't carry), a `Box` class and `ctx.model.object_length_m`/
-      `object_width_m` accessors, none of which exist. *2026-07-31, corrected:*
-      now imports `Prim`/`LayerCtx` from their real modules, uses
-      `ctx.port(...)`, and states plainly that a component resolves its own
-      calibration mapping (cached), matching `model/project.py`'s own
-      "no generic dimension accessor" scoping
+      longer exists.)*
 - [x] `Prim.derived` is set on reconstructed prims in `modules/df/sim/`, not only
       `Layer.derived` — this stage owns the first plug-in that actually mixes
       published and reconstructed geometry (`OD-6`). *2026-07-31:* every prim
@@ -2806,13 +1446,6 @@ it was a documentation one — but one line of it is real ergonomics:*
       is calibration-derived in both; `warning_layer`'s drawn *state* is real,
       making it the mixed case `OD-6` describes) — `Layer.derived=True` on
       `warning_layer` follows from `Layer.__post_init__`'s own constraint
-
-**Finding: `UT-B1-14` collides with an already-shipped test id.** This delta's
-own checklist named its new AuthoringError/silent-empty test `UT-B1-14` —
-already spent on "no two layer ids share a prefix" (`test_no_two_layer_ids_
-share_a_prefix`, shipped and still `[x]` above `S-B1`'s own checklist). Caught
-while implementing, not reasoned in advance. Renumbered the new test
-`UT-B1-15`; `R32`'s register row (§13) updated to match.
 
 - [x] `python scripts/check_invariants.py`: `GT-11` — no port address is a
       literal outside the component that declares it — added as a mechanised
@@ -2838,422 +1471,6 @@ and the interesting failures are on the other side of it.
 **Purpose.** The interactive surface: docks, panels, layer tree, inspector,
 timeline, plots. Everything a developer touches, over the `Session` that `S-B2`
 made seekable.
-
-**Status: Slice 1 (foundation) DONE 2026-07-29 — window + threading + one
-peer panel.** This stage is large enough to land incrementally rather than in
-one pass: Slice 1 is `render/viewer.py`'s `MainWindow` + `_SessionLoadWorker`
-(pass 1 on a `QThread`, progress/cancel by signal) + `BevPanel`, plus
-`core/runner.py` gained the `on_progress`/`is_cancelled` hooks pass 1 needed
-and `build_scene()` (discovery-based Scene assembly via
-`scene/registry.registered_providers()` — the piece `S-B1`'s own golden
-generator prototyped as a hardcoded `df`-specific tuple, promoted here to a
-generic, `R-SIM-1`-clean form any component can use).
-
-**Slice 2 (layer tree) DONE 2026-07-29.** `view/layers.py`'s `LayerTreeState`
-— groups, per-layer visibility, solo/mute, per-group verbosity level, search,
-and a plain `to_dict()`/`load_dict()`/`save()`/`load()` persistence surface —
-is pure state, no Qt, no pixels (`UT-B3-17`'s own layering, extended). A
-`LayersPanel` `QDockWidget` in `render/viewer.py` is a thin Qt view over it
-(tri-state checkboxes, a search box, `Alt`+click to solo); `MainWindow.render_tick`
-now applies the panel's real `visible_layer_ids()` to `render_scene` — Scene
-assembly itself stays cached ignoring layer selection, so toggling a layer
-re-renders without re-running pass 1 *or* pass 2a. **Not yet wired: disk
-persistence's actual location** (`QStandardPaths.AppConfigLocation`, `P-7`) —
-`LayerTreeState.save()`/`.load()` work against any path today; `MainWindow`
-does not yet call them. `pytest modules\sim\tests -q`: **141 passed** (131
-from Slice 1 + 10 new). `scripts\check_invariants.py` and
-`python docs/py/run_all.py`: both clean.
-
-**Slice 3 (panel grid + persistence wiring) DONE 2026-07-30.** Closes both
-pieces of debt Slice 2 left open. **Persistence wiring:** `render/viewer.py`
-gained `_config_root()`/`layers_state_path(project, pipeline)`/
-`layout_path(project)`, all resolving through
-`QStandardPaths.AppConfigLocation` (`P-7`) — `MainWindow._on_loaded` now
-calls `layers_state.load()` once the session's `pipeline` is known, and
-`_on_layers_changed` (the `LayersPanel.changed` handler) saves it back, so a
-function's layer choices really do restore per (project, pipeline) (§6), not
-just round-trip in memory (`UT-B3-1`). **Panel grid:** open/close needed no
-new state — each dock's own `toggleViewAction()` in a new View menu reopens
-what its close button hid; split/tab/float are native
-`QMainWindow`/`QDockWidget` mechanics once a dock carries a stable
-`objectName()` (`dock.bev`/`dock.layers`, added for this). What Slice 2 left
-open — an actual saved-layout location — is `MainWindow.save_layout()`/
-`restore_layout()`: `saveState()`/`restoreState()` against `layout_path`,
-saved on `closeEvent` and restored at construction, **per project** (§11.1)
-rather than per pipeline (a layout is a workspace concern, not a run
-concern). `pytest modules\sim\tests -q`: **146 passed** (141 from Slice 2 +
-5 new, `tests/system/test_b3_panel_layout.py`, closing `UT-B3-10`).
-`scripts\check_invariants.py` and `python docs/py/run_all.py`: both clean.
-**Finding:** a `QDockWidget`'s `isVisible()` reflects the whole ancestor
-chain, not just its own show/hide state — the offscreen system tests call
-`window.show()` for exactly this reason (the existing Slice 1/2 tests never
-needed to, since they only read pixels off `BevPanel`, never a dock's own
-visibility flag).
-**Corrected 2026-08-07 (`AR-59`):** the default dock AREAS this slice
-shipped were never actually checked against `sim_player.md` §3's own
-layout — `bev`/`inspector_panel`/`evidence_panel` all defaulted into
-`RightDockWidgetArea` together, and `QMainWindow` tabifies same-area docks
-by default, so only the last one added (`evidence_panel`) was ever the
-visible tab; a fresh window measured `bev.isVisible() is False`.
-`pipeline_panel` was `BottomDockWidgetArea`, not left; `layers_panel` was
-left, not right. Fixed: `pipeline_panel` (left) and `layers_panel` (right)
-are placed first, `bev` is slotted between them with `splitDockWidget`
-(the native Qt mechanism for a 3-column layout, no central-widget
-wrapper) and given most of the width via `resizeDocks` — dominant without
-giving up being a real, tabbable/floatable `QDockWidget`
-(`test_tab_and_float_are_native_dock_mechanics` still passes unchanged).
-`inspector_panel`/`evidence_panel` now start hidden, matching §3's
-"everything else... closed by default." New test:
-`test_default_layout_matches_sim_player_section_3`.
-
-**Slice 4 (interaction plumbing) DONE 2026-07-30.** `Interaction`/`LayerCtx`
-(`core/history.py`) already existed as dormant scaffolding from an earlier
-stage — nothing referenced either one yet. This slice makes them real:
-`scene/registry.py`'s `layer_provider()` gained `reacts_to=`, validated
-against `Interaction`'s own dataclass fields (`dataclasses.fields`, so the
-vocabulary cannot drift from the class) rather than a hand-copied literal
-set. `core/runner.py` splits provider execution into `_static_layers`
-(`reacts_to` empty) and `_reactive_layers` (`reacts_to` non-empty), exposed
-as `build_static_scene`/`build_reactive_layers` alongside the unchanged
-whole-scene `build_scene` (now `interaction`-aware, default a module-level
-no-op so every existing caller is unaffected). `SceneCache` gained an
-**opt-in** second tier (`build_reactive`, `None` by default): the static
-tier's key is untouched, so `UT-B2-3/5/12`'s existing test doubles (which
-return plain strings/tuples, not `Scene`s) keep passing unmodified — the
-reactive tier is keyed on `interaction_cache_key(interaction)` since
-`Interaction.toggles` (a `Mapping`) makes the dataclass's own generated
-`__hash__` raise `TypeError` the moment anything actually hashes it, which
-nothing did until now. `MainWindow.render_tick` gained an `interaction`
-keyword (default the same no-op), wired straight through to the cache; no
-panel drives it live yet (`view/measure.py`/`view/inspector.py`'s job) —
-this slice is the plumbing being *correct*, proven directly rather than
-implied by a UI nobody built yet. `pytest modules\sim\tests -q`: **153
-passed** (146 from Slice 3 + 6 in `tests/unit/test_b3_interaction.py` +
-1 in `tests/system/test_b3_interaction_wiring.py`, closing `UT-B3-13`/
-`UT-B3-14`). `scripts\check_invariants.py` and `python docs/py/run_all.py`:
-both clean.
-
-**Slice 5 (selection + docked inspector) DONE 2026-07-30.** §7.1's
-click-to-select needed no new hit-testing — `render/bev.hit_test` already
-existed, fully tested (`S-B1`, `UT-B1-10`); the gap was that nothing called
-it. `BevPanel` gained `_ClickableImageLabel`, correcting `AlignCenter`'s
-centring offset so a click lands in true pixmap-relative pixels;
-`MainWindow._on_bev_clicked` runs `hit_test` against exactly the layer
-selection just rendered (a hit on a hidden layer's prim cannot select it)
-and folds the result into `self._selection` (plain click replaces,
-`Ctrl`+click toggles membership, a `QShortcut` on `Esc` clears).
-`render_tick` now overrides `interaction.selection` from `self._selection`
-on every call — not just the click handler's — so the layers panel or a
-tick-scrub cannot silently drop the current selection; `render_scene` gained
-a `selection=` parameter and `_draw_prim` applies `object.selected` styling
-plus a generic bbox halo (any prim kind, via the same `_prim_bounds_m`
-`hit_test` already used — one path, not one per kind). **Real design gap
-found while scoping, not while coding:** `S-A3`'s `@inspector_fields`
-decorator only ever registered field *names* against the decorated function
-object, with no mechanism to resolve *values* for a picked entity, and its
-registration key could silently diverge from `LayerProviderEntry.func` once
-`requires` wrapped it in `gated` — never called anywhere. Checked with the
-user (`AskUserQuestion`) rather than patched silently; removed in favour of
-`Prim.fields: tuple[tuple[str, str], ...] | None` — the provider that builds
-a prim already has the raw entity in hand, so it computes the inspector's
-(name, value) pairs inline, the same pass, matching the legacy tkinter
-viewer's own `_object_summary_fields`/`_ego_summary_fields` shape
-(`replay/viz.py`) rather than the unused registry. `view/inspector.py`'s
-`InspectorState` never caches a resolved value — `entries()` re-derives
-from the *current* Scene every call, so `UT-B3-2`'s "dropped, not shown
-stale" is just what re-deriving does; a pin survives deselection but not the
-entity's actual disappearance from the rendered (layer-filtered) Scene.
-`pytest modules\sim\tests -q`: **171 passed** (153 from Slice 4 + 18 new
-across `tests/unit/test_a3_types.py`, `test_b3_inspector.py`,
-`test_b3_selection_render.py` and `tests/system/
-test_b3_selection_and_inspector.py`, closing `UT-B3-2`).
-`scripts\check_invariants.py` and `python docs/py/run_all.py`: both clean.
-
-**Slice 6 (signal resolver) DONE 2026-07-30.** The prerequisite `view/
-timeline.py` and `view/plots.py` both need — one address space, `<component>.
-<port>.<field>` / `source.*` / `truth.*` / `derived.*` (`NR-SIM-8`).
-**Real placement gap found while scoping, checked with the user
-(`AskUserQuestion`) before writing code:** the checklist above named `view/
-signals.py`, but `sim_api_reference.md` §2.3 sketches this as a
-`Session.signal()` method, and `Session` lives in `core/session.py`; `check/`'s
-future expectation evaluator (`S-D6`, headless, no Qt) is one of `NR-SIM-8`'s
-five consumers and would otherwise have to import something named `view/`.
-Built as `core/signals.py` instead. A port name is itself dotted (`N-2`,
-`<component>.<function>.<port>`), so resolution is the **longest entry in
-`tick.ports` that prefixes the address**, then a plain attribute walk
-(`_walk_field_path`, incl. `name[index]` for a repeated field) over whatever
-remains — one mechanism for all three raw prefixes, no special-casing.
-`derived.*` signals register with `@signal(name, unit="")`, taking `(tick,
-ctx)` — the same shape a layer provider gets — and are the only path that
-needs a `LayerCtx` (project + growing history window, same shape `core/
-runner.py`'s own per-tick context); `resolve_series` builds one **only when
-the address is a registered `derived.*` name**, so a raw field's whole-session
-resolution never pays for `ProjectModel.resolve`. Also absorbs `scene/
-registry.py`'s `@signal`/`registered_signals` (`S-A3`, unused anywhere until
-now, same "dormant scaffolding actually wired up" story as Slice 5's `Prim.
-fields`) — one registry next to the resolver that reads it. **Two corrections
-to `sim_api_reference.md`'s `Session.signal()` sketch**, alongside the
-relocation: return type `tuple[tuple[int, object], ...]` not `Sequence[tuple[int,
-float]]` (a state lane's signal, §7.3, is categorical — forcing `float` would
-have made the method lie about what it actually returns), and a `project:
-str = "base"` keyword the original sketch had no way to supply despite
-`derived.*` resolution needing one. **Finding, not reasoned in advance:**
-`core/signals.signal()`'s own docstring claimed N-8 duplicate-name discipline
-("names both") that the first version didn't actually implement — caught by
-its own test (`test_signal_decorator_rejects_a_duplicate_name`) asserting on
-both names and failing, not by re-reading the code. `pytest modules\sim\tests
--q`: **187 passed** (171 from Slice 5 + 16 new: `tests/unit/test_b3_signals.py`
-plus one delegation test in `test_b2_session.py`). `scripts\check_invariants.py`
-and `python docs/py/run_all.py`: both clean.
-
-**Slice 7a (viewport controls) DONE 2026-07-30.** §4.4: drag-to-pan,
-wheel-to-zoom-about-cursor, `F` fit, `0` reset, `R` cycle follow, `1`-`9`
-jump to a `DEFAULT_PRESETS` entry. `Viewport` gained `panned()` (drag-to-pan,
-proved by the same "invariant point stays under the cursor" reasoning
-`zoomed_about_cursor` already used, rather than a second pixel-delta
-derivation that could disagree with it) and `fitted_to()` (smallest scale
-that fits a world bbox, degenerate spans keep the current scale rather than
-dividing by zero); `render/bev.py` gained `scene_bounds_m` (unions
-`_prim_bounds_m` over every visible prim -- the same generic bbox
-`hit_test` already uses). `_ClickableImageLabel` now tracks press/move/
-release itself: a click only fires on release, and only if the pointer
-never moved past `_DRAG_THRESHOLD_PX` (3px) from the press -- otherwise it
-was a pan, and `dragged` fires once per move step instead, so `Viewport.
-panned` is applied incrementally and each step's own invariant holds.
-**Real gap found while wiring follow modes, not fixed here:** `render/
-bev.py` draws every `Prim`'s metres directly in viewport space and has
-never once read `Prim.frame` -- there is no frame-aware transform pass at
-all. `ego_forward`/`ego_heading`/`world` therefore render **identically**
-today; `Viewport.follow` is real, tested, cyclable state (same "ahead of
-its own consumer" shape `Interaction` had before Slice 4), but the
-rendering difference the spec describes needs that transform pass first, a
-separate piece of work this slice does not attempt. **Finding caught by a
-test, not by re-reading the code:** `test_f_fits_to_the_visible_content`
-failed under the full suite (not in isolation) -- every S-B3 system-test
-file's layer provider uses `group="test"` with no `requires=` gating, so in
-a full run every one of them contributes prims to every other test's Scene,
-and a scene-wide bounds union is exactly the assertion shape that notices.
-Earlier slices' assertions were narrow enough not to trip on this
-pre-existing gap; fixed *for this test* with a distinctive group + solo,
-noted rather than fixed retroactively across the other five files.
-`pytest modules\sim\tests -q`: **203 passed** (187 from Slice 6 + 16 new:
-5 in `test_b1_viewport.py`, 3 in `test_b1_bev_render.py`, 8 in
-`tests/system/test_b3_viewport_controls.py`). `scripts\check_invariants.py`
-and `python docs/py/run_all.py`: both clean.
-
-**Slice 7b (scrub bar) DONE 2026-07-30.** §5's transport toolbar.
-`view/transport.Transport` (`S-B2`, `R-SIM-17`) was already fully built and
-tested -- head/review-mode, clamping, resume-eligibility, advance-N-as-a-
-job -- with nothing in `render/viewer.py` using it; this slice is the Qt
-binding, not new state-machine logic. `TransportBar` is a fixed, non-
-floatable `QToolBar` (§11.1 lists the scrub bar next to "the menu and the
-keymap", not the docks a user rearranges), with `Space`/`←`/`→`/`Shift+→`/
-`L` shortcuts alongside its buttons/slider/speed box/loop-mark actions. A
-`QTimer` drives playback, restarted every tick (not just on play/pause)
-from that tick's own `dt_ns / speed` -- ticks need not be equally spaced.
-**Two real bugs, both found by a test, not by reasoning about the code:**
-(1) `Transport.__init__` starts `cursor` at `head_tick` -- correct for a
-live SUT ("head" is "where execution is now"), wrong for opening a
-recording for review, where `head_tick` is pinned to the *last* tick
-(everything is already loaded) and the user wants to start at the
-*first*. Every new test failed with `cursor == 9` instead of `0` on a
-10-tick fixture; fixed with an explicit `transport.goto(0)` in `_on_loaded`
-before `bind()`. (2) The loop test's own comments had the tick direction
-backwards (`_on_playback_tick` only ever steps forward or jumps to the
-in-mark; there is no "step backward during playback") -- the test's
-assumption was wrong, not the code, caught by working through the actual
-call sequence rather than trusting the comment. `head_tick` pinned to the
-last tick also makes `Transport`'s own review-mode-forbidden guard
-(`_require_not_review_mode`) **provably unreachable** in this viewer today
-(there is never a target beyond `head_tick` to require permission for) --
-correct and inert, not broken; it earns its keep once a live/resim
-consumer with a real `head_tick` that moves exists. `pytest
-modules\sim\tests -q`: **213 passed** (203 from Slice 7a + 10 new,
-`tests/system/test_b3_transport_bar.py`). `scripts\check_invariants.py` and
-`python docs/py/run_all.py`: both clean.
-
-**Slice 8 (timeline strip) DONE 2026-07-30.** §7.3's synced signal strip.
-`view/timeline.py` (`TimelineState`, `event_markers`) is pure state, no
-Qt -- `event_markers` fires a marker exactly where consecutive `(tick,
-value)` pairs from a `core/signals.resolve_series` result differ
-(`UT-B3-3`), and `add_signal_lane`/`add_state_lane` never merge two
-addresses into one lane (§7.3's "never two y-scales in one lane" is
-therefore not a rule to check, but a shape the state class cannot
-represent). `render/timeline.py` renders lanes with **zero-margin,
-per-lane axes** (`fig.add_axes`, not `plt.subplots`'s default margins or
-`tight_layout()`, which are data-dependent) so `px_to_tick` -- click-to-
-seek's other half in `TimelineStrip` -- is an *exact* inverse of what was
-drawn, the same "one path" reasoning `render/bev.py`'s `hit_test` already
-uses for the BEV, rather than a documented approximation. `MainWindow`
-resolves a lane's series **once**, on add (`_on_add_timeline_lane`, behind
-a `QInputDialog` prompting for a `NR-SIM-8` address), and caches it --
-`Session.signal` is an O(ticks) pass, so re-resolving on every
-`render_tick` (every single tick during playback) would have made the
-strip the render loop's own bottleneck; only the raster is redone per
-tick. `[`/`]` (§5's own "jump to event") walk `TimelineState.jump_to_event`
-over every state lane's markers plus bookmarks. `pytest
-modules\sim\tests -q`: **238 passed** (213 from Slice 7b + 25 new: 10 in
-`test_b3_timeline.py`, 7 in `test_b3_timeline_render.py`, 8 in `tests/
-system/test_b3_timeline_strip.py`, closing `UT-B3-3`).
-`scripts\check_invariants.py` and `python docs/py/run_all.py`: both clean.
-
-**Slice 9 (workspace loading) DONE 2026-07-30.** §13b's component-shipped
-default arrangement. `view/workspace.py` is pure parsing (`Workspace`/
-`WorkspaceTab`/`WorkspaceSplit`/`WorkspaceView`, no Qt, no disk IO of its
-own initiative -- `load_workspace` reads a path it's handed,
-`parse_workspace` works on an already-loaded `dict` so a test never needs
-a real file). **A real scope boundary, named in `Workspace`'s own
-docstring rather than hidden:** `MainWindow`'s dock grid is one
-`BevPanel`/`TimelineStrip`/etc. each (Slices 1-8) -- a genuine second tab
-with its *own* `BevPanel` at a different viewpoint needs tab-switching
-shell architecture none of those slices built. `Workspace.tabs` parses and
-validates every tab faithfully; only `tabs[0]`'s views apply to the
-existing singleton panels (`bev`'s `viewpoint` against `DEFAULT_PRESETS`,
-`timeline`'s `signals` added uniformly as **signal** lanes -- the
-schema's own example (§13b) mixes a warning and `derived.ttc` under one
-flat `signals:` list with no kind declared, and guessing from a resolved
-value's Python type would silently misclassify a protobuf enum, which
-decodes as `int`, as numeric). `UT-B3-12`'s "shipped default" is captured
-once, `bytes(self.saveState())`, **before** `restore_layout()` overlays
-any user-saved state -- `Reset Layout` restores exactly those bytes, never
-a re-derivation that could drift from what was actually shipped at
-construction. A malformed `workspace.yaml` still raises (`AuthoringError`,
-naming the available workspace names) -- only a **missing** one falls
-back silently, matching §13b's own "the framework falls back" wording
-precisely rather than a loader that treats every failure the same way.
-`pytest modules\sim\tests -q`: **253 passed** (238 from Slice 8 + 15 new: 8
-in `test_b3_workspace.py`, 7 in `tests/system/test_b3_workspace_wiring.py`,
-closing `UT-B3-12`; `UT-B3-11` gets a scoped precursor, see its own
-checklist note above). `scripts\check_invariants.py` and `python
-docs/py/run_all.py`: both clean.
-
-**Slice 10 (plot panels) DONE 2026-07-30.** §7.4's pluggable analysis
-surface -- `timeseries` / `xy` / `state` / `distribution`. `view/plots.py`'s
-`PlotState` is kind-gated at construction (`add_lane` only for
-`timeseries`/`state`, `set_xy` only for `xy`, `set_distribution` only for
-`distribution` -- each raises `AuthoringError` naming the mismatch, so a
-caller cannot build a nonsensical panel). **`timeseries`/`state` reuse
-`render/timeline.render_timeline` directly, not a second implementation**
--- a plot's lanes are drawn exactly like the strip's, which is what "one
-address space... timeline, plot panels..." (`NR-SIM-8`) means as a
-*rendering* claim, not just a resolver one; they inherit its exact
-click-to-seek for free. `xy`/`render_plots.render_xy` pairs two series by
-tick index (both resolved from the same session, so their indices already
-match), optionally colours by a third, and highlights the current tick's
-own point; `distribution` histograms a signal's values over the whole
-session (a scenario-*set* distribution is Campaign territory, `S-D`, out
-of a single `Session`'s scope, not built here). Neither has a time axis,
-so neither is click-seekable -- a real, documented gap
-(`render/plots.py`'s own docstring), not silently missing. `MainWindow`
-gained `_numeric_series` (drops a non-numeric resolved value -- raw bytes
-with no schema, a sub-message with no field path -- rather than handing
-it to matplotlib, which would not crash but would draw silent garbage);
-**found by a test, not by design review**: the first `xy`/`distribution`
-wiring used `_signal_series_cache` unfiltered and only `distribution`
-happened to filter, an inconsistency a real matplotlib warning (`Glyph ...
-missing`, from plotting raw bytes as if numeric) surfaced immediately.
-`_signal_series_cache` (renamed from `_timeline_series_cache`, Slice 8) is
-now genuinely shared -- closing `UT-B3-6` for real: the same address added
-to both the strip and a plot resolves to the literal same cached tuple
-(`is`, not just `==`). `pytest modules\sim\tests -q`: **277 passed** (253
-from Slice 9 + 24 new: 9 in `test_b3_plots.py`, 7 in
-`test_b3_plots_render.py`, 9 in `tests/system/test_b3_plots_wiring.py`,
-closing `UT-B3-6`/`UT-B3-7`/`UT-B3-8`/`UT-B3-9`). `scripts\check_invariants.py`
-and `python docs/py/run_all.py`: both clean.
-
-**Slice 11 (measurement tools) DONE 2026-07-30.** §8: ruler with snap,
-range rings, cursor readout, persistent annotations -- the last `view/*.py`
-module this stage's file list names. **No new dock**: everything lands on
-the existing `BevPanel`, as ordinary `Prim`s
-(`view/measure.MeasureState.overlay_prims()`) drawn last by
-`render_scene`'s existing `_draw_prim` -- "the renderer hit-tests the
-prims it actually drew" (§7.1) extended to "draws the measurement it
-actually computed", never a second canvas-overlay mechanism. `render/bev.py`
-gained `anchor_points_m` (every selectable prim's bbox corners + centre,
-reusing `_prim_bounds_m` the same way `hit_test` and `scene_bounds_m` do)
-and an `overlay_prims` parameter on `render_scene`. **A real gesture
-conflict, resolved by splitting the drag signal, not by branching harder
-on the existing one:** panning (Slice 7a) needs an *incremental* delta to
-chain (`Viewport.panned` applied step by step); the ruler needs the
-drag's fixed *press point* to wherever the cursor is now -- two different
-numbers from the same physical gesture. `_ClickableImageLabel` gained
-`drag_extent_changed` (press-to-here) alongside the existing `dragged`
-(step-to-step), both firing from the same `mouseMoveEvent`, so `M`
-(`_measure_mode`) simply routes to one handler or the other rather than
-one handler trying to serve both arithmetics. Snap (`view/measure.
-snap_point`) compares in **pixels** (`viewport.to_px`), not metres --
-a metre threshold would snap at wildly different effective ranges
-depending on zoom, the same reasoning `_DRAG_THRESHOLD_PX` already applies
-to telling a click from a drag. **Cursor readout is deliberately not a
-`Prim`**: a `hovered` signal (`setMouseTracking`) updates a plain
-status-bar `QLabel` with zero re-render cost, because a full `render_scene`
-(a real matplotlib figure) on every pixel of mouse travel would make the
-BEV laggy under ordinary use -- documented in `view/measure.py`'s own
-module docstring as a deliberate architecture choice, not an oversight.
-`pytest modules\sim\tests -q`: **302 passed** (277 from Slice 10 + 25 new:
-13 in `test_b3_measure.py`, 3 more in `test_b1_bev_render.py`, 8 in
-`tests/system/test_b3_measure_wiring.py`, closing `UT-B3-4`).
-`scripts\check_invariants.py` and `python docs/py/run_all.py`: both clean.
-
-**Slice 12 (HUD + stale banner) DONE 2026-07-30.** §10's always-on
-furniture. Drawn as a **third rasterising tier inside `render_scene`
-itself** -- world-space prims, then `overlay_prims` (Slice 11's
-world-space ruler/rings/annotations), then `hud_lines`/`stale_banner` in
-**screen space** (`ax.transAxes`) -- a `Prim` cannot stay fixed top-right
-under pan/zoom, proved directly
-(`test_render_scene_hud_lines_stay_fixed_regardless_of_viewport_pan`: the
-same HUD text at two different viewport centres renders byte-identical).
-Scale/`t = .. · tick ..`/project-scenario-pipeline-build-id are always
-shown -- the framework already has every one of those values itself. The
-ego-state line and the stale-port banner are different: §10 wants a
-velocity's *address* and a port's *declared max-age seconds*, and the
-framework has no component calibration to invent either from (`R-SIM-1`)
--- `MainWindow.__init__` gained `ego_state_signals`/`max_age_s`, both
-caller-supplied dicts, both empty by default, so an unconfigured HUD shows
-exactly what the framework itself knows and nothing guessed.
-**Deliberately not built:** the origin dot/axis arrows/distance grid §10
-also names -- `modules/df/sim/layers/common.py`'s own `frame_layer`
-already draws these today, as a component layer in a different submodule;
-whether that responsibility should move into framework HUD furniture is a
-real cross-submodule question this slice names rather than decides
-unilaterally or silently duplicates. `pytest modules\sim\tests -q`: **322
-passed** (302 from Slice 11 + 20 new: 11 in `test_b3_hud.py`, 3 more in
-`test_b1_bev_render.py`, 6 in `tests/system/test_b3_hud_wiring.py`,
-closing `UT-B3-5`). `scripts\check_invariants.py` and `python
-docs/py/run_all.py`: both clean.
-
-**Slice 13 (`cli/view.py`, `cli/render.py`) DONE 2026-07-30.** The last
-file bullet in this stage's checklist. `cli/render.py` is genuinely
-Qt-free -- `core/runner.py`/`render/bev.py` never import it (`UT-B3-17`),
-so `sim render` needs no display **and no PySide6 at all**, not merely an
-offscreen Qt platform; `matplotlib.image.imsave` writes the PNG (`ST-B3-1`).
-`cli/view.py` stays argument-parsing-only per its own rule (`GT-9`) by
-deferring into a new `app/gui.py` (`launch()`: construct `QApplication`,
-construct `MainWindow`, run the event loop -- the file `app/` bullet
-actually names, holding orchestration, not logic). Both verbs' Qt/
-matplotlib imports are deferred **inside `cli/__init__.py`'s dispatcher
-too**, not just within their own files -- otherwise `sim doctor` would
-transitively require matplotlib just from `import adas_sim.cli` (`UT-A1-2`'s
-optional-dependency discipline, extended from protobuf to both). `sim view
-<session> [--preset] [--at]` needed two small, real `MainWindow` additions:
-`preset` (wins over the workspace's own `tabs[0]` viewpoint, Slice 9,
-applied last since it is the more specific request) and `initial_at_s`
-(resolved through `Session.seek_ns`, replacing the `goto(0)` default). A
-comprehensive offscreen test now proves every `S-B3` panel type --
-`BevPanel`, `LayersPanel`, `InspectorPanel`, `TimelineStrip`,
-`TransportBar`, a `PlotPanel` -- opens, renders a real frame and stays
-scrubbable together in one window, closing `ST-B3-2`'s buildable half
-(the "on both platforms" clause needs Ubuntu CI this session has no access
-to, named rather than silently assumed). `pytest modules\sim\tests -q`:
-**335 passed** (322 from Slice 12 + 13 new: 6 in `test_b3_cli_render.py`,
-6 in `test_b3_cli_view.py`, 1 in `test_b3_full_shell_offscreen.py`,
-closing `ST-B3-1`). `scripts\check_invariants.py` and `python
-docs/py/run_all.py`: both clean.
-
-Every file this stage's checklist names is now built, except the origin/
-axes/grid cross-submodule question (Slice 12's own note). None of this
-changes `MainWindow`'s shape (visualization spec §11.1's own "a new panel
-type registers itself... the shell does not change").
 
 **Must not.**
 - **Run pass 1 on the GUI thread.** Building a `Session` blocks for as long as
@@ -3391,45 +1608,8 @@ type registers itself... the shell does not change").
 - [x] `MC-1` (repeat) a human confirms the full shell reads well. Confirmed
       2026-07-30, same session as `MC-4` above
 
-**Discipline** (every stage)
-- [x] portability §3 ticked — exposure: `P-7` (every Qt rule: standard paths, no
-      named font families, high-DPI policy set before the app object, offscreen
-      must work). Verified end to end this pass: `grep` confirms no
-      `setFont`/`QFont(` anywhere in `render/`; `set_high_dpi_policy()` is
-      always called before the `QApplication` (`app/gui.launch`); every
-      persisted path (`layers_state_path`, `layout_path`, `_config_root`)
-      resolves through `QStandardPaths`; every S-B3 system test runs under
-      `QT_QPA_PLATFORM=offscreen`
-- [x] naming §3 ticked — exposure: `N-3a` (panel and dock classes are where
-      generic names like `manager`/`handler` appear first), `N-7`.
-      **Finding, fixed this pass:** `N-7` ("every new public class has a
-      `__repr__` naming itself, no `0x`") was not actually true for this
-      stage's three new plain state classes (`view/plots.PlotState`,
-      `view/timeline.TimelineState`, `view/measure.MeasureState`) — none
-      had one, so `repr()` fell through to Python's default `<... object
-      at 0x...>`. Added one to each. **Noted, not fixed:** `view/layers.
-      LayerTreeState` and `view/inspector.InspectorState` (Slices 2 and 5)
-      have the identical gap and predate this review; left alone rather
-      than reopening already-shipped, already-tested files from earlier
-      sessions for a discipline item neither slice's own gate required at
-      the time. `N-3a`: no `Manager`/`Handler`/`Helper`/`Util` class name
-      anywhere in `modules/sim/src` (checked directly, this stage or
-      earlier)
-- [x] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked. `GT-1/2/3/6`:
-      `scripts\check_invariants.py` clean. `GT-4`/`GT-5`: unaffected — no
-      `src/component/**` file and no build-machinery file touched this
-      stage. `GT-7`: every slice's status paragraph above was written and
-      corrected alongside its code, in the same commit, including three
-      documented api-reference corrections (Prim catalogue, `Session.
-      signal()`, workspace file location). `GT-9`: `cli/render.py`/`cli/
-      view.py` are parsing-and-dispatch only, `app/gui.py` is
-      `QApplication`/`MainWindow`/`exec()` orchestration only — every
-      capability (`Session.open`, `build_scene`, `render_scene`,
-      `MainWindow`) is reachable in a few lines from a plain script, which
-      is exactly what `cli/render.py`'s own body does. **`GT-8` is a
-      measured human number** ("time to first picture... timed on a real
-      newcomer") — genuinely not fillable by this session; its own gate
-      entry below states this, not silently skipped here
+**Discipline**
+- [x] portability §3 (`P-7`) · naming §3 (`N-7`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] `UT-B3-15` + `ST-B3-2` green — responsive by construction and testable
@@ -3479,47 +1659,6 @@ Closes `FR-SIM-13`.
 **Must not.** Write a PNG whose sidecar could be lost without anyone noticing.
 The sidecar is written in the same call, or the capture fails.
 
-**Status: DONE 2026-07-30.** `render/bev.py` gained `_draw_scene_figure`
-(the one drawing path, `D5`) that both the existing `render_scene` (raster)
-and a new `render_scene_vector` (`.svg`/`.pdf`, matplotlib `savefig`) call —
-`render/capture.py`'s `snapshot()` picks between them from `out`'s own
-suffix. `snapshot()` itself splits into `write_pair(image_bytes, sidecar,
-out)` (the atomic temp-file-then-`os.replace` mechanism, panel-agnostic —
-`UT-B4-3`) and the BEV-specific caller that builds the `Scene`/sidecar dict
-and hands bytes to it; `render/clip.py`'s `export_clip()` reuses the exact
-same `write_pair` for an interval's `.mp4` (`imageio[ffmpeg]`, new `video`
-extra in `pyproject.toml` — no ffmpeg on `PATH` in this environment, so a
-portable binary via pip rather than a system dependency, checked with the
-user first: real signal/CSV export, `S-D7`, is a different stage from this
-one's picture/video capture — confirmed after clarifying which need was
-being asked for). `cli/render.py` now delegates to `snapshot()` instead of
-calling `build_scene`/`render_scene`/`imsave` directly, so `--out fig.svg`
-gets vector output and every `sim render` call gets a sidecar for free,
-with no change to its existing argument shape (`ST-B3-1`'s original tests
-still pass unmodified). **One correction to this checklist's own wording:**
-"pipeline hash" — no pipeline is built or hashed anywhere yet (`S-C1c`);
-the sidecar's `pipeline` field is `RunManifest.pipeline`, the name the
-manifest actually carries today, noted in `capture.py`'s own comment rather
-than fabricating a hash that does not exist. `pytest modules\sim\tests -q`:
-**347 passed** (335 before this stage + 12 new: 6 in `test_b4_capture.py`,
-2 in `test_b4_clip.py`, 4 in `test_b4_capture_cli.py`). `scripts\
-check_invariants.py` and `python docs\py\run_all.py`: both clean. No
-`sim clip`/video CLI verb was added — not named in this stage's own file
-list (only the two `render/` functions), and `sim_api_reference.md` §11
-already frees "internal helpers" and "renderer internals"; `export_clip()`
-is usable in 3 lines from a script either way (`R-SIM-16`).
-**Corrected 2026-08-07 (`AR-58`):** "active layers" in the sidecar list
-above was a lie whenever no explicit selection was given -- `layer_
-selection=None` meant "draw literally every layer the Scene carries,"
-which let a layer the live window hides by default (`Layer.default_on=
-False`, `AR-56`) dominate a headless snapshot the Bench itself never
-shows, and recorded `"layers": null` in the sidecar, unable to say which
-ones. `capture.resolve_layer_selection()` now resolves `None` through
-`LayerTreeState` (the GUI's own class) in both `snapshot()` and `export_
-clip()`, so a picture with no explicit `--layer` selection matches what a
-fresh, nothing-clicked Bench window would actually show, and the sidecar
-always names the resolved set.
-
 - [x] `render/capture.py` — `snapshot(session, tick, viewport, layers, out)`
       writing `out.png` **and** `out.json` atomically (temp file, then rename;
       a half-written pair is worse than none)
@@ -3554,16 +1693,8 @@ always names the resolved set.
       the same basis as `ST-B3-2`: no Ubuntu environment this session can
       verify against.
 
-**Discipline** (every stage)
-- [x] portability §3 ticked — exposure: `P-7` (offscreen is the tested path, not
-      a fallback — see `ST-B4-2` above), `P-4` (sidecar written
-      `encoding="utf-8"`), `P-2` (every path is a parameter, nothing hardcoded)
-- [x] naming §3 ticked — exposure: `N-9` (this is where the correlation id earns
-      its keep), `N-4` (sidecar fields carry units: `t_ns`, `clip_t_start_s`/
-      `clip_t_end_s`, `bundle_sha256`)
-- [x] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked. `GT-4`/`GT-5`:
-      unaffected — no `src/component/**` file and no build-machinery file
-      touched this stage.
+**Discipline**
+- [x] portability §3 (`P-2`, `P-4`, `P-7`) · naming §3 (`N-4`, `N-9`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] `ST-B4-1` + `ST-B4-2` green — a snapshot is reproducible evidence, and it
@@ -3572,7 +1703,6 @@ always names the resolved set.
       (pure `matplotlib`/`imageio-ffmpeg`, no Qt), but its "on both platforms"
       clause stays open for the same reason `S-B3`'s combined gate bullet
       does — not a code gap.
-
 
 ---
 
@@ -3613,8 +1743,6 @@ it is the **failure mode of the substitution itself**:
 > *build*, because it does not use the build. Both defects below live entirely
 > in CMake and in cross-repo commit order — the exact surface a hand-rolled
 > `g++` command line replaces rather than exercises.
-
-**Measured:**
 
 | | Command | Result |
 |---|---|---|
@@ -3673,10 +1801,6 @@ alongside `type:`/`libs:`, not as a literal.
 
 > **Build order: #1** (§0a is the authority on sequence). Block 1. First stage of Phase C. Blocked on nothing.
 
-*(Added 2026-07-31. This is `A10`'s recommendation made executable — see
-`sim_requirements.md` §12.6 for why the audit's own wording could not be
-followed literally.)*
-
 **Purpose.** The audit's finding is right: `S-C6` (CI) sits at the **end** of
 Phase C, after every stage that relied on manual verification — and manual
 verification is the mechanism that has already failed twice here (`GT-4`'s floor
@@ -3693,30 +1817,6 @@ scenario half, because a stage id is a stable citation (§0).
 **Must not.** Grow into a general CI design — that is `plan.md` item 20 and it
 is larger than this module. `S-C0` runs what already exists, automatically, and
 nothing more.
-
-**Status, 2026-07-31.** Built as `scripts/ci_gate.py` (the entire check logic,
-callable identically by hand and by CI) plus `.github/workflows/sim-ci.yml`
-(a thin trigger/artifact wrapper around it, two jobs — `gate` with full deps,
-`core-only-smoke` with core+dev only, for `P-10`) and
-`scripts/ci_gate_config.yaml` (the pytest floor and the known-flake tolerance,
-as data, so bumping the floor never touches logic). **What was verified for
-real, locally, with the exact interpreter and script the workflow invokes**
-(not a substitute toolchain — same Python, same repo): the gate runs green on
-the clean tree (`ST-C0-1`), and each of the three planted defects — a deleted
-test (`tests/unit/test_a1_package.py`), a `GT-1` violation
-(`bsd_zone_width_m = 1` appended to `src/adas_sim/__init__.py`), and a
-requirement citing an invented, nowhere-defined test id (added to
-`NR-SIM-40`'s block in `sim_requirements.md`) — turned it red, then were
-reverted (`ST-C0-2`). *(That invented id is deliberately not spelled out
-here in `UT-`/`ST-`-shaped form — `check_traceability.py` scans this
-document's full text for id-shaped tokens, not only its Tests blocks, so
-writing the literal placeholder here previously tripped the same check it
-was describing.)*
-**What was not verified**: this session has `git push` but no `gh` CLI and no
-API token, so the hosted GitHub Actions job itself has not been observed to
-fire on a real push or to actually retain an artefact — only its logic has
-been exercised. Confirm this the first time `feat/sim-platform` is pushed with
-this workflow present, by checking the Actions tab.
 
 **A second, real gap found 2026-08-07, while trying to close `ST-D6-1`'s own
 CI caveat**: `sim`'s CI job checks out only `Pavan-karimajji/sim`
@@ -3766,16 +1866,8 @@ on demand, evidence recorded in the plan rather than automated.
       can fail is the only property that matters, and one planted defect per
       check is what stops a job that runs only the cheapest of the three
 
-**Discipline** (every stage)
-- [x] portability §3 ticked — exposure: `P-4`, `P-6` (the job invokes Python
-      directly, never a `.bat`), `P-10` (the runner image carries every core
-      dependency; a Qt-less runner must still pass, which is what proves the
-      extras split is real — `core-only-smoke` job)
-- [x] naming §3 ticked — exposure: `N-9`, `N-10` (the job's log must carry the
-      greppable line, or a failure cannot be joined to its artefacts —
-      `event=ci_gate_result run=<run_id> status=... mode=...`)
-- [x] `GT-1..GT-14` re-checked — none apply beyond what `ci_gate.py` itself is
-      checked by (it is framework tooling, not a layer/renderer/config path)
+**Discipline**
+- [x] portability §3 (`P-4`, `P-6`, `P-10`) · naming §3 (`N-9`, `N-10`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [x] `ST-C0-2` green — all three planted defects turn the job red, verified
@@ -3797,44 +1889,6 @@ discoverable. **`D1` closes here or nowhere** — this is the stage that stops
 `interfaces` builds, nothing links against the new symbols, and no component
 changes. That is what makes it independently revertible.
 
-**Status: code + tests written and verified 2026-07-30, but NOT through this
-repo's own Conan/CMake pipeline** — this session's environment has no `conan`,
-no MSVC/`vs2026` toolchain, and no `protoc`/`libprotobuf`/`gtest` dev packages
-installable via `sudo` (no passwordless sudo). Substituted a genuine,
-independent toolchain with no repo footprint: system `gcc`/`g++` (already
-present) plus `protoc 3.12.4`/`libprotobuf`/`libgtest` extracted from
-`apt-get download` `.deb`s into a scratch prefix (no root needed — `dpkg-deb
--x`), and `grpcio-tools` (`pip install --user`) for a from-scratch Python
-codegen check. Against that toolchain: `adas_sil_abi.h` compiles clean under
-`-std=c11 -Wall -Wextra -Wpedantic` **and** `-std=c++17`; `component_manifest.proto`
-generates real C++ and Python bindings and both round-trip byte-identically
-(119 bytes for the same fixture in both languages); all 6 gtest cases below
-compile and **pass** linked against real `libprotobuf`/`libgtest`. This is
-strong evidence the code is correct, but it is evidence from a parallel
-toolchain, not this repo's own build — `ST-C1a-1` and this stage's **Gate**
-stay unchecked until someone runs the real thing
-(`modules/interfaces/build.bat gtest vs2026 base`, or the Linux equivalent
-once one exists) and reports a real `ctest` count, the same discipline every
-prior stage's `Status:` line holds itself to. Do not read the ticked boxes
-below as "the official pipeline was run" — they mean "the described artifact
-exists and was independently verified to do what it claims."
-
-**Finding — `scripts/build.py`'s `cmake_layout` branch never turns on
-`BUILD_TESTING`.** `output_folder`-kind components (`df`, etc.) get
-`BUILD_TESTING: "ON"` baked into their hand-authored `gtest-<platform>` CMake
-preset; `cmake_layout`-kind components (today only `interfaces`) configure
-through Conan's generated `conan-default`/`conan-release` presets, which know
-nothing about a per-target test flag — so `interfaces`' new `gtest` target
-would configure with `BUILD_TESTING` unset, `CMakeLists.txt`'s own
-`if(BUILD_TESTING)` would never add `tests/`, and `ctest` would silently find
-zero tests. Fixed with one line (`configure_cmd.append("-DBUILD_TESTING=ON")`
-when `args.target in TEST_TARGETS`), applied identically to all 8 component
-copies of this byte-identical file (`df`, `interfaces`, `mathlib`,
-`perception-core`, `shared_config`, `sil_host`, `vdy` — confirmed byte-identical
-before and after via `diff -q`, `R-BUILD-2`/`R-BUILD-6`/`GT-5`). Pre-existing
-gap, not introduced by this stage — surfaced only because this is the first
-`cmake_layout` component to actually add a `gtest` target.
-
 - [x] `interfaces/include/adas/adas_sil_abi.h` — `AdasPort`, `AdasPortSet`, the
       five exports (`sim_sil_contract.md` §3.1). **Where `R-SIM-4` is built**:
       ports are named and discovered, so adding a function adds a manifest line,
@@ -3845,17 +1899,7 @@ gap, not introduced by this stage — surfaced only because this is the first
       - **`cdecl` on both platforms.** No non-`cdecl` Windows calling
         convention, no `__declspec` outside a single export macro that
         expands to `__attribute__((visibility("default")))` on GCC/Clang
-        (`P-5`). **Finding:** an early draft's own explanatory comment named
-        the banned tokens it was prohibiting ("no `__stdcall`, no `WINAPI`") —
-        the same self-violation shape `S-A2`/`S-A3`/`S-B2` hit with `GT-1`,
-        here tripping `UT-C1a-4`'s own literal text scan. Paraphrased without
-        naming them
-      - Struct layout is explicit: no bitfields, no `#pragma pack`. Every
-        struct's size **and every member's offset** is asserted via
-        `_Static_assert`/`static_assert`, guarded on `UINTPTR_MAX` so only the
-        64-bit pointer model every real target uses (`vs2026` x64, Linux
-        x86_64/aarch64) is asserted — a 32-bit target isn't a target today and
-        would need its own numbers
+        (`P-5`).
 - [x] `interfaces/proto/Adas__Sil/component_manifest.proto` — `ComponentManifest`
       incl. `project`, `config_bundle_sha256`, `descriptor_set`, `abi_version`,
       and per port: name, direction, `proto_type`, required/optional. Package
@@ -3973,21 +2017,8 @@ cross-repo rework the Phase C review already paid for once.
   stage's job was the manifest attribute existing and being readable, both
   now true.
 
-**Discipline** (every stage)
-- [x] portability §3 ticked — exposure: `P-5` (the ABI header must compile for
-      both toolchains; no Windows-only types), `P-8` (integer time in the
-      manifest — `descriptor_set` is `bytes`/opaque, no timestamp field exists
-      in this schema to get wrong)
-- [x] naming §3 ticked — exposure: `N-1` (this stage fixes the port-name token
-      that every later layer reuses — an abbreviation chosen here is
-      permanent), `N-11` (`abi` is an approved abbreviation; nothing else new
-      abbreviates)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked — `docs/py/run_all.py`
-      is `modules/sim`'s own cross-validation script and does not cover
-      `interfaces`; `GT-1..GT-3`/`GT-6` don't apply to `interfaces` (no
-      `modules/sim/src` in this stage), `GT-5` re-checked directly (see
-      Finding above), `GT-4` unaffected (no `df` file touched other than its
-      shared `scripts/build.py` copy, which is machinery, not `src/component/**`)
+**Discipline**
+- [ ] portability §3 (`P-5`, `P-8`) · naming §3 (`N-1`, `N-11`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Delta — re-opened 2026-07-30** (see the Phase C review above). Everything
 here changes `interfaces` only and stays purely additive; `abi_version` does
@@ -4042,96 +2073,6 @@ stage that modifies a shipping artefact.
 the existing body** (`df_sil_dll.md` rule 9) — if this stage needs an algorithm
 change, the design is wrong, not the algorithm. And must not remove or alter the
 positional exports: `sil_host` still calls them, and `ST-C1b-2` proves it.
-
-**Status: code + tests written and verified 2026-07-30, again NOT through
-`df`'s own Conan/CMake pipeline** (no `conan`, no MSVC in this environment,
-same caveat as `S-C1a`). Substituted a full, independent standalone build:
-every real source file `df_interface_c.cpp` pulls in — `mathlib`'s `scalar.cpp`
-+ the exact 25 `openlibm` translation units its own `CMakeLists.txt` names
-(including its per-file `sin=__olm_sin`-style renames, replicated exactly),
-every `aeb`/`bsd` `.cpp`, `df_runner.cpp`, `param_loader.cpp`, all of
-`interfaces`' real proto files (via the same extracted `protoc`/`libprotobuf`
-as `S-C1a`, plus `libyaml-cpp-dev`/`libgtest-dev` extracted the same
-no-sudo `apt-get download` + `dpkg-deb -x` way) — compiled and linked into a
-real `.so` with `-fPIC`, exporting all nine symbols
-(`dfApiVersion/dfInit/dfExec/dfShutdown` and
-`adasAbiVersion/adasManifest/adasInit/adasExec/adasShutdown` side by side,
-confirmed via `nm -D`). Against that library: the **existing, unmodified**
-`test_interface_c_api.cpp` — **6/6 still pass**, proving the positional path
-is genuinely untouched; a new `test_generic_interface_c_api.cpp` — **14/14
-pass**, including `EquivalenceTest.GenericAndPositionalPathsProduceByteIdenticalOutputs`
-(`ST-C1b-1`'s actual claim, verified byte-for-byte, not asserted); and a
-manual BCT-01-style override (recompiling `df_interface_c.cpp` with neither
-`ADAS_FN_AEB_ENABLED` nor `ADAS_FN_BSD_ENABLED` defined) confirms the manifest
-reports zero inputs/outputs (`UT-C1b-7`). `ST-C1b-1` is therefore green on
-real evidence; `GT-4`'s own count and `ST-C1b-2` (`sil_host` itself) still
-need a real `ctest`/`vs2026` run this environment cannot perform — tracked
-open below, not assumed.
-
-**Correction, 2026-07-30 — the real build was RED.** The standalone evidence
-above is accurate about what it tested and was accurate to distrust itself; it
-was simply testing the wrong layer. `modules/df/build.bat -t gtest -p vs2026
--P base` failed at **CMake generate**, before compiling anything:
-
-```
-CMake Error at src/platform/df_sil/CMakeLists.txt:65 (target_link_libraries):
-  Target "df_manifest_dump" links to:  yaml-cpp::yaml-cpp
-  but the target was not found.
-```
-
-`find_package(yaml-cpp)` runs in `src/component/common/`, a **sibling**
-directory — its imported target is not visible in `src/platform/df_sil/`. The
-deeper cause is defect 10: `df_manifest_dump` was given only `df_sil`, whose
-sole `PUBLIC` include dir is its own source folder, so it also had no
-`interfaces` headers and no protobuf. `df_sil` links `df_common` **PRIVATE**
-while `df_interface_c.h` — installed, and `AdasDf::AdasDf`'s public interface —
-now includes `adas/adas_sil_abi.h`. `sil_host` survives that only by
-independently requiring `interfaces`; `df_manifest_dump` was the first consumer
-with no such luck.
-
-The fix is one word — `target_link_libraries(df_manifest_dump PRIVATE df_sil
-df_common)` — after which a **clean** rebuild is **228/228 green** (214 prior +
-the 14 new), all five `ManifestTest.*` included, and
-`EquivalenceTest.GenericAndPositionalPathsProduceByteIdenticalOutputs` passes
-against the real MSVC-built DLL. `dumpbin /EXPORTS` confirms all nine symbols
-side by side, and `df_manifest_dump` regenerates `df_sil.ports.yaml`
-**byte-identically** to the checked-in copy. So `S-C1b`'s *design* is sound and
-its equivalence claim is true — what failed was the claim that a substitute
-toolchain could stand in for the build.
-
-**Three real findings, not anticipated:**
-- **`FileDescriptorSet`/`SimpleDescriptorDatabase` live in `descriptor.pb.h`/
-  `descriptor_database.h`, not `descriptor.h`** — a real compile error the
-  first draft hit immediately, in both `df_interface_c.cpp` and the new test
-  file. Fixed by including the right headers; not a design problem, a missing
-  include.
-- **A user-caught mistake, fixed and now recorded as a standing rule for this
-  codebase:** the first draft's fallback `#define ADAS_DF_PROJECT_NAME "base"`
-  (for when the real CMake wiring is absent) used `"base"` — a real, valid
-  project name, indistinguishable from a genuine answer if the wiring were
-  ever forgotten. Changed to `"unknown"` (matching `ADAS_DF_BUILD_ID`'s own
-  fallback and `io/base.py`'s `Provenance.unknown` elsewhere in this
-  superproject) — a fallback for a value with a real value-space must never
-  itself be a member of that space. Audited every other file touched in this
-  stage and `S-C1a` for the same shape; none found.
-- **`ADAS_DF_BUILD_ID` (git describe) is deliberately NOT wired to a real
-  value.** A real `git describe` would make the checked-in
-  `df_sil.ports.yaml` change on every single commit regardless of whether a
-  port actually changed, defeating the "a port change shows up as a
-  reviewable diff" reason that file exists. Left as `"unknown"`, same
-  deferral shape as `config_bundle_sha256` (`S-C5`) — `UT-C1b-6`'s equality
-  check excludes `build_id` for exactly this reason, documented in the test
-  itself, not silently skipped.
-
-**Design note, not a deviation:** `writeProBuf` (the positional helper) is left
-byte-for-byte unchanged; a **new** `writeAdasProBuf` exists for the generic
-path specifically because `UT-C1b-5` asks for different undersize behaviour
-(report the required size, matching `adasManifest()`'s own two-call pattern)
-than the positional path's existing `len = 0`. `updateReqPort` **is** shared
-between both paths (templated on the buffer type — `DfReqBuf` and `AdasPort`
-carry the same field names by construction), so the input side genuinely
-cannot diverge between the two APIs; only the one deliberately-different
-output behaviour has two implementations.
 
 - [x] `adasAbiVersion` / `adasManifest` / `adasInit` / `adasExec` /
       `adasShutdown` in the component's `*_interface_c.cpp`, `adasExec`
@@ -4210,20 +2151,8 @@ output behaviour has two implementations.
         `S-C1b` is additive. `ParamLoader` is `S-E2`'s to revisit, once nothing
         calls the positional exports
 
-**Discipline** (every stage)
-- [x] portability §3 ticked — exposure: `P-5` (`ADAS_SIL_ABI_EXPORTS` follows
-      the exact same `_WIN32`/export-macro pattern `DF_SIL_EXPORTS` already
-      uses; no `.def` file), `P-3` (port-name comparison is `strcmp`, exact,
-      never case-folded)
-- [x] naming §3 ticked — exposure: `N-1` (`UT-C1b-9`), `N-4` (`max_bytes`,
-      `abi_version` — every manifest field that needs a unit or a scope
-      already has one)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked —
-      `docs/py/run_all.py` doesn't cover `df`; `GT-4`'s real count needs the
-      real `ctest` run noted above, not assumed from the standalone
-      equivalent; `GT-1..GT-3`/`GT-6` don't apply (no `modules/sim/src`
-      touched this stage); `GT-5` unaffected (no build-machinery file touched
-      in this stage)
+**Discipline**
+- [ ] portability §3 (`P-3`, `P-5`) · naming §3 (`N-1`, `N-4`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Delta — re-opened 2026-07-30** (see the Phase C review above). Ordered so the
 tree builds after every step; item 1 is the only one blocking anything else.
@@ -4281,32 +2210,11 @@ tree builds after every step; item 1 is the only one blocking anything else.
       it is deliberately *never* run automatically. `GT-7`, at the smallest
       possible scale
 
-**Delta outcome, 2026-07-30 — 233/233 green** (`-P base` and `-P cus1`), and
-the two new binding tests were **shown to fail before being trusted**, since a
-gate that has never failed has never been shown to work (`ST-C6-2`'s own
-principle, applied one stage early):
-
 | Probe | Change | Expected | Got |
 |---|---|---|---|
 | A | regress the port name to `aeb.comp_state` | `UT-C1b-12` red | red — plus `ContainsTheAebPorts` and `UT-C1b-6`, three independent catches |
 | A | " | `UT-C1b-11` **green** | green — the one-name-constant design means a rename cannot desynchronise the manifest from the dispatch, which is the property being claimed |
 | B | declare an output row nothing dispatches | `UT-C1b-11` red | red, naming the unbound port |
-
-**Probe A found a defect in `UT-C1b-12` itself**, which is the whole reason to
-run it: the first draft searched the ports header for the port name as a bare
-token and **passed on `aeb.comp_state`**, because `aeb_ports.hpp` contains
-`#include "common/comp_state.pb.h"` and neither `/` nor `.` is an identifier
-character. It now matches a *declaration* — the token followed by `;` — which
-is the distinction the test exists to make. A test that cannot fail is worse
-than no test, and only a probe distinguishes the two.
-
-**Probe B found a defect in the fix.** The first port table bound its dispatch
-by array index (`kOutputPorts[port::kAebOutputs]`), so inserting a row silently
-shifted every later constant — a *new* drift surface, milder than the one being
-removed but real, and it needed an `#elif` block to survive the `ENABLED_
-FUNCTIONS` combinatorics. Replaced with **one `constexpr` name per port**,
-referenced by the table rows and by the dispatch alike: no position to get
-wrong, no combinatoric block, and a rename is still a single edit.
 
 **Tests added by the delta**
 - [x] `UT-C1b-11` **every manifest-declared name is a name the dispatch
@@ -4356,11 +2264,7 @@ order #5.**
 - [x] `contracts/component.py` — the `SilComponent` Protocol plus
       `CtypesSilComponent` and `InProcessSilComponent` (api reference §3.1).
       `CtypesSilComponent.exec` is **the one place** integer nanoseconds become
-      the ABI's float `dtS` (`P-8`, `sim_sil_contract.md` §3.1). **Finding:**
-      the real `df_sil.dll` returns `adasExec()` success even when one output
-      port was undersized (that port is just left `updated=0`) -- undersize
-      detection reads `port.len > port.cap` unconditionally, never gated on
-      the return code, or grow-and-retry silently never fires
+      the ABI's float `dtS` (`P-8`, `sim_sil_contract.md` §3.1).
 - [x] **A stub component library implementing the generic ABI** — `impl:
       stubdll:`, mandated by `R-SIM-10` ("if a stand-in must run without Python
       it is promoted from `stub:` to `stubdll:` on the same generic ABI"),
@@ -4371,29 +2275,6 @@ order #5.**
       and not obligations. It lands here rather than later because it is also
       the only way `CtypesSilComponent` gets tested without `df` built, and it
       is deliberately trivial: an echo component with a hand-written manifest.
-      **Done 2026-08-07**: `sim_sil_contract.md` §8 says "a stub DLL", singular
-      — `S-D6`'s own `tests/fixtures/echo_stub/echo_stub_with_output.c`
-      already IS exactly that shape (hand-written manifest, one output port),
-      so this reuses it rather than writing a near-duplicate. **A real,
-      previously-latent portability bug found and fixed landing this**: the
-      fixture never defined `ADAS_SIL_ABI_EXPORTS` before including `adas_
-      sil_abi.h`, so `ADAS_SIL_API` never resolved to `__declspec(dllexport)`
-      on Windows/MSVC — it compiled silently into a DLL exporting nothing,
-      only ever proven on POSIX (gcc's own default visibility, which happens
-      to export everything regardless of the macro). One-line fix in both
-      `echo_stub.c` and `echo_stub_with_output.c` (`#define ADAS_SIL_ABI_
-      EXPORTS` before the include — mirrors every real component's own CMake
-      `target_compile_definitions`), proven by actually compiling and running
-      the fixed fixture on Windows via `cl.exe /std:c11` (MSVC's default C
-      dialect predates C11 `_Static_assert`, the header's own struct-layout
-      assertions — a second, smaller portability finding, worked around with
-      an explicit `/std:c11` rather than silently dropped), `dumpbin
-      /exports` confirming all 5 ABI symbols now present. No `vswhere.exe` in
-      this environment, so the MSVC discovery is a best-effort glob under
-      `Program Files\Microsoft Visual Studio\*\*\VC\Auxiliary\Build\
-      vcvars64.bat`, skipping with a named reason if not found — same
-      environment-gated-test discipline as every other real-DLL test this
-      session
 - [x] `contracts/loader.py` — **`resolve_library`**, the single place the
       framework consults the platform (`P-5`). `<stem>` expands to
       `<stem>.dll` on Windows and `lib<stem>.so` / `<stem>.so` on Linux; a miss
@@ -4422,34 +2303,13 @@ order #5.**
       are `v1` (`CR-SIM-23`)
 - [x] `period_ns` read from each manifest; **base grid derived as the GCD** of
       the declared periods; a period that is not an integer multiple is a load
-      error naming both numbers — never rounded (`R-SIM-18`). **Finding:** a
-      base grid genuinely computed as the GCD of a period set can never
-      actually fail this check against any period in that set (GCD divides
-      every member of the set it came from, by definition) -- unreachable
-      through `Pipeline.load` today with correct inputs. The guard
-      (`_require_multiple`) stays regardless -- `R-SIM-18` states the
-      invariant explicitly -- and is unit-tested directly with numbers that
-      do not come from a real GCD, rather than pretending a natural failing
-      case exists. `Pipeline.step()` is the multi-rate-aware entry point
-      (`exec()` stays single-rate, unconditional, and is what `step()`'s
-      due ticks are built on)
+      error naming both numbers — never rounded (`R-SIM-18`).
 - [x] `contracts/override.py` — the closed four-verb list (`R-SIM-15`).
       `Stage.overrides` is declared and validated at load (a verb outside
       the four is `AuthoringError`); actually applying one to a live port's
       bytes between wiring and `exec()` is `S-D6`'s job (its own checklist
       item below -- run-manifest tagging and HUD badging belong there too)
 - [x] Component pipeline files under `modules/<name>/sim/pipelines/`.
-      **Done 2026-08-07** — `df`'s own `df_only.yaml` already proved the
-      convention for a multi-function component; `modules/perception-core/
-      sim/pipelines/perception_core_only.yaml` (new) proves it for the
-      newly-shimmed one, mirroring `df_only.yaml`'s shape exactly: one
-      stage, wired to both of `perception_core`'s real declared input ports
-      (`frame`/`egoDyn`). Checked in unmodified and proven for real —
-      `tests/system/test_c1c_pipeline_files.py` confirms `check.runner.
-      discover_pipelines` finds it under `modules/*/sim/pipelines/` and that
-      `Pipeline.load` against the real `perception_core_sil.dll` wires both
-      ports correctly, from the actual checked-in file, not a hand-authored
-      stand-in
 
 **Tests**
 - [x] `UT-C1c-1` ABI version mismatch fails loudly at load, naming both versions
@@ -4484,18 +2344,7 @@ order #5.**
       `CtypesSilComponent` path a `dll:` stage does, and its port set is
       indistinguishable from a `dll:` stage's to everything downstream —
       `R-SIM-10`'s "executed and injected produce the same port set", proven at
-      the `impl:` axis rather than only at the `mode:` axis. **Done
-      2026-08-07** — true by construction in `contracts/pipeline.py`'s own
-      `_resolve_components` (`kind in ("dll", "stubdll")` is one branch, not
-      two), but this session's own lesson is that reading a code path is not
-      running it: `tests/system/test_c1c_stubdll.py` resims the SAME
-      compiled stub library twice, once as `impl: "dll:echo_stub_with_
-      output"` and once as `impl: "stubdll:echo_stub_with_output"`, and
-      diffs the two resulting recordings with `core.determinism.
-      compare_exact` (`R-SIM-24`'s own exact-comparison tool, reused for a
-      different axis — `impl:` kind, not process/host/build) — byte-
-      identical. Real execution, Windows, MSVC (`cl.exe`, auto-discovered
-      `vcvars64.bat`)
+      the `impl:` axis rather than only at the `mode:` axis.
 - [x] `UT-C1c-16` **severed chain detected** — `simulate → measured → simulate`
       on one path is found; `off → measured → simulate` is **not** flagged
       (`R-SIM-10`; the GUI's auto-close in S-D6 builds on this)
@@ -4519,19 +2368,8 @@ order #5.**
 - [x] `ST-C1c-2` an algo-test pipeline runs with everything `measured` except
       one stage — the canonical shape of `R-SIM-12`
 
-**Discipline** (every stage)
-- [x] portability §3 ticked — exposure: `P-5` (**the** stage that owns
-      `resolve_library`; every platform difference in the framework lives here
-      and nowhere else), `P-2`. **2026-08-07**: closing `UT-C1c-15a`/the
-      stub-DLL box found P-5 exposure for real a second time — the fixture's
-      missing `ADAS_SIL_ABI_EXPORTS` (a platform difference in a component
-      fixture, not `resolve_library` itself, but the same class of "worked
-      on POSIX, silently wrong on Windows" this section exists to catch)
-- [x] naming §3 ticked — exposure: `N-8` (wiring errors are the most-read
-      messages in the system: expected, found, where it looked, next action),
-      `N-5`
-- [x] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked — 2026-08-07,
-      see this pass's own full-suite numbers below
+**Discipline**
+- [x] portability §3 (`P-2`, `P-5`) · naming §3 (`N-5`, `N-8`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [x] `ST-C1c-1` green over every recording — the generic path is proven
@@ -4568,74 +2406,18 @@ that one is real work for whenever `S-C3`/`S-D3`/`S-D7` actually need it (a live
       manifest declares (`N-8`). **One resolver, four consumers** — layer
       `requires`, `expect:` predicates (`S-C3`), workspace/viewpoint files
       (`S-D3`), and export column selection (`S-D7`). Four resolvers is how the
-      third one starts accepting a name the first one rejects. **Done
-      2026-08-07** (sim build queue row 4, sub-row 4): `resolve(ref, *,
-      component, manifest, where)` lands in `contracts/binding.py`, taking a
-      `ComponentManifest` directly (never a caller-flattened list) so "every
-      port its manifest declares" in an error message can never drift from
-      what the manifest actually holds. **The layer-`requires`/`resolve_
-      component_ref` consumer stays exactly as it is, on purpose** — it
-      exists because a layer provider replays from a `Session` with no live
-      `Pipeline` at all (`R-SIM-13`), a genuinely different call-time
-      context this resolver does not (and should not) reach; "one resolver,
-      four consumers" is the reason a single function was worth building for
-      the OTHER three, not a mandate to retrofit the Session-only path onto
-      it. 4 new unit tests, `tests/unit/test_c1c_binding.py`
+      third one starts accepting a name the first one rejects.
 - [x] `core/signals.py` routes through it rather than resolving addresses
       itself — today it does a longest-known-prefix match over raw strings,
       which is correct for a spelled address and has nothing to resolve a
-      component-relative one against. **Done 2026-08-07, narrower than the
-      literal wording**: `core/signals.py` itself is unchanged (it has no
-      `Pipeline`/manifest access, only a `Tick`'s own `ports`) — the routing
-      happens one layer up, in `check/expect.py`'s new `_resolve_self_address`
-      (called from `_series` before `core.signals.resolve_tick` ever sees
-      the address), which is the ACTUAL consumer named two lines below
-      (`expect:` predicates, `S-C3`) and the only one of the three
-      newly-named consumers with an established, unambiguous "what does
-      `self` mean here" convention (`ST-C1c-2`'s canonical "everything
-      measured except one `simulate` stage" shape — `self` is that one
-      stage). Wired end to end: `check/runner.py`'s `_sole_simulate_stage`
-      derives `(stage_name, manifest)` from the real `Pipeline` `check_
-      scenario` already builds, threaded through `evaluate_scenario` ->
-      `evaluate_expectation`/`resolve_marker`/`resolve_markers` -> `_series`
-      as an optional `sut=` (default `None`, so `render/viewer.py`'s
-      pre-existing `evaluate_scenario(scenario, session.ticks)` call is
-      unaffected — no `self.` support there, since a live viewer session has
-      no `Pipeline` in the loop either, `R-SIM-13` again). Zero or more than
-      one `simulate` stage raises, naming why, the moment a scenario
-      actually tries to use `self.` — never eagerly, since most scenarios
-      never do. 2 new end-to-end tests in `tests/unit/test_c3_check.py`
-      (a real `self.outputs.x` `expect:`/marker signal resolving through
-      the real `check_scenario` chain and producing the identical result a
-      spelled `widget.outputs.x` signal already proved; the no-sole-
-      simulate-stage raise). **`S-D3` viewpoints and `S-D7` export column
-      selection stay unwired, deliberately, not silently** — neither has
-      any established "which stage is `self`" convention documented
-      anywhere (both routinely name MULTIPLE stages' ports at once, unlike
-      the single-SUT algo-test shape `expect:` inherits from `ST-C1c-2`),
-      so wiring either would mean inventing a scenario/pipeline-file schema
-      decision here rather than wiring an already-designed one — real,
-      separate work for whenever `S-D3`/`S-D7` actually need it, exactly
-      the deferral this delta's own opening paragraph already named
+      component-relative one against.
 - [x] `UT-C1c-22` a component-relative reference resolves to the concrete
       address **under a renamed stage** — the same plug-in binds correctly
       whether the pipeline calls the stage `df` or `driving_functions`. This is
       the whole claim; a test that only checks the default stage name proves
-      nothing. **Done 2026-08-07**: `test_resolve_binds_under_a_renamed_
-      stage` calls `resolve("self.bsd.outputs", component=..., manifest=...)`
-      with `component="df"` and again with `component="driving_functions"`
-      against the SAME manifest, asserting both concrete addresses —
-      the resolver's own signature makes the renamed-stage case free (the
-      caller supplies `component` directly; there is no name to search for
-      or accidentally hardcode)
+      nothing.
 - [x] `UT-C1c-23` an unresolvable reference raises naming all three things, and
       **never** returns a sentinel that a caller could treat as "absent".
-      **Done 2026-08-07**: `test_resolve_raises_naming_the_reference_
-      component_and_declared_ports` asserts the reference, the component
-      name and every declared port all appear in the raised message; `check/
-      expect.py`'s own `_resolve_self_address` raises the same way for the
-      "no sole simulate stage" case (`test_check_scenario_self_dot_port_
-      raises_when_no_sole_simulate_stage`)
 
 **Delta `S-C1cΔ` — added 2026-07-31 (`OD-8`, closes `OQ-10`). Build order #5** —
 Block 1, blocked on nothing; `S-B1Δ` (#6) and `S-C3` (#10) both consume what it
@@ -4727,9 +2509,6 @@ grammar is still free. Read arch §5.10 first.
 ### S-C1d — the generated ABI shim (`R-SIM-22`, closes `D12`)
 
 > **Build order: #12** (§0a is the authority on sequence). Block 2. Blocked on `S-C1aΔ2` (#11) — the generator must emit fields the proto actually has.
-
-*(Added 2026-07-31. Fourth sub-stage of **C1**, and the one that makes component
-number two cheap.)*
 
 **Purpose.** Stop every component hand-writing ~400 lines of port table,
 manifest builder and dispatch. `S-C1b` proved the shim is *correct*; this stage
@@ -4868,20 +2647,8 @@ code-generation framework. One generator, one input schema, one output file.
       `CtypesSilComponent` with no real DLL at all), not required once `vdy`
       covers this gate
 
-**Discipline** (every stage)
-- [x] portability §3 ticked — exposure: `P-1`/`P-2` (a generator is where an
-      absolute build path enters), `P-4` (generated C++ written with explicit
-      encoding and `\n`, or two machines produce different files), `P-8`
-      (declaration order sorted, or the manifest is not reproducible)
-- [x] naming §3 ticked — exposure: `N-1` (this stage makes it structural), `N-8`
-- [x] `GT-1..GT-12` re-checked; `GT-4`'s `df` row re-measured (a refactor that
-      changes the count changed behaviour).
-      *2026-08-04:* `df` still 233/233 (`-P base` and `-P cus1`, unchanged);
-      `vdy` 18/18, its **first real number**, replacing the blank "never run"
-      row. `pytest modules/sim/tests` 643 passed (the one pre-existing,
-      documented flake aside — `test_dragging_pans_the_viewport_and_a_second_
-      click_still_selects`, not touched); `check_invariants.py` and
-      `docs/py/run_all.py` both clean
+**Discipline**
+- [x] portability §3 (`P-1`, `P-2`, `P-4`, `P-8`) · naming §3 (`N-1`, `N-8`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [x] `UT-C1d-1` green — byte-identical manifest, both projects. A refactor that
@@ -4901,19 +2668,6 @@ code-generation framework. One generator, one input schema, one output file.
 **Must not.** Move the existing bridge. This stage **decomposes by copy**: the
 original keeps working until `S-E1` deletes it, gated on this stage's tests.
 Nothing in `sources/` may name a driving function (`GT-1`).
-
-**Status: checkbox archaeology, 2026-08-06.** This whole section read as
-untouched — every box unticked, no status note — despite the stage being
-substantially built and tested. Verified against real code and a real
-`pytest` run rather than trusted on sight (the same discipline the
-2026-08-04 audit applied to `S-D7`, which turned out to be 17 of 27 boxes
-done under an identical "looks untouched" doc): every file below exists,
-substantial, and 54 of this stage's own unit + system tests pass. Ticked
-accordingly, each against its real test file. Two real, previously
-unbuilt gaps survived this pass — `UT-C2-9` (manifest-mismatch hard error
-/ library-hash warning at resim time) and `UT-C2-12` (record-policy
-visibility in the recording's own metadata) — **both closed in this same
-pass**, see their own entries below.
 
 - [x] `sources/base.py` — the `Source` Protocol; `emits()` declares what this
       world can produce, so a pipeline asking for a level the source cannot
@@ -4944,7 +2698,7 @@ pass**, see their own entries below.
       port, not only the exceptions**, so a reader answers *"was this
       complete?"* from the file alone. This is what makes `R-SIM-6` degrade
       *visibly* to "everything except these, by declaration" instead of silently
-      becoming false. **Done, 2026-08-06** — see `UT-C2-12`'s own entry below
+      becoming false.
 - [x] **An excluded port feeds `R-SIM-23`'s feasible-cut query, not a second
       mechanism.** To a later run an excluded port is indistinguishable from one
       the recording never had, which is the case `S-C9` already computes.
@@ -4990,24 +2744,7 @@ pass**, see their own entries below.
       component outputs `simulated` (`R-SIM-12`). Same file
 - [x] `UT-C2-9` a resim against a recording whose port manifest differs is a
       **hard error**; a differing library hash is a **warning** — the two are
-      not the same severity and must not be merged. **Done, 2026-08-06 — a
-      real, previously unbuilt gap**, not stale docs: `Pipeline.load`'s own
-      `recording=` parameter cannot make the hard-error claim for a real
-      resim (bare, non-ingest-mapped topic keys nothing in the real CLI
-      wires up), and nothing produced the warning half at all. Built:
-      `core.resim._validate_measured_stages_against_recording` (the
-      hard-error half — missing or schema-mismatched measured-stage output
-      refuses to start, naming both; previously silently fed an empty
-      `measured` dict and produced neutral-looking wrong output) and
-      `core.manifest.check_library_provenance` (the warning half,
-      deliberately the unconditional sibling of `--pin-builds`'s opt-in
-      hard refusal, `UT-D7-9` — never warns on an unrecorded/unknown hash,
-      only a real, known mismatch). `tests/unit/test_c2_resim_provenance.py`
-      (6 tests). Wired into both `resim_pipeline` and `resim_pipeline_
-      merged` (the GUI "Run" path, `R-SIM-16`'s "one engine") for the
-      hard-error half, and `cli/resim.py` (default, skipped when
-      `--pin-builds` already covers the same fact more strictly) for the
-      warning half
+      not the same severity and must not be merged.
 - [x] `UT-C2-10` `emits()` is honoured: a pipeline requesting a port this source
       cannot produce fails at load naming the source and the port.
       `tests/unit/test_c2_source.py`
@@ -5017,22 +2754,7 @@ pass**, see their own entries below.
       declared `excluded` or `decimated` is honoured **and named in the
       recording's own metadata**, so `R-SIM-6`'s "everything the SUT reads was
       recorded" degrades *visibly* to "everything except these, by declaration"
-      rather than silently becoming false. **Done, 2026-08-06 — a real,
-      previously unbuilt gap**, not stale docs: `Recorder` already used the
-      policy internally (`record_policy_for`) to decide what to physically
-      write, but never wrote the policy itself anywhere — an excluded port
-      simply never appeared as a topic, indistinguishable from "never
-      wired." `RunManifest.record_policies` (new field, `io/base.py`'s new
-      `RecordPolicyRecord`: `port`/`verb`/`decimate_n`) is built by
-      `core.manifest._record_policy_records` from every non-`off` stage's
-      own declared output ports — `full` is written too, not only the
-      exceptions, which is the whole claim — and round-tripped through
-      `io/mcap.py`. Flows automatically through the real `sim run --record`
-      path: `cli/run.py` already passed `pipeline=` to `build_manifest`
-      before this pass, so no CLI/`Recorder` change was needed beyond the
-      manifest schema itself. `tests/unit/test_c2_manifest.py` (+4),
-      `tests/unit/test_a4_mcap.py`'s own `UT-A4-3` round-trip extended to
-      cover `full`/`excluded`/`decimate` together
+      rather than silently becoming false.
 - [x] `UT-C2-13` the recorder writes **capture and reception time** separately
       (`CR-SIM-4`); an injected latency error model is recoverable from the
       recording, which is the whole reason the second stamp exists.
@@ -5060,14 +2782,8 @@ pass**, see their own entries below.
       **Genuinely blocked** — needs a live CARLA/world-model server, not
       available in this environment
 
-**Discipline** (every stage)
-- [x] portability §3 ticked — exposure: `P-2` (a world-model client is the
-      likeliest place an absolute path creeps in — `UT-C2-11` proves it),
-      `P-6` (never launch a simulator through a shell — same test)
-- [x] naming §3 ticked — exposure: `N-5` (a source's emitted names state origin,
-      not intent), `N-12` (`sources/` in a traceback must mean *the world* lied)
-- [x] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked (this
-      pass's own re-run, 2026-08-06 — see `UT-C2-9`'s entry)
+**Discipline**
+- [x] portability §3 (`P-2`, `P-6`) · naming §3 (`N-5`, `N-12`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] `ST-C2-2` green; `MC-2` recorded with a date and a name. `ST-C2-2`
@@ -5192,35 +2908,7 @@ review.
 - [x] A fault is declared in `run.faults:`, lands in the run manifest, tags its
       topic `origin: overridden` and is badged in the HUD. **The origin enum
       stays at five** — fault-versus-override is a *record* question, answered
-      by the manifest, not a provenance grade. **Done, follow-up pass
-      2026-08-06 — the "tags its topic" half corrected to "and a run-level
-      HUD summary," same design finding `UT-D6-2` made for overrides**: a
-      fault mutates the STIMULUS right before a stage sees it
-      (`Pipeline._apply_stimulus_faults`), but the recorded `source.*`
-      topic is `Recorder.tick`'s own raw, pre-fault `stimulus` — no
-      recorded topic's bytes ever reflect a fault, so `origin: overridden`
-      on a topic would state something false, exactly the reasoning
-      `UT-D6-2` already worked out for overrides, extended here rather than
-      re-derived. `RunManifest.faults` (new field, `io/base.py`'s new
-      `FaultRecord`: `verb`/`address`/`value`/`from_s`/`to_s`/`after_tick`,
-      mirroring `contracts.fault.Fault` 1:1) is built by `core.manifest.
-      _fault_records`, hashed into `run_id` via `_faults_repr` (same
-      reasoning `_overrides_repr` already gives — not added to `core.ids.
-      REQUIRED_KEYS`, since `new_run_id` hashes every key it is given and
-      `build_manifest` is its only caller), and round-tripped through
-      `io/mcap.py`. `Pipeline.faults` (new public property) is the one
-      sanctioned read of the previously-private `_faults`. **The HUD half
-      is a run-level summary label in the real Qt `PipelinePanel`
-      (`render/viewer.py`), not a per-stage badge** — unlike an override,
-      a fault targets the stimulus generically, never one particular
-      stage's own row, so there is no single row to attach it to the way
-      the override badge does. `tests/unit/test_c3_fault_manifest.py`
-      (6 tests) + `tests/system/test_c3_fault_hud_widget.py` (2, real Qt,
-      offscreen) + `tests/unit/test_a4_mcap.py`'s own `UT-A4-3` round-trip
-      extended to cover `faults` too. Full suite: 825 passed / 7 skipped
-      (Windows venv, `foxglove` extra not installed here, one pre-existing
-      flake, confirmed passing standalone), `check_invariants.py` and
-      `docs/py/run_all.py` both clean
+      by the manifest, not a provenance grade.
 - [x] `delay` requires `S-A4Δ`. With one clock there is nowhere to put the
       original instant, which is the clearest case of the two-clock change
       paying for something beyond itself. *2026-08-03:* `apply_fault`'s
@@ -5270,13 +2958,8 @@ review.
 - [x] `ST-C3-3` a scenario whose recording is missing is **skipped with a
       warning**, not failed. *2026-08-03*
 
-**Discipline** (every stage)
-- [x] portability §3 ticked — exposure: `P-4` (scenario YAML read as UTF-8; report written with explicit newline or two machines produce different reports), `P-3`.
-      *2026-08-03:* `load_scenario`/`write_report` both explicit `encoding="utf-8"`; `write_report` explicit `newline="\n"`
-- [x] naming §3 ticked — exposure: `N-2` (an `expect:` path is the one address space, fully qualified), `N-4` (`within_s` is a unit-suffixed name for a reason).
-      *2026-08-03*
-- [x] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked. *2026-08-03:*
-      green; 619/620 (the one pre-existing documented flake, unrelated)
+**Discipline**
+- [x] portability §3 (`P-3`, `P-4`) · naming §3 (`N-2`, `N-4`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] All 18 scenarios have `expect:` blocks **transcribed from their existing
@@ -5362,20 +3045,8 @@ duplicate**; it does not relocate a source of truth.
       in_bsd_layers` (`test_a1_check_invariants.py`) calls `check_gt3()`
       directly
 
-**Discipline** (every stage)
-- [x] portability §3 ticked — exposure: `P-3` (this stage deletes a duplicate of
-      real calibration keys; a case-only mismatch would silently resurrect it).
-      *2026-07-31:* `_bsd_sensors` reads `BSD_SENSOR_*` keys through
-      `parse_sensors`, which is case-sensitive by construction (`model/
-      sensors.py`'s own `P-3` note) — no new case-folding introduced
-- [x] naming §3 ticked — exposure: `N-1` (the deletion is only safe because both
-      spellings were the same token).
-      *2026-07-31:* no renaming performed; `sensor_fov_layer` reads the same
-      `BSD_SENSOR_*` token `bsd_params.cpp` reads, unchanged
-- [x] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked.
-      *2026-07-31:* green; `check_invariants.py` reports GT-1/2/3/6/11 clean;
-      471/471 tests pass (up from the 468 baseline: `UT-C4-1`, `UT-C4-2`,
-      `ST-C4-1`)
+**Discipline**
+- [x] portability §3 (`P-3`) · naming §3 (`N-1`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [x] `ST-C4-1` green — and `UT-C4-1` green, because a grep proving the literal
@@ -5664,13 +3335,8 @@ test_bundle_sha256_is_stable_across_mixed_line_endings_and_iteration_order`).
       Tests: `test_b3_hud_wiring.py::test_hud_reports_checkout_bundle_origin_when_the_recording_carries_no_bundle`,
       `::test_hud_reports_embedded_bundle_origin_when_the_recording_carries_its_own_bundle`.
 
-**Discipline** (every stage)
-- [x] portability §3 — `P-9`/`P-5`/`P-3` all exercised for real by
-      `test_c5_relocatability_installed.py` and the P-9 hash tests
-- [x] naming §3 — `N-9` (bundle hash already joins `RunManifest`)
-- [x] `python docs/py/run_all.py` green (2026-08-05); `df` gtest 244/244 on
-      both `-P base`/`-P cus1` (238 + 3 `ParamLoaderTest.PeriodUs*` + 3
-      `ManifestTest`); `vdy` gtest 18/18 unchanged; sim `pytest` 657/3 skipped
+**Discipline**
+- [x] portability §3 (`P-3`, `P-5`, `P-9`) · naming §3 (`N-9`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [x] `ST-C5-1` green — item 19 closed with evidence, against the **installed**
@@ -5680,7 +3346,6 @@ test_bundle_sha256_is_stable_across_mixed_line_endings_and_iteration_order`).
 **S-C5 is now fully closed** — every item and every `UT-C5-*`/`ST-C5-*`
 landed 2026-08-06 (above), including `UT-C5-6/7`, `ST-C5-2`, and the
 `updated`-flag-vs-predicted-schedule disagreement report.
-
 
 ### S-C6 — Resim in CI (the minimum automatic gate)
 
@@ -5792,13 +3457,8 @@ one place the tolerance rules are argued rather than stated.*
 - [x] `ST-C6-5` (`test_c6_determinism.py::test_row_without_why_is_an_authoring_error`, `::test_row_with_negative_bound_is_an_authoring_error`; the "prints the bound on a pass" half: `test_compare_with_tolerance_passes_within_bound_and_reports_headroom`)
 - [x] `ST-C6-6` (`test_c6_determinism.py::test_two_differing_dimensions_is_evidence_for_neither_axis_naming_both`, `test_c6_determinism_cli.py::test_two_dimensions_differing_reports_neither_axis`)
 
-**Discipline** (every stage)
-- [x] portability §3 — `P-4` (the ubuntu runner's honest skip is itself the
-      P-4 exposure, handled); `P-10` not separately exercised
-- [x] naming §3 — `N-9` (`run_id`/`process_nonce` both reach the manifest)
-- [x] `python docs/py/run_all.py` green (2026-08-05); sim `pytest` 696
-      collected / 692 counted toward the floor (bumped 409 → 692, verified
-      local run, `ci_gate_config.yaml`)
+**Discipline**
+- [x] portability §3 (`P-4`, `P-10`) · naming §3 (`N-9`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [x] `ST-C6-2` green — proven twice over: the unit-level pure-function test,
@@ -5817,8 +3477,6 @@ which is `plan.md` item 20 and explicitly out of this stage's scope.
 ### S-C7 — `sil_host` reads the pipeline (`FR-SIM-65`, closes `OQ-11`)
 
 > **Build order: #15** (§0a is the authority on sequence). Block 2. Blocked on `S-C1d` (#12) and `S-C5` (#13).
-
-*(Added 2026-07-31.)*
 
 **Purpose.** Make `sil_host` do the job it is named for: **run a complete
 pipeline in simulation, with no Python in the process.** Today it is 54 lines
@@ -5930,14 +3588,8 @@ already exists somewhere and was not found.
       (two `stubdll:echo_stub` stages; also proven manually against a real
       `df_sil` + `echo_stub` two-stage pipeline, see status note above)
 
-**Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-5` (a second loader implementation
-      is where the platform difference gets duplicated; it must follow the same
-      documented rules, not invent its own), `P-1`, `P-4`
-- [ ] naming §3 ticked — exposure: `N-8` (a wiring error must read identically
-      in both hosts, or a developer learns two error vocabularies for one
-      model), `N-2`
-- [ ] `GT-1..GT-12` re-checked; `GT-4`'s `sil_host` row re-measured
+**Discipline**
+- [ ] portability §3 (`P-1`, `P-4`, `P-5`) · naming §3 (`N-2`, `N-8`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [x] `ST-C7-1` green — byte-identical across both hosts. Holds for both a
@@ -5949,10 +3601,6 @@ already exists somewhere and was not found.
 ### S-C8 — The plug-in bundle: the player runs standalone (`R-SIM-20`, `FR-SIM-64`)
 
 > **Build order: #14** (§0a is the authority on sequence). Block 2. **Built before `S-C6`/`S-C7`, against id order**, on this stage's own instruction: adjacency to `S-C5` (#13).
-
-*(Added 2026-07-31. Sibling of `S-C5`, and deliberately built right after it —
-the two are the same mechanism applied to configuration and to plug-ins, and
-building them apart is how they end up with two resolution orders.)*
 
 **Purpose.** Make *"point the player at a folder of libraries and it draws
 them"* true. A component's plug-ins are authored in the component (`R-SIM-1`,
@@ -6054,7 +3702,7 @@ reports which one won.
       imported — deliberately sidestepped, not worked around). **Not
       proven: an actual `vantage <dir>` GUI frame** — same scope split
       `S-C5` drew between the mechanism and a full CLI/GUI run
-      **Extended 2026-08-07 (`AR-55`):** load-and-register alone let a real
+      **Extended 2026-08-07:** load-and-register alone let a real
       bug through — a driving function's own calibration reader worked from
       a source checkout but crashed (`FileNotFoundError`) from exactly the
       relocated/deployed copy this test proves resolves and imports. Both
@@ -6078,20 +3726,52 @@ reports which one won.
       "`vantage <dir>` renders a run" GUI-level claim is not exercised by an
       automated test this pass
 
-**Discipline** (every stage)
-- [x] portability §3 — `P-9`/`P-1`/`P-5` exercised for real by
-      `test_c8_relocatability_installed.py`; `P-2` not specifically exercised
-- [x] naming §3 — `N-2` (real cross-component collision proven,
-      `UT-C8-3`); `N-9`'s HUD half deferred with the rest of the HUD work
-- [x] `python docs/py/run_all.py` green (2026-08-05); `df` `sil`/`gtest`
-      rebuilt clean with the plug-in bundle wired in; sim `pytest` 669/3
-      skipped
+**Discipline**
+- [x] portability §3 (`P-1`, `P-2`, `P-5`, `P-9`) · naming §3 (`N-2`, `N-9`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [x] `ST-C8-2` green — the strong form, at the mechanism level described
       above (real artefact, original deleted, fresh process, no GUI frame)
 - [~] `GT-12` — mechanism green; the GUI-level form is deferred, same as
       noted in the stage's own Tests section
+- [ ] **A plug-in bundle loaded from a DEPLOYED root actually renders**
+      (carried over from the retired ledger's `AR-61`, the one row that was
+      **still open** when it was deleted — §9a is now its home). **Reproduced
+      against current source 2026-08-08**, so this is live, not history.
+
+      **Repro** — the discriminator is whether `<root>/src/project/` exists,
+      which is true of a checkout and false of a deployed copy, and is why
+      three earlier attempts missed it: build a deployed-*shaped* root (a temp
+      dir holding today's `modules/df/sim/` plus the real packed `config/`,
+      and deliberately **no** `src/project/`), then drive it through
+      `vantage.py`'s own `_register_plugin_root` into a real `VantageWindow`.
+      Result: `FileNotFoundError` at `df/sim/layers/bsd.py`'s
+      `_bsd_calibration`, **empty layer tree, zero rows**, exception swallowed
+      on the render thread.
+
+      **Root cause.** `_bsd_calibration` branches on `bundle_dir is not None`
+      and the traceback shows the **else** branch running — so
+      `ctx.model.bundle_dir` **is** `None`. The `AR-55` fix that made it read
+      the bundle is correct code that never executes here. Nothing populates
+      it: `scripts/vantage.py` passes `_register_plugin_root`'s returned
+      `config/` directory as **`pipeline_config`**, which feeds the
+      *pipeline's* `adasInit`, and it never reaches
+      `ProjectModel.resolve(library_dir=…)`. A source checkout works **by
+      accident** — the fallback path happens to exist there.
+
+      **Fix site:** route that resolved `config/` into `ProjectModel.resolve`
+      as the explicit/library bundle, not only into the pipeline.
+
+      **Already eliminated, so nobody re-tests it:** the on-disk deployed
+      bundle *is* older than source, but its `bundle_sha256` recomputes to
+      exactly its stamped value — internally consistent, so hash verification
+      would never flag it — and the fresh-source repro above crashes anyway.
+      *"Verify the hash"* is not the fix.
+
+      **This is `FR-SIM-64`'s (`P0`) actual claim**, which today reads
+      `proven*` on `ST-C8-1`/`ST-C8-2` — both of which prove **load and
+      register**, never *render*. `scripts/gui.py`'s plug-in-root validator
+      warns on exactly this condition in the meantime.
 
 **Remaining, explicitly deferred, not this session's scope:** the HUD's
 missing-plug-in/HUD-badge surfaces (`sim explain`/`sim doctor` reporting the
@@ -6103,10 +3783,6 @@ viewer.
 ### S-C9 — Recording ingest: what a file provides, and which cuts it supports (`R-SIM-23`, closes `D14`)
 
 > **Build order: #8** (§0a is the authority on sequence). Block 1. **Built before `S-C2`, against id order** — it is `P0`, needs no world model, and `S-C3` (#10) depends on it.
-
-*(Added 2026-07-31. Ordered **before** `S-C3`, because a scenario's `expect:`
-block names ports and this stage is what makes a port name resolvable against a
-recording that was not produced by this framework.)*
 
 **Purpose.** Make an existing recording drivable. Today the chain
 `df/gen_object_list` → `/source/gen_object_list` → `source.gen_object_list`
@@ -6247,19 +3923,8 @@ own best test.
       line naming its own line number) — 12 tests total across both files,
       all real, compiled, and passing (no DLL needed).
 
-**Discipline** (every stage)
-- [x] portability §3 ticked — exposure: `P-3` (topic names are matched exactly,
-      never case-folded — a case-only near-miss would silently drop a port,
-      confirmed: `IngestMap.matches`/`_by_raw_topic` key off exact string
-      equality, no `.lower()`/`.casefold()` anywhere in `io/ingest.py`), `P-1`,
-      `P-4`
-- [x] naming §3 ticked — exposure: `N-6` (**the** stage that decides whether a
-      translation table is data or code; the one sanctioned exception disappears
-      here — `io/legacy.py` and its `check_gt1` exemption are both deleted),
-      `N-2`, `N-8`
-- [x] `python docs/py/run_all.py` green; `GT-1, GT-2, GT-3, GT-6, GT-11`
-      re-checked clean (`scripts/check_invariants.py`'s own current scope —
-      not all of `GT-1..12` are wired into that script yet, pre-existing)
+**Discipline**
+- [x] portability §3 (`P-1`, `P-3`, `P-4`) · naming §3 (`N-2`, `N-6`, `N-8`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [x] `ST-C9-1` green **with `ST-C1c-1`'s hardcoded topic constants deleted** —
@@ -6318,44 +3983,6 @@ than argued from the Scene's shape.
 and lives entirely in `render/foxglove.py`; `Prim` must not grow a field that
 exists because a foreign schema wanted it.
 
-**Status: the automatable ~90% DONE and pytest-verified 2026-08-05 (WSL shell,
-`foxglove-sdk` installed into the venv, real network access confirmed for
-PyPI); `ST-D1-1`/`MC-3` is NOT done and cannot be from this shell — see
-below.** `render/foxglove.py` (new): `scene_update`/`scene_entity_for_layer`
-map all 11 `PrimKind`s, one `SceneEntity` per `Layer` with `id` = `Layer.id`
-unchanged (`N-2`/`N-6`); `frame_transforms_for` publishes a static-identity
-`FrameTransforms` graph for every frame a Scene's prims actually reference,
-closing the chain to `"world"` even when only a non-`ego` frame appears
-(the exact stranding bug `df_carla_viz_plan.md` §2 hit); `write_scene_
-snapshot`/`scene_recording_topics` write `/scene` + `/tf` into an
-ALREADY-OPEN `RecordingWriter` using Foxglove's own well-known schema names,
-verified round-tripping through a REAL `.mcap` file (`io/mcap.py`, no
-mocking) including `capture_time_ns`. **A real bug found while writing
-`UT-D1-2`, fixed before it shipped**: the first cut hardcoded every entity's
-`frame_id` to `"ego"` regardless of what frame its own prims were actually
-drawn in — a layer containing `sensor:0`-relative prims would have rendered
-them AS IF `ego`-relative, silently misplaced in the foreign viewer (exactly
-the class of bug this stage exists to close, just introduced fresh instead
-of inherited). Fixed by deriving `frame_id` from the layer's own prims and
-raising `_MixedFrameLayer` (naming the frames) if a layer ever mixes more
-than one — `test_mixed_frame_layer_raises_naming_the_frames_rather_than_
-misplacing_geometry` is that regression test. **Foxglove SDK objects are
-write-only** (no readable attributes beyond `.encode()`/`.get_schema()`,
-confirmed against the installed package, not assumed) — every test decodes
-`.encode()`'s bytes back into a real protobuf message via a `DescriptorPool`
-built from `ClassName.get_schema().data` (a genuine `FileDescriptorSet`),
-the same technique `contracts/component.py`'s `resolve_message_classes`
-already uses for a component's manifest (`R-SIM-11`'s own "no generated
-bindings needed" reasoning, reused here as a TEST technique rather than
-production code). **Heatmap/image** map to a labelled placeholder
-`TextPrimitive` naming the referenced `Prim.bulk` topic — Foxglove's
-`SceneEntity` has no bulk-data primitive of its own, and `R-SIM-2` already
-keeps that payload out of the Scene, so there is nothing more to draw here
-even in principle; stated as a real, permanent limitation, not a stopgap.
-19 new tests (`tests/unit/test_d1_foxglove.py` + `test_d1_scene_recording.py`),
-full suite re-run clean: 629 passed / 28 skipped (was 610/28), `scripts/
-check_invariants.py` clean (`GT-1,2,3,6,11`).
-
 - [x] `render/foxglove.py` — Scene to scene entities, **one entity per layer**,
       so layer toggles work in the foreign viewer for free
 - [x] Frame graph emitted **once** from the project model — the fix for the
@@ -6410,16 +4037,8 @@ check_invariants.py` clean (`GT-1,2,3,6,11`).
       look step is missing, and no amount of further coding in this
       environment closes it
 
-**Discipline** (every stage)
-- [x] portability §3 ticked — exposure: `P-4`, `P-8` (entity ordering must be
-      sorted or two exports of one scene differ — verified, see `UT-D1-3`)
-- [x] naming §3 ticked — exposure: `N-2` (a Foxglove entity id **is** a
-      `Layer.id`, unchanged — `N-6`: no translation table)
-- [x] `pytest`/`scripts/check_invariants.py` green in this WSL shell (see
-      Status note). `docs/py/run_all.py` NOT independently re-run for this
-      stage — see the `project_wsl_toolchain_gaps` memory note on
-      `check_audit_ledger.py`'s own unrelated slowness in this shell
-      (confirmed pre-existing during `S-D7`, not re-triggered here)
+**Discipline**
+- [x] portability §3 (`P-4`, `P-8`) · naming §3 (`N-2`, `N-6`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] `ST-D1-1` green — the interop claim is demonstrated in a foreign viewer,
@@ -6428,11 +4047,6 @@ check_invariants.py` clean (`GT-1,2,3,6,11`).
 - [x] `UT-D1-4` green — the boundary held in the direction that is easy to lose
 
 ### S-D2 — matplotlib renderer + figure-driver migration
-
-> **Deferred by decision, 2026-08-05 (`NR-SIM-46`, see `S-D5`'s entry
-> condition and `sim_requirements.md`).** Named trigger: a figure headless
-> `sim render` cannot produce. Do not start this stage until that trigger
-> fires — it is not "next" in id order, it is parked.
 
 **Purpose.** Prove **one Scene, two renderers, one palette** (`D5`). A figure in
 a document and the live view must be the same picture in two media, not two
@@ -6463,12 +4077,8 @@ Scene lacks, the Scene is what changes.
 - [ ] `ST-D2-2` a figure and the live view of the same geometry use the same
       token, therefore the same semantic appearance (**D5** closed)
 
-**Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-4` (figure output must be byte-stable
-      across platforms), `P-7` (matplotlib runs headless here)
-- [ ] naming §3 ticked — exposure: `N-6` (a figure label is the signal name,
-      never a hand-typed caption)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
+**Discipline**
+- [ ] portability §3 (`P-4`, `P-7`) · naming §3 (`N-6`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] `ST-D2-1` + `ST-D2-2` green — one Scene, two renderers, one palette. A
@@ -6795,14 +4405,7 @@ be replaced the day an Ubuntu machine appears.
 
 - [ ] `app/panels/pipeline.py` — the pipeline dock, per visualization spec §13:
       one row per stage, `mode` toggle, `impl:` and overrides in a collapsed
-      expert row. **Landed as `view/pipeline_panel.py` +
-      `render.viewer.PipelinePanel`, not a new `app/panels/` module** — this
-      stage's own checklist path predates the real `S-B3` build, which put
-      every panel (`LayersPanel`, `InspectorPanel`, …) directly in
-      `render/viewer.py` with a paired `view/<name>.py` state module; this
-      slice followed the codebase's real convention over the checklist's
-      literal (and by now stale) path. Overrides-in-a-collapsed-row: **not
-      attempted**, see slice-1 note above
+      expert row.
 - [ ] Discovery-driven and component-agnostic: stages from the pipeline —
       **done**. `impl:` choices from manifests on disk — **not attempted**
       (no on-disk discovery mechanism exists anywhere yet, see slice-1 note).
@@ -6810,14 +4413,9 @@ be replaced the day an Ubuntu machine appears.
       **No component name anywhere** (`GT-1`) — **done**, `check_invariants.
       py` clean
 - [x] Severed-chain auto-close surfaced with a one-line undo bar (detection is
-      `UT-C1c-16`'s; acting on it is this stage's — `R-SIM-10`). **Done,
-      slice 5** — `PipelinePanelState.set_mode`/`undo_last_auto_close`
-      delegate to `Pipeline.with_mode`; `render.viewer.PipelinePanel`
-      renders the badge + undo bar
+      `UT-C1c-16`'s; acting on it is this stage's — `R-SIM-10`).
 - [x] `core/manifest.py` round-trip: the panel emits a run manifest, the CLI
       consumes it unchanged, and the CLI can emit one the panel reopens.
-      **Done, slice 2** — `RunSpec`/`load_run_spec`/`write_run_manifest`,
-      wired into `cli/resim.py`'s fallback resolution, see status note above
 - [x] Console entry point in `pyproject.toml`; **no `.bat`, no `.sh`** written
       by hand. `vantage = adas_sim.app:main` already existed from an
       earlier stage; **slice 3** made the panel reachable through it for
@@ -6838,11 +4436,7 @@ be replaced the day an Ubuntu machine appears.
       itself is `setEnabled(False)` with the reason as its tooltip), real,
       passing
 - [x] `UT-D3-3` a severed chain is flagged in the panel and the orphan stage is
-      badged *"computed, not consumed"*. **Done, slice 5** —
-      `tests/unit/test_d3_severed_chain_panel.py` (engine-level: auto-close,
-      undo, orphan flag, mode_overrides diff) + `tests/system/
-      test_d3_severed_chain_widget.py` (real Qt clicks: undo bar appears,
-      undo click renders the badge), real, passing
+      badged *"computed, not consumed"*.
 - [x] `UT-D3-4` the GUI builds a valid run manifest that the CLI accepts
       **verbatim**. `tests/unit/test_d3_run_manifest.py` (writer/reader) +
       `tests/system/test_d3_run_manifest_cli.py` (the real CLI's own
@@ -6871,55 +4465,17 @@ be replaced the day an Ubuntu machine appears.
       surfaces are driven by one `evidence()` call and are asserted **field by
       field**, not merely both non-empty. A field the record cannot fill reads
       `unknown` on both — never a plausible default, never blank on one side and
-      filled on the other. **Done, slice 5** — `core.evidence.format_evidence`
-      is the one shared formatter; `view/evidence_panel.py::EvidencePanelState`
-      + `render.viewer.EvidencePanel` are new. `tests/unit/
-      test_d3_evidence_panel.py` + `tests/system/test_d3_evidence_panel_widget.
-      py` (real Qt panel vs. a real `cli/explain.py --at` run against an
-      on-disk recording, both a resolved port and an unresolved address),
-      real, passing. **Scope note:** the panel's address is today's BEV
-      selection's `pick_id`, tried directly against the session's ports —
-      the full `pick_id` → port join (`Layer.id` → a provider's resolved
-      `requires` → ports) is `ST-D6-3`'s own separate, still-open scope; this
-      test proves the two SURFACES agree, not that every prim resolves yet
+      filled on the other.
 - [x] `ST-D3-1` every run in this plan is launchable from the GUI with no
-      hand-typed command. **Closed, slice 4** — `PipelinePanel`'s Run button
-      → `write_run_manifest` (scratch file) → `_ResimWorker` (off the GUI
-      thread: `Pipeline.load`, `init_components`, `core.resim.
-      resim_pipeline_merged`, `shutdown_components`, `build_session_
-      from_recording`) → `_on_loaded`, the same path any other recording
-      open takes. Proven against a REAL `stubdll:` (`echo_stub.dll`):
-      clicking Run yields a genuinely different `Session` object, no
-      hand-typed CLI command anywhere in the path. `tests/system/
-      test_d3_mainwindow_pipeline_panel.py`, real, passing
+      hand-typed command.
 
-**Discipline** (every stage)
-- [x] portability §3 ticked — exposure: `P-6` (entry point, never a `.bat`),
-      `P-7`, `P-2` (a run manifest must not embed a machine path). Re-checked
-      slice 5: no new `subprocess`/shell call, no new absolute path, no new
-      platform-specific Qt code
-- [x] naming §3 ticked — exposure: `N-8` (the GUI surfaces the same messages the
-      CLI raises — one wording, not two), `N-9`. Re-checked slice 5: `UT-D3-8`
-      IS the mechanism that makes `N-8` true for evidence text; the new
-      `undo_last_auto_close` `ValueError` follows this file's own existing
-      plain-`ValueError` convention (`set_mode`'s own), not a new pattern
-- [x] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked. Re-run
-      slice 5: clean (`GT-1,2,3,6,11`)
+**Discipline**
+- [x] portability §3 (`P-2`, `P-6`, `P-7`) · naming §3 (`N-8`, `N-9`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [x] `UT-D3-4` + `UT-D3-5` + `ST-D3-1` green — the GUI and the CLI exchange the
       same artefact in both directions, which is what keeps them one engine
-      (`R-SIM-16`) rather than two paths that drift. **Closed, slice 4** —
-      `UT-D3-4`/`UT-D3-5` real since slice 2; `ST-D3-1` closed by wiring
-      `PipelinePanel`'s Run button through `write_run_manifest` (the SAME
-      call `Save Run Manifest...` makes) into a real, off-thread resim
-      (`_ResimWorker` → `core.resim.resim_pipeline_merged`, same single-rate
-      `Pipeline.exec()` engine `cli/resim.py` uses — never a second engine)
-      → `build_session_from_recording`. `UT-D3-3`/`UT-D3-8` were a
-      separate concern (severed-chain UI, evidence-panel consistency) —
-      not part of this gate's own three checks, and **now also closed,
-      slice 5** (see the stage's own Tests entries and the status note
-      above)
+      (`R-SIM-16`) rather than two paths that drift.
 
 ### S-D4 — Perception readiness
 
@@ -6974,123 +4530,12 @@ against.
 anything in its entry path branches on the upstream stage's `mode` or `impl`,
 the invariant is already broken and no test after this will catch it.
 
-**Status: the pure-geometry half DONE and pytest-verified 2026-08-05** (same
-WSL session as `S-D7`/`S-D1`/`S-D6`), **exactly the slice the stage's own
-"Gating" note names as landable now.** `render/image_view.py` (new):
-`project_point`/`unproject_pixel` (pinhole projection, internal CV-frame
-conversion never exposed outside this module), `project_box` reading a
-`kind="box"` `Prim`'s OWN fields (`cx_m`/`cy_m`/`length_m`/`width_m`/
-`yaw_rad`/`height_m`) — the identical `Prim` `render/bev.py` already draws,
-so `UT-D4-2`'s "cannot disagree" claim holds by construction, not by
-cross-checking two derivations. `ProjectedPoint` is a new, `_px`-suffixed
-dataclass, never reusing a `CameraModel`/`Prim` field's bare stem
-(`UT-D4-3`). `CameraModel` itself (`model/cameras.py`, `S-A2`) needed no
-change — its declared field set was already sufficient. 7 new tests
-(`tests/unit/test_d4_image_view.py`), full suite re-run clean: 647 passed /
-28 skipped (was 640/28), `check_invariants.py` clean (`GT-1,2,3,6,11`).
-
-**Status: the layer-group and camera-source halves DONE 2026-08-07** (sim
-build queue, S-D4 follow-up after `ST-D6-1`'s CI item closed). Two real,
-falsifiable pieces, neither a naming convention alone:
-
-- **`ground_truth`/`perception`/`perception.error` layer groups.**
-  `scene/types.py`'s `Layer.__post_init__` gains a second cross-field check
-  (beside the existing prim/layer `derived` one, `UT-A3-13`): a `Layer`
-  whose `group` ends `.error` that is not also `derived=True` raises,
-  naming the group and the layer id. This gives the naming convention real
-  teeth rather than a comment — an error group's own layer is, by
-  construction, a comparison between two SEPARATE sources, never a value
-  any single `ProPort` published, so it is always a reconstruction
-  (`R-SIM-7`) and the framework now refuses to let a layer claim otherwise.
-  `ground_truth` and `perception` carry no such rule (both can legitimately
-  be real, published values) — proven by a fourth test asserting the rule
-  does NOT fire for them.
-  **Generalised to the `.error` suffix, not kept to the literal
-  `"perception.error"`, by review 2026-08-07** — the first version was
-  keyed to today's one string, which is narrower than its own stated
-  reasoning: if `perception-core` splits into computer-vision + fusion
-  (`FR-SIM-71`), the real error group becomes `"fusion.error"`, and a rule
-  scoped to `"perception.error"` alone would silently stop applying at
-  exactly the moment the decomposition it exists to survive actually
-  happens. One line (`self.group.endswith(".error")` in place of an exact
-  match) plus one added test proving the generalisation
-  (`test_a_differently_named_error_group_layer_must_also_be_derived`,
-  `group="fusion.error"`). 4 tests total, `tests/unit/test_a3_types.py`
-  (`test_an_error_group_layer_must_be_derived`,
-  `test_a_differently_named_error_group_layer_must_also_be_derived`,
-  `test_an_error_group_layer_marked_derived_is_accepted`,
-  `test_an_unrelated_group_is_not_forced_derived`).
-  **Correction, found while working `S-C1c` the same day**: this box's own
-  claim that "no real perception provider exists to register under these
-  groups yet" was wrong — `modules/perception-core/sim/layers/
-  perception.py`'s `perception_objects` (audit run 3, `AR-46`, predates
-  this whole pass) already registers under `group="perception"`, reading
-  `self.genObjectList`. It is real and correctly-shaped (the file's own
-  docstring names `S-D4`'s convention explicitly), but has no test of its
-  own exercising it — dormant, not verified, a separate pre-existing gap
-  this pass did not create and is not this row's mandate to close. What
-  this row's own claim should have said: the FRAMEWORK half (the
-  enforcement rule) is what was missing; a real `group="perception"`
-  consumer already existed, `group="perception.error"` still has none.
-- **A source emitting camera stimulus, declared through `emits()`.**
-  `SyntheticSource` (`S-C2`) already IS a general-purpose emitter — no new
-  `Source` class was needed, since its `emits()` is the union of whatever
-  port names a caller's script declares. What was unproven: that a
-  source's declared `frame` port is genuinely usable against a REAL
-  component's REAL declared input, not merely a name that happens to match.
-  `tests/system/test_d4_camera_source.py` (new, real `perception_core_sil.dll`
-  from build queue row 1): a `SyntheticSource` emits real
-  `adas.isp.ProcessedFrame` bytes (message class resolved from the DLL's
-  own `descriptor_set`, `R-SIM-11` — no `interfaces` import) across three
-  ticks with DISTINCT content each tick; `Pipeline.load` validates the
-  `source.frame`/`source.egoDyn` wiring against the real manifest; the real
-  DLL executes against it (`adasExec`'s no-op accepts the call without
-  error); the recording's `source/frame` topic decodes back to EXACTLY the
-  scripted bytes per tick (not merely non-empty — a truncation or
-  misrouting bug would be caught). A second test proves `emits()` is
-  load-validated, not decorative: a pipeline naming `source.egoDyn` against
-  a source that never declared it is refused at `Pipeline.load`, naming
-  the missing port. 2 tests, both real DLL execution, no fixture faked.
-  **Radar deliberately not attempted, and why stated rather than left
-  silent**: no real component anywhere in this repo declares a
-  radar-shaped input port today, so a radar stimulus test would have
-  nothing to validate the wiring against — exactly the "asserts whatever
-  the code happens to do" shape a 2026-08-07 review warned this class of
-  work is prone to. Camera stays a real, falsifiable claim (a genuine
-  component, a genuine consuming port, a genuine round-trip); radar would
-  not have been.
-
-Full suite re-run: `pytest` 1007 passed / 10 skipped (the known
-`test_b3_viewport_controls.py` flake did not reproduce this run — it is
-non-deterministic, not always red), `check_invariants.py` clean,
-`docs/py/run_all.py` clean. **One real defect found and fixed landing
-this**: the `Layer.__post_init__` comment explaining the new
-`perception.error` rule literally quoted two of `GT-1`'s own banned
-function-id tokens as examples of what the grep catches — `GT-1` caught it
-in its own framework source, exactly as designed. Rephrased to describe
-the rule without quoting the banned vocabulary; `check_invariants.py` and
-the two `test_a1_check_invariants.py` tests it had turned red are clean
-again.
-
-**Explicitly NOT attempted, and why:**
-
-- **`ST-D4-1`/`ST-D4-2`** — correctly stay un-attempted, per the stage's OWN
-  "Gating" note: both need a second real PERCEPTION component, which does
-  not exist (`perception-core` has no real Conan package yet, `R-SIL-2`).
-  **`vdy`'s existence does not change this** — checked explicitly before
-  starting this pass, since an earlier session-planning message speculated
-  it might: `vdy` is vehicle dynamics, not perception, and does not satisfy
-  what `R-SIM-10`'s invariant needs a SECOND component's output compared
-  against ground truth for
-
 - [ ] `CameraModel` completed (declared in `S-A2`) + `render/image_view.py` —
       project Scene prims onto a camera frame.
       **`render/image_view.py` done**; `CameraModel` needed no completion
       (already sufficient as declared)
 - [x] `ground_truth` and `perception` layer groups; `perception.error` as a
-      **derived** group, marked (`R-SIM-7`). **Done 2026-08-07** — see
-      Status note: `Layer.__post_init__` structurally enforces
-      `group="perception.error"` implies `derived=True`
+      **derived** group, marked (`R-SIM-7`).
 - [x] A source emits camera stimuli, declared through `emits()`. **Camera
       done 2026-08-07, radar not attempted** — see Status note for why
 
@@ -7140,18 +4585,10 @@ again.
       keeps `perception-core`'s decomposition (one component vs.
       computer-vision + fusion) a cheap decision instead of an expensive one**,
       and the owner has stated it is undecided. The `perception-core` lean
-      structure landed by audit run 3 (`AR-46`) is the shape it binds to
+      structure landed by audit run 3 is the shape it binds to
 
-**Discipline** (every stage)
-- [x] portability §3 ticked — exposure: `P-8` (projection maths must not
-      introduce float time — `project_point`/`unproject_pixel` take/return
-      plain floats, no timestamp involved), `P-1`
-- [x] naming §3 ticked — exposure: `N-4` (intrinsics and extrinsics are
-      unit-suffixed; a pixel and a metre sharing a bare name is the defect this
-      rule exists for — `UT-D4-3` above)
-- [x] `pytest`/`scripts/check_invariants.py` green in this WSL shell (see
-      Status note). `docs/py/run_all.py` not independently re-run — same
-      `check_audit_ledger.py` slowness noted for `S-D1`/`S-D6`
+**Discipline**
+- [x] portability §3 (`P-1`, `P-8`) · naming §3 (`N-4`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] `ST-D4-1` + `ST-D4-2` green — two components in one pipeline, with the
@@ -7199,68 +4636,6 @@ dependant, exactly inverting `R-SIM-1`.
 > condition is what unblocks a future session to start it, not a decision to
 > start it now.
 
-> **Status, follow-up session (2026-08-05): started for real.** Three
-> genuinely new pieces landed: `app/version.py` (`--version`'s
-> compatibility statement, `UT-D5-2`), `scripts/freeze.py` (the PyInstaller
-> one-folder build), and `pyproject.toml`'s new `package` extra
-> (`pyinstaller>=6`, build-time only — never a runtime dependency, so a
-> frozen build never bundles its own freezer). Everything else the
-> checklist names turned out to already exist from earlier stages —
-> `--plugin-root`/`ADAS_SIM_PLUGIN_PATH` (`S-C8`), `%LOCALAPPDATA%` settings
-> (`_config_root`'s `QStandardPaths.AppConfigLocation`, `S-B3`), the
-> open-a-recording positional argument — and `UT-D5-1`/`UT-D5-3`/`UT-D5-4`/
-> `ST-D5-2`/`ST-D5-3` are already proven by existing tests, cross-referenced
-> rather than rebuilt (see each test's own entry below for exactly which).
->
-> **`scripts/freeze.py` was actually run in this shell** (PyInstaller
-> installed fresh, `pip install pyinstaller` — not present before this
-> pass) and produced a real `dist/vantage/` (~750 MB, PySide6 + matplotlib
-> + mcap + the framework). Running it found a REAL bug, fixed the same
-> pass: `app/version.py`'s `importlib.metadata.version("adas-sim")` raised
-> `PackageNotFoundError` inside the frozen bundle (PyInstaller does not
-> carry a package's dist-info unless told to) — `vantage.exe --version`
-> crashed outright. Fixed two ways, deliberately both: `scripts/freeze.py`
-> gained `--copy-metadata adas-sim` (the real fix, proven — a second freeze
-> reports the true `0.1.0`), and `app/version.py` now catches
-> `PackageNotFoundError` and reports `"unknown"` rather than crashing
-> (`R-SIM-25`/`NR-SIM-4`'s "never a plausible default, never crashes" —
-> `--version` existing specifically for diagnosability must not itself be
-> the thing that fails). `tests/unit/test_d5_version.py` covers the
-> fallback directly (a monkeypatched `PackageNotFoundError`), not just the
-> happy path.
->
-> **`ST-D5-1`, honestly scoped.** This machine is not a clean VM — it still
-> has Python, Conan and this checkout, just not inside the directory the
-> frozen build is copied to and run from. What running it here DID prove,
-> for real, twice: (1) `dist/vantage/vantage.exe`, copied to an isolated
-> `tmp_path` with nothing else beside it, runs `--version` standalone — no
-> `PYTHONPATH`, no venv activation, no sibling checkout; (2) the same
-> isolated copy opens a real recording (`tests/fixtures/tiny.mcap`) and
-> sits in its Qt event loop with no load-time crash, for as long as the
-> process was left running (killed cleanly after 5s, the test's own
-> timeout, not a hang). **A second, real, separate gap found doing (2):**
-> without `modules/shared_config` copied alongside, the frozen app raises a
-> properly-formed `AuthoringError` (`N-8`-compliant: expected, found,
-> where, a next-action hint) from `model/ego.py`'s `MODULES_ROOT = Path(
-> __file__).resolve().parents[4]` — a SOURCE-TREE-relative fallback
-> (R-VAR-4's "checkout" tier, `S-A2`) that resolves to nonsense once
-> frozen, and a bare `sim view <recording>` with no `--pipeline` has no
-> OTHER tier to fall back to (`R-SIM-3a`'s packed config bundle is
-> per-component, not part of the bare framework). The error is clean, not
-> a garbled crash — but it still surfaces as a raw stderr traceback rather
-> than an in-app message, and a genuinely clean-machine deployment of the
-> bare viewer (no component, no bundle) has no config source at all today.
-> **Real, not this pass's fix** — `tests/system/test_d5_frozen_build.py`
-> copies `shared_config` alongside to test what THIS pass's freezing work
-> can actually claim, and states the gap in its own docstring rather than
-> quietly working around it with no record.
->
-> Full suite re-run: `pytest` 764 passed / 7 skipped (the two frozen-build
-> tests skip by design when `dist/vantage/vantage.exe` is absent — freezing
-> takes minutes and is never part of the default gate, same precedent
-> `test_c8_relocatability_installed.py` sets), `check_invariants.py` and
-> `docs/py/run_all.py` both clean.
-
 Turns the library into the application of arch §5.15. Windows only.
 
 - [x] One-folder frozen build (PyInstaller or equivalent) bundling CPython, Qt,
@@ -7275,7 +4650,7 @@ Turns the library into the application of arch §5.15. Windows only.
       `--plugin-root`/`ADAS_SIM_PLUGIN_PATH`, see `UT-D5-3`'s own naming note)
 - [x] `--version` prints the player version **and** its compatibility statement:
       supported ABI generation, Scene major, recording-model and manifest
-      versions. **Done, this pass** — `app/version.py`, see `UT-D5-2`
+      versions.
 - [x] Settings/layouts in `%LOCALAPPDATA%`, never inside the install or a repo.
       **Already true** — `render/viewer.py::_config_root` uses
       `QStandardPaths.AppConfigLocation` (`P-7`'s own discipline: never
@@ -7299,11 +4674,6 @@ Turns the library into the application of arch §5.15. Windows only.
       same constants each of these already enforces, so `--version` cannot
       drift from what a refusal actually checks
 - [x] `UT-D5-2` `--version` reports every one of the four version fields.
-      **Done** — `app/version.py::version_info`/`format_version_text`
-      (new), wired into `scripts/vantage.py --version` (short-circuits
-      before `recording` is required). `tests/unit/test_d5_version.py` +
-      `tests/system/test_d5_vantage_cli.py` (the real subprocess entry
-      point), real, passing
 - [x] `UT-D5-4` **the plug-in API carries its own generation** (`NR-SIM-44`,
       audit `A7`), independent of the Scene major and the ABI version; a plug-in
       outside the player's supported range is **refused with both numbers
@@ -7351,17 +4721,8 @@ Turns the library into the application of arch §5.15. Windows only.
       on; its own docstring states the "short of an actual GUI frame" scope
       honestly)
 
-**Discipline** (every stage)
-- [~] portability §3 ticked — exposure: `P-6` (entry point stays `vantage.exe`
-      via PyInstaller's own bootloader, never a `.bat`), `P-7` (`set_high_
-      dpi_policy`/`_config_root` unchanged, already portable), `P-10` — **not
-      re-checked**: packaging was only run and verified on Windows this
-      pass, `P-10`'s own Linux-unavailable-dependency bring-up table needs a
-      real Ubuntu freeze attempt, not attempted here
-- [x] naming §3 ticked — exposure: `N-9` (`--version` prints the
-      compatibility statement — done, `app/version.py`)
-- [x] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked. Clean
-      this pass (see Status note)
+**Discipline**
+- [ ] portability §3 (`P-6`, `P-7`, `P-10`) · naming §3 (`N-9`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [~] `ST-D5-1` + `ST-D5-2` green — the player is genuinely component-agnostic
@@ -7386,7 +4747,6 @@ in `docs/py/logs/FR_SIM_45_argument_binding_survey.*.log`: 5.8 authored config
 elements per `exec()` call, 21 for a realistic one. If six verbs prove
 insufficient the answer is a `stub:` stage — real code, in a file, reviewable.
 
-
 Closes `FR-SIM-44`, `FR-SIM-45`, `FR-SIM-46`. This is the stage that decides
 whether anyone writes a private player, so `GT-8` is measured here.
 
@@ -7400,62 +4760,6 @@ whether anyone writes a private player, so `GT-8` is measured here.
 > implementation work and were: building them twice is exactly the rework this
 > plan's §0a sequence exists to prevent, and `GT-9` says the capability lives in
 > the library while `S-D6` adds the way a person reaches it.
-
-**Status: the CLI/logic half partially done and pytest-verified 2026-08-05**
-(WSL shell, same session as `S-D7`/`S-D1`). `sim_learn.md` SS5 confirms
-`sim probe <lib>` and `sim probe <recording>` are ONE verb, auto-detected —
-`cli/probe.py` extended (not replaced) with `is_registered_recording_
-extension` (new, `io/registry.py`) doing the dispatch by suffix, the
-library half reusing `CtypesSilComponent` exactly (no second manifest
-reader). `cli/list_cmd.py` is new (`DG-1`'s four sub-verbs); named
-`list_cmd.py`, **not** `list.py` — a real bug found while writing it:
-importing a submodule literally named `list` sets a `list` attribute on the
-`adas_sim.cli` PACKAGE module object, which IS `cli/__init__.py`'s own
-`globals()`, silently shadowing the `list()` BUILTIN for every other verb's
-dispatch the moment anything imported it (broke `render`/`export`/`doctor`
-CLI dispatch tests until caught by the full-suite run, not the file's own
-tests in isolation). Both compiled fixtures live at `tests/fixtures/
-echo_stub/` — `echo_stub.c`, pure C, zero dependencies (no protobuf, no
-`AdasInterfaces` link), hand-encoding two manifest fields in raw protobuf
-wire format — compiled here with `gcc` against nothing but `interfaces/
-include/adas/adas_sil_abi.h`, proving the REAL `ctypes.CDLL` load path (not
-mocked) with no Conan/C++ toolchain needed, same precedent `test_c5_
-relocatability.py`'s own fixture already set. **`test_list_layers_builds_
-a_real_scene` needed a fresh-subprocess sidestep** (mirrors `test_c8_
-relocatability_installed.py`'s own reasoning) — `scene/registry.py`'s
-provider table is process-global, so whether `df`'s real layer providers
-are already registered when `tiny.mcap`'s synthetic non-protobuf payload
-reaches them (and crashes trying to decode it) depends on pytest collection
-order, not on `cli/list_cmd.py`'s own correctness. **Verifying severed-chain
-handling found a second real gap**, fixed in `contracts/pipeline.py`
-alongside its own tests: `with_mode(close_gaps=False)` silently left an
-orphan stage with no warning at all — `R-SIM-10`'s own text ("forcing the
-gap open... is badged... and warned at load headlessly. Never silent")
-was not actually true until now. Full suite re-run clean: 640 passed / 28
-skipped (was 629/28), `check_invariants.py` clean (`GT-1,2,3,6,11`).
-
-**Status update, follow-up pass (same date, after `S-D3` slice 5).**
-Three more boxes closed, no engine code touched — this pass is tests plus
-one cross-reference fix: `UT-D6-4`'s "GUI acts on a severed chain" turned
-out to already be built, under a different (real) path than this box
-named — `S-D3` slice 5's `view/pipeline_panel.py` + `render.viewer.
-PipelinePanel` IS the `app/gui/pipeline_panel.py` this box was written
-against, before the codebase's real panel convention existed; cross-
-referenced rather than re-implemented. `UT-D6-3` and `ST-D6-2` were both
-genuinely unwritten and are now real tests (`tests/unit/test_d6_manifest_
-for.py`, `tests/system/test_d6_override_determinism.py` — the latter
-proves an override actually applies AND that two independent resims
-against the same recording produce byte-identical outputs and equal
-manifests, closing the one determinism axis `S-C1cΔ`'s override work left
-unassertated). Full suite re-run: `pytest` 758 passed / 7 skipped (one
-pre-existing flake, `test_b3_viewport_controls.py`, reproduced once more
-inside the full run and passed standalone every time — see `S-D3` slice
-5's own note, unrelated to this pass), `check_invariants.py` clean,
-`docs/py/run_all.py` clean. `S-D6`'s own Gate
-remains open — it names only `ST-D6-1` (the day-one end-to-end
-walkthrough + `GT-8`'s timed-newcomer measurement), which this pass did
-not attempt; see that test's own note on why it needs a real newcomer, not
-a self-timed session.
 
 - [x] `contracts/override.py` — **verify, do not rebuild**: the six verbs resolve
       at a port, a field path (`egoDyn.vx`) and a repeated element
@@ -7566,46 +4870,6 @@ a self-timed session.
       viewer and the SUT would agree** (`R-SIM-3a`); codec capabilities;
       which cuts a recording supports; platform, line endings, console
       encoding (`P-4`). Non-zero exit on anything that would break a run.
-      **Done, follow-up pass 2026-08-06** (`UT-D6-8`): `sim doctor` gains
-      `--pipeline`/`--search`/`--config`/`--recording`/`--project`. Codec
-      capabilities (`io.registry.codec_info`) are always reported, no flag
-      needed; the other three fire only when given enough to check.
-      **Real design gap found and fixed in the same pass**: `Pipeline.load`
-      itself raises on the first stage whose `impl:` stem does not resolve
-      (`_resolve_components`), which would have made "a broken stem"
-      undiagnosable — the exact condition `sim doctor` exists to report
-      would instead crash it. Fixed by splitting `Pipeline.parse_stages`
-      (new classmethod, no component resolution) out of `Pipeline.load`,
-      so library resolution is checked first, off the raw stage
-      declarations, before `Pipeline.load` is even attempted (itself now
-      wrapped so a load failure past that point is reported, not raised).
-      `contracts.loader.resolve_library_report` (new, alongside
-      `resolve_library`) answers "which directory and pattern matched"
-      on SUCCESS too, which the raise-only-on-failure original cannot.
-      Config-bundle agreement loads the resolved library for real (same as
-      `sim probe`) to read its own `config_bundle_sha256` and compares it
-      against `model.project.ProjectModel`'s viewer-side resolution over
-      the same `--config`/library-packed bundle. **Scoped honestly**: the
-      "embedded in recording" bundle tier is not compared — nothing in
-      this codebase extracts a bundle from a recording's embedded bytes to
-      a directory yet, so only the two tiers that are actually wired
-      (explicit `--config`, library-packed) are checked; this is the exact
-      pair `sim resim --config` exercises. Recording diagnostics reuse
-      `Session.feasible_cuts` (already built at `S-C9`) for "which cuts
-      this recording supports." `tests/unit/test_d6_doctor.py` (7 tests, no
-      DLL needed) + `tests/system/test_d6_doctor_cli.py` (6 tests, real
-      `df_sil.dll`: a healthy pipeline exits 0; a broken stem, a real
-      bundle mismatch — a second, different but real bundle, not a
-      tampered hash — and an unregistered/write-only recording extension
-      each exit non-zero naming the file). Full suite: 799 passed / 7
-      skipped (Windows venv, `foxglove` extra not installed here, one
-      pre-existing flake — `test_b3_viewport_controls.py`, reproduced and
-      confirmed passing standalone, same as prior sessions' own note),
-      `check_invariants.py` and `docs/py/run_all.py` both clean. One
-      unrelated boundary violation caught and fixed along the way:
-      `core/diagnostics.py`'s own docstring named a format ("mcap")
-      outside `io/`, tripping `UT-A4-11`/`R-SIM-14`'s mechanised check —
-      reworded, no logic change
 - [x] `cli/list.py` — `sim list ports|topics|layers|signals` (`DG-1`).
       **Filename is `cli/list_cmd.py`, not `cli/list.py`** — see the Status
       note's own bug story for why. `signals` is scoped to the PORT-level
@@ -7623,55 +4887,26 @@ a self-timed session.
       outside_the_closed_four_is_a_load_error_not_a_warning` + `test_c1c_
       binding.py`'s field-path tests), confirmed intact, not rewritten
 - [x] `UT-D6-2` an override appears in the run manifest and tags its topic.
-      **Done, follow-up pass 2026-08-06 — "tags its topic" corrected to
-      "and its stage's HUD row"**, per the resolved design question in its
-      own checklist item above: no topic's recorded bytes ever reflect an
-      override, so tagging one would be false. `RunManifest.overrides`
-      (the manifest half) + `StageView.overridden`/the real Qt badge (the
-      HUD half) both proven — see that entry for the full test list
 - [x] `UT-D6-3` `sim probe` on `InProcessSilComponent` prints the same port set
-      the pipeline resolves — one source, no second description. **Done** —
-      `sim probe` the CLI verb only ever takes a file path, never an
-      in-process object (`tests/system/test_d6_probe.py` proves that half);
-      the claim underneath it, at the level that DOES apply to an
-      `InProcessSilComponent`, is `tests/unit/test_d6_manifest_for.py`:
-      `Pipeline.manifest_for` returns the resolved stage's own manifest
-      **unchanged** (identity, not a copy) — no second description to drift
+      the pipeline resolves — one source, no second description.
 - [x] `UT-D6-4` the **GUI** acts on a severed chain: given the detection from
       `UT-C1c-16`, setting a stage to `simulate` flips the intervening
       stages and shows the undo bar. Detection is the loader's; **acting on
       it is this stage's** — two tests, because a correct detector behind a
       GUI that ignores it is exactly the silent toggle `R-SIM-10` bans.
-      **The engine half (no GUI) is `UT-D6-5` below.** **Done, `S-D3` slice
-      5** — the real `app/gui/pipeline_panel.py` this box names turned out
-      to BE `view/pipeline_panel.py` + `render.viewer.PipelinePanel` (the
-      codebase's real panel convention since `S-B3`, `S-D3` slice 1's own
-      note); its "acting on it" half is `UT-D3-3`, same tests:
-      `tests/unit/test_d3_severed_chain_panel.py` +
-      `tests/system/test_d3_severed_chain_widget.py`, real, passing
+      **The engine half (no GUI) is `UT-D6-5` below.**
 - [x] `UT-D6-5` auto-close flips only the intervening stages, and undo restores
       the exact prior modes.
       `tests/unit/test_d6_severed_chain.py::test_auto_close_flips_only_
       the_intervening_stage_and_undo_restores_exact_prior_modes`
 - [x] `UT-D6-6` forcing the gap open is permitted and yields exactly one
-      orphan-stage warning naming the stage. **Found not implemented,
-      fixed, then tested** — see Status note.
-      `test_forcing_the_gap_open_yields_exactly_one_orphan_warning_naming_
-      the_stage` (+ a third test confirming the warning stays silent when
-      nothing is actually severed)
+      orphan-stage warning naming the stage.
 - [x] `UT-D6-7` `sim explain` resolves each of the six accepted name kinds,
       and on an unknown name suggests a fuzzy match rather than failing
-      bare (`DG-2`, `N-8`). **Done, follow-up pass 2026-08-06** — see
-      `cli/explain.py`'s own entry above for the full detail;
-      `tests/unit/test_d6_explain.py` covers all six kinds plus both the
-      "no suggestion when nothing is close" and "a real suggestion when
-      something is" fuzzy-match halves
+      bare (`DG-2`, `N-8`).
 - [x] `UT-D6-8` `sim doctor` exits non-zero on a broken stem, a bundle
       mismatch and a missing codec capability — and each message names the
-      file (`DG-3`). **Done, follow-up pass 2026-08-06** — see
-      `cli/doctor.py`'s own entry above for the full detail; all three
-      cases proven against a real `df_sil.dll` in
-      `tests/system/test_d6_doctor_cli.py`
+      file (`DG-3`).
 - [x] `ST-D6-1` **day one, end to end**: a fresh component library with only a
       manifest is probed, wired into a five-line pipeline, run against
       `tiny.mcap`, and its outputs appear in a recording — **no edit anywhere in
@@ -7732,42 +4967,7 @@ a self-timed session.
       > by direct `ctypes` execution against the compiled `.so`, and only the
       > chained Python assertions are unexecuted.
       >
-      > **Closed on evidence, 2026-08-07.** Ran on `python:3.12-slim` (Docker,
-      > this same WSL machine — `docker info` confirms `OSType: linux`, a
-      > genuine POSIX shell with Python ≥3.12, the exact acceptance condition
-      > above): a fresh copy of `modules/sim` + `modules/interfaces` (needed
-      > for `echo_stub_with_output.c`'s own `#include`), `gcc` installed,
-      > `pip install -e '.[dev]'`, then
-      > `python -m pytest tests/system/test_d6_day_one_walkthrough.py -v`:
-      >
-      > ```
-      > platform linux -- Python 3.12.13, pytest-9.1.1
-      > tests/system/test_d6_day_one_walkthrough.py::test_day_one_walkthrough_probe_pipeline_resim_recording PASSED
-      > 1 passed in 0.55s
-      > ```
-      >
-      > `1 passed`, not `1 skipped` — the chained Python assertions (probe
-      > output text, recording topic/payload contents, `Session.known_ports`)
-      > that the earlier note could only verify by reading source are now
-      > genuinely exercised, on a real POSIX interpreter. Re-tick is
-      > therefore real, not a repeat of the defect this box was downgraded
-      > for.
-      >
-      > **`.github/workflows/sim-ci.yml` itself still cannot run this test —
-      > a separate, real gap, recorded here rather than assumed fixed.**
-      > `sim`'s CI job checks out only `Pavan-karimajji/sim` (`actions/
-      > checkout@v4`, no `submodules:`, no sibling-repo step, and `sim`'s own
-      > repo carries no `.gitmodules` of its own) — `modules/interfaces` is
-      > never present at `parents[3] / "interfaces"` the way it is in this
-      > superproject checkout, so both `gate` and `core-only-smoke` would
-      > report this test (and `test_d6_probe.py`, which shares the identical
-      > `_INTERFACES_INCLUDE` skip guard) `skipped`, regardless of `gcc`
-      > availability on the runner. Wiring a sibling-repo checkout step into
-      > `sim-ci.yml` is real, separate work — that file's own header already
-      > declares "no general CI design here", and reaching across repo
-      > boundaries in a submodule architecture is exactly that, not a
-      > one-line fix. `ST-D6-1` closes on the evidence above; the CI-execution
-      > gap is a new, distinct, undecided item, not swept into this box.
+      >.
 - [x] `ST-D6-3` **the evidence chain, end to end** (`FR-SIM-67`, `R-SIM-25`,
       audit `A4`): selecting any prim answers — in one action — its port, topic,
       tick, origin tag, config bundle and component build, and whether the value
@@ -7776,68 +4976,8 @@ a self-timed session.
       if the two differ, the GUI has become the source of truth. Every piece
       already exists (`Prim.pick_id`, `PortValue.origin`, topic provenance,
       `bundle_origin`, `run_id`) — this test is that they are joined.
-      **Done 2026-08-06** (sim build queue row 4, sub-row 2): closes the
-      "still-open half of `R-SIM-25`'s join" `view/evidence_panel.py`'s own
-      docstring named. `core/evidence.py`'s `_resolve_prim` adds `kind="prim"`
-      to `evidence()`: `Layer.id` → the owning provider's declared `requires`
-      (`scene/registry.LayerProviderEntry.requires`, today used only for
-      tick-gating) → `contracts.binding.try_resolve_component_ref` (the same
-      tolerant resolver `LayerCtx.port` already calls) → the port's real
-      address, from which topic/origin/value are read exactly as `kind="port"`
-      already does. Also unblocked in the same pass: `config_bundle_sha256`/
-      `component_build_id`, resolved from `session.meta.components` by the
-      port's own stage prefix — populated for `kind="port"` too, not only
-      `kind="prim"`, and `layer_id`/`derived` (`Prim.derived`, R-SIM-7's
-      published-vs-reconstructed marker) for `kind="prim"`. **No GUI/CLI edit
-      needed for parity**: `MainWindow` already passed the BEV selection's raw
-      `pick_id` straight through as `address` (predating this row, `S-D3`
-      slice 5's own note), and `cli/explain.py --at` already just calls
-      `evidence()` then the shared `format_evidence` — "one producer, two
-      formatters" meant both surfaces gained `kind="prim"` for free.
-      **A real regression found and fixed in the same pass**: the naive
-      version rebuilt a full `Scene` (every currently-registered layer
-      provider, not just whichever might own the selected pick_id — one
-      process-global registry, `R-VAR-2`) on every unresolved-address lookup,
-      and a real component provider (`df/sim/layers/common.py`) crashed on a
-      session whose recording carried an undecoded port it assumed was
-      already a decoded message — turning an unrelated `kind="unknown"` test
-      into a hard crash (`tests/system/test_d3_evidence_panel_widget.py`'s
-      own unresolved-address case). Fixed by (a) skipping scene-building
-      entirely when `registered_providers()` is empty (the ordinary CLI/
-      unit-test case, cheap and correct), and (b) catching any exception
-      from `build_scene` and treating it as "no prim found" rather than
-      propagating — a provider's crash on data it was never designed for is
-      not *this* address's failure to resolve. New tests: `tests/unit/
-      test_d6_evidence_prim_join.py` (5, a test-scoped `@layer_provider`
-      registered with `requires=`, proving the join end to end, matching
-      value/origin/provenance against a direct port lookup, and the
-      unresolvable-pick_id degrade). Full suite re-run clean after the fix
-      (see Status note); `test_d3_evidence_panel_widget.py`'s two field-by-
-      field parity tests (resolved port, unresolved address) both still pass
-      unchanged. **Honest limit, stated rather than hidden**: `requires` is a
-      provider's own declaration, used today for gating, not a compiler-
-      verified list of every port its body reads — a provider calling
-      `ctx.port(...)` on a port outside its declared `requires=` resolves to
-      `topic=None` here, never a guess. **Also out of this row's scope,
-      surfaced not silently absorbed**: `S-C8`'s plug-in loading
-      (`model.plugins.PluginBundle.import_modules()`) is never actually
-      called anywhere in `app/`/`cli/` today — `registered_providers()` is
-      non-empty in the test suite only because test modules register their
-      own providers at import time, so `sim explain <pick_id>` run as a
-      real standalone CLI invocation (no test harness) still resolves
-      `kind="unknown"` for every real component's prims until that wiring
-      lands, a separate, pre-existing gap this row did not create and does
-      not close.
 - [x] `ST-D6-2` a pipeline with overrides resims reproducibly: two runs produce
-      byte-identical outputs and identical manifests. **Done** —
-      `tests/system/test_d6_override_determinism.py`: a real `const`
-      override on a `simulate` stage's input (proven actually applied —
-      every tick sees the overridden value, never the original stimulus),
-      two fresh `Pipeline`/`InProcessSilComponent` instances against the
-      same recording produce byte-identical `resim_pipeline` outputs and
-      equal `build_manifest` results (same explicit `clock=`, since
-      `created_utc` is the one field two real calls would otherwise
-      legitimately differ on)
+      byte-identical outputs and identical manifests.
 - [x] `ST-D6-4` **`sim doctor --component <name>` reports a component against
       the component-side checklist** (`NR-SIM-48`, added by audit run 3 —
       `AR-43`). Run against `df`, `vdy` and `perception-core` it produces the
@@ -7850,33 +4990,9 @@ a self-timed session.
       not a gate** — a gate here would fail `vdy` for not shipping layers it
       has no reason to ship; the value is that an absence becomes *declared*
       rather than *unnoticed*, which is `R-SIM-23`'s `absent:` one level up.
-      **Done 2026-08-06** (sim build queue row 3): `core/diagnostics.py`'s
-      `component_checklist(component_root)` + `sim doctor --component ROOT`
-      (a real path, e.g. `modules/df` — never a bare name, no superproject-
-      layout guess inside the framework, `R-SIM-11`). **One deliberate
-      narrowing of this box's own wording**: the tool reports every
-      required row's absence as an unconditional gap, but a conditional/
-      optional row's absence is reported **without** being labelled
-      legitimate-or-gap — the framework has no way to know `vdy`'s reason is
-      legitimate without hardcoding a fact about `vdy` inside `modules/sim`
-      itself, which `R-SIM-1`'s spirit forbids as surely as the literal
-      grep does. A human still makes that call, from the report, exactly as
-      §10's own "three readings" already does by hand. **Verified against
-      all three real trees, no build needed** — every row is a filesystem/
-      text check against the checked-in source, and it immediately found a
-      real, previously-unmeasured gap: §10's own table claimed `vdy` ✅ for
-      rows 5–7, and `vdy` has no `src/project/` directory at all (its
-      calibration is `adas-shared-config`'s, entirely) — corrected in that
-      table, not fixed here (real functional/build work, out of a docs-only
-      row's mandate). This is precisely the row's own framing, proven true a
-      second time: *"this is the check that would have caught row 2."*
 
-**Discipline** (every stage)
-- [x] portability §3 ticked — exposure: `P-5` (`sim probe` and `sim doctor` are the tools that *explain* library resolution, so they must exercise every pattern — both now do, `sim doctor` via `resolve_library_report`), `P-2`
-- [x] naming §3 ticked — exposure: `N-1`/`N-6` (`sim explain` only works because one name means one thing everywhere -- this stage is where that pays off, `explain.py` now complete for all six kinds), `N-8` (fuzzy "did you mean" landed)
-- [x] `pytest`/`scripts/check_invariants.py` green in this WSL shell (see
-      Status note). `docs/py/run_all.py` not independently re-run — same
-      `check_audit_ledger.py` slowness noted for `S-D1`
+**Discipline**
+- [x] portability §3 (`P-2`, `P-5`) · naming §3 (`N-1`, `N-6`, `N-8`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] `ST-D6-1` green **and `GT-8` measured and recorded** — the number goes in
@@ -7904,107 +5020,8 @@ is already broken.
 with it, and an overnight run of 500 recordings would die on recording 3 and
 report nothing. Isolation at run granularity costs nothing per tick.
 
-
 Closes `FR-SIM-52`, `NR-SIM-21`. Readers already exist (S-A4); this stage makes
 the codec table symmetric and adds the two verbs that scale it.
-
-**Status: export/convert DONE 2026-07-30; `sim batch` (isolation/crash/
-timeout half) DONE 2026-08-05, real pytest green in this WSL shell.**
-Unlike `S-C7`'s C++ work, this half is pure Python — the standalone-Python-
-3.12 venv trick (`project_wsl_toolchain_gaps` memory) unblocked a real
-`pytest` run in this same session, so this is verified, not merely written.
-`core/batch_worker.py` (new) is the per-recording subprocess entry point —
-`Pipeline.load` → `init_components` → `resim_pipeline` → `shutdown_
-components`, the same four calls `cli/resim.py` already makes for one
-recording — writing its outcome (`ok`/`fail`) as JSON before exiting.
-`core/batch.py` (new) is `run_batch`'s real engine: one fresh `subprocess.
-run` per recording (never a reused worker — `R-SIM-19`), concurrency
-bounded by `-j` via a thread pool that only supervises N subprocesses in
-flight, classification into the closed `ok`/`fail`/`crash`/`timeout` set —
-`crash` is inferred from the OUTSIDE (missing/unreadable `--out-json` plus
-an abnormal exit), never trusted from a value a dying process claims about
-itself, since a real crash never reaches the worker's own reporting code.
-`cli/batch.py` (new, registered in `cli/__init__.py`) is argument parsing
-only (`GT-9`). Two explicitly-named, non-production test hooks in
-`batch_worker.py` made `UT-D7-7`/`UT-D7-8`/`ST-D7-5` testable with no
-compiled component available in this shell: `ADAS_SIM_BATCH_TEST_STUB=
-crash|hang` (blanket) / `ADAS_SIM_BATCH_TEST_STUB_MAP="stem=crash;stem2=
-hang"` (per-recording, keyed by `--recording`'s own `.stem`) bypass
-pipeline loading entirely and die/hang on command; `--test-stub-echo NAME`
-injects a trivial zero-port `InProcessSilComponent` via `Pipeline.load`'s
-own `components=` kwarg so the real `ok` path (`ST-D7-2`/`ST-D7-3`) can run
-end to end against `tests/fixtures/tiny.mcap` with no `dll:`/`stubdll:`
-available. `tests/unit/test_d7_batch.py` (7 tests) + `tests/system/
-test_d7_batch_isolation.py` (5 tests), all green; full suite re-run clean
-at 610 passed / 28 skipped (598/28 before this stage); `scripts/
-check_invariants.py`'s four sub-checks (`check_doc_invariants`,
-`check_requirement_coverage`, `check_rules_coverage`, `check_traceability`)
-all `RESULT pass`/`RESULT ok`.
-
-**Explicitly deferred, not silently dropped, and not this pass's scope:**
-
-- **`UT-D7-9`/`--pin-builds`** — per `sim_resim_and_recording.md` §10 this
-  flag is spec'd against `sim resim`, not `sim batch` itself (a batch worker
-  could gain the same check later, sharing the mechanism once it exists).
-  It needs `library_sha256` actually computed somewhere — today `core/
-  manifest.py`'s `build_manifest` only THREADS a caller-supplied
-  `component_build_shas` mapping through to `ComponentBuildInfo`; nothing
-  computes a real hash from a resolved library path, and `cli/resim.py`
-  doesn't pass the mapping at all (every resim-produced manifest today
-  carries `library_sha256=""`). That hashing step is real, separate work.
-- **`ST-D7-6`** (a crash reproduces in-process on Bench) — needs a Bench GUI,
-  which does not exist (`S-D8` unbuilt). **Superseded 2026-08-07: `S-D8`
-  landed `Open on Bench`, and the build queue's row 4 sub-row 3 wired the
-  crash tick through it — see `ST-D7-6`'s own checkbox below, now done.**
-  The recording/pipeline/last-tick/
-  stderr/`run_id` this stage's own crash classification already captures is
-  exactly what that future "Open on Bench" affordance would consume; the
-  data side is done, the GUI side is a different stage's job.
-- **`ST-D7-7`** (campaign sizing, measured) — deliberately not attempted
-  alongside the rest of this pass; **measured in a later session, see the
-  test's own entry below for the real numbers.**
-- **`mode: isolated`** (the per-stage bisection escape hatch `R-SIM-19`
-  names alongside per-recording isolation) — not in this stage's own
-  checklist; `sim batch` isolates at run granularity only, which is the
-  scope `cli/batch.py`'s checklist line actually asks for.
-
-`io/base.py`'s writer protocol and `round_trips`/
-`write_only` capability flags, and `io/mcap.py`'s writer path, turned out to
-already exist (S-A4) — verified, not rebuilt. New: `io/csv.py`'s `CsvWriter`
-works directly on raw `(topic, log_time_ns, bytes)` triples, never
-`core/tick.Tick`/`PortValue`, so `io/` stays below `core/` in the dependency
-direction (`decode_message`/topic→port conversion duplicated locally rather
-than imported, noted in-code). Leaf columns are discovered from each port's
-**declared schema** (`DESCRIPTOR`, default-constructed message — works even
-with zero occurrences), never `ListFields()`/instance presence, so the
-column set is identical on every row (`UT-D7-1`). A genuine finding while
-building this: `Tick.age_s` (`core/runner.py`'s pass 1) is always `0.0`
-today — no scheduler exists yet to populate real multi-rate holding
-(`R-SIM-18` is Phase D). Rather than surface that gap, `CsvWriter` computes
-**real** held-value/`age_s` semantics itself from the row sequence (last
-seen value + elapsed time), which `UT-D7-3` exercises directly — a `core/`-
-level gap this module does not depend on to be correct. `on_missing`
-governs exactly one thing: a port with **no prior value to hold** (never
-appeared at all, or a leading gap before its first occurrence); every
-later gap is held automatically. `io/registry.py`'s `reader_for` gained the
-mirror of `writer_for`'s existing read-only check — a write-only extension
-(`.csv`) is now refused as a resim input **by capability**, naming the
-gap (`R-SIM-14`). `cli/convert.py` copies `meta`/`topics`/`messages`
-through the `RecordingReader`/`RecordingWriter` Protocols unchanged,
-carrying `config_bundle_bytes` through when both sides support it
-(duck-typed, `io/mcap.py`'s own "extra beyond the Protocol" helper) rather
-than silently dropping it. `cli/export.py` wraps `io/csv.py` directly, not
-through `io.registry.writer_for` (`CsvWriter` needs `ports`/`on_missing`
-config `open()`'s Protocol shape has no room for). New test-only dependency:
-`pandas` (`dev` extra) for `ST-D7-1`'s own literal claim. `pytest
-modules\sim\tests -q`: **362 passed** (347 before this stage + 15 new: 8 in
-`test_d7_csv.py`, 3 in `test_d7_convert.py`, 4 in `test_d7_export_cli.py`).
-`scripts\check_invariants.py` and `python docs\py\run_all.py`: both clean.
-**`UT-D7-6`'s own scope note:** "convert to a genuinely different
-round-tripping format and back" is untested — `.mcap` is still the only
-`round_trips=True` codec (`.csv` is write-only by design); the test round-
-trips `tiny.mcap` through `.mcap` twice instead, which still proves the
-copy path is lossless, just not the "different format" half of the claim.
 
 - [x] `io/base.py` — the writer half of the codec protocol; capability flags
       extended with `round_trips` and `write_only`. **Already present from
@@ -8099,41 +5116,7 @@ copy path is lossless, just not the "different format" half of the claim.
 - [x] `ST-D7-6` **a crash is reproducible**: the recorded recording + pipeline +
       tick + `run_id` reproduce it in-process on Bench, where a debugger can
       attach (`R-SIM-19`) — the loop that makes crashes get fixed rather than
-      retried. **Done 2026-08-07** (sim build queue row 4, sub-row 3), once
-      `S-D8` landed `Open on Bench` (`UT-D8-3`) to build on — the "needs a
-      Bench GUI that doesn't exist" blocker this box's own history noted is
-      resolved. `CampaignWidget.open_on_bench_requested` widened from
-      `(recording, pipeline_path)` to `(recording, pipeline_path, at_s)`:
-      `at_s = RecordingOutcome.last_tick_ns / 1e9` for the activated row, or
-      `0.0` when `last_tick_ns` is `None` — identical to `open_recording`'s
-      own pre-existing `at_s=None` default (`Session.seek_ns(0)` is tick 0
-      either way, so a plain `float` signal type needs no `None` case).
-      `window.py`'s `_on_open_on_bench_requested` threads it straight into
-      `open_recording(..., at_s=...)`, which already seeked
-      (`MainWindow.__init__`'s `initial_at_s` → `session.seek_ns` →
-      `self.transport.goto(start_tick)`) for every OTHER caller of
-      `open_recording` (a recent-file reopen, a sample pipeline) — this row
-      is wiring one more caller through an existing mechanism, not building
-      seek-on-open from nothing. The recording/pipeline reopen itself
-      predates this row (`UT-D8-3`); this closes the tick half that box's
-      own note left open. `run_id` needs no separate propagation — it
-      travels embedded in the recording file `open_recording` already
-      reopens. **Deliberately narrow, stated rather than widened
-      silently**: only a `crash`/`timeout` outcome's tick is wired, because
-      `RecordingOutcome.last_tick_ns` is a fact `run_batch` already captured
-      with no evaluation needed; an `ok`/`fail` outcome still opens at tick
-      0, because attributing ITS tick needs `expect:` evaluation
-      (`sim check`'s own job, `UT-D8-3`'s own original scope note, left
-      exactly as narrow as it already was). New/updated tests:
-      `tests/system/test_d8_campaign.py::test_double_clicking_a_crash_row_
-      emits_its_last_tick_as_at_s` (new) + its existing sibling updated for
-      the widened signal; `tests/system/test_d8_window.py::
-      test_ut_d7_6_open_on_bench_seeks_to_a_crash_results_last_tick` (new,
-      asserts `window.bench.transport.cursor` lands on the exact tick, not
-      merely that the call didn't raise) + `test_ut_d8_3_...`'s own
-      assertion extended to confirm the non-crash path still lands at
-      cursor 0. 29/29 in both files, full suite/`check_invariants.py`/
-      `run_all.py` all clean (see Status note)
+      retried.
 - [x] `UT-D7-9` **`--pin-builds` verifies, it does not merely address**
       (`OQ-9`, `NR-SIM-24`): resolving a component to an artefact whose
       `library_sha256` differs from the recording's **refuses to start**, naming
@@ -8187,36 +5170,10 @@ copy path is lossless, just not the "different format" half of the claim.
 - [x] `ST-D7-7` **campaign sizing, measured** (`NR-SIM-23`): a real campaign over
       the full recording set records per-recording size, wall-clock per resim,
       and scaling with `-j`. **The numbers go in this document**, whatever they
-      are — this test exists to produce a fact, not to pass. **Measured, real
-      environment, `df_only.yaml` against a real `df_sil.dll`, full recording
-      set at `modules/df/tests/carla_testruns/`**: 7 recordings (61–276 ticks
-      each, 1.8–11 MB, 33.1 MB total). `-j 1`: 2.11s (0.30s/recording). `-j 7`
-      (fully parallel — one worker per recording): 0.41s (0.06s/recording),
-      **5.2x**. Per-recording actual `resim_pipeline` compute is ~0.05s
-      (measured separately, single recording, in-process) — most of `-j 1`'s
-      wall-clock is per-recording **subprocess startup** (Python interpreter +
-      import), not SUT execution, which is why the campaign parallelises
-      *better* than compute-bound scaling would predict: the fixed per-
-      recording overhead is what `-j` actually amortises. `tests/system/
-      test_d7_campaign_sizing.py` (new) reproduces this on any machine with a
-      real `df_sil.dll` build and the recording set — re-run it rather than
-      trusting these numbers stale on a different machine
+      are — this test exists to produce a fact, not to pass.
 
-**Discipline** (every stage)
-- [x] portability §3 ticked — exposure: `P-4` (sidecar/CSV written
-      `encoding="utf-8", newline="\n"`, matching `S-B4`'s own discipline —
-      not verified byte-identical cross-platform this session, same "no
-      Ubuntu environment" basis as `S-B3`/`S-B4`), `P-8` (sorted columns and
-      topics — `CsvWriter` sorts the default "every port" selection;
-      an explicit `--ports` list keeps the caller's own declared order,
-      `UT-D7-1`'s own claim)
-- [x] naming §3 ticked — exposure: `N-2`/`N-4` (a column header is a fully
-      qualified name, `<port>.<leaf>`; unit suffixes come from the
-      producing `.proto`'s own field names, outside this module's control),
-      `N-9` (`run_id` in every export's preamble)
-- [x] `python docs/py/run_all.py` green; `GT-1..GT-9` re-checked. `GT-4`/
-      `GT-5`: unaffected — no `src/component/**` file and no build-machinery
-      file touched this stage
+**Discipline**
+- [x] portability §3 (`P-4`, `P-8`) · naming §3 (`N-2`, `N-4`, `N-9`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [x] `UT-D7-5` + `ST-D7-2` + `ST-D7-3` green — an export can never be mistaken
@@ -8254,23 +5211,9 @@ Nor may the engine learn which workspace is open: `Bench`/`Campaign` are UI
 arrangements plus a permission set, and `UT-D8-9` asserts the tokens never leave
 `app/` — the same discipline `R-SIM-1` applies to function names.
 
-
 Closes `FR-SIM-47`, `FR-SIM-48`. Everything before this stage builds capability;
 this stage decides whether anyone meets it. Spec:
 [sim_player.md](sim_player.md).
-
-*Landed 2026-08-06, this session.* `render.viewer.MainWindow` (`S-B3`/`S-D3`'s
-own window) is reused unmodified as Bench's content, reparented as a plain
-child widget of a `QStackedWidget` — Qt supports a non-top-level `QMainWindow`
-(its dock system and menu bar keep working), which is what let this land
-without rewriting the pipeline panel, inspector or plot `S-B3`/`S-D3` already
-own. Confirmed: `check_invariants.py`'s new `UT-D8-9` check is clean, and the
-full `pytest` suite went from 3 real failures to 1 (a pre-existing, order-
-dependent flake in `test_b3_viewport_controls.py`, unrelated to this stage) —
-the other two were `test_d3_mainwindow_pipeline_panel.py`'s own `skipif`
-missing a `sys.platform == "win32"` guard (a stale Windows-built `echo_stub.dll`
-existed on this Linux checkout, passed the file-existence check, and failed to
-load instead of skipping) — fixed as part of proving `ST-D8-1` for real.
 
 **Shell**
 - [x] `app/shell/window.py` — `VantageWindow`: transport/pipeline dock/centre/
@@ -8309,7 +5252,7 @@ load instead of skipping) — fixed as part of proving `ST-D8-1` for real.
       Library…`, reuses `contracts.component.CtypesSilComponent` directly
       (the exact load `cli/probe.py` performs, never a re-parse of its text
       output), renders every input/output port in a tree.
-      **Re-opened and re-closed 2026-08-06 (`AR-45`, fix queue row 5):** the
+      **Re-opened and re-closed 2026-08-06:** the
       panel was built and wired to `probe_requested`, but never added to
       `window.py`'s `QStackedWidget` — probing rendered into a widget
       nobody saw, a defect the panel's own unit tests could not catch
@@ -8320,7 +5263,7 @@ load instead of skipping) — fixed as part of proving `ST-D8-1` for real.
       (stdlib, no `qtconsole`/IPython dependency), `update_namespace` rebinds
       `session`/`pipeline`/`scene` in place across a new recording without a
       new console instance.
-      **Re-opened and re-closed 2026-08-06 (`AR-45`):** never constructed
+      **Re-opened and re-closed 2026-08-06:** never constructed
       anywhere in `app/`, `window.py` did not import it. `VantageWindow` now
       constructs ONE instance and docks it onto `self.bench` (Bench-only, by
       omission — Campaign never gets one, same discipline `CampaignWidget`
@@ -8370,8 +5313,7 @@ load instead of skipping) — fixed as part of proving `ST-D8-1` for real.
       always true" (`sim_player.md` §3's own mockup: "bundle ✓" is always
       shown), never the abnormal-only badge L-3 bans — reconciled explicitly
       since the two design docs could otherwise read as contradictory.
-      **A new abnormal-only badge added 2026-08-07 (`AR-57`, audit run 4,
-      fix queue row 2), correctly gated by the same L-3 boundary**:
+      **A new abnormal-only badge added 2026-08-07, correctly gated by the same L-3 boundary**:
       `Session.has_simulated_output()` (`core/session.py`) answers, from a
       recording's own `R-SIM-12` origin tags alone, whether ANY stage ever
       genuinely computed and captured its own output here — no `Pipeline`
@@ -8382,20 +5324,12 @@ load instead of skipping) — fixed as part of proving `ST-D8-1` for real.
       `render_scene`, never a glyph a rendering font might lack), merged
       into the SAME banner slot the stale-port banner already uses
       (`render/viewer.py`'s `_hud_and_stale_banner`) rather than adding a
-      second one. **Verified against both real fixture shapes, not just
-      the new one**: `test_d8_lean_limits.py`'s own `_write_normal_recording`
-      already used `Provenance.SIMULATED` and needed no change at all — the
-      genuinely-normal case was already correctly fixtured; `test_b3_hud_
-      wiring.py`'s own synthetic fixture is genuinely stimulus-only
-      (`Provenance.UNKNOWN`) and its two assertions of `banner is None`
-      were the actual bug this row's own audit finding pointed at, now
-      corrected to assert the real banner text. `sim_player.md` §6 gained
-      the sentence for the case its own text was silent on
+      second one.
 
 **Tests**
 - [x] `UT-D8-1` (`test_d8_window.py::test_switch_to_campaign_changes_the_visible_page_only`, `::test_ut_d8_1_session_object_identity_survives_a_round_trip`, `::test_ut_d8_1_pipeline_file_bytes_survive_a_workspace_switch`)
 - [x] `UT-D8-2` (`test_d8_workspace.py::test_require_raises_naming_the_action_and_the_workspace_never_a_generic_message`, `::test_require_raises_for_every_locked_action_kind`).
-      **Repointed 2026-08-06 (`AR-48`, fix queue row 6):** those two prove
+      **Repointed 2026-08-06:** those two prove
       `Workspace.require()`'s own correctness, real but with zero call
       sites in `src/` — the mechanism the lock is ACTUALLY enforced by is
       `CampaignWidget` never constructing an override affordance, a mode
@@ -8415,7 +5349,7 @@ load instead of skipping) — fixed as part of proving `ST-D8-1` for real.
       checkbox line**: `check_requirement_coverage.py` defines a test by *"a
       checkbox whose first token is the id"*, so a second id sharing a line is
       invisible to it, and the requirement citing it reports an unresolvable
-      verifier (`AR-30`).
+      verifier.
 - [x] `UT-D8-7` — scoped: `Pipeline.load()` is atomic by design
       (`contracts/pipeline.py`, out of this stage's own "must not touch a
       pipeline panel" bound), so `MainWindow._degraded_pipeline_summary`
@@ -8446,16 +5380,8 @@ load instead of skipping) — fixed as part of proving `ST-D8-1` for real.
       open, same as `S-D1`'s `ST-D1-1` ("blocked on a human opening Foxglove
       Studio")
 
-**Discipline** (every stage)
-- [x] portability §3 — `P-7` exercised throughout (offscreen Qt, every new
-      test); `P-2` (`StartPage`'s recent files go through `_config_root()`,
-      never a hand-written path); `P-3` not separately exercised
-- [x] naming §3 — `N-8` is `UT-D8-8`'s own table; `N-3a`/`N-7` not
-      specifically audited this pass
-- [x] `docs/py/check_doc_invariants.py`/`check_rules_coverage.py`/
-      `check_traceability.py`/`check_audit_ledger.py` all pass; `GT-1..GT-11`
-      (`check_invariants.py`'s own current scope) plus the new `UT-D8-9`
-      clean
+**Discipline**
+- [x] portability §3 (`P-2`, `P-3`, `P-7`) · naming §3 (`N-7`, `N-8`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [x] `UT-D8-1` + `UT-D8-3` + `ST-D8-1` green — the workspace split is real
@@ -8546,12 +5472,8 @@ ticked. And must not batch the rows into one commit — see the phase preamble.
       revertibility this phase depends on is a property of the history, not of
       the tree
 
-**Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-2` (deleting the old tooling must not
-      leave an absolute path in a doc that referenced it)
-- [ ] naming §3 ticked — exposure: `N-12` (after this stage a traceback path
-      means exactly one layer; that is the point of the deletion)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
+**Discipline**
+- [ ] portability §3 (`P-2`) · naming §3 (`N-12`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] `ST-E1-1..7` green **and every replacement stage named in the table above
@@ -8563,18 +5485,6 @@ ticked. And must not batch the rows into one commit — see the phase preamble.
 
 **Purpose.** Remove the ABI that grew a parameter pair per function, so `D1`
 cannot recur. This is the last C++ change in the plan.
-
-**Status, follow-up pass (2026-08-06): consumer enumeration DONE, deletion
-BLOCKED on the same root cause `S-E1` is blocked on.** `sil_host` was
-checked first, since the stage's own ordering makes it the gate for
-everything else: `modules/sil_host/src/sil_component.cpp` binds and calls
-**only** `adasAbiVersion`/`adasManifest`/`adasInit`/`adasExec`/
-`adasShutdown` (`BindOrThrow<...>` for each, by name) — grepping its whole
-`src/` tree for `dfInit`/`dfExec`/`dfShutdown`/`DfReqBuf`/`DfProBuf` returns
-nothing. `sil_host` was built directly on the generic ABI (`S-C7`, well
-after `S-C1a` established it) and never called the positional one — there
-is nothing to migrate, so **"`sil_host` moves to the generic ABI" is
-vacuously true, not a task performed this pass.**
 
 **Enumerated consumers of `dfInit`/`dfExec`/`dfShutdown`/`dfApiVersion`/
 `DfReqBuf`/`DfProBuf`, grepped across the whole superproject (code only,
@@ -8692,12 +5602,8 @@ consumer discovered after the deletion is a consumer discovered by an outage.
       own blocker (`MC-2`) clears; this box stays open honestly rather than
       being satisfied by "named" alone
 
-**Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-5` (removing the positional exports
-      must not break either platform's loader path)
-- [ ] naming §3 ticked — exposure: `N-1` (the old positional names disappear;
-      nothing may keep a second spelling alive)
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
+**Discipline**
+- [ ] portability §3 (`P-5`) · naming §3 (`N-1`) · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate**
 - [ ] `ST-E2-1..4` green — the positional ABI is gone, every consumer was known
@@ -8739,18 +5645,14 @@ separate gates below, and two of them cannot be automated.
 **Added by audit run 3, 2026-08-06 — four items, one theme: the gates that
 score the other gates cannot themselves be scored**
 
-- [x] **Give every `GT-` a checkbox** (`AR-35`). Seven of fourteen — `GT-3`,
+- [x] **Give every `GT-` a checkbox**. Seven of fourteen — `GT-3`,
       `GT-8`, `GT-9`, `GT-10`, `GT-11`, `GT-13`, `GT-14` — are cited as
       `Verified by` targets by real requirements and are defined in §2 as prose
       blocks with **nowhere to record a state**. `MC-1..MC-5` already have
       checkboxes, which is exactly why their states are readable. **Adds a
       state, rewrites no prose.** The consequence today: `GT-13`'s own founding
       principle — *"a requirement nobody can fail is a requirement that will be
-      declared satisfied"* — currently applies to `GT-13`. **Done 2026-08-06**:
-      a backtick-quoted `` `GT-n` `` checkbox nested under each of the seven,
-      plus the four `DC-` ids (`DC-1`/`DC-4`/`DC-5`/`DC-6`, same finding, same
-      fix) in a new §2 subsection — eleven total, none ticked, no gate prose
-      rewritten
+      declared satisfied"* — currently applies to `GT-13`.
 - [x] **Then extend `check_requirement_coverage.py` to score `MC-`/`GT-`/`DC-`**
       (`AR-36`, blocked on the item above). Today it scores `UT-`/`ST-` only, so
       **21 of 77 rows rest partly on verifiers it cannot see** and `FR-SIM-47`
@@ -8758,23 +5660,12 @@ score the other gates cannot themselves be scored**
       column, *"unscored verifiers and their state"*, is the whole change.
       Shipping it before the checkboxes exist would print `[?]` eleven times and
       teach everyone to ignore it. See `sim_requirements.md` §0a's caveat table.
-      **Done 2026-08-06**: `OTHER_ID_RE`/`OTHER_DEFN_RE` extract cited
-      `MC-`/`GT-`/`DC-` ids and their checkbox state (`x`/blank/`?` for
-      no-checkbox-anywhere), reported in a new "unscored verifiers" column on
-      the `P0` and `Partial` tables — **never folded into proven/partial/
-      unproven**, which stay `UT-`/`ST-` only. `FR-SIM-47` now shows
-      `proven 3/3` next to `GT-8: , MC-5: ` in the same row, so the bare
-      `proven 3/3` a reader used to see alone is gone
-- [x] **Work the undiscoverable-verifier baseline down from 19** (`AR-50`).
+- [x] **Work the undiscoverable-verifier baseline down from 19**.
       `docs/py/check_verifier_discoverability.py` (new, in `run_all.py`) ratchets
       it: a run finding more than `BASELINE` fails. **Do not untick a box to fix
       one** — all 19 are real, passing tests; what is missing is the id written
       where the test lives. Lower `BASELINE` in the same commit that fixes one.
-      **Done 2026-08-06**: all 19 threaded back to their implementing test/build
-      site (Python docstrings, C++ gtest comments, and — for the three ids with
-      no dedicated automated test, `ST-C1a-1`/`ST-C3-1`/`UT-C1b-7` — the
-      build/CI script that IS the verification), `BASELINE` lowered to 0.
-- [x] **Re-assess `OQ-14` with the measurement it now has** (`AR-49`). It asked
+- [x] **Re-assess `OQ-14` with the measurement it now has**. It asked
       whether ~600 KB of normative prose across ten documents is still worth
       maintaining, and predicted the failure as *"documents that silently stop
       being maintained rather than a decision to stop maintaining them."*
@@ -8784,16 +5675,6 @@ score the other gates cannot themselves be scored**
       executes combined. Re-assess against that, not against a worry — and note
       that the answer may legitimately be *"fold two documents into this one"*
       rather than *"write more prose"*.
-      **Decided 2026-08-06 (fix queue row 7, owner's own call):** reconcile,
-      do not fold. Each of the four documents `AR-49` named gained a "what
-      shipped, reconciled" account against the plan's own record — the same
-      pattern `AR-47` already used for `sim_player.md` §10 and `AR-44` for
-      `sim_api_reference.md` §10 — rather than being merged into this plan.
-      `OQ-14`'s own prediction stands as the reason to keep doing this
-      regularly (a design doc left unreconciled for four days is what
-      produced this exact finding); the mechanism to catch the next drift
-      earlier is future work, not decided here. **Not folding is itself the
-      decision** — `OQ-14` is answered, not deferred again
 
 **Tests**
 - [ ] `ST-E3-1` `check_invariants.py` exits 0
@@ -8820,12 +5701,8 @@ score the other gates cannot themselves be scored**
       to `P-10`" is a claim; running the suite is evidence, and the difference
       must be visible in this document
 
-**Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: every `P-` rule, re-checked; this is the
-      last gate before the system is called done
-- [ ] naming §3 ticked — exposure: every `N-` rule; `DG-2`/`DG-3` must answer
-      for every name the system can produce
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
+**Discipline**
+- [ ] portability §3 · naming §3 · `run_all.py` green; `GT-1..GT-12` re-checked
 
 **Gate — the definition of done**
 - [ ] `ST-E3-1..4` green
@@ -8837,8 +5714,9 @@ score the other gates cannot themselves be scored**
       reason recorded next to it — an untouched checkbox at this point means
       nobody looked, which is different from a decision
 
-
 ---
+
+
 
 ## 9. Traceability — every requirement to a stage and a test
 
@@ -8906,28 +5784,28 @@ the stage named there.
 
 ## 9a. Audit findings — where they live
 
-**Findings do not live here.** They live in
-[sim_audit_log.md](sim_audit_log.md) as stable `AR-n` rows, and every
-actionable fix is a **checkbox in the stage that will do it**, in build order,
-citing its `AR-n`. This section is a pointer, deliberately — the first audit
-wrote its findings into a table at the end of this document, which is exactly
-the place a session working the queue never reaches.
+**A finding is a checkbox in the stage that will fix it**, in build order. There
+is no separate ledger: the one that existed was retired at the freeze, and a
+second list of open work is a second thing to reconcile.
 
-| | |
-|---|---|
-| **Ledger** | [sim_audit_log.md](sim_audit_log.md) — id · origin level · fix type · landed-in · state |
-| **Enforced by** | `docs/py/check_audit_ledger.py` (inside `run_all.py`) — a `CLOSED` row must name a landed-in target that resolves, and a level 1/2 finding must name a **master document**, not just a stage |
-| **Produced by** | `modules/sim/.claude/prompts/sim_audit.md` (method: root `.claude/prompts/system_audit_and_replan.md`) |
+> **One correction, 2026-08-08.** The retirement note said all 61 rows were
+> "closed or won't-fix". **`AR-61` was not** — it had been reopened after being
+> reproduced and root-caused, and the deletion took the only record of it with
+> it. Recovered as an unticked box on `S-C8`'s Gate, which is where §9a says it
+> belongs. Recorded rather than quietly re-added, because "nothing open was
+> lost" was the premise the retirement rested on, and it was one row wrong —
+> exactly the reconciliation this section's second rule exists to force.
 
-**The rule worth repeating here**, because this is where someone will look for
-it: a finding whose origin is the requirements or design level is **not
-closable until that master document has been edited**. The ledger records that
-it happened and where; it never carries the correction. Otherwise the ledger
-becomes a second source of truth and the register stays wrong.
+Two rules survive it, because they are what made it work:
 
-**Reconciliation precedes appending.** An audit re-verifies every `OPEN` row
-before writing a new one. A run that cannot shrink the ledger means the
-previous run was ignored — which is itself a finding.
+- A finding whose origin is the **requirements or design level is not closable
+  until that master document has been edited.** Recording a correction that no
+  master document contains is the failure the mechanism existed to prevent.
+- **Reconciliation precedes appending.** An audit re-verifies what is already
+  open before writing anything new.
+
+Method: `modules/sim/.claude/prompts/sim_audit.md` (root
+`.claude/prompts/system_audit_and_replan.md`).
 
 ---
 
@@ -8943,7 +5821,7 @@ previous run was ignored — which is itself a finding.
 | **Phase C touches production C++** | Every C++ change is additive until S-E2; both ABIs live and are tested against each other. |
 | **No CI** | The test command is the gate and is cited in each commit. Wiring CI is `plan.md` item 12, unblocked by this work. |
 | **`modules/sim` unpublished** | Until `adas-sim` is published, a checkout is needed; that is the same interim state `interfaces` and `shared_config` already live in. |
-| **The design set outgrows the code** *(added 2026-07-31, `OQ-14`; **decided 2026-08-06**)* | ~600 KB of normative prose across ten documents describes ~8,300 lines of Python; this plan alone is 3,745 lines and every stage re-ticks two checklists and twelve gates. The discipline has paid for itself so far — `S-A3`'s `Prim` finding and `S-C1a`'s `BUILD_TESTING` finding were both caught *by* it — but the honest failure mode is documents that quietly stop being maintained rather than a decision to stop maintaining them. Mitigation: `GT-7` is a stage gate, `docs/py/run_all.py` is mechanical, and `sim_learn.md` gives a reader one entry point instead of ten. **Re-assessed at `S-E3` (`AR-49`, fix queue row 7): the predicted failure happened exactly as written** (measured, `AR-49`: every `S-C9`/`S-D6`/`S-D7`/`S-D8` artefact name appeared in this plan and no other document). **Decision: reconcile, do not fold** — each affected document gains a "what shipped" account against this plan instead of being merged into it. `OQ-14` closed in `sim_requirements.md` §11. |
+| **The design set outgrows the code** *(added 2026-07-31, `OQ-14`; **decided 2026-08-06**)* | ~600 KB of normative prose across ten documents describes ~8,300 lines of Python; this plan alone is 3,745 lines and every stage re-ticks two checklists and twelve gates. The discipline has paid for itself so far — `S-A3`'s `Prim` finding and `S-C1a`'s `BUILD_TESTING` finding were both caught *by* it — but the honest failure mode is documents that quietly stop being maintained rather than a decision to stop maintaining them. Mitigation: `GT-7` is a stage gate, `docs/py/run_all.py` is mechanical, and `sim_learn.md` gives a reader one entry point instead of ten. **Re-assessed at `S-E3`: the predicted failure happened exactly as written** (measured, `AR-49`: every `S-C9`/`S-D6`/`S-D7`/`S-D8` artefact name appeared in this plan and no other document). **Decision: reconcile, do not fold** — each affected document gains a "what shipped" account against this plan instead of being merged into it. `OQ-14` closed in `sim_requirements.md` §11. |
 | **Ten concepts to draw one rectangle** *(added 2026-07-31, `OQ-13`; **diagnosed and mitigated the same day**)* | Counting honestly, the ten are not ten. Themes are a theme-author's concept; frames default to `ego`; `derived`/`assumed_geometry` matter only when something is unusual; the three grep gates are one sentence and **do not even apply** to `modules/<name>/sim/`. The unavoidable core is **four** — decorator, `ctx`, `Prim`, style token — which is exactly `FR-SIM-47`'s `L-3` limit. So the defect was in the *presentation*, not the API: the template taught all ten at once and imported a decorator that no longer exists. Mitigation, landed: a canonical minimal provider of ≤15 lines that mentions none of the six optional concepts, with everything else moved below a second heading. `GT-8` still measures the consequence. |
 | **`S-B2Δ` changes a frozen core type 410 tests already use** *(added 2026-07-31, `OD-13`)* | Making `PortValue.message` lazily parsed and `age_s` derived is the most invasive item of the resolution pass, and it is the one place a mechanical change can quietly alter behaviour rather than fail. Mitigation: it lands **after** `S-A4Δ` (so the capture stamp exists first) and **before** `S-C2` (so no recording is written against the old shape); `UT-B2-14` proves not-parsing is *observable* rather than merely claimed; and the full suite is the regression net — a count below 410 means something broke, per `S-C0`'s recorded floor. |
 | **A requirement can cite a test that exists and proves something else** *(added 2026-07-31, §12.7)* | Two of the eleven test ids the 2026-07-31 audit attached to its new requirements pointed at real tests about unrelated subjects (`FR-SIM-67`→`UT-D3-5`, `NR-SIM-43`→`UT-D4-3`). `check_traceability.py` verifies existence, uniqueness and filing — it **cannot** verify aboutness, and no mechanical check can before the tests exist. The register therefore read as fully traced while two `P0`/`P1` rows were verified by nothing. Mitigation, and it is a habit rather than a tool: **after adding a requirement, open the test it cites and read it.** Same shape as `D13` — a name written by hand, bound to its target by nothing, failing silently. |

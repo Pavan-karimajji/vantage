@@ -122,7 +122,7 @@ class Prim:
     # -- grid -----------------------------------------------------------------
     spacing_m: float | None = None
     extent_m: float | None = None
-    #: `AR-56` (2026-08-07): the lateral (world-y) grid line spacing, when it
+    #: `AR-56`: the lateral (world-y) grid line spacing, when it
     #: legitimately differs from `spacing_m` (world-x) -- `None` means "same
     #: as `spacing_m`". Not a new kind (the closed catalogue above is
     #: unchanged): a grid with denser cross-lines at close range is still

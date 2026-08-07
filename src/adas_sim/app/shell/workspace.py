@@ -82,7 +82,7 @@ class Workspace:
         rather than looked up by a string key, so a typo in the action name
         can never accidentally bypass the real check.
 
-        **Has zero call sites in `src/` today (`AR-48`, 2026-08-06).**
+        **Has zero call sites in `src/` today.**
         `CampaignWidget` locks the stronger way instead -- it never
         constructs an override affordance, a mode toggle or a console dock
         at all, so there is nothing here to grey out and nothing to bypass.

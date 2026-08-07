@@ -3,29 +3,18 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`sim resim <recording> --pipeline <pipeline.yaml> [--save <out.mcap>]`
--- executes a SUT against an existing recording
-(`sim_resim_and_recording.md` §9: "produces an artifact: optional, executes
-a SUT: yes (from a recording)"). Argument parsing only (`GT-9`);
-`resim_pipeline` (`core/resim.py`, moved there at `S-C3` -- `check/` needs
-the same engine and may never import `cli/`) is the real, directly-testable
-engine underneath, built on `contracts.pipeline.Pipeline.exec` +
-`io.base.group_by_log_time` (both already built) -- never a second
-tick-grouping implementation.
+"""`sim resim <recording> --pipeline <p.yaml>` -- re-execute against a recording.
 
-`--pipeline` is not shown in `sim_resim_and_recording.md` §9's own example
-CLI line, but a resim structurally needs one (which stages exist, which
-are `measured`, how they're wired) -- the same flag `sim run` already
-carries.
+Runs the pipeline's stages over an existing recording, deterministically. This
+is the mode CI uses. `--save` writes the result as a new recording.
 
-`recording`/`--project`/`--config` are all optional (`S-D3`, `UT-D3-4`):
-each falls back to `--pipeline`'s own `recording:`/`project:`/`config:`
-key (`core.manifest.load_run_spec`) when not given explicitly, so a run
-manifest -- a pipeline file with those three extra keys, `core.manifest.
-write_run_manifest`'s own output -- is a single `--pipeline` argument away
-from a full resim, no other flag needed. An explicit CLI flag always wins
-over the file's own value.
+`recording`, `--project` and `--config` each fall back to the pipeline file's
+own key when omitted, so a run manifest resims with `--pipeline` alone. An
+explicit flag always wins.
 """
+
+# Design refs: `GT-9` · engine is `core/resim.py` (`check/` needs it and may not import
+# `cli/`) · `R-SIM-5` resim is the deterministic mode · `UT-D3-4`, `NR-SIM-24`
 
 from __future__ import annotations
 
@@ -58,7 +47,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--save", type=Path, help="write this resim's own freshly-computed tick outputs to a new recording")
     parser.add_argument(
         "--search", type=Path, action="append", default=[],
-        help="a directory to search for a dll:/stubdll: stage's library (repeatable, contracts.loader.resolve_library)",
+        help="a directory to search for a dll:/stubdll: stage's library "
+            "(repeatable)",
     )
     parser.add_argument(
         "--project", default=None,
@@ -66,14 +56,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--config", type=Path, default=None,
-        help="config path forwarded to each stage's adasInit -- adasInit(NULL)'s own bundle "
-             "resolution is S-C5, not yet built, so a real dll:/stubdll: stage needs this explicitly. "
-             "Falls back to --pipeline's own config: key",
+        help="config path forwarded to each stage's adasInit; falls back to the "
+            "bundle beside the library, then to --pipeline's config: key",
     )
     parser.add_argument(
         "--pin-builds", action="store_true",
-        help="refuse to start unless every mode: simulate stage's currently-resolved library "
-             "byte-matches the recording's own recorded library_sha256 (NR-SIM-24, OQ-9)",
+        help="refuse to start unless every simulate stage's resolved library "
+            "byte-matches the library_sha256 the recording was made with "
+            "(NR-SIM-24)",
     )
     return parser
 

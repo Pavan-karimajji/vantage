@@ -3,10 +3,14 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`sim view <session> [--preset] [--at]` (`sim_api_reference.md` §10) --
-argument parsing only (`GT-9`); launching the GUI is `app/gui.launch`'s
-job, not this module's -- **not** `app/cli.py`, since `app/` is the GUI
-and holds no logic of its own either."""
+"""`sim view <session>` -- open the viewer on a recording.
+
+Loads the recording, resolves the config bundle it was produced with, and opens
+the window. `--workspace` picks a saved panel arrangement, `--at` opens at a
+tick, `--preset` picks a viewpoint.
+"""
+
+# Design refs: `GT-9` · `R-SIM-13` the viewer renders a `Session` only · `ST-D3-1`
 
 from __future__ import annotations
 
@@ -23,16 +27,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--at", type=float, default=None, help="seconds into the recording to open at")
     parser.add_argument(
         "--scenario", type=Path, default=None,
-        help="the scenario YAML this recording was run against -- draws its expect: windows on the "
-             "timeline strip (sim_visualization_spec.md SS7.3). Explicit, never guessed: a recording's "
-             "own run manifest carries only the scenario's name (RunManifest.scenario), not a path back "
-             "to the file",
+        help="the scenario YAML this recording was run against; draws its "
+            "expect: windows on the timeline strip",
     )
     parser.add_argument(
         "--pipeline", type=Path, default=None,
-        help="S-D3: shows the pipeline panel (read-only this slice -- mode/impl as declared, toggling "
-             "writes a run manifest via File > Save Run Manifest, does not re-run anything live). "
-             "Explicit, never guessed, same reasoning as --scenario",
+        help="show the pipeline panel for this pipeline (read-only; toggling "
+            "mode/impl writes a run manifest rather than re-running)",
     )
     parser.add_argument(
         "--search", type=Path, action="append", default=[],
@@ -40,8 +41,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--config", type=Path, default=None,
-        help="S-D3 slice 4 (ST-D3-1): config path forwarded to --pipeline's adasInit for a real Run -- "
-             "same 'adasInit(NULL) bundle auto-resolution is not built yet' caveat as sim resim --config",
+        help="config path forwarded to --pipeline's adasInit; falls back to the "
+            "bundle beside the library",
     )
     return parser
 

@@ -7,8 +7,7 @@
 UT-B1-5, UT-B1-6, UT-B1-7, UT-B1-8, UT-B1-11, UT-B1-13, UT-B1-14
 (docs/sim_implementation_plan.md). Also UT-C4-1, UT-C4-2 (`S-C4`).
 
-**UT-B1-4 and UT-B1-12 moved to `test_b1_default_layers.py`** (`AR-52`,
-2026-08-07) along with the providers they test (`ego_layer`/`trail_layer`,
+**UT-B1-4 and UT-B1-12 moved to `test_b1_default_layers.py`** along with the providers they test (`ego_layer`/`trail_layer`,
 now `adas_sim.scene.default_layers`) -- the test IDs did not move, only
 their file.
 
@@ -202,7 +201,7 @@ def test_warning_layer_binds_correctly_under_a_renamed_stage():
 
 
 def test_warning_layer_is_named_unavailable_when_the_run_never_produced_bsd_outputs():
-    """`AR-53` (2026-08-07), supersedes this test's own original reading:
+    """`AR-53`, supersedes this test's own original reading:
     the port genuinely isn't part of this run -- `bsd.warning`'s own
     `requires=("self.bsd.outputs",)` has zero matches against this run's
     known ports. Used to stay a silent empty result on the reasoning that
@@ -249,8 +248,7 @@ def test_provider_is_pure_no_attribute_changes_between_calls():
 
 def test_no_two_layer_ids_share_a_prefix():
     """UT-B1-14: solo/mute selects by id; a prefix collision would select
-    the wrong set. `df.common.frame`/`ego`/`trail` moved to the framework
-    (`AR-52`) -- `df`'s own set is smaller now; the framework's own set has
+    the wrong set. `df.common.frame`/`ego`/`trail` moved to the framework -- `df`'s own set is smaller now; the framework's own set has
     its own prefix check, `test_b1_default_layers.py`."""
     ids = ["df.common.objects", "df.common.hud", "bsd.zone", "bsd.warning", "bsd.sensor_fov"]
     for i, a in enumerate(ids):

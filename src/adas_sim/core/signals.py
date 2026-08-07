@@ -3,24 +3,17 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""The one signal resolver (`NR-SIM-8`, `sim_api_reference.md` §2.3's
-`Session.signal` contract): `<component>.<port>.<field>` · `source.*` ·
-`truth.*` · `derived.*`. Raw port fields resolve with **no registration** --
-a port name is itself dotted (`<component>.<function>.<port>`, `N-2`), so
-resolution is the **longest known port name that prefixes the address**,
-then a plain attribute walk for whatever remains. Only a *computed* signal
-(no ProPort carries it, e.g. TTC) registers, with `@signal`.
+"""The one signal resolver (`NR-SIM-8`, api reference §2.3):
+`<component>.<port>.<field>`, `source.*`, `truth.*`, `derived.*`.
 
-**Lives in `core/`, not `view/`.** `sim_implementation_plan.md`'s checklist
-names `view/signals.py`; `sim_api_reference.md` §2.3 sketches this as a
-`Session.signal()` method, and `Session` lives in `core/session.py`. Checked
-with the user rather than picked silently: `core/` is where every other
-consumer -- `view/timeline.py` (not yet built) and `check/`'s expectation
-evaluator (`S-D6`, headless, no Qt) alike -- can depend on it in the normal
-direction, rather than `check/` importing something named `view/`. Also
-absorbs `scene/registry.py`'s `@signal`/`registered_signals` (`S-A3`,
-unused anywhere until now) -- one registry next to the resolver that reads
-it, not two files sharing one concept.
+Raw port fields resolve with **no registration**. A port name is itself dotted
+(`N-2`), so resolution is the longest known port name that prefixes the
+address, then a plain attribute walk over the remainder. Only a *computed*
+signal -- one no ProPort carries, such as TTC -- registers, via `@signal`.
+
+**Lives in `core/`, not `view/`**, so that every consumer can depend on it in
+the normal direction: `check/`'s expectation evaluator is headless and must
+not import something named `view/`.
 """
 
 from __future__ import annotations

@@ -3,31 +3,24 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""The framework's own default layer set (`AR-52`, 2026-08-07): ego body,
-grid/frame furniture, ego trail -- every recording needs these regardless of
-which component produced it, so they are shipped here, not authored by any
-one component. **Not a rename of `df`'s old `sim/layers/common.py`
-providers**: each of the three below reads only `ctx.model` (`ProjectModel`,
-already framework-level, `R-SIM-1`) or `ctx.history`/`ctx.frames` (a
-coordinate-frame transform of `Tick.pose`, likewise framework-level) --
-never a port, so moving them here adds no function's name to `src/adas_sim`
-and needs no `requires=` gate.
+"""The framework's own default layer set: ego body, grid/frame furniture, ego
+trail. Every recording needs these regardless of which component produced it,
+so they ship here rather than being authored by any one component.
 
-**Why `objects`/`hud` did not move too.** `df.common.objects` needs
-`source.gen_object_list` and `df.common.hud` needs `source.veh_dyn` -- real
-port dependencies only a component's own wiring supplies (`R-SIM-21`: a
-framework-level provider has no "self" component identity to resolve
-`self.<port>` against). The HUD's ego-state readout already has a generic,
-caller-configured path with no component-specific default
-(`view/hud.py`'s own `HudInfo.ego_state`/`format_hud_lines`, documented
-there since S-B3) -- `df.common.hud`'s BEV-drawn duplicate of the same
-numbers stays `df`'s own layer, unmoved.
+Each reads only `ctx.model` or `ctx.history`/`ctx.frames` -- **never a port**
+-- so living here adds no function name to `src/adas_sim` (`R-SIM-1`) and
+needs no `requires=` gate.
 
-This module is imported unconditionally by `scene.registry` (bottom of that
-file) -- "the framework ships a default layer set" means these three are
-registered before any component's plug-in is ever loaded, not merely
-available for one to opt into (`R-VAR-2`'s "discovery by import" applied to
-the framework's own contribution, not just a component's).
+**Why the object and HUD layers did not move too:** both need real ports that
+only a component's own wiring supplies, and a framework-level provider has no
+"self" identity to resolve `self.<port>` against (`R-SIM-21`). The HUD's
+ego-state readout already has a generic caller-configured path in
+`view/hud.py`.
+
+Imported unconditionally by `scene.registry`: "the framework ships a default
+layer set" means these are registered before any component plug-in loads, not
+merely available to opt into (`R-VAR-2`'s discovery-by-import, applied to the
+framework's own contribution rather than only to a component's).
 """
 
 from __future__ import annotations
@@ -52,7 +45,7 @@ _TRAIL_WINDOW_TICKS = 60
 def frame_layer(ctx: LayerCtx) -> tuple[Layer, ...]:
     """Grid + origin/axis furniture -- needs only the project model, no
     port. `spacing_lateral_m` gives the grid a denser cross-spacing at
-    close range without a second kind (`AR-56`, 2026-08-07).
+    close range without a second kind.
 
     **`AR-56`: distance labels moved out of this provider entirely.** They
     used to be `text` prims baked at a small, fixed metre offset from the
@@ -122,7 +115,7 @@ def trail_layer(ctx: LayerCtx) -> tuple[Layer, ...]:
     """The ego's own recent path -- a temporal layer (`UT-B1-12`): pure
     function of `ctx.history`, no attribute holds state between calls.
 
-    Two empty cases, deliberately handled differently (`AR-60`, 2026-08-07,
+    Two empty cases, deliberately handled differently (`AR-60`,
     same distinction `AR-53` drew for a `requires=` reference): fewer than
     two windowed ticks exist yet is TRANSIENT -- the very first tick or two
     of any recording, before there is enough history to have a trail at

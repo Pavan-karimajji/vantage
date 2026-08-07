@@ -11,8 +11,7 @@ compiled `perception_core_sil.dll` declares an input port `frame`,
 (`conf/ports.yaml`'s own comment). **Radar is deliberately not attempted**:
 no real component declares a radar-shaped input port anywhere in this repo
 yet, so a radar stimulus test would have nothing to validate the wiring
-against -- exactly the "asserts whatever the code happens to do" shape a
-2026-08-07 review warned this class of work is prone to. Camera stays a
+against -- exactly the "asserts whatever the code happens to do" shape a review warned this class of work is prone to. Camera stays a
 real, falsifiable claim; radar would not be.
 
 `SyntheticSource` (`S-C2`) already IS a general-purpose emitter -- its

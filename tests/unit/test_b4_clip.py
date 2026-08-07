@@ -81,7 +81,7 @@ def test_export_clip_rejects_a_non_mp4_output(tmp_path):
 
 
 def test_export_clip_with_no_explicit_selection_matches_the_guis_own_default(tmp_path):
-    """`AR-58` (2026-08-07): the same fix `snapshot()` got, for its `S-B4`
+    """`AR-58`: the same fix `snapshot()` got, for its `S-B4`
     sibling -- resolved once off the first tick (`capture.resolve_layer_
     selection`) and held fixed for every frame, so a `default_on=False`
     layer stays off for the whole clip, not flickering per tick."""

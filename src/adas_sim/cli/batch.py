@@ -3,11 +3,15 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`sim batch <recordings...|glob|list.txt> --pipeline P [--report path]
-[-j N]` (S-D7, `sim_resim_and_recording.md` §9) -- the SAME pipeline file
-`sim resim` takes, run over a whole recording set, one subprocess per
-recording (`R-SIM-19`). Argument parsing only (`GT-9`); `core/batch.py` is
-the real engine."""
+"""`sim batch <recordings> --pipeline <p.yaml>` -- run a pipeline over a set.
+
+One subprocess per recording, so a component that crashes or hangs costs one
+row rather than the run. `-j` sets parallelism, `--timeout-s` bounds a hung
+library. `--report` writes per-recording outcomes, keeping `fail`, `crash` and
+`timeout` distinct.
+"""
+
+# Design refs: `GT-9` (no logic here -- `core/batch.py` is the engine) · `R-SIM-19` fault containment
 
 from __future__ import annotations
 

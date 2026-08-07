@@ -60,7 +60,7 @@ _DT_NS = 50_000_000
 
 # ST-D8-1: `echo_stub.dll` is a Windows PE binary (S-C7's own build) -- a
 # stale copy left over from an earlier Windows session can exist on a
-# non-Windows checkout (this repo's own WSL shell, found 2026-08-06) and
+# non-Windows checkout (this repo's own WSL shell, found and
 # pass the file-existence check while being unloadable by ctypes.CDLL on
 # this platform. Checking sys.platform FIRST (same precedent test_d7_
 # pin_builds_cli.py/test_c7_cross_host_resim.py already set) turns that

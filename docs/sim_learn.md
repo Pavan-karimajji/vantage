@@ -95,7 +95,7 @@ the code discover it.**
 
 ---
 
-## 2. The five ideas
+## 2. The seven ideas
 
 Everything else is consequences of these.
 
@@ -250,16 +250,19 @@ from a true one.
 
 ## 3. The walkthrough
 
-Four phases. The ordering is not aesthetic — each phase is chosen so that a
+Five phases. The ordering is not aesthetic — each phase is chosen so that a
 mistake in it is cheap.
 
-```
-Phase A  Foundations       no C++, no DLL, nothing user-visible      DONE
-Phase B  The viewer        no C++, no DLL, driven by old recordings  DONE
-Phase C  The contract      the only phase that touches production    IN PROGRESS
-Phase D  Reach             more renderers, more components, the app  NOT STARTED
-Phase E  Retirement        delete the old tooling                    NOT STARTED
-```
+| Phase | What it builds | Needs a compiler? | State |
+|---|---|---|---|
+| **A** Foundations | the vocabulary: project model, Scene IR, the mcap codec | no | done |
+| **B** The viewer | `Session`, layer providers, the Qt shell, capture — driven by **already-recorded files** | no | done |
+| **C** The contract | the generic ABI, the production side, the config bundle, ingest | **yes** | done |
+| **D** Reach | Foxglove, the pipeline panel, a second component, packaging, overrides, batch, **Vantage** | yes | done |
+| **E** Retirement | delete the per-component private tooling it replaced | yes | not started |
+
+[sim_implementation_plan.md](sim_implementation_plan.md) §0a is the authority on
+what is left and in what order; this table is the story, not the tracker.
 
 ### Why this order, and not "build the exciting thing first"
 
@@ -267,173 +270,246 @@ The tempting order is: get a picture on screen driven by a real DLL, then tidy
 up. That order has a trap in it.
 
 To drive the DLL *before* the generic ABI exists, the framework would need a
-`df`-specific ctypes binding **inside the framework** — the exact thing
+component-specific ctypes binding **inside the framework** — the exact thing
 `R-SIM-1` forbids, written in the one place it must never live, and then
 unpicked later. Building the viewer against **already-recorded files** avoids
 needing one at all. By the time the framework first talks to a library, the
 socket already exists and the binding is component-agnostic by construction.
 
-Everything in A and B is testable with **no build at all**. That is why 410
-tests run in 42 seconds on a laptop with no compiler.
+Everything in A and B is testable with **no build at all**, which is why most of
+the suite runs in seconds on a laptop with no compiler.
 
----
-
-### Phase A — Foundations *(done)*
-
-Four stages, no behaviour anyone can see. This is the vocabulary.
-
-**S-A1 — the skeleton.** The folders, the packaging, the error taxonomy, the
-run id, the log line. Nothing here is interesting; it exists so nothing later
-has to invent a name under pressure.
-
-Two things were deliberately built *early* here rather than late: `sim doctor`
-(tells you about your environment) and, in S-B2, `sim explain` (tells you what a
-name means). *A diagnostic tool is most valuable while the environment is least
-settled.* A `sim doctor` that arrives at the last stage would mean twenty stages
-were built without it.
-
-**S-A2 — the project model.** Where D3 closes. Every physical number comes from
-resolved YAML. The test that matters is `UT-A2-9`: a fixture using a *different*
-key prefix parses identically — proving the parser reads the *shape* of a key,
-not the domain it came from. That is what stops a "generic" model from quietly
-being one component's model.
-
-**S-A3 — the Scene.** The central data structure: shapes, in metres, in a named
-frame, with a semantic style token. This is the one decision that cannot be
-localised later — everything upstream produces it and everything downstream
-consumes it.
-
-*This stage produced the largest single finding in the project so far*: the API
-reference's own description of the Scene contradicted the two design documents
-that actually specify it, and was too narrow to represent things they required.
-Caught before writing code, resolved with the user, and the API reference was
-corrected in the same commit. Worth knowing because it is the pattern: when two
-documents disagree, someone has to decide, and deciding silently is how a system
-ends up with two shapes for one idea.
-
-**S-A4 — the mcap codec.** Proves `R-SIM-14` by building exactly one codec and
-nothing else. Verified against the seven *real* recordings already in `df`.
-
----
-
-### Phase B — The viewer, on pure replay *(done)*
-
-Still no C++, no DLL. Every stage is driven by an already-exported recording.
-
-**S-B2 — Session and time transport.** Splits *executing* from *viewing*, which
-is what makes scrubbing backwards possible at all.
-
-The idea here is called **the head**: the furthest tick that has been computed.
-*Behind* the head, a run is immutable data — seeking, scrubbing and re-rendering
-are free and never re-run the algorithm. *At* the head, execution advances.
-
-And so, the rule people find surprising: **stepping backwards leaves execution
-mode and enters review.** There is no reverse `exec()` — the component holds
-internal state the ABI does not expose, so "step back one tick" cannot be
-undone, only re-derived. Resuming forward from a rewound position offers exactly
-two honest choices, both named on screen: *skip to head*, or *recompute from
-tick 0*. Silently continuing is the fabrication this design exists to prevent.
-
-*Studio version: you can wind the tape back and listen. You cannot wind the
-drummer back.*
-
-**S-B1 — layer providers.** The first real pictures. This is where
-`modules/df/sim/` was born — `df`'s own contribution: what BSD looks like.
-
-**S-B3 — the Qt viewer shell.** The window: docks, layer tree, inspector,
-timeline, plots, measurement tools, HUD. The biggest stage in the plan (13
-slices), and the one whose value is hardest to assert in a test — hence `MC-1`
-and `MC-4`, two named checks that say *a human looked at this on a date*.
-
-**S-B4 — capture with provenance.** A snapshot carries what produced it.
-
----
-
-### Phase C — the contract *(in progress, and where the confusion lives)*
-
-**This is the only phase that changes production C++**, so it is the only phase
-that can break a shipping component. Three properties hold throughout: every
-change is additive; `src/component/**` is never touched; and `df`'s own test
-suite is re-run after every commit, not just at the end.
+### The one sentence that organises Phase C
 
 Phase C is confusing for an honest reason: it is six things across three repos
-and two languages. Here is the one sentence that organises it:
+and two languages. This is the sentence that lines them up:
 
 > **A component's DLL must be able to answer three questions — *what ports do I
 > have*, *what configuration am I using*, and *run one tick*. Everything else in
 > Phase C is building the things that ask those three questions.**
 
-With that, the stages line up:
+Two properties held throughout, and they are why it could touch production C++
+safely: **every change was additive**, and `src/component/**` was never touched.
+The generic exports were built *beside* the positional ones, with a test proving
+both paths produce **byte-identical output** for the same inputs. Nothing is
+removed until Phase E, and only after its replacement is proven. That
+equivalence test is the most valuable single thing in Phase C — it turns "we
+rewrote the interface" from a leap into a measurement.
 
-**The rows below are in *build* order, which is not id order** — `S-C9`, `S-C4`
-and `S-C8` were added late and their ids record when they were written, not when
-they are built. The plan's §0a table is the authority; this one is the story.
-
-| # | Stage | Who is being taught | In one line | Status |
-|---|---|---|---|---|
-| 1 | **S-C0** | CI | Make the gate run itself, before trusting any later stage | done |
-| — | *(deltas #2–#6)* | `sim` + `df` | Two clocks, bulk-by-reference, lazy parsing, `select`/`drop`, and plug-ins that bind by name | done |
-| — | **S-C1a** | `interfaces` | Define the socket and the label format | done |
-| — | **S-C1b** | `df` | Make one real component speak it — *beside* the old way, not instead of | done |
-| — | **S-C1c** | `sim` | Teach Python to load a DLL, read its label, and wire a pipeline | mostly done |
-| 7 | **S-C4** | `df` | Delete the duplicated calibration | done |
-| 8 | **S-C9** | `df` + `sim` | Make recordings we did not produce drivable (see §5a) | mostly done (2 stress-shape tests open, `ST-C9-2/3`) |
-| 9 | **S-C2** | `sim` | Split *producing* a recording from *executing* one | done |
-| 10 | **S-C3** | `sim` + `df` | Turn scenario intent from prose comments into data | mostly done (7/18 scenarios carry `expect:`, 4 verified against a real recording + a real compiled `df_sil`; see its own plan section) |
-| 11 | **S-C1aΔ2** | `interfaces` | Two manifest fields the resolutions need — the first stage that needs a compiler | not started |
-| 12 | **S-C1d** | `df` + build | Generate the shim instead of hand-writing it per component | not started |
-| 13 | **S-C5** | `df` + build | Pack the config bundle beside the DLL | not started |
-| 14 | **S-C8** | `df` + build | Ship the plug-ins beside the DLL, so the player is standalone | not started |
-| 15 | **S-C7** | `sil_host` | Teach the C++ host to read the same pipeline file | not started |
-| 16 | **S-C6** | CI | Run a resim automatically, so determinism cannot decay quietly | not started |
-
-**Why `S-C1b` is "beside, not instead".** The new generic exports live alongside
-the old positional ones, and a test proves both paths produce **byte-identical
-output** for the same inputs. Nothing is removed until Phase E, and only after
-the replacement is proven. That equivalence test is the single most valuable
-thing in Phase C: it converts "we rewrote the interface" from a leap into a
-measurement.
-
-**Phase C was re-opened on 2026-07-30, and the reason generalises.** `S-C1a` and
-`S-C1b` were built and reported green against a standalone `gcc` harness,
-because that session had no Conan and no MSVC. The code was right. The *build*
-was red — two defects living entirely in CMake and in cross-repo commit order,
-which is exactly the surface a hand-rolled compiler command replaces rather than
-exercises.
+**One lesson from Phase C that generalises**, because it cost a re-open: two
+stages were built and reported green against a standalone `gcc` harness by a
+session that had no Conan and no MSVC. The *code* was right; the *build* was
+red, and the defects lived entirely in CMake and cross-repo commit order.
 
 > A parallel toolchain verifies the code. It structurally cannot verify the
 > build, because it does not use the build.
 
-Ten defects were found in that review. Six were contract defects — a port named
-`aeb.comp_state` in one place and `compState` in another, port names written in
-three unbound places, a manifest field that `R-SIM-18` requires and the schema
-didn't have. Each was cheap to fix that week and would have been permanent a
-month later, because `S-C1c` turns port names into topic names, signal paths,
-CSV headers and `expect:` strings. That is why the phase was re-opened rather
-than patched forward.
+**Phase E's risk has a different shape** from A–D's: adding code fails loudly on
+the thing you just wrote; removing code fails weeks later, for someone who was
+not in the room. That is why every deletion is gated on its replacement being
+*proven* rather than merely existing (`NR-SIM-30`).
 
 ---
 
-### Phase D — Reach *(not started)*
+## 4. How you actually use it
 
-Takes a working single-recording viewer and extends it: to Foxglove (`S-D1`),
-to print (`S-D2`), to the measured/simulate panel (`S-D3`), to a second
-component (`S-D4`), to a machine with no repo (`S-D5`), to per-port overrides
-and `sim probe` (`S-D6`), to many recordings at once (`S-D7`), and finally to a
-named product — **Vantage**, with its **Bench** and **Campaign** workspaces
-(`S-D8`).
+One executable, `sim`, plus `vantage` for the window. Fourteen verbs, and none
+of them names a driving function — the tool learns what exists by asking the
+DLL.
 
-### Phase E — Retirement *(not started)*
+**Look at something**
 
-Deletes ~3,530 lines of per-component private tooling, one commit per deleted
-file, each gated on its replacement being **proven** rather than merely
-existing. Phase E's risk has a different shape from A–D's: adding code fails
-loudly on the thing you just wrote; removing code fails weeks later, for
-someone who was not in the room.
+| Command | Does |
+|---|---|
+| `sim doctor` | reports your environment: interpreter, install mode, platform, encoding. Grows a section per capability, so it is the first thing to run when something is odd |
+| `sim probe <lib.dll>` | asks a library what ports it has — no repo, no Python knowledge, no docs |
+| `sim probe <rec.mcap>` | asks a **recording** what it provides, and **which cuts it supports** (§8) |
+| `sim explain <name>` | explains any name in the system — a port, a layer, a signal, a topic, an error |
+| `sim list ports\|topics\|layers\|signals` | enumerates one kind for a library, recording or session |
+| `sim view <rec>` / `vantage <rec>` | opens the window |
+| `sim render <rec> --at <tick>` | headless snapshot to PNG, with a provenance sidecar |
+
+**Produce a recording**
+
+| Command | Does |
+|---|---|
+| `sim record <scenario>` | drives a world model and writes a recording. **Executes nothing** |
+| `sim run <scenario>` | drives a world model **and** executes a pipeline, live, writing a session recording |
+
+**Re-execute one**
+
+| Command | Does |
+|---|---|
+| `sim resim <rec> --pipeline <p.yaml>` | re-runs the SUT against a recording. **Deterministic, and the only thing that goes in CI** |
+| `sim check <scenario-dir>` | evaluates the scenarios' `expect:` blocks headless; exits non-zero on failure |
+| `sim determinism <a> <b>` | compares two recordings; **the axis is derived from their manifests, never declared by a flag** |
+| `sim batch <recordings>` | runs a pipeline over a set, one subprocess per recording, so a crash costs one row |
+
+**Move data**
+
+| Command | Does |
+|---|---|
+| `sim convert <in> <out>` | recording → recording, between codecs |
+| `sim export <rec> --ports …` | recording → CSV. **Lossy and terminal** — an export is never a resim input |
+
+### The three words, against those verbs
+
+This is the distinction the whole tool rests on (`R-SIM-5`), and it is easiest
+to see here:
+
+- **sim** — a live world model computes the world. Non-deterministic. `sim run`.
+- **resim** — the SUT is re-executed against a recording. Deterministic, and the
+  only one CI trusts. `sim resim`.
+- **replay** — a recorded result is rendered with **no computation at all**.
+  `sim view`.
+
+Never call a resim a replay. The difference is whether your code ran.
 
 ---
 
-## 4. The questions you will actually ask
+## 5. What you configure, and where
+
+Nothing physical is a constant in the source. Every number that describes the
+world is resolved from YAML at run time, and **switching project must change
+the picture** (`R-SIM-3`). Here is every file that decides something, who owns
+it, and what breaks if it is wrong.
+
+### Calibration — what the vehicle actually is
+
+| File | Owner | Decides |
+|---|---|---|
+| `projects/<p>/default.yaml` | the project | every physical number: zone geometry, thresholds, sensor poses, class footprints, sample periods (`R-VAR-4`) |
+| `shared_config` → `vehicle/ego_params.yaml` | shared | the ego body — wheelbase, overhangs, width |
+
+Calibration keys are **ALL_CAPS with a domain prefix and a unit suffix**
+(`EGO_WHEELBASE_M`, `<COMPONENT>_<FN>_PERIOD_US`) — `R-NAME-3`. The unit is in
+the name because a bare `width` is exactly how you get a plausible wrong
+picture.
+
+### The bundle — calibration, as delivered
+
+The build copies the resolved calibration **beside the built library**, so a
+recording renders correctly on a machine with no checkout:
+
+```
+<library_dir>/
+  df_sil.dll
+  config/
+    default.yaml          the project's calibration
+    vehicle/              shared_config's ego params
+    df_sil.ports.yaml     a dump of the ports that compiled
+    bundle.sha256         what makes it one atomic artifact
+  sim/                    the component's plug-ins (below)
+```
+
+Three things follow, and each exists to prevent a specific failure:
+
+- **`adasInit(NULL)` resolves it module-relative.** An explicit path always
+  wins; a project mismatch is a **warning**, not a stop.
+- **It is copied beside the DLL, never compiled into it.** Compiling it in would
+  kill the edit-and-re-run calibration loop. Production freezes parameters via
+  AUTOSAR instead.
+- **The viewer must read the bundle the SUT was initialised with**, resolving
+  *embedded-in-recording → library `config/` → source checkout* — and **stating
+  which**. Two readers agreeing by coincidence is the exact failure this
+  prevents (`R-SIM-3a`).
+
+**Never edit the bundle.** It is a build output. Edit `projects/<p>/` and
+rebuild, or the next build silently reverts you.
+
+### What a component declares about itself
+
+| File | Decides |
+|---|---|
+| `modules/<n>/conf/build.yml` | project × target × platform, Conan `requires`, and `enabled_functions` (`R-VAR-3`) |
+| `modules/<n>/conf/ports.yaml` | **the port declaration** — the one hand-written source the ABI shim is generated from (`R-SIM-22`) |
+| `<n>_sil.ports.yaml` | **generated.** A dump of what compiled. Never hand-edit it; it exists so a human can read the manifest without loading the DLL |
+
+Function selection is **compile-time** (`ENABLED_FUNCTIONS`, `R-VAR-5`), so the
+manifest cannot drift from what was built.
+
+### What a component contributes to the picture
+
+All of it lives in `modules/<n>/sim/`, and the build deploys it to
+`<library_dir>/sim/` exactly as it deploys the config bundle — which is what
+makes *"point Vantage at a folder of DLLs and it draws them"* true with no
+checkout and no `PYTHONPATH` (`R-SIM-20`).
+
+| File | Decides |
+|---|---|
+| `plugin.yaml` | the plug-in API generation and the bundle hash. **Read before importing**, so an incompatible plug-in is refused rather than half-loaded |
+| `layers/<fn>.py` | one file per function — the *only* place that function's picture is described |
+| `viewpoints.yaml` | named camera viewpoints |
+| `pipelines/*.yaml` | **the wiring**: per stage `mode:` and `impl:`, per-port overrides, the `record:` policy |
+| `sensor_models/*.yaml` | sensor **error** models — noise, latency, dropout, occlusion |
+| `ingest/*.yaml` | which topic in a foreign recording satisfies which port (§8) |
+| `tolerance.yaml` | determinism tolerance. `default: exact`; every row needs a `why:` |
+| `workspace.yaml` | the component's default panel arrangement. *Specified (viz §13b); no component authors one yet* |
+
+A recording embeds the config bundle's **bytes** but only the plug-in bundle's
+**hash and identity**. The asymmetry is deliberate and nobody should "fix" it:
+**configuration is data, a plug-in is code** — opening a colleague's recording
+must never run their code. A missing plug-in degrades to *"these layers
+unavailable"*, named with the hashes it expected.
+
+### The pipeline file — where you decide what actually runs
+
+This is the file a developer edits most, and the one that makes one tool cover
+every level of simulation. Per stage, **two independent fields**:
+
+- **`mode:`** — `simulate` (execute it) · `measured` (inject it from the
+  recording) · `off`
+- **`impl:`** — `dll:` (the real library) · `stub:` (a Python stand-in) ·
+  `stubdll:` (a stand-in on the same generic ABI)
+
+The invariant that makes this work: *executed* and *injected* produce **the same
+port set**, so a downstream consumer cannot tell which it got. Ground truth →
+real perception → RSP in the loop is therefore a `mode:`/`impl:` change, and the
+downstream stage's entry stays byte-identical (`R-SIM-10`).
+
+`impl:` is **retained** on a `measured` stage, so the toggle is reversible.
+Setting a stage to `simulate` **closes the gap by default** — intervening stages
+flip too — because a `measured` stage between two `simulate` stages is a severed
+chain where the upstream computes into nothing. Forcing the gap open is allowed
+and is how you watch one stage diverge while holding the next on known-good
+input; the orphaned stage is then badged *"computed, not consumed"*.
+
+You can also **tweak a port's value** from a closed list of six verbs — `const`,
+`hold`, `offset`, `scale`, `select`, `drop` — addressed at a port, a field path
+(`egoDyn.vx`) or a repeated element (`[i]`, `[*]`). The line that keeps the list
+closed: **an override may destroy or attenuate information; it may never create
+an entity.** There is no expression language and no scripting hook, deliberately
+(`R-SIM-15`). Every override is declared in the run manifest and badged in the
+HUD — never smuggled.
+
+### Scenarios
+
+A scenario lives with the **module that owns its behaviour**
+(`modules/<n>/tests/*_scenarios/**/*.yaml`), never in the framework — its
+`expect:` block names component ports, so a scenario in `modules/sim` would put
+a function's name in the framework. It carries the world-agnostic content, how
+that is realised in a specific simulator, the sensor model, run control, the SUT
+reference, and its `expect:` block. **The expectations are data, from one
+source**: the same block drives the timeline marker, the headless `sim check`
+and the report, and every timing predicate carries an explicit `within_s` —
+there is no default tolerance (`R-SIM-8`).
+
+### The other inputs
+
+| Thing | What it is |
+|---|---|
+| **`<n>_sil.dll`** | the component under test. Carries its own manifest **and** a `FileDescriptorSet`, so message classes are built at run time from the DLL that produced the bytes — **no generated Python bindings, no sibling checkout** (`R-SIM-11`) |
+| **`.mcap`** | the recording. Read **and** written |
+| **`.jsonl`** | read and written; the debuggable text format |
+| **CSV** | **write-only.** Registered without a reader, so the loader refuses it by capability rather than by convention — an export is lossy and terminal |
+| **Foxglove `SceneUpdate`** | an export, for viewing a Scene in a foreign viewer |
+
+A recording is a *model*; a format is a *codec* (`R-SIM-14`). Adding one is a
+reader and a writer of about four methods each, registered by extension —
+nothing in the viewer, the layers or the expectations may learn a format exists.
+
+---
+## 6. The questions you will actually ask
 
 ### "Why is sim code spread across five repos? Isn't that the opposite of modular?"
 
@@ -559,7 +635,7 @@ yet.
 
 ---
 
-## 5. A day in the life, once this is finished
+## 7. A day in the life
 
 ```bash
 # What can this library do?  (no repo, no Python knowledge, no docs)
@@ -572,7 +648,7 @@ sim probe modules/df/tests/carla_testruns/bsd/bsd_ego_lane_exit.mcap
 sim run modules/df/tests/carla_scenarios/bsd/ego_lane_exit.yaml
 
 # Re-run just the driving functions against yesterday's recording
-sim resim runs/2026-07-30/bsd_ego_lane_exit.mcap --pipeline df_only.yaml
+sim resim runs/<date>/bsd_ego_lane_exit.mcap --pipeline df_only.yaml
 
 # Did it do what the scenario says it should?  (headless, exits non-zero)
 sim check modules/df/tests/carla_scenarios/bsd/
@@ -590,28 +666,10 @@ by asking the DLL. That is the whole design, compressed into six commands.
 
 **Every path points into `modules/df`.** That is not incidental — see below.
 
-**`--plugin-root`, verified for real, 2026-08-07 — a gap found, then closed
-the same day.** This whole block used to read "once this is finished,"
-future tense. The `vantage`/`sim probe`/`sim resim` half of it is real
-today, against a real `perception_core_sil.dll` and `df_sil.dll` (`sim`
-build queue rows 1–4). Running `vantage.bat` against a real BSD recording
-first found a genuine gap: `--plugin-root` is documented to take a
-component's **built library directory** — `df_sil`'s own `Release/sim/`
-copy, packed there by the build (`R-SIM-20`) — but `df/sim/layers/bsd.py`'s
-own `_bsd_calibration` read its zone geometry relative to *itself*
-(`_DF_ROOT / "src" / "project" / ...`), which resolves correctly for a
-source checkout but not for a deployed copy — `FileNotFoundError` on the
-very first tick (`sim_audit_log.md` `AR-55`). **Fixed the same day**:
-`ProjectModel` gained the `bundle_dir` accessor its own docstring had
-flagged as missing — the winning tier's own directory, `<library_dir>/
-config/` for a deployed copy — and `_bsd_calibration` now reads `default.
-yaml` from there when it is available, falling back to the checkout-relative
-path only when it genuinely is a checkout (`bundle_dir is None`). `vantage.py`
-threads `--plugin-root`'s own `config/` directory through to the viewer's
-`ProjectModel.resolve` the same way. Point `--plugin-root` at the built
-`Release/` directory (as shown above) or at the checkout — both work now;
-real `bsd`/`df` layer groups appear in the Layers panel either way, check
-their boxes to draw.
+**`--plugin-root` takes either a component's built library directory
+(its deployed `sim/` and `config/` copies) or a source checkout — both
+resolve. The component's own layer groups then appear in the Layers panel;
+check their boxes to draw.**
 
 ### Vantage authors nothing
 
@@ -630,7 +688,7 @@ has moved and something downstream will break at `GT-1`.
 
 ---
 
-## 5a. The hard part: recordings we did not make
+## 8. The hard part: recordings we did not make
 
 This is the question that decides whether the tool is usable on day one, because
 **every recording that exists today was made by something else.**
@@ -704,14 +762,12 @@ $ sim probe modules/df/tests/carla_testruns/bsd/bsd_ego_lane_exit.mcap
              [source → perception → df]     unsupported: no detections topic
 ```
 
-*Status: honest one.* Dimension 1 is built. Dimension 2 is **specified and not
-yet built** — today the bridge from a legacy topic to a manifest port exists
-only hardcoded inside one test, which is why `S-C9` exists and why it is ordered
-before scenarios land. See architecture `D14`.
+Both dimensions are built — the codec table (`R-SIM-14`) and the ingest map
+(`R-SIM-23`, closing defect `D14`).
 
 ---
 
-## 6. Where to go next
+## 9. Where to go next
 
 | You want | Read |
 |---|---|

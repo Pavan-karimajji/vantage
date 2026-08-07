@@ -3,27 +3,17 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`sim doctor [--pipeline P [--search DIR ...] [--config C] [--project NAME]]
-[--recording R] [--config-source embedded|library|checkout]` -- argument
-parsing and layout only (GT-9); the facts themselves come from
-`adas_sim.core.diagnostics.doctor_report`. With no flags, exactly the S-A1
-environment slice; `--pipeline`/`--recording` add library resolution,
-config-bundle agreement, codec capabilities and recording-cut feasibility
-(DG-3, S-D6/`UT-D6-8`). `--config-source` forces the bundle-agreement check
-onto exactly one resolution tier instead of the normal priority order
-(`UT-C5-8`) -- `embedded` needs `--recording` to have something to force
-against. `--plugin-root` (`S-C8`) reports each resolved stage's own
-plug-in bundle -- explicit -> library `sim/` -> checkout, same tiers the
-config bundle uses minus `embedded` (`core.diagnostics._plugin_diagnoses`'s
-own docstring on why). `--component ROOT` (`S-D6`, `ST-D6-4`,
-`sim_sil_contract.md` section 10) reports a component TREE (a path, e.g.
-`modules/df` -- never a bare name, same convention as every other flag
-here) against the thirteen-row "what a component owes the framework"
-checklist -- a required row absent is a gap, a conditional/optional row's
-absence is reported without this tool guessing whether it is legitimate
-(`core.diagnostics.component_checklist`'s own docstring on why).
-Deliberately never added to `problems` -- section 10 states this is not a
-gate. Non-zero exit on anything that would break a real run."""
+"""`sim doctor` -- report the environment, and what is missing.
+
+Prints the interpreter, install mode, platform, console encoding and line
+endings, plus whichever optional extras are present.
+
+With `--component <path>`, checks one component against what the framework
+needs from it -- manifest, config bundle, plug-ins -- and names each absence as
+a gap. It reports; it never fixes.
+"""
+
+# Design refs: `GT-9` · `DG-3` · facts live in `core/diagnostics.py` · `UT-D6-8`, `UT-C5-8`
 
 from __future__ import annotations
 
@@ -46,13 +36,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--project", default="base", help="falls back to 'base' (R-VAR-4)")
     parser.add_argument(
         "--config-source", choices=["embedded", "library", "checkout"], default=None,
-        help="force the config-bundle agreement check onto exactly one tier (UT-C5-8); "
-             "'embedded' requires --recording",
+        help="force the config-bundle agreement check onto one tier (UT-C5-8); "
+            "'embedded' requires --recording",
     )
     parser.add_argument(
         "--component", type=Path, default=None,
-        help="a component's root directory (e.g. modules/df) -- report it against "
-             "sim_sil_contract.md section 10's thirteen-row checklist (ST-D6-4)",
+        help="a component's root directory (e.g. modules/<name>); report it "
+            "against the component checklist (ST-D6-4)",
     )
     return parser
 

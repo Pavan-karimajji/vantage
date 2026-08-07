@@ -152,7 +152,7 @@ class Session:
         return tuple(results)
 
     def has_simulated_output(self) -> bool:
-        """`AR-57` (2026-08-07): whether ANY port in this run ever carried
+        """`AR-57`: whether ANY port in this run ever carried
         an `origin="simulated"` value (`R-SIM-12`'s own origin tag) --
         true iff some `mode: simulate` stage genuinely executed and its
         output was captured, false for a purely stimulus-only recording

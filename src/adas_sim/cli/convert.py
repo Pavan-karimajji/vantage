@@ -3,11 +3,14 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`sim convert <in> <out>` -- recording -> recording, refused when either
-side lacks `round_trips` (`R-SIM-14`, `S-D7`). Argument parsing plus the
-copy itself (`GT-9`): every fact comes from `io/registry.py`'s
-`RecordingReader`/`RecordingWriter` Protocols, nothing reinterprets a
-message along the way."""
+"""`sim convert <in> <out>` -- recording to recording.
+
+Reads with the codec registered for the input extension and writes with the
+output's. Refuses a target that cannot round-trip, by capability rather than by
+convention.
+"""
+
+# Design refs: `GT-9` · `R-SIM-14` a recording is a model, a format is a codec
 
 from __future__ import annotations
 

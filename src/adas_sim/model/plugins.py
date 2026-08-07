@@ -3,21 +3,20 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji <Pavan.Karimajji@larsentoubro.com>
 
-"""`PluginBundle.resolve(...)` -- S-C8 (`R-SIM-20`, `FR-SIM-64`): a
-component's plug-ins are authored in the component (`modules/<name>/sim/`,
-`R-SIM-1`, unchanged) and DELIVERED beside its built library, exactly like
-the config bundle (`R-SIM-3a`) -- built right after `S-C5` deliberately, so
-the two do not end up with different resolution orders. Resolution order:
-**explicit -> embedded-in-recording -> library `sim/` -> source checkout**,
-mirroring `model.project.ProjectModel.resolve` tier for tier.
+"""`PluginBundle.resolve()` -- plug-ins are **authored** in the component
+(`modules/<name>/sim/`, `R-SIM-1`) and **delivered** beside its built library,
+exactly like the config bundle (`R-SIM-3a`; `R-SIM-20`, `FR-SIM-64`). Resolution order
+mirrors `ProjectModel.resolve` tier for tier: explicit -> embedded-in-recording
+-> library `sim/` -> source checkout.
 
 **A recording never carries a plug-in's bytes** (`NR-SIM-44`) -- only its
-identity (`component`, `api`) and `sha256`, so opening a colleague's
-recording never runs their code (the asymmetry with the config bundle is
-deliberate: configuration is data, a plug-in is code). A plug-in outside the
-player's declared `api:` range is refused **before it is imported** --
-`PluginBundle.resolve` never imports anything; only `import_modules()` does,
-once, after `api` has already been checked.
+identity and `sha256` -- so opening a colleague's recording never runs their
+code. The asymmetry with the config bundle is deliberate: configuration is
+data, a plug-in is code.
+
+A plug-in outside the player's declared `api:` range is refused **before it is
+imported**: `resolve()` imports nothing, and `import_modules()` runs only
+after `api` has been checked.
 """
 
 from __future__ import annotations

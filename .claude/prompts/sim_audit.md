@@ -30,14 +30,23 @@ the method; if the two ever disagree, the root method wins.
 `docs/sim_learn.md` is a plain-language narrative — useful for sanity-checking
 your own understanding, **not authoritative**.
 
-## 2. The ledger
+## 2. Where a finding goes
 
-**`docs/sim_audit_log.md`** — stable ids `AR-n`. Enforced by
-`docs/py/check_audit_ledger.py` (inside `run_all.py`), which fails if a
-`CLOSED` row names no landed-in anchor, or names one that does not resolve.
-That check is what makes the root method's *"level 1/2 findings are not
-closable until the master document was edited"* rule real rather than
-aspirational.
+**There is no ledger file.** A finding is a **checkbox in the stage that will
+fix it**, in build order — see the plan's §9a. The ledger that used to exist was
+retired at the freeze with every row closed; a second list of open work is a
+second thing to reconcile, and it was reliably the one nobody read.
+
+Two rules from it survive and are binding on any audit:
+
+- A finding whose origin is the **requirements or design level is not closable
+  until that master document has been edited.** Recording a correction that no
+  master document contains is the failure the mechanism exists to prevent.
+- **Reconciliation precedes appending.** Re-verify what is already open before
+  writing anything new.
+
+`AR-n` ids from the retired ledger are still cited in a few source and test
+docstrings. They are historical; do not allocate new ones.
 
 ## 3. ID families
 

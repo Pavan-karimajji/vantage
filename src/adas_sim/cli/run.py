@@ -3,20 +3,15 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`sim run <scenario> --pipeline <p> [--record <out>]` -- argument parsing
-only (`GT-9`). Drives a `Source` AND executes the pipeline live
-(`sim_resim_and_recording.md` §9: "produces an artifact: optional, executes
-a SUT: yes (live)") -- `--record` is the only difference from `sim record`:
-without it, ticks execute and nothing is written; with it, `Recorder`
-(`sources/recorder.py`) writes every declared port exactly as `sim run
---record` always has (`sim_architecture.md`'s own migration table).
+"""`sim run <scenario> --pipeline <p.yaml>` -- drive a world model and execute.
 
-`--source`/`--script` reuse `cli.record`'s own stand-in for scenario-driven
-source selection (see that module's docstring) -- `--source`/`--script`
-choose which `Source` drives the run; which scenario schema section that
-choice should someday be read from is unrelated to `S-C3`'s own job (the
-schema itself, now built, `contracts/scenario.py`) and stays a stand-in.
+Runs a scenario live against a world model with the pipeline in the loop, and
+writes a session recording by default. The non-deterministic mode: use
+`sim resim` to re-execute the result reproducibly.
 """
+
+# Design refs: `GT-9` · `R-SIM-5` sim is the non-deterministic mode · `R-SIM-6` a sim run
+# writes a session recording by default
 
 from __future__ import annotations
 
@@ -42,8 +37,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--project", default="base")
     parser.add_argument(
         "--config", type=Path,
-        help="config path forwarded to each stage's adasInit -- adasInit(NULL)'s own bundle "
-             "resolution is S-C5, not yet built, so a real dll:/stubdll: stage needs this explicitly",
+        help="config path forwarded to each stage's adasInit; falls back to the "
+            "bundle beside the library",
     )
     return parser
 

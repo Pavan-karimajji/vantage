@@ -145,7 +145,7 @@ def test_run_button_drives_run_batch_off_the_gui_thread_and_populates_results(mo
 
 
 def test_ut_d8_2_locked_by_omission_no_mode_toggle_and_no_console():
-    """`UT-D8-2` (`AR-48`, repointed 2026-08-06): the claim that matters is
+    """`UT-D8-2` (`AR-48`, repointed: the claim that matters is
     not that `Workspace.require()` raises correctly in isolation
     (`test_d8_workspace.py` already proves that) -- it is that `Campaign
     Widget` never constructs a control there is anything to grey out. Mode

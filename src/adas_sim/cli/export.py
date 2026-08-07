@@ -3,9 +3,15 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`sim export <in> <out> --ports <p1,p2,...> [--on-missing error|blank|omit-column]`
--- argument parsing plus wiring into `io/csv.py`'s `CsvWriter` (`GT-9`, `S-D7`).
-`--ports` omitted exports every port the recording declares."""
+"""`sim export <in> <out> --ports …` -- recording to a flat file.
+
+Writes a selected port subset to a declared column schema, carrying the source
+recording's timebase and origin tags.
+
+An export is lossy and terminal: it is never accepted back as a resim input.
+"""
+
+# Design refs: `GT-9` · `R-SIM-14` an export is lossy and terminal, never a resim input
 
 from __future__ import annotations
 

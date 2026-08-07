@@ -34,15 +34,15 @@ and §5.8 answers "where does this file go?".
 
 | Doc | Owns |
 |---|---|
-| **[sim_requirements.md](docs/sim_requirements.md)** | **the source** — 45 numbered requirements (`FR-`/`NR-`/`CR-SIM-n`), the decisions register, what is parked and why, open questions |
+| **[sim_requirements.md](docs/sim_requirements.md)** | **the source** — 80 numbered requirements (`FR-`/`NR-`/`CR-SIM-n`), each with its origin, its answer, its verifier and its priority |
 | [sim_architecture.md](docs/sim_architecture.md) | vocabulary, the defect analysis, layers, the Scene IR, placement map, config bundle, pipeline depth, extension points |
 | [sim_sil_contract.md](docs/sim_sil_contract.md) | the Python↔C boundary: named port sets, component manifests, pipelines |
 | [sim_visualization_spec.md](docs/sim_visualization_spec.md) | the viewer: Scene primitives, BEV feature set, renderers, themes |
 | [sim_resim_and_recording.md](docs/sim_resim_and_recording.md) | sim / resim / replay, run manifests, determinism, recording model & codecs |
 | [sim_scenarios_and_expectations.md](docs/sim_scenarios_and_expectations.md) | scenario schema, sensor model, expectations-as-data, headless CI |
-| **[sim_implementation_plan.md](docs/sim_implementation_plan.md)** | **the executable plan** — 21 stages, checkboxes, unit + system tests, the `df` retirement inventory, traceability |
+| **[sim_implementation_plan.md](docs/sim_implementation_plan.md)** | **the executable plan** — 32 stages, checkboxes, unit + system tests, the retirement inventory, traceability |
 
-Normative rules: superproject `.claude/rules/sim.md` (`R-SIM-1..14`).
+Normative rules: superproject `.claude/rules/sim.md` (`R-SIM-1..25`).
 
 ## Planned layout
 

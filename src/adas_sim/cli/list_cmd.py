@@ -3,26 +3,14 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`sim list ports|topics|layers|signals <path>` (`DG-1`,
-`sim_naming_and_diagnostics.md` §2): "everything named is discoverable at
-run time... no name is knowable only from source." Argument parsing and
-formatting only (`GT-9`) -- every fact below comes from a source that
-already exists (`adasManifest`, the recording's own topic index, an emitted
-`Scene`, `Session.known_ports`), never a second, hand-maintained list.
+"""`sim list ports|topics|layers|signals <path>` -- enumerate one kind of name.
 
-    sim list ports <lib>          from adasManifest
-    sim list topics <recording>   from the topic index
-    sim list layers <session>     from the emitted Scene
-    sim list signals <session>    the port-level address space (see below)
-
-**`signals`, scoped honestly.** `DG-1`'s own wording is "ports x fields, the
-one address space" -- the full claim needs each port's message class
-resolved from its embedded schema and its fields walked recursively
-(nested messages, repeated fields). That is real, separate work; what is
-built here is the PORT-level address space only (every `known_ports` entry,
-sorted) -- a real, useful subset, not the full field-level claim. Widening
-this to field paths is the natural next slice, not attempted here.
+Takes a component library, a recording or a session, and prints the names of
+the requested kind. The companion to `sim explain`, which describes one name;
+this prints all of them.
 """
+
+# Design refs: `GT-9` · `DG-1`
 
 from __future__ import annotations
 

@@ -1076,7 +1076,7 @@ semantics change to `updated`, which is the definition of expensive-later.
 
 ## 10. What a component owes the framework — the checklist (`NR-SIM-48`)
 
-*Added 2026-08-06 by sim audit run 3 (`AR-43`).* `R-SIM-16` says *"a component
+*Added 2026-08-06 by sim audit run 3.* `R-SIM-16` says *"a component
 onboards itself"*. That is only true if what **onboarded** means is written
 down, and until this section it was not — it was spread across `R-SIM-20`,
 `R-SIM-22`, `R-SIM-23`, `R-SIM-24` and `R-SIM-3a`, one obligation each, with no
@@ -1104,7 +1104,7 @@ worst possible witness for it.
 
 **Rows 5–7, `vdy` column, corrected 2026-08-06 (`ST-D6-4`, sim build queue
 row 3).** The three `✅`s above were asserted, not measured, when this table
-was first written (`AR-43`) — `component_checklist()`, the mechanism this row
+was first written — `component_checklist()`, the mechanism this row
 built, is what actually looked and found `modules/vdy/src/project/` does not
 exist. This is not a regression: `vdy` never had it. It is the table's own
 claim that was wrong, corrected here rather than quietly left — and it is

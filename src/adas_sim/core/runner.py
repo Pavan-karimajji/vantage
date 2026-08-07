@@ -206,26 +206,21 @@ def build_scene(
     session: Session, tick_index: int, *, project: str = "base", interaction: Interaction = _NO_INTERACTION,
     model: ProjectModel | None = None,
 ) -> Scene:
-    """Pass 2a: assemble one tick's `Scene` from every currently-registered
-    layer provider (`scene/registry.py`) -- discovery by import, never a
-    hardcoded provider list (`R-SIM-1`). Whoever composes the running app
-    (a CLI, the viewer, a test) is responsible for importing the component
-    `sim/layers/*.py` modules that should contribute; this function only
-    calls whatever is registered at the time.
+    """Pass 2a: assemble one tick's `Scene` from every registered layer provider
+        -- discovery by import, never a hardcoded list (`R-SIM-1`). Whoever
+        composes the running app is responsible for importing the component layer
+        modules that should contribute; this calls whatever is registered.
 
-    Independent of theme and layer selection -- both are applied later, at
-    render time (`render/bev.py`) -- which is why `SceneCache` (below) keys
-    on them without this function needing either. `interaction` defaults to
-    a no-op, so every caller that predates `S-B3` slice 3 is unaffected; a
-    real caller only needs it to feed a provider declaring `reacts_to`.
+        Independent of theme and layer selection, both applied later at render
+        time, which is why `SceneCache` can key on them without this needing
+        either.
 
-    `model`, when given, is used as-is instead of re-resolving `project`
-    (`ST-C5-2`) -- a caller rendering many ticks off one loaded session
-    (the live viewer) resolves its `ProjectModel` once, off the session's
-    own embedded bundle (`Session.config_bundle_bytes`) if it carries one,
-    rather than paying `ProjectModel.resolve`'s checkout-only default on
-    every single tick. `None` (every other caller: `capture.py`, `clip.py`,
-    every test) reproduces the exact prior behaviour.
+        `model`, when given, is used as-is instead of re-resolving `project`
+    (`ST-C5-2`): a
+        caller rendering many ticks off one session resolves its `ProjectModel`
+        once, from the session's embedded bundle if it has one, rather than paying
+        a full resolve per tick.
+
     """
     index = _resolve_tick_index(session, tick_index)
     ctx = _build_layer_ctx(session, tick_index, project=project, interaction=interaction, model=model)

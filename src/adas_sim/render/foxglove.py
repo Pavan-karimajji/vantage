@@ -3,43 +3,34 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""Scene -> Foxglove `SceneUpdate`/`FrameTransforms` (S-D1, `R-SIM-13`):
-demonstrating "visualization is identical regardless of origin" in a viewer
-we did not write, by translating the SAME `Scene` a Qt/matplotlib renderer
-already draws into a foreign tool's own schema, rather than a second,
-independent rendering.
+"""Scene -> Foxglove `SceneUpdate`/`FrameTransforms` (`S-D1`, `R-SIM-13`):
+"visualization is identical regardless of origin", shown in a viewer we did
+not write, by translating the **same** `Scene` the Qt renderer draws rather
+than rendering a second time independently.
 
-**One entity per `Layer`** (this stage's own checklist item), so Foxglove
-Studio's own per-entity visibility toggle lines up with our layer toggles
-for free. **Entity id IS `Layer.id`, unchanged** (`N-2`/`N-6`) -- no
-translation table, so a layer named in an error or the inspector reads
+**One entity per `Layer`**, so Foxglove Studio's per-entity visibility lines up
+with our layer toggles for free. **The entity id is `Layer.id`, unchanged**
+(`N-2`, `N-6`) -- no translation table, so a layer named in an error reads
 identically in both viewers.
 
-**Must not** (this stage's own words): let a Foxglove type reach `scene/`.
-This module is the ONLY place `foxglove.messages` is imported anywhere in
-this package -- `UT-D1-4` asserts it mechanically. The mapping is
-one-directional: `scene/` has never heard of Foxglove, and never will.
+**Must not let a Foxglove type reach `scene/`.** This is the only module that
+imports `foxglove.messages` anywhere in the package, asserted mechanically by
+`UT-D1-4`. The mapping is one-directional: `scene/` has never heard of
+Foxglove.
 
-**Frame graph.** Real dynamic pose composition (sensor mounting, ego
-kinematics) needs `core/tick.py`'s `Tick` composed with the project's
-resolved poses -- out of scope here, same as `sim_visualization_spec.md`
-§11.4 already scopes real camera extrinsics to a later phase ("Scoped for
-Phase D4"). What THIS stage owns is narrower and load-bearing on its own:
-the earlier Foxglove attempt failed because an entity referenced a frame
-(`chase_camera`) nothing ever published, and every entity silently rendered
-at the origin (`df_carla_viz_plan.md` §2). `frame_transforms_for` closes
-exactly that hole -- a static identity transform for every frame a Scene's
-prims actually reference, parented to `"ego"` -- never a real pose, but
+**Frame graph.** Real dynamic pose composition is out of scope here (viz §11.4
+scopes real extrinsics to a later phase). What this owns is narrower and
+load-bearing: an earlier attempt failed because entities referenced a frame
+nothing ever published, and every one silently rendered at the origin.
+`frame_transforms_for` emits a static identity transform for every frame a
+Scene's prims actually reference, parented to `"ego"` -- never a real pose, but
 never a stranded reference either.
 
-**Heatmap/image.** Foxglove's `SceneEntity` has no bulk-data primitive (no
-`PointCloud`/`Grid`/`CompressedImage` slot on the entity itself -- those are
-separate top-level channels). `R-SIM-2` already keeps a `Prim`'s bulk
-payload OUT of the Scene (`Prim.bulk`, a `BulkRef` into the recording), so
-there is nothing more to draw here even in principle: this module maps both
-kinds to a labelled placeholder `TextPrimitive` naming the referenced topic,
-satisfying `UT-D1-1`'s "every kind maps to something" without pretending to
-render bytes it was never handed.
+**Heatmap and image** map to a labelled placeholder naming the referenced
+topic. Foxglove's `SceneEntity` has no bulk-data primitive, and `R-SIM-2`
+already keeps bulk payloads out of the Scene (`Prim.bulk` is a `BulkRef` into
+the recording), so there is nothing more to draw even in principle -- this
+satisfies `UT-D1-1` without pretending to render bytes it was never handed.
 """
 
 from __future__ import annotations

@@ -37,7 +37,7 @@ from adas_sim.view.viewport import Viewport
 
 
 def resolve_layer_selection(layer_selection: frozenset[str] | None, scene: Scene) -> frozenset[str]:
-    """`AR-58` (2026-08-07): `None` (no explicit `--layer` selection) used
+    """`AR-58`: `None` (no explicit `--layer` selection) used
     to mean "draw literally every layer the Scene carries" all the way
     into the rendered pixels -- which let a layer the live window hides by
     default (`Layer.default_on=False`, a debug overlay a component marked

@@ -132,7 +132,7 @@ def test_sidecar_run_id_matches_the_session(tmp_path):
 
 
 def test_snapshot_with_no_explicit_selection_matches_the_guis_own_default(tmp_path):
-    """`AR-58` (2026-08-07): `layer_selection=None` used to mean "draw
+    """`AR-58`: `layer_selection=None` used to mean "draw
     literally every layer the Scene carries" -- so a layer the live window
     hides by default (`Layer.default_on=False`) still dominated a headless
     snapshot, and the sidecar recorded `"layers": null`, unable to say

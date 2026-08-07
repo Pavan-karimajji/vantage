@@ -119,7 +119,7 @@ def test_every_panel_type_opens_and_renders_together_offscreen(tmp_path, monkeyp
     window.bev._label.clicked.emit(*box_px, QtCore.Qt.KeyboardModifier.NoModifier)
     assert window._selection == frozenset({"box"})
 
-    # `AR-59` (2026-08-07): `inspector_panel` starts hidden by default now
+    # `AR-59`: `inspector_panel` starts hidden by default now
     # (`sim_player.md` §3: "everything else... closed by default") -- open
     # it explicitly, the same as a real user clicking its View-menu entry,
     # so this test still proves it renders once open rather than asserting

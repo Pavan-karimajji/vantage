@@ -74,7 +74,7 @@ def test_resolution_order_explicit_beats_embedded_beats_library_beats_checkout(t
 
 
 def test_bundle_dir_is_the_winning_tiers_own_directory_and_none_for_checkout(tmp_path):
-    """`AR-55` (2026-08-07): `bundle_dir` is what lets a component's own
+    """`AR-55`: `bundle_dir` is what lets a component's own
     layer code (`df/sim/layers/bsd.py`'s calibration reader) read ITS OWN
     calibration from the SAME directory this model resolved from, instead
     of separately computing a source-checkout-only path. `None` only for
@@ -105,7 +105,7 @@ def test_project_mismatch_emits_provenance_warning_and_still_resolves(tmp_path):
 
 
 def test_manifestless_library_bundle_reports_unknown_and_does_not_warn(tmp_path):
-    """UT-C5-3 (`AR-51`): a real `S-C5`-packed bundle carries no
+    """UT-C5-3: a real `S-C5`-packed bundle carries no
     `manifest.yaml`. Named "config" -- the exact directory name every real
     build packs into, and the value `ProjectModel` used to fall back to
     (`bundle_dir.name`) before this fix. Without a `known_project`, the
@@ -148,7 +148,7 @@ def test_manifestless_library_bundle_reports_unknown_and_does_not_warn(tmp_path)
 
 
 def test_manifestless_library_bundle_uses_known_project_and_never_warns_when_it_matches(tmp_path):
-    """UT-C5-3 (`AR-51`): a caller that already loaded the component
+    """UT-C5-3: a caller that already loaded the component
     (`core/diagnostics.py`'s `_bundle_diagnoses`) supplies `known_project`
     from the DLL's own `adasManifest().project`. A correct real bundle then
     resolves to the real project and `ProvenanceWarning` does not fire --
@@ -164,7 +164,7 @@ def test_manifestless_library_bundle_uses_known_project_and_never_warns_when_it_
 
 
 def test_manifestless_library_bundle_known_project_mismatch_still_warns(tmp_path):
-    """UT-C5-3 (`AR-51`): `known_project` reports the truth, it does not
+    """UT-C5-3: `known_project` reports the truth, it does not
     silence a real mismatch -- a library genuinely built for `cus1` loaded
     against a run requesting `base` still warns, exactly as `R-SIM-3a`
     requires."""

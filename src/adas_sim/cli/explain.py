@@ -3,22 +3,19 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`sim explain <name> [--session] [--at <tick>]` -- argument parsing and
-layout only (GT-9); the facts come from `adas_sim.core.explain.explain`
-(static: what a name *is*) or, with `--at`, `adas_sim.core.evidence.evidence`
-(dynamic: what a name's *value was*, at that tick -- `S-B2Δ`, `OD-6`,
-`R-SIM-25`'s own CLI signature). First version, seeded at `S-B2`/`S-B2Δ`
-(`DG-2`); the CLI surface table's full shape (`sim_api_reference.md` §10)
-completed at `S-D6` (`UT-D6-7`).
+"""`sim explain <name>` -- what is this name, and where did it come from?
 
-`_explain_with_style_tokens` is the one place this file carries more than
-argument parsing (`GT-9`): a style token is a `render/theme.py` concept, and
-`render/` sits ABOVE `core/` in the package map (`sim_api_reference.md` §1,
-`UT-A1-6`), so `core.explain.explain` cannot check it. `cli/` is allowed to
-import `render/` (`sim doctor`/`sim explain` stay light regardless --
-`render/theme.py` itself imports neither Qt nor matplotlib), so the one
-extra branch lives here rather than growing a second "explain" module.
+Resolves any name in the system -- a port, topic, layer, signal, error or id --
+and prints what it is, what produced it and which document defines it. With
+`--session` and `--at`, adds the value at that tick and its origin.
+
+Prints the same record the viewer's evidence panel shows, so the headless and
+GUI answers cannot drift apart.
 """
+
+# Design refs: `GT-9` · `DG-2` · `OD-6`/`R-SIM-25` one producer, two formatters · `UT-D6-7`.
+# A style token is resolved here, not in `core/explain.py`: `render/theme.py`
+# sits above `core/` in the package map (`UT-A1-6`), so `core/` cannot import it.
 
 from __future__ import annotations
 

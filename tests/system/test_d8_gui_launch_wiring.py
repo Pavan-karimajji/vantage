@@ -4,8 +4,7 @@
 # @author Pavan Karimajji
 
 """`app/gui.launch` actually launches the `S-D8` shell (`VantageWindow`),
-not `render/viewer.py`'s bare `MainWindow` directly -- the gap found
-2026-08-06: every `S-D8` shell/workspace/palette/panel piece was built
+not `render/viewer.py`'s bare `MainWindow` directly -- the gap found: every `S-D8` shell/workspace/palette/panel piece was built
 and tested in isolation, but `sim view`/`vantage.bat`'s own real entry
 point still constructed the old window directly, so none of it was
 actually reachable. This file exists so that gap cannot silently return:
@@ -55,7 +54,7 @@ def _write_synthetic_recording(out_path) -> None:
 
 
 def test_launch_constructs_a_real_vantage_window_not_a_bare_mainwindow(tmp_path, monkeypatch):
-    """The regression test for the exact gap found 2026-08-06: `launch()`
+    """The regression test for the exact gap found: `launch()`
     must reach `VantageWindow.__init__` for real."""
     recording = tmp_path / "rec.mcap"
     _write_synthetic_recording(recording)

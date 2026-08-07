@@ -3,7 +3,7 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji <Pavan.Karimajji@larsentoubro.com>
 
-"""`ST-C5-1`, the real half: `sim_implementation_plan.md`'s S-C5 2026-08-04
+"""`ST-C5-1`, the real half: `sim_implementation_plan.md`'s S-C5
 audit found the config bundle travelled with `df_sil`'s own *build* directory
 (the `POST_BUILD` packing step) but was never `install()`-ed, so a real
 `df_sil` resolved through Conan packaging -- which is how `sil_host` gets it

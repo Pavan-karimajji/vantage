@@ -18,8 +18,7 @@ compiled library twice, once addressed each way, and diffs the results.
 new one written -- `sim_sil_contract.md` §8's own "a stub DLL built
 in-tree that implements the generic ABI over a trivial echo component" is
 singular; a second near-identical fixture would just be the same claim
-twice. Compiles on **both** platforms now (this stage's own finding,
-2026-08-07): the fixture was missing `ADAS_SIL_ABI_EXPORTS` before
+twice. Compiles on **both** platforms now (this stage's own finding: the fixture was missing `ADAS_SIL_ABI_EXPORTS` before
 including `adas_sil_abi.h`, so a Windows/MSVC build silently produced a
 DLL exporting nothing -- fixed in the fixture itself (a one-line
 `#define`, mirrors every real component's own CMake wiring), proven here

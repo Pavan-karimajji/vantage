@@ -11,7 +11,7 @@ half is `test_c1c_pipeline.py`'s, since it needs a real manifest), UT-C1c-26
 Also `S-B1Δ`'s `resolve_component_ref`/`try_resolve_component_ref` --
 component-relative `self.<port>` binding (`R-SIM-21`, arch `D13`). These are
 **still not** `UT-C1c-22`/`-23` (that pair is the Pipeline/ComponentManifest-
-based `resolve()`, real as of 2026-08-07 -- its own tests are below, in this
+based `resolve()`, real as of -- its own tests are below, in this
 same file since it's the same module; Block 1 has no live manifest to resolve
 against, so `resolve_component_ref` above resolves against a run's own known
 port names instead -- see `scene/registry.py`'s `gated()` and `LayerCtx.port`

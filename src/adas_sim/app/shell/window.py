@@ -76,7 +76,7 @@ class VantageWindow(QtWidgets.QMainWindow):
         self._default_project = project
         self._pipeline_search = tuple(pipeline_search)
         self._pipeline_config = pipeline_config
-        #: `AR-55` (2026-08-07): `--plugin-root`'s own `config/` directory
+        #: `AR-55`: `--plugin-root`'s own `config/` directory
         #: (`scripts/vantage.py`), so `MainWindow`'s `ProjectModel` resolves
         #: a DEPLOYED plug-in's calibration the SUT was actually packed
         #: with, not only a recording's embedded bundle or the checkout

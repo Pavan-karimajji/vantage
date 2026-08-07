@@ -3,27 +3,25 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`sim batch`'s real engine (S-D7, `R-SIM-19`) -- `cli/batch.py` carries no
-logic (`GT-9`), this module does. `run_batch` launches ONE fresh subprocess
-per recording (never a reused worker process -- a segfault in recording 3
-must not corrupt whatever runs recording 4) via `batch_worker.py`, and
-classifies each into the closed, never-merged three-way outcome `R-SIM-19`
-requires, plus `ok`:
+"""`sim batch`'s engine (`S-D7`, `R-SIM-19`); `cli/batch.py` carries no logic (`GT-9`).
 
-- **ok** -- the worker reported `{"outcome": "ok", ...}`.
-- **fail** -- the worker reported `{"outcome": "fail", ...}`: a clean,
-  expected failure (a `SimError`, or any other exception the worker's own
-  top-level `try` caught and reported before exiting).
-- **crash** -- the worker's `--out-json` is missing or unreadable AND the
-  process exited abnormally. Classified from the OUTSIDE, never from a value
-  the dying process claims about itself -- a real crash (a segfault inside a
-  `dll:`/`stubdll:` library) never reaches the worker's own reporting code.
-- **timeout** -- `subprocess.run` itself raised `TimeoutExpired`.
+`run_batch` launches **one fresh subprocess per recording** via
+`batch_worker.py` -- never a reused worker, because a segfault in recording 3
+must not corrupt recording 4 -- and classifies each into the closed,
+never-merged outcomes `R-SIM-19` requires:
 
-`-j N` bounds how many of these subprocesses run concurrently (a thread pool
-supervises N `subprocess.run` calls in flight -- the concurrency is in the
-supervision, not in reusing one interpreter across recordings), but does not
-change isolation: still one subprocess per recording, always.
+- **ok** -- the worker reported success.
+- **fail** -- the worker reported a clean, expected failure it caught and
+  reported before exiting.
+- **crash** -- `--out-json` is missing or unreadable **and** the process
+  exited abnormally. Classified from the outside, never from a value a dying
+  process claims about itself: a real segfault inside a library never reaches
+  the worker's own reporting code.
+- **timeout** -- `subprocess.run` raised `TimeoutExpired`.
+
+`-j N` bounds how many subprocesses run concurrently; the concurrency is in
+the supervision, not in reusing an interpreter. Isolation is unchanged: still
+one subprocess per recording, always.
 """
 
 from __future__ import annotations

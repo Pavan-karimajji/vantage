@@ -3,138 +3,52 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""The GUI viewer's Qt shell -- foundation slice (`sim_implementation_plan.md` S-B3).
-Qt starts here and never below this line (`UT-B3-17`): pass 1 lives in
+"""The GUI viewer's Qt shell (`S-B3`).
+
+**Qt starts here and never below this line** (`UT-B3-17`): pass 1 lives in
 `core/runner.py`, Scene assembly in `core/runner.build_scene`, rasterising in
-`render/bev.py` -- none of them import Qt, so this module is the only place
-that does.
+`render/bev.py` -- none of them import Qt, so this is the only module that
+does.
 
-**Threading ownership (one documented rule, `sim_visualization_spec.md`
-§11.1).** Pass 1 (`build_session_from_recording`) runs on a `QThread` via
-`_SessionLoadWorker`, which is the only thing that touches a `Session`
-before it exists. Once `loaded` fires (delivered on the GUI thread by Qt's
-queued connection across threads), the `SceneCache` and every panel are
-built and read from the GUI thread only -- pass 2 (Scene assembly +
-rasterising) is cheap and pure, so it can afford to.
+**Threading ownership, the one documented rule** (viz §11.1). Pass 1
+(`build_session_from_recording`) runs on a `QThread` via `_SessionLoadWorker`,
+the only thing that touches a `Session` before it exists. Once `loaded` fires
+-- delivered on the GUI thread by a queued connection -- the `SceneCache` and
+every panel are built and read from the GUI thread only. Pass 2 is cheap and
+pure, so it can afford that.
 
-**Scope so far.** Slice 1 built the window, the threading model and the BEV
-panel. Slice 2 added the layers dock, a thin Qt view over
-`view.layers.LayerTreeState` (every decision -- tri-state, solo/mute, search,
-verbosity -- lives there, never here, `GT-9`). **Slice 3 closes two pieces of
-persistence debt (`P-7`):** the dockable panel grid itself -- open/close (each
-dock's own `toggleViewAction()` in the View menu), split/tab/float (native
-`QMainWindow`/`QDockWidget` mechanics, nothing to wrap) and a **saved layout,
-per project** (`sim_visualization_spec.md` §11.1) via `saveState()`/
-`restoreState()` -- plus wiring `LayerTreeState`'s already-built `save()`/
-`load()` (Slice 2) to a real location, **per (project, pipeline)** (§6: a
-function's layer overrides persist per project + pipeline, so re-opening a
-recording of that function restores its layer choices). Both locations
-resolve through `QStandardPaths.AppConfigLocation`, never a hand-written
-`%LOCALAPPDATA%`/`~/.config` path. **Slice 4** activated `Interaction` on
-`LayerCtx` (`reacts_to=`, `SceneCache`'s reactive tier) with no panel driving
-it yet. **Slice 5 is that panel, for selection:** `BevPanel` click-to-select
-(`Ctrl`+click to multi-select, `Esc` to clear) resolves through
-`render/bev.hit_test` (already built and tested in `S-B1`, `UT-B1-10`) into
-`MainWindow._selection`, which `render_tick` folds into both the `Interaction`
-it was already passing to `SceneCache` (Slice 4) and a new `selection=`
-argument to `render_scene` (§7.1's styling-plus-halo). The docked
-`InspectorPanel` (`view/inspector.py`) shows the resolved entities' declared
-`Prim.fields` live, with pin and copy-as-text. Slice 6 built the signal
-resolver (`core/signals.py`, not a `view/` file -- `Session.signal()`
-needed it, `sim_api_reference.md` §2.3). **Slice 7a wires `Viewport` (§4)
-into `BevPanel`:** drag-to-pan and wheel-to-zoom live in
-`_ClickableImageLabel` (which now tells a click from a drag by movement
-past `_DRAG_THRESHOLD_PX`, deferring `clicked` to release); `F`/`0`/`R`/
-`1`-`9` are `MainWindow` shortcuts (fit-to-content, reset, cycle follow
-mode, jump to a `DEFAULT_PRESETS` entry) since they need the current Scene
-or session, which `BevPanel` itself does not hold. Follow mode is real,
-cyclable `Viewport` state with **no rendering effect yet** -- a documented
-gap, not an oversight (see `_on_cycle_follow_mode`'s own docstring).
-**Slice 7b wires `Transport` (§5) into `TransportBar`**, a fixed toolbar,
-not a dock (§11.1 lists the scrub bar alongside "the menu and the keymap",
-not the panels a user rearranges). `Transport` itself (`view/transport.py`)
-was already built and fully tested in `S-B2`; this slice is the Qt binding
--- play/pause/step/speed/loop/goto, `Space`/`←`/`→`/`Shift+→`/`L`, and a
-`QTimer` whose interval is recomputed every tick from that tick's own
-`dt_ns / speed` (ticks need not be equally spaced). `head_tick` is pinned
-to the session's last tick at load (the whole recording is already in
-memory, so nothing is ever actually "advanced" -- `_advance_for_transport`
-exists only to satisfy `Transport`'s constructor and is provably
-unreachable); `Transport.__init__` starts `cursor` at `head_tick`, which is
-right for a live SUT ("head" is "where execution is now") but wrong for
-opening a recording for review, so `_on_loaded` calls `goto(0)` before
-binding. **Slice 8 adds `TimelineStrip`** (§7.3), synced with the same
-`Transport`: `Session.signal()` (Slice 6) is resolved once per lane-add and
-cached (`_signal_series_cache`) -- an O(ticks) pass on every render would
-make the strip the render loop's own bottleneck -- and `render/timeline.py`
-rasterises with zero-margin per-lane axes (`fig.add_axes`, the same trick
-`render/bev.py`'s single axes uses) so click-to-seek's pixel-to-tick
-inverse is exact, not approximate. `[`/`]` jump to the nearest state-lane
-transition or bookmark. **Slice 9 applies `view/workspace.Workspace`**
-(§13b): `MainWindow` takes an optional `workspace_path`, resolved to a
-component's `workspace.yaml` or `default_workspace()` (bev + timeline) if
-missing -- a malformed file still raises, only a missing one falls back.
-Only `tabs[0]` reaches this single-arrangement shell (`bev`'s `viewpoint`
-against `DEFAULT_PRESETS`, `timeline`'s `signals` as signal lanes,
-uniformly -- the schema does not declare state vs. signal, and guessing
-from a resolved value's type would silently misclassify a protobuf enum);
-`Workspace.tabs[1:]` parse and validate but nothing applies them yet, a
-gap `view/workspace.py`'s own docstring names rather than hides. `View >
-Reset Layout` restores `_default_layout_state`, captured once before any
-user-saved state is overlaid, byte for byte. **Slice 10 adds `PlotPanel`**
-(§7.4) -- unlike `TimelineStrip` (one, fixed), a user opens *several*
-(`Plots` menu, `_on_add_plot`), each its own `PlotState`
-(`timeseries`/`xy`/`state`/`distribution`). `timeseries`/`state` reuse
-`render/timeline.render_timeline` directly (one rendering path, not two,
-for lanes that look identical whether they live in the strip or a plot)
-and so inherit its exact click-to-seek; `xy`/`distribution` get their own
-`render/plots.py` functions and a plain, non-interactive label -- their
-axes are scaled to the data, not a fixed range, so the same exact inverse
-does not carry over. `_signal_series_cache` (renamed from
-`_timeline_series_cache`) is shared by the strip and every plot panel, so
-the same address requested by both never resolves twice. **Slice 11 adds
-§8's measurement tools, all onto `BevPanel` -- no new dock.** Ruler/range-
-rings/annotations are ordinary `Prim`s (`view/measure.MeasureState.
-overlay_prims()`) drawn last by the same `render_scene`/`_draw_prim` every
-layer provider's own prims go through, never a second canvas-overlay path.
-`M` toggles `_measure_mode`, in which dragging the BEV measures instead of
-panning (`_ClickableImageLabel` grew `drag_extent_changed` -- press-to-here,
-not the incremental `dragged` pan already uses, since panning and ruling
-need different arithmetic from the same gesture); `Shift`+click drops an
-annotation. Both snap to `render/bev.anchor_points_m` (every selectable
-prim's bbox corners + centre) within a fixed **pixel** threshold, not a
-metre one -- a metre threshold would snap wildly differently at different
-zoom levels. **Cursor readout is deliberately not a `Prim`**: a
-`_ClickableImageLabel.hovered` signal (needs `setMouseTracking`) updates a
-plain status-bar `QLabel` with no re-render at all -- a full `render_scene`
-(a matplotlib figure) on every pixel of mouse travel would make the BEV
-laggy, the same class of cost `S-B3`'s playback timer already has to
-respect per tick. **Slice 12 adds §10's HUD text and stale banner**, drawn
-in **screen space** (`ax.transAxes`) inside `render_scene` itself -- fixed
-top-right/top-centre regardless of pan/zoom, which a `Prim` (world-space)
-cannot do, so this is a third drawing tier alongside the scene's own
-prims and `overlay_prims`, not more of either. Scale/time/tick/project are
-always shown (the framework knows them itself); the ego-state line and the
-stale-port banner are **caller-supplied** (`__init__`'s `ego_state_signals`/
-`max_age_s`, both empty by default) -- the framework has no component
-calibration of its own to guess a velocity's address or a max-age-seconds
-value from (`R-SIM-1`, `view/hud.py`'s own docstring). **Not built here:**
-the origin dot/axis arrows/distance grid §10 also lists -- `modules/df`'s
-own `frame_layer` already draws these today, as a component layer in a
-different submodule; whether that responsibility moves into framework HUD
-furniture is a real, cross-submodule question this slice does not decide
-or silently duplicate. **Slice 13 gives `MainWindow` its `cli/` surface**:
-`preset`/`initial_at_s` constructor parameters (`sim view <session>
-[--preset] [--at]`, `sim_api_reference.md` §10) -- a command-line preset
-wins over the workspace's own `tabs[0]` viewpoint (Slice 9), applied last,
-after the first real render so it always has a `_current_tick` to
-re-render at; `initial_at_s` resolves through `Session.seek_ns` the same
-way any other seek does, replacing the `goto(0)` default. `cli/view.py`
-and `app/gui.py` (construct `QApplication`, construct this class, run the
-event loop) are the only files that ever construct a `MainWindow` outside
-a test. None of this changes the module's shape
-(`sim_visualization_spec.md` §11.1's own "a new panel type registers
-itself... the shell does not change").
+**What the window holds.** A `BevPanel` and a `LayersPanel`, an
+`InspectorPanel`, a fixed `TransportBar`, a `TimelineStrip`, and any number of
+`PlotPanel`s. Every decision behind them lives in `view/` -- layer tri-state
+and solo/mute in `view.layers.LayerTreeState`, transport in `view.transport`,
+measurement in `view.measure`, arrangement in `view.workspace` -- never here
+(`GT-9`). The scrub bar is a toolbar rather than a dock because viz §11.1
+lists it with the menu and the keymap, not with the panels a user rearranges.
+
+**Three drawing tiers, deliberately distinct.** Layer providers' own `Prim`s;
+`MeasureState.overlay_prims()`, drawn last through the same `_draw_prim` path
+rather than a second canvas; and HUD text in **screen space**
+(`ax.transAxes`), which a world-space `Prim` cannot do.
+
+The HUD's scale/time/tick/project are framework-known and always shown. The
+ego-state line and stale-port banner are **caller-supplied** and empty by
+default -- the framework has no component calibration to guess a velocity's
+address or a max-age from (`R-SIM-1`).
+
+**Two costs the design respects.** Signal series are resolved once per
+lane-add and cached (`_signal_series_cache`, shared by the strip and every
+plot) -- an O(ticks) pass per render would make the strip the bottleneck. And
+the cursor readout is deliberately **not** a `Prim`: it updates a status-bar
+label with no re-render, because a matplotlib figure per pixel of mouse travel
+would make the BEV laggy.
+
+Measurement snapping uses a **pixel** threshold, not a metre one, which would
+snap wildly differently at different zoom levels. Click-to-select resolves
+through `render/bev.hit_test` (`UT-B1-10`).
+
+**Known gaps, named rather than hidden:** follow mode is real, cyclable
+`Viewport` state with no rendering effect yet; `Workspace.tabs[1:]` parse and
+validate but only `tabs[0]` is applied by this single-arrangement shell.
 """
 
 from __future__ import annotations
@@ -1031,7 +945,7 @@ class MainWindow(QtWidgets.QMainWindow):
     #: `app/shell/window.py` (outside this module, `R-SIM-13`-adjacent -- it
     #: wraps this window, never the other way round) needs to know when
     #: `session`/`pipeline_panel_state` stop being `None`, e.g. to rebind a
-    #: dock's live namespace (`AR-45`) -- this module carries no opinion
+    #: dock's live namespace -- this module carries no opinion
     #: about which dock or why (`UT-D8-9`: no workspace/product name outside
     #: `app/`). Emitted once, at the end of `_on_loaded`, so a caller
     #: connecting AFTER construction still gets it -- `_worker.loaded`
@@ -1060,7 +974,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # someone in app/ names it.
         self._project = project
         self._recording_path = recording
-        #: `AR-55` (2026-08-07): a component's DEPLOYED plug-in copy's own
+        #: `AR-55`: a component's DEPLOYED plug-in copy's own
         #: `config/` directory (`scripts/vantage.py --plugin-root`), so
         #: `_resolve_project_model` can resolve calibration from the same
         #: bundle the SUT was packed with instead of only `embedded`/
@@ -1155,7 +1069,7 @@ class MainWindow(QtWidgets.QMainWindow):
         #: mouse gesture, never simultaneous.
         self._measure_mode = False
 
-        #: `AR-59` (2026-08-07): `sim_player.md` §3's own diagram --
+        #: `AR-59`: `sim_player.md` §3's own diagram --
         #: Pipeline dock **left**, **CENTRE** = the BEV, Layers dock
         #: **right** -- was never actually wired: every dock defaulted to
         #: `addDockWidget`'s own area with no regard for a neighbour
@@ -1369,7 +1283,7 @@ class MainWindow(QtWidgets.QMainWindow):
         `build_static_scene`/`build_reactive_layers` call reuses one
         `ProjectModel` instead of paying `resolve()`'s checkout-only
         default per tick (`core/runner.py`'s own `build_scene(model=...)`
-        docstring). **`AR-55` (2026-08-07):** the viewer has no `explicit`
+        docstring). **`AR-55`:** the viewer has no `explicit`
         source of its own (`R-SIM-13`: it only ever holds a `Session`), but
         it does have `self._config_library_dir` when launched via
         `vantage.py --plugin-root` -- a real fourth source, `library_dir=`,
