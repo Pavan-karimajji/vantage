@@ -776,7 +776,10 @@ table) — it passes in isolation, and it is **never yours to fix**.
    **exact command** and the **exact acceptance condition** that closes it —
    that is why `S-C7`'s equivalent caveat closed in one command instead of
    needing its situation reconstructed. **Check the skip count**, not just
-   pass/fail: it moved 9 → 10 in the same run.
+   pass/fail: it moved 9 → 10 in the same run. **`ST-D6-1` closed for real
+   the same day**, on a Docker `python:3.12-slim` container, `1 passed` —
+   the lesson is kept here regardless, since it is about how a box gets
+   ticked, not about this one box's current state.
 
 **Do not attempt** (no work can close these): `MC-5` · `GT-14` · `MC-2` ·
 `MC-3` / `S-D1`'s gate. Each needs a person. `ST-C6-4` needs a CI runner with
@@ -3615,6 +3618,23 @@ API token, so the hosted GitHub Actions job itself has not been observed to
 fire on a real push or to actually retain an artefact — only its logic has
 been exercised. Confirm this the first time `feat/sim-platform` is pushed with
 this workflow present, by checking the Actions tab.
+
+**A second, real gap found 2026-08-07, while trying to close `ST-D6-1`'s own
+CI caveat**: `sim`'s CI job checks out only `Pavan-karimajji/sim`
+(`actions/checkout@v4`, no `submodules:`, no sibling-repo step — `sim`'s own
+repo carries no `.gitmodules` of its own, confirmed directly). Any test whose
+fixture needs a sibling submodule — today, `test_d6_probe.py` and
+`test_d6_day_one_walkthrough.py`, both gated on `modules/interfaces/include`
+via an identical `_INTERFACES_INCLUDE` skip guard — reports `skipped` in
+**both** `gate` and `core-only-smoke`, regardless of whether the runner has
+`gcc`. This is a structural consequence of the submodule architecture
+(`R-GIT-1`: one repo per component), not a bug in either test or in this
+workflow file as written. **Undecided, not this stage's to take**: whether
+`sim-ci.yml` grows a sibling-repo checkout step (a real CI-design change,
+which this stage's own "Must not" already declines to make unilaterally) or
+this class of test stays permanently CI-skipped and is instead verified the
+way `ST-D6-1` was closed on 2026-08-07 — a container or a newer local shell,
+on demand, evidence recorded in the plan rather than automated.
 
 - [x] One job, triggered on every push to `feat/sim-platform` in `modules/sim`
       (plus `workflow_dispatch`, for a manual re-run — the one addition beyond
@@ -7404,7 +7424,7 @@ a self-timed session.
       `cli/doctor.py`'s own entry above for the full detail; all three
       cases proven against a real `df_sil.dll` in
       `tests/system/test_d6_doctor_cli.py`
-- [~] `ST-D6-1` **day one, end to end**: a fresh component library with only a
+- [x] `ST-D6-1` **day one, end to end**: a fresh component library with only a
       manifest is probed, wired into a five-line pipeline, run against
       `tiny.mcap`, and its outputs appear in a recording — **no edit anywhere in
       `modules/sim`** (`FR-SIM-46`). **Written 2026-08-06** (sim build queue row
@@ -7463,6 +7483,43 @@ a self-timed session.
       > or the fixture needs changing first — the C half is genuinely proven
       > by direct `ctypes` execution against the compiled `.so`, and only the
       > chained Python assertions are unexecuted.
+      >
+      > **Closed on evidence, 2026-08-07.** Ran on `python:3.12-slim` (Docker,
+      > this same WSL machine — `docker info` confirms `OSType: linux`, a
+      > genuine POSIX shell with Python ≥3.12, the exact acceptance condition
+      > above): a fresh copy of `modules/sim` + `modules/interfaces` (needed
+      > for `echo_stub_with_output.c`'s own `#include`), `gcc` installed,
+      > `pip install -e '.[dev]'`, then
+      > `python -m pytest tests/system/test_d6_day_one_walkthrough.py -v`:
+      >
+      > ```
+      > platform linux -- Python 3.12.13, pytest-9.1.1
+      > tests/system/test_d6_day_one_walkthrough.py::test_day_one_walkthrough_probe_pipeline_resim_recording PASSED
+      > 1 passed in 0.55s
+      > ```
+      >
+      > `1 passed`, not `1 skipped` — the chained Python assertions (probe
+      > output text, recording topic/payload contents, `Session.known_ports`)
+      > that the earlier note could only verify by reading source are now
+      > genuinely exercised, on a real POSIX interpreter. Re-tick is
+      > therefore real, not a repeat of the defect this box was downgraded
+      > for.
+      >
+      > **`.github/workflows/sim-ci.yml` itself still cannot run this test —
+      > a separate, real gap, recorded here rather than assumed fixed.**
+      > `sim`'s CI job checks out only `Pavan-karimajji/sim` (`actions/
+      > checkout@v4`, no `submodules:`, no sibling-repo step, and `sim`'s own
+      > repo carries no `.gitmodules` of its own) — `modules/interfaces` is
+      > never present at `parents[3] / "interfaces"` the way it is in this
+      > superproject checkout, so both `gate` and `core-only-smoke` would
+      > report this test (and `test_d6_probe.py`, which shares the identical
+      > `_INTERFACES_INCLUDE` skip guard) `skipped`, regardless of `gcc`
+      > availability on the runner. Wiring a sibling-repo checkout step into
+      > `sim-ci.yml` is real, separate work — that file's own header already
+      > declares "no general CI design here", and reaching across repo
+      > boundaries in a submodule architecture is exactly that, not a
+      > one-line fix. `ST-D6-1` closes on the evidence above; the CI-execution
+      > gap is a new, distinct, undecided item, not swept into this box.
 - [x] `ST-D6-3` **the evidence chain, end to end** (`FR-SIM-67`, `R-SIM-25`,
       audit `A4`): selecting any prim answers — in one action — its port, topic,
       tick, origin tag, config bundle and component build, and whether the value
@@ -7576,9 +7633,11 @@ a self-timed session.
 **Gate**
 - [ ] `ST-D6-1` green **and `GT-8` measured and recorded** — the number goes in
       this document, whatever it is. **Not closed** — `ST-D6-1` itself is
-      done (2026-08-06) but `GT-8` needs a real newcomer, not a self-timed
-      session, and stays unmeasured; this stage lands partial, not gated
-      closed
+      now genuinely green (2026-08-07, real execution on `python:3.12-slim`,
+      `1 passed`, see its own note — not merely "done" the way the earlier,
+      reversed tick claimed) but `GT-8` needs a real newcomer, not a
+      self-timed session, and stays unmeasured; this stage lands partial,
+      not gated closed
 
 ### S-D7 — Writers, exports, `sim convert`, `sim batch`
 
