@@ -37,6 +37,16 @@ def _box_layer(ctx):
     )),)
 
 
+@layer_provider("test.b4c.hidden_by_default", group="test-b4c")
+def _hidden_layer(ctx):
+    del ctx
+    return (Layer(
+        id="test.b4c.hidden_by_default", group="test-b4c", default_on=False, prims=(
+            Prim(kind="circle", cx_m=5.0, cy_m=5.0, r_m=1.0, style="sensor.fov"),
+        ),
+    ),)
+
+
 def _session() -> Session:
     ticks = tuple(
         Tick(index=i, t_ns=i * _DT_NS, dt_ns=_DT_NS if i else 0,
@@ -68,3 +78,17 @@ def test_export_clip_writes_an_mp4_and_a_sidecar(tmp_path):
 def test_export_clip_rejects_a_non_mp4_output(tmp_path):
     with pytest.raises(ValueError):
         clip.export_clip(_session(), 0.0, 0.1, Viewport(size_px=(64, 48)), None, tmp_path / "clip.mov")
+
+
+def test_export_clip_with_no_explicit_selection_matches_the_guis_own_default(tmp_path):
+    """`AR-58` (2026-08-07): the same fix `snapshot()` got, for its `S-B4`
+    sibling -- resolved once off the first tick (`capture.resolve_layer_
+    selection`) and held fixed for every frame, so a `default_on=False`
+    layer stays off for the whole clip, not flickering per tick."""
+    out = tmp_path / "clip.mp4"
+    clip.export_clip(_session(), 0.0, 0.1, Viewport(size_px=(64, 48)), None, out)
+
+    sidecar = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+    assert sidecar["layers"] is not None
+    assert "test.b4c.box" in sidecar["layers"]
+    assert "test.b4c.hidden_by_default" not in sidecar["layers"]

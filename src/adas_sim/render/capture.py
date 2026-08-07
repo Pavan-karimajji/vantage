@@ -40,8 +40,9 @@ def resolve_layer_selection(layer_selection: frozenset[str] | None, scene: Scene
     """`AR-58` (2026-08-07): `None` (no explicit `--layer` selection) used
     to mean "draw literally every layer the Scene carries" all the way
     into the rendered pixels -- which let a layer the live window hides by
-    default (`Layer.default_on=False`, e.g. `bsd.sensor_fov`, `AR-56`)
-    dominate a headless `sim render`/`sim clip` output instead, breaking
+    default (`Layer.default_on=False`, a debug overlay a component marked
+    off by default per `AR-56`) dominate a headless `sim render`/`sim
+    clip` output instead, breaking
     `NR-SIM-2`'s "one picture, many media" and `FR-SIM-13`'s "a snapshot
     is reproducible evidence of what you saw" -- the live window and its
     own PNG disagreed about what was on screen. `None` now resolves to

@@ -143,6 +143,138 @@ def classify_plugin_root(root: str | Path) -> tuple[str, str]:
 # config
 # --------------------------------------------------------------------------
 
+#: Per-field help: `(placeholder, tooltip)`. **One table, two surfaces** --
+#: the grey ghost text inside an empty box and the hover tooltip are rendered
+#: from the same entry, so they cannot drift into saying different things
+#: about the same field. Every example below is a real path or value on this
+#: repository, not an invented one: `close`/`wide` are the actual
+#: `view.viewport.DEFAULT_PRESETS` keys, and `df_only.yaml` is the real
+#: pipeline `sut.pipeline: df_only` names.
+FIELD_HELP: dict[str, tuple[str, str]] = {
+    "recording": (
+        "…/df/tests/carla_testruns/bsd/bsd_ego_lane_exit.mcap    (optional)",
+        "The .mcap to open.\n\n"
+        "LEAVE EMPTY to get Vantage's start page (recent files, Open Recording…, "
+        "Probe a Library…) instead of a recording.\n\n"
+        "The dropdown lists your recent files first, then every .mcap under "
+        "modules/*/tests/**, newest first.",
+    ),
+    "plugin_root": (
+        "..\\df                                   (a component checkout)",
+        "Where a component's LAYERS come from -- the picture of that component's "
+        "own function.\n\n"
+        "Use the SOURCE CHECKOUT: ..\\df\n"
+        "Not the built directory yet -- the deployed copy crashes bsd.zone with a "
+        "swallowed error and leaves an EMPTY layer tree (AR-61, open).\n\n"
+        "LEAVE EMPTY and you still get the framework's own layers (ego, frame) -- "
+        "just nothing function-specific.",
+    ),
+    "project": (
+        "base",
+        "Which calibration set to resolve geometry from (R-VAR-4).\n\n"
+        "Real values in this repo: base · cus1 · 2w_base\n\n"
+        "'base' is the no-specific-programme fallback and is what every scenario's "
+        "expect: block is written against. Switching this must visibly change the "
+        "drawn ego (R-SIM-3).",
+    ),
+    "preset": (
+        "close                                     (or: wide)",
+        "Starting viewport zoom. Exactly two exist:\n\n"
+        "  close  -- tight around the ego, for zone/warning work\n"
+        "  wide   -- more of the road, for approach and cut-in\n\n"
+        "LEAVE EMPTY for the default. You can pan and zoom once it is open, so "
+        "this only sets where you start.",
+    ),
+    "at_s": (
+        "0                                          (seconds)",
+        "Seconds into the recording to open at -- NOT a tick number.\n\n"
+        "LEAVE EMPTY to start at 0. Useful when you already know roughly when "
+        "the interesting thing happens (e.g. 5 for bsd_ego_lane_exit).",
+    ),
+    "pipeline": (
+        "..\\df\\sim\\pipelines\\df_only.yaml      (only to RESIM)",
+        "A pipeline makes this a RESIM -- the component's DLL is re-executed "
+        "against the recording, so its outputs (and its layers) actually exist.\n\n"
+        "Real one here: ..\\df\\sim\\pipelines\\df_only.yaml\n\n"
+        "LEAVE EMPTY to REPLAY: you see only what the file already contains. A "
+        "stimulus-only recording then shows bsd.warning as (unavailable) -- that "
+        "is correct, not a bug.\n\n"
+        "If you set this, you almost certainly need --search and --config too.",
+    ),
+    "search": (
+        "..\\df\\build-sil-vs2026\\src\\platform\\df_sil\\Release",
+        "The directory holding the component's built library (df_sil.dll).\n\n"
+        "Only needed with a pipeline -- it is how 'impl: dll:df_sil' is resolved "
+        "to a real file (P-5).\n\n"
+        "Note this is the BUILT directory, and using it here is fine: AR-61 is "
+        "about loading LAYERS from there, not the DLL.",
+    ),
+    "config_path": (
+        "..\\df\\build-sil-vs2026\\src\\platform\\df_sil\\Release\\config",
+        "The packed config bundle the DLL is initialised with (adasInit).\n\n"
+        "Only needed with a pipeline. It is the 'config' folder sitting beside "
+        "the built DLL.\n\n"
+        "Getting this wrong is how the viewer and the SUT end up reading "
+        "different calibration and agreeing only by coincidence (R-SIM-3a).",
+    ),
+}
+
+
+class Tooltip:
+    """Hover help. Same shape as `df_sim_gui.py`'s own `_Tooltip` -- a
+    borderless `Toplevel` shown on `<Enter>`, destroyed on `<Leave>`."""
+
+    def __init__(self, widget: tk.Widget, text: str):
+        self.widget, self.text, self.tip = widget, text, None
+        widget.bind("<Enter>", self._show, add="+")
+        widget.bind("<Leave>", self._hide, add="+")
+        widget.bind("<FocusIn>", self._show, add="+")
+        widget.bind("<FocusOut>", self._hide, add="+")
+
+    def _show(self, _event=None) -> None:
+        if self.tip is not None:
+            return
+        x = self.widget.winfo_rootx() + 20
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 4
+        self.tip = tk.Toplevel(self.widget)
+        self.tip.wm_overrideredirect(True)
+        self.tip.wm_geometry(f"+{x}+{y}")
+        tk.Label(
+            self.tip, text=self.text, justify="left", background="#ffffe0",
+            relief="solid", borderwidth=1, wraplength=560, padx=8, pady=6,
+            font=("Segoe UI", 9) if sys.platform == "win32" else None,
+        ).pack()
+
+    def _hide(self, _event=None) -> None:
+        if self.tip is not None:
+            self.tip.destroy()
+            self.tip = None
+
+
+def attach_placeholder(entry: tk.Entry | ttk.Entry, text: str) -> None:
+    """Grey ghost text while the box is empty and unfocused.
+
+    Tk has no native placeholder, and the usual trick -- writing the hint into
+    the widget as real text -- is wrong here: this GUI builds a command line
+    from these boxes, so a hint that lives in the variable would be *submitted*
+    as an argument. This paints a separate label over the entry instead, so the
+    underlying `StringVar` stays genuinely empty.
+    """
+    ghost = tk.Label(entry, text=text, anchor="w", foreground="#8a8a8a",
+                     background="white" if sys.platform == "win32" else None)
+
+    def sync(*_):
+        if entry.get():
+            ghost.place_forget()
+        else:
+            ghost.place(x=3, rely=0.5, anchor="w")
+
+    entry.bind("<KeyRelease>", sync, add="+")
+    entry.bind("<FocusIn>", lambda *_: ghost.place_forget(), add="+")
+    entry.bind("<FocusOut>", sync, add="+")
+    entry.after(80, sync)
+
+
 def load_cfg() -> dict:
     try:
         return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
@@ -272,6 +404,7 @@ class LauncherApp:
             seen.setdefault(r, None)
         self.rec_combo = ttk.Combobox(box, textvariable=self.recording, values=list(seen))
         self.rec_combo.pack(side="left", fill="x", expand=True, padx=6, pady=6)
+        self._help(self.rec_combo, "recording")
         ttk.Button(box, text="Browse…", command=self._browse_recording).pack(side="left", padx=6)
         ttk.Label(box, text="(leave empty for Vantage's start page)").pack(side="left", padx=6)
 
@@ -282,6 +415,7 @@ class LauncherApp:
         self.root_combo = ttk.Combobox(
             row, textvariable=self.plugin_root, values=[str(p) for p in find_plugin_roots()])
         self.root_combo.pack(side="left", fill="x", expand=True, padx=6, pady=6)
+        self._help(self.root_combo, "plugin_root")
         ttk.Button(row, text="Browse…", command=self._browse_plugin_root).pack(side="left", padx=6)
         self.root_status = ttk.Label(box, text="", wraplength=940, justify="left")
         self.root_status.pack(fill="x", padx=8, pady=(0, 6))
@@ -289,21 +423,36 @@ class LauncherApp:
         # --- run options --------------------------------------------------
         box = ttk.LabelFrame(outer, text="Run")
         box.pack(fill="x", **pad)
-        for label, var, width in (("project", self.project, 12),
-                                  ("preset", self.preset, 16),
-                                  ("start at (s)", self.at_s, 8)):
+        for label, var, key, width, choices in (
+            ("project", self.project, "project", 14, ("base", "cus1", "2w_base")),
+            ("preset", self.preset, "preset", 14, ("", "close", "wide")),
+            ("start at (s)", self.at_s, "at_s", 10, None),
+        ):
             ttk.Label(box, text=label).pack(side="left", padx=(8, 2), pady=6)
-            ttk.Entry(box, textvariable=var, width=width).pack(side="left", pady=6)
+            if choices is None:
+                widget = ttk.Entry(box, textvariable=var, width=width)
+            else:
+                # A closed set is a dropdown, not a free-text box you can typo
+                # into: `preset` accepts exactly `close`/`wide`, and `project`
+                # exactly what `src/project/` holds. Offering them removes a
+                # whole class of "why did nothing change?".
+                widget = ttk.Combobox(box, textvariable=var, width=width, values=choices)
+            widget.pack(side="left", pady=6)
+            self._help(widget, key)
 
         # --- advanced ------------------------------------------------------
         adv = ttk.LabelFrame(outer, text="Pipeline  —  only needed to RESIM (compute stage outputs)")
         adv.pack(fill="x", **pad)
-        for label, var, browse in (("pipeline.yaml", self.pipeline, self._browse_pipeline),
-                                   ("--search (dll dir)", self.search, self._browse_dir_search),
-                                   ("--config", self.config_path, self._browse_dir_config)):
+        for label, var, key, browse in (
+            ("pipeline.yaml", self.pipeline, "pipeline", self._browse_pipeline),
+            ("--search (dll dir)", self.search, "search", self._browse_dir_search),
+            ("--config", self.config_path, "config_path", self._browse_dir_config),
+        ):
             row = ttk.Frame(adv); row.pack(fill="x")
             ttk.Label(row, text=label, width=18).pack(side="left", padx=6, pady=3)
-            ttk.Entry(row, textvariable=var).pack(side="left", fill="x", expand=True, pady=3)
+            entry = ttk.Entry(row, textvariable=var)
+            entry.pack(side="left", fill="x", expand=True, pady=3)
+            self._help(entry, key)
             ttk.Button(row, text="…", width=3, command=browse).pack(side="left", padx=6)
         ttk.Label(
             adv, wraplength=940, justify="left",
@@ -334,6 +483,14 @@ class LauncherApp:
         box.pack(fill="both", expand=True, **pad)
         self.out = ScrolledText(box, wrap="word", height=14)
         self.out.pack(fill="both", expand=True, padx=6, pady=6)
+
+    def _help(self, widget, key: str) -> None:
+        """Attach both surfaces of `FIELD_HELP[key]` to one widget -- the ghost
+        placeholder and the hover/focus tooltip. One call site per field, so a
+        field can never end up with one and not the other."""
+        placeholder, tooltip = FIELD_HELP[key]
+        Tooltip(widget, tooltip)
+        attach_placeholder(widget, placeholder)
 
     # -- pickers -----------------------------------------------------------
 
