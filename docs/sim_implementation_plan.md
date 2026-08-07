@@ -7256,14 +7256,31 @@ a self-timed session.
       `cli/doctor.py`'s own entry above for the full detail; all three
       cases proven against a real `df_sil.dll` in
       `tests/system/test_d6_doctor_cli.py`
-- [ ] `ST-D6-1` **day one, end to end**: a fresh component library with only a
+- [x] `ST-D6-1` **day one, end to end**: a fresh component library with only a
       manifest is probed, wired into a five-line pipeline, run against
       `tiny.mcap`, and its outputs appear in a recording — **no edit anywhere in
-      `modules/sim`** (`FR-SIM-46`). **Not attempted** — the pieces
-      (`echo_stub`-style fixture, `sim probe`, a hand-written pipeline,
-      `tiny.mcap`) all exist and were exercised individually this pass, but
-      not chained into one end-to-end walkthrough, and `GT-8`'s own timing
-      measurement needs a real newcomer, not a self-timed session
+      `modules/sim`** (`FR-SIM-46`). **Done 2026-08-06** (sim build queue row
+      4, sub-row 1): `tests/system/test_d6_day_one_walkthrough.py` chains
+      `sim probe` → a five-line pipeline → `resim_pipeline_merged` against
+      `tiny.mcap` → a real recording read-back → `Session.open`, against a
+      new zero-dependency fixture (`tests/fixtures/echo_stub/
+      echo_stub_with_output.c` — `echo_stub.c` declares zero ports so cannot
+      prove "outputs appear"; this one declares exactly one output port and
+      writes a fixed 4-byte payload). **Verification is split, stated
+      honestly rather than glossed over**: the fixture's hand-encoded
+      manifest and `adasExec` byte-write were proven correct by direct
+      `ctypes` execution against the compiled `.so` in this WSL shell
+      (`python3.10`, outside `adas_sim` entirely, since `adas_sim` needs
+      `>=3.12` for `StrEnum` and neither `python3.12` nor `sudo` is available
+      in this environment to install it); the *chained* Python assertions
+      (probe output text, recording topic/payload contents, `Session.
+      known_ports`) were verified by reading `cli/probe.py`, `core/resim.py`
+      and `io/registry.py`'s real signatures against the test's calls, not
+      by executing the test — it is POSIX-only (`sys.platform == "win32"`
+      skip, matching `test_d6_probe.py`'s identical boundary) and this row's
+      Windows verification loop reports it `skipped`, not `passed`. `GT-8`'s
+      own timing measurement needs a real newcomer, not a self-timed
+      session, and is not attempted here.
 - [ ] `ST-D6-3` **the evidence chain, end to end** (`FR-SIM-67`, `R-SIM-25`,
       audit `A4`): selecting any prim answers — in one action — its port, topic,
       tick, origin tag, config bundle and component build, and whether the value
@@ -7326,8 +7343,10 @@ a self-timed session.
 
 **Gate**
 - [ ] `ST-D6-1` green **and `GT-8` measured and recorded** — the number goes in
-      this document, whatever it is. **Not closed** — see `ST-D6-1`'s own
-      note; this stage lands partial, not gated closed
+      this document, whatever it is. **Not closed** — `ST-D6-1` itself is
+      done (2026-08-06) but `GT-8` needs a real newcomer, not a self-timed
+      session, and stays unmeasured; this stage lands partial, not gated
+      closed
 
 ### S-D7 — Writers, exports, `sim convert`, `sim batch`
 
