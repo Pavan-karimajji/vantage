@@ -3496,6 +3496,17 @@ check_invariants.py` and `python docs\py\run_all.py`: both clean. No
 list (only the two `render/` functions), and `sim_api_reference.md` §11
 already frees "internal helpers" and "renderer internals"; `export_clip()`
 is usable in 3 lines from a script either way (`R-SIM-16`).
+**Corrected 2026-08-07 (`AR-58`):** "active layers" in the sidecar list
+above was a lie whenever no explicit selection was given -- `layer_
+selection=None` meant "draw literally every layer the Scene carries,"
+which let a layer the live window hides by default (`Layer.default_on=
+False`, `AR-56`) dominate a headless snapshot the Bench itself never
+shows, and recorded `"layers": null` in the sidecar, unable to say which
+ones. `capture.resolve_layer_selection()` now resolves `None` through
+`LayerTreeState` (the GUI's own class) in both `snapshot()` and `export_
+clip()`, so a picture with no explicit `--layer` selection matches what a
+fresh, nothing-clicked Bench window would actually show, and the sidecar
+always names the resolved set.
 
 - [x] `render/capture.py` — `snapshot(session, tick, viewport, layers, out)`
       writing `out.png` **and** `out.json` atomically (temp file, then rename;
