@@ -97,7 +97,15 @@ def test_hud_lines_carry_the_frameworks_own_known_fields(tmp_path):
     assert len(lines) == 3
     assert "base" in lines[2]
     assert "build-xyz" in lines[2]
-    assert banner is None  # nothing configured, nothing invalid by default
+    # AR-57: this fixture's own topic is Provenance.UNKNOWN -- genuinely
+    # stimulus-only (no port ever carries origin="simulated") -- so the
+    # banner is real, not the "nothing configured" absence this test's own
+    # name once implied. `test_max_age_not_exceeded_no_banner` below is the
+    # real "nothing wrong" case for the stale half specifically.
+    assert banner == (
+        "STIMULUS-ONLY: no port here was ever a stage's own computed output "
+        "-- resim through a pipeline to see one"
+    )
 
 
 def test_stale_banner_reaches_the_rendered_frame(tmp_path):
@@ -150,7 +158,12 @@ def test_max_age_not_exceeded_no_banner(tmp_path):
     _write_synthetic_recording(recording)
     window = _open_window(recording, max_age_s={"test.marker": 999.0})
     _lines, banner = window._hud_and_stale_banner(0)
-    assert banner is None
+    # AR-57: this fixture's own recording is genuinely stimulus-only, so
+    # the OTHER half of the merged banner still fires -- what this test
+    # actually asserts is that the STALE half specifically stays absent
+    # when nothing is stale, not that the banner slot is empty overall
+    # (`test_hud_lines_carry_the_frameworks_own_known_fields` covers that).
+    assert banner is not None and "STALE" not in banner
 
 
 def _make_bundle_bytes(*, project: str) -> bytes:
@@ -181,6 +194,30 @@ def test_hud_reports_checkout_bundle_origin_when_the_recording_carries_no_bundle
     window = _open_window(recording)
     lines, _banner = window._hud_and_stale_banner(0)
     assert "cfg:checkout" in lines[2]
+
+
+def test_no_stimulus_only_banner_when_a_topic_is_genuinely_simulated(tmp_path):
+    """`AR-57`'s converse, real end to end: a recording carrying even one
+    `Provenance.SIMULATED` topic (a stage's own genuinely-computed and
+    recorded output, `R-SIM-12`) reaches `MainWindow` with no STIMULUS-ONLY
+    banner -- the merged slot carries neither half's text."""
+    recording = tmp_path / "rec_simulated.mcap"
+    manifest = RunManifest(
+        manifest_version=1, run_id="test-b3-hud-sim", run_kind="resim",
+        created_utc="2026-07-30T00:00:00Z", source_kind="synthetic",
+        scenario="fixtures/test_b3_hud.yaml", project=_PROJECT, pipeline="p1", seed=0,
+        components=(ComponentBuildInfo(name="test", library_sha256="0" * 64, build_id="build-xyz"),),
+    )
+    topics = {"/test/marker": TopicInfo(schema_name="", provenance=Provenance.SIMULATED)}
+    writer = writer_for(recording)
+    writer.open(recording, manifest, topics)
+    for tick in range(_TICK_COUNT):
+        writer.write("/test/marker", tick * _DT_NS, bytes([tick % 256]))
+    writer.close()
+
+    window = _open_window(recording)
+    _lines, banner = window._hud_and_stale_banner(0)
+    assert banner is None
 
 
 def test_hud_reports_embedded_bundle_origin_when_the_recording_carries_its_own_bundle(tmp_path):

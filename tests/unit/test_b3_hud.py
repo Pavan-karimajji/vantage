@@ -10,7 +10,9 @@ stays headless-testable)."""
 from __future__ import annotations
 
 from adas_sim.core.tick import Pose2D, PortValue, Tick
-from adas_sim.view.hud import HudInfo, format_hud_lines, format_stale_banner, stale_ports
+from adas_sim.view.hud import (
+    HudInfo, format_hud_lines, format_stale_banner, format_stimulus_only_banner, stale_ports,
+)
 
 _POSE = Pose2D(x_m=0.0, y_m=0.0, yaw_rad=0.0)
 
@@ -96,3 +98,15 @@ def test_format_stale_banner_names_every_stale_port():
     banner = format_stale_banner(("a", "b"))
     assert banner is not None
     assert "a" in banner and "b" in banner
+
+
+def test_format_stimulus_only_banner_none_when_a_stage_computed_something():
+    """`AR-57`: no banner for the ordinary, complete case."""
+    assert format_stimulus_only_banner(True) is None
+
+
+def test_format_stimulus_only_banner_names_the_fix_when_nothing_was_computed():
+    banner = format_stimulus_only_banner(False)
+    assert banner is not None
+    assert "STIMULUS-ONLY" in banner
+    assert "resim" in banner.lower()

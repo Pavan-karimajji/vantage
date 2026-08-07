@@ -171,7 +171,9 @@ from adas_sim.scene.types import Layer, Scene
 from adas_sim.view.evidence_panel import EvidencePanelState
 from adas_sim.view.inspector import InspectorState, copy_as_text
 from adas_sim.view.layers import LayerTreeState
-from adas_sim.view.hud import HudInfo, format_hud_lines, format_stale_banner, stale_ports
+from adas_sim.view.hud import (
+    HudInfo, format_hud_lines, format_stale_banner, format_stimulus_only_banner, stale_ports,
+)
 from adas_sim.view.measure import MeasureState, snap_point
 from adas_sim.view.pipeline_panel import PipelinePanelState, StageView
 from adas_sim.view.plots import PlotState
@@ -1120,6 +1122,10 @@ class MainWindow(QtWidgets.QMainWindow):
         # default (`view/hud.py`'s own docstring).
         self._ego_state_signals = ego_state_signals or {}
         self._max_age_s = max_age_s or {}
+        # AR-57: overwritten for real in `_on_loaded`; `True` here so no
+        # banner shows before any Session has actually been checked (never
+        # a false "STIMULUS-ONLY" claim about a session that has not loaded).
+        self._has_simulated_output = True
         # §13b: "a missing workspace is not an error" -- the caller decides
         # what "missing" means by handing (or not handing) a path; a
         # malformed file, unlike a missing one, still raises (a workspace.yaml
@@ -1346,6 +1352,11 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_loaded(self, session: Session) -> None:
         self._session = session
         self._project_model = self._resolve_project_model(session)
+        # AR-57: a session-wide fact, computed once here rather than
+        # per-tick in `_hud_and_stale_banner` (every render_tick() call,
+        # potentially many times a second during playback) -- the answer
+        # cannot change for a loaded, immutable Session (R-SIM-13).
+        self._has_simulated_output = session.has_simulated_output()
         self.evidence_state = EvidencePanelState(session)  # UT-D3-8
         self._scene_cache = SceneCache(self._build_scene_for_cache, build_reactive=self._build_reactive_for_cache)
         self._stop_thread()
@@ -1651,7 +1662,19 @@ class MainWindow(QtWidgets.QMainWindow):
             pipeline=self._session.meta.pipeline, build_id=build_id, bundle_origin=bundle_origin,
             ego_state=ego_state,
         )
-        banner = format_stale_banner(stale_ports(tick, self._max_age_s))
+        # AR-57: two independent "abnormal, tell the user" conditions,
+        # merged into the one banner slot `render_scene` draws (adding a
+        # second slot would be more plumbing than the "one sentence of UI"
+        # this row asked for) -- each stays computable and testable on its
+        # own (`format_stale_banner`/`format_stimulus_only_banner`, both
+        # unchanged in isolation).
+        banners = [
+            b for b in (
+                format_stale_banner(stale_ports(tick, self._max_age_s)),
+                format_stimulus_only_banner(self._has_simulated_output),
+            ) if b is not None
+        ]
+        banner = " · ".join(banners) if banners else None
         return format_hud_lines(info), banner
 
     def _rerender_timeline(self) -> None:

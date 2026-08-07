@@ -8269,7 +8269,28 @@ load instead of skipping) — fixed as part of proving `ST-D8-1` for real.
       build/`cfg:<origin>`) is the status region's own "four things that are
       always true" (`sim_player.md` §3's own mockup: "bundle ✓" is always
       shown), never the abnormal-only badge L-3 bans — reconciled explicitly
-      since the two design docs could otherwise read as contradictory
+      since the two design docs could otherwise read as contradictory.
+      **A new abnormal-only badge added 2026-08-07 (`AR-57`, audit run 4,
+      fix queue row 2), correctly gated by the same L-3 boundary**:
+      `Session.has_simulated_output()` (`core/session.py`) answers, from a
+      recording's own `R-SIM-12` origin tags alone, whether ANY stage ever
+      genuinely computed and captured its own output here — no `Pipeline`
+      needed, unlike `Session.feasible_cuts` above, which is `sim doctor`'s
+      own richer per-stage answer and stays exactly as it is. `view/hud.py`'s
+      new `format_stimulus_only_banner` returns `None` for the ordinary
+      case and a plain-ASCII sentence otherwise (rasterized as pixels,
+      `render_scene`, never a glyph a rendering font might lack), merged
+      into the SAME banner slot the stale-port banner already uses
+      (`render/viewer.py`'s `_hud_and_stale_banner`) rather than adding a
+      second one. **Verified against both real fixture shapes, not just
+      the new one**: `test_d8_lean_limits.py`'s own `_write_normal_recording`
+      already used `Provenance.SIMULATED` and needed no change at all — the
+      genuinely-normal case was already correctly fixtured; `test_b3_hud_
+      wiring.py`'s own synthetic fixture is genuinely stimulus-only
+      (`Provenance.UNKNOWN`) and its two assertions of `banner is None`
+      were the actual bug this row's own audit finding pointed at, now
+      corrected to assert the real banner text. `sim_player.md` §6 gained
+      the sentence for the case its own text was silent on
 
 **Tests**
 - [x] `UT-D8-1` (`test_d8_window.py::test_switch_to_campaign_changes_the_visible_page_only`, `::test_ut_d8_1_session_object_identity_survives_a_round_trip`, `::test_ut_d8_1_pipeline_file_bytes_survive_a_workspace_switch`)

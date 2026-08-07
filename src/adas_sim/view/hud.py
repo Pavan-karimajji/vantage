@@ -103,3 +103,19 @@ def format_stale_banner(stale: tuple[str, ...]) -> str | None:
     if not stale:
         return None
     return "STALE: " + ", ".join(stale)
+
+
+def format_stimulus_only_banner(has_simulated_output: bool) -> str | None:
+    """`AR-57` (2026-08-07): the "why is a component's own result missing"
+    answer that needs no `Pipeline` -- `sim_player.md` §6 describes only the
+    case where *"the recording carries stage outputs"*; this is the
+    sentence for the other case, which is every legacy recording in this
+    repo. `None` (no banner) when `has_simulated_output` is true -- shown
+    only when abnormal, never folded into `format_hud_lines`'s always-true
+    baseline (`L-3`)."""
+    if has_simulated_output:
+        return None
+    # Plain ASCII, not an em-dash: this string is rasterized as pixels
+    # (`render_scene`), not printed as prose -- matching `format_stale_
+    # banner`'s own convention, never a glyph a rendering font might lack.
+    return "STIMULUS-ONLY: no port here was ever a stage's own computed output -- resim through a pipeline to see one"

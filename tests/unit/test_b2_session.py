@@ -93,3 +93,31 @@ def test_session_is_immutable_mutating_a_returned_tick_or_its_ports_raises():
         tick.ports["p"] = PortValue(name="p", message=b"x", origin="measured")
     with pytest.raises(dataclasses.FrozenInstanceError):
         session.ticks = ()
+
+
+def test_has_simulated_output_is_false_for_a_stimulus_only_recording():
+    """`AR-57`: `_make_ticks`' own default is `origin="measured"` on every
+    tick -- exactly the "stimulus-only" shape (source/truth/mocked data,
+    no stage ever executed against it)."""
+    session = Session(run_id="r", name="s", ticks=_make_ticks(3))
+    assert session.has_simulated_output() is False
+
+
+def test_has_simulated_output_is_true_when_any_port_ever_says_simulated():
+    """A single `origin="simulated"` value, on a single port at a single
+    tick, is enough -- this asks "did any stage ever genuinely compute
+    something here", not "does every port carry computed data"."""
+    ticks = (
+        Tick(index=0, t_ns=0, dt_ns=0,
+             ports={"p": PortValue(name="p", message=b"", origin="measured")}, pose=_ORIGIN_POSE),
+        Tick(index=1, t_ns=50_000_000, dt_ns=50_000_000,
+             ports={"p": PortValue(name="p", message=b"", origin="measured"),
+                    "q": PortValue(name="q", message=b"", origin="simulated")}, pose=_ORIGIN_POSE),
+    )
+    session = Session(run_id="r", name="s", ticks=ticks)
+    assert session.has_simulated_output() is True
+
+
+def test_has_simulated_output_is_false_for_an_empty_session():
+    session = Session(run_id="r", name="s", ticks=())
+    assert session.has_simulated_output() is False

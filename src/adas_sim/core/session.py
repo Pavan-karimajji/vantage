@@ -151,6 +151,21 @@ class Session:
             results.append(CutFeasibility(stage=stage.name, feasible=not missing, missing=tuple(missing)))
         return tuple(results)
 
+    def has_simulated_output(self) -> bool:
+        """`AR-57` (2026-08-07): whether ANY port in this run ever carried
+        an `origin="simulated"` value (`R-SIM-12`'s own origin tag) --
+        true iff some `mode: simulate` stage genuinely executed and its
+        output was captured, false for a purely stimulus-only recording
+        (source/truth/mocked data alone, no stage ever ran against it).
+        The **no-pipeline** answer to "can this file show me a component's
+        own computed result" -- `feasible_cuts` above needs a `Pipeline`
+        to name which stage; this needs nothing but the recording itself,
+        because the origin tag is already carried per `PortValue` and this
+        only asks whether any of them says so. No component name (`R-SIM-1`)
+        -- a fact about this run's own tags, never what any one function
+        would have computed."""
+        return any(port.origin == "simulated" for tick in self.ticks for port in tick.ports.values())
+
     def seek_ns(self, t_ns: int) -> int:
         """The index of the tick whose `t_ns` is the greatest value `<=
         t_ns` (boundary-exact); clamps to tick 0 if `t_ns` precedes it."""
