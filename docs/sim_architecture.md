@@ -1225,7 +1225,10 @@ modules/sim/
                 carla/catalogue.yaml (blueprint → class)      was carla_bridge.py
     sinks/      console · image · video                     ← non-recording outputs
                                                               (recording writing is io/)
-    scene/      types · registry · builder · frames         ← NEW (the Scene IR)
+    scene/      types · registry · builder · frames ·
+                default_layers                              ← NEW (the Scene IR; default_layers
+                                                                is the framework's own ego/frame/
+                                                                trail furniture, AR-52, 2026-08-07)
     render/     theme · viewer · matplotlib · foxglove      ← was viz.py, foxglove_stream.py,
                                                               bsdviz.canvas/palette
     view/       viewport · transport · layers · inspector · timeline · measure ← NEW

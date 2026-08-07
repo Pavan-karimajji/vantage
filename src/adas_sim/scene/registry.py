@@ -160,3 +160,14 @@ def layer_provider(
 
 def registered_providers() -> Mapping[str, LayerProviderEntry]:
     return MappingProxyType(_PROVIDERS)
+
+
+# `AR-52` (2026-08-07): the framework ships a default layer set -- unlike a
+# component's plug-in (imported lazily, only if its checkout/library is on
+# the plug-in path, `model.plugins.PluginBundle`), these three are the
+# framework's OWN contribution and must be registered unconditionally,
+# before any plug-in is ever loaded. `layer_provider` is already defined
+# above this line, so `default_layers`' own `from adas_sim.scene.registry
+# import layer_provider` resolves against this (partially-initialized but
+# sufficient) module rather than deadlocking.
+from adas_sim.scene import default_layers  # noqa: E402,F401

@@ -28,6 +28,7 @@ from adas_sim.core.console import reconfigure_console_utf8  # noqa: E402
 from adas_sim.core.history import FrameTree, HistoryView, LayerCtx  # noqa: E402
 from adas_sim.core.runner import build_session_from_recording  # noqa: E402
 from adas_sim.model.project import ProjectModel  # noqa: E402
+from adas_sim.scene import default_layers  # noqa: E402
 from adas_sim.scene.codec import encode_scene  # noqa: E402
 from adas_sim.scene.types import Scene  # noqa: E402
 from sim.layers import bsd, common  # noqa: E402
@@ -36,9 +37,12 @@ RECORDING = _DF_ROOT / "tests" / "carla_testruns" / "exports" / "bsd_curve_r172_
 OUT_DIR = Path(__file__).resolve().parent / "golden"
 SAMPLE_TICKS = (0, 50, 100, 162, -1)  # -1: the last tick
 
+# `frame`/`ego`/`trail` moved to the framework's own default layer set
+# (`AR-52`, 2026-08-07, `adas_sim.scene.default_layers`) -- `df` only
+# contributes `objects`/`hud` now.
 _PROVIDERS = (
-    common.frame_layer, common.ego_layer, common.objects_layer,
-    common.trail_layer, common.hud_layer, bsd.zone_layer, bsd.warning_layer,
+    default_layers.frame_layer, default_layers.ego_layer, common.objects_layer,
+    default_layers.trail_layer, common.hud_layer, bsd.zone_layer, bsd.warning_layer,
 )
 
 

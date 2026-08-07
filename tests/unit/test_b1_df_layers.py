@@ -4,8 +4,13 @@
 # @author Pavan Karimajji
 
 """S-B1 tests for `modules/df/sim/layers/{common,bsd}.py`: UT-B1-2, UT-B1-3,
-UT-B1-4, UT-B1-5, UT-B1-6, UT-B1-7, UT-B1-8, UT-B1-11, UT-B1-12, UT-B1-13,
-UT-B1-14 (docs/sim_implementation_plan.md). Also UT-C4-1, UT-C4-2 (`S-C4`).
+UT-B1-5, UT-B1-6, UT-B1-7, UT-B1-8, UT-B1-11, UT-B1-13, UT-B1-14
+(docs/sim_implementation_plan.md). Also UT-C4-1, UT-C4-2 (`S-C4`).
+
+**UT-B1-4 and UT-B1-12 moved to `test_b1_default_layers.py`** (`AR-52`,
+2026-08-07) along with the providers they test (`ego_layer`/`trail_layer`,
+now `adas_sim.scene.default_layers`) -- the test IDs did not move, only
+their file.
 
 Placement note: these test a component's own layer providers
 (`modules/df/sim/layers/`), not the framework. They live here rather than in
@@ -151,21 +156,6 @@ def test_no_provider_module_imports_a_renderer():
     assert not violations, "\n".join(violations)
 
 
-def test_ego_box_equals_ego_model_and_changes_with_project():
-    """UT-B1-4: asserted by changing the project and seeing the box change,
-    not by comparing to a literal."""
-    tick = _make_tick(0)
-    for project in ("base", "cus1", "2w_base"):
-        ctx = _ctx((tick,), project=project)
-        prim = common.ego_layer(ctx)[0].prims[0]
-        ego = ctx.model.ego()
-        assert prim.length_m == pytest.approx(ego.x_front_m - ego.x_rear_m)
-        assert prim.width_m == pytest.approx(2.0 * ego.half_width_m)
-    base_box = common.ego_layer(_ctx((tick,), project="base"))[0].prims[0]
-    cus1_box = common.ego_layer(_ctx((tick,), project="cus1"))[0].prims[0]
-    assert base_box.length_m != cus1_box.length_m
-
-
 def test_two_different_object_classes_draw_different_footprints():
     """UT-B1-5."""
     tick = _make_tick(0, gen_object_list=_gen_object_list([(1, 10.0, -3.0, 1), (2, 20.0, 3.0, 3)]))  # CAR, PEDESTRIAN
@@ -248,35 +238,6 @@ def test_stale_port_changes_what_the_hud_draws():
     assert "stale" in stale_prim.text
 
 
-def test_ego_trail_out_of_order_calls_give_identical_output():
-    """UT-B1-12: a temporal layer, but the provider holds no state between
-    calls. Poses are varied directly and explicitly here (standing in for
-    real ego-in-world data, e.g. a world model's ground truth) -- never
-    dead-reckoned from `veh_dyn`, which `trail_layer` no longer reads at all
-    (R-SIM-7: a layer may transform data a port/world model already
-    produced, never estimate new information by integrating one over time)."""
-    poses = tuple(Pose2D(x_m=float(i), y_m=0.0, yaw_rad=0.0) for i in range(10))
-    ticks = tuple(_make_tick(i, pose=poses[i]) for i in range(10))
-    ctx = _ctx(ticks)
-    first = common.trail_layer(ctx)
-    # Call again "out of order" (a second, later call) -- purity means the
-    # provider has nothing that could make this differ.
-    third = common.trail_layer(_ctx(ticks))
-    second = common.trail_layer(ctx)
-    assert first == second == third
-    assert len(first[0].prims[0].points_m) == 10
-
-
-def test_ego_trail_with_no_real_pose_source_draws_nothing():
-    """A recording with no ego-position ground truth (every tick's pose is
-    the coordinate-origin default -- this component's own legacy recordings
-    carry none) transforms to the same point at every tick; drawing that as
-    a trail would be a fabricated flat line, so the layer draws nothing."""
-    ticks = tuple(_make_tick(i) for i in range(10))  # default pose at every tick
-    ctx = _ctx(ticks)
-    assert common.trail_layer(ctx) == ()
-
-
 def test_provider_is_pure_no_attribute_changes_between_calls():
     """UT-B1-13."""
     ticks = tuple(_make_tick(i, veh_dyn=_veh_dyn(vx=15.0)) for i in range(5))
@@ -288,9 +249,10 @@ def test_provider_is_pure_no_attribute_changes_between_calls():
 
 def test_no_two_layer_ids_share_a_prefix():
     """UT-B1-14: solo/mute selects by id; a prefix collision would select
-    the wrong set."""
-    ids = ["df.common.frame", "df.common.ego", "df.common.objects", "df.common.hud",
-           "df.common.trail", "bsd.zone", "bsd.warning", "bsd.sensor_fov"]
+    the wrong set. `df.common.frame`/`ego`/`trail` moved to the framework
+    (`AR-52`) -- `df`'s own set is smaller now; the framework's own set has
+    its own prefix check, `test_b1_default_layers.py`."""
+    ids = ["df.common.objects", "df.common.hud", "bsd.zone", "bsd.warning", "bsd.sensor_fov"]
     for i, a in enumerate(ids):
         for b in ids[i + 1:]:
             assert not a.startswith(b) and not b.startswith(a), (a, b)

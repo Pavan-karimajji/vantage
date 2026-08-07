@@ -2430,6 +2430,20 @@ removing**.
 
 - [x] `modules/<name>/sim/layers/common.py` — ego body, objects, grid/frame
       furniture, HUD fields (the component-generic half).
+      **Superseded 2026-08-07 (`AR-52`):** ego body, grid/frame furniture and
+      the ego trail moved out of `df.common` into the framework's own
+      `adas_sim.scene.default_layers` (`sim.ego`/`sim.frame`/`sim.trail`) —
+      all three read only `ctx.model`/`ctx.history`, never a port, so every
+      component needed them and only `df` had them; a `vdy`- or
+      `perception-core`-only run drew nothing at all until this moved.
+      `objects`/`hud` stayed in `df.common` (both need a real, component-
+      wired port — `source.gen_object_list`/`source.veh_dyn` — that a
+      framework-level provider has no "self" identity to resolve against,
+      `R-SIM-21`). Landed in `scene/default_layers.py`,
+      `scene/registry.py` (unconditional import), `tests/unit/
+      test_b1_default_layers.py`; golden fixtures regenerated
+      (`tests/fixtures/golden/*.scene.bin`, layer ids `df.common.ego` →
+      `sim.ego` etc.).
       **Finding, a real `GT-1`/`GT-3` bug pair:** the object-classification
       footprint table and its fallback were first written as literal
       `Footprint(length_m=..., width_m=...)` values directly in this file —

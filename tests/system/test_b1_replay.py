@@ -56,7 +56,7 @@ def test_a_different_project_produces_a_different_ego_box_and_zone():
     cus1_scene = build_scene(session, 0, project="cus1")
 
     def ego_prim(scene):
-        return next(p for layer in scene.layers if layer.id == "df.common.ego" for p in layer.prims)
+        return next(p for layer in scene.layers if layer.id == "sim.ego" for p in layer.prims)
 
     def zone_prims(scene):
         return [p for layer in scene.layers if layer.id == "bsd.zone" for p in layer.prims]
