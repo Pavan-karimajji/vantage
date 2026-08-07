@@ -298,6 +298,74 @@ def test_check_scenario_applies_scenario_faults_during_resim(tmp_path):
     assert by_id["EXP-CORRUPTED"].passed is True
 
 
+def test_check_scenario_expect_signal_resolves_self_dot_port_against_the_sole_simulate_stage(tmp_path):
+    """`S-C1cΔ`, `UT-C1c-22`: an `expect:`/marker `signal:` naming
+    `self.outputs.x` resolves against `check_scenario`'s own `Pipeline`
+    (its sole `mode: simulate` stage, `ST-C1c-2`'s canonical shape),
+    producing the identical result the spelled `widget.outputs.x` signal
+    already proves above -- `contracts.binding.resolve` genuinely wired
+    into `sim check`, not only unit-tested in isolation."""
+    scalar_cls, descriptor_set = _scalar_message_cls()
+    values = [0.0, 0.2, 0.6, 1.0]
+    recording_path = _record_widget_recording(tmp_path, values, descriptor_set=descriptor_set, scalar_cls=scalar_cls)
+
+    check_pipeline_path = tmp_path / "check_pipeline_self.yaml"
+    remaining = iter(values)
+    check_component = InProcessSilComponent(
+        "widget", _widget_manifest(descriptor_set),
+        lambda dt_ns, inputs: {"outputs": scalar_cls(x=next(remaining)).SerializeToString()},
+    )
+    check_component.init()
+    _write_widget_pipeline(check_pipeline_path, mode="simulate", component=check_component)
+
+    scenario_path = tmp_path / "case_self.yaml"
+    _write_scenario(scenario_path, expect=[
+        {"id": "EXP-SELF-BECOMES", "signal": "self.outputs.x", "becomes": 1.0, "within_s": 0.15, "of": "marker.crossing"},
+        {"id": "EXP-SELF-NEVER", "signal": "self.outputs.x", "never": 5.0},
+    ])
+    raw = yaml.safe_load(scenario_path.read_text(encoding="utf-8"))
+    raw["markers"] = [{"id": "crossing", "at": {"first": "self.outputs.x", "crosses": 0.5, "dir": "rising"}}]
+    scenario_path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+
+    result = check_scenario(
+        scenario_path, recording_path=recording_path, pipeline_path=check_pipeline_path,
+        components={"widget": check_component},
+    )
+
+    assert result.skipped is False
+    by_id = {r.id: r for r in result.results}
+    assert by_id["EXP-SELF-BECOMES"].passed is True
+    assert by_id["EXP-SELF-NEVER"].passed is True
+
+
+def test_check_scenario_self_dot_port_raises_when_no_sole_simulate_stage(tmp_path):
+    """No `mode: simulate` stage (a pure-`measured` check pipeline) means
+    `self` is undefined -- a `self.`-prefixed signal raises naming why,
+    never silently resolving to something guessed (`UT-C1c-23`,
+    `R-SIM-25`/`NR-SIM-4`)."""
+    scalar_cls, descriptor_set = _scalar_message_cls()
+    values = [0.0, 0.2]
+    recording_path = _record_widget_recording(tmp_path, values, descriptor_set=descriptor_set, scalar_cls=scalar_cls)
+
+    check_pipeline_path = tmp_path / "check_pipeline_measured.yaml"
+
+    def _never(dt_ns, inputs):
+        raise AssertionError("a measured stage must never execute during resim")
+
+    check_component = InProcessSilComponent("widget", _widget_manifest(descriptor_set), _never)
+    check_component.init()
+    _write_widget_pipeline(check_pipeline_path, mode="measured", component=check_component)
+
+    scenario_path = tmp_path / "case_self_undefined.yaml"
+    _write_scenario(scenario_path, expect=[{"id": "EXP-SELF", "signal": "self.outputs.x", "never": 5.0}])
+
+    with pytest.raises(AuthoringError, match="self.outputs.x"):
+        check_scenario(
+            scenario_path, recording_path=recording_path, pipeline_path=check_pipeline_path,
+            components={"widget": check_component},
+        )
+
+
 def test_check_scenarios_aggregates_a_directory(tmp_path):
     scenario_dir = tmp_path / "scenarios"
     scenario_dir.mkdir()

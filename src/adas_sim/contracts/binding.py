@@ -36,6 +36,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Literal
 
+from adas_sim.contracts.component import ComponentManifest
 from adas_sim.contracts.override import Override, OverrideVerb
 from adas_sim.core.errors import AuthoringError, ContractError
 
@@ -166,6 +167,49 @@ def try_resolve_component_ref(ref: str, *, known_ports: Iterable[str], where: st
             hint=f"known ports this run: {sorted(known_ports)}",
         )
     return matches[0]
+
+
+def resolve(ref: str, *, component: str, manifest: ComponentManifest, where: str) -> str:
+    """`S-C1cΔ`'s resolver (added 2026-08-07, sim build queue row 4 sub-row
+    4, `UT-C1c-22`/`UT-C1c-23`) -- the one this module's own delta note
+    names: `Pipeline` already knows every manifest in a run and already
+    builds the concrete address (`f"{stage.name}.{port.name}"`), so
+    resolution happens **once, at load** (`R-SIM-21`), against the ONE
+    component `ref` is relative to -- never searched for across a run's
+    whole port universe the way `resolve_component_ref` (below) must, for
+    the different reason given in its own docstring.
+
+    `ref` a bare `<port>` (no `self.` prefix) is already concrete and
+    passes through unchanged, same convention as `resolve_component_ref`.
+    `self.<port>` resolves to `f"{component}.{port}"` **iff** `<port>`
+    exactly matches one of `manifest.inputs`/`manifest.outputs`' own
+    `PortSpec.name` -- no search, no ambiguity possible, because `component`
+    already names the one manifest this call resolves against. A `<port>`
+    matching neither raises `AuthoringError` naming the reference, `component`
+    and every port `manifest` actually declares (`N-8`, `UT-C1c-23`) --
+    never a sentinel a caller could mistake for "absent".
+
+    **Not `resolve_component_ref`, on purpose (`S-B1Δ`'s own note).** That
+    resolver exists because a layer provider replays from a `Session` alone,
+    with no live `Pipeline` in the loop (`R-SIM-13`) -- it stays exactly as
+    it is. This one is for a caller that already holds a `Pipeline` (`sim
+    check`'s expectation evaluator, today's own consumer -- `S-D3`
+    viewpoints and `S-D7` export column selection remain unwired: neither
+    has an established "which stage is `self`" convention documented
+    anywhere, and inventing one here would be a scenario/pipeline-file
+    schema decision, not a resolver-wiring one).
+    """
+    if not ref.startswith("self."):
+        return ref
+    port = ref[len("self."):]
+    declared = tuple(spec.name for spec in (*manifest.inputs, *manifest.outputs))
+    if port not in declared:
+        raise AuthoringError(
+            expected=f"one of {component!r}'s declared ports: {sorted(declared)}",
+            found=repr(ref), where=where,
+            hint=f"{component!r} is the stage {ref!r} resolves relative to",
+        )
+    return f"{component}.{port}"
 
 
 def _descend(message: object, path: tuple[AddressSegment, ...]) -> object:

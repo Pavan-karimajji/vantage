@@ -4333,28 +4333,83 @@ needed `self.<port>` binding for a layer provider's `requires=`/`ctx.port`
 run's own **known port names** (a recording's topics), not against this
 Pipeline/`ComponentManifest`-based `resolve(ref, *, component)` sketched below —
 that one is real work for whenever `S-C3`/`S-D3`/`S-D7` actually need it (a live
-`Pipeline` is genuinely available there). The boxes below stay unticked on
-purpose; do not fold them into `S-B1Δ`'s closure.
+`Pipeline` is genuinely available there).
 
-- [ ] **`contracts/binding.py` — the one port-address resolver.**
+- [x] **`contracts/binding.py` — the one port-address resolver.**
       `resolve(ref, *, component) -> str`: takes `self.<port>` or a bare
       `<port>`, returns the concrete address for *this* run. A miss raises
       `AuthoringError` naming the reference, the component and every port its
       manifest declares (`N-8`). **One resolver, four consumers** — layer
       `requires`, `expect:` predicates (`S-C3`), workspace/viewpoint files
       (`S-D3`), and export column selection (`S-D7`). Four resolvers is how the
-      third one starts accepting a name the first one rejects
-- [ ] `core/signals.py` routes through it rather than resolving addresses
+      third one starts accepting a name the first one rejects. **Done
+      2026-08-07** (sim build queue row 4, sub-row 4): `resolve(ref, *,
+      component, manifest, where)` lands in `contracts/binding.py`, taking a
+      `ComponentManifest` directly (never a caller-flattened list) so "every
+      port its manifest declares" in an error message can never drift from
+      what the manifest actually holds. **The layer-`requires`/`resolve_
+      component_ref` consumer stays exactly as it is, on purpose** — it
+      exists because a layer provider replays from a `Session` with no live
+      `Pipeline` at all (`R-SIM-13`), a genuinely different call-time
+      context this resolver does not (and should not) reach; "one resolver,
+      four consumers" is the reason a single function was worth building for
+      the OTHER three, not a mandate to retrofit the Session-only path onto
+      it. 4 new unit tests, `tests/unit/test_c1c_binding.py`
+- [x] `core/signals.py` routes through it rather than resolving addresses
       itself — today it does a longest-known-prefix match over raw strings,
       which is correct for a spelled address and has nothing to resolve a
-      component-relative one against
-- [ ] `UT-C1c-22` a component-relative reference resolves to the concrete
+      component-relative one against. **Done 2026-08-07, narrower than the
+      literal wording**: `core/signals.py` itself is unchanged (it has no
+      `Pipeline`/manifest access, only a `Tick`'s own `ports`) — the routing
+      happens one layer up, in `check/expect.py`'s new `_resolve_self_address`
+      (called from `_series` before `core.signals.resolve_tick` ever sees
+      the address), which is the ACTUAL consumer named two lines below
+      (`expect:` predicates, `S-C3`) and the only one of the three
+      newly-named consumers with an established, unambiguous "what does
+      `self` mean here" convention (`ST-C1c-2`'s canonical "everything
+      measured except one `simulate` stage" shape — `self` is that one
+      stage). Wired end to end: `check/runner.py`'s `_sole_simulate_stage`
+      derives `(stage_name, manifest)` from the real `Pipeline` `check_
+      scenario` already builds, threaded through `evaluate_scenario` ->
+      `evaluate_expectation`/`resolve_marker`/`resolve_markers` -> `_series`
+      as an optional `sut=` (default `None`, so `render/viewer.py`'s
+      pre-existing `evaluate_scenario(scenario, session.ticks)` call is
+      unaffected — no `self.` support there, since a live viewer session has
+      no `Pipeline` in the loop either, `R-SIM-13` again). Zero or more than
+      one `simulate` stage raises, naming why, the moment a scenario
+      actually tries to use `self.` — never eagerly, since most scenarios
+      never do. 2 new end-to-end tests in `tests/unit/test_c3_check.py`
+      (a real `self.outputs.x` `expect:`/marker signal resolving through
+      the real `check_scenario` chain and producing the identical result a
+      spelled `widget.outputs.x` signal already proved; the no-sole-
+      simulate-stage raise). **`S-D3` viewpoints and `S-D7` export column
+      selection stay unwired, deliberately, not silently** — neither has
+      any established "which stage is `self`" convention documented
+      anywhere (both routinely name MULTIPLE stages' ports at once, unlike
+      the single-SUT algo-test shape `expect:` inherits from `ST-C1c-2`),
+      so wiring either would mean inventing a scenario/pipeline-file schema
+      decision here rather than wiring an already-designed one — real,
+      separate work for whenever `S-D3`/`S-D7` actually need it, exactly
+      the deferral this delta's own opening paragraph already named
+- [x] `UT-C1c-22` a component-relative reference resolves to the concrete
       address **under a renamed stage** — the same plug-in binds correctly
       whether the pipeline calls the stage `df` or `driving_functions`. This is
       the whole claim; a test that only checks the default stage name proves
-      nothing
-- [ ] `UT-C1c-23` an unresolvable reference raises naming all three things, and
-      **never** returns a sentinel that a caller could treat as "absent"
+      nothing. **Done 2026-08-07**: `test_resolve_binds_under_a_renamed_
+      stage` calls `resolve("self.bsd.outputs", component=..., manifest=...)`
+      with `component="df"` and again with `component="driving_functions"`
+      against the SAME manifest, asserting both concrete addresses —
+      the resolver's own signature makes the renamed-stage case free (the
+      caller supplies `component` directly; there is no name to search for
+      or accidentally hardcode)
+- [x] `UT-C1c-23` an unresolvable reference raises naming all three things, and
+      **never** returns a sentinel that a caller could treat as "absent".
+      **Done 2026-08-07**: `test_resolve_raises_naming_the_reference_
+      component_and_declared_ports` asserts the reference, the component
+      name and every declared port all appear in the raised message; `check/
+      expect.py`'s own `_resolve_self_address` raises the same way for the
+      "no sole simulate stage" case (`test_check_scenario_self_dot_port_
+      raises_when_no_sole_simulate_stage`)
 
 **Delta `S-C1cΔ` — added 2026-07-31 (`OD-8`, closes `OQ-10`). Build order #5** —
 Block 1, blocked on nothing; `S-B1Δ` (#6) and `S-C3` (#10) both consume what it

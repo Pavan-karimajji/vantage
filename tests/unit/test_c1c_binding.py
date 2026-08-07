@@ -10,10 +10,12 @@ half is `test_c1c_pipeline.py`'s, since it needs a real manifest), UT-C1c-26
 
 Also `S-B1Δ`'s `resolve_component_ref`/`try_resolve_component_ref` --
 component-relative `self.<port>` binding (`R-SIM-21`, arch `D13`). These are
-NOT `UT-C1c-22`/`-23` (that pair is the Pipeline/ComponentManifest-based
-resolver the S-C1c delta sketches for Block 2; Block 1 has no live manifest
-to resolve against, so this resolves against a run's own known port names
-instead -- see `scene/registry.py`'s `gated()` and `LayerCtx.port`).
+**still not** `UT-C1c-22`/`-23` (that pair is the Pipeline/ComponentManifest-
+based `resolve()`, real as of 2026-08-07 -- its own tests are below, in this
+same file since it's the same module; Block 1 has no live manifest to resolve
+against, so `resolve_component_ref` above resolves against a run's own known
+port names instead -- see `scene/registry.py`'s `gated()` and `LayerCtx.port`
+-- and stays that way, on purpose, see `resolve`'s own docstring).
 """
 
 from __future__ import annotations
@@ -24,8 +26,10 @@ from google.protobuf import descriptor_pool as _dpool
 from google.protobuf import message_factory as _mfactory
 
 from adas_sim.contracts.binding import (
-    Address, AddressSegment, apply_override, parse_address, resolve_component_ref, try_resolve_component_ref,
+    Address, AddressSegment, apply_override, parse_address, resolve, resolve_component_ref,
+    try_resolve_component_ref,
 )
+from adas_sim.contracts.component import ComponentManifest, PortSpec
 from adas_sim.contracts.override import Override, OverrideVerb
 from adas_sim.core.errors import AuthoringError, ContractError
 
@@ -338,3 +342,55 @@ def test_try_resolve_component_ref_still_raises_on_ambiguous_matches():
     known_ports = frozenset({"df.bsd.outputs", "other.bsd.outputs"})
     with pytest.raises(AuthoringError):
         try_resolve_component_ref("self.bsd.outputs", known_ports=known_ports, where="t")
+
+
+# ---------------------------------------------------------------------------
+# `resolve` -- the S-C1cΔ, Pipeline/ComponentManifest-based resolver
+# (`UT-C1c-22`, `UT-C1c-23`). NOT `resolve_component_ref` above -- that one
+# resolves against a run's flat known-port universe with no manifest; this
+# one resolves against ONE component's own declared ports, exactly.
+# ---------------------------------------------------------------------------
+
+
+def _manifest(*port_names: str) -> ComponentManifest:
+    return ComponentManifest(
+        component="test", version="1", abi_version=1, build_id="b",
+        inputs=(), outputs=tuple(PortSpec(name=name, proto_type="x.Y") for name in port_names),
+        project="base", config_bundle_sha256="", descriptor_set=b"", period_ns=0,
+    )
+
+
+def test_a_bare_ref_passes_through_resolve_unchanged():
+    assert resolve("df.bsd.outputs", component="df", manifest=_manifest(), where="t") == "df.bsd.outputs"
+
+
+def test_resolve_binds_under_a_renamed_stage():
+    """`UT-C1c-22`: the whole claim -- the same plug-in binds correctly
+    whether the pipeline calls the stage `df` or `driving_functions`, since
+    the concrete address is built from whatever `component` the caller
+    supplies, never searched for."""
+    manifest = _manifest("bsd.outputs")
+    assert resolve("self.bsd.outputs", component="df", manifest=manifest, where="t") == "df.bsd.outputs"
+    assert resolve("self.bsd.outputs", component="driving_functions", manifest=manifest, where="t") == \
+        "driving_functions.bsd.outputs"
+
+
+def test_resolve_matches_an_input_port_too():
+    manifest = ComponentManifest(
+        component="test", version="1", abi_version=1, build_id="b",
+        inputs=(PortSpec(name="veh_dyn", proto_type="x.Y"),), outputs=(),
+        project="base", config_bundle_sha256="", descriptor_set=b"", period_ns=0,
+    )
+    assert resolve("self.veh_dyn", component="vdy", manifest=manifest, where="t") == "vdy.veh_dyn"
+
+
+def test_resolve_raises_naming_the_reference_component_and_declared_ports():
+    """`UT-C1c-23`: names all three -- never a sentinel a caller could
+    treat as "absent"."""
+    manifest = _manifest("bsd.outputs", "common.hud")
+    with pytest.raises(AuthoringError) as excinfo:
+        resolve("self.no_such_port", component="df", manifest=manifest, where="t")
+    message = str(excinfo.value)
+    assert "self.no_such_port" in message
+    assert "df" in message
+    assert "bsd.outputs" in message and "common.hud" in message

@@ -28,6 +28,8 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from adas_sim.contracts.binding import resolve as resolve_component_address
+from adas_sim.contracts.component import ComponentManifest
 from adas_sim.contracts.scenario import (
     BecomesAnchor, ConstantAnchor, CrossesAnchor, Marker, Scenario,
 )
@@ -36,6 +38,14 @@ from adas_sim.core.history import FrameTree, HistoryView, LayerCtx
 from adas_sim.core.signals import registered_signals, resolve_tick
 from adas_sim.core.tick import Tick
 from adas_sim.model.project import ProjectModel
+
+#: `(stage_name, manifest)` for the pipeline's own single `mode: simulate`
+#: stage (`ST-C1c-2`'s canonical algo-test shape) -- what a `self.<port>`
+#: reference in an `expect:`/marker `signal:` resolves relative to
+#: (`S-C1cΔ`, `contracts.binding.resolve`). `None` when no `Pipeline` was
+#: supplied, or it does not have exactly one `simulate` stage -- "self" is
+#: then undefined, not guessed.
+SutRef = tuple[str, ComponentManifest]
 
 # ---------------------------------------------------------------------------
 # Time references -- `of: marker.<id>` and `during: [a, marker.<id>]`
@@ -317,13 +327,61 @@ def _missing_within_s(where: str) -> float:
 # ---------------------------------------------------------------------------
 
 
-def _series(ticks: Sequence[Tick], address: str, *, project: str) -> tuple[tuple[float, object], ...]:
+def _resolve_self_address(address: str, sut: SutRef | None) -> str:
+    """`address`'s `self.<port>` prefix, if any, resolved to the concrete
+    `<stage>.<port>` it names (`S-C1cΔ`, `UT-C1c-22`) -- the longest of
+    `sut`'s own declared port names matching the self.-prefixed portion,
+    since a port name can itself be dotted (`R-SIM-4`, gated components),
+    then delegated to `contracts.binding.resolve` for the actual bind
+    (never a second resolver -- this only splits the prefix `resolve`
+    itself has no way to find, the same relationship `core.signals.
+    _find_port` has to `resolve_tick`). `address` unchanged when it carries
+    no `self.` prefix. `sut=None` (no `Pipeline` supplied, or it does not
+    have exactly one `mode: simulate` stage -- `ST-C1c-2`'s own canonical
+    algo-test shape) with a `self.`-prefixed address raises, naming why --
+    "self" is undefined there, never guessed (`R-SIM-25`/`NR-SIM-4`)."""
+    if not address.startswith("self."):
+        return address
+    if sut is None:
+        raise AuthoringError(
+            expected="exactly one mode: simulate stage to resolve 'self.' against (ST-C1c-2's canonical shape)",
+            found=repr(address), where="adas_sim.check.expect._resolve_self_address",
+            hint="a self.<port> reference needs a Pipeline with exactly one simulate stage, "
+                 "or spell the concrete <stage>.<port> address instead",
+        )
+    stage_name, manifest = sut
+    rest = address[len("self."):]
+    declared = [spec.name for spec in (*manifest.inputs, *manifest.outputs)]
+    best: str | None = None
+    for name in declared:
+        if rest == name or rest.startswith(name + "."):
+            if best is None or len(name) > len(best):
+                best = name
+    if best is None:
+        raise AuthoringError(
+            expected=f"one of {stage_name!r}'s declared ports: {sorted(declared)}",
+            found=repr(address), where="adas_sim.check.expect._resolve_self_address",
+            hint=f"{stage_name!r} is the stage {address!r} resolves relative to",
+        )
+    field_path = rest[len(best):].lstrip(".")
+    concrete_port = resolve_component_address(
+        f"self.{best}", component=stage_name, manifest=manifest, where="adas_sim.check.expect._resolve_self_address",
+    )
+    return f"{concrete_port}.{field_path}" if field_path else concrete_port
+
+
+def _series(
+    ticks: Sequence[Tick], address: str, *, project: str, sut: SutRef | None = None,
+) -> tuple[tuple[float, object], ...]:
     """`address`'s value at every tick, as `(t_s, value)` pairs -- the same
     resolver `core.signals.resolve_series` uses, indexed by time instead of
     tick position (a predicate reasons in seconds, `within_s`'s own unit).
     UT-C3-6: calling `resolve_tick` directly here, the same function a plot
     panel calls, is the one-address-space proof -- there is no second
-    resolver for `expect:` predicates."""
+    resolver for `expect:` predicates. `sut`, when given, resolves a
+    `self.<port>` prefix before `core.signals` ever sees it -- that module's
+    own resolution has no concept of `self` (`S-C1cΔ`)."""
+    address = _resolve_self_address(address, sut)
     needs_ctx = address in registered_signals()
     model = ProjectModel.resolve(project=project) if needs_ctx else None
     out: list[tuple[float, object]] = []
@@ -406,11 +464,14 @@ def _eval_span(series: Sequence[tuple[float, object]], value: object, *, lo: flo
 
 def evaluate_expectation(
     expectation: Expectation, ticks: Sequence[Tick], *, markers: Mapping[str, float], project: str = "base",
+    sut: SutRef | None = None,
 ) -> ExpectationResult:
     """One expectation's pass/fail (SS5.4) -- the one evaluator the
-    timeline, `sim check` and the report all call (never three copies)."""
+    timeline, `sim check` and the report all call (never three copies).
+    `sut`, when given, is what a `self.<port>` signal resolves against
+    (`S-C1cΔ`, `_resolve_self_address`)."""
     predicate = expectation.predicate
-    series = _series(ticks, expectation.signal, project=project)
+    series = _series(ticks, expectation.signal, project=project, sut=sut)
 
     passed: bool
     actual_time_s: float | None = None
@@ -428,7 +489,7 @@ def evaluate_expectation(
         window_s = (lo, hi)
 
     elif isinstance(predicate, EqualsWhenever):
-        cond_series = _series(ticks, predicate.condition.signal, project=project)
+        cond_series = _series(ticks, predicate.condition.signal, project=project, sut=sut)
         op = _COND_OPS[predicate.condition.op]
         passed = True
         for (t_s, v), (_t2, cond_raw) in zip(series, cond_series):
@@ -551,7 +612,7 @@ def evaluate_expectation(
 # ---------------------------------------------------------------------------
 
 
-def resolve_marker(marker: Marker, ticks: Sequence[Tick], *, project: str = "base") -> float:
+def resolve_marker(marker: Marker, ticks: Sequence[Tick], *, project: str = "base", sut: SutRef | None = None) -> float:
     """One marker's resolved time, in seconds. `ConstantAnchor` is a
     pass-through; the two predicate forms reuse `_series` +
     `_first_transition_into`/a threshold crossing -- "an anchor is an
@@ -561,7 +622,7 @@ def resolve_marker(marker: Marker, ticks: Sequence[Tick], *, project: str = "bas
     if isinstance(anchor, ConstantAnchor):
         return anchor.seconds
 
-    series = _series(ticks, anchor.signal, project=project)
+    series = _series(ticks, anchor.signal, project=project, sut=sut)
 
     if isinstance(anchor, BecomesAnchor):
         found = _first_transition_into(series, anchor.value)
@@ -588,19 +649,28 @@ def resolve_marker(marker: Marker, ticks: Sequence[Tick], *, project: str = "bas
     )
 
 
-def resolve_markers(scenario: Scenario, ticks: Sequence[Tick]) -> dict[str, float]:
+def resolve_markers(scenario: Scenario, ticks: Sequence[Tick], *, sut: SutRef | None = None) -> dict[str, float]:
     """Every declared marker's resolved time, keyed by id -- what
     `evaluate_scenario` feeds `evaluate_expectation`'s `markers=`."""
-    return {marker_id: resolve_marker(marker, ticks, project=scenario.sut.project) for marker_id, marker in scenario.markers.items()}
+    return {
+        marker_id: resolve_marker(marker, ticks, project=scenario.sut.project, sut=sut)
+        for marker_id, marker in scenario.markers.items()
+    }
 
 
-def evaluate_scenario(scenario: Scenario, ticks: Sequence[Tick]) -> tuple[ExpectationResult, ...]:
+def evaluate_scenario(
+    scenario: Scenario, ticks: Sequence[Tick], *, sut: SutRef | None = None,
+) -> tuple[ExpectationResult, ...]:
     """Every `expect:` entry's result, in declaration order -- markers
     resolved once, up front, and shared across every expectation that
-    references one (SS5.4's "one evaluator, three consumers")."""
-    markers = resolve_markers(scenario, ticks)
+    references one (SS5.4's "one evaluator, three consumers"). `sut`,
+    when given (`check.runner.check_scenario`'s own `Pipeline`, `S-C1cΔ`),
+    is what a `self.<port>` signal resolves against -- omitted, every
+    `self.`-prefixed signal raises (`_resolve_self_address`), unchanged
+    behaviour for every caller that predates this parameter."""
+    markers = resolve_markers(scenario, ticks, sut=sut)
     expectations = [parse_expectation(raw, where=f"{scenario.id} expect") for raw in scenario.expect]
     return tuple(
-        evaluate_expectation(expectation, ticks, markers=markers, project=scenario.sut.project)
+        evaluate_expectation(expectation, ticks, markers=markers, project=scenario.sut.project, sut=sut)
         for expectation in expectations
     )

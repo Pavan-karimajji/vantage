@@ -43,7 +43,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from adas_sim.check.expect import ExpectationResult, evaluate_scenario
-from adas_sim.contracts.component import resolve_message_classes
+from adas_sim.contracts.component import ComponentManifest, resolve_message_classes
 from adas_sim.contracts.pipeline import Pipeline
 from adas_sim.contracts.scenario import load_scenario
 from adas_sim.core.errors import AuthoringError
@@ -237,8 +237,24 @@ def check_scenario(
     finally:
         pipeline.shutdown_components()
     ticks = _ticks_from_resim(pipeline, outputs)
-    results = evaluate_scenario(scenario, ticks)
+    sut = _sole_simulate_stage(pipeline)
+    results = evaluate_scenario(scenario, ticks, sut=sut)
     return ScenarioCheckResult(scenario_id=scenario.id, scenario_path=scenario_path, skipped=False, results=results)
+
+
+def _sole_simulate_stage(pipeline: Pipeline) -> tuple[str, ComponentManifest] | None:
+    """`(stage_name, manifest)` for `pipeline`'s own single `mode: simulate`
+    stage -- what a `self.<port>` signal resolves against (`S-C1cΔ`,
+    `ST-C1c-2`'s own canonical algo-test shape). `None` for zero or more
+    than one `simulate` stage -- "self" is then genuinely undefined, and
+    `check.expect._resolve_self_address` raises naming that only if a
+    scenario's `expect:` block actually uses `self.` (never eagerly, since
+    most scenarios never do)."""
+    simulate_stages = [stage.name for stage in pipeline.stages if stage.mode == "simulate"]
+    if len(simulate_stages) != 1:
+        return None
+    name = simulate_stages[0]
+    return name, pipeline.manifest_for(name)
 
 
 def discover_scenarios(scenario_set: Path) -> tuple[Path, ...]:
