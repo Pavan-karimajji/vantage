@@ -120,12 +120,30 @@ def _relative_trail_m(ctx: LayerCtx) -> tuple[tuple[float, float], ...]:
 @layer_provider("sim.trail", group="sim")
 def trail_layer(ctx: LayerCtx) -> tuple[Layer, ...]:
     """The ego's own recent path -- a temporal layer (`UT-B1-12`): pure
-    function of `ctx.history`, no attribute holds state between calls. Draws
-    nothing when every windowed tick's pose transforms to the same point
-    (no real ego-position source for this recording) -- a single dot
-    pretending to be a trail is worse than no trail at all."""
+    function of `ctx.history`, no attribute holds state between calls.
+
+    Two empty cases, deliberately handled differently (`AR-60`, 2026-08-07,
+    same distinction `AR-53` drew for a `requires=` reference): fewer than
+    two windowed ticks exist yet is TRANSIENT -- the very first tick or two
+    of any recording, before there is enough history to have a trail at
+    all -- and stays a silent `()`, the same as a `self.<port>` reference
+    resolved but not yet arrived this tick. Every windowed tick's pose
+    transforming to the SAME point is not transient: it means this
+    recording carries no real ego world-position source at all, which will
+    never change as more ticks arrive. That case is named and badged
+    (`Layer.unavailable`), never a silent absence a user could mistake for
+    "the ego never moved" -- a single dot pretending to be a trail is worse
+    than no trail at all, and now the reason says so instead of nothing."""
     points_m = _relative_trail_m(ctx)
-    if len(points_m) < 2 or len(set(points_m)) < 2:
+    if len(points_m) < 2:
         return ()
+    if len(set(points_m)) < 2:
+        return (Layer(
+            id="sim.trail", group="sim", prims=(),
+            unavailable="no ego world-position source in this recording -- every tick's pose "
+                        "transforms to the same point, and a single dot pretending to be a "
+                        "trail is worse than no trail at all",
+            label="Ego trail", level=2,
+        ),)
     prim = Prim(kind="polyline", points_m=points_m, style="ego.body", width_px=1.5, z=2)
     return (Layer(id="sim.trail", group="sim", prims=(prim,), label="Ego trail", level=2),)

@@ -2662,6 +2662,18 @@ already required, or a new idea" rather than built blind:
    and `df.common.frame` grew from 6 to 46 prims (the new grid labels; back
    down to 6 as of `AR-56`, 2026-08-07 — the labels are the renderer's own
    now, not baked prims).
+   **Corrected 2026-08-07 (`AR-60`):** "honestly draws no trail at all"
+   above was the SAME silent-empty-layer pattern `AR-53` eliminated for
+   `bsd.warning` on the very same day, just not recognised as one yet at
+   the time this paragraph was written — a layer absent from the Scene
+   and the layer tree with no visible reason. `trail_layer` (now the
+   framework's own, `AR-52`) draws the placeholder `Layer(unavailable=
+   ...)` `AR-53` built when the recording genuinely carries no ego pose
+   (distinct from simply not having enough history yet, which stays a
+   silent, transient `()`). Caught along the way: `Layer.unavailable`
+   itself had never been wired into `scene/codec.py`, so this row's own
+   golden fixture — the first ever to carry an unavailable *layer* — went
+   red until that was fixed too.
 
 **Discipline** (every stage)
 - [x] portability §3 ticked — exposure: `P-1`, `P-3` (a viewpoint or layer file

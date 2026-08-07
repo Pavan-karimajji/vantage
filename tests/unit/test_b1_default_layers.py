@@ -73,12 +73,27 @@ def test_ego_trail_out_of_order_calls_give_identical_output():
     assert len(first[0].prims[0].points_m) == 10
 
 
-def test_ego_trail_with_no_real_pose_source_draws_nothing():
-    """A recording with no ego-position ground truth (every tick's pose is
-    the coordinate-origin default) transforms to the same point at every
-    tick; drawing that as a trail would be a fabricated flat line, so the
-    layer draws nothing."""
+def test_ego_trail_with_no_real_pose_source_is_named_unavailable():
+    """`AR-60` (2026-08-07), supersedes this test's own original reading: a
+    recording with no ego-position ground truth (every tick's pose is the
+    coordinate-origin default) transforms to the same point at every tick;
+    drawing that as a trail would be a fabricated flat line -- but the
+    layer used to just vanish (`== ()`), the exact silent-absence pattern
+    `AR-53` eliminated elsewhere. Now a named, badged placeholder, matching
+    `AR-53`'s own mechanism (`Layer.unavailable`)."""
     ticks = tuple(_make_tick(i) for i in range(10))  # default pose at every tick
+    ctx = _ctx(ticks)
+    result = default_layers.trail_layer(ctx)
+    assert len(result) == 1
+    assert result[0].prims == ()
+    assert result[0].unavailable is not None and "ego world-position source" in result[0].unavailable
+
+
+def test_ego_trail_with_fewer_than_two_ticks_stays_silently_empty():
+    """The OTHER empty case (`AR-60`): too little history yet is transient
+    -- the very first tick of any recording -- and must stay a plain `()`,
+    never badged as permanently unavailable."""
+    ticks = (_make_tick(0),)
     ctx = _ctx(ticks)
     assert default_layers.trail_layer(ctx) == ()
 

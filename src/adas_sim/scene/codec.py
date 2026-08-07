@@ -135,6 +135,10 @@ def _build_file_descriptor() -> _dpb.FileDescriptorProto:
     _field(layer, "level", 6, _FT.TYPE_INT32)
     _field(layer, "default_on", 7, _FT.TYPE_BOOL)
     _field(layer, "derived", 8, _FT.TYPE_BOOL)
+    # Field 9 added by `AR-60` (2026-08-07) -- `Layer.unavailable` (`AR-53`,
+    # 2026-08-07) was never wired into this codec at all; caught by a golden
+    # round-trip carrying an unavailable layer for the first time.
+    _field(layer, "unavailable", 9, _FT.TYPE_STRING)
 
     scene = fdp.message_type.add()
     scene.name = "Scene"
@@ -217,6 +221,8 @@ def _layer_to_proto(layer: Layer) -> LayerProto:
         id=layer.id, group=layer.group, label=layer.label, z=layer.z,
         level=layer.level, default_on=layer.default_on, derived=layer.derived,
     )
+    if layer.unavailable is not None:
+        msg.unavailable = layer.unavailable
     for prim in layer.prims:
         msg.prims.append(_prim_to_proto(prim))
     return msg
@@ -226,6 +232,7 @@ def _layer_from_proto(msg: LayerProto) -> Layer:
     return Layer(
         id=msg.id, group=msg.group, prims=tuple(_prim_from_proto(p) for p in msg.prims),
         label=msg.label, z=msg.z, level=msg.level, default_on=msg.default_on, derived=msg.derived,
+        unavailable=msg.unavailable if msg.HasField("unavailable") else None,
     )
 
 

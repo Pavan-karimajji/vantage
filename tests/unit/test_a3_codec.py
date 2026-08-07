@@ -61,6 +61,22 @@ def test_grid_spacing_lateral_m_round_trips():
     assert decode_scene(encode_scene(scene)) == scene
 
 
+def test_layer_unavailable_round_trips():
+    """`AR-60` (2026-08-07): `Layer.unavailable` (`AR-53`, 2026-08-07) was
+    never wired into this codec at all -- the same shape of gap as
+    `spacing_lateral_m` above, caught the same way: a golden round-trip
+    carrying an unavailable layer for the first time (`AR-60`'s own fix to
+    `sim.trail`) went red. `None` (the ordinary case, no `unavailable`
+    field set) must round-trip as `None` too, not an empty string."""
+    unavailable_layer = Layer(id="sim.test.trail", group="sim", prims=(), unavailable="no real pose source")
+    ordinary_layer = Layer(id="sim.test.ego", group="sim", prims=())
+    scene = Scene(t_s=0.5, layers=(unavailable_layer, ordinary_layer))
+    decoded = decode_scene(encode_scene(scene))
+    assert decoded == scene
+    assert decoded.layers[0].unavailable == "no real pose source"
+    assert decoded.layers[1].unavailable is None
+
+
 def test_a_higher_minor_version_still_reads_unknown_fields_skipped():
     """UT-A3-8: a future minor version's extra field is invisible to this
     reader but does not raise, and every field this reader knows survives."""
