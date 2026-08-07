@@ -6826,18 +6826,31 @@ falsifiable pieces, neither a naming convention alone:
 
 - **`ground_truth`/`perception`/`perception.error` layer groups.**
   `scene/types.py`'s `Layer.__post_init__` gains a second cross-field check
-  (beside the existing prim/layer `derived` one, `UT-A3-13`): a
-  `Layer(group="perception.error")` that is not also `derived=True` raises,
+  (beside the existing prim/layer `derived` one, `UT-A3-13`): a `Layer`
+  whose `group` ends `.error` that is not also `derived=True` raises,
   naming the group and the layer id. This gives the naming convention real
-  teeth rather than a comment — a perception-vs-ground-truth error is, by
+  teeth rather than a comment — an error group's own layer is, by
   construction, a comparison between two SEPARATE sources, never a value
   any single `ProPort` published, so it is always a reconstruction
   (`R-SIM-7`) and the framework now refuses to let a layer claim otherwise.
   `ground_truth` and `perception` carry no such rule (both can legitimately
-  be real, published values) — proven by a third test asserting the rule
-  does NOT fire for them. 3 new tests, `tests/unit/test_a3_types.py`
-  (`test_a_perception_error_group_layer_must_be_derived`,
-  `..._marked_derived_is_accepted`, `test_an_unrelated_group_is_not_forced_derived`).
+  be real, published values) — proven by a fourth test asserting the rule
+  does NOT fire for them.
+  **Generalised to the `.error` suffix, not kept to the literal
+  `"perception.error"`, by review 2026-08-07** — the first version was
+  keyed to today's one string, which is narrower than its own stated
+  reasoning: if `perception-core` splits into computer-vision + fusion
+  (`FR-SIM-71`), the real error group becomes `"fusion.error"`, and a rule
+  scoped to `"perception.error"` alone would silently stop applying at
+  exactly the moment the decomposition it exists to survive actually
+  happens. One line (`self.group.endswith(".error")` in place of an exact
+  match) plus one added test proving the generalisation
+  (`test_a_differently_named_error_group_layer_must_also_be_derived`,
+  `group="fusion.error"`). 4 tests total, `tests/unit/test_a3_types.py`
+  (`test_an_error_group_layer_must_be_derived`,
+  `test_a_differently_named_error_group_layer_must_also_be_derived`,
+  `test_an_error_group_layer_marked_derived_is_accepted`,
+  `test_an_unrelated_group_is_not_forced_derived`).
   No real perception provider exists to REGISTER under these groups yet
   (unchanged, still true) — this closes the FRAMEWORK half only, which is
   exactly what "reachable now" meant: the convention now has an enforced

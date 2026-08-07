@@ -140,10 +140,11 @@ def test_layer_with_derived_true_may_legitimately_mix_real_and_derived_prims():
     assert layer.prims[1].derived is True
 
 
-def test_a_perception_error_group_layer_must_be_derived():
-    """`S-D4`'s ground_truth/perception/perception.error group convention:
-    a perception-vs-ground-truth error is always a reconstructed comparison
-    between two separate sources, never a value any single port published
+def test_an_error_group_layer_must_be_derived():
+    """`S-D4`'s ground_truth/perception/perception.error group convention,
+    generalised to the `*.error` suffix rather than one literal string: an
+    error group's own layer is always a reconstructed comparison between
+    two separate sources, never a value any single port published
     (`R-SIM-7`) -- so `Layer(group="perception.error", derived=False)` is
     refused, not merely discouraged by naming."""
     with pytest.raises(AuthoringError) as excinfo:
@@ -151,7 +152,18 @@ def test_a_perception_error_group_layer_must_be_derived():
     assert "perception.error" in str(excinfo.value)
 
 
-def test_a_perception_error_group_layer_marked_derived_is_accepted():
+def test_a_differently_named_error_group_layer_must_also_be_derived():
+    """The rule is keyed to the `.error` suffix, not the literal
+    `"perception.error"` string -- if `perception-core` splits into
+    computer-vision + fusion (`FR-SIM-71`), the real error group becomes
+    `"fusion.error"`, and the rule must not silently stop applying at
+    exactly the moment the decomposition it exists to survive happens."""
+    with pytest.raises(AuthoringError) as excinfo:
+        Layer(id="sim.test.fusion_error", group="fusion.error", derived=False)
+    assert "fusion.error" in str(excinfo.value)
+
+
+def test_an_error_group_layer_marked_derived_is_accepted():
     """Converse of the above: the same group with `derived=True` is exactly
     the marked stopgap `R-SIM-7` asks for, and constructs without error."""
     layer = Layer(id="sim.test.perception_error", group="perception.error", derived=True)
@@ -160,9 +172,10 @@ def test_a_perception_error_group_layer_marked_derived_is_accepted():
 
 
 def test_an_unrelated_group_is_not_forced_derived():
-    """The rule fires for `"perception.error"` specifically, not for every
-    group -- an ordinary group (e.g. real ground-truth or perception output,
-    which genuinely is a published value) stays `derived=False` freely."""
+    """The rule fires for a `.error`-suffixed group specifically, not for
+    every group -- an ordinary group (e.g. real ground-truth or perception
+    output, which genuinely is a published value) stays `derived=False`
+    freely."""
     for group in ("ground_truth", "perception", "sim"):
         layer = Layer(id=f"sim.test.{group}", group=group, derived=False)
         assert layer.derived is False
