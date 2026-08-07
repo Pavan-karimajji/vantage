@@ -35,6 +35,7 @@ from types import MappingProxyType
 from adas_sim.contracts.binding import try_resolve_component_ref
 from adas_sim.core.errors import AuthoringError
 from adas_sim.core.history import Interaction
+from adas_sim.scene.types import Layer
 
 #: The vocabulary a provider's `reacts_to=` may name -- read off `Interaction`
 #: itself rather than duplicated here, so the two cannot drift apart.
@@ -116,16 +117,30 @@ def layer_provider(
                 if not current:
                     return ()
                 # A `self.<port>` name matching more than one known port is
-                # an unambiguous same-run collision and raises loudly; zero
-                # matches or a resolved name simply absent from *this* tick
-                # are both a legitimate "nothing to draw yet" (`D13`,
-                # `S-B1Δ`) -- Block 1 has no live manifest to tell "does not
-                # exist" apart from "this run never wired that component".
+                # an unambiguous same-run collision and raises loudly.
+                # A resolved name simply absent from *this* tick stays a
+                # legitimate "nothing to draw yet" (`D13`, `S-B1Δ`) -- it
+                # was already discovered on an earlier tick and will
+                # populate again, so `view/layers.py`'s own `LayerTreeState.
+                # sync` keeps it in the tree deliberately.
+                #
+                # A ZERO-match `requires=` entry is different (`AR-53`,
+                # 2026-08-07): manifests are live now (`sim probe`, `S-C1d`,
+                # `R-SIM-23`'s ingest maps) -- "this port does not exist
+                # anywhere in this run" is no longer indistinguishable from
+                # "this run never wired that component" the way it was at
+                # `S-B1Δ`. Returning `()` here is silent absence for a
+                # reference that will NEVER resolve; a placeholder layer,
+                # named and carrying no prims, is what lets the layer list
+                # say so instead of looking identical to "never warned".
                 resolved: list[str] = []
                 for name in requires:
                     ref = try_resolve_component_ref(name, known_ports=ctx.known_ports, where=where)
                     if ref is None:
-                        return ()
+                        return (Layer(
+                            id=layer_id, group=group, prims=(),
+                            unavailable=f"requires {name!r}, which no port in this run resolves to",
+                        ),)
                     resolved.append(ref)
                 if not all(name in current[-1].ports for name in resolved):
                     return ()

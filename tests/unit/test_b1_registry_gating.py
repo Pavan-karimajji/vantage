@@ -72,11 +72,17 @@ def test_an_ambiguous_self_ref_raises_naming_the_plugin():
         _provider(ctx)
 
 
-def test_a_self_ref_matching_nothing_yet_yields_no_layers_and_raises_nothing():
-    """UT-B1-15: zero matches -- this run simply has not (yet, or ever)
-    produced a port under this name -- is indistinguishable in Block 1 from
-    "hasn't arrived this tick" without a live component manifest, so both
-    stay a silent empty result (checked with the user, `S-B1Δ`)."""
+def test_a_self_ref_matching_nothing_yields_a_named_unavailable_placeholder():
+    """`AR-53` (2026-08-07), supersedes `UT-B1-15`'s own original reading:
+    zero matches -- this run's known ports contain nothing this `self.<port>`
+    reference could ever resolve to -- used to stay a silent empty result on
+    the reasoning that "does not exist" and "hasn't arrived this tick" were
+    indistinguishable without a live manifest (`S-B1Δ`). That reasoning
+    expired at `S-C1d`: manifests are live, so a zero-match placeholder
+    layer is now returned instead, named and carrying no prims, so the
+    layer list can say "unavailable" rather than looking identical to
+    "never fired". The wrapped function itself is still never called --
+    there is nothing for it to read."""
     calls = []
 
     @layer_provider("sim.test.gating.unmatched_self_ref", requires=("self.needed",))
@@ -86,7 +92,10 @@ def test_a_self_ref_matching_nothing_yet_yields_no_layers_and_raises_nothing():
 
     ctx = _ctx_with_ports({}, known_ports=frozenset({"a.other"}))
     result = _provider(ctx)
-    assert result == ()
+    assert len(result) == 1
+    assert result[0].id == "sim.test.gating.unmatched_self_ref"
+    assert result[0].prims == ()
+    assert result[0].unavailable is not None and "self.needed" in result[0].unavailable
     assert calls == []
 
 

@@ -211,13 +211,22 @@ def test_warning_layer_binds_correctly_under_a_renamed_stage():
     assert left_circle.style == "status.warning"
 
 
-def test_warning_layer_yields_nothing_when_the_run_never_produced_bsd_outputs():
-    """The port genuinely isn't part of this run -- Block 1 has no live
-    manifest to call this an error, so it stays a silent empty result
-    (checked with the user, `S-B1Δ`), same as `UT-B1-1`'s own gating."""
+def test_warning_layer_is_named_unavailable_when_the_run_never_produced_bsd_outputs():
+    """`AR-53` (2026-08-07), supersedes this test's own original reading:
+    the port genuinely isn't part of this run -- `bsd.warning`'s own
+    `requires=("self.bsd.outputs",)` has zero matches against this run's
+    known ports. Used to stay a silent empty result on the reasoning that
+    Block 1 had no live manifest to call this an error (`S-B1Δ`); that
+    reasoning expired at `S-C1d` (manifests are live). Now a placeholder
+    layer, named and carrying no prims, so a BSD scenario recorded without
+    BSD's own outputs reads "unavailable" in the layer list rather than
+    looking identical to "BSD never warned"."""
     tick = _make_tick(0, veh_dyn=_veh_dyn())  # a real tick, just no bsd stage at all
     ctx = _ctx((tick,))
-    assert bsd.warning_layer(ctx) == ()
+    result = bsd.warning_layer(ctx)
+    assert len(result) == 1
+    assert result[0].prims == ()
+    assert result[0].unavailable is not None and "bsd.outputs" in result[0].unavailable
 
 
 def test_padding_slots_produce_no_prims():

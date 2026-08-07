@@ -2682,7 +2682,21 @@ lines of `modules/df/sim/`, all in the same shape:
       caller already past that gate (`LayerCtx.port`). A perfectly precise
       "does not exist anywhere, ever" check needs a live component manifest —
       out of reach until `S-C8`/`S-D3`'s per-session plug-in scoping exists —
-      and is recorded here as a scoped gap, not solved by this stage
+      and is recorded here as a scoped gap, not solved by this stage.
+      **Superseded 2026-08-07 (`AR-53`, audit run 4): the scoped gap closed
+      for real — "raises loudly" was the wrong fix (it would crash every
+      layer provider rendering a recording that simply does not include the
+      component it draws for, the ordinary case), but silent `()` was also
+      wrong once manifests went live (`S-C1d`, 2026-08-04): "does not exist"
+      and "this run never wired that component" no longer need a live
+      manifest to distinguish from "the plug-in author is watching a badge
+      say so." A zero-match `requires=` entry now returns a ONE-element
+      tuple carrying a placeholder `Layer(prims=(), unavailable=<reason>)`
+      instead of `()` — named in the layer list, never dropped, never
+      crashing, and never claiming a value nobody published. The "resolved
+      but not yet arrived this tick" case is genuinely different (transient,
+      will populate) and is UNCHANGED, still a silent `()`. See `scene/
+      registry.py`'s `gated()` and `scene/types.py`'s `Layer.unavailable`
 - [x] **A layer provider reads disk** — `_bsd_calibration()` calls
       `path.read_text()` on `df`'s project YAML **per tick**, which `R-SIM-2`
       forbids outright ("a provider never touches disk") and which bypasses
@@ -2700,7 +2714,12 @@ lines of `modules/df/sim/`, all in the same shape:
       `self.<port>` `requires=` entry ambiguous across this run's known ports
       raises naming the plug-in; one matching zero ports, or matching but not
       yet present this tick, stays a silent empty result without raising
-      (`test_b1_registry_gating.py`)
+      (`test_b1_registry_gating.py`). **Revised 2026-08-07 (`AR-53`)**: "zero
+      ports" no longer stays silent — see the superseded note above —
+      `test_b1_registry_gating.py`'s own test for that case is renamed
+      `test_a_self_ref_matching_nothing_yields_a_named_unavailable_placeholder`
+      and asserts the placeholder, not an empty tuple. The "matching but not
+      yet present this tick" half is unchanged
 
 *Scope added 2026-07-31 (`OQ-13`). The concept count was never an API problem —
 it was a documentation one — but one line of it is real ergonomics:*

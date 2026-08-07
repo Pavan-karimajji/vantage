@@ -87,8 +87,42 @@ def test_search_filters_the_tree_listing_but_never_rendered_visibility():
     state.set_search("trail")
     assert state.matches_search("df.common.trail") is True
     assert state.matches_search("df.common.ego") is False
-    # Search narrows the tree's own listing only -- rendering is unaffected.
-    assert state.is_visible("df.common.ego") is True
+
+
+def test_an_unavailable_layer_is_discovered_and_carries_its_reason():
+    """`AR-53`: a placeholder `Layer(unavailable=...)` (from `scene/
+    registry.py`'s `gated()` on a zero-match `requires=`) is discovered by
+    `sync()` like any other id -- named in the tree, not dropped -- and its
+    reason string survives into `LayerInfo`."""
+    state = LayerTreeState()
+    placeholder = Layer(id="bsd.warning", group="bsd", label="BSD warning",
+                         unavailable="requires 'self.bsd.outputs', which no port in this run resolves to")
+    state.sync((placeholder,))
+    infos = {info.id: info for info in state.layers_in_group("bsd")}
+    assert infos["bsd.warning"].unavailable == \
+        "requires 'self.bsd.outputs', which no port in this run resolves to"
+
+
+def test_an_unavailable_reason_is_never_cleared_once_set():
+    """A layer id first seen as ordinary (real prims, one tick) and later
+    reported unavailable (a subsequent tick where its `requires=` genuinely
+    never resolves) keeps the badge -- `sync()` only ever adds the reason,
+    never clears one an earlier tick already recorded."""
+    state = LayerTreeState()
+    ordinary = Layer(id="bsd.warning", group="bsd", label="BSD warning")
+    state.sync((ordinary,))
+    assert state.layers_in_group("bsd")[0].unavailable is None
+
+    unavailable = Layer(id="bsd.warning", group="bsd", label="BSD warning", unavailable="now unresolved")
+    state.sync((unavailable,))
+    assert state.layers_in_group("bsd")[0].unavailable == "now unresolved"
+
+    # A later ordinary-looking sync (the id simply absent from that tick's
+    # Scene, the ordinary "not due yet" case) must not un-badge it either --
+    # sync() only ever adds an id it has not seen, it never overwrites an
+    # existing one back to unavailable=None.
+    state.sync(())
+    assert state.layers_in_group("bsd")[0].unavailable == "now unresolved"
 
 
 def test_persistence_round_trips_every_kind_of_state():

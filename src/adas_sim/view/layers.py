@@ -35,6 +35,11 @@ class LayerInfo:
     label: str
     level: int
     default_on: bool
+    #: `AR-53`: the reason string from `Layer.unavailable`, or `None` for an
+    #: ordinary layer. Once discovered as unavailable, stays that way for
+    #: this tree's lifetime -- `sync()` never downgrades an id, matching its
+    #: own "never removes a previously-seen id" discipline one step further.
+    unavailable: str | None = None
 
 
 class LayerTreeState:
@@ -54,7 +59,9 @@ class LayerTreeState:
         self._search: str = ""
 
     def sync(self, layers: Sequence[Layer]) -> None:
-        """Registers any layer id not seen before. Never removes a
+        """Registers any layer id not seen before, or updates an existing
+        one's `unavailable` reason (`AR-53`) -- everything else about a
+        known id is immutable once discovered. Never REMOVES a
         previously-seen id (a layer absent from one tick's `Scene` -- e.g. a
         gated provider with no port this tick -- must not vanish from the
         tree and silently reset the user's choice for it)."""
@@ -62,9 +69,20 @@ class LayerTreeState:
             if layer.id not in self._known:
                 self._known[layer.id] = LayerInfo(
                     id=layer.id, group=layer.group, label=layer.label or layer.id,
-                    level=layer.level, default_on=layer.default_on,
+                    level=layer.level, default_on=layer.default_on, unavailable=layer.unavailable,
                 )
                 self._group_level.setdefault(layer.group, 1)
+            elif layer.unavailable is not None and self._known[layer.id].unavailable is None:
+                # A layer id first discovered as ordinary (a real tick with
+                # real prims) but marked unavailable on a LATER tick -- e.g.
+                # the recording's known ports genuinely never include this
+                # one -- still deserves the badge; this only ever adds it,
+                # never clears one an earlier tick already set.
+                info = self._known[layer.id]
+                self._known[layer.id] = LayerInfo(
+                    id=info.id, group=info.group, label=info.label,
+                    level=info.level, default_on=info.default_on, unavailable=layer.unavailable,
+                )
 
     def groups(self) -> tuple[str, ...]:
         return tuple(sorted({info.group for info in self._known.values()}))

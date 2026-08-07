@@ -472,6 +472,21 @@ class LayersPanel(QtWidgets.QDockWidget):
             for info in self.state.layers_in_group(group):
                 if not self.state.matches_search(info.id):
                     continue
+                if info.unavailable is not None:
+                    # AR-53: named, not dropped -- nothing to check (no
+                    # prims exist regardless), so the checkbox itself is
+                    # disabled rather than merely unchecked, and the reason
+                    # is both in the label (visible without hovering) and
+                    # the tooltip (the full text, `R-SIM-25`/`NR-SIM-4`:
+                    # never truncate the one field whose job is being read).
+                    layer_item = QtWidgets.QTreeWidgetItem([f"{info.label} (unavailable)"])
+                    layer_item.setData(0, QtCore.Qt.ItemDataRole.UserRole, ("layer", info.id))
+                    layer_item.setFlags(layer_item.flags() & ~QtCore.Qt.ItemFlag.ItemIsUserCheckable)
+                    layer_item.setToolTip(0, info.unavailable)
+                    disabled_color = self._tree.palette().color(QtGui.QPalette.ColorRole.PlaceholderText)
+                    layer_item.setForeground(0, QtGui.QBrush(disabled_color))
+                    group_item.addChild(layer_item)
+                    continue
                 layer_item = QtWidgets.QTreeWidgetItem([info.label])
                 layer_item.setData(0, QtCore.Qt.ItemDataRole.UserRole, ("layer", info.id))
                 layer_item.setFlags(layer_item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)

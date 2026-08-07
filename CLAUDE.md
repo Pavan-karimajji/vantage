@@ -42,13 +42,17 @@ unfinished.** Normative rules: root `.claude/rules/sim.md` (`R-SIM-1..25`).
 - **A plug-in never spells a port address** (R-SIM-21). `self.<port>`, resolved
   against `LayerCtx.known_ports` (`ctx.port(...)`/`requires=`, `S-B1Δ`). An
   *ambiguous* match (more than one known port fits) is an `AuthoringError`,
-  never a guess; a *zero*-match `requires=` entry stays a silent empty layer —
-  Block 1 has no live component manifest, so "this port does not exist" and
-  "this run never wired that component" are indistinguishable from a
-  recording's own topics alone (checked with the user). This is the boundary
-  `GT-1` does *not* guard — it scans `src/` and stops exactly where a
-  component's plug-in begins (arch `D13`); `GT-11` (`scripts/
-  check_invariants.py`) is the mechanised check over `modules/*/sim/**`.
+  never a guess; a *zero*-match `requires=` entry returns a placeholder layer
+  — named, carrying no prims, badged `unavailable` in the layer list (`AR-53`,
+  2026-08-07) — never a value nobody published, and never silently absent
+  either: manifests are live (`S-C1d`), so "this port does not exist" and
+  "this run never wired that component" no longer need to be indistinguishable
+  the way they were before that stage landed. A resolved reference simply not
+  yet present *this tick* still stays a silent empty result (transient, will
+  populate). This is the boundary `GT-1` does *not* guard — it scans `src/`
+  and stops exactly where a component's plug-in begins (arch `D13`); `GT-11`
+  (`scripts/check_invariants.py`) is the mechanised check over
+  `modules/*/sim/**`.
 - **Authoring home ≠ deployed form** (R-SIM-20). Plug-ins are authored in
   `modules/<name>/sim/` and *copied* beside the library at build time, like the
   config bundle. "The player is standalone" and "the picture lives with the

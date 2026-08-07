@@ -214,6 +214,18 @@ class Layer:
     #: real debug port, never a silent one.
     derived: bool = False
 
+    #: `AR-53`: set (to the unresolved `self.<port>` reference, human-
+    #: readable) when a `requires=` entry never binds to any port this run
+    #: -- never a value any single ProPort published, so this layer carries
+    #: NO prims (`__post_init__` enforces it) and exists only to be named
+    #: and greyed in the layer list, instead of vanishing (`scene/
+    #: registry.py`'s own `gated()`, the one place this is set). Distinct
+    #: from the ordinary "no port yet this tick" case, which stays silently
+    #: absent on purpose (`view/layers.py`'s own `LayerTreeState.sync`
+    #: docstring) -- that one is transient and will populate; this one is
+    #: structural and will not, until the recording or the pipeline changes.
+    unavailable: str | None = None
+
     #: `S-D4`'s ground_truth/perception/perception.error group convention --
     #: framework-generic, not any one component's; R-SIM-1's banned-string
     #: grep names specific function ids, never a role vocabulary this general.
@@ -229,6 +241,13 @@ class Layer:
     _DERIVED_GROUP_SUFFIX = ".error"
 
     def __post_init__(self) -> None:
+        if self.unavailable is not None and self.prims:
+            raise AuthoringError(
+                expected="a Layer(unavailable=...) to carry no prims -- nothing was published to draw",
+                found=f"{len(self.prims)} prim(s) alongside unavailable={self.unavailable!r}",
+                where=f"Layer.__post_init__ (layer={self.id!r})",
+                hint="an unavailable layer names its own absence; it never also draws something (R-SIM-7)",
+            )
         if self.group.endswith(self._DERIVED_GROUP_SUFFIX) and not self.derived:
             raise AuthoringError(
                 expected=f"a Layer(group={self.group!r}) ending {self._DERIVED_GROUP_SUFFIX!r} to be derived=True",
