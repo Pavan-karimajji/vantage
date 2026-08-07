@@ -122,6 +122,15 @@ class Prim:
     # -- grid -----------------------------------------------------------------
     spacing_m: float | None = None
     extent_m: float | None = None
+    #: `AR-56` (2026-08-07): the lateral (world-y) grid line spacing, when it
+    #: legitimately differs from `spacing_m` (world-x) -- `None` means "same
+    #: as `spacing_m`". Not a new kind (the closed catalogue above is
+    #: unchanged): a grid with denser cross-lines at close range is still
+    #: one grid, the same way `width_px`/`offset_px` are optional per-kind
+    #: legibility fields already. The renderer, not the provider, decides
+    #: WHERE a grid's coordinate labels are drawn (R-SIM-2) -- this field is
+    #: only the physical fact of a second spacing for it to read.
+    spacing_lateral_m: float | None = None
 
     # -- heatmap ----------------------------------------------------------------
     x0_m: float | None = None

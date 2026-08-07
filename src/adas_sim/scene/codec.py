@@ -122,6 +122,8 @@ def _build_file_descriptor() -> _dpb.FileDescriptorProto:
     # renumbered, per this file's own "permanent once shipped" rule above.
     _field(prim, "bulk", 38, _FT.TYPE_MESSAGE, type_name=f".{_PACKAGE}.BulkRef")
     _field(prim, "derived", 39, _FT.TYPE_BOOL)
+    # Field 40+ added by `AR-56` (2026-08-07) -- same append-only rule.
+    _field(prim, "spacing_lateral_m", 40, _FT.TYPE_DOUBLE)
 
     layer = fdp.message_type.add()
     layer.name = "Layer"
@@ -164,7 +166,7 @@ _PRIM_SCALAR_FIELDS = (
     "cx_m", "cy_m", "length_m", "width_m", "yaw_rad", "height_m", "r_m", "a_m", "b_m",
     "x_m", "y_m", "dx_m", "dy_m", "text", "anchor",
     "spacing_m", "extent_m", "x0_m", "y0_m", "cell_dx_m", "cell_dy_m",
-    "data", "format", "derived",
+    "data", "format", "derived", "spacing_lateral_m",
 )
 
 

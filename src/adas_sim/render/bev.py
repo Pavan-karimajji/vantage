@@ -41,7 +41,40 @@ def _visible_prims(scene: Scene, layer_selection: frozenset[str] | None) -> list
     return pairs
 
 
-def _draw_prim(ax, prim: Prim, theme: Theme, selected: bool = False) -> None:
+#: `AR-56` (2026-08-07): two text labels closer than this in SCREEN pixels
+#: are a collision -- the second one is dropped rather than drawn on top of
+#: the first. A rough footprint, not real text metrics (`ax.text`'s actual
+#: rendered extent needs a draw pass to query); good enough to stop the
+#: worst case -- two labels stacked unreadably on each other -- without a
+#: second rendering pass. Tuned to roughly half an 8pt label's own width.
+_LABEL_COLLISION_RADIUS_PX = 18.0
+
+
+def _draw_text_avoiding_collisions(
+    ax, x_m: float, y_m: float, text: str, *, color: str, fontsize: float, zorder: float,
+    occupied_px: list[tuple[float, float]] | None, ha: str = "left", va: str = "baseline",
+) -> None:
+    """The one place any label reaches the canvas (`AR-56`) -- grid distance
+    labels and ordinary `text` prims both go through this, so a grid label
+    and an object label mutually avoid each other rather than each having
+    its own, inconsistent notion of "too close". `occupied_px=None` (the
+    overlay/HUD-text call sites, and any caller predating this) skips the
+    check entirely -- opt-in, not a behaviour change for existing callers
+    that never populate it."""
+    if occupied_px is not None:
+        # world (y_m, x_m) -> the SAME (horizontal, vertical) convention
+        # every other call in this module plots with -- ax.transData is
+        # already configured with this frame's xlim/ylim.
+        px, py = ax.transData.transform((y_m, x_m))
+        for ox, oy in occupied_px:
+            if (px - ox) ** 2 + (py - oy) ** 2 < _LABEL_COLLISION_RADIUS_PX ** 2:
+                return
+        occupied_px.append((px, py))
+    ax.text(y_m, x_m, text, color=color, fontsize=fontsize, zorder=zorder, ha=ha, va=va)
+
+
+def _draw_prim(ax, prim: Prim, theme: Theme, selected: bool = False,
+                occupied_px: list[tuple[float, float]] | None = None) -> None:
     style = resolve(prim.style, theme) if prim.style else None
     color = style.color if style else "#888888"
     if selected:
@@ -87,13 +120,56 @@ def _draw_prim(ax, prim: Prim, theme: Theme, selected: bool = False) -> None:
         ax.annotate("", xy=(prim.y_m + prim.dy_m, prim.x_m + prim.dx_m), xytext=(prim.y_m, prim.x_m),
                     arrowprops=dict(arrowstyle="->", color=color), zorder=prim.z)
     elif prim.kind == "text" and prim.text and None not in (prim.x_m, prim.y_m):
-        ax.text(prim.y_m, prim.x_m, prim.text, color=color, fontsize=8, zorder=prim.z)
+        _draw_text_avoiding_collisions(
+            ax, prim.x_m, prim.y_m, prim.text, color=color, fontsize=8, zorder=prim.z, occupied_px=occupied_px,
+        )
     elif prim.kind == "grid" and prim.spacing_m and prim.extent_m:
         n = int(prim.extent_m / prim.spacing_m)
         for i in range(-n, n + 1):
             d = i * prim.spacing_m
             ax.axhline(d, color=color, linewidth=0.4, alpha=0.5, zorder=prim.z)
+        spacing_lateral_m = prim.spacing_lateral_m or prim.spacing_m
+        n_lateral = int(prim.extent_m / spacing_lateral_m)
+        for i in range(-n_lateral, n_lateral + 1):
+            d = i * spacing_lateral_m
             ax.axvline(d, color=color, linewidth=0.4, alpha=0.5, zorder=prim.z)
+        # `AR-56` (2026-08-07): distance labels anchored near the frame
+        # MARGIN, never the crosshair -- the whole point of the fix (used
+        # to sit at a fixed small offset from the origin, directly on the
+        # ego box). Legible at any pan/zoom because it is computed from
+        # the CURRENT visible extent (`ax.get_xlim`/`get_ylim`), which only
+        # the renderer -- never a layer provider, R-SIM-2 -- may read. A
+        # label is only drawn for a grid line actually crossing the
+        # visible frame on the other axis; an off-screen line's label
+        # would render nowhere useful anyway.
+        x_left, x_right = ax.get_xlim()   # world-y, screen-horizontal, inverted (left > right)
+        y_bottom, y_top = ax.get_ylim()   # world-x, screen-vertical
+        margin_frac = 0.04
+        label_y_at_edge = x_right + margin_frac * (x_left - x_right)   # inset from the right screen edge
+        label_x_at_edge = y_bottom + margin_frac * (y_top - y_bottom)  # inset from the bottom screen edge
+        # A label whose own anchor sits too close to the FRAME edge (not
+        # the margin line above -- the actual raster boundary) draws half
+        # off-canvas, unreadable rather than merely tight. `ha="center"`
+        # labels (the lateral row) are the ones this actually bites --
+        # inset the visibility check itself by a small band, not just the
+        # anchor position, so the outermost label is skipped rather than
+        # clipped.
+        clip_x_m = 0.03 * abs(x_left - x_right)
+        clip_y_m = 0.03 * (y_top - y_bottom)
+        for i in range(-n, n + 1):
+            d = i * prim.spacing_m
+            if y_bottom + clip_y_m <= d <= y_top - clip_y_m:
+                _draw_text_avoiding_collisions(
+                    ax, d, label_y_at_edge, f"{d:.0f}", color=color, fontsize=7, zorder=prim.z,
+                    occupied_px=occupied_px, ha="right", va="center",
+                )
+        for i in range(-n_lateral, n_lateral + 1):
+            d = i * spacing_lateral_m
+            if min(x_left, x_right) + clip_x_m <= d <= max(x_left, x_right) - clip_x_m:
+                _draw_text_avoiding_collisions(
+                    ax, label_x_at_edge, d, f"{d:.0f}", color=color, fontsize=7, zorder=prim.z,
+                    occupied_px=occupied_px, ha="center", va="bottom",
+                )
     elif prim.kind == "heatmap" and prim.values:
         arr = np.array(prim.values)
         extent = (prim.y0_m, prim.y0_m + arr.shape[1] * prim.cell_dy_m,
@@ -130,10 +206,16 @@ def _draw_scene_figure(scene: Scene, viewport: Viewport, theme: Theme,
     fig.patch.set_facecolor("#1a1a19" if theme == "dark" else "#fcfcfb")
     ax.set_facecolor(fig.patch.get_facecolor())
 
+    # `AR-56`: one shared list for the whole frame, so a grid label and an
+    # object label -- drawn from entirely different providers -- still
+    # avoid each other (`_draw_text_avoiding_collisions`). Z-order already
+    # decides paint order (`_visible_prims`' own sort); collision order
+    # follows the same sequence, so a higher-`z` label wins a contested spot.
+    occupied_px: list[tuple[float, float]] = []
     for _layer, prim in _visible_prims(scene, layer_selection):
-        _draw_prim(ax, prim, theme, selected=prim.pick_id in selection)
+        _draw_prim(ax, prim, theme, selected=prim.pick_id in selection, occupied_px=occupied_px)
     for prim in overlay_prims:
-        _draw_prim(ax, prim, theme)
+        _draw_prim(ax, prim, theme, occupied_px=occupied_px)
 
     hud_color = "#dddddd" if theme == "dark" else "#333333"
     for i, line in enumerate(hud_lines):

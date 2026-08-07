@@ -2606,6 +2606,19 @@ already required, or a new idea" rather than built blind:
    (BSD/lane scale, not highway scale), so 10m reads as too coarse there.
    Labels are bare numbers (`"10"`, not `"10m"`) — the axis is metres
    throughout, stated once rather than repeated on every tick.
+   **Superseded 2026-08-07 (`AR-56`):** this fixed pass drew every label at
+   a small, fixed metre offset from the coordinate origin (`y_m=0.4`/
+   `x_m=0.4`) — legible in isolation, but sitting directly on the ego box
+   and any near-origin object once actually rendered end to end, confirmed
+   real from a live PNG. Labels moved out of the provider entirely: the
+   grid `Prim` now carries `spacing_lateral_m` (the 5m/10m split above,
+   preserved) and the RENDERER draws the coordinate labels, anchored near
+   the current viewport's own margin rather than the crosshair — a
+   provider may not read the viewport (`R-SIM-2`), so this could only ever
+   be a renderer-side fix. See `render/bev.py`'s `spacing_lateral_m`
+   handling and label-margin anchoring, and `scene/default_layers.py`'s
+   `frame_layer` (formerly `df.common.frame`, moved by `AR-52` the same
+   day).
 2. **An ego "front" marker** (a roof/triangle shape on the body box, so
    heading reads at a glance). Checked every doc this plan cites for BEV
    content (`sim_visualization_spec.md`, `sim_requirements.md`) — no such
@@ -2634,7 +2647,9 @@ already required, or a new idea" rather than built blind:
    trail at all** for them rather than a fabricated curve — a flat dot
    pretending to be a trail would be worse than no trail. Golden fixtures
    regenerated: `df.common.trail` is absent from every golden `Scene` now,
-   and `df.common.frame` grew from 6 to 46 prims (the new grid labels).
+   and `df.common.frame` grew from 6 to 46 prims (the new grid labels; back
+   down to 6 as of `AR-56`, 2026-08-07 — the labels are the renderer's own
+   now, not baked prims).
 
 **Discipline** (every stage)
 - [x] portability §3 ticked — exposure: `P-1`, `P-3` (a viewpoint or layer file

@@ -51,28 +51,30 @@ _TRAIL_WINDOW_TICKS = 60
 @layer_provider("sim.frame", group="sim")
 def frame_layer(ctx: LayerCtx) -> tuple[Layer, ...]:
     """Grid + origin/axis furniture -- needs only the project model, no
-    port. Distance labels (`frame.grid_label`, sim_visualization_spec.md
-    §3.2) give the grid actual coordinate references. Bare numbers, no unit
-    suffix repeated at every tick -- the axis is metres throughout,
-    stated once, not on every label."""
+    port. `spacing_lateral_m` gives the grid a denser cross-spacing at
+    close range without a second kind (`AR-56`, 2026-08-07).
+
+    **`AR-56`: distance labels moved out of this provider entirely.** They
+    used to be `text` prims baked at a small, fixed metre offset from the
+    origin (`y_m=0.4`/`x_m=0.4`) -- which reads fine in isolation but sits
+    directly on the ego box and any near-origin object once actually
+    rendered (confirmed real, `sim_audit_log.md` `AR-56`: "`-5` sits on the
+    ego box"). Where a label belongs on screen is a function of the
+    CURRENT VIEWPORT's visible edges, which this provider is not allowed to
+    read (`R-SIM-2`) -- so the renderer now draws them, anchored near the
+    frame margin instead of the crosshair, from this grid `Prim`'s own
+    `spacing_m`/`spacing_lateral_m`/`extent_m` (`render/bev.py`)."""
     prims = [
-        Prim(kind="grid", spacing_m=_GRID_SPACING_M, extent_m=_GRID_EXTENT_M, style="frame.grid", z=0),
+        Prim(
+            kind="grid", spacing_m=_GRID_SPACING_M, spacing_lateral_m=_LATERAL_LABEL_SPACING_M,
+            extent_m=_GRID_EXTENT_M, style="frame.grid", z=0,
+        ),
         Prim(kind="circle", cx_m=0.0, cy_m=0.0, r_m=0.15, style="frame.origin", z=1),
         Prim(kind="arrow", x_m=0.0, y_m=0.0, dx_m=1.0, dy_m=0.0, style="frame.axis", z=1),
         Prim(kind="arrow", x_m=0.0, y_m=0.0, dx_m=0.0, dy_m=1.0, style="frame.axis", z=1),
         Prim(kind="text", x_m=1.1, y_m=0.0, text="+x", style="frame.axis", z=1),
         Prim(kind="text", x_m=0.0, y_m=1.1, text="+y", style="frame.axis", z=1),
     ]
-    x_steps = int(_GRID_EXTENT_M / _GRID_SPACING_M)
-    for i in range(1, x_steps + 1):
-        d = i * _GRID_SPACING_M
-        prims.append(Prim(kind="text", x_m=d, y_m=0.4, text=f"{d:.0f}", style="frame.grid_label", z=1))
-        prims.append(Prim(kind="text", x_m=-d, y_m=0.4, text=f"{-d:.0f}", style="frame.grid_label", z=1))
-    y_steps = int(_GRID_EXTENT_M / _LATERAL_LABEL_SPACING_M)
-    for i in range(1, y_steps + 1):
-        d = i * _LATERAL_LABEL_SPACING_M
-        prims.append(Prim(kind="text", x_m=0.4, y_m=d, text=f"{d:.0f}", style="frame.grid_label", z=1))
-        prims.append(Prim(kind="text", x_m=0.4, y_m=-d, text=f"{-d:.0f}", style="frame.grid_label", z=1))
     return (Layer(id="sim.frame", group="sim", prims=tuple(prims), label="Frame", level=1),)
 
 

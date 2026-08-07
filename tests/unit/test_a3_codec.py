@@ -47,6 +47,20 @@ def test_bulk_ref_and_derived_round_trip():
     assert decode_scene(encode_scene(scene)) == scene
 
 
+def test_grid_spacing_lateral_m_round_trips():
+    """`AR-56` (2026-08-07): `Prim.spacing_lateral_m` (field 40) survives
+    encode/decode like every other field -- caught real by
+    `test_b1_replay.py`'s own golden comparison the first time this field
+    was added without a matching codec entry (`_PRIM_SCALAR_FIELDS` is the
+    single list both directions read; a field absent from it round-trips
+    as `None` regardless of what was set, which is exactly the mismatch
+    that surfaced)."""
+    prim = Prim(kind="grid", spacing_m=10.0, spacing_lateral_m=5.0, extent_m=100.0, style="frame.grid")
+    layer = Layer(id="sim.test.frame", group="sim", prims=(prim,))
+    scene = Scene(t_s=0.5, layers=(layer,))
+    assert decode_scene(encode_scene(scene)) == scene
+
+
 def test_a_higher_minor_version_still_reads_unknown_fields_skipped():
     """UT-A3-8: a future minor version's extra field is invisible to this
     reader but does not raise, and every field this reader knows survives."""
