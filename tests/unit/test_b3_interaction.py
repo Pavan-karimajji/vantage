@@ -17,7 +17,10 @@ import pytest
 
 from adas_sim.core.errors import AuthoringError
 from adas_sim.core.history import Interaction, interaction_cache_key
-from adas_sim.core.runner import SceneCache
+from adas_sim.core.runner import SceneCache, build_reactive_layers
+from adas_sim.core.session import Session
+from adas_sim.core.tick import Pose2D, Tick
+from adas_sim.model.project import ProjectModel
 from adas_sim.scene.registry import layer_provider, registered_providers
 from adas_sim.scene.types import Layer, Scene
 
@@ -102,3 +105,38 @@ def test_scene_cache_reactive_tier_recomputes_only_on_interaction_change():
     cache.get(0, frozenset(), "dark", Interaction(cursor=(3.0, 4.0)))
     assert len(static_calls) == 1
     assert len(reactive_calls) == 2
+
+
+def test_build_reactive_layers_forwards_model_like_build_static_scene_does(tmp_path):
+    """A real regression (found 2026-08-07 investigating a report that
+    `ctx.model.bundle_dir` came back `None` in a live render):
+    `build_reactive_layers`'s own `model=` parameter was never forwarded to
+    `_build_layer_ctx` -- `build_scene`/`build_static_scene` both do, this
+    one silently didn't, so a reactive provider (`reacts_to=`) would see a
+    freshly re-resolved checkout-only `ProjectModel` instead of the
+    caller's real one. Harmless only because no provider declares
+    `reacts_to=` yet (`AR-52`..`AR-57`'s own layers all don't) -- this test
+    exists so the day one does, this stays caught rather than silently
+    reintroduced."""
+    seen_bundle_dirs: list = []
+
+    @layer_provider("sim.test.interaction.model_forwarding", reacts_to=("cursor",))
+    def _provider(ctx):
+        seen_bundle_dirs.append(ctx.model.bundle_dir)
+        return (Layer(id="sim.test.interaction.model_forwarding", group="g", prims=()),)
+
+    bundle_dir = tmp_path / "config"
+    (bundle_dir / "vehicle").mkdir(parents=True)
+    (bundle_dir / "vehicle" / "ego_params.yaml").write_text(
+        "EGO_LENGTH_M: 4.5\nEGO_WIDTH_M: 1.8\nEGO_WHEELBASE_M: 2.7\nEGO_OVERHANG_FRONT_M: 0.9\n",
+        encoding="utf-8",
+    )
+    model = ProjectModel.resolve(library_dir=bundle_dir, project="base")
+    assert model.bundle_dir == bundle_dir  # sanity: the fixture itself resolves as intended
+
+    pose = Pose2D(x_m=0.0, y_m=0.0, yaw_rad=0.0)
+    tick = Tick(index=0, t_ns=0, dt_ns=0, ports={}, pose=pose)
+    session = Session(run_id="r", name="s", ticks=(tick,))
+
+    build_reactive_layers(session, 0, model=model)
+    assert seen_bundle_dirs == [bundle_dir]

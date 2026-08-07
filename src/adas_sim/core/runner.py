@@ -249,7 +249,7 @@ def build_reactive_layers(
 ) -> tuple[Layer, ...]:
     """`SceneCache`'s interaction-keyed tier: only providers that declared
     `reacts_to` (`sim_visualization_spec.md` §7.5)."""
-    ctx = _build_layer_ctx(session, tick_index, project=project, interaction=interaction)
+    ctx = _build_layer_ctx(session, tick_index, project=project, interaction=interaction, model=model)
     return _reactive_layers(ctx)
 
 
