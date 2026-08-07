@@ -1269,7 +1269,19 @@ boundary the first nine watched from only one side.*
       is a legitimate silent empty layer in Block 1's global-registry world,
       since "does not exist" and "this run never wired the component" are the
       same observation without a live manifest.
-      - [ ] `GT-11`
+      **Decided 2026-08-07 (`AR-54`, fix queue row 6):** `GT-11`'s
+      `_GT11_EXEMPT_PREFIXES = ("self.", "source.")` was flagged as
+      possibly ungrounded — `source` looks, at a glance, like a spelled
+      pipeline-authoring choice the way `df.bsd.outputs` was. It is not:
+      `contracts/pipeline.py` treats `source` as a reserved producer
+      keyword (`producer_name == "source"`), never a stage a pipeline
+      author could rename, so `R-SIM-21`'s own worry does not apply to it.
+      Justified in writing at `R-SIM-21` itself, with the real, narrower
+      limitation it does carry (`source.<port>` doesn't *resolve* the way
+      `self.<port>` does — it stops matching if the same data is ever
+      stage-computed instead of source-fed) recorded there as a deferred,
+      not-yet-live concern rather than fixed now.
+      - [x] `GT-11`
 *The two gates below were added by the 2026-07-31 adversarial audit
 (`sim_requirements.md` §12). Both exist because the claim they guard was
 previously carried by prose alone.*

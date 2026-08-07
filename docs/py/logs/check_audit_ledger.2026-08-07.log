@@ -8,6 +8,6 @@ Ledger
 ------
 rows  open  closed  superseded  wontfix
 ----  ----  ------  ----------  -------
-57    2     52      0           3
+57    0     54      0           3
 
 RESULT  ok -- 57 findings, every closed row names a landed-in target that resolves
