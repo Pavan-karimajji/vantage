@@ -6783,8 +6783,8 @@ against.
 >
 > | Box | State | Why |
 > |---|---|---|
-> | `ground_truth` / `perception` / `perception.error` layer groups | **reachable now** | a naming convention plus a provider; needs no objects to exist to be written |
-> | a source emitting camera/radar stimuli via `emits()` | **reachable now** | world-model-client work, independent of what perception computes |
+> | `ground_truth` / `perception` / `perception.error` layer groups | **done 2026-08-07** | see status note below — `perception.error` is now structurally enforced `derived=True`, not just named |
+> | a source emitting camera/radar stimuli via `emits()` | **camera done 2026-08-07, radar not attempted** | see status note below for why radar specifically stays out |
 > | `ST-D4-1` — ground truth vs perception side by side | **still blocked** | the perception side would be empty |
 > | `ST-D4-2` — **the invariant** | **still blocked** | the "real-upstream" arm produces no bytes to compare against the truth and stand-in arms |
 > | `ST-D4-3` — a split absorbs into an ingest map (`FR-SIM-71`) | **still blocked** | needs two manifest shapes to map between |
@@ -6820,17 +6820,71 @@ change — its declared field set was already sufficient. 7 new tests
 (`tests/unit/test_d4_image_view.py`), full suite re-run clean: 647 passed /
 28 skipped (was 640/28), `check_invariants.py` clean (`GT-1,2,3,6,11`).
 
+**Status: the layer-group and camera-source halves DONE 2026-08-07** (sim
+build queue, S-D4 follow-up after `ST-D6-1`'s CI item closed). Two real,
+falsifiable pieces, neither a naming convention alone:
+
+- **`ground_truth`/`perception`/`perception.error` layer groups.**
+  `scene/types.py`'s `Layer.__post_init__` gains a second cross-field check
+  (beside the existing prim/layer `derived` one, `UT-A3-13`): a
+  `Layer(group="perception.error")` that is not also `derived=True` raises,
+  naming the group and the layer id. This gives the naming convention real
+  teeth rather than a comment — a perception-vs-ground-truth error is, by
+  construction, a comparison between two SEPARATE sources, never a value
+  any single `ProPort` published, so it is always a reconstruction
+  (`R-SIM-7`) and the framework now refuses to let a layer claim otherwise.
+  `ground_truth` and `perception` carry no such rule (both can legitimately
+  be real, published values) — proven by a third test asserting the rule
+  does NOT fire for them. 3 new tests, `tests/unit/test_a3_types.py`
+  (`test_a_perception_error_group_layer_must_be_derived`,
+  `..._marked_derived_is_accepted`, `test_an_unrelated_group_is_not_forced_derived`).
+  No real perception provider exists to REGISTER under these groups yet
+  (unchanged, still true) — this closes the FRAMEWORK half only, which is
+  exactly what "reachable now" meant: the convention now has an enforced
+  meaning waiting for the first real provider to adopt it, rather than a
+  string nobody checks.
+- **A source emitting camera stimulus, declared through `emits()`.**
+  `SyntheticSource` (`S-C2`) already IS a general-purpose emitter — no new
+  `Source` class was needed, since its `emits()` is the union of whatever
+  port names a caller's script declares. What was unproven: that a
+  source's declared `frame` port is genuinely usable against a REAL
+  component's REAL declared input, not merely a name that happens to match.
+  `tests/system/test_d4_camera_source.py` (new, real `perception_core_sil.dll`
+  from build queue row 1): a `SyntheticSource` emits real
+  `adas.isp.ProcessedFrame` bytes (message class resolved from the DLL's
+  own `descriptor_set`, `R-SIM-11` — no `interfaces` import) across three
+  ticks with DISTINCT content each tick; `Pipeline.load` validates the
+  `source.frame`/`source.egoDyn` wiring against the real manifest; the real
+  DLL executes against it (`adasExec`'s no-op accepts the call without
+  error); the recording's `source/frame` topic decodes back to EXACTLY the
+  scripted bytes per tick (not merely non-empty — a truncation or
+  misrouting bug would be caught). A second test proves `emits()` is
+  load-validated, not decorative: a pipeline naming `source.egoDyn` against
+  a source that never declared it is refused at `Pipeline.load`, naming
+  the missing port. 2 tests, both real DLL execution, no fixture faked.
+  **Radar deliberately not attempted, and why stated rather than left
+  silent**: no real component anywhere in this repo declares a
+  radar-shaped input port today, so a radar stimulus test would have
+  nothing to validate the wiring against — exactly the "asserts whatever
+  the code happens to do" shape a 2026-08-07 review warned this class of
+  work is prone to. Camera stays a real, falsifiable claim (a genuine
+  component, a genuine consuming port, a genuine round-trip); radar would
+  not have been.
+
+Full suite re-run: `pytest` 1007 passed / 10 skipped (the known
+`test_b3_viewport_controls.py` flake did not reproduce this run — it is
+non-deterministic, not always red), `check_invariants.py` clean,
+`docs/py/run_all.py` clean. **One real defect found and fixed landing
+this**: the `Layer.__post_init__` comment explaining the new
+`perception.error` rule literally quoted two of `GT-1`'s own banned
+function-id tokens as examples of what the grep catches — `GT-1` caught it
+in its own framework source, exactly as designed. Rephrased to describe
+the rule without quoting the banned vocabulary; `check_invariants.py` and
+the two `test_a1_check_invariants.py` tests it had turned red are clean
+again.
+
 **Explicitly NOT attempted, and why:**
 
-- **`ground_truth`/`perception`/`perception.error` layer groups** — these
-  are a NAMING CONVENTION a real provider adopts when it registers
-  (`group="perception"` etc.), not free-standing code; there is no real
-  perception provider to apply them to (see below), so there is nothing to
-  build here yet beyond the string itself
-- **A source emitting camera/radar stimuli via `emits()`** — a real
-  world-model client (CARLA-shaped or otherwise), materially bigger and a
-  different kind of work than the pure geometry above; not attempted this
-  pass
 - **`ST-D4-1`/`ST-D4-2`** — correctly stay un-attempted, per the stage's OWN
   "Gating" note: both need a second real PERCEPTION component, which does
   not exist (`perception-core` has no real Conan package yet, `R-SIL-2`).
@@ -6844,11 +6898,12 @@ change — its declared field set was already sufficient. 7 new tests
       project Scene prims onto a camera frame.
       **`render/image_view.py` done**; `CameraModel` needed no completion
       (already sufficient as declared)
-- [ ] `ground_truth` and `perception` layer groups; `perception.error` as a
-      **derived** group, marked (`R-SIM-7`). **Not attempted** — see Status
-      note
-- [ ] A source emits camera/radar stimuli, declared through `emits()`.
-      **Not attempted** — see Status note
+- [x] `ground_truth` and `perception` layer groups; `perception.error` as a
+      **derived** group, marked (`R-SIM-7`). **Done 2026-08-07** — see
+      Status note: `Layer.__post_init__` structurally enforces
+      `group="perception.error"` implies `derived=True`
+- [x] A source emits camera stimuli, declared through `emits()`. **Camera
+      done 2026-08-07, radar not attempted** — see Status note for why
 
 **Tests**
 - [x] `UT-D4-1` projection round-trips for a known intrinsic/extrinsic pair.
@@ -6913,9 +6968,13 @@ change — its declared field set was already sufficient. 7 new tests
 - [ ] `ST-D4-1` + `ST-D4-2` green — two components in one pipeline, with the
       downstream component's entry byte-identical to its single-component form
       (`R-SIM-10`'s central invariant, first demonstrated here). **Not
-      closed** — correctly gated on a second real perception component that
-      does not exist yet; this pass lands only the pure-geometry half the
-      stage's own "Gating" note says is landable without one
+      closed** — correctly gated, still, on the decomposition decision named
+      in the 2026-08-07 restatement above, never on a missing component (one
+      exists, `perception-core`, and it publishes nothing by design). This
+      pass lands the pure-geometry half (2026-08-05) plus the two other
+      boxes the restatement's own table marks reachable without an
+      algorithm — layer groups and a camera-emitting source — which is
+      every box this stage can land before that decision is made
 
 ### S-D5 — Package the player
 

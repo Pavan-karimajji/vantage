@@ -9,7 +9,7 @@ Summary
 -------
 priority  proven  partial  unproven  no test id  parked  total
 --------  ------  -------  --------  ----------  ------  -----
-P0        12      3        1         1           0       17
+P0        13      2        1         1           0       17
 P1        43      2        10        7           1       63
 P2        0       0        0         0           0       0
 
@@ -22,7 +22,7 @@ id         state       done  requirement                                   outst
 CR-SIM-1   proven      1/1   The framework names no function               -                      GT-1:x
 FR-SIM-47  proven*     3/3   The UI and the concept must be lean, and not  -                      GT-8: , MC-5:
 FR-SIM-66  proven      3/3   Vantage must adapt to recordings it did not   -                      -
-FR-SIM-46  partial     2/3   One tool, not a developer tool and a project  ST-D6-1                GT-8: , GT-9:
+FR-SIM-46  proven*     3/3   One tool, not a developer tool and a project  -                      GT-8: , GT-9:
 NR-SIM-21  proven      2/2   Mass-scale runs must be expressible           -                      -
 FR-SIM-70  partial     2/3   The outcome is a **player application**, not  ST-D5-1                -
 FR-SIM-64  proven*     2/2   A component's plug-ins must be *delivered*,   -                      GT-12:
@@ -43,8 +43,7 @@ id         pri  done  requirement                                   outstanding 
 ---------  ---  ----  --------------------------------------------  ---------------------  ------------------
 FR-SIM-3   P1   1/2   Scale to perception                           ST-D4-1                -
 FR-SIM-15  P1   1/2   A component ships a default workspace         UT-B3-11               -
-FR-SIM-46  P0   2/3   One tool, not a developer tool and a project  ST-D6-1                GT-8: , GT-9:
 FR-SIM-70  P0   2/3   The outcome is a **player application**, not  ST-D5-1                -
 NR-SIM-40  P0   1/2   Determinism must be measured across the axes  ST-C6-4                -
 
-RESULT  ok — every cited verifier resolves to a unit of work (55 proven, 5 partial, 11 unproven, 8 verified by other means)
+RESULT  ok — every cited verifier resolves to a unit of work (56 proven, 4 partial, 11 unproven, 8 verified by other means)

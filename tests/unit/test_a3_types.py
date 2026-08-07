@@ -138,3 +138,31 @@ def test_layer_with_derived_true_may_legitimately_mix_real_and_derived_prims():
     layer = Layer(id="sim.test.mixed", group="sim", prims=(real_prim, derived_prim), derived=True)
     assert layer.prims[0].derived is False
     assert layer.prims[1].derived is True
+
+
+def test_a_perception_error_group_layer_must_be_derived():
+    """`S-D4`'s ground_truth/perception/perception.error group convention:
+    a perception-vs-ground-truth error is always a reconstructed comparison
+    between two separate sources, never a value any single port published
+    (`R-SIM-7`) -- so `Layer(group="perception.error", derived=False)` is
+    refused, not merely discouraged by naming."""
+    with pytest.raises(AuthoringError) as excinfo:
+        Layer(id="sim.test.perception_error", group="perception.error", derived=False)
+    assert "perception.error" in str(excinfo.value)
+
+
+def test_a_perception_error_group_layer_marked_derived_is_accepted():
+    """Converse of the above: the same group with `derived=True` is exactly
+    the marked stopgap `R-SIM-7` asks for, and constructs without error."""
+    layer = Layer(id="sim.test.perception_error", group="perception.error", derived=True)
+    assert layer.group == "perception.error"
+    assert layer.derived is True
+
+
+def test_an_unrelated_group_is_not_forced_derived():
+    """The rule fires for `"perception.error"` specifically, not for every
+    group -- an ordinary group (e.g. real ground-truth or perception output,
+    which genuinely is a published value) stays `derived=False` freely."""
+    for group in ("ground_truth", "perception", "sim"):
+        layer = Layer(id=f"sim.test.{group}", group=group, derived=False)
+        assert layer.derived is False

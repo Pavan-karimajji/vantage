@@ -214,7 +214,24 @@ class Layer:
     #: real debug port, never a silent one.
     derived: bool = False
 
+    #: `S-D4`'s ground_truth/perception/perception.error group convention --
+    #: framework-generic, not any one component's; R-SIM-1's banned-string
+    #: grep names specific function ids, never a role vocabulary this general.
+    #: A perception-vs-ground-truth error is, by construction, a comparison
+    #: between two SEPARATE sources -- never a value any single ProPort
+    #: published -- so it is always a reconstruction (R-SIM-7), and this
+    #: group is the one whose name states that plainly enough to enforce.
+    _DERIVED_GROUP = "perception.error"
+
     def __post_init__(self) -> None:
+        if self.group == self._DERIVED_GROUP and not self.derived:
+            raise AuthoringError(
+                expected=f"a Layer(group={self._DERIVED_GROUP!r}) to be derived=True",
+                found=f"Layer(group={self.group!r}, derived=False)",
+                where=f"Layer.__post_init__ (layer={self.id!r})",
+                hint="a perception-vs-ground-truth error is always a reconstructed "
+                     "comparison, never a value any single port published (R-SIM-7)",
+            )
         for prim in self.prims:
             if prim.derived and not self.derived:
                 raise AuthoringError(
