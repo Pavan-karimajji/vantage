@@ -6745,6 +6745,42 @@ now; `ST-D4-1` is written now and skips with a named reason. Writing the system
 test early is deliberate — it is the specification the second component is built
 against.
 
+> **▶ THE BLOCKER CHANGED IDENTITY — re-stated 2026-08-07.** The sentence above
+> is now misleading in both directions, so read this instead.
+>
+> **A second real component now exists.** `perception-core` gained its
+> generic-ABI shim on 2026-08-06 (build queue row 1): real MSVC/Conan build,
+> **11/11 gtest** on `-P base` and `-P cus1`, `perception_core_sil.dll`
+> produced, manifest declaring `frame`/`egoDyn` in and
+> `genObjectList`/`compState` out — where `genObjectList` is **byte-for-byte
+> the type `df` consumes** on its own `objects` port. So the ABI, manifest,
+> bundle and plug-in chain are all proven end to end.
+>
+> **What it does not have is an algorithm.** `adasExec` is a deliberate no-op:
+> every `ProPort` stays `updated == false` (`R-SIM-7` — never invent a value
+> nobody computed). **So perception-core publishes nothing**, and that decides
+> exactly which boxes are now reachable:
+>
+> | Box | State | Why |
+> |---|---|---|
+> | `ground_truth` / `perception` / `perception.error` layer groups | **reachable now** | a naming convention plus a provider; needs no objects to exist to be written |
+> | a source emitting camera/radar stimuli via `emits()` | **reachable now** | world-model-client work, independent of what perception computes |
+> | `ST-D4-1` — ground truth vs perception side by side | **still blocked** | the perception side would be empty |
+> | `ST-D4-2` — **the invariant** | **still blocked** | the "real-upstream" arm produces no bytes to compare against the truth and stand-in arms |
+> | `ST-D4-3` — a split absorbs into an ingest map (`FR-SIM-71`) | **still blocked** | needs two manifest shapes to map between |
+>
+> **The remaining blocker is a decision, not a task**, and it is not this
+> plan's to take: whether `perception-core` stays one component or splits into
+> computer-vision + fusion
+> (`modules/perception-core/docs/perception_core_decomposition.md`). An
+> algorithm written before that is answered is an algorithm written into a
+> shape that may not survive.
+>
+> **Do not read "a second real component exists" as "`S-D4`'s gate is
+> reachable".** Row 1 bought the *chain*; it did not buy the *demonstration*.
+> This box was corrected after a review asserted the opposite from the stage's
+> own stale gating line — the same defect the line itself now warns about.
+
 **Must not.** Let the downstream component learn where its input came from. If
 anything in its entry path branches on the upstream stage's `mode` or `impl`,
 the invariant is already broken and no test after this will catch it.
