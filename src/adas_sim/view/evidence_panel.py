@@ -17,18 +17,19 @@ stays headless-testable, the same discipline `view/pipeline_panel.py` and
 or address is never shown -- there is no separate invalidation to get
 wrong.
 
-**Address, not yet prim -- the still-open half of `R-SIM-25`'s join.** A
-rendered `Prim`'s `pick_id` does not yet resolve to the port/topic that
-produced it; that join (`Layer.id` -> a provider's resolved `requires` ->
-ports) is `ST-D6-3`'s own separate, still-open scope (`sim_implementation_
-plan.md`'s R39 row). This panel accepts whatever address the caller
-selects -- today, `MainWindow` tries the current BEV selection's `pick_id`
-directly -- and degrades exactly the way `evidence()` already does for
-anything unresolved: `kind="unknown"`, every field `format_evidence`
-cannot fill reading `"unknown"` (`R-SIM-25`, `NR-SIM-4`), never a guess.
-That degrade is honest today (most `pick_id`s are not port names) and
-becomes precise for free once `ST-D6-3` lands the real join -- this
-class's contract does not change, only what address it is handed.
+**Address or prim -- `R-SIM-25`'s join, closed at `ST-D6-3`.** A rendered
+`Prim`'s `pick_id` resolves to the port/topic that produced it
+(`core.evidence._resolve_prim`: `Layer.id` -> a provider's declared
+`requires` -> `contracts.binding.try_resolve_component_ref`), so
+`kind="prim"` now joins `"run_id"`/`"port"`/`"unknown"`. This panel needed
+no edit to gain it -- `MainWindow` already passes the current BEV
+selection's `pick_id` straight through as `address` (predating this
+change), and `evidence()` tries it as a port, then a prim, before
+degrading. **One honest limit stays**: a `pick_id` from a layer provider
+never imported into this process (no plug-in loaded, `S-C8`'s own separate
+scope) still degrades to `kind="unknown"` -- there is no `Prim` to find,
+so `format_evidence` prints `"unknown"` on every field it cannot fill
+(`R-SIM-25`, `NR-SIM-4`), never a guess.
 """
 
 from __future__ import annotations

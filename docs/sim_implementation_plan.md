@@ -7281,7 +7281,7 @@ a self-timed session.
       Windows verification loop reports it `skipped`, not `passed`. `GT-8`'s
       own timing measurement needs a real newcomer, not a self-timed
       session, and is not attempted here.
-- [ ] `ST-D6-3` **the evidence chain, end to end** (`FR-SIM-67`, `R-SIM-25`,
+- [x] `ST-D6-3` **the evidence chain, end to end** (`FR-SIM-67`, `R-SIM-25`,
       audit `A4`): selecting any prim answers — in one action — its port, topic,
       tick, origin tag, config bundle and component build, and whether the value
       was **published by the SUT or reconstructed by a layer** (`R-SIM-7`).
@@ -7289,8 +7289,58 @@ a self-timed session.
       if the two differ, the GUI has become the source of truth. Every piece
       already exists (`Prim.pick_id`, `PortValue.origin`, topic provenance,
       `bundle_origin`, `run_id`) — this test is that they are joined.
-      **Not attempted** — needs both a GUI to compare against and `sim
-      explain`'s completion
+      **Done 2026-08-06** (sim build queue row 4, sub-row 2): closes the
+      "still-open half of `R-SIM-25`'s join" `view/evidence_panel.py`'s own
+      docstring named. `core/evidence.py`'s `_resolve_prim` adds `kind="prim"`
+      to `evidence()`: `Layer.id` → the owning provider's declared `requires`
+      (`scene/registry.LayerProviderEntry.requires`, today used only for
+      tick-gating) → `contracts.binding.try_resolve_component_ref` (the same
+      tolerant resolver `LayerCtx.port` already calls) → the port's real
+      address, from which topic/origin/value are read exactly as `kind="port"`
+      already does. Also unblocked in the same pass: `config_bundle_sha256`/
+      `component_build_id`, resolved from `session.meta.components` by the
+      port's own stage prefix — populated for `kind="port"` too, not only
+      `kind="prim"`, and `layer_id`/`derived` (`Prim.derived`, R-SIM-7's
+      published-vs-reconstructed marker) for `kind="prim"`. **No GUI/CLI edit
+      needed for parity**: `MainWindow` already passed the BEV selection's raw
+      `pick_id` straight through as `address` (predating this row, `S-D3`
+      slice 5's own note), and `cli/explain.py --at` already just calls
+      `evidence()` then the shared `format_evidence` — "one producer, two
+      formatters" meant both surfaces gained `kind="prim"` for free.
+      **A real regression found and fixed in the same pass**: the naive
+      version rebuilt a full `Scene` (every currently-registered layer
+      provider, not just whichever might own the selected pick_id — one
+      process-global registry, `R-VAR-2`) on every unresolved-address lookup,
+      and a real component provider (`df/sim/layers/common.py`) crashed on a
+      session whose recording carried an undecoded port it assumed was
+      already a decoded message — turning an unrelated `kind="unknown"` test
+      into a hard crash (`tests/system/test_d3_evidence_panel_widget.py`'s
+      own unresolved-address case). Fixed by (a) skipping scene-building
+      entirely when `registered_providers()` is empty (the ordinary CLI/
+      unit-test case, cheap and correct), and (b) catching any exception
+      from `build_scene` and treating it as "no prim found" rather than
+      propagating — a provider's crash on data it was never designed for is
+      not *this* address's failure to resolve. New tests: `tests/unit/
+      test_d6_evidence_prim_join.py` (5, a test-scoped `@layer_provider`
+      registered with `requires=`, proving the join end to end, matching
+      value/origin/provenance against a direct port lookup, and the
+      unresolvable-pick_id degrade). Full suite re-run clean after the fix
+      (see Status note); `test_d3_evidence_panel_widget.py`'s two field-by-
+      field parity tests (resolved port, unresolved address) both still pass
+      unchanged. **Honest limit, stated rather than hidden**: `requires` is a
+      provider's own declaration, used today for gating, not a compiler-
+      verified list of every port its body reads — a provider calling
+      `ctx.port(...)` on a port outside its declared `requires=` resolves to
+      `topic=None` here, never a guess. **Also out of this row's scope,
+      surfaced not silently absorbed**: `S-C8`'s plug-in loading
+      (`model.plugins.PluginBundle.import_modules()`) is never actually
+      called anywhere in `app/`/`cli/` today — `registered_providers()` is
+      non-empty in the test suite only because test modules register their
+      own providers at import time, so `sim explain <pick_id>` run as a
+      real standalone CLI invocation (no test harness) still resolves
+      `kind="unknown"` for every real component's prims until that wiring
+      lands, a separate, pre-existing gap this row did not create and does
+      not close.
 - [x] `ST-D6-2` a pipeline with overrides resims reproducibly: two runs produce
       byte-identical outputs and identical manifests. **Done** —
       `tests/system/test_d6_override_determinism.py`: a real `const`
