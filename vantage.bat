@@ -26,6 +26,12 @@ if "%~1"=="" (
   echo                    [--pipeline ^<pipeline.yaml^> --search ^<dll dir^> --config ^<config path^>]
   echo   e.g. vantage.bat C:\path\to\run.mcap --plugin-root ..\df
   echo   e.g. vantage.bat C:\path\to\run.mcap --pipeline my_pipeline.yaml --search C:\path\to\dlls
+  echo.
+  echo   --plugin-root: point it at the component's SOURCE CHECKOUT ^(e.g. ..\df^),
+  echo   not a built library directory ^(e.g. ..\df\build-sil-vs2026\...\Release^) --
+  echo   df's own bsd.py still reads its calibration relative to itself and crashes
+  echo   under the built-directory copy ^(a real, scoped, documented gap in df, not
+  echo   here^). See sim_learn.md section 5 if this changes.
 )
 
 "%PYCMD%" "%~dp0scripts\vantage.py" %*
