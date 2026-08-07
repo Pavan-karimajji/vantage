@@ -83,6 +83,59 @@ different sessions.
 
 ---
 
+## Run 4 — 2026-08-07 — **the first time anyone looked at the product**
+
+Runs 1–3 audited documents, plans and code. This run did what none of them
+did: **ran `vantage.bat` on a real recording and looked at the picture.**
+
+```
+vantage.bat ..\df\tests\carla_testruns\bsd\bsd_ego_lane_exit.mcap --plugin-root ..\df
+```
+
+**Every finding below is invisible to the test suite.** At the moment they were
+found: **1008 passed / 10 skipped / 0 failed**, `check_invariants.py` clean,
+`run_all.py` all six checks green, every `P0` requirement reporting `proven`,
+`proven*` or `partial` against a named verifier. The suite proves the parts
+work. Nobody had asked whether the product does. **That gap is precisely what
+`MC-5` and `GT-8` exist for, and both are unrun** — so this run is the
+strongest available evidence that they are not optional bookkeeping.
+
+Evidence kept: `logs/vantage_look.png` (no plug-in root — blank) and
+`logs/vantage_with_plugins.png` (with `--plugin-root ..\df`).
+
+### Open
+
+| ID | Lvl | Fix | Finding | Owner | Raised |
+|---|---|---|---|---|---|
+| **AR-52** | 2 | code | **The framework ships zero layer providers, so `sim render <recording>` draws a blank frame and exits 0.** Measured: with no `--plugin-root`, `scene.registry._PROVIDERS` is `[]`; the PNG is a uniform dark rectangle and the CLI prints `wrote logs/vantage_look.png (tick 97, t=4.972s)` and returns success. **Every generic layer lives in `df`** — `df.common.ego`, `df.common.frame` (the ground grid), `df.common.hud`, `df.common.trail`, `df.common.objects`. None of those is a driving function's picture: an ego box, a metre grid and a speed readout are what *any* recording needs. So `vdy` or `perception-core` opened alone draws **nothing at all**, and a second component must re-author them or depend on `df`'s bundle. `sim_player.md` §6 Screen 2 promises *"the BEV, populated, at tick 0 … the layer list filled in from what the Scene actually contains. **The user has configured nothing.**"* — false for every recording unless the component happens to be `df`. **`R-SIM-1` forbids a *function's* name in the framework; it does not forbid the framework owning generic geometry** — reading it as "no layers at all" is what produced a player that cannot draw. | `S-B1`; `sim_player.md` §6 | 2026-08-07 |
+| **AR-53** | 4 | code | **On a BSD recording the BSD warning layer vanishes silently — the one thing the scenario exists to show.** `bsd.warning` declares `requires=("self.bsd.outputs",)`; this file carries only `carla/chase_camera`, `df/gen_object_list`, `df/veh_dyn`, so the reference resolves against nothing, `layer_provider`'s gating means **the provider is never called**, and the layer is absent from the `Scene` and therefore from the layer list (`sim_player.md` §3: *"derived entirely from the Scene … a layer exists by being emitted"*). Measured at tick 97: six layers, 74 prims, with `bsd.warning` and `df.common.trail` **not present at all** — not empty, absent. On screen that is **indistinguishable from "BSD never warned"**, the exact failure `R-SIM-21` and `modules/sim/CLAUDE.md` describe verbatim. That text excuses it because *"Block 1 has no live component manifest"* — **the reasoning expired at `S-C1d`** (2026-08-04): manifests are live, `sim probe` reads them, `R-SIM-23`'s ingest map exists. A missing layer must be **named and badged**, never dropped. | `S-B1Δ`/`S-D6`; `modules/sim/CLAUDE.md` (the expired exemption) | 2026-08-07 |
+| **AR-54** | 3 | code | **`GT-11` exempts the `source.` prefix, so the gate that exists to forbid spelled port addresses permits the two that ship.** `scripts/check_invariants.py:71` — `_GT11_EXEMPT_PREFIXES = ("self.", "source.")`. `df/sim/layers/common.py` declares `requires=("source.gen_object_list",)` (`df.common.objects`) and `requires=("source.veh_dyn",)` (`df.common.hud`): literal stage-qualified addresses, both clean under `GT-11`. **`source` is a pipeline stage name**, exactly the authoring choice `R-SIM-21` says a plug-in cannot know — rename that stage to `carla` or `replay` and both layers unbind silently. They work today by coincidence of this recording's naming. `CR-SIM-2` (`P0`) reads `proven*` on `GT-11` + `UT-B1-14` + `UT-C1c-22`. Either the exemption is justified **in writing at the rule**, or it goes and the two layers move to `self.`. | `S-B1Δ`; root `.claude/rules/sim.md` `R-SIM-21` | 2026-08-07 |
+| **AR-55** | 2 | code | **`vantage.bat` tells the user to point at a source checkout because the *delivered* form crashes — the exact inversion of `R-SIM-20`.** Its own help text: *"`--plugin-root`: point it at the component's SOURCE CHECKOUT (e.g. `..\df`), not a built library directory … `df`'s own `bsd.py` still reads its calibration relative to itself and crashes under the built-directory copy."* `R-SIM-20` says *"a checkout is not a delivery mechanism"*, and `FR-SIM-64` (`P0`, reporting `proven*`) requires plug-ins **delivered, not merely checked out**, with *"point Vantage at a folder of DLLs and it draws them"* true by construction. The packing mechanism is real and tested (`AR-26`); what was never tested is that a plug-in **renders** from its deployed copy — `ST-C8-1`/`ST-C8-2` prove load-and-register only. | `S-C8`; `modules/df/sim/layers/bsd.py` | 2026-08-07 |
+| **AR-56** | 4 | code | **The BEV as rendered is not legible.** From `logs/vantage_with_plugins.png` at tick 97: (a) **axis tick labels are drawn along the centre crosshair** rather than at the plot margins, so `-5` sits on the ego box and the `ego 72km/h, yaw +0.0deg/s` readout overlaps both the ego and an object label; (b) the two `bsd.sensor_fov` wedges occupy roughly **60% of the frame** at default zoom, drawn to `RANGE_MAX_CAR_M` with no clip or fade, so a debug overlay dominates a picture opened to see objects — against `sim_player.md` §2's *"a concept earns screen space by being wrong"*; (c) labels have no collision avoidance. `FR-SIM-10` (*"a state-of-the-art 2D BEV, and it is **the** developer view"*) is verified by `MC-1` + viz §16's checklist, and `MC-1` is ticked — which, given this frame, means the checklist was read rather than the picture looked at. | `S-B3`/`S-B1`; `sim_visualization_spec.md` §16 | 2026-08-07 |
+| **AR-57** | 2 | code | **The answer to *"why is BSD missing?"* is already computed, and is unreachable from the path a user takes.** `Session.feasible_cuts(pipeline)` exists and does exactly the right thing — per stage, whether the file can drive it as `measured`, *"each miss naming the port and why (missing entirely, or a declared-`absent` reason)"* (`CR-SIM-21`, `S-C9`, `UT-C9-2/3`). It takes a **`Pipeline`**, and the primary path — `vantage <recording>` with no `--pipeline` — has none, so it is never called and the user is told nothing. Compounding it: this recording is **stimulus-only** (no `df/bsd_outputs` topic), so BSD state can only appear by *resimming* it through `df_sil.dll`. `sim_player.md` §6 describes the case where *"the recording carries stage outputs"* and is silent on the case where it does not — which is every legacy recording in this repo. **The cheapest high-value fix here**: the machinery is built and tested, only the wiring and one sentence of UI are missing. | `S-D3`/`S-D6`; `sim_player.md` §6 | 2026-08-07 |
+
+### ▶▶ THE FIX QUEUE — run 4
+
+Ordered by *what makes the product usable soonest*, not by severity. Rows 1–3
+stop a developer being misled; 4–6 make it pleasant.
+
+| Do | Row | Why here |
+|---|---|---|
+| **1** | `AR-53` — **a required-but-unbound layer is named and badged, never dropped** | The only defect that makes the tool actively *mislead*. Every other one is an absence a user can see; this one looks like an answer. Emit a **placeholder layer** carrying the unresolved reference, rendered as a badged, greyed row in the layer list |
+| **2** | `AR-57` — **the viewer states what the recording can and cannot drive** | Machinery exists (`Session.feasible_cuts`); needs a no-pipeline form plus one HUD line. Turns row 1's badge from *"unavailable"* into *"unavailable **because this file is stimulus-only — resim it to see BSD**"* |
+| **3** | `AR-52` — **the framework ships a default layer set** | Move `ego` / `frame` / `hud` / `trail` out of `df` into the framework. **Not a rename**: `R-SIM-1` must still hold, so the ego box comes from `ProjectModel` and the grid from the viewport, neither naming a function. Unblocks `vdy` and `perception-core` drawing anything at all |
+| **4** | `AR-55` — **prove a plug-in renders from its deployed copy**, then delete the launcher's workaround | Extend `ST-C8-1`/`ST-C8-2` from load-and-register to **render**. `df`'s `bsd.py` calibration read is the real bug (`S-C4`'s own scoped gap) |
+| **5** | `AR-56` — **the BEV becomes legible** | Axis labels to the margins; FOV wedges clipped or faded and **off by default**; label collision avoidance. **Re-look at the PNG afterwards** — this row is not closable by a passing test |
+| **6** | `AR-54` — **decide the `source.` exemption** | Justify it in writing at `R-SIM-21`, or remove it and move the two layers to `self.`. Smallest, and a decision rather than a task |
+
+**The standing lesson, which outranks any single row:** *a green suite is not a
+working product.* Six user-facing defects, none visible to 1008 passing tests.
+**`MC-5` and `GT-8` are the only gates in this plan that could have caught any
+of them, and both are unrun** — that is no longer a bookkeeping gap, it is the
+largest single hole in the verification story.
+
+---
+
 ## Run 3 — 2026-08-06
 
 Third full-scope audit, commissioned with a **wider mandate than runs 1 and 2**:
