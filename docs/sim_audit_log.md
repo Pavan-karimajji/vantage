@@ -105,8 +105,21 @@ Evidence kept: `logs/vantage_look.png` (no plug-in root — blank) and
 
 ### Open
 
+**Re-verified 2026-08-07 by an independent pass** (renders looked at, not
+described; GUI launched offscreen and measured). `AR-52`..`AR-57` all confirmed
+genuinely fixed — the blank frame is gone, `bsd.warning` shows as
+`bsd.warning (unavailable)` in the layer tree with the reason as its tooltip,
+`format_stimulus_only_banner` is wired into the HUD, `bsd.py` reads
+`ctx.model.bundle_dir`, and `R-SIM-21` now carries the `source.` justification
+**with its deferred limitation and a named trigger**, which is the part that
+makes it a decision rather than an excuse. Three defects the same pass found,
+two of them *in the fixes themselves*:
+
 | ID | Lvl | Fix | Finding | Owner | Raised |
 |---|---|---|---|---|---|
+| **AR-58** | 4 | code | **`default_on` is honoured by the GUI and ignored by the headless renderer, so a snapshot no longer shows what the window showed.** `AR-56` correctly gave `bsd.sensor_fov` `default_on=False, level=2`, and `view/layers.py` reads it — but `render/bev.py` and `cli/render.py` contain the string nowhere, so `sim render` draws every layer in the `Scene` regardless. Measured: `logs/v2_plugins.png` (rendered after the fix) still has the two FOV wedges covering ~55% of the frame, while the same Scene in the Bench hides them. **This breaks `NR-SIM-2` — *"one picture, many media"*** — and it specifically undermines `FR-SIM-13`/`ST-B4-1`, whose whole claim is that a snapshot is *reproducible evidence of what you saw*. The filtering belongs in one shared helper both paths call, not re-implemented in the second one: two copies of "which layers are on" is how they drift again. | `S-B4`/`S-B3`; `render/bev.py`, `cli/render.py` | 2026-08-07 |
+| **AR-59** | 2 | code | **The default window layout contradicts `sim_player.md` §3, and it is what a first-time user gets.** Measured on a fresh `VantageWindow` at 1500×950 with **no saved layout present** (`%LOCALAPPDATA%\adas-sim` does not exist, so `restoreState` had nothing to restore — this is the shipped default, not stale state on one machine): `centralWidget` is **`None`**; **BEV** is a dock in the **RIGHT** area reporting `isVisible()=False`; **Pipeline** is in **BOTTOM**. §3 specifies *Pipeline dock **left**, **CENTRE** = the BEV panel grid, Layers dock **right**, timeline **bottom***. `Layers`/`Inspector`/`Evidence` each span the full 1500 px width stacked vertically, leaving a large empty central region — visible in `logs/vantage_gui.png`. **`FR-SIM-10` calls the BEV *"**the** developer view"* and it is neither central nor visible on first run.** This is the shape of `MC-5`'s failure: the window opens and the thing you came to look at is not where the spec puts it. | `S-D8`/`S-B3`; `sim_player.md` §3 | 2026-08-07 |
+| **AR-60** | 4 | code | **`sim.trail` returns `()` silently — the exact pattern `AR-53` was raised to eliminate, in a layer `AR-52` had just moved into the framework.** `scene/default_layers.py:128`: `if len(points_m) < 2 or len(set(points_m)) < 2: return ()`. The *reasoning* is right and is `R-SIM-7` — this recording has no ego world-position source, and its own docstring says *"a single dot pretending to be a trail is worse than no trail at all"*. But the layer then vanishes from the Scene and from the layer tree (confirmed: the expanded tree shows `sim.ego` and `sim.frame`, no `sim.trail`), so a user cannot tell *"the ego did not move"* from *"this file has no ego position"*. **The reason is already written — it is simply not surfaced.** Return the placeholder `AR-53` built, with that sentence as its `unavailable` text. Cheap, and it makes the new default layer set honest on the first recording anyone opens. | `S-B1`; `scene/default_layers.py` | 2026-08-07 |
 | — | | | *(empty — every finding from this run is closed)* | | |
 
 ### Closed
