@@ -767,6 +767,16 @@ table) — it passes in isolation, and it is **never yours to fix**.
 2. **Watch the whole-suite warning count**, not only the tests you wrote. It
    went 8 → 10 while a fix was believed complete, and that was the available
    signal.
+3. **A test that `skip`s has not passed, and reading it is not running it.**
+   Added 2026-08-07, after `ST-D6-1` was ticked on *"verified by reading the
+   real signatures against the test's calls"* — moving a `P0` requirement to
+   `proven*` on a test that has never executed on any platform. The note
+   saying so was admirably honest and the **tick contradicted it**. When a
+   test cannot run in your shell, the box is `[~]`, and the caveat names the
+   **exact command** and the **exact acceptance condition** that closes it —
+   that is why `S-C7`'s equivalent caveat closed in one command instead of
+   needing its situation reconstructed. **Check the skip count**, not just
+   pass/fail: it moved 9 → 10 in the same run.
 
 **Do not attempt** (no work can close these): `MC-5` · `GT-14` · `MC-2` ·
 `MC-3` / `S-D1`'s gate. Each needs a person. `ST-C6-4` needs a CI runner with
@@ -7358,10 +7368,10 @@ a self-timed session.
       `cli/doctor.py`'s own entry above for the full detail; all three
       cases proven against a real `df_sil.dll` in
       `tests/system/test_d6_doctor_cli.py`
-- [x] `ST-D6-1` **day one, end to end**: a fresh component library with only a
+- [~] `ST-D6-1` **day one, end to end**: a fresh component library with only a
       manifest is probed, wired into a five-line pipeline, run against
       `tiny.mcap`, and its outputs appear in a recording — **no edit anywhere in
-      `modules/sim`** (`FR-SIM-46`). **Done 2026-08-06** (sim build queue row
+      `modules/sim`** (`FR-SIM-46`). **Written 2026-08-06** (sim build queue row
       4, sub-row 1): `tests/system/test_d6_day_one_walkthrough.py` chains
       `sim probe` → a five-line pipeline → `resim_pipeline_merged` against
       `tiny.mcap` → a real recording read-back → `Session.open`, against a
@@ -7383,6 +7393,40 @@ a self-timed session.
       Windows verification loop reports it `skipped`, not `passed`. `GT-8`'s
       own timing measurement needs a real newcomer, not a self-timed
       session, and is not attempted here.
+
+      > **⚠ DOWNGRADED `[x]` → `[~]` 2026-08-07 by review.** The note above is
+      > honest and is exactly why this was caught — but *"verified by reading
+      > the real signatures against the test's calls, not by executing the
+      > test"* is **not verification**, and this box was ticked on it. The
+      > plan's own rule is unconditional: *"Never tick a box you did not
+      > verify. A ticked box is a claim that something was run on a date."*
+      > **The test has not been executed on any platform**: it skips on
+      > Windows by design, and the WSL shell has Python 3.10 while `adas_sim`
+      > requires ≥3.12 (`StrEnum`), confirmed 2026-08-07.
+      >
+      > **What made this worth reversing rather than annotating:** `ST-D6-1`
+      > is `FR-SIM-46`'s (`P0`) third verifier, so the tick moved a `P0`
+      > requirement to `proven*` on the strength of a test nobody has run.
+      > That is the precise defect `AR-34`/`AR-50` were raised for, arriving
+      > from a new direction — and `S-C7`'s own history is the precedent:
+      > *"believed correct, awaiting compilation"* was kept visible until a
+      > shell that could compile ran it, and it closed in **one command**
+      > because the caveat named the command and the acceptance condition.
+      >
+      > **To close it, on a POSIX shell with Python ≥3.12** (a container, a
+      > newer WSL distro, or CI — `.github/workflows/sim-ci.yml` already runs
+      > Ubuntu):
+      >
+      > ```
+      > modules/sim/.venv/bin/python -m pytest \
+      >     modules/sim/tests/system/test_d6_day_one_walkthrough.py -q
+      > ```
+      >
+      > **Acceptance: it reports `1 passed`, not `1 skipped`.** A skip is the
+      > current state and must not be read as a pass. Nothing about the test
+      > or the fixture needs changing first — the C half is genuinely proven
+      > by direct `ctypes` execution against the compiled `.so`, and only the
+      > chained Python assertions are unexecuted.
 - [x] `ST-D6-3` **the evidence chain, end to end** (`FR-SIM-67`, `R-SIM-25`,
       audit `A4`): selecting any prim answers — in one action — its port, topic,
       tick, origin tag, config bundle and component build, and whether the value

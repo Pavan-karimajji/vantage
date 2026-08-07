@@ -1,0 +1,13 @@
+# check_audit_ledger
+# platform  win32
+# python    3.12.10
+
+Audit ledger shape check -- sim_audit_log.md
+
+Ledger
+------
+rows  open  closed  superseded  wontfix
+----  ----  ------  ----------  -------
+51    0     48      0           3
+
+RESULT  ok -- 51 findings, every closed row names a landed-in target that resolves
