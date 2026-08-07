@@ -102,6 +102,36 @@ def _open_window(recording) -> MainWindow:
     return window
 
 
+def test_default_layout_matches_sim_player_section_3(tmp_path):
+    """`AR-59` (2026-08-07): a fresh window, on a profile with no saved
+    layout, used to put every one of `bev`/`inspector_panel`/
+    `evidence_panel` in `RightDockWidgetArea` together -- `QMainWindow`
+    tabifies same-area docks by default, so only the last one added
+    (`evidence_panel`) ended up on top and `bev.isVisible()` measured
+    `False` on first open. `sim_player.md` §3: Pipeline dock left, CENTRE
+    = the BEV, Layers dock right, "everything else... closed by default"
+    (inspector/evidence). `BevPanel` stays a real `QDockWidget` (unchanged:
+    `test_tab_and_float_are_native_dock_mechanics` below depends on it) --
+    what this proves is that it no longer collides with anything and
+    dominates the window by default, the same visual outcome a central
+    widget would give without giving up dock flexibility."""
+    recording = tmp_path / "rec.mcap"
+    _write_synthetic_recording(recording, pipeline="p1")
+    window = _open_window(recording)
+    window.resize(1500, 950)
+
+    assert window.bev.isVisible() is True
+    assert window.dockWidgetArea(window.pipeline_panel) == QtCore.Qt.DockWidgetArea.LeftDockWidgetArea
+    assert window.dockWidgetArea(window.layers_panel) == QtCore.Qt.DockWidgetArea.RightDockWidgetArea
+    # BEV dominates the window rather than being squeezed into a third of
+    # it alongside two other docks (the measured defect: bev previously
+    # wasn't even the visible tab, so its width didn't matter).
+    assert window.bev.geometry().width() > window.width() * 0.5
+
+    assert window.inspector_panel.isVisible() is False
+    assert window.evidence_panel.isVisible() is False
+
+
 def test_toggle_view_action_reopens_a_closed_dock(tmp_path):
     recording = tmp_path / "rec.mcap"
     _write_synthetic_recording(recording, pipeline="p1")

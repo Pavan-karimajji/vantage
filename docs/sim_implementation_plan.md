@@ -2877,6 +2877,22 @@ chain, not just its own show/hide state — the offscreen system tests call
 `window.show()` for exactly this reason (the existing Slice 1/2 tests never
 needed to, since they only read pixels off `BevPanel`, never a dock's own
 visibility flag).
+**Corrected 2026-08-07 (`AR-59`):** the default dock AREAS this slice
+shipped were never actually checked against `sim_player.md` §3's own
+layout — `bev`/`inspector_panel`/`evidence_panel` all defaulted into
+`RightDockWidgetArea` together, and `QMainWindow` tabifies same-area docks
+by default, so only the last one added (`evidence_panel`) was ever the
+visible tab; a fresh window measured `bev.isVisible() is False`.
+`pipeline_panel` was `BottomDockWidgetArea`, not left; `layers_panel` was
+left, not right. Fixed: `pipeline_panel` (left) and `layers_panel` (right)
+are placed first, `bev` is slotted between them with `splitDockWidget`
+(the native Qt mechanism for a 3-column layout, no central-widget
+wrapper) and given most of the width via `resizeDocks` — dominant without
+giving up being a real, tabbable/floatable `QDockWidget`
+(`test_tab_and_float_are_native_dock_mechanics` still passes unchanged).
+`inspector_panel`/`evidence_panel` now start hidden, matching §3's
+"everything else... closed by default." New test:
+`test_default_layout_matches_sim_player_section_3`.
 
 **Slice 4 (interaction plumbing) DONE 2026-07-30.** `Interaction`/`LayerCtx`
 (`core/history.py`) already existed as dormant scaffolding from an earlier

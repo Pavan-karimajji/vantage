@@ -1155,8 +1155,46 @@ class MainWindow(QtWidgets.QMainWindow):
         #: mouse gesture, never simultaneous.
         self._measure_mode = False
 
+        #: `AR-59` (2026-08-07): `sim_player.md` §3's own diagram --
+        #: Pipeline dock **left**, **CENTRE** = the BEV, Layers dock
+        #: **right** -- was never actually wired: every dock defaulted to
+        #: `addDockWidget`'s own area with no regard for a neighbour
+        #: already there, so `bev`/`inspector_panel`/`evidence_panel` all
+        #: landed in `RightDockWidgetArea` together. `QMainWindow` tabifies
+        #: same-area docks by default, so only the LAST one added
+        #: (`evidence_panel`) ended up on top -- confirmed real: a fresh
+        #: window reported `bev.isVisible() is False`. `BevPanel` stays a
+        #: genuine `QDockWidget` (unchanged: `test_b3_panel_layout.py`'s
+        #: own `test_tab_and_float_are_native_dock_mechanics` depends on it
+        #: being tabbable/floatable like any other dock, and `MainWindow`'s
+        #: own docstring already names the FULL "dockable peer-panel grid"
+        #: -- BEV/camera/plots as peers via a nested dock area -- as later
+        #: work this stage does not build) -- what changes is which area
+        #: each dock is GIVEN by default and that they no longer silently
+        #: collide. `pipeline_panel` (left) and `layers_panel` (right) are
+        #: placed FIRST so `splitDockWidget` can slot `bev` between them,
+        #: the native Qt mechanism for a 3-column layout with no custom
+        #: central-widget wrapper -- `resizeDocks` below then gives BEV
+        #: most of the width, so it dominates the window exactly like a
+        #: central widget would, while staying a full peer dock.
+        #: `inspector_panel`/`evidence_panel` start hidden (`sim_player.md`
+        #: §3: "everything else is a dock that is closed by default") --
+        #: tabified together on the right, behind `layers_panel`, so
+        #: opening either from the View menu does not reopen a second,
+        #: unrelated area.
+        self.pipeline_panel = PipelinePanel(self)
+        self.addDockWidget(QtCore.Qt.DockWidgetArea.LeftDockWidgetArea, self.pipeline_panel)
+        self.pipeline_panel.mode_changed.connect(self._on_pipeline_mode_changed)
+        self.pipeline_panel.run_requested.connect(self._on_run_requested)
+
+        self.layers_state = LayerTreeState()
+        self.layers_panel = LayersPanel(self.layers_state, self)
+        self.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, self.layers_panel)
+        self.layers_panel.changed.connect(self._on_layers_changed)
+
         self.bev = BevPanel(self)
-        self.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, self.bev)
+        self.splitDockWidget(self.pipeline_panel, self.bev, QtCore.Qt.Orientation.Horizontal)
+        self.resizeDocks([self.pipeline_panel, self.bev, self.layers_panel], [1, 4, 1], QtCore.Qt.Orientation.Horizontal)
         self.bev.clicked.connect(self._on_bev_clicked)
         self.bev.dragged.connect(self._on_bev_dragged)
         self.bev.drag_extent_changed.connect(self._on_bev_drag_extent_changed)
@@ -1167,29 +1205,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self._cursor_readout_label = QtWidgets.QLabel("")
         self.statusBar().addPermanentWidget(self._cursor_readout_label)
 
-        self.layers_state = LayerTreeState()
-        self.layers_panel = LayersPanel(self.layers_state, self)
-        self.addDockWidget(QtCore.Qt.DockWidgetArea.LeftDockWidgetArea, self.layers_panel)
-        self.layers_panel.changed.connect(self._on_layers_changed)
-
         self.inspector_state = InspectorState()
         self.inspector_panel = InspectorPanel(self.inspector_state, self)
-        self.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, self.inspector_panel)
+        self.tabifyDockWidget(self.layers_panel, self.inspector_panel)
+        self.inspector_panel.hide()
 
         #: `UT-D3-8`: `None` until `_on_loaded` has a real `Session` to
         #: wrap -- `render_tick` skips syncing this panel until then, same
         #: "docked empty" gating `pipeline_panel` uses (see its own note).
         self.evidence_state: EvidencePanelState | None = None
         self.evidence_panel = EvidencePanel(self)
-        self.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, self.evidence_panel)
-
-        #: S-D3 slice 3: docked empty (no `pipeline_path` -> no state to
-        #: sync) until `_on_loaded` knows `session.known_ports`.
-        #: Slice 4 (`ST-D3-1`) adds a real "Run" -- `run_requested`.
-        self.pipeline_panel = PipelinePanel(self)
-        self.addDockWidget(QtCore.Qt.DockWidgetArea.BottomDockWidgetArea, self.pipeline_panel)
-        self.pipeline_panel.mode_changed.connect(self._on_pipeline_mode_changed)
-        self.pipeline_panel.run_requested.connect(self._on_run_requested)
+        self.tabifyDockWidget(self.layers_panel, self.evidence_panel)
+        self.evidence_panel.hide()
 
         self.timeline_state = TimelineState()
         #: address -> resolved (tick_index, value) series -- resolved once
