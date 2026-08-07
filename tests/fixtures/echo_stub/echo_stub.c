@@ -16,7 +16,17 @@
  * `interfaces/include/adas/adas_sil_abi.h` (pure C, zero dependencies by
  * design) -- proof this doesn't need Conan, protobuf, or C++ to exist,
  * only a real dynamic library CtypesSilComponent can genuinely dlopen.
+ *
+ * `ADAS_SIL_ABI_EXPORTS` defined before the include (mirrors every real
+ * component's own CMake wiring, e.g. vdy_sil/perception_core_sil's
+ * `target_compile_definitions`): on POSIX this changes nothing (`ADAS_SIL_
+ * API` is GCC/Clang default-visibility regardless), but on Windows/MSVC it
+ * is what makes `ADAS_SIL_API` resolve to `__declspec(dllexport)` instead
+ * of `dllimport` -- without it, this file compiles silently into a DLL
+ * exporting nothing `GetProcAddress` can find (`S-C1c`'s own stub-DLL
+ * box, `UT-C1c-15a`).
  */
+#define ADAS_SIL_ABI_EXPORTS
 #include "adas/adas_sil_abi.h"
 #include <string.h>
 

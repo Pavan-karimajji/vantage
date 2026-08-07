@@ -24,7 +24,11 @@
  * raw bytes plus a schema handle; decoding is a consumer's problem, not
  * the pipeline's). `adasExec` writes a fixed 4-byte payload into "echo"
  * every tick, so the recorded topic is never empty.
+ *
+ * `ADAS_SIL_ABI_EXPORTS` defined before the include -- see `echo_stub.c`'s
+ * own sibling comment for why (Windows/MSVC `dllexport`, a no-op on POSIX).
  */
+#define ADAS_SIL_ABI_EXPORTS
 #include "adas/adas_sil_abi.h"
 #include <string.h>
 

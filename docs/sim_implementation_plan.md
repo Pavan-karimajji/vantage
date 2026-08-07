@@ -4262,7 +4262,7 @@ order #5.**
       port was undersized (that port is just left `updated=0`) -- undersize
       detection reads `port.len > port.cap` unconditionally, never gated on
       the return code, or grow-and-retry silently never fires
-- [ ] **A stub component library implementing the generic ABI** — `impl:
+- [x] **A stub component library implementing the generic ABI** — `impl:
       stubdll:`, mandated by `R-SIM-10` ("if a stand-in must run without Python
       it is promoted from `stub:` to `stubdll:` on the same generic ABI"),
       listed in api reference §3.3's `impl:` vocabulary, and named by
@@ -4271,7 +4271,30 @@ order #5.**
       stage, which `check_traceability.py` cannot see because it joins test ids
       and not obligations. It lands here rather than later because it is also
       the only way `CtypesSilComponent` gets tested without `df` built, and it
-      is deliberately trivial: an echo component with a hand-written manifest
+      is deliberately trivial: an echo component with a hand-written manifest.
+      **Done 2026-08-07**: `sim_sil_contract.md` §8 says "a stub DLL", singular
+      — `S-D6`'s own `tests/fixtures/echo_stub/echo_stub_with_output.c`
+      already IS exactly that shape (hand-written manifest, one output port),
+      so this reuses it rather than writing a near-duplicate. **A real,
+      previously-latent portability bug found and fixed landing this**: the
+      fixture never defined `ADAS_SIL_ABI_EXPORTS` before including `adas_
+      sil_abi.h`, so `ADAS_SIL_API` never resolved to `__declspec(dllexport)`
+      on Windows/MSVC — it compiled silently into a DLL exporting nothing,
+      only ever proven on POSIX (gcc's own default visibility, which happens
+      to export everything regardless of the macro). One-line fix in both
+      `echo_stub.c` and `echo_stub_with_output.c` (`#define ADAS_SIL_ABI_
+      EXPORTS` before the include — mirrors every real component's own CMake
+      `target_compile_definitions`), proven by actually compiling and running
+      the fixed fixture on Windows via `cl.exe /std:c11` (MSVC's default C
+      dialect predates C11 `_Static_assert`, the header's own struct-layout
+      assertions — a second, smaller portability finding, worked around with
+      an explicit `/std:c11` rather than silently dropped), `dumpbin
+      /exports` confirming all 5 ABI symbols now present. No `vswhere.exe` in
+      this environment, so the MSVC discovery is a best-effort glob under
+      `Program Files\Microsoft Visual Studio\*\*\VC\Auxiliary\Build\
+      vcvars64.bat`, skipping with a named reason if not found — same
+      environment-gated-test discipline as every other real-DLL test this
+      session
 - [x] `contracts/loader.py` — **`resolve_library`**, the single place the
       framework consults the platform (`P-5`). `<stem>` expands to
       `<stem>.dll` on Windows and `lib<stem>.so` / `<stem>.so` on Linux; a miss
@@ -4316,7 +4339,18 @@ order #5.**
       the four is `AuthoringError`); actually applying one to a live port's
       bytes between wiring and `exec()` is `S-D6`'s job (its own checklist
       item below -- run-manifest tagging and HUD badging belong there too)
-- [ ] Component pipeline files under `modules/<name>/sim/pipelines/`
+- [x] Component pipeline files under `modules/<name>/sim/pipelines/`.
+      **Done 2026-08-07** — `df`'s own `df_only.yaml` already proved the
+      convention for a multi-function component; `modules/perception-core/
+      sim/pipelines/perception_core_only.yaml` (new) proves it for the
+      newly-shimmed one, mirroring `df_only.yaml`'s shape exactly: one
+      stage, wired to both of `perception_core`'s real declared input ports
+      (`frame`/`egoDyn`). Checked in unmodified and proven for real —
+      `tests/system/test_c1c_pipeline_files.py` confirms `check.runner.
+      discover_pipelines` finds it under `modules/*/sim/pipelines/` and that
+      `Pipeline.load` against the real `perception_core_sil.dll` wires both
+      ports correctly, from the actual checked-in file, not a hand-authored
+      stand-in
 
 **Tests**
 - [x] `UT-C1c-1` ABI version mismatch fails loudly at load, naming both versions
@@ -4347,11 +4381,22 @@ order #5.**
       pipeline whose declaration order contradicts its wiring is a load error
 - [x] `UT-C1c-15` `resolve_library` returns the right file for each platform
       pattern (parametrised over both), and a miss names every candidate
-- [ ] `UT-C1c-15a` a `stubdll:` stage loads through the **same**
+- [x] `UT-C1c-15a` a `stubdll:` stage loads through the **same**
       `CtypesSilComponent` path a `dll:` stage does, and its port set is
       indistinguishable from a `dll:` stage's to everything downstream —
       `R-SIM-10`'s "executed and injected produce the same port set", proven at
-      the `impl:` axis rather than only at the `mode:` axis
+      the `impl:` axis rather than only at the `mode:` axis. **Done
+      2026-08-07** — true by construction in `contracts/pipeline.py`'s own
+      `_resolve_components` (`kind in ("dll", "stubdll")` is one branch, not
+      two), but this session's own lesson is that reading a code path is not
+      running it: `tests/system/test_c1c_stubdll.py` resims the SAME
+      compiled stub library twice, once as `impl: "dll:echo_stub_with_
+      output"` and once as `impl: "stubdll:echo_stub_with_output"`, and
+      diffs the two resulting recordings with `core.determinism.
+      compare_exact` (`R-SIM-24`'s own exact-comparison tool, reused for a
+      different axis — `impl:` kind, not process/host/build) — byte-
+      identical. Real execution, Windows, MSVC (`cl.exe`, auto-discovered
+      `vcvars64.bat`)
 - [x] `UT-C1c-16` **severed chain detected** — `simulate → measured → simulate`
       on one path is found; `off → measured → simulate` is **not** flagged
       (`R-SIM-10`; the GUI's auto-close in S-D6 builds on this)
@@ -4376,13 +4421,18 @@ order #5.**
       one stage — the canonical shape of `R-SIM-12`
 
 **Discipline** (every stage)
-- [ ] portability §3 ticked — exposure: `P-5` (**the** stage that owns
+- [x] portability §3 ticked — exposure: `P-5` (**the** stage that owns
       `resolve_library`; every platform difference in the framework lives here
-      and nowhere else), `P-2`
-- [ ] naming §3 ticked — exposure: `N-8` (wiring errors are the most-read
+      and nowhere else), `P-2`. **2026-08-07**: closing `UT-C1c-15a`/the
+      stub-DLL box found P-5 exposure for real a second time — the fixture's
+      missing `ADAS_SIL_ABI_EXPORTS` (a platform difference in a component
+      fixture, not `resolve_library` itself, but the same class of "worked
+      on POSIX, silently wrong on Windows" this section exists to catch)
+- [x] naming §3 ticked — exposure: `N-8` (wiring errors are the most-read
       messages in the system: expected, found, where it looked, next action),
       `N-5`
-- [ ] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked
+- [x] `python docs/py/run_all.py` green; `GT-1..GT-12` re-checked — 2026-08-07,
+      see this pass's own full-suite numbers below
 
 **Gate**
 - [x] `ST-C1c-1` green over every recording — the generic path is proven
@@ -6851,11 +6901,18 @@ falsifiable pieces, neither a naming convention alone:
   `test_a_differently_named_error_group_layer_must_also_be_derived`,
   `test_an_error_group_layer_marked_derived_is_accepted`,
   `test_an_unrelated_group_is_not_forced_derived`).
-  No real perception provider exists to REGISTER under these groups yet
-  (unchanged, still true) — this closes the FRAMEWORK half only, which is
-  exactly what "reachable now" meant: the convention now has an enforced
-  meaning waiting for the first real provider to adopt it, rather than a
-  string nobody checks.
+  **Correction, found while working `S-C1c` the same day**: this box's own
+  claim that "no real perception provider exists to register under these
+  groups yet" was wrong — `modules/perception-core/sim/layers/
+  perception.py`'s `perception_objects` (audit run 3, `AR-46`, predates
+  this whole pass) already registers under `group="perception"`, reading
+  `self.genObjectList`. It is real and correctly-shaped (the file's own
+  docstring names `S-D4`'s convention explicitly), but has no test of its
+  own exercising it — dormant, not verified, a separate pre-existing gap
+  this pass did not create and is not this row's mandate to close. What
+  this row's own claim should have said: the FRAMEWORK half (the
+  enforcement rule) is what was missing; a real `group="perception"`
+  consumer already existed, `group="perception.error"` still has none.
 - **A source emitting camera stimulus, declared through `emits()`.**
   `SyntheticSource` (`S-C2`) already IS a general-purpose emitter — no new
   `Source` class was needed, since its `emits()` is the union of whatever
