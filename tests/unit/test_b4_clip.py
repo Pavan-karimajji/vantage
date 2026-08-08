@@ -3,7 +3,8 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""S-B4 `render/clip.py` tests (docs/sim_implementation_plan.md).
+"""S-B4 `render/clip.py` tests (docs/sim_implementation_plan.md), including
+the `export_clip()` half of `UT-B4-6`.
 `imageio[ffmpeg]` is the `video` extra (`pyproject.toml`) -- skipped, not
 failed, where it is not installed."""
 
@@ -16,6 +17,8 @@ import pytest
 from adas_sim.core.session import Session
 from adas_sim.core.tick import Pose2D, PortValue, Tick
 from adas_sim.io.base import ComponentBuildInfo, RunManifest
+from adas_sim.model.project import ProjectModel
+from adas_sim.scene import registry as scene_registry
 from adas_sim.scene.registry import layer_provider
 from adas_sim.scene.types import Layer, Prim
 from adas_sim.view.viewport import Viewport
@@ -45,6 +48,34 @@ def _hidden_layer(ctx):
             Prim(kind="circle", cx_m=5.0, cy_m=5.0, r_m=1.0, style="sensor.fov"),
         ),
     ),)
+
+
+@layer_provider("test.b4c.needs_bundle_dir", group="test-b4c")
+def _needs_bundle_dir_layer(ctx):
+    """Same regression shape as `test_b4_capture.py`'s own: a prim only
+    when `ctx.model.bundle_dir` is populated, so a silently-dropped
+    `model=` shows up as a missing layer across every frame."""
+    if ctx.model.bundle_dir is None:
+        return ()
+    return (Layer(id="test.b4c.needs_bundle_dir", group="test-b4c", prims=(
+        Prim(kind="box", cx_m=0.0, cy_m=0.0, length_m=1.0, width_m=1.0, yaw_rad=0.0, style="object.label"),
+    )),)
+
+
+_EGO_TEMPLATE = (
+    "EGO_LENGTH_M: 4.5\n"
+    "EGO_WIDTH_M: 1.8\n"
+    "EGO_WHEELBASE_M: 2.7\n"
+    "EGO_OVERHANG_FRONT_M: 0.9\n"
+)
+
+
+def _make_bundle_dir(root):
+    bundle_dir = root / "library_bundle"
+    (bundle_dir / "vehicle").mkdir(parents=True)
+    (bundle_dir / "vehicle" / "ego_params.yaml").write_text(_EGO_TEMPLATE, encoding="utf-8")
+    (bundle_dir / "manifest.yaml").write_text("project: fx\n", encoding="utf-8")
+    return bundle_dir
 
 
 def _session() -> Session:
@@ -92,3 +123,31 @@ def test_export_clip_with_no_explicit_selection_matches_the_guis_own_default(tmp
     assert sidecar["layers"] is not None
     assert "test.b4c.box" in sidecar["layers"]
     assert "test.b4c.hidden_by_default" not in sidecar["layers"]
+
+
+def test_export_clip_threads_a_given_model_through_instead_of_re_resolving(tmp_path, monkeypatch):
+    """`UT-B4-6`'s `export_clip()` half. Regression, same bug class `test_b4_capture.py`'s own test guards:
+    `export_clip()` used to call `build_scene(...)` per tick with no
+    `model=` at all, so a plugin-root-resolved `ProjectModel` (`cli/render.py
+    --plugin-root`, once added) was silently dropped for every frame of a
+    clip, not just the first.
+
+    **Registry isolated to this file's own providers** -- same reason
+    `test_b4_capture.py`'s sibling test isolates it: `build_scene` calls
+    every globally registered provider, and a real component's own layer
+    (imported by an unrelated test elsewhere this session) would see this
+    test's `bundle_dir` too and crash on a bundle shaped for this test
+    only."""
+    monkeypatch.setattr(scene_registry, "_PROVIDERS", {
+        k: v for k, v in scene_registry._PROVIDERS.items() if v.group in ("test-b4c",)
+    })
+    bundle_dir = _make_bundle_dir(tmp_path)
+    model = ProjectModel.resolve(library_dir=bundle_dir, project="fx")
+    assert model.bundle_dir == bundle_dir
+
+    out = tmp_path / "clip.mp4"
+    clip.export_clip(_session(), 0.0, 0.1, Viewport(size_px=(64, 48)), None, out, model=model)
+
+    sidecar = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+    assert sidecar["bundle_origin"] == "library"
+    assert "test.b4c.needs_bundle_dir" in sidecar["layers"]

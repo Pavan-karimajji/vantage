@@ -1672,6 +1672,35 @@ The sidecar is written in the same call, or the capture fails.
 - [x] Print variant: same Scene, `print` theme, vector output where the renderer
       supports it — one Scene, two renderers, never two drawing paths (`D5`)
 
+**Found and fixed running Vantage against a real BSD recording**: neither
+`snapshot()` nor `export_clip()` ever threaded a `ProjectModel` through to
+`build_scene`, so both always re-resolved a checkout-only default —
+the same bug class `render/viewer.py`'s `_resolve_project_model` was fixed
+for (S-C8's gate), but never patched here. `sim render` had **no
+`--plugin-root` flag at all**, so a component's real layers (e.g. a driving
+function's zone/warning) could never be imported by the CLI in the first
+place; even a caller that imported them separately would then hit
+`snapshot()`'s missing `model=` and crash with `FileNotFoundError` the
+moment a layer read calibration relative to a DEPLOYED copy's own path
+(confirmed: `bsd.py`'s `_bsd_calibration`, against the real `df_sil` build
+tree). Fixed:
+- `model/plugins.py` gained `register_plugin_root(library_dir)` — the
+  shared implementation `scripts/vantage.py`'s own `_register_plugin_root`
+  now delegates to, so there is one implementation, not one per entry
+  point.
+- `snapshot()`/`export_clip()`/`sidecar_dict()` gained `model:
+  ProjectModel | None = None`, threaded into `build_scene`; `None` keeps
+  every existing caller's behaviour exactly unchanged.
+- `export_clip()` also resolves its model **once**, before the per-tick
+  loop, rather than implicitly re-resolving on every frame — a real,
+  separate inefficiency found while fixing the same call site (`ST-C5-2`'s
+  discipline extended here).
+- `cli/render.py` gained `--plugin-root` (repeatable, same meaning as
+  `vantage.py`'s own flag).
+Verified against the real recording (`bsd_ego_lane_exit.mcap`) and the real
+`df_sil` build: `sim render --plugin-root <dir>` now renders the zone
+rectangles and object boxes it previously omitted, with no crash.
+
 **Tests**
 - [x] `UT-B4-1` a snapshot writes exactly two files, and neither exists if the
       other could not be written
@@ -1684,6 +1713,20 @@ The sidecar is written in the same call, or the capture fails.
 - [x] `UT-B4-5` `bundle_origin` is recorded, so a picture rendered from a
       checkout is distinguishable from one rendered from the embedded bundle
       (`R-SIM-3a`)
+- [x] `UT-B4-6` `snapshot()`/`export_clip()` use a given `model=` instead of
+      re-resolving one — proven with a test-only layer that only produces a
+      prim when `ctx.model.bundle_dir` is populated, so a silently-dropped
+      `model=` shows up as a missing layer, not a crash.
+      `test_b4_capture.py::test_snapshot_threads_a_given_model_through_instead_of_re_resolving`,
+      `test_b4_clip.py::test_export_clip_threads_a_given_model_through_instead_of_re_resolving`
+      (both isolate the layer-provider registry to their own file's
+      providers — `build_scene` calls every globally registered one, and a
+      real component's layer imported by an unrelated test elsewhere this
+      session would see this test's `bundle_dir` too and crash on a bundle
+      shaped for this test only, the same order-dependency
+      `test_c8_relocatability_installed.py` sidesteps with a subprocess).
+      `test_b4_capture.py::test_snapshot_with_no_model_still_resolves_a_default_unchanged`
+      covers the `model=None` backward-compatibility half.
 - [x] `ST-B4-1` `sim render` twice at the same tick produces byte-identical PNGs
 - [ ] `ST-B4-2` `sim render` works with **no display**, under an offscreen
       platform, on both platforms (`P-7`). **Buildable half closed**: no Qt
@@ -2965,17 +3008,26 @@ review.
 - [ ] All 18 scenarios have `expect:` blocks **transcribed from their existing
       comment blocks**, each reviewed against the comment's claim before being
       accepted (§7 step 5 — an expectation that merely records today's behaviour
-      is worse than none). **Not fully met**: 13 of 18 carry `expect:`/`markers:`
-      (3 `aeb`, 10 `bsd`), verified end to end against a real compiled `df_sil`
-      and a real recording for 3 of those 13 (`aeb_canonical_10mps_30m`,
-      `aeb_closing_ego20mps_lead10mps_30m`, `bsd_ego_lane_exit`); the other 10
-      are authored from each scenario's own analytic claim but not yet checked
-      against a recording (none exists yet) — `aeb_watchable_5mps_60m`,
-      `bsd_mergein_vlat025/_vlat050/_vlat075`, and (2026-08-03 follow-up)
-      `bsd_passby_dv8/_dv16/_dv24/_dv32`, `bsd_ncap_bsm_car/_motorcycle`. The
-      remaining 5 were migrated to schema v2 structurally only, each with a
-      stated reason not to assert (several are the scenario's own comment
-      saying "demonstration, not a measurement"). Full detail:
+      is worse than none). **Not fully met**: 15 of 18 carry `expect:`/`markers:`
+      (3 `aeb`, 12 `bsd`), verified end to end against a real compiled `df_sil`
+      and a real recording for 4 of those 15 (`aeb_canonical_10mps_30m`,
+      `aeb_closing_ego20mps_lead10mps_30m`, `bsd_ego_lane_exit`,
+      `bsd_curve_r172_passby`); the other 11 are authored from each scenario's
+      own analytic or stated claim but not yet checked against a recording
+      (none exists yet) — `aeb_watchable_5mps_60m`,
+      `bsd_mergein_vlat025/_vlat050/_vlat075`,
+      `bsd_passby_dv8/_dv16/_dv24/_dv32`, `bsd_ncap_bsm_car/_motorcycle`,
+      `bsd_sot_ego_overtakes`. `bsd_curve_r172_passby`'s two expectations are
+      deliberately weaker than its comment's numeric detail: the comment
+      itself declines to re-derive `BSD_CURVE_TAU_S` convergence timing (that
+      is a unit test's job), so what is encoded is the one claim it does
+      commit to ("late onset relative to the straight-road 5.0s"), not an
+      invented anchor. The remaining 3 (`bsd_curve_r172_straight_approach`,
+      `bsd_ego_lane_change_warp`, `bsd_ego_swerve_warp`) are migrated to
+      schema v2 structurally only, each with a stated reason not to assert —
+      two by explicit, repeated author instruction ("DEMONSTRATION,
+      deliberately not a measurement"), one because it is a diagnostic
+      scenario meant to be read, not thresholded. Full detail:
       `modules/df/docs/sim_scenarios_and_expectations_migration.md`
 - [x] The migration record lists every claim that **could not** be expressed.
       *2026-08-03:* see the migration record above — also records two real
@@ -3722,9 +3774,20 @@ reports which one won.
       `vantage.py --plugin-root <build dir>` run leaves) crashed the NEXT
       rebuild's hash step — now excludes `__pycache__` the same way the
       copy step already did.
-- [~] `GT-12` — the load-and-register mechanism is proven standalone; the full
-      "`vantage <dir>` renders a run" GUI-level claim is not exercised by an
-      automated test this pass
+- [x] `ST-C8-3` (`test_c8_deployed_root_render_wiring.py`) — the wiring gap
+      `ST-C8-1`/`ST-C8-2` could not see: those call `ProjectModel.resolve`
+      directly, so a bug in `scripts/vantage.py`'s own CLI-argument-to-
+      `library_dir=` plumbing would pass them silently. This drives
+      `_register_plugin_root` **and** a real `MainWindow` together, against
+      a relocated, original-deleted `df_sil` build, and confirms a real
+      `bsd.zone` layer renders real prims with `bundle_origin == "library"`.
+      Re-verified by injection: reverting the fix reproduces the exact
+      original `FileNotFoundError`/empty-layer-tree failure; restoring it
+      passes again.
+- [x] `GT-12` — the load-and-register mechanism (`ST-C8-1`/`ST-C8-2`) and the
+      specific render-from-a-deployed-root gap (`ST-C8-3`) are both proven;
+      a full interactive `vantage <dir>` session exercising every panel is
+      still not automated
 
 **Discipline**
 - [x] portability §3 (`P-1`, `P-2`, `P-5`, `P-9`) · naming §3 (`N-2`, `N-9`) · `run_all.py` green; `GT-1..GT-12` re-checked
@@ -3732,52 +3795,49 @@ reports which one won.
 **Gate**
 - [x] `ST-C8-2` green — the strong form, at the mechanism level described
       above (real artefact, original deleted, fresh process, no GUI frame)
-- [~] `GT-12` — mechanism green; the GUI-level form is deferred, same as
-      noted in the stage's own Tests section
-- [ ] **A plug-in bundle loaded from a DEPLOYED root actually renders**
+- [x] **A plug-in bundle loaded from a DEPLOYED root actually renders**
       (carried over from the retired ledger's `AR-61`, the one row that was
-      **still open** when it was deleted — §9a is now its home). **Reproduced
-      against current source 2026-08-08**, so this is live, not history.
+      still open when it was deleted — §9a is now its home).
 
-      **Repro** — the discriminator is whether `<root>/src/project/` exists,
-      which is true of a checkout and false of a deployed copy, and is why
-      three earlier attempts missed it: build a deployed-*shaped* root (a temp
-      dir holding today's `modules/df/sim/` plus the real packed `config/`,
-      and deliberately **no** `src/project/`), then drive it through
-      `vantage.py`'s own `_register_plugin_root` into a real `VantageWindow`.
-      Result: `FileNotFoundError` at `df/sim/layers/bsd.py`'s
-      `_bsd_calibration`, **empty layer tree, zero rows**, exception swallowed
-      on the render thread.
+      **Re-verified against current source and found already fixed.** The
+      repro that previously found this broken: build a deployed-*shaped*
+      root (`sim/` + the real packed `config/`, deliberately **no**
+      `src/project/` — the discriminator, present in a checkout and absent
+      from a deployed copy) and drive it through `vantage.py`'s own
+      `_register_plugin_root` into a real `MainWindow`. Result now: the
+      session loads, `ProjectModel.bundle_origin == "library"`,
+      `bundle_dir` resolves to the deployed `config/`, and `bsd.zone`
+      renders real prims — no `FileNotFoundError`, no empty layer tree.
+      `render/viewer.py`'s `_resolve_project_model` does thread
+      `self._config_library_dir` into `ProjectModel.resolve(library_dir=…)`
+      — the fix site the previous finding named — so the wiring gap no
+      longer exists.
 
-      **Root cause.** `_bsd_calibration` branches on `bundle_dir is not None`
-      and the traceback shows the **else** branch running — so
-      `ctx.model.bundle_dir` **is** `None`. The `AR-55` fix that made it read
-      the bundle is correct code that never executes here. Nothing populates
-      it: `scripts/vantage.py` passes `_register_plugin_root`'s returned
-      `config/` directory as **`pipeline_config`**, which feeds the
-      *pipeline's* `adasInit`, and it never reaches
-      `ProjectModel.resolve(library_dir=…)`. A source checkout works **by
-      accident** — the fallback path happens to exist there.
+      **Confirmed by injection, not by reading the code**: reverting
+      `_resolve_project_model` to the two `ProjectModel.resolve(...)` calls
+      *without* `library_dir=` reproduces the original failure exactly —
+      `FileNotFoundError` at `_bsd_calibration`, `bundle_origin ==
+      "checkout"` — then restoring the real code makes it pass again. The
+      fix is real and this is what it fixes.
 
-      **Fix site:** route that resolved `config/` into `ProjectModel.resolve`
-      as the explicit/library bundle, not only into the pipeline.
+      **New regression test**, since none existed for this specific wiring
+      path: `tests/system/test_c8_deployed_root_render_wiring.py`. Unlike
+      `ST-C8-2`'s own check (which calls `ProjectModel.resolve` directly),
+      this drives `scripts/vantage.py`'s real `_register_plugin_root`
+      **and** a real `MainWindow` together, in a fresh subprocess, against a
+      real installed-then-relocated `df_sil` build with the original
+      deleted — so a future edit that reintroduces the `pipeline_config`-only
+      wiring fails here rather than needing to be found by hand a fourth
+      time. Skips with a named reason if no real build or recording exists.
+- [x] `GT-12` — the mechanism (`ST-C8-1`/`ST-C8-2`) and the specific render
+      gap above are both proven; a full interactive `vantage <dir>` session
+      exercising every panel is still not automated (same scope this gate
+      always distinguished from the mechanism level).
 
-      **Already eliminated, so nobody re-tests it:** the on-disk deployed
-      bundle *is* older than source, but its `bundle_sha256` recomputes to
-      exactly its stamped value — internally consistent, so hash verification
-      would never flag it — and the fresh-source repro above crashes anyway.
-      *"Verify the hash"* is not the fix.
-
-      **This is `FR-SIM-64`'s (`P0`) actual claim**, which today reads
-      `proven*` on `ST-C8-1`/`ST-C8-2` — both of which prove **load and
-      register**, never *render*. `scripts/gui.py`'s plug-in-root validator
-      warns on exactly this condition in the meantime.
-
-**Remaining, explicitly deferred, not this session's scope:** the HUD's
-missing-plug-in/HUD-badge surfaces (`sim explain`/`sim doctor` reporting the
-plug-in path landed 2026-08-06, above); the full `vantage <dir>` GUI-render
-proof of `GT-12`/`ST-C8-1/2`. Neither blocks `S-C6`, which needs recordings
-and scenarios, not the
+**Remaining, explicitly deferred:** the HUD's missing-plug-in badge surface
+(`sim explain`/`sim doctor` reporting the plug-in path landed 2026-08-06,
+above — the on-screen HUD message for a missing plug-in is the only piece
+left). Does not block `S-C6`, which needs recordings and scenarios, not the
 viewer.
 
 ### S-C9 — Recording ingest: what a file provides, and which cuts it supports (`R-SIM-23`, closes `D14`)

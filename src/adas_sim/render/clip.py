@@ -22,6 +22,7 @@ from pathlib import Path
 
 from adas_sim.core.runner import build_scene
 from adas_sim.core.session import Session
+from adas_sim.model.project import ProjectModel
 from adas_sim.render import capture
 from adas_sim.render.bev import render_scene
 from adas_sim.render.theme import Theme
@@ -52,9 +53,19 @@ def export_clip(
     overlay_prims: tuple[Prim, ...] = (),
     hud_lines: tuple[str, ...] = (),
     stale_banner: str | None = None,
+    model: ProjectModel | None = None,
 ) -> None:
     """One clip per call, `[t_start_s, t_end_s]` inclusive (boundary-exact
-    via `Session.seek_ns`, same as `snapshot`). `out` must end `.mp4`."""
+    via `Session.seek_ns`, same as `snapshot`). `out` must end `.mp4`.
+
+    `model`, when given, is resolved once and reused for every frame --
+    same discipline `ST-C5-2` states for `render/viewer.py`'s own cache,
+    and the same fix `snapshot()` needed (`sim_implementation_plan.md`
+    S-C8's gate: a plug-in root's `ProjectModel` must be threaded through
+    or a component's layer code falls back to a source-checkout path a
+    deployed copy does not have). `None` resolves once here rather than
+    once per tick, which the previous per-tick `build_scene(...)` call
+    (implicitly re-resolving on every frame) did not."""
     if out.suffix.lower() != ".mp4":
         raise ValueError(f"clip output must end .mp4, got {out.suffix!r}")
     # Deferred: only an actual clip export needs a video encoder -- every
@@ -63,6 +74,7 @@ def export_clip(
     import imageio.v3 as iio
 
     resolved_project = project or session.meta.project or "base"
+    resolved_model = model if model is not None else ProjectModel.resolve(project=resolved_project)
     start_tick = session.seek_ns(int(t_start_s * 1e9))
     end_tick = session.seek_ns(int(t_end_s * 1e9))
     tick_indices = range(min(start_tick, end_tick), max(start_tick, end_tick) + 1)
@@ -70,7 +82,7 @@ def export_clip(
     frames = []
     first_scene = None
     for tick_index in tick_indices:
-        scene = build_scene(session, tick_index, project=resolved_project)
+        scene = build_scene(session, tick_index, project=resolved_project, model=resolved_model)
         if first_scene is None:
             first_scene = scene
             # `AR-58`: resolved once, off the first tick, and reused for
@@ -82,7 +94,7 @@ def export_clip(
         ))
 
     sidecar = capture.sidecar_dict(
-        session, tick_indices[0], first_scene, viewport, layer_selection, theme, resolved_project,
+        session, tick_indices[0], first_scene, viewport, layer_selection, theme, resolved_project, resolved_model,
     )
     sidecar["clip_t_start_s"] = session.at(tick_indices[0]).t_s
     sidecar["clip_t_end_s"] = session.at(tick_indices[-1]).t_s

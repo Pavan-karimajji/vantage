@@ -3,7 +3,7 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""S-B4 `render/capture.py` tests: `UT-B4-1`..`UT-B4-5`
+"""S-B4 `render/capture.py` tests: `UT-B4-1`..`UT-B4-6`
 (docs/sim_implementation_plan.md)."""
 
 from __future__ import annotations
@@ -15,10 +15,42 @@ import pytest
 from adas_sim.core.session import Session
 from adas_sim.core.tick import Pose2D, PortValue, Tick
 from adas_sim.io.base import ComponentBuildInfo, RunManifest
+from adas_sim.model.project import ProjectModel
 from adas_sim.render import capture
+from adas_sim.scene import registry as scene_registry
 from adas_sim.scene.registry import layer_provider
 from adas_sim.scene.types import Layer, Prim, Scene
 from adas_sim.view.viewport import Viewport
+
+_EGO_TEMPLATE = (
+    "EGO_LENGTH_M: 4.5\n"
+    "EGO_WIDTH_M: 1.8\n"
+    "EGO_WHEELBASE_M: 2.7\n"
+    "EGO_OVERHANG_FRONT_M: 0.9\n"
+)
+
+
+def _make_bundle_dir(root):
+    bundle_dir = root / "library_bundle"
+    (bundle_dir / "vehicle").mkdir(parents=True)
+    (bundle_dir / "vehicle" / "ego_params.yaml").write_text(_EGO_TEMPLATE, encoding="utf-8")
+    (bundle_dir / "manifest.yaml").write_text("project: fx\n", encoding="utf-8")
+    return bundle_dir
+
+
+@layer_provider("test.b4.needs_bundle_dir", group="test-b4")
+def _needs_bundle_dir_layer(ctx):
+    """Mirrors a real component's own calibration-reading pattern (e.g.
+    `df/sim/layers/bsd.py`'s `_bsd_calibration`): a prim only when
+    `ctx.model.bundle_dir` is populated, so a test can tell whether
+    `snapshot()`/`export_clip()` actually threaded a plugin-root-resolved
+    `ProjectModel` through, rather than silently re-resolving a checkout
+    default that has no `bundle_dir` at all."""
+    if ctx.model.bundle_dir is None:
+        return ()
+    return (Layer(id="test.b4.needs_bundle_dir", group="test-b4", prims=(
+        Prim(kind="box", cx_m=0.0, cy_m=0.0, length_m=1.0, width_m=1.0, yaw_rad=0.0, style="object.label"),
+    )),)
 
 _ORIGIN_POSE = Pose2D(x_m=0.0, y_m=0.0, yaw_rad=0.0)
 
@@ -167,3 +199,55 @@ def test_sidecar_records_bundle_origin(tmp_path):
     sidecar = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
     assert sidecar["bundle_origin"] == "checkout"  # no recording/library bundle passed in
     assert sidecar["bundle_sha256"]
+
+
+def test_snapshot_threads_a_given_model_through_instead_of_re_resolving(tmp_path, monkeypatch):
+    """`UT-B4-6`. Regression: `snapshot()` used to always call `build_scene(...)` with
+    no `model=`, so it silently re-resolved a checkout-default `ProjectModel`
+    even when the caller had already resolved one with a `library_dir=`
+    (e.g. `cli/render.py --plugin-root`). That fell a component's own
+    calibration-reading layer code back to a source-checkout path a
+    DEPLOYED copy does not have, crashing with `FileNotFoundError`
+    (`sim_implementation_plan.md` S-C8's gate). Proven here without a real
+    component: a test-only layer only produces a prim when
+    `ctx.model.bundle_dir` is populated, so a `model=` that was silently
+    dropped shows up as a missing layer, not a crash -- a clearer failure
+    for this test than reproducing the exact exception.
+
+    **The registry is isolated to this file's own providers**, restored by
+    `monkeypatch` on teardown: `build_scene` calls every GLOBALLY registered
+    provider (`scene.registry` is process-wide, `R-VAR-2`), and any real
+    component's own layer (e.g. `df.sim.layers.bsd`, imported by an
+    unrelated test elsewhere in this same session) would see this test's
+    `bundle_dir` too and crash on a bundle shaped for this test only, not
+    for that component's own calibration keys -- exactly the
+    order-dependent collision `test_c8_relocatability_installed.py`'s own
+    docstring names and sidesteps with a fresh subprocess instead."""
+    monkeypatch.setattr(scene_registry, "_PROVIDERS", {
+        k: v for k, v in scene_registry._PROVIDERS.items() if v.group in ("test-b4",)
+    })
+    bundle_dir = _make_bundle_dir(tmp_path)
+    model = ProjectModel.resolve(library_dir=bundle_dir, project="fx")
+    assert model.bundle_dir == bundle_dir  # sanity: the fixture is bundle-shaped
+
+    # `layer_selection=None`: the sidecar's own "layers" list is then
+    # `LayerTreeState.sync(scene.layers)`'s output, which only names a
+    # layer that the SCENE actually produced -- an explicit selection
+    # would just echo the request back regardless of what rendered.
+    out = tmp_path / "fig.png"
+    capture.snapshot(_session(), 0, _viewport(), None, out, model=model)
+    sidecar = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+    assert sidecar["bundle_origin"] == "library"
+    assert "test.b4.needs_bundle_dir" in sidecar["layers"]
+
+
+def test_snapshot_with_no_model_still_resolves_a_default_unchanged(tmp_path):
+    """The `model=None` default must stay exactly what it was before
+    `model=` existed -- a checkout-resolved `ProjectModel`, `bundle_dir`
+    `None` -- so every existing caller that never passes `model=` sees no
+    behaviour change."""
+    out = tmp_path / "fig.png"
+    capture.snapshot(_session(), 0, _viewport(), None, out)
+    sidecar = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+    assert sidecar["bundle_origin"] == "checkout"
+    assert "test.b4.needs_bundle_dir" not in sidecar["layers"]

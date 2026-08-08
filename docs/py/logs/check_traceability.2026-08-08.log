@@ -3,7 +3,7 @@
 # python    3.12.10
 
 Checking: requirements <-> tests <-> stages
-plan defines 353 test/gate ids across 32 stages, plus 9 document checks
+plan defines 355 test/gate ids across 32 stages, plus 9 document checks
 
 1. Requirement -> test
 ----------------------
@@ -17,7 +17,7 @@ ok    every stage-scoped test id maps to a declared stage
 
 2b. Test ids are unique
 -----------------------
-ok    all 230 test definitions unique
+ok    all 231 test definitions unique
 
 2c. Tests are filed under the stage they name
 ---------------------------------------------
@@ -29,8 +29,8 @@ ok    all 32 stages define tests and a gate
 
 4. Coverage summary
 -------------------
-tests defined in plan      362
+tests defined in plan      364
 tests cited by a requirement 196
-tests not cited by any requirement 166  (fine -- stage gates cite them)
+tests not cited by any requirement 168  (fine -- stage gates cite them)
 
 RESULT  pass

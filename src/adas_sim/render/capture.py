@@ -68,9 +68,10 @@ _VECTOR_SUFFIXES = frozenset({".svg", ".pdf"})
 def sidecar_dict(
     session: Session, tick_index: int, scene: Scene, viewport: Viewport,
     layer_selection: frozenset[str] | None, theme: str, project: str,
+    model: ProjectModel | None = None,
 ) -> dict:
     tick = session.at(tick_index)
-    model = ProjectModel.resolve(project=project)
+    model = model if model is not None else ProjectModel.resolve(project=project)
     manifest = session.meta
     return {
         "run_id": session.run_id,
@@ -129,6 +130,7 @@ def snapshot(
     overlay_prims: tuple[Prim, ...] = (),
     hud_lines: tuple[str, ...] = (),
     stale_banner: str | None = None,
+    model: ProjectModel | None = None,
 ) -> None:
     """Writes `out` (raster `.png`, or vector `.svg`/`.pdf`) and a `.json`
     sidecar beside it carrying enough provenance to believe the picture
@@ -139,11 +141,20 @@ def snapshot(
     `project` defaults to the session's own recorded project
     (`session.meta.project`), falling back to `"base"` (`R-VAR-4`) only if
     the recording carries no meta at all (`R-SIM-6`).
-    """
+
+    `model`, when given, is used as-is instead of re-resolving `project`
+    (`ST-C5-2`'s discipline, extended here): a caller that already
+    resolved a plug-in root's own `ProjectModel` (`cli/render.py`
+    `--plugin-root`) must pass it through, or a component's layer code
+    reading calibration relative to a DEPLOYED copy's own path falls back
+    to a source-checkout path that does not exist there and crashes
+    (`sim_implementation_plan.md` S-C8's gate, the same bug class
+    `render/viewer.py`'s `_resolve_project_model` fixed for the
+    interactive window)."""
     resolved_project = project or session.meta.project or "base"
-    scene = build_scene(session, tick_index, project=resolved_project)
+    scene = build_scene(session, tick_index, project=resolved_project, model=model)
     layer_selection = resolve_layer_selection(layer_selection, scene)
-    sidecar = sidecar_dict(session, tick_index, scene, viewport, layer_selection, theme, resolved_project)
+    sidecar = sidecar_dict(session, tick_index, scene, viewport, layer_selection, theme, resolved_project, model)
 
     if out.suffix.lower() in _VECTOR_SUFFIXES:
         image_bytes = render_scene_vector(

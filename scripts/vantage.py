@@ -33,29 +33,23 @@ _SRC = _SIM_ROOT / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from adas_sim.model.plugins import PluginBundle  # noqa: E402
+from adas_sim.model.plugins import PluginBundle, register_plugin_root  # noqa: E402
 
 
 def _register_plugin_root(library_dir: Path) -> Path:
-    """Imports the plug-in half (`sim/plugin.yaml`) and returns
-    `library_dir/config` -- the SAME directory the build packed this
-    component's config bundle into, beside `sim/` (`R-SIM-3a`,
-    `interfaces/scripts/pack_config_bundle.py`). `main()` uses the first
-    root's config directory as `MainWindow`'s `config_library_dir` (`AR-55`,
-    2026-08-07) -- without it, a component's own layer code (`df.bsd`'s
-    `_bsd_calibration`) has no way to read its own calibration from a
-    DEPLOYED plug-in copy, only from a source checkout (the exact bug that
-    finding named). Returned unconditionally, even if `sim/plugin.yaml` is
-    absent -- `ProjectModel.resolve` degrades a missing/empty `config/`
-    tier to the next one on its own (`_bundle_ego` returns `None` when
-    `ego_params.yaml` isn't there), so there is nothing to validate here."""
+    """Thin wrapper over `model.plugins.register_plugin_root` -- the shared
+    implementation `cli/render.py` also uses, so "point a caller at a
+    library directory and it draws it" has one implementation (`R-SIM-20`).
+    Kept as a named function here, rather than calling the shared one
+    directly at each call site, only to add this launcher's own stderr
+    warning for a root with no plug-ins -- `main()` uses the first root's
+    returned `config/` directory as `MainWindow`'s `config_library_dir`,
+    without which a component's own layer code has no way to read its
+    calibration from a DEPLOYED plug-in copy, only from a source checkout."""
     library_dir = library_dir.resolve()
-    bundle = PluginBundle.resolve(library_dir=library_dir / "sim")
-    if bundle is None:
+    if PluginBundle.resolve(library_dir=library_dir / "sim") is None:
         print(f"warning: {library_dir} has no sim/plugin.yaml -- nothing to import from it", file=sys.stderr)
-    else:
-        bundle.import_modules()
-    return library_dir / "config"
+    return register_plugin_root(library_dir)
 
 
 def build_parser() -> argparse.ArgumentParser:

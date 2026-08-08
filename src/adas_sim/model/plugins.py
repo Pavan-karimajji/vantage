@@ -149,3 +149,28 @@ class PluginBundle:
             spec.loader.exec_module(module)
             modules.append(module)
         return tuple(modules)
+
+
+def register_plugin_root(library_dir: Path) -> Path:
+    """A component's built library directory (carries `sim/plugin.yaml`,
+    packed by the build) -- imports its plug-in half and returns
+    `library_dir/config`, the SAME directory the build packed this
+    component's config bundle into, beside `sim/` (`R-SIM-3a`). Every
+    caller that loads a plug-in from a directory (`scripts/vantage.py`,
+    `cli/render.py`) shares this one function so "point a caller at a
+    folder of libraries and it draws them" (`R-SIM-20`) has one
+    implementation, not one per entry point that could drift.
+
+    The returned `config/` directory must be threaded into
+    `ProjectModel.resolve(library_dir=...)` by the caller -- without it, a
+    component's own layer code has no way to read its calibration from a
+    DEPLOYED copy, only from a source checkout (the class of bug
+    `sim_implementation_plan.md` S-C8's gate names). Returned
+    unconditionally, even if `sim/plugin.yaml` is absent --
+    `ProjectModel.resolve` degrades a missing/empty `config/` tier to the
+    next one on its own, so there is nothing to validate here."""
+    library_dir = library_dir.resolve()
+    bundle = PluginBundle.resolve(library_dir=library_dir / "sim")
+    if bundle is not None:
+        bundle.import_modules()
+    return library_dir / "config"
