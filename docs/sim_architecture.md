@@ -53,7 +53,7 @@ from here on.
 
 Four supporting terms:
 
-- **stimulus** — one tick's complete input set to the SUT (`DetectedObjectList`,
+- **stimulus** — one tick's complete input set to the SUT (`DfObjList`,
   `VehDyn`, `VehSig`, later raw sensor frames).
 - **observation** — one tick's complete output set (`AebOutputs`, `BsdOutputs`,
   `CompState`…), plus any derived quantity the viewer computes for display only
@@ -86,7 +86,7 @@ Facts, not judgements. Line counts as of 2026-07-27.
 
 | File | Lines | Role |
 |---|---|---|
-| `modules/df/tools/carla/carla_bridge.py` | 983 | CARLA connect, spawn, actor motion, frame conversion, `DetectedObjectList`/`VehDyn` synthesis, `dfExec` call, console log, recording, end conditions, scenario resolution, CLI |
+| `modules/df/tools/carla/carla_bridge.py` | 983 | CARLA connect, spawn, actor motion, frame conversion, `DfObjList`/`VehDyn` synthesis, `dfExec` call, console log, recording, end conditions, scenario resolution, CLI |
 | `modules/df/tools/carla/actor_behaviour.py` | 136 | Declarative lateral motion profiles |
 | `modules/df/tools/carla/frame_convert.py` | 61 | World frame → ego frame |
 | `modules/df/tools/carla/df_ctypes.py` | 104 | ctypes mirror of `df_interface_c.h` |
@@ -523,7 +523,7 @@ Everything downstream reads a `Tick` and nothing else. `stimulus` and
 `"bsd.outputs"`), which is what makes L1 and L3 both function-agnostic.
 
 `truth` matters more than it looks: today the CARLA bridge *is* the perception
-system — it synthesises `DetectedObjectList` from actor transforms. Once
+system — it synthesises `DfObjList` from actor transforms. Once
 `perception-core` is in the pipeline, ground truth becomes a separate,
 independently drawable thing, and the difference between `truth` and
 `observation` is exactly what a perception engineer needs to see. Keeping the
@@ -761,7 +761,7 @@ not its library.
 ```python
 model = ProjectModel.load(project="base")
 model.ego         # EgoModel   — from shared_config .../vehicle/ego_params.yaml
-model.objects     # ObjectModel — footprint per DetectedObject.Classification
+model.objects     # ObjectModel — footprint per DfObj.Classification
 model.sensors     # SensorModel — pose, FOV, range, per sensor id
 model.cameras     # CameraModel — intrinsics + extrinsics, for image overlays
 model.calib       # raw key→value view of the project's default.yaml sections
@@ -781,10 +781,10 @@ from a BSD special case to *the* ego model is the whole of the fix.
 
 `ObjectModel` resolves a footprint in this precedence order:
 
-1. `DetectedObject.geometry.shape_point_coordinates`, when perception actually fills
+1. `DfObj.geometry.shape_point_coordinates`, when perception actually fills
    it (the item parked in `../../../docs/df_carla_viz_plan.md` §6 — this is where it lands);
 2. the project's class-footprint table, keyed by
-   `DetectedObject.attributes.classification`;
+   `DfObj.attributes.classification`;
 3. a declared fallback, drawn with a distinct "assumed geometry" style token so
    a viewer can *see* that the box is a guess rather than a measurement.
 
@@ -1342,7 +1342,7 @@ interim state `interfaces` and `shared_config` already live in.
 ### 5.10 Pipeline depth — where the simulation starts
 
 The second scaling question: today a CARLA Python script synthesises
-`DetectedObjectList` and hands it to `df`. Tomorrow the chain runs radar signal
+`DfObjList` and hands it to `df`. Tomorrow the chain runs radar signal
 processing → detections → fusion → functions, or camera → perception →
 functions. Does the "a Python script makes the objects" approach survive? And
 will `sil_host` end up synthesising objects *again*, in C++?
@@ -1745,7 +1745,7 @@ last row names, not as the normal path.
 | real vehicle measurement | freezes of every port | any stage `measured` or `simulate` |
 | session recording (from a resim) | source ports + every stage's outputs | any stage |
 | **manufactured stimulus** (workflow B) | only the mocked upstream ports | upstream stages `measured`; **the component under test must be `simulate`** — nothing exists to inject |
-| today's stimulus recording | `DetectedObjectList`, `VehDyn`, camera | df must be `simulate` |
+| today's stimulus recording | `DfObjList`, `VehDyn`, camera | df must be `simulate` |
 
 The pipeline loader resolves this from the recording's topic index and the GUI
 disables what the file cannot support (§13 of the visualization spec). Nothing
@@ -1776,7 +1776,7 @@ misread result.
 | Job | Side | Lands in |
 |---|---|---|
 | connect to CARLA, spawn, drive actors | production | `adas_sim.sources.carla` |
-| CARLA → `DetectedObjectList`/`VehDyn` synthesis | production (a **mock**, tagged `mocked`) | `adas_sim.sources.carla.mocks` |
+| CARLA → `DfObjList`/`VehDyn` synthesis | production (a **mock**, tagged `mocked`) | `adas_sim.sources.carla.mocks` |
 | write the mcap | production | `adas_sim.io.mcap` (the codec) |
 | call `dfExec`, print, draw | consumption | `core.runner` + the viewer |
 
@@ -2456,7 +2456,7 @@ like. Therefore:
   just two arrays indexed by the same `i`.
 
 Memory cost is bounded and small: a `Tick` holds parsed protobuf messages, and
-a 50-slot `DetectedObjectList` plus outputs is a few kB — a 1200-tick session is
+a 50-slot `DfObjList` plus outputs is a few kB — a 1200-tick session is
 single-digit MB. Camera frames are the exception and are held by reference into
 the recording, decoded on demand.
 
@@ -2513,14 +2513,14 @@ which does not exist yet — without redesign. Concretely:
 **Today**
 
 ```
-CARLA actors ──(bridge synthesises)──► DetectedObjectList ──► df ──► AebOutputs/BsdOutputs
+CARLA actors ──(bridge synthesises)──► DfObjList ──► df ──► AebOutputs/BsdOutputs
 ```
 
 **With perception**
 
 ```
 CARLA sensors ──► camera frames ─┐
-                  radar dets   ──┴─► perception-core ──► DetectedObjectList ──► df ──► outputs
+                  radar dets   ──┴─► perception-core ──► DfObjList ──► df ──► outputs
 CARLA actors  ──────────────────────────────────────────────► truth (ground truth)
 ```
 

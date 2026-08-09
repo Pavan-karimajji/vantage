@@ -7,8 +7,8 @@
 
 Six verbs, forever: four arithmetic -- `const`, `hold`, `offset`, `scale` --
 plus two structural, added at `S-C1cΔ` (`OD-8`): `select`, `drop`. There is
-no expression language, no `python:`, no user-supplied callable -- the
-reference console's per-argument mapping rules are the failure this
+no expression language, no `python:`, no user-supplied callable -- an
+open-ended per-argument mapping scheme is the failure this
 bounds. A seventh verb is a design change requiring a requirement, never a
 runtime extension point. The line that keeps the list closed: **an
 override may destroy or attenuate information; it may never create an

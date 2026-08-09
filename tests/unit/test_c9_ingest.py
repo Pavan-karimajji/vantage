@@ -79,7 +79,7 @@ def _session_with(*, provides: dict[str, ProvidedPort] = {}, absent: dict[str, A
 
 
 def test_feasible_cuts_reports_a_proto_type_mismatch_naming_both_types(tmp_path):
-    manifest = _manifest(component="under_test", outputs=[PortSpec(name="objects", proto_type="adas.perception.DetectedObjectList")])
+    manifest = _manifest(component="under_test", outputs=[PortSpec(name="objects", proto_type="adas.perception.DfObjList")])
     pipeline = _stub_pipeline(tmp_path, stage_name="under_test", manifest=manifest)
     session = _session_with(provides={
         "objects": ProvidedPort(
@@ -93,7 +93,7 @@ def test_feasible_cuts_reports_a_proto_type_mismatch_naming_both_types(tmp_path)
     assert len(results) == 1
     assert results[0].feasible is False
     assert "adas.perception.ObjectList" in results[0].missing[0]
-    assert "adas.perception.DetectedObjectList" in results[0].missing[0]
+    assert "adas.perception.DfObjList" in results[0].missing[0]
 
 
 # ---------------------------------------------------------------------------

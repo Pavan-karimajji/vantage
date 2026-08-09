@@ -95,7 +95,7 @@ def test_parse_manifest_round_trips_every_field():
         component="widget", version="1.2.3", abi_version=1, build_id="deadbeef",
         project="base", config_bundle_sha256="", descriptor_set=b"\x01\x02", period_ns=50_000_000,
     )
-    msg.inputs.add(name="objects", proto_type="adas.perception.DetectedObjectList", optional=False)
+    msg.inputs.add(name="objects", proto_type="adas.perception.DfObjList", optional=False)
     msg.outputs.add(
         name="widget.outputs", proto_type="adas.df.WidgetOutputs", max_bytes=256, owner_function="widget",
         period_us=50_000, fixed_slots=True,
@@ -108,7 +108,7 @@ def test_parse_manifest_round_trips_every_field():
     assert manifest.abi_version == 1
     assert manifest.build_id == "deadbeef"
     assert manifest.period_ns == 50_000_000
-    assert manifest.inputs == (PortSpec(name="objects", proto_type="adas.perception.DetectedObjectList"),)
+    assert manifest.inputs == (PortSpec(name="objects", proto_type="adas.perception.DfObjList"),)
     assert manifest.outputs == (
         PortSpec(
             name="widget.outputs", proto_type="adas.df.WidgetOutputs", max_bytes=256, owner_function="widget",
@@ -224,7 +224,7 @@ def test_build_in_portset_passes_real_valid_and_age_s_from_input_meta():
     """S-C3: `_build_in_portset` used to hardcode every input port's
     `valid`/`ageS` (`valid=1, ageS=0.0`, always), discarding whatever the
     caller actually knew -- the gap `df`'s own `ReqPort` gating
-    (`reqPorts_.detectedObjects.valid && ageS <= maxAge`,
+    (`reqPorts_.dfObjects.valid && ageS <= maxAge`,
     `modules/df/src/component/aeb/aeb_function.cpp`) depends on. Verified
     against the real ABI struct directly, naming no port (`R-SIM-1`) --
     only that the field the caller supplied for one port lands there, and

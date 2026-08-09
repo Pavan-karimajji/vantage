@@ -49,7 +49,7 @@ def _load_generated_bindings():
     framework itself (R-SIM-11), and this build output may not exist on a
     fresh checkout (a partial clone), hence the named skip."""
     required = [
-        _GENERATED_PY / "PerceptionCore__Outputs" / "gen_object_list_pb2.py",
+        _GENERATED_PY / "PerceptionCore__Outputs" / "df_obj_list_pb2.py",
         _GENERATED_PY / "VehSigProvider__Outputs" / "veh_dyn_pb2.py",
         _GENERATED_PY / "Bsd__Outputs" / "bsd_outputs_pb2.py",
     ]
@@ -60,9 +60,9 @@ def _load_generated_bindings():
         if path not in sys.path:
             sys.path.insert(0, path)
     import bsd_outputs_pb2
-    import gen_object_list_pb2
+    import df_obj_list_pb2
     import veh_dyn_pb2
-    return gen_object_list_pb2, veh_dyn_pb2, bsd_outputs_pb2
+    return df_obj_list_pb2, veh_dyn_pb2, bsd_outputs_pb2
 
 
 _bindings = _load_generated_bindings()
@@ -71,7 +71,7 @@ pytestmark = pytest.mark.skipif(
     reason="modules/interfaces/build/generated_py is absent -- build interfaces first",
 )
 if _bindings is not None:
-    _gen_object_list_pb2, _veh_dyn_pb2, _bsd_outputs_pb2 = _bindings
+    _df_obj_list_pb2, _veh_dyn_pb2, _bsd_outputs_pb2 = _bindings
     from sim.layers import bsd, common  # noqa: E402  (df's own package, needs DF_ROOT on sys.path)
 
 
@@ -84,7 +84,7 @@ def _veh_dyn(vx: float = 20.0, yaw_rate: float = 0.0):
 
 def _gen_object_list(objects: list[tuple[int, float, float, int]]):
     """`objects`: list of `(local_id, dist_x, dist_y, classification)`."""
-    msg = _gen_object_list_pb2.DetectedObjectList()
+    msg = _df_obj_list_pb2.DfObjList()
     for _ in range(50):
         msg.objects.add()
     for i, (local_id, dist_x, dist_y, classification) in enumerate(objects):

@@ -63,7 +63,7 @@ def _build_source(args: argparse.Namespace):
     if args.component_lib is None:
         raise AuthoringError(
             expected="--component-lib <path> with --source carla", found="--component-lib absent",
-            where="sim record", hint="a live CARLA source resolves its DetectedObjectList/VehDyn/"
+            where="sim record", hint="a live CARLA source resolves its DfObjList/VehDyn/"
                   "VehSig message classes from a built component's adasManifest()",
         )
     component = CtypesSilComponent(args.component_lib)

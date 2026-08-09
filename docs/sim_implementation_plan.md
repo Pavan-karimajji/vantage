@@ -4557,7 +4557,7 @@ against.
 > generic-ABI shim on 2026-08-06 (build queue row 1): real MSVC/Conan build,
 > **11/11 gtest** on `-P base` and `-P cus1`, `perception_core_sil.dll`
 > produced, manifest declaring `frame`/`egoDyn` in and
-> `detectedObjectList`/`compState` out — where `detectedObjectList` is **byte-for-byte
+> `dfObjList`/`compState` out — where `dfObjList` is **byte-for-byte
 > the type `df` consumes** on its own `objects` port. So the ABI, manifest,
 > bundle and plug-in chain are all proven end to end.
 >

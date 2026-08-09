@@ -728,7 +728,7 @@ whoever owns those recordings:
 ```yaml
 # modules/df/sim/ingest/carla_legacy.yaml
 provides:
-  df/gen_object_list: {port: objects, proto_type: adas.perception.DetectedObjectList, origin: mocked}
+  df/gen_object_list: {port: objects, proto_type: adas.perception.DfObjList, origin: mocked}
   df/veh_dyn:         {port: egoDyn,  proto_type: adas.common.VehDyn,            origin: truth}
 absent:
   vehSig: "never recorded by the old bridge; consumers see valid=0"

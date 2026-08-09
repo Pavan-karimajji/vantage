@@ -29,7 +29,7 @@ DT_NS = 50_000_000  # 20 Hz, matching the live bridge's own pacing
 
 TOPICS = {
     "/source/veh_dyn": TopicInfo(schema_name="adas_sim.test.VehDyn", provenance=Provenance.MEASURED),
-    "/source/gen_object_list": TopicInfo(schema_name="adas_sim.test.DetectedObjectList", provenance=Provenance.MEASURED),
+    "/source/gen_object_list": TopicInfo(schema_name="adas_sim.test.DfObjList", provenance=Provenance.MEASURED),
     "/df/aeb.outputs": TopicInfo(schema_name="adas_sim.test.AebOutputs", provenance=Provenance.SIMULATED),
 }
 

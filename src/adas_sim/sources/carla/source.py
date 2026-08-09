@@ -22,7 +22,7 @@ a caller's `Pipeline`/recorder clock is a separate, nominal `dt_ns` for its
 own scheduling (`R-SIM-18`), which for a live CARLA run is expected to
 track this source's real pacing but is never used to drive it.
 
-`message_classes` (constructor-required) supplies the `DetectedObjectList`/
+`message_classes` (constructor-required) supplies the `DfObjList`/
 `VehDyn`/`VehSig` message classes `mocks.py` builds bytes with -- resolved
 by the CALLER from a real component's own manifest
 (`contracts.component.resolve_message_classes`, `R-SIM-11`'s own dynamic-

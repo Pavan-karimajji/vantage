@@ -340,7 +340,7 @@ change rate:
 |---|---|
 | Per scenario — map, spawn point index, blueprints | the scenario's `world.carla:` block (§3) |
 | Reusable engine constants — spawn z-clearance `0.05`, `TARGET_HZ`, `LaneAdvancer.REFRESH_DISTANCE_M`, the async-mode decision | `modules/sim/src/adas_sim/sources/carla/` (Python) |
-| Reusable catalogues — blueprint → `DetectedObject.Classification`, blueprint dimensions | `modules/sim/src/adas_sim/sources/carla/catalogue.yaml` |
+| Reusable catalogues — blueprint → `DfObj.Classification`, blueprint dimensions | `modules/sim/src/adas_sim/sources/carla/catalogue.yaml` |
 
 The catalogue is framework, not component content: a blueprint-to-class mapping
 is a fact about CARLA, contains no function name, and every component that ever

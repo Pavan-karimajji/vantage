@@ -3,7 +3,7 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""CARLA actor state -> `DetectedObjectList`/`VehDyn`/`VehSig` bytes (`S-C2`
+"""CARLA actor state -> `DfObjList`/`VehDyn`/`VehSig` bytes (`S-C2`
 slice 5) -- ground truth standing in for perception, a MOCK (`R-SIM-12`):
 tagged `mocked`/`truth` by whatever records it (`sources/recorder.py`),
 never presented as a measurement. Ported from
@@ -15,7 +15,7 @@ message classes are supplied by the caller (`CarlaSource`), resolved from a
 real component's own manifest via `contracts.component.resolve_message_classes`
 -- the same dynamic-from-`descriptor_set` construction every other framework
 module already uses, never a generated-code import. `_CLASSIFICATION_VALUES`
-mirrors `PerceptionCore__Outputs/gen_object.proto`'s `DetectedObject.Classification`
+mirrors `PerceptionCore__Outputs/df_obj.proto`'s `DfObj.Classification`
 enum verbatim (field numbers, not names, are the wire contract -- the same
 reasoning `contracts/component.py`'s own hand-built manifest schema states
 for its field numbers)."""
@@ -27,7 +27,7 @@ import math
 from adas_sim.sources.carla import frame_convert
 from adas_sim.sources.carla.actor_behaviour import velocity_world
 
-GEN_OBJECT_LIST_PROTO_TYPE = "adas.perception.DetectedObjectList"
+GEN_OBJECT_LIST_PROTO_TYPE = "adas.perception.DfObjList"
 VEH_DYN_PROTO_TYPE = "adas.common.VehDyn"
 VEH_SIG_PROTO_TYPE = "adas.common.VehSig"
 
@@ -40,10 +40,10 @@ PORT_PROTO_TYPES: dict[str, str] = {
     "veh_sig": VEH_SIG_PROTO_TYPE,
 }
 
-#: Verbatim against `PerceptionCore__Outputs/gen_object.proto`'s
-#: `DetectedObject.Classification` enum -- kept as plain ints here (not resolved
-#: through a `DetectedObject` message class) so this module needs no message
-#: class beyond `DetectedObjectList` itself.
+#: Verbatim against `PerceptionCore__Outputs/df_obj.proto`'s
+#: `DfObj.Classification` enum -- kept as plain ints here (not resolved
+#: through a `DfObj` message class) so this module needs no message
+#: class beyond `DfObjList` itself.
 _CLASSIFICATION_VALUES = {
     "POINT": 0, "CAR": 1, "TRUCK": 2, "PEDESTRIAN": 3, "MOTORCYCLE": 4,
     "BICYCLE": 5, "WIDE": 6, "UNCLASSIFIED": 7, "OTHER_VEHICLE": 8, "TL": 9, "MULTIPLE": 10,
@@ -54,7 +54,7 @@ def _project_onto_ego_heading(ego_yaw_deg: float, vx: float, vy: float) -> tuple
     """Projects a world-frame velocity onto ego's own heading axes
     (forward, OUR +y-left) -- the same convention `frame_convert.to_ego_frame`
     uses for its relative velocity, but absolute rather than ego-relative
-    (`DetectedObject.kinematic`'s `vabs_x`/`vabs_y`: a real radar/track-filter
+    (`DfObj.kinematic`'s `vabs_x`/`vabs_y`: a real radar/track-filter
     output is ego-frame-*aligned*, not ego-frame-*relative*)."""
     yaw_rad = math.radians(ego_yaw_deg)
     forward = (math.cos(yaw_rad), math.sin(yaw_rad))
@@ -73,14 +73,14 @@ def build_gen_object_list_bytes(
     function only ever consumes an already-resolved token; it does not
     know a catalogue exists.
 
-    `message_classes[GEN_OBJECT_LIST_PROTO_TYPE]` is the `DetectedObjectList`
+    `message_classes[GEN_OBJECT_LIST_PROTO_TYPE]` is the `DfObjList`
     message class, resolved by the caller (never imported here, `R-SIM-11`).
 
-    Always returns exactly `num_object_slots` `DetectedObject`s, matching a
+    Always returns exactly `num_object_slots` `DfObj`s, matching a
     fixed-array shape rather than a variable-length list that happens to be
     small in one scenario. Real, in-range targets fill the nearest slots
     first (sorted by distance); any remaining slots are padded with
-    default-constructed (all-zero) objects -- a zero-valued `DetectedObject` has
+    default-constructed (all-zero) objects -- a zero-valued `DfObj` has
     `dist_x=0`, already outside any eligibility gate requiring `dx > 0`,
     so padding slots are inert without special-casing downstream.
     """

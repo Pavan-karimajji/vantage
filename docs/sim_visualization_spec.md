@@ -672,7 +672,7 @@ outline where perception is a fill), so the two can never be confused at a
 glance.
 
 This is also what turns the CARLA bridge's current role inside out in a healthy
-way: today it *is* the perception system (it synthesises `DetectedObjectList` from
+way: today it *is* the perception system (it synthesises `DfObjList` from
 actor transforms); afterwards it is a stimulus source that also happens to know
 the truth, and both facts stay useful.
 
@@ -843,7 +843,7 @@ Everything a state-of-the-art ADAS debug BEV needs, with today's status.
 | 2 | **Config-driven ego body** | ⚠ BSD-only branch | A2/B1 |
 | 3 | **Config-driven object footprints by class** | ❌ | A2/C4 |
 | 4 | Oriented (yawed) footprints | ❌ | B1 |
-| 5 | Geometry from `DetectedObject.geometry` when present | ❌ parked | D4 |
+| 5 | Geometry from `DfObj.geometry` when present | ❌ parked | D4 |
 | 6 | Coordinate frame furniture (origin, triad, grid, scale) | ✅ | B1 |
 | 7 | Cursor metre readout | ✅ | B1 |
 | 8 | Click-to-inspect | ✅ two entity types, popups | B3 |

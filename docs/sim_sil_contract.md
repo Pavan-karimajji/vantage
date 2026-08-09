@@ -374,7 +374,7 @@ declaration moves to **data**, beside the other per-component build data:
 component: df
 period_ns: 50000000            # OQ-12: should come from the config bundle
 inputs:
-  - {name: objects, proto_type: adas.perception.DetectedObjectList, binds: detectedObjects, functions: [aeb, bsd]}
+  - {name: objects, proto_type: adas.perception.DfObjList, binds: dfObjects, functions: [aeb, bsd]}
   - {name: egoDyn,  proto_type: adas.common.VehDyn,            binds: egoDyn,       functions: [aeb, bsd]}
   - {name: vehSig,  proto_type: adas.common.VehSig,            binds: vehSig,       functions: [bsd], optional: true}
 outputs:
@@ -400,14 +400,14 @@ possible rather than a test that has to catch it:
   not byte-identical across components — each names its own ports.
 
 **The handle-member-naming convention (`S-C1d`, frozen 2026-08-04).** `binds:`
-names only the `ReqPort`/`ProPort` member (`detectedObjects`) — not which
+names only the `ReqPort`/`ProPort` member (`dfObjects`) — not which
 port-set instance on the component's handle struct owns it, since a
 component may or may not split its ports by function. The generator infers
 this from `conf/ports.yaml` itself, never a second field or CLI flag:
 
 - **Gated** (any port declares `functions:`/`owner_function`, e.g. `df`'s
   `aeb`/`bsd`): the handle member is `<fn>ReqPorts`/`<fn>ProPorts`
-  (`handle.aebReqPorts.detectedObjects`) — one port-set instance per function,
+  (`handle.aebReqPorts.dfObjects`) — one port-set instance per function,
   matching `DfHandle`'s existing shape.
 - **Ungated** (no port ever names a function, e.g. `vdy` — a single
   always-on function with no `ENABLED_FUNCTIONS` split): the handle member is
@@ -504,7 +504,7 @@ message ComponentManifest {
 
 message PortSpec {
   string name          = 1;   // "objects", "aeb.compState"
-  string proto_type    = 2;   // fully-qualified: "adas.perception.DetectedObjectList"
+  string proto_type    = 2;   // fully-qualified: "adas.perception.DfObjList"
   uint32 max_bytes     = 3;   // sizing hint for the host's output buffer
   bool   optional      = 4;   // may be absent without failing the cycle
   string owner_function= 5;   // "aeb" — empty for component-level ports
@@ -532,7 +532,7 @@ component: df
 abi_version: 1
 period_ns: 50000000          # 20 Hz, R-SIM-18
 inputs:
-  - {name: objects, proto_type: adas.perception.DetectedObjectList, optional: false}
+  - {name: objects, proto_type: adas.perception.DfObjList, optional: false}
   - {name: egoDyn,  proto_type: adas.common.VehDyn,            optional: false}
   - {name: vehSig,  proto_type: adas.common.VehSig,            optional: true}
 outputs:
@@ -696,7 +696,7 @@ traps that today's code gets right and a naive rewrite gets wrong:
 2. **`valid=0` is not `data=NULL`.** `../../../docs/df_sil_dll.md` §1 records a real bug here:
    an all-default protobuf serializes to zero bytes and `.data()` may be
    `nullptr`, so a `data != nullptr` check wrongly rejected a legitimately empty
-   `DetectedObjectList` and forced `CompState` to `ERROR`. The host's `valid` flag is
+   `DfObjList` and forced `CompState` to `ERROR`. The host's `valid` flag is
    the sole "was something received" signal. Carried forward verbatim into
    `AdasPort` semantics, and asserted by a test.
 
@@ -790,7 +790,7 @@ handle explicitly:
   grows to the reported `port.len` and retries **once**, then raises if it
   still fails. A grow event is logged, because a manifest whose `max_bytes`
   is chronically low is a manifest bug worth fixing.
-- **Unbounded growth** — a `DetectedObjectList` with 50 slots is not small. Buffers
+- **Unbounded growth** — a `DfObjList` with 50 slots is not small. Buffers
   are per-handle and reused, so growth is amortised to at most one realloc per
   port per run.
 
