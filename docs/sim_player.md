@@ -21,8 +21,8 @@ project-scale one and the developer-facing one.
 | Name | What it is | Replaces the working name |
 |---|---|---|
 | **Vantage** | the application. One engine, one project file, one recording model. | — |
-| **Bench** | the developer workspace: one run, permissive, poke at everything | `ltMB` |
-| **Campaign** | the project workspace: many runs, locked, reportable | `ltMTS` |
+| **Bench** | the developer workspace: one run, permissive, poke at everything | *(internal working name)* |
+| **Campaign** | the project workspace: many runs, locked, reportable | *(internal working name)* |
 
 ### Why these
 

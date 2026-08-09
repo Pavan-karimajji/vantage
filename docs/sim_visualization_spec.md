@@ -322,7 +322,7 @@ the renderer hit-tests the prims it actually drew, so the two cannot disagree.
 - selected prims get `object.selected` styling plus a halo;
 - selection **persists across ticks by `pick_id`**, so stepping through a run
   keeps the same target selected — which today's popups already do via their
-  `("object", ui_id)` key, and which is the right behaviour to keep.
+  `("object", local_id)` key, and which is the right behaviour to keep.
 
 ### 7.2 Inspector
 
@@ -369,7 +369,7 @@ Three constraints on it, and they are what make it worth having:
 A synced strip below the BEV. Entirely new, and the single biggest usability
 gain after scrubbing.
 
-- **Signal lanes.** Numeric signals over time (TTC, `f_dist_y` of the selected
+- **Signal lanes.** Numeric signals over time (TTC, `dist_y` of the selected
   object, ego speed, `observable_fraction`). One scale per lane — **never two
   y-scales in one lane**; two signals of different magnitude get two lanes.
 - **State lanes.** Categorical/state signals as coloured bands with text
@@ -672,7 +672,7 @@ outline where perception is a fill), so the two can never be confused at a
 glance.
 
 This is also what turns the CARLA bridge's current role inside out in a healthy
-way: today it *is* the perception system (it synthesises `GenObjectList` from
+way: today it *is* the perception system (it synthesises `DetectedObjectList` from
 actor transforms); afterwards it is a stimulus source that also happens to know
 the truth, and both facts stay useful.
 
@@ -843,7 +843,7 @@ Everything a state-of-the-art ADAS debug BEV needs, with today's status.
 | 2 | **Config-driven ego body** | ⚠ BSD-only branch | A2/B1 |
 | 3 | **Config-driven object footprints by class** | ❌ | A2/C4 |
 | 4 | Oriented (yawed) footprints | ❌ | B1 |
-| 5 | Geometry from `GenObject.geometry` when present | ❌ parked | D4 |
+| 5 | Geometry from `DetectedObject.geometry` when present | ❌ parked | D4 |
 | 6 | Coordinate frame furniture (origin, triad, grid, scale) | ✅ | B1 |
 | 7 | Cursor metre readout | ✅ | B1 |
 | 8 | Click-to-inspect | ✅ two entity types, popups | B3 |

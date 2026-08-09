@@ -255,8 +255,8 @@ tag, written once at `t=0`:
 | `simulated` | produced by a real component that executed in an earlier run |
 
 Today every topic in every recording would be tagged `truth` or `mocked`:
-`carla_bridge.py` derives `GenObjectList` from actor transforms and sets
-`contributingSensors = 0x2` (the radar bit) on it — a reasonable stand-in, and
+`carla_bridge.py` derives `DetectedObjectList` from actor transforms and sets
+`contributing_sensors = 0x2` (the radar bit) on it — a reasonable stand-in, and
 one nothing currently records as a stand-in. The viewer shows the tag, the run
 manifest carries it, and `sim check`'s report states it, so "perception was
 measured" can never quietly mean "perception was a CARLA mock". One enum per
@@ -491,9 +491,9 @@ every future cut point.
 ### Two smaller guarantees to state explicitly
 
 - **Padding slots.** `build_gen_object_list()` always emits exactly
-  `num_object_slots` objects, padding with all-zero `GenObject`s — a deliberate
+  `num_object_slots` objects, padding with all-zero `DetectedObject`s — a deliberate
   choice matching the reference fixed-array shape. Padding detection
-  (`f_dist_x == 0 and f_dist_y == 0`) is currently reimplemented in the viewer
+  (`dist_x == 0 and dist_y == 0`) is currently reimplemented in the viewer
   as `_is_padding_slot()`. It moves into the framework once, next to the sensor
   model that creates the padding, so the two definitions cannot drift.
 - **Buffer capacity.** Output buffers are sized from the port manifest
@@ -935,7 +935,7 @@ the problem changes the answer, because the memory is not in the tick count.
 
 A `Session` holds `Tick`s, and a `Tick` holds `PortValue`s whose `message` is a
 **parsed** protobuf. That is what is large: 36 000 ticks × ~5 ports × a parsed
-50-slot `GenObjectList` is expensive in a way that 36 000 small structs is not.
+50-slot `DetectedObjectList` is expensive in a way that 36 000 small structs is not.
 And `NR-SIM-41`'s measurement supplies the decisive fact: **the resim path never
 parses at all.** The recording holds serialized protobuf, the port buffer wants
 serialized protobuf, so filling an input is a `memmove`; the parse happens inside

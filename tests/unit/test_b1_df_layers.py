@@ -83,16 +83,16 @@ def _veh_dyn(vx: float = 20.0, yaw_rate: float = 0.0):
 
 
 def _gen_object_list(objects: list[tuple[int, float, float, int]]):
-    """`objects`: list of `(ui_id, dist_x, dist_y, classification)`."""
-    msg = _gen_object_list_pb2.GenObjectList()
+    """`objects`: list of `(local_id, dist_x, dist_y, classification)`."""
+    msg = _gen_object_list_pb2.DetectedObjectList()
     for _ in range(50):
         msg.objects.add()
-    for i, (ui_id, dist_x, dist_y, classification) in enumerate(objects):
+    for i, (local_id, dist_x, dist_y, classification) in enumerate(objects):
         obj = msg.objects[i]
-        obj.kinematic.f_dist_x = dist_x
-        obj.kinematic.f_dist_y = dist_y
-        obj.attributes.e_classification = classification
-        obj.general.ui_id = ui_id
+        obj.kinematic.dist_x = dist_x
+        obj.kinematic.dist_y = dist_y
+        obj.attributes.classification = classification
+        obj.general.local_id = local_id
     return msg
 
 

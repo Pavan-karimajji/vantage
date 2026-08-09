@@ -6,7 +6,7 @@
 # is a plain string, resolved to the real enum value by whichever
 # component's generated bindings the caller supplies (this module carries
 # no generated proto of its own, R-SIM-11) -- verbatim against
-# PerceptionCore__Outputs/gen_object.proto's `GenObject.Classification`
+# PerceptionCore__Outputs/gen_object.proto's `DetectedObject.Classification`
 # names: CAR, TRUCK, PEDESTRIAN, MOTORCYCLE, BICYCLE, WIDE, UNCLASSIFIED,
 # OTHER_VEHICLE, TL, MULTIPLE, POINT.
 #

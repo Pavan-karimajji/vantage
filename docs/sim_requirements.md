@@ -434,11 +434,12 @@ knows — no new index to maintain.
 **Requirement.** Good names for the master player and for the two stages inside
 it — one for project-scale simulation, one for the developer.
 **Origin.** 2026-07-28: *"algo give good names for master player and also for 2
-stages inside that one one for sim (ltmts) and other for developer one (ltmb).
+stages inside that one one for sim (project-scale) and other for developer one.
 or you are free to choose whatever type of segregation and naming is expected."*
 **Answered by.** [sim_player.md](sim_player.md) §1 — **Vantage** (the
-application), **Bench** (developer workspace, was `ltMB`), **Campaign**
-(project workspace, was `ltMTS`). Plain English on purpose: `R-SIM-16`'s claim
+application), **Bench** (developer workspace), **Campaign**
+(project workspace) — both replacing internal working names used during
+design. Plain English on purpose: `R-SIM-16`'s claim
 is that these are two faces of one product, and two invented words would teach
 the opposite. The product name is deliberately **not** the module, package or
 import name — `modules/sim`, `adas-sim` and the `sim` CLI are unchanged, so a
@@ -812,12 +813,13 @@ which is already data.
 DLL-resim/wiring tool are designed independently or as common tooling; and
 whether a new component should first be exercised through a DLL-wrapper mapping,
 then handed to a platform team for integration.
-**Origin.** 2026-07-28: *"Now I dont know if the player (for now lets name its as
-ltMTS) and ltMB (matchbox) should be independently designed or we can have a
-common tooling for this"*; *"the core aim is to ship everything as a single
-entity"*; *"tomorrow if a candidate designed new component with a dll … use ltmb
-tool dll wrapper concept to map the ports easily … once its clear later he will
-give requirement for sim guys to incorporate that component."*
+**Origin.** 2026-07-28: *"Now I dont know if the player (for now lets name it
+the project-scale workspace) and the developer-facing workspace should be
+independently designed or we can have a common tooling for this"*; *"the core
+aim is to ship everything as a single entity"*; *"tomorrow if a candidate
+designed new component with a dll … use a dll wrapper concept to map the ports
+easily … once its clear later he will give requirement for sim guys to
+incorporate that component."*
 **Answered by.** Arch §5.16 — **one engine, two faces.** The two personas are
 real; two engines are not, because they would give two namespaces, two project
 schemas and a developer validating something other than what the project runs,
@@ -904,9 +906,10 @@ as a resim input by **capability**, not convention.
 ### NR-SIM-21 — Mass-scale runs must be expressible
 **Requirement.** The project-scale face exists for auditing, reporting and
 mass-scale simulation.
-**Origin.** 2026-07-28: *"ltMTS is more at project level helping people to
-simulate at big scale that will help in auditing and reporting or even at mass
-scale simulation"*; *"what is lagging currently to attempt things at scale."*
+**Origin.** 2026-07-28: *"the project-scale workspace is more at project level
+helping people to simulate at big scale that will help in auditing and
+reporting or even at mass scale simulation"*; *"what is lagging currently to
+attempt things at scale."*
 **Answered by.** `sim batch` (recording doc §9) over a folder/glob/list with one
 report, taking **the same pipeline file** used interactively (`R-SIM-16`), plus
 `sim convert`. **This is currently the largest functional gap** — `sim resim`
@@ -982,7 +985,7 @@ the same class as the reference measurement/resim console, deliverable as a
 Windows executable.
 **Origin.** 2026-07-28: *"arent you trying to create some player which could be
 an executable (in win …) that has all of these feature of porting, resim,
-visualization and all like mts."* **Not covered before this** — the design
+visualization and all like a reference project-scale tool."* **Not covered before this** — the design
 described a library for developers with a repo and a Python environment, and
 never named the application or its users.
 **Answered by.** Arch §5.15. The architecture already makes it possible:
