@@ -74,12 +74,25 @@ class Recorder:
         source_provenance: Provenance | Mapping[str, Provenance] = Provenance.MOCKED,
         config_bundle_bytes: bytes = b"",
         plugin_bundles_meta: Mapping[str, Mapping[str, object]] = MappingProxyType({}),
+        source_proto_types: Mapping[str, str] = MappingProxyType({}),
+        source_descriptor_set: bytes = b"",
     ) -> None:
         self._pipeline = pipeline
         self._source = source
         self._path = path
         self._meta = meta
         self._source_provenance = source_provenance
+        # A stage output's schema comes from its own pipeline manifest
+        # (`_topics` below); a source port has no manifest to draw one from,
+        # so the caller supplies it directly -- proto_type per port plus one
+        # shared `FileDescriptorSet` (mirrors `config_bundle_bytes`: a single
+        # blob, not per-port). Empty for a source with no real schema to
+        # offer (e.g. `--source synthetic`'s scripted bytes) -- the same
+        # honest "nothing to embed" `config_bundle_bytes` already uses,
+        # rather than the placeholder qualified-port-name schema this used
+        # to fall back to silently.
+        self._source_proto_types = source_proto_types
+        self._source_descriptor_set = source_descriptor_set
         # S-C5, R-SIM-6: the SUT's config bundle, embedded once at open() on
         # /meta/config_bundle -- empty when the caller has no real component
         # bundle to embed (e.g. a pure-synthetic-source `sim record` run
@@ -146,7 +159,11 @@ class Recorder:
         topics: dict[str, TopicInfo] = {}
         for port in self._wired_source_ports():
             name = _qualified("source", port)
-            topics[topic_for(name)] = TopicInfo(schema_name=name, provenance=self._provenance_for_source_port(port))
+            proto_type = self._source_proto_types.get(port)
+            topics[topic_for(name)] = TopicInfo(
+                schema_name=proto_type or name, provenance=self._provenance_for_source_port(port),
+                schema_bytes=self._source_descriptor_set if proto_type else b"",
+            )
         for stage, port_spec, _policy in self._recorded_stage_output_ports():
             name = _qualified(stage.name, port_spec.name)
             # R-SIM-11: the component's own adasManifest() descriptor_set,

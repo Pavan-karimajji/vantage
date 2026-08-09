@@ -22,7 +22,7 @@ a caller's `Pipeline`/recorder clock is a separate, nominal `dt_ns` for its
 own scheduling (`R-SIM-18`), which for a live CARLA run is expected to
 track this source's real pacing but is never used to drive it.
 
-`message_classes` (constructor-required) supplies the `GenObjectList`/
+`message_classes` (constructor-required) supplies the `DetectedObjectList`/
 `VehDyn`/`VehSig` message classes `mocks.py` builds bytes with -- resolved
 by the CALLER from a real component's own manifest
 (`contracts.component.resolve_message_classes`, `R-SIM-11`'s own dynamic-
@@ -36,10 +36,13 @@ from __future__ import annotations
 
 import time
 from collections.abc import Mapping
+from pathlib import Path
 from typing import ClassVar
 
+import yaml
+
 from adas_sim.contracts.scenario import Scenario
-from adas_sim.core.errors import InternalError
+from adas_sim.core.errors import AuthoringError, InternalError
 from adas_sim.sources.carla import actor_behaviour, chase, mocks, spawn, world
 from adas_sim.sources.carla.catalogue import classification_for_blueprint, load_catalogue
 
@@ -94,6 +97,24 @@ def _actor_cfgs_from_scenario(scenario: Scenario, carla_cfg: Mapping[str, object
         }
         for actor in scenario.scenario.actors
     ]
+
+
+def _resolve_sensor_model_preset(scenario_path: Path | None, preset_id: str) -> Mapping[str, object]:
+    """`SensorModelRef`'s own docstring: resolving a `preset:` is the
+    consumer's job, never the scenario loader's (`R-SIM-1`). Walking up from
+    the scenario file to find its nearest `sim/sensor_models/<preset_id>.yaml`
+    sibling resolves it with no component name hardcoded here -- this stays
+    framework code regardless of which component owns the scenario."""
+    if scenario_path is not None:
+        for ancestor in scenario_path.resolve().parents:
+            candidate = ancestor / "sim" / "sensor_models" / f"{preset_id}.yaml"
+            if candidate.is_file():
+                return yaml.safe_load(candidate.read_text(encoding="utf-8")) or {}
+    raise AuthoringError(
+        expected=f"a sim/sensor_models/{preset_id}.yaml reachable from an ancestor of the scenario file",
+        found="no such file in any ancestor directory", where="CarlaSource.start",
+        hint="sensor_model.preset names a document under the owning component's sim/sensor_models/",
+    )
 
 
 class CarlaSource:
@@ -167,6 +188,18 @@ class CarlaSource:
         self._ego_cfg = ego_cfg
         self._object_range_m = scenario.sensor_model.object_range_m
         self._num_object_slots = scenario.sensor_model.num_object_slots
+        if self._object_range_m is None or self._num_object_slots is None:
+            if scenario.sensor_model.preset is None:
+                raise AuthoringError(
+                    expected="sensor_model.preset or explicit object_range_m/num_object_slots",
+                    found="sensor_model declares neither", where="CarlaSource.start",
+                    hint="name a sim/sensor_models/*.yaml preset, or set both fields explicitly",
+                )
+            preset = _resolve_sensor_model_preset(scenario.path, scenario.sensor_model.preset)
+            if self._object_range_m is None:
+                self._object_range_m = preset.get("object_range_m")
+            if self._num_object_slots is None:
+                self._num_object_slots = preset.get("num_object_slots")
         # `run.faults` (SS3.2's `roll_fault:` -> `run.faults` upgrade) is a
         # list; this source has only ever driven the single-fault case
         # `roll_fault:` expressed, so the first (only) entry is equivalent.

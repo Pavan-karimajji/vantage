@@ -3,7 +3,7 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""CARLA actor state -> `GenObjectList`/`VehDyn`/`VehSig` bytes (`S-C2`
+"""CARLA actor state -> `DetectedObjectList`/`VehDyn`/`VehSig` bytes (`S-C2`
 slice 5) -- ground truth standing in for perception, a MOCK (`R-SIM-12`):
 tagged `mocked`/`truth` by whatever records it (`sources/recorder.py`),
 never presented as a measurement. Ported from
@@ -15,7 +15,7 @@ message classes are supplied by the caller (`CarlaSource`), resolved from a
 real component's own manifest via `contracts.component.resolve_message_classes`
 -- the same dynamic-from-`descriptor_set` construction every other framework
 module already uses, never a generated-code import. `_CLASSIFICATION_VALUES`
-mirrors `PerceptionCore__Outputs/gen_object.proto`'s `GenObject.Classification`
+mirrors `PerceptionCore__Outputs/gen_object.proto`'s `DetectedObject.Classification`
 enum verbatim (field numbers, not names, are the wire contract -- the same
 reasoning `contracts/component.py`'s own hand-built manifest schema states
 for its field numbers)."""
@@ -27,14 +27,23 @@ import math
 from adas_sim.sources.carla import frame_convert
 from adas_sim.sources.carla.actor_behaviour import velocity_world
 
-GEN_OBJECT_LIST_PROTO_TYPE = "adas.perception.GenObjectList"
+GEN_OBJECT_LIST_PROTO_TYPE = "adas.perception.DetectedObjectList"
 VEH_DYN_PROTO_TYPE = "adas.common.VehDyn"
 VEH_SIG_PROTO_TYPE = "adas.common.VehSig"
 
+#: `CarlaSource.emits()`'s port names, paired with the proto_type each one
+#: carries -- lets a recorder (`sources/recorder.py`) give `source.*` topics
+#: a real schema instead of a placeholder qualified port name.
+PORT_PROTO_TYPES: dict[str, str] = {
+    "gen_object_list": GEN_OBJECT_LIST_PROTO_TYPE,
+    "veh_dyn": VEH_DYN_PROTO_TYPE,
+    "veh_sig": VEH_SIG_PROTO_TYPE,
+}
+
 #: Verbatim against `PerceptionCore__Outputs/gen_object.proto`'s
-#: `GenObject.Classification` enum -- kept as plain ints here (not resolved
-#: through a `GenObject` message class) so this module needs no message
-#: class beyond `GenObjectList` itself.
+#: `DetectedObject.Classification` enum -- kept as plain ints here (not resolved
+#: through a `DetectedObject` message class) so this module needs no message
+#: class beyond `DetectedObjectList` itself.
 _CLASSIFICATION_VALUES = {
     "POINT": 0, "CAR": 1, "TRUCK": 2, "PEDESTRIAN": 3, "MOTORCYCLE": 4,
     "BICYCLE": 5, "WIDE": 6, "UNCLASSIFIED": 7, "OTHER_VEHICLE": 8, "TL": 9, "MULTIPLE": 10,
@@ -45,7 +54,7 @@ def _project_onto_ego_heading(ego_yaw_deg: float, vx: float, vy: float) -> tuple
     """Projects a world-frame velocity onto ego's own heading axes
     (forward, OUR +y-left) -- the same convention `frame_convert.to_ego_frame`
     uses for its relative velocity, but absolute rather than ego-relative
-    (`GenObject.kinematic`'s `f_vabs_x`/`f_vabs_y`: a real radar/track-filter
+    (`DetectedObject.kinematic`'s `vabs_x`/`vabs_y`: a real radar/track-filter
     output is ego-frame-*aligned*, not ego-frame-*relative*)."""
     yaw_rad = math.radians(ego_yaw_deg)
     forward = (math.cos(yaw_rad), math.sin(yaw_rad))
@@ -64,15 +73,15 @@ def build_gen_object_list_bytes(
     function only ever consumes an already-resolved token; it does not
     know a catalogue exists.
 
-    `message_classes[GEN_OBJECT_LIST_PROTO_TYPE]` is the `GenObjectList`
+    `message_classes[GEN_OBJECT_LIST_PROTO_TYPE]` is the `DetectedObjectList`
     message class, resolved by the caller (never imported here, `R-SIM-11`).
 
-    Always returns exactly `num_object_slots` `GenObject`s, matching a
+    Always returns exactly `num_object_slots` `DetectedObject`s, matching a
     fixed-array shape rather than a variable-length list that happens to be
     small in one scenario. Real, in-range targets fill the nearest slots
     first (sorted by distance); any remaining slots are padded with
-    default-constructed (all-zero) objects -- a zero-valued `GenObject` has
-    `f_dist_x=0`, already outside any eligibility gate requiring `dx > 0`,
+    default-constructed (all-zero) objects -- a zero-valued `DetectedObject` has
+    `dist_x=0`, already outside any eligibility gate requiring `dx > 0`,
     so padding slots are inert without special-casing downstream.
     """
     gen_object_list_cls = message_classes[GEN_OBJECT_LIST_PROTO_TYPE]
@@ -98,16 +107,16 @@ def build_gen_object_list_bytes(
     objects_msg = gen_object_list_cls()
     for _distance, actor_id, rel, vabs_x, vabs_y, classification in in_range[:num_object_slots]:
         obj = objects_msg.objects.add()
-        obj.kinematic.f_dist_x = rel.dist_x
-        obj.kinematic.f_dist_y = rel.dist_y
-        obj.kinematic.f_vrel_x = rel.vrel_x
-        obj.kinematic.f_vrel_y = rel.vrel_y
-        obj.kinematic.f_vabs_x = vabs_x
-        obj.kinematic.f_vabs_y = vabs_y
-        obj.general.ui_id = actor_id
-        obj.general.contributingSensors = 0x2  # radar bit -- CARLA ground truth stands in for that path
-        obj.general.f_life_time = 5.0  # ground truth, always mature
-        obj.attributes.e_classification = classification
+        obj.kinematic.dist_x = rel.dist_x
+        obj.kinematic.dist_y = rel.dist_y
+        obj.kinematic.vrel_x = rel.vrel_x
+        obj.kinematic.vrel_y = rel.vrel_y
+        obj.kinematic.vabs_x = vabs_x
+        obj.kinematic.vabs_y = vabs_y
+        obj.general.local_id = actor_id
+        obj.general.contributing_sensors = 0x2  # radar bit -- CARLA ground truth stands in for that path
+        obj.general.life_time = 5.0  # ground truth, always mature
+        obj.attributes.classification = classification
         obj.attributes.existence_probability = 0.95  # ground truth
     while len(objects_msg.objects) < num_object_slots:
         objects_msg.objects.add()  # default-constructed: all-zero, inert padding
