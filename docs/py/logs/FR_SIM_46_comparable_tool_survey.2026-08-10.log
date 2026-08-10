@@ -1,0 +1,9 @@
+# FR_SIM_46_comparable_tool_survey
+# platform  win32
+# python    3.14.6
+
+FR-SIM-46 -- comparable console concept inventory vs. this architecture
+Answers: is there a concept over there with no home over here?
+SKIPPED  no comparable tool installation found (set ADAS_SIM_COMPARABLE_TOOL to a directory)
+
+RESULT  skipped -- no comparable tool installation found (set ADAS_SIM_COMPARABLE_TOOL to a directory)

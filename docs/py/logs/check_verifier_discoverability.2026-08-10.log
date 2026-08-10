@@ -1,0 +1,15 @@
+# check_verifier_discoverability
+# platform  win32
+# python    3.14.6
+
+Ticked verifiers whose id appears in no source file
+
+Measured
+--------
+ticked ids  source files scanned  undiscoverable  baseline
+----------  --------------------  --------------  --------
+305         1387                  0               0
+
+ok    0 undiscoverable, exactly the declared baseline -- no growth
+
+RESULT  pass

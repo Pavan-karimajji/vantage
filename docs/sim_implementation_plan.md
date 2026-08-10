@@ -1948,7 +1948,7 @@ changes. That is what makes it independently revertible.
       and per port: name, direction, `proto_type`, required/optional. Package
       `adas.sil` (matches the contract doc's own `adas.sil.ComponentManifest`
       references). Carries a `PROVENANCE:` comment (`R-IFACE-3`): this schema is
-      original to the sim rework, not reference-derived, so it does not claim
+      original to the sim rework, not externally-verified, so it does not claim
       the verbatim-naming exception
       - Field naming per `R-NAME-4`; port names per `N-1` — **the token chosen
         here is the token every later layer reuses, and it is permanent**

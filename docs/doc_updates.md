@@ -394,7 +394,7 @@ Cut §17 open points per T8; trim rationale under §2/§3/§7 per T6.
   audit-log links (lines 834, 1542).
 - **`docs/py/`** — delete `check_audit_ledger.py` and its `run_all.py` entry.
   Keep the other five checks and both frozen surveys unchanged. Fold `AR-22`'s
-  standing note (`reference_tool_path.txt` is `.gitignore`d by design, do not
+  standing note (`comparable_tool_path.txt` is `.gitignore`d by design, do not
   re-flag) into `docs/py/README.md` as one line, and `AR-21`'s
   (`.gitmodules` declares `submodule "modules/sil"` at path `modules/sil_host`,
   cosmetic, deliberately not renamed) into root `plan.md` — both exist purely to
@@ -509,6 +509,6 @@ Per §3.3 — every ID removed, with the reason. Verified by census diff
 | `S-C1` | plan prose | never a stage — an artefact of the `S-C1a`/`b`/`c`/`d` prefix matching the census regex. **Not a loss** |
 
 Two won't-fix notes worth re-homing before this file is deleted (§5.9): the
-`reference_tool_path.txt` `.gitignore` rationale → `docs/py/README.md`, and the
+`comparable_tool_path.txt` `.gitignore` rationale → `docs/py/README.md`, and the
 `.gitmodules` `submodule "modules/sil"` / `path = modules/sil_host` mismatch →
 root `plan.md`. Both exist only to stop a future audit re-raising them.

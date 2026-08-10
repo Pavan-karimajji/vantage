@@ -671,14 +671,14 @@ The model this architecture assumes until evidence forces otherwise:
 Not designed: sub-tick interpolation, or a component whose rate is not an
 integer divisor of the grid.
 
-**Evidence from the reference stack, recorded rather than acted on.** Its
+**Evidence from a comparable implementation, recorded rather than acted on.** Its
 components are not driven by a passed `dt` at all: a component subscribes to a
-**cycle-end event from a named data source** (`UdexClientPort::CycleEndEvent`,
-with a cycle id declared identically for the live device and the recorded one),
-and its execution is wired through explicit **control ports** — a `Doit` server
-port to run it and a `Done` client port to signal completion — separate from its
-data ports. That is the industrial answer to multi-rate and event-driven
-components, and it is more machinery than a single `adasExec(dt)` needs today.
+**cycle-end event from a named data source**, with a cycle id declared
+identically for the live device and the recorded one, and its execution is
+wired through explicit **control ports** — a server port to run it and a
+client port to signal completion — separate from its data ports. That is the
+industrial answer to multi-rate and event-driven components, and it is more
+machinery than a single `adasExec(dt)` needs today.
 
 Two things worth taking from it now, at zero cost: the cycle id being *the same*
 for the live and the recorded source is precisely our

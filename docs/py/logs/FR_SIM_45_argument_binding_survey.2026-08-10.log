@@ -1,0 +1,9 @@
+# FR_SIM_45_argument_binding_survey
+# platform  win32
+# python    3.14.6
+
+FR-SIM-45 -- how much hand-written config does binding one exec() cost?
+Measured on a comparable console's own shipped DLL-wrapper example.
+SKIPPED  no comparable tool installation found (set ADAS_SIM_COMPARABLE_TOOL to a directory)
+
+RESULT  skipped -- no comparable tool installation found (set ADAS_SIM_COMPARABLE_TOOL to a directory)

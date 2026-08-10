@@ -140,15 +140,15 @@ class Report:
 # External artefacts
 # --------------------------------------------------------------------------
 
-def reference_tool_root() -> pathlib.Path | None:
-    """Locate an installation of the reference resim/wiring console.
+def comparable_tool_root() -> pathlib.Path | None:
+    """Locate an installation of a comparable resim/wiring console.
 
     Resolution order, most explicit first:
 
-    1. ``ADAS_SIM_REFERENCE_TOOL`` -- an environment variable, so a machine
+    1. ``ADAS_SIM_COMPARABLE_TOOL`` -- an environment variable, so a machine
        with the tool somewhere unusual (or an Ubuntu box with a share mounted)
        needs no edit here;
-    2. ``docs/py/reference_tool_path.txt`` -- an untracked one-line file, for a
+    2. ``docs/py/comparable_tool_path.txt`` -- an untracked one-line file, for a
        developer who does not want to set an environment variable;
     3. conventional install locations, by *directory shape* rather than by a
        hard-coded vendor path.
@@ -160,18 +160,18 @@ def reference_tool_root() -> pathlib.Path | None:
 
     Returns ``None`` when nothing is found; callers must then ``skip``.
     """
-    env = os.environ.get("ADAS_SIM_REFERENCE_TOOL")
+    env = os.environ.get("ADAS_SIM_COMPARABLE_TOOL")
     if env:
         p = pathlib.Path(env).expanduser()
         return p if p.is_dir() else None
 
-    pointer = PY_DIR / "reference_tool_path.txt"
+    pointer = PY_DIR / "comparable_tool_path.txt"
     if pointer.is_file():
         p = pathlib.Path(pointer.read_text(encoding="utf-8").strip()).expanduser()
         if p.is_dir():
             return p
 
-    # Shape test: a reference installation is a directory containing both a
+    # Shape test: a comparable installation is a directory containing both a
     # Components/ and a Machines/ subdirectory. Searching by shape keeps any
     # vendor or organisation name out of this file entirely.
     roots = [pathlib.Path.home(), pathlib.Path("/opt")]

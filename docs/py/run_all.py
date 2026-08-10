@@ -31,7 +31,7 @@ CHECKS = [
     "check_verifier_discoverability.py",
 ]
 SURVEYS = [
-    "FR_SIM_46_reference_tool_survey.py",
+    "FR_SIM_46_comparable_tool_survey.py",
     "FR_SIM_45_argument_binding_survey.py",
 ]
 

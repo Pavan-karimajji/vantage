@@ -1,0 +1,36 @@
+# check_traceability
+# platform  win32
+# python    3.14.6
+
+Checking: requirements <-> tests <-> stages
+plan defines 355 test/gate ids across 32 stages, plus 9 document checks
+
+1. Requirement -> test
+----------------------
+80 requirements in the register
+ok    every decided requirement names at least one existing test
+  2 requirement(s) open/parked, verifier not written yet: FR-SIM-51, NR-SIM-46
+
+2. Test -> stage
+----------------
+ok    every stage-scoped test id maps to a declared stage
+
+2b. Test ids are unique
+-----------------------
+ok    all 231 test definitions unique
+
+2c. Tests are filed under the stage they name
+---------------------------------------------
+ok    every test is defined under the stage its id names
+
+3. Stage -> tests + gate
+------------------------
+ok    all 32 stages define tests and a gate
+
+4. Coverage summary
+-------------------
+tests defined in plan      364
+tests cited by a requirement 196
+tests not cited by any requirement 168  (fine -- stage gates cite them)
+
+RESULT  pass

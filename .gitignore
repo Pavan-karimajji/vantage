@@ -56,7 +56,7 @@ Thumbs.db
 # hand-crafted, but committed so the suite needs no real component build.
 !tests/fixtures/tiny.mcap
 
-# Machine-local pointer to a reference tool installation (DC-2: no absolute
-# paths in the repo). See docs/py/_common.py:reference_tool_root().
-docs/py/reference_tool_path.txt
+# Machine-local pointer to a comparable tool installation (DC-2: no absolute
+# paths in the repo). See docs/py/_common.py:comparable_tool_root().
+docs/py/comparable_tool_path.txt
 scripts/gui_config.json

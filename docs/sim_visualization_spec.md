@@ -278,7 +278,7 @@ and produce a plausible-looking fabricated run.
 
 ### 5.2 Advance-N is a job, not a loop
 
-`50` / `100` / `200` / custom is the coarse-jump control the reference console
+`50` / `100` / `200` / custom is the coarse-jump control a comparable console
 puts on its toolbar, and it is what makes a 1200-tick recording navigable. It
 runs as **one cancellable job**: a progress indicator, a live tick counter, and
 `Esc` to stop at whatever tick has been reached — which then becomes the head.
@@ -454,7 +454,7 @@ or to CSV, both carrying the same provenance sidecar as a BEV snapshot (§9).
 
 ### 7.5 Interaction-aware layers — without breaking provider purity
 
-The reference console lets a render context declare that it wants input:
+A comparable console lets a render context declare that it wants input:
 `MouseListener`, `KeyboardListener`, `WindowListener`. That is how a crosshair
 follows the pointer, and how clicking a raw detection opens its detail. Our
 providers, as specified so far, cannot do either — they are pure functions of a

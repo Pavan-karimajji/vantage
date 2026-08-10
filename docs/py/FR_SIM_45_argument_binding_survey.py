@@ -9,7 +9,7 @@ FR-SIM-45 records the complaint this platform is designed against: developers
 could not flexibly tweak the inputs of a run, and the tool felt
 over-configured. "Over-configured" is a feeling until it is a number.
 
-This script produces the number. It reads the reference console's own shipped
+This script produces the number. It reads a comparable console's own shipped
 DLL-wrapper example and measures, per wrapped function call, how many
 configuration elements a human had to author to bind one ``exec()``: argument
 positions, per-field value-handling rules, glob patterns and URI rewrite rules.
@@ -17,12 +17,12 @@ positions, per-field value-handling rules, glob patterns and URI rewrite rules.
 Two design decisions rest on the result:
 
 * ``R-SIM-15`` -- the per-port override verb list is **closed** (const / hold /
-  offset / scale). The reference tool's open pattern-and-rewrite grammar is
+  offset / scale). The comparable tool's open pattern-and-rewrite grammar is
   what an unbounded one becomes.
 * ``arch 5.16.1`` -- ``sim probe`` plus a manifest removes the mapping step
   entirely for components we own, so this cost is never paid by default.
 
-The measurement is of a *tool doing something reasonable* -- the reference
+The measurement is of a *tool doing something reasonable* -- the comparable
 wrapper is verbose because the DLL is opaque and it recovers signatures from
 debug symbols. The finding is not that it is badly built; it is that we must
 not inherit its cost when our binaries are not opaque.
@@ -38,7 +38,7 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 
-from _common import Report, read_text, reference_tool_root
+from _common import Report, read_text, comparable_tool_root
 
 #: Element tags that represent one authored decision in the binding config.
 AUTHORED_TAGS = (
@@ -52,12 +52,12 @@ AUTHORED_TAGS = (
 def main() -> int:
     rep = Report("FR_SIM_45_argument_binding_survey")
     rep.line("FR-SIM-45 -- how much hand-written config does binding one exec() cost?")
-    rep.line("Measured on the reference console's own shipped DLL-wrapper example.")
+    rep.line("Measured on a comparable console's own shipped DLL-wrapper example.")
 
-    root = reference_tool_root()
+    root = comparable_tool_root()
     if root is None:
-        rep.skip("no reference tool installation found "
-                 "(set ADAS_SIM_REFERENCE_TOOL to a directory)")
+        rep.skip("no comparable tool installation found "
+                 "(set ADAS_SIM_COMPARABLE_TOOL to a directory)")
         return rep.finish()
 
     projects = sorted((root / "Examples").rglob("*.mbprj")) if (root / "Examples").is_dir() else []

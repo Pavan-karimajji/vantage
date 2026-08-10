@@ -250,8 +250,8 @@ grid).
 ### FR-SIM-15 — A component ships a default workspace
 **Requirement.** Opening a recording should give a sensible arrangement of
 panels, not an empty grid the user assembles by hand.
-**Origin.** 2026-07-28, inferred from the reference measurement console's
-visualization config, whose layout is a tree of tabs, splitters and named views
+**Origin.** 2026-07-28, inferred from established measurement-console
+visualization design, where layout is a tree of tabs, splitters and named views
 with ratios. Our design had per-user saved layouts but no **component-shipped
 default** — half the mechanism.
 **Answered by.** viz §13b — `modules/<name>/sim/workspace.yaml`, composing
@@ -263,8 +263,8 @@ framework reads the file and does not know what the component is.
 ### FR-SIM-16 — Layers may react to interaction, without becoming stateful
 **Requirement.** A layer must be able to follow the cursor or highlight a
 selection — a crosshair, a measurement aid, click-a-detection.
-**Origin.** 2026-07-28, inferred from the reference console, where a render
-context declares `MouseListener` / `KeyboardListener` / `WindowListener`. Our
+**Origin.** 2026-07-28, inferred from a common console-application pattern,
+where a render context declares `MouseListener` / `KeyboardListener` / `WindowListener`. Our
 providers could not do either: they are pure functions of a tick with no way to
 know where the pointer is.
 **Answered by.** viz §7.5 + arch §5.3 — the interaction **state**
@@ -504,8 +504,8 @@ plan.md item 19's 2026-07-22 decision — see §6.
 ### FR-SIM-22 — The config source is overridable and always displayed
 **Requirement.** The embedded → library → checkout resolution order must be a
 default, not a lock.
-**Origin.** 2026-07-28, inferred from the reference console, which exposes
-exactly this as a per-artifact-kind user toggle (*use the description from the
+**Origin.** 2026-07-28, inferred from a common console-application pattern,
+exposing exactly this as a per-artifact-kind user toggle (*use the description from the
 recording, or from disk*). An embedded bundle can be stale, and testing a new
 calibration against an old recording is a real workflow.
 **Answered by.** Arch §5.6 — `--config-source embedded|library|checkout|<path>`
@@ -618,8 +618,8 @@ a downstream component's pipeline entry is byte-identical across levels.
 
 ### FR-SIM-42 — Per-component measured vs simulated, from a GUI
 **Requirement.** A console where you set, per component, whether it is taken
-from measurement or simulated — as the reference measurement/resim toolchain
-does.
+from measurement or simulated — the same per-component take-from-measurement
+toggle a measurement/resim toolchain needs.
 **Origin.** 2026-07-28: *"we have gui where we set which components are taken
 from measurement and which components has to be simulated. thats how the tool
 looks for us. does any concept like this will work as a single solution for us
@@ -789,8 +789,8 @@ players over configuration or something I dont know. but i dont want this tool t
 end up in this way."*
 **Answered by.** `R-SIM-15` + arch §5.10 *"Per-port overrides"* — `const`,
 `hold`, `offset`, `scale`, at a port or a field path, declared in the pipeline
-and recorded in the run manifest. **The verb list is closed**: the reference
-console's per-argument glob-and-substitute mapping rules are what an open
+and recorded in the run manifest. **The verb list is closed**: an open-ended
+per-argument glob-and-substitute mapping scheme is what an open
 expression grammar becomes, and that is the over-configuration this requirement
 names. If four verbs are insufficient the answer is a `stub:` stage — real
 code, in a file, reviewable — not a fifth verb.
@@ -937,10 +937,10 @@ visualizatoin concept outside df. may be as a sil package or whatever."*
 **Answered by.** `modules/sim` submodule (arch §5.7). Rejected alternatives are
 recorded there with reasons.
 **Verified by.** `ST-E1-3`, `GT-1`. **Status.** frozen.
-*Confirmed later against the reference stack's own `mf_plot` — a peer component
-module described as a "plotter for function/measurement analysis", i.e. the same
-structural choice. Difference is language only (theirs C++, in-process; ours
-Python, dev-time), and the Scene is serializable so a C++ renderer stays a
+*Confirmed later against a comparable peer-component plotter design ("a plotter
+for function/measurement analysis"), i.e. the same
+structural choice. Difference is language only (a comparable design in C++,
+in-process; ours Python, dev-time), and the Scene is serializable so a C++ renderer stays a
 future adapter rather than a rewrite.*
 
 ### FR-SIM-61 — Clarity on what lives in `df` vs the superproject
@@ -980,9 +980,8 @@ would fail. Full reasoning and the promotion trigger: scenarios doc §0.
 
 ### FR-SIM-70 — The outcome is a **player application**, not only a library
 **Requirement.** What this exercise is actually building is a measurement/resim
-player — porting/ingest, resim at any cut point, visualization, plotting — in
-the same class as the reference measurement/resim console, deliverable as a
-Windows executable.
+player — porting/ingest, resim at any cut point, visualization, plotting —
+deliverable as a Windows executable.
 **Origin.** 2026-07-28: *"arent you trying to create some player which could be
 an executable (in win …) that has all of these feature of porting, resim,
 visualization and all like a reference project-scale tool."* **Not covered before this** — the design
@@ -991,8 +990,8 @@ never named the application or its users.
 **Answered by.** Arch §5.15. The architecture already makes it possible:
 `R-SIM-1` + `R-SIM-11` + `R-SIM-3a` + `R-SIM-14` + `R-SIM-13` together mean the
 player is **component-agnostic at build time** and can ship before any component
-exists, with components appearing at run time as data — the reference console's
-own model. Two delivery forms from one codebase: the `adas-sim` package for
+exists, with components appearing at run time as data — the same model a
+comparable console-application design uses. Two delivery forms from one codebase: the `adas-sim` package for
 developers and CI, and a packaged `adas-sim.exe` needing no repo, no Python and
 no Conan cache. **Windows first; Linux deliberately out of scope.**
 **Constraint it imposes:** a frozen executable must keep an **external plug-in

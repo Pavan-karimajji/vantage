@@ -8,21 +8,21 @@
 FR-SIM-46 asks whether the project-scale player and the developer-facing
 DLL-resim/wiring tool should be one product or two. Architecture section 5.16
 answers "one engine, two faces", and its central claim is a *mapping*: nearly
-every concept in the reference console corresponds to something this
+every concept in a comparable console corresponds to something this
 architecture already has, and the single genuine difference (binding to an
 opaque binary) is a stage adapter rather than a second product.
 
 That claim is only worth anything if it was measured. This script measures it:
-it enumerates the reference installation's own component/machine inventory and
+it enumerates the comparable installation's own component/machine inventory and
 its shipped example pipelines, and prints them beside the concept each maps to
-here. Re-run it against a newer reference release to find concepts we have not
+here. Re-run it against a newer release of that tool to find concepts we have not
 accounted for -- those are the rows that would reopen the two-tool question.
 
 Usage
 -----
-    python docs/py/FR_SIM_46_reference_tool_survey.py
+    python docs/py/FR_SIM_46_comparable_tool_survey.py
 
-Set ``ADAS_SIM_REFERENCE_TOOL`` if the installation is not in a conventional
+Set ``ADAS_SIM_COMPARABLE_TOOL`` if the installation is not in a conventional
 place. Skips cleanly when it is absent.
 """
 
@@ -31,7 +31,7 @@ from __future__ import annotations
 import sys
 import xml.etree.ElementTree as ET
 
-from _common import Report, read_text, reference_tool_root
+from _common import Report, read_text, comparable_tool_root
 
 #: The mapping architecture section 5.16 asserts. Keys are matched as
 #: case-insensitive substrings of a discovered component/machine directory
@@ -63,7 +63,7 @@ CONCEPT_MAP: dict[str, str] = {
     "ergreader":      "io/ codec (CarMaker results)     FR-SIM-50 / R-SIM-13",
     "toprimitive":    "Scene Prim (geometry from data)  R-SIM-2",
     "canreader":      "sources/ client (live bus)       OUT OF SCOPE, req 10",
-    # -- Test-object generators. The reference tool ships three (a plain
+    # -- Test-object generators. The comparable tool ships three (a plain
     #    object, a single-track vehicle model, a waypoint follower). Every one
     #    is a stand-in manufacturing a port's data -- exactly R-SIM-12's
     #    "mock", which belongs on the PRODUCTION side and is frozen into a
@@ -109,14 +109,14 @@ ACCOUNTED_MARKERS = ("PARKED", "OUT OF SCOPE", "--")
 
 
 def main() -> int:
-    rep = Report("FR_SIM_46_reference_tool_survey")
-    rep.line("FR-SIM-46 -- reference console concept inventory vs. this architecture")
+    rep = Report("FR_SIM_46_comparable_tool_survey")
+    rep.line("FR-SIM-46 -- comparable console concept inventory vs. this architecture")
     rep.line("Answers: is there a concept over there with no home over here?")
 
-    root = reference_tool_root()
+    root = comparable_tool_root()
     if root is None:
-        rep.skip("no reference tool installation found "
-                 "(set ADAS_SIM_REFERENCE_TOOL to a directory)")
+        rep.skip("no comparable tool installation found "
+                 "(set ADAS_SIM_COMPARABLE_TOOL to a directory)")
         return rep.finish()
     rep.line(f"root: {root}")
 
@@ -131,7 +131,7 @@ def main() -> int:
 
     if not discovered:
         rep.skip(f"{root} has no Components/ or Machines/ directory -- "
-                 "not a reference tool installation")
+                 "not a comparable tool installation")
         return rep.finish()
 
     # An installation ships only the subset of components it was licensed for,
@@ -204,7 +204,7 @@ def main() -> int:
         rep.line("(b) a recorded park in sim_requirements.md section 10.")
         rep.line("An unreviewed entry here is what reopens the two-tool question,")
         rep.line("so this list must be empty or explained -- never merely present.")
-        rep.fail(f"{len(real_gaps)} unreviewed reference concept(s)")
+        rep.fail(f"{len(real_gaps)} unreviewed comparable-tool concept(s)")
     else:
         rep.ok("every discovered concept maps to a stage, codec, renderer, or a "
                "recorded park/out-of-scope decision -- arch 5.16's table is "

@@ -58,8 +58,8 @@ Four supporting terms:
 - **observation** — one tick's complete output set (`AebOutputs`, `BsdOutputs`,
   `CompState`…), plus any derived quantity the viewer computes for display only
   (TTC, for example, which no ProPort carries).
-- **port freeze** — one port's contents written to the recording for one tick.
-  The reference toolchain's `MEAS_FREEZE`; here, one message on that port's
+- **port freeze** — one port's contents written to the recording for one tick,
+  one message on that port's
   topic. A recording containing a freeze of *every* port is what makes any cut
   point possible (§5.10).
 - **mock** — a stand-in that manufactures a port's data because the component
@@ -569,10 +569,9 @@ Five properties are doing the work:
   + marker, per output medium. This is what makes D5 fixable: the live viewer's
   dark theme and the document figure's light/print theme are two theme tables
   over one scene.
-- **Layers are named and grouped, with a default visibility.** Straight from
-  the reference measurement stack's display-list API, whose draw entry point is
-  `DrawStartNewGroup(group, subgroup, active_on_startup)` — a pattern with two
-  decades of production use behind it. The layer panel (§ visualization spec)
+- **Layers are named and grouped, with a default visibility.** A proven
+  pattern for layered draw APIs — group/subgroup-scoped draw calls with a
+  startup-active flag — with decades of production use behind it. The layer panel (§ visualization spec)
   falls out of this for free, and so does a per-function verbosity level.
 - **`pick_id` makes selection a scene-level concept**, so click-to-inspect works
   for a zone corner or a lane polyline, not only for the two entity types
@@ -700,8 +699,8 @@ follow mode explicitly promises (viz §4.2), a velocity trace. Those are geometr
 and therefore belong to a layer provider; the alternative (a renderer that
 remembers) would put state in the one place that must not have it.
 
-`interaction` is the same idea applied to input (viz §7.5). The reference
-console lets a layer declare `MouseListener`/`KeyboardListener`; handing a
+`interaction` is the same idea applied to input (viz §7.5). A common console-
+application pattern lets a layer declare `MouseListener`/`KeyboardListener`; handing a
 provider an event callback would put UI state inside the one thing that must
 have none, so the interaction **state** is an input instead, and a provider
 declares `reacts_to=` so the cache knows when to re-render it. Cursor arrives in
@@ -981,7 +980,8 @@ the DLL reads.
 bundle → the SUT library's `config/` bundle → the source checkout (development
 fallback, flagged in the HUD as unverified provenance).
 
-**That order is a default, not a lock.** The reference console exposes exactly
+**That order is a default, not a lock.** A common console-application pattern
+exposes exactly
 this as a per-artifact-kind user toggle (*use the description from the
 recording, or from disk*), and it is right to: an embedded bundle can be stale,
 and testing a new calibration against an old recording is a real thing people
@@ -1355,10 +1355,9 @@ world-model binding.
 
 #### Two orthogonal questions, not one
 
-This is the model the reference measurement/resim toolchain has used for two
-decades, and it is worth adopting wholesale: its console presents the component
-chain with a **per-component toggle — take this one from measurement, or
-simulate it** — and the operator moves the boundary rather than switching tools.
+This is a proven model for measurement/resim toolchains, worth adopting
+wholesale: a **per-component toggle — take this one from measurement, or
+simulate it** — where the operator moves the boundary rather than switching tools.
 
 Mapping that onto the pipeline shows a distinction an earlier draft of this
 section collapsed. Each stage answers **two** independent questions:
@@ -1381,7 +1380,7 @@ components:
 
 Keeping `impl:` on a `measured` stage is deliberate: the toggle must be
 **reversible without re-authoring the pipeline**, which is the whole ergonomic
-point of the reference console. `mode: off` exists for a stage that is neither
+point. `mode: off` exists for a stage that is neither
 run nor injected — its consumers see `valid=0`, which is a real fault-injection
 case the ABI already expresses.
 
@@ -1464,9 +1463,9 @@ inputs:
 ```
 
 **Four verbs — `const`, `hold`, `offset`, `scale` — and a hard stop there.**
-The temptation is an expression language, and it must be refused: the reference
-console's `ValueHandleRules` (glob patterns plus URI string-replacement rules
-per argument) is exactly what an open grammar becomes, and it is the mechanism
+The temptation is an expression language, and it must be refused: an
+open-ended glob-and-substitute mapping scheme
+per argument is exactly what an open grammar becomes, and it is the mechanism
 behind the over-configuration complaint this design answers. If four verbs prove
 insufficient, the honest answer is a `stub:` stage — real code, in a real file,
 reviewable — not a fifth verb.
@@ -1563,7 +1562,7 @@ When a stage is `simulate` **and** the recording also contains its recorded
 outputs, both values exist for every tick. Comparing them is free, and it
 answers the question that dominates resim work:
 
-> *"My new build diverges from the reference run — at which tick, on which
+> *"My new build diverges from the recorded run — at which tick, on which
 > port, by how much?"*
 
 Reported as a per-port, per-tick divergence with the **first** differing tick
@@ -1698,7 +1697,7 @@ same per-stage toggles.
 #### The two workflows this makes explicit
 
 **(A) Resim a measurement.** A recording arrives containing a freeze of every
-port of the running code — the reference toolchain's `MEAS_FREEZE` of each port
+port of the running code — that per-port freeze
 is exactly what our per-port topic is. Every stage can therefore be `measured`
 or `simulate`, freely, because every stage's data is present.
 
@@ -1870,8 +1869,8 @@ is the failure mode this whole architecture exists to prevent.
 Read end to end, what §5.1–§5.14 describe is a **measurement/resim player**:
 open a recording, choose per stage what is taken from measurement and what is
 simulated, execute, watch it in a BEV, plot signals against each other, and
-check it against expectations. That is the same class of tool as the reference
-measurement/resim console, and it is worth saying so explicitly rather than
+check it against expectations. That is the same class of tool as an
+established measurement/resim console, and it is worth saying so explicitly rather than
 letting it be an emergent property nobody named.
 
 #### It is already component-agnostic at build time — that was not an accident
@@ -1887,8 +1886,8 @@ Four rules combine to something none of them says alone:
 | `R-SIM-13` | any world model — the viewer takes a `Session` |
 
 **So the player can be built and shipped without any component existing**, and a
-component appears at run time as data. That is exactly the model the reference
-console uses — the tool ships; the component simulation libraries are plugged
+component appears at run time as data. That is exactly the model a
+comparable console-application design uses — the tool ships; the component simulation libraries are plugged
 in — and it is what makes this sustainable across `df`, `perception-core`, RSP
 and whatever follows.
 
@@ -1907,7 +1906,7 @@ path** — it cannot bake in only what it was built with, or adding LCA's layers
 would mean rebuilding the player, which defeats the whole plug-in model. The
 player takes a plug-in root (a component checkout, or a folder beside a DLL),
 adds it to the import path at start-up, and discovers providers there exactly as
-an unfrozen run does. Same shape as the reference console loading a simulation
+an unfrozen run does. Same shape as any console loading a simulation
 DLL it was not built against.
 
 #### Two delivery forms, one codebase
@@ -1921,9 +1920,9 @@ The second is a *packaging* of the first, not a fork. Everything in the plan up
 to that point produces the library; one stage packages it. **Windows first;
 Linux is deliberately out of scope for now.**
 
-#### Checked against the reference console (2026-07-28)
+#### Checked against established console-application practice (2026-07-28)
 
-The reference measurement stack was examined directly — its shipped player
+A comparable measurement-console design was examined directly — its shipped player
 folder and the per-component simulation configs several components carry. What
 it confirmed, what it changed, and the one place our design is deliberately
 different:
@@ -2041,12 +2040,12 @@ distinction between the two *users* is real. The conclusion that they need two
 *engines* does not follow, and this section records why — so the question does
 not get reopened in three months.
 
-#### The reference tool, mapped onto this design
+#### A comparable resim/wiring console, mapped onto this design
 
-The reference resim/wiring console was examined concept by concept
+A comparable resim/wiring console was examined concept by concept
 (2026-07-28, from its own shipped example projects):
 
-| Reference concept | Here | Same thing? |
+| Comparable concept | Here | Same thing? |
 |---|---|---|
 | Component (a pipeline element DLL) | pipeline stage (§5.4) | yes |
 | DLL-wrapper component | `impl: "dll:…"` | yes — different binding method |
@@ -2059,7 +2058,7 @@ The reference resim/wiring console was examined concept by concept
 Nearly everything maps. There is **exactly one** genuine architectural
 difference, and it is not a difference of tool:
 
-> The reference console binds to binaries that never agreed to be bound — it
+> A comparable console binds to binaries that never agreed to be bound — it
 > recovers signatures from debug symbols, and a human then hand-writes every
 > argument's mapping. We own our components, so we mandate a manifest
 > (`R-SIM-4`) and **derive** the binding.
@@ -2073,7 +2072,7 @@ map its ports, feed it from a reader, check the outputs — then later raise a
 requirement for a platform team to incorporate it into the project-level tool.
 The first, third and fourth steps are right. The other two must not exist here.
 
-**Why the mapping step must not exist.** The reference wrapper is verbose
+**Why the mapping step must not exist.** A wrapper approach is verbose
 because the DLL is opaque; ours is not. A developer hand-mapping the ports of a
 component **they just wrote** pays that cost without having that problem — and
 the mapping becomes a *second* description of the port set, living in a project
@@ -2116,29 +2115,29 @@ exists for. The property worth protecting is that a developer's own debugging
 setup *is* the artifact that goes into the mass run; they add a list around it
 and re-express nothing. That is unavailable the moment the engines differ.
 
-Both faces may write the pipeline file directly, as the reference GUI does —
+Both faces may write the pipeline file directly, as a comparable design's GUI does —
 a file that is hand-writable, GUI-writable and diffable, with **no window
 geometry inside it** (§5.16.4).
 
 #### 5.16.3 What is missing for scale, honestly
 
-Two capabilities the reference tool has and this design does not, both small on
+Two capabilities a comparable tool has and this design does not, both small on
 top of what already exists:
 
 - **`sim batch`** — run a pipeline over a folder or list of recordings,
-  headless, one report. This is the reference tool's playlist/folder machinery,
+  headless, one report. This is a common playlist/folder machinery pattern,
   and it is how resim scales past one file. There is currently **no way to
   express "run this over 500 recordings"**.
 - **`sim convert`** — recording → recording across formats, which the codec
   table (`R-SIM-14`) already gives for free once readers and writers are
   symmetric; only the verb was never named.
 
-Deliberately **parked**: the reference tool's generic signal explorer over the
-whole datapool. Useful, large, and not needed until someone asks.
+Deliberately **parked**: a generic signal explorer over the
+whole datapool, of the kind comparable tools ship. Useful, large, and not needed until someone asks.
 
 #### 5.16.4 What is deliberately not copied
 
-- **Window layout inside the project file.** In the reference tool's own
+- **Window layout inside the project file.** In comparable designs'
   examples, over half of a 16 kB project file is dock geometry. It makes the
   pipeline undiffable and unreviewable. Here: pipeline in git, window layout in
   user state (visualization spec §13b).
@@ -2146,7 +2145,7 @@ whole datapool. Useful, large, and not needed until someone asks.
   `Unknown MO` entry — a config referencing a binary that is not there, with no
   statement of what was expected. Here: keyed by component name, resolved
   through the manifest, and a miss is a load error naming both ends (§5.14).
-- **Configuration spread across several independent surfaces.** The reference
+- **Configuration spread across several independent surfaces.** A comparable
   console's blank-screen failure is diagnosable only by checking a config tree,
   a component's properties and a data-source setting in turn. Here, one file per
   run and one load-time validation pass.
