@@ -62,6 +62,191 @@ Enforced by `UT-A1-6` (import-direction test over the module graph).
 
 ---
 
+## 1a. Source file map
+
+Every `.py` file under `modules/sim/src/adas_sim/`, one row each. This is a
+map of *what exists*, not a contract — §2 onward fixes the symbols that
+matter; this table exists so a reader can find the right file without
+grepping. Descriptions are drawn from each file's own module docstring/header;
+a file with no docstring is marked as such rather than guessed at.
+
+### `core/` — time, values, sessions (`R-SIM-*`, §2 below)
+
+| File | What it does |
+|---|---|
+| `core/__init__.py` | Package marker; docstring notes it groups tick, session, history, runner, ids, logging per this doc's §2. |
+| `core/console.py` | Provides `reconfigure_console_utf8()`, called once at every entry point, to force stdout/stderr to UTF-8 since Windows consoles default to cp1252. Safe to call repeatedly. |
+| `core/errors.py` | Defines the closed `SimError` taxonomy (`DG-5`): `AuthoringError`, `EnvironmentError_`, `ContractError`, `InternalError`, each carrying `expected`/`found`/`where`/`hint`. Also `ProvenanceWarning` for project-mismatch/unknown-provenance recordings. |
+| `core/ids.py` | `new_run_id()` — the `N-9` run correlation id `<UTC compact>-<8 hex>`, hashed from pipeline/recording/project/build/bundle/override/seed inputs. Raises `InternalError` if any required key is missing. |
+| `core/logging.py` | Defines the closed `Event` enum (`N-10` fixed log-line vocabulary) and `log()`, which emits one fixed-field-order line to stderr with level derived from the event, never caller-supplied. |
+| `core/history.py` | Defines `HistoryView` (read-only windowed tick history) and `FrameTree` (ego/world frame transforms, `R-COORD-1`) — everything a layer provider may access. |
+| `core/tolerance.py` | `ToleranceSet`/`ToleranceRow`/`load_tolerance()` — per-component field tolerance (`R-SIM-24`) used only by the two measured determinism axes; every widening row needs a mandatory `why:`. |
+| `core/resim.py` | `resim_pipeline` — the resim engine, built on `Pipeline.exec` + `group_by_log_time`, ingest-wrapping recordings via `modules/*/sim/ingest/*.yaml`. Validates `mode: measured` stages against the recording's own port manifest. |
+| `core/signals.py` | The single signal resolver (`NR-SIM-8`) for dotted addresses `<component>.<port>.<field>`/`source.*`/`truth.*`/`derived.*`. Lives in `core/`, not `view/`, so headless consumers (`check/`) never depend on the GUI layer. |
+| `core/determinism.py` | `derive_axis()`/`AxisResult` — compares two `RunManifest`s to classify which determinism axis (same/fresh process, rebuilt binary, different machine) a run pair is evidence for (`R-SIM-24`). |
+| `core/evidence.py` | `Evidence` record + the single `evidence()` producer (`R-SIM-25`) answering "what was this value and where did it come from" — shared by `cli/explain.py` and the GUI evidence panel. |
+| `core/session.py` | `Session` (the viewer's only input, `R-SIM-13`), `SessionEvent` (timeline markers), `CutFeasibility` (whether a recording can drive a stage as `mode: measured`, `R-SIM-23`). |
+| `core/tick.py` | `PortValue`/`Tick` (one unified port mapping), `Pose2D`, `decode_message()` (builds protobuf classes from an embedded `FileDescriptorSet` at run time, `R-SIM-11`). `age_s` is derived, never stored. |
+| `core/manifest.py` | `build_manifest` (assembles a post-run `RunManifest`, `R-SIM-6`) and `RunSpec`/`load_run_spec`/`write_run_manifest` (pre-run config). |
+| `core/runner.py` | Pass 1 of the replay path: groups raw `(topic, log_time_ns, bytes)` triples into lazily-parsed `Tick`s. Defines `SceneCache`, pass 2's bounded memo so toggling a layer/theme doesn't re-run pass 1. |
+| `core/diagnostics.py` | `doctor_report()` — environment facts behind `sim doctor` (`DG-3`): library resolution, config-bundle agreement, recording-cut support, plugin-bundle inspection. |
+| `core/explain.py` | Facts behind `sim explain` (`DG-2`): resolves a run_id/topic/layer id/codec name/error code, with fuzzy "did you mean" suggestions (`N-8`). |
+| `core/batch_worker.py` | `sim batch`'s per-recording subprocess entry point (`R-SIM-19`): runs one recording's load→init→resim→shutdown and writes outcome JSON. Self-reports only `ok`/`fail`; crash/hang is judged from outside. |
+| `core/batch.py` | `run_batch` — `sim batch`'s engine (`R-SIM-19`): one fresh subprocess per recording for crash isolation, classifying into `ok`/`fail`/`crash`/`timeout`. `-j N` bounds concurrency. |
+
+### `model/` — project configuration → geometry (`R-SIM-3`, §6 below)
+
+| File | What it does |
+|---|---|
+| `model/__init__.py` | Package marker: "Project configuration -> geometry" (`R-SIM-3`). No logic. |
+| `model/cameras.py` | `CameraModel` dataclass declaring camera intrinsics/extrinsics fields ahead of the projection stage; fields only, projection not yet implemented. |
+| `model/ego.py` | `EgoModel` — ego body geometry (length/width/wheelbase/overhang) loaded from a project's `ego_params.yaml`; computes `x_front_m`/`x_rear_m`/`half_width_m` (`R-COORD-1`). Never a hardcoded constant. |
+| `model/sensors.py` | `SensorModel`/`parse_sensors` — discovers `<PREFIX>_SENSOR_<i>_<FIELD>` keys by shape, not a hardcoded domain prefix (`R-SIM-1`), validating an optional declared sensor count. |
+| `model/objects.py` | `ObjectModel.footprint(class_name)` — three-tier precedence (explicit → project class table → declared fallback); fallback sizes always carry `assumed_geometry=True`. |
+| `model/project.py` | `ProjectModel.resolve()` — resolves project config/geometry across four tiers (explicit → embedded-in-recording → library `config/` → source checkout, `R-SIM-3a`), reporting which tier via `bundle_origin`. |
+| `model/plugins.py` | `PluginBundle.resolve()` — resolves a component's sim plug-in bundle across the same four tiers as config, checking API-range compatibility; a recording carries only a plug-in's identity/hash, never its code (`R-SIM-20`). |
+
+### `scene/` — Prim / Layer / Scene, frames (`R-SIM-2`, §5 below)
+
+| File | What it does |
+|---|---|
+| `scene/__init__.py` | Package marker: "Prim / Layer / Scene, frames" (`R-SIM-2`). No logic. |
+| `scene/frames.py` | Defines/validates the frame-name graph a `Prim.frame` can reference: `ego`/`world` plus `sensor:<id>`/`image:<cam>`. Name validation only; full transform composition is a later stage. |
+| `scene/codec.py` | Hand-builds a protobuf `FileDescriptorSet` (proto2, no `.proto`/`protoc`) at import time to serialize `Scene`/`Prim`/`Layer`/`BulkRef` to bytes and back. Uses `TYPE_DOUBLE` throughout to avoid float32 round-trip loss. |
+| `scene/registry.py` | `@layer_provider` decorator — registers a layer-producing function by import (no central roster, `R-VAR-2`); supports `requires=` (gates on port presence) and `reacts_to=` (re-render tier). |
+| `scene/types.py` | The central IR: `Prim` (11-kind closed catalogue), `Layer`, `Scene`, `BulkRef` (`R-SIM-2`). A `Prim` carries only metres/frame/semantic style token, never colour or pixels. |
+| `scene/default_layers.py` | Registers the framework's built-in default layers (grid/frame furniture, ego body, ego trail) needed regardless of producing component; reads only `ctx.model`/`ctx.history`, never a port. |
+
+### `contracts/` — SilComponent, Pipeline, ports, overrides, loader (§3 below)
+
+| File | What it does |
+|---|---|
+| `contracts/__init__.py` | Package marker; docstring notes it groups `SilComponent`, `Pipeline`, ports, overrides, loader, and scenario schema v2. |
+| `contracts/scenario.py` | Scenario schema v2 dataclasses (`LateralPhase`, `Actor`, `RoadHint`, etc.) plus a v1→v2 in-memory upgrader. Framework-only: knows scenario shape, never test content (`R-SIM-1`). |
+| `contracts/fault.py` | The closed five-verb `FaultVerb` vocabulary (`drop`/`stale`/`delay`/`invalidate`/`corrupt`) and the `Fault` dataclass, applied to the stimulus before any stage sees it via `Pipeline._apply_stimulus_faults`. |
+| `contracts/component.py` | `SilComponent` (the generic ABI) with two implementations, `CtypesSilComponent` (real/`stubdll:` library) and `InProcessSilComponent` (Python callable + manifest). `CtypesSilComponent.exec` is the sole place ns→float `dtS` conversion happens (`P-8`). |
+| `contracts/loader.py` | `resolve_library`/`resolve_library_report` — the one place a component library stem (`dll:<stem>`) resolves to a real platform file (`P-5`). The report variant never raises, for `sim doctor`. |
+| `contracts/binding.py` | The override/fault address grammar (`Address`, `AddressSegment`, `parse_address`) — `port`, `port.field`, `port.repeated[i]`, `port.repeated[*]`, no predicates (`R-SIM-15`) — and applies verbs to real bytes. |
+| `contracts/pipeline.py` | `Pipeline`/`Stage` (ordered, name-wired stages, load-time-validated), `Pipeline.exec`/`Pipeline.step`, plus `RecordVerb`/`RecordPolicy` (per-port record policy, `R-SIM-6`). Applies overrides and scenario-scoped faults before `exec()`. |
+| `contracts/override.py` | The closed six-verb `OverrideVerb` vocabulary (`const`/`hold`/`offset`/`scale`/`select`/`drop`, `R-SIM-15`) and the `Override` dataclass; `.apply()` implements the four arithmetic verbs. |
+
+### `io/` — format codecs: read + write (`R-SIM-14`, §4 below)
+
+| File | What it does |
+|---|---|
+| `io/__init__.py` | Package marker for format codecs (read + write, `R-SIM-14`). No logic. |
+| `io/csv.py` | Write-only export codec (`round_trips=False`): flattens raw `(topic, log_time_ns, capture_time_ns, bytes)` messages into one row per tick, one column per leaf field, with held-value semantics for multi-rate topics. |
+| `io/ingest.py` | Loads per-recording-family "ingest maps" (`R-SIM-23`) mapping a legacy recording's topics to framework ports — renames/tags only, no computation. Discovers YAML maps under `modules/*/sim/ingest/*.yaml`. |
+| `io/base.py` | Defines the format-agnostic recording model: `RecordingReader`/`RecordingWriter` Protocols, `Capabilities`, `TopicInfo`, `Provenance`, `RunManifest`. Everything above `io/` is written against this model, never a concrete format. |
+| `io/mcap.py` | Default, fully-capable codec (`embedded_schemas`/`random_access`/`round_trips`/`capture_time` all true): protobuf messages with per-channel embedded `FileDescriptorSet` schemas plus native mcap `Metadata` blocks. |
+| `io/jsonl.py` | Second registered codec, human-readable JSON-lines format (header + one line per message, hex-encoded bytes) for small fixtures/debugging; round-trips but no embedded schemas or random access. |
+| `io/registry.py` | `register(ext, reader=, writer=)` + extension-based lookup; lazily imports built-in codec modules (mcap/csv/jsonl) so `adas_sim.io` import never pulls in heavy deps like `mcap`. |
+
+### `sources/` — world-model clients (`R-SIM-14`, §8 below)
+
+| File | What it does |
+|---|---|
+| `sources/__init__.py` | Package marker for "world-model clients" (`R-SIM-14`). No logic. |
+| `sources/base.py` | Defines the `Source` Protocol (`emits`/`start`/`poll`/`stop`) and re-exports `Scenario` — the production-side counterpart to `SilComponent`, driving `source.*` stimulus live or scripted. |
+| `sources/synthetic.py` | `SyntheticSource` — scripted stimuli with no world model: a fixed, pre-encoded sequence of per-tick byte maps (optionally loaded from YAML), used by the framework's own tests. |
+| `sources/recorder.py` | `Recorder` — drives a `Source` (optionally through a `Pipeline`) and writes a recording (`R-SIM-12`); derives topics from pipeline port manifests or the source's full `emits()` when no pipeline is given. |
+| `sources/carla/__init__.py` | Re-exports `CarlaSource` as the package's public API; ported from the old `modules/df/tools/carla/carla_bridge.py`, with `carla` imports deferred to function scope. |
+| `sources/carla/frame_convert.py` | Pure-math CARLA world-frame → ego-fixed-frame conversion (`R-COORD-1`): projects position/velocity onto ego heading, flips CARLA's right-handed convention to +y-left. No `carla` dependency. |
+| `sources/carla/actor_behaviour.py` | Declarative per-tick actor lateral-motion engine: an ordered phase list (`rate_mps`, `duration_s`, optional `raised_cosine` shape) sampled by elapsed time. Component-agnostic. |
+| `sources/carla/world.py` | CARLA connection/world setup: `connect`, `wait_for_world` (retries), `ensure_map`, `set_asynchronous`. `carla` imported inside each function for optional-dependency importability. |
+| `sources/carla/spawn.py` | Actor spawning helpers: `spawn_kinematic_ego` (snaps to a real map spawn point/centerline) and `spawn_kinematic_at` (spawns relative to ego along the road), both kinematic (physics disabled). |
+| `sources/carla/chase.py` | Computes/applies a chase-view spectator camera transform behind/above ego, aimed at the midpoint between ego and an optional focus actor. |
+| `sources/carla/catalogue.py` | Loads `catalogue.yaml` mapping CARLA blueprint id prefixes to classification tokens; `classification_for_blueprint` resolves via longest-prefix match with a declared fallback. |
+| `sources/carla/source.py` | `CarlaSource` — the `Source` implementation driving a live CARLA server; paces itself at `TARGET_HZ=20` by wall clock, emits `gen_object_list`/`veh_dyn`/`veh_sig` only (camera capture not yet ported). |
+| `sources/carla/mocks.py` | Converts CARLA actor ground-truth state into `DfObjList`/`VehDyn`/`VehSig` protobuf bytes, tagged as mock ground truth (`R-SIM-12`). Message classes are supplied by the caller, never imported here. |
+
+### `view/` — transport + viewport STATE, no pixels (`R-SIM-17`)
+
+| File | What it does |
+|---|---|
+| `view/__init__.py` | Package marker; "Transport + viewport STATE -- no pixels" (`R-SIM-17`). No logic. |
+| `view/transport.py` | `Transport` — the head/cursor model: play/pause, step, speed, loop marks, goto; distinguishes immutable-review (behind head) from execution (at head) via `review_mode`. |
+| `view/inspector.py` | `InspectorState` — docked inspector state resolving picked/pinned `pick_id`s to a `Prim`'s declared fields each call (never cached, so vanished entities drop rather than show stale). |
+| `view/viewport.py` | `Viewport` — frozen dataclass holding BEV pan/zoom/rotate/follow/size state plus `to_px`/`to_m` coordinate conversions. Pure state, no pixels drawn. |
+| `view/workspace.py` | `Workspace`/`WorkspaceTab`/`WorkspaceView`/`WorkspaceSplit` — pure parsing of a component's `workspace.yaml` panel arrangement, validating shape only. Only `tabs[0]` is actually applied today. |
+| `view/plots.py` | `PlotState` — tracks which signal addresses one plot panel wants and how, per a closed `KNOWN_KINDS` set; never resolves values itself (delegated to `core/signals.py`). |
+| `view/timeline.py` | `TimelineState` — which signals are lane'd plus user bookmarks, and `event_markers()` deriving transition markers. No pixels, no disk persistence yet. |
+| `view/measure.py` | Ruler/range-ring/annotation state and geometry (`measure()`, `snap_point()`, `RulerMeasurement`, `Annotation`) for the BEV measurement tool; overlay is drawn as ordinary `Prim`s by `render/bev.py`. |
+| `view/pipeline_panel.py` | `PipelinePanelState`/`StageView` — pipeline panel state rendering a loaded `Pipeline`'s mode/impl per stage, delegating mode toggles to `Pipeline.with_mode`. |
+| `view/evidence_panel.py` | `EvidencePanelState`/`EvidenceView` — wraps `core.evidence.evidence`/`format_evidence` (same producer `cli/explain.py --at` uses) for a live `Session` and current tick. |
+| `view/hud.py` | `HudInfo`/`format_hud_lines` — formats HUD text (scale, time/tick, project line, optional ego-state line) from caller-supplied data; no pixels/Qt. |
+| `view/layers.py` | `LayerTreeState`/`LayerInfo` — layer-tree state: per-layer visibility, solo/mute, group verbosity, search filter, persistence; `sync()` discovers layer ids from a `Scene`, never removing a previously-seen id. |
+
+### `render/` — theme, raster, matplotlib, foxglove (`R-SIM-2`, §11 below)
+
+| File | What it does |
+|---|---|
+| `render/__init__.py` | Package marker; "Theme, raster, matplotlib, foxglove" (`R-SIM-2`). No logic. |
+| `render/palette_check.py` | Six-check categorical-palette validator (OKLCH lightness band, chroma floor, CVD-simulated + normal-vision ΔE, contrast), runnable as `python -m adas_sim.render.palette_check`. |
+| `render/theme.py` | Token table (`TokenStyle`, `THEMES` = dark/light/print/forced) mapping style tokens like `zone.entry` to actual colors — the one legal place for a hex literal in the framework. |
+| `render/timeline.py` | `render_timeline()` — rasterizes `view/timeline.TimelineState`'s lanes to a numpy array via headless matplotlib/Agg, zero-margin axes so pixel-to-tick mapping is an exact inverse for click-to-seek. |
+| `render/image_view.py` | Projects `Scene` `Prim`s onto a camera image plane (`project_point`/`unproject_pixel`, `ProjectedPoint`) using `CameraModel` pose. Geometry/projection module, not final rasterization. |
+| `render/plots.py` | Rasterizes `view/plots.PlotState` panels: `xy`/`distribution` get dedicated matplotlib/Agg drawing here; `timeseries`/`state` kinds reuse `render/timeline.render_timeline`. |
+| `render/bev.py` | The Qt-independent Scene-to-raster core: draws every `Prim` kind from `scene/types.py`'s closed catalogue via matplotlib `Agg`, resolving style tokens through `render/theme.py`. |
+| `render/foxglove.py` | Translates a `Scene` into Foxglove `SceneUpdate`/`FrameTransforms` messages (one entity per `Layer`, id unchanged) so Foxglove Studio mirrors the same Scene the Qt renderer draws. |
+| `render/viewer.py` | The GUI viewer's Qt shell (`MainWindow`) — the only module allowed to import Qt; assembles `BevPanel`, `LayersPanel`, `InspectorPanel`, `TransportBar`, `TimelineStrip`, `PlotPanel`s from `view/`-owned state. |
+| `render/clip.py` | `export_clip()` — exports an interval to `.mp4` (via `imageio[ffmpeg]`, deferred import) by rendering each frame through `render/bev.render_scene`, real-time FPS from actual tick spacing. |
+| `render/capture.py` | `snapshot()` — writes a single frame image (raster `.png` or vector `.pdf`/`.svg`) plus a provenance JSON sidecar atomically (`os.replace`), both or neither. |
+
+### `check/` — expectations, report (`R-SIM-8`, §7 below)
+
+| File | What it does |
+|---|---|
+| `check/__init__.py` | Package marker; "Expectations, report" (`R-SIM-8`). No logic. |
+| `check/report.py` | Formats `check.runner.ScenarioCheckResult` sequences into `report.md`/`report.json`; purely a formatter, never re-derives pass/fail so report and exit code can't disagree. |
+| `check/expect.py` | The closed expectation predicate vocabulary (`equals`/`becomes`/`never`/`count`/`between`/`monotonic`, etc.) and evaluator (`evaluate_scenario`), plus marker resolution (`resolve_marker`). |
+| `check/runner.py` | Ties scenario schema, resim engine, and `check/expect.py` together for `sim check`: discovers pipelines/recordings via the `carla_scenarios`/`carla_testruns` sibling-folder convention, resims, evaluates. |
+
+### `cli/` — argument parsing only (`GT-9`)
+
+| File | What it does |
+|---|---|
+| `cli/__init__.py` | `sim`'s single entry point (`sim = adas_sim.cli:main`); dispatches each `argparse` subcommand to its own `cli/*.py` module, deferring imports for GUI/matplotlib/mcap-dependent verbs. No logic beyond parsing/dispatch. |
+| `cli/batch.py` | `sim batch <recordings> --pipeline <p.yaml>` — one subprocess per recording (`R-SIM-19`), `-j` parallelism, `--timeout-s`, optional `--report`. Delegates to `core/batch.py`. |
+| `cli/check.py` | `sim check <scenario-set>` — evaluates `expect:` blocks headless across a scenario set, exits non-zero on failure (CI gate). Engine is `check/`. |
+| `cli/convert.py` | `sim convert <in> <out>` — recording-to-recording conversion via the codec registry, refusing sources/destinations lacking `round_trips` (`R-SIM-14`). |
+| `cli/determinism.py` | `sim determinism <run_a> <run_b>` — compares port values (never file bytes) between two runs, deriving the comparison axis from the run manifests (`R-SIM-24`). |
+| `cli/doctor.py` | `sim doctor` — reports environment facts and, with `--component`/`--pipeline`/`--recording`, checks those against framework needs (`DG-3`). Logic lives in `core/diagnostics.py`. |
+| `cli/explain.py` | `sim explain <name>` — resolves any name (port, topic, layer, signal, error, style token, id); `--at` adds evidence-chain values via the same formatter the GUI evidence panel uses. |
+| `cli/export.py` | `sim export <in> <out> --ports …` — writes a selected port subset of a recording to CSV; explicitly lossy and terminal, never accepted back as a `resim` input. |
+| `cli/list_cmd.py` | `sim list ports\|topics\|layers\|signals <path>` — enumerates one kind of name from a component library, recording, or session; delegates data access to `contracts`/`core`/`io`. |
+| `cli/probe.py` | `sim probe <lib>\|<recording>` — prints a component library's declared ports or a recording's provided/absent ports and feasible pipeline cuts, told apart by file extension (`R-SIM-16`, `R-SIM-23`). |
+| `cli/resim.py` | `sim resim <recording> --pipeline <p.yaml>` — deterministically re-executes a pipeline's stages against an existing recording (the CI mode); `--save` writes a new recording, `--pin-builds` enforces build-sha match. |
+| `cli/run.py` | `sim run <scenario> --pipeline <p.yaml>` — drives a world model live with the pipeline in the loop (non-deterministic) and writes a session recording by default. |
+| `cli/view.py` | `sim view <session>` — opens the Vantage GUI viewer on a recording, resolving its config bundle, workspace, preset, tick, scenario. Defers the Qt-importing `app.gui.launch` call. |
+| `cli/render.py` | `sim render <recording> --at <tick>` — headless snapshot of one tick to a byte-identical PNG plus a provenance sidecar; `--plugin-root` registers a component's built layer/config directory. |
+| `cli/record.py` | `sim record <scenario> -o <out>` — drives a world model (synthetic script or live CARLA) and writes every emitted port with no pipeline execution — stimulus only (`R-SIM-12`). |
+
+### `app/` — Vantage: shell, workspaces, panels (`GT-9`)
+
+| File | What it does |
+|---|---|
+| `app/__init__.py` | Package docstring only: `app/` is Vantage's shell/workspaces/panels layer with "no logic" (`GT-9`). |
+| `app/version.py` | Builds Vantage's `--version` compatibility statement by reading the real enforced constants (ABI version, Scene codec major, recording-manifest version, pipeline schema version, plugin API min/max) plus the installed package version. |
+| `app/shell/__init__.py` | Package docstring only: scopes `app/shell/` to the outer window (workspace toggle, command palette, start page). |
+| `app/panels/__init__.py` | Package docstring only: scopes `app/panels/` to "Bench-only day-one affordances" — `sim probe` as a panel and the Python console. |
+| `app/shell/startpage.py` | `StartPage` widget (Screen 1): recent files, "Open recording…", "Probe a library…", sample-pipeline entries. Also recent-files persistence (`load_recent_files`/`save_recent_files`/`add_recent_file`). |
+| `app/shell/palette.py` | `CommandPalette` (`Ctrl+K`): a searchable dialog listing every `QAction` already registered on a window, built via `actions_from_window` with zero duplicate action-list maintenance. |
+| `app/panels/probe.py` | `ProbePanel` — GUI panel form of `sim probe`: accepts a dropped or browsed component library and displays its ports/types/schemas by reusing `CtypesSilComponent` directly. |
+| `app/panels/console.py` | `ConsolePanel` — the Bench-only Python console dock, built on stdlib `code.InteractiveInterpreter` with `session`/`pipeline`/`scene` bound live via `update_namespace`. |
+| `app/shell/campaign.py` | `CampaignWidget` — the Campaign workspace: a recording-set list plus results table driven entirely by `core.batch.run_batch` (same path as `sim batch`/CI), run off-thread via `_BatchWorker`. |
+| `app/gui.py` | `launch()` — orchestration-only entry point for `sim view`: constructs `QApplication` and `VantageWindow`, runs the Qt event loop. `recording=None` opens onto the start page. |
+| `app/shell/window.py` | `VantageWindow` — the outer shell holding one `render.viewer.MainWindow` (Bench) inside a `QStackedWidget`, with Campaign as a sibling widget over the same `Session`/pipeline. |
+| `app/shell/workspace.py` | Defines `Workspace` (dock arrangement plus permission set: `allow_overrides`/`allow_mode_toggles`/`allow_console`) and the two instances `BENCH`/`CAMPAIGN`; also `WorkspacePermissionError`. |
+
+### Top level
+
+| File | What it does |
+|---|---|
+| `__init__.py` | Top-level package docstring: "component-agnostic (`R-SIM-1`)" simulation & visualization framework — drives component SIL libraries against live/recorded stimuli, records, renders. Version + docstring only. |
+
+---
+
 ## 2. `core/` — time, values, sessions
 
 ### 2.1 `core/ids.py`
