@@ -412,7 +412,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Release one shall provide readers for, in priority order: a vehicle measurement format, a bench capture export, and the system's own interchange format.
 **Accept.** Each of the three opens a real file supplied by its owning team, and `E2E-01` completes against each.
 **Verify.** T · `SYT-INP-11`   **Trace.** CN-0004
-*Note:* the definitive format list is `OQ-08` in §22 and must be closed before baseline.
+*Note:* the definitive format list was `OQ-08` in §22, **closed 2026-08-11 — MCAP (interchange), MDF4 (vehicle measurement), TDMS (bench capture)**.
 
 **`SYS-0012`** · `P2` · `R2` — Second-tier formats
 **Shall.** The system shall provide readers for an image folder with index, and for a synthetic-scenario tool's output.
@@ -2078,7 +2078,7 @@ Everything else is continuity.
 | `OQ-05` | Which components have real, functional libraries today, and which are structural only? | What can actually be validated in `E2E-02`, `E2E-03`, `E2E-10` | Module teams |
 | `OQ-06` | Do existing modules support reset without destroy? | `SYS-0048`, `SYS-0192` | Module teams |
 | `OQ-07` | Should the system inject parameters, or point at a module's existing parameter file? | `SYS-0177`, `SYS-0179` | SIM team + module teams |
-| `OQ-08` | Definitive input format list for release one, in priority order. | `SYS-0011`, `SYS-0012` | Algorithm teams |
+| ~~`OQ-08`~~ | ~~Definitive input format list for release one, in priority order.~~ **Answered 2026-08-11: MCAP (the system's own interchange format), MDF4 (vehicle measurement), TDMS (bench capture).** Priority order is moot — `DD-13` ships MCAP now and writes each other reader the week its first sample file arrives. | `SYS-0011`, `SYS-0012` | **Closed** |
 | `OQ-09` | What exactly does the bench capture write, and does it preserve the signal header end to end? | `SYS-0015`, `SYS-0029`, `SYS-0061` | Bench owner |
 | `OQ-10` | Preferred exchange format for outputs. | `SYS-0111` | Algorithm teams + external automation owner |
 | `OQ-11` | Does an internal port model or signal catalogue already exist that should be adopted rather than defined? | `SYS-0023` — **adopting beats defining**, and this must be asked before the port model is authored | SIM team |
@@ -2109,7 +2109,7 @@ Everything else is continuity.
 | `CN-0222` | Single-cycle replay from a saved state | R2 | Depends on a state-capture mechanism not required by anything in R1; the minimal reproducer (`SYS-0219`) covers the urgent case. |
 | `CN-0063`, `CN-0064`, `CN-0065`, `CN-0173` | Display-only data bypass and lazy decode | R2 | Concept migration phase 5. It is a bandwidth optimisation whose absence degrades performance, not correctness — but see the note below. |
 | `CN-0084` | Synchronization buffer for out-of-order sources | R2 | Needed only for multi-source runs with known reordering; `SYS-0007` refuses the unsafe case in R1 rather than silently mis-handling it. |
-| `CN-0004` (partial) | Image folder and synthetic-tool readers | R2 | `OQ-08` decides. The three R1 readers (`SYS-0011`) are the ones with a stated owner. |
+| `CN-0004` (partial) | Image folder and synthetic-tool readers | R2 | `OQ-08` named three R1 formats and neither of these is among them, so both stay R2. The three R1 readers (`SYS-0011`) are the ones with a stated owner. |
 
 > **On the display-only deferral.** It is deferred, not dropped, and the reason is worth stating precisely: a large share of a real recording is context video that never enters the simulation chain (`CN-0270`). Deferring the bypass means R1's performance on multi-camera recordings will be poor, and that is an accepted, stated consequence rather than a discovered one. `SYS-0230` (read only what the graph needs) is in R1 and carries most of the benefit; the remaining bypass is the player-side half.
 

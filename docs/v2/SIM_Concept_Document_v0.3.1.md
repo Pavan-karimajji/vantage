@@ -95,7 +95,7 @@ The algorithm engineer writes **configuration**, not framework code.
 | 1.4.3 | CN-0010 | Not a closed-loop world simulator. See 11.6. |
 | 1.4.4 | CN-0011 | **No KPI computation, no pass/fail decisions, no test reporting.** A separate automation framework owns these. SIM's job ends at clean, self-describing artifacts. See 10.2. |
 | 1.4.5 | CN-0012 | Not a labelling tool, not a results database, not a tuning optimiser — though the batch and export interfaces are designed so those can be built on top. |
-| 1.4.6 | CN-0282 | Not a world-model client. Driving a live simulator is a plugin concern, never a core one. |
+| 1.4.6 | CN-0282 | Not a world-model client. Driving a live simulator is **out of scope entirely** — a foreign simulator reaches the system only as a recording, through the ordinary codec and ingest-map path (CN-0136). *Amended 2026-08-11 with the confirmation of Implementation Design `DD-12`, which is stronger than the original wording: not even as a plugin.* |
 
 ---
 

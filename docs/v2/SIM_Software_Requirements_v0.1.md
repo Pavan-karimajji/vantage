@@ -603,7 +603,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Release one shall provide readers for a vehicle measurement format, a bench capture export, and the system's own interchange format.
 **Accept.** Each opens a real file supplied by its owning team, and the onboarding scenario completes against each.
 **Verify.** T · `UT-IO-23`   **Trace.** SYS-0011
-**Now.** `PARTIAL` — the interchange codec exists (`io/mcap.py`) plus a second registered codec proving the registry generalises; neither measurement reader exists. The definitive list is `OQ-08`, open.
+**Now.** `PARTIAL` — the interchange codec exists (`io/mcap.py`) plus a second registered codec proving the registry generalises; neither measurement reader exists. **The three are named as of 2026-08-11: MCAP (interchange), MDF4 (vehicle measurement), TDMS (bench capture).** `OQ-08` is closed on the *list*; the remaining open part is priority order between MDF4 and TDMS, which `DD-13` makes moot anyway — each is written the week its first sample file arrives.
 
 **`SW-0382`** · `SI-01` · `P2` · `R2` — Second-tier readers
 **Shall.** The system shall provide readers for an image folder with an index and for a synthetic-scenario tool's output.
@@ -3168,9 +3168,13 @@ section, SYS §26 and the Design's `DD-nn` statuses, assembled so that answering
 is one pass instead of four. That document is a view; **this section stays
 authoritative** for the `SWQ-nn` below.
 
+**As of 2026-08-11: §34.2's eight are all closed** by design decisions that have
+since been confirmed. What remains open is §34.1's inherited set, minus `OQ-08`
+(the format list — MCAP, MDF4, TDMS).
+
 ### 34.1 Inherited, and blocking
 
-All twenty-two of the System Requirements' open questions (SYS §26) are inherited unchanged. Five block baselining there and therefore here. Two of them change this document's content rather than only its numbers:
+All twenty-two of the System Requirements' open questions (SYS §26) are inherited. **`OQ-08` closed 2026-08-11** (the format list: MCAP interchange, MDF4 vehicle measurement, TDMS bench capture), leaving twenty-one, of which four block baselining there and therefore here. Two of them change this document's content rather than only its numbers:
 
 | ID | Question | What it changes here |
 |---|---|---|
@@ -3180,20 +3184,22 @@ All twenty-two of the System Requirements' open questions (SYS §26) are inherit
 | `OQ-16` | The stated set of common configuration changes and each one's time budget | `SW-0348` cannot be failed without them |
 | `OQ-17` | Are there tool qualification or functional-safety process constraints? | Potentially the requirement style, the verification evidence and the documentation set. Answer early |
 
-### 34.2 New, arising from the decomposition
+### 34.2 New, arising from the decomposition — all eight closed
 
-| ID | Question | Blocks | Owner |
-|---|---|---|---|
-| `SWQ-01` | **Where does the C++ subtree live?** `modules/sim` currently declares itself as having no compiled artifact. Adding `simcore` and `simengine` changes its build shape, its package type and its dependency graph. Is that a change to `modules/sim`, or a second module the package delivers from? | §32.1's move, and therefore everything downstream of it. **Close first.** | SIM team |
-| `SWQ-02` | Does the port model carry a **static/parameter** port class, or is static data a separate concept beside ports? | `SW-0060`, `SW-0199`, and §32.3's proposed `SYS` addition | SIM team + a recording owner |
-| `SWQ-03` | Is description resolution (§2.5) one artifact kind or several typed ones with independent version sets? | `SW-0197`, `SW-0198` | SIM team + a recording owner |
-| `SWQ-04` | What is the Resolved Run Spec's serialisation? `SW-0012` requires text and diffability; the choice of concrete format is open and affects `SW-0004`'s canonicalisation rules. | `SW-0001`, `SW-0004`, `SW-0012` | SIM team |
-| `SWQ-05` | Does the engine expose a stable **C** ABI to its embedders, or a C++ one with a C shim? Concept `CN-0047` says C ABI; `SW-0144` requires a second host to prove it. | `SI-09`, `SI-25` | SIM team |
-| `SWQ-06` | What is the declared **line budget** for `SW-0230` ("a few lines from a script")? Without a number the requirement cannot be failed. | `SW-0230` | SIM team |
-| `SWQ-07` | Who owns the offered-onward home for `check/` (§32.4) — is it handed to the automation-framework owner, or archived? | `SW-0126` | SIM team + automation-framework owner |
-| `SWQ-08` | Does per-stage isolation (`SW-0096`) reuse the module ABI over a pipe, or does it need out-of-process hosting, which `SYS-0058` defers past R2? | `SW-0096`, `SW-0255` | SIM team |
+**All eight `SWQ-nn` are closed by a design decision, and every one of those was confirmed on 2026-08-11.** Kept as a table rather than deleted, because the question is what makes the decision legible — but none of these is open, and none blocks a work package. Full text of each decision: `SIM_Implementation_Design_v0.1.md` §1.
 
-**`SWQ-01` should close before any of §32.1 begins.** It is the only one where the wrong answer is expensive to reverse.
+| ID | The question | Closed by |
+|---|---|---|
+| `SWQ-01` | Where does the C++ subtree live — a change to `modules/sim`, or a second module? | `DD-01` — siblings inside `modules/sim`: `src/simcore/`, `src/simengine/`, `src/adas_sim/`, headers at `include/simcore/`. `conanfile.py` unedited, which is the check that says the shape is right |
+| `SWQ-02` | Does the port model carry a **static/parameter** port class, or is static data a separate concept beside ports? | `DD-05` — a port **kind**, not a concept beside ports |
+| `SWQ-03` | Is description resolution one artifact kind, or several typed ones with independent version sets? | `DD-06` — several typed artifacts, each with its own accepted-version set |
+| `SWQ-04` | What is the Resolved Run Spec's serialisation? | `DD-02` — JSON, canonically serialised (§3.4) |
+| `SWQ-05` | A stable **C** ABI, or C++ with a C shim? | `DD-03` — C++17 inside, a flat C ABI to every embedder; `simengine` and the Python binding consume that and nothing else |
+| `SWQ-06` | What is the declared **line budget** for `SW-0230`? | `DD-07` — three statements: one import, one construction, one call |
+| `SWQ-07` | Who owns the offered-onward home for `check/`? | `DD-08` — moved intact to `contrib/check/`, excluded from the package, offered to the automation-framework owner |
+| `SWQ-08` | Does per-stage isolation reuse the module ABI over a pipe, or need out-of-process hosting? | `DD-09` — the module ABI over a pipe, hosted by a second `simengine` in single-stage mode. `SYS-0058`'s deferral is untouched |
+
+**`SWQ-01` was the one where the wrong answer would have been expensive to reverse**, which is why the Design closed it first and marked it `ADOPTED` rather than `CONFIRM`.
 
 ---
 

@@ -100,9 +100,21 @@ SwReq §34.2 records eight questions arising from the decomposition, and says of
 
 | Mark | Meaning |
 |---|---|
-| **`ADOPTED`** | The requirement set already argues this answer; recording it is bookkeeping, not a new decision. |
-| **`CONFIRM`** | A real choice made here on stated grounds. Cheap to reverse, or reversible at a named point. Review should agree or overturn it. |
-| **`CONFIRM·HARD`** | A real choice that is expensive to reverse. Review should settle it before the work package that depends on it starts. |
+| **`ADOPTED`** | Settled. No work package below is waiting on it. |
+
+**All fourteen were confirmed on 2026-08-11**, so every mark now reads `ADOPTED`
+and the `CONFIRM` / `CONFIRM·HARD` marks are gone rather than left standing
+stale. What they meant is worth keeping, because it says which three were the
+consequential ones: `DD-03` (the flat C ABI), `DD-04` (exactly one codec) and
+`DD-12` (no live world-model client at all) were marked `CONFIRM·HARD` —
+expensive to reverse — and are the three whose reversal would now cost a
+restructure rather than an edit. The rest were `CONFIRM`: real choices made on
+stated grounds, reversible at a named point.
+
+**`DD-12`'s confirmation came with the format list** that `SW-0381` and `OQ-08`
+were waiting on: *a recording can be an MCAP, an MDF4 or a TDMS.* See `DD-13`,
+which is unchanged in substance — MCAP is still the only codec in release one —
+but now names the other two instead of describing them.
 
 ---
 
@@ -122,13 +134,13 @@ SwReq §34.2 records eight questions arising from the decomposition, and says of
 
 ---
 
-**`DD-02`** · closes `SWQ-04` · **`CONFIRM`** — **The Resolved Run Spec is JSON, with a canonical serialisation defined in §3.4.**
+**`DD-02`** · closes `SWQ-04` · **`ADOPTED`** — **The Resolved Run Spec is JSON, with a canonical serialisation defined in §3.4.**
 
 `CN-0294` says the engine needs no YAML parser. Choosing YAML for the seam would hand it one back and undo the reason the seam exists. `SW-0012` requires text and a meaningful line diff; `SW-0004` requires a stable canonical form to hash. JSON gives all three with a single-header reader and exactly one canonicalisation rule set. Reversible: the spec is written and read at two named symbols (§3.5), so a format change is two functions.
 
 ---
 
-**`DD-03`** · closes `SWQ-05` · **`CONFIRM·HARD`** — **`simcore` is C++17 internally and exposes a flat C ABI (`simcore/abi/simcore.h`) to every embedder. `simengine` and the Python binding both consume that C ABI and nothing else.**
+**`DD-03`** · closes `SWQ-05` · **`ADOPTED`** — **`simcore` is C++17 internally and exposes a flat C ABI (`simcore/abi/simcore.h`) to every embedder. `simengine` and the Python binding both consume that C ABI and nothing else.**
 
 `CN-0047` says a stable C ABI. `SW-0144` requires the library to be usable without the executable, and `SW-0016`/`SW-0142` require the engine to link no interpreter — which a pybind11 module would violate by construction. A C ABI consumed from Python by `ctypes` gives: no build-time coupling between the player and the engine's compiler, one binding mechanism already proven in this repository (`modules/df/tools/.../df_ctypes.py`), and `SW-0144`'s second host for free — `simengine` *is* the second host.
 
@@ -136,7 +148,7 @@ SwReq §34.2 records eight questions arising from the decomposition, and says of
 
 ---
 
-**`DD-04`** · new, not in `SWQ` · **`CONFIRM·HARD`** — **There is exactly one codec implementation, in `simcore/io` (C++). The player reads recordings through the `simcore` C ABI, not through a second Python codec.**
+**`DD-04`** · new, not in `SWQ` · **`ADOPTED`** — **There is exactly one codec implementation, in `simcore/io` (C++). The player reads recordings through the `simcore` C ABI, not through a second Python codec.**
 
 This decision is forced and is stated because leaving it implicit is how the fifth duplication would be created after the first four were removed. Three requirements pull in apparently opposite directions: `SW-0013` forbids Python on a per-message path; `SW-0299` requires a finished run to open with **no engine present**; `SW-0290` has the player decoding a port value lazily, in Python, at display rate.
 
@@ -146,43 +158,43 @@ They are only in tension if "no engine present" is read as "no engine *library* 
 
 ---
 
-**`DD-05`** · closes `SWQ-02` · **`CONFIRM`** — **Static parameter data is a port *kind*, not a concept beside ports.**
+**`DD-05`** · closes `SWQ-02` · **`ADOPTED`** — **Static parameter data is a port *kind*, not a concept beside ports.**
 
 The port declaration gains `kind: data | control | static`, extending the two kinds `CN-0093` already distinguishes rather than adding a third top-level concept. `SW-0060`'s "no cycle structure, no hold, no age" then becomes a property the scheduler reads off the kind, and `SW-0057`'s "a consumer always receives its full port set" needs no exception. The alternative — static data as a parallel channel — would require every consumer, every export and every evidence answer to learn about a second address space.
 
 ---
 
-**`DD-06`** · closes `SWQ-03` · **`CONFIRM`** — **Description resolution produces several typed artifacts, each with its own accepted-version set.**
+**`DD-06`** · closes `SWQ-03` · **`ADOPTED`** — **Description resolution produces several typed artifacts, each with its own accepted-version set.**
 
 `SW-0198` requires *per description type* accepted versions. One artifact kind cannot carry per-type version sets without inventing a type field inside it, which is the same design with an extra indirection. Typed from the start.
 
 ---
 
-**`DD-07`** · closes `SWQ-06` · **`CONFIRM`** — **`SW-0230`'s "a few lines" is three statements: one import, one construction, one call.**
+**`DD-07`** · closes `SWQ-06` · **`ADOPTED`** — **`SW-0230`'s "a few lines" is three statements: one import, one construction, one call.**
 
 Stated as a number so `SW-0230` can be failed. `ANL-SW-40` counts statements in the scripted equivalent of every CLI verb (`SW-0231`) and fails above three.
 
 ---
 
-**`DD-08`** · closes `SWQ-07` · **`CONFIRM`** — **`check/` is moved intact to `modules/sim/contrib/check/`, excluded from the package, and offered to the automation-framework owner.**
+**`DD-08`** · closes `SWQ-07` · **`ADOPTED`** — **`check/` is moved intact to `modules/sim/contrib/check/`, excluded from the package, and offered to the automation-framework owner.**
 
 `SW-0126` puts verdicts outside the system; SwReq §32.4 says the mechanism is good and should be offered onward rather than deleted from the world. `contrib/` is not built, not packaged, not imported by anything under `src/`, and carries a `README` naming the owner question as open. If no owner claims it within the migration, it is deleted at `MP-6` — recorded so that "temporarily archived" cannot become permanent by silence.
 
 ---
 
-**`DD-09`** · closes `SWQ-08` · **`CONFIRM`** — **Per-stage isolation (`SW-0096`) reuses the module ABI over a pipe, hosted by a second `simengine` process in single-stage mode.**
+**`DD-09`** · closes `SWQ-08` · **`ADOPTED`** — **Per-stage isolation (`SW-0096`) reuses the module ABI over a pipe, hosted by a second `simengine` process in single-stage mode.**
 
 No new hosting design, no new ABI, and `SYS-0058`'s deferral of out-of-process module hosting is untouched — the isolated thing is a *stage of the engine*, not a module hosted out of process. The child is the same executable with `--isolate-stage <name>`, which also makes the isolated path exercise the same load and lifecycle code as the normal one.
 
 ---
 
-**`DD-10`** · new, not in `SWQ` · **`CONFIRM`** — **The Python package is restructured so that a package name is a software item name.**
+**`DD-10`** · new, not in `SWQ` · **`ADOPTED`** — **The Python package is restructured so that a package name is a software item name.**
 
 `adas_sim.core`, `adas_sim.contracts` and `adas_sim.view` are not item names, and three of the four duplications live in files whose package gives no clue which side of the seam they belong to. After the restructure, `adas_sim/config/`, `adas_sim/graph/`, `adas_sim/runspec/` … map one-to-one onto `SI-10`…`SI-25`, and `D-1`…`D-6` (SwReq §1.3) become import-direction checks a script can run (`ANL-SW-07`). Full mapping in §2.3.
 
 ---
 
-**`DD-11`** · new, not in `SWQ` · **`CONFIRM`** — **The signal header is built before the cycle ladder, and both are built before anything is deleted.**
+**`DD-11`** · new, not in `SWQ` · **`ADOPTED`** — **The signal header is built before the cycle ladder, and both are built before anything is deleted.**
 
 SwReq §32.5's closing paragraph names `SW-0049` and `SW-0043` as what the largest number of other requirements sit on. `SW-0050`'s ladder reads three of the header's eight fields, so the header is not merely first among equals — it is the ladder's input. The Plan orders them `WP-05` then `WP-06`, both inside `MP-1`, and neither behind any deletion.
 
@@ -190,7 +202,7 @@ SwReq §32.5's closing paragraph names `SW-0049` and `SW-0043` as what the large
 
 ---
 
-**`DD-12`** · **supersedes the draft's "demote"** · **`CONFIRM·HARD`** — **The live world-model client is removed from the system entirely. There is no `sources/` abstraction, no world-model plug-in, and no live stimulus of any kind. Every input is a recording, read by a codec.**
+**`DD-12`** · **supersedes the draft's "demote"** · **`ADOPTED`** — **The live world-model client is removed from the system entirely. There is no `sources/` abstraction, no world-model plug-in, and no live stimulus of any kind. Every input is a recording, read by a codec.**
 
 **This is a scope decision by the customer, taken 2026-08-10, and it is stronger than what the requirement documents currently say.** SwReq §32.4 said *"demoted, not deleted"*, and `CN-0282` says driving a live simulator is *"a plugin concern, never a core one"* — both leave a live-source seam open. The decision closes it: a scene-authoring, actor-spawning, world-driving client does not fit this architecture, and keeping one as a plug-in preserves the shape of the thing that does not fit.
 
@@ -217,17 +229,21 @@ SwReq §32.5's closing paragraph names `SW-0049` and `SW-0043` as what the large
 
 ---
 
-**`DD-13`** · new, from the same decision · **`CONFIRM`** — **MCAP is the only codec implemented in release one. `SW-0381`'s other two readers are built when a sample file exists, and not before.**
+**`DD-13`** · new, from the same decision · **`ADOPTED`** — **MCAP is the only codec implemented in release one. `SW-0381`'s other two readers are built when a sample file exists, and not before.**
 
-`SW-0381` requires three readers for `R1`. Two of them cannot be *written* today, let alone tested: there is no MF4 and no bench-capture sample in hand. A reader developed against a format specification and no file is a reader that fails on the first real file, and `F-FOREIGN` — the fixture the whole of `MP-1` is validated against — would have to be synthesised from the same guess.
+**The three are now named** (confirmed with `DD-12`, 2026-08-11): **MCAP** — the system's own interchange format; **MDF4** — the vehicle measurement format; **TDMS** — the bench capture export. `SW-0381` described them by role because `OQ-08` was open; that half of `OQ-08` is now closed, and the descriptions above are the mapping.
 
-**So the requirement stands and the plan sequences it.** `WP-06` implements the codec contract with MCAP as its one registration; `WP-18` adds MF4 and bench capture, and its exit gate is explicitly conditional on a sample being available. This is recorded in §32 as a blocking input alongside `OQ-14` and `OQ-16`, because it is the same kind of thing: **a requirement nobody can exercise is a requirement that will be declared satisfied.**
+`SW-0381` requires three readers for `R1`. Two of them cannot be *written* today, let alone tested: there is no MDF4 and no TDMS sample in hand. A reader developed against a format specification and no file is a reader that fails on the first real file, and `F-FOREIGN` — the fixture the whole of `MP-1` is validated against — would have to be synthesised from the same guess.
+
+**Naming them changes the plan's shape not at all, and that is the point.** `R-SIM-14` makes a format a codec of ~4 methods each behind one registered interface, so three names is three rows in the codec table. If naming the formats had propagated anywhere beyond that table and `WP-18`, the codec seam would have been wrong.
+
+**So the requirement stands and the plan sequences it.** `WP-06` implements the codec contract with MCAP as its one registration; `WP-18` adds MDF4 and TDMS, and its exit gate is explicitly conditional on a sample being available. This is recorded in §32 as a blocking input alongside `OQ-14` and `OQ-16`, because it is the same kind of thing: **a requirement nobody can exercise is a requirement that will be declared satisfied.**
 
 The seam's schema follows: §3.1's `sources[].codec` example reads `"mcap"`, and the codec table has one row until a file arrives to justify a second.
 
 ---
 
-**`DD-14`** · consequence of `DD-12` · **`CONFIRM`** — **The producing-and-not-executing verb in release one is `convert`, not `record`. `record` leaves the verb set.**
+**`DD-14`** · consequence of `DD-12` · **`ADOPTED`** — **The producing-and-not-executing verb in release one is `convert`, not `record`. `record` leaves the verb set.**
 
 `SW-0233` requires three distinct verbs: one that produces a recording and executes nothing, one that does both, one that executes an existing recording. Today those are `record` / `run` / `resim`, and `record`'s only producer was the live world model that `DD-12` removes.
 
@@ -624,7 +640,7 @@ src/io/
 | `IMP-0040` | `SW-0040` | `WP-06` | `MOVE` | `src/simcore/io/writer_base.cpp` — message order is input order, no map iteration reaches the file, and no wall-clock value is written outside the declared `meta` block. | `UT-IO-20` |
 | `IMP-0041` | `SW-0041` | `WP-06` | `EXTEND` | `writer_base.cpp::WriteMessage` — flushes on the same three bounds `ReadBounds` uses. Replaces the accumulate-then-write shape in `resim_runner.cpp` and `core/resim.py`. | `UT-IO-21` |
 | `IMP-0042` | `SW-0042` | `WP-18` | `MOVE` | `src/simcore/io/merged_output.cpp` — original messages pass through, simulated ports overwrite their own topic, and the result carries its own `meta` so it loads alone. | `UT-IO-22` |
-| `IMP-0381` | `SW-0381` | `WP-18` | `EXTEND` | `src/simcore/io/codecs/{mcap,mf4,pxi}.cpp` — MCAP is the port of `io/mcap.py` and lands at `WP-06`. **MF4 and PXI are blocked on a sample file (`DD-13`)** and are written the week one arrives; they are the reason `SI-01` exists at all, which is why they are deferred rather than dropped. | `UT-IO-23` |
+| `IMP-0381` | `SW-0381` | `WP-18` | `EXTEND` | `src/simcore/io/codecs/{mcap,mdf4,tdms}.cpp` — MCAP is the port of `io/mcap.py` and lands at `WP-06`. **MDF4 and TDMS are blocked on a sample file (`DD-13`)** and are written the week one arrives; they are the reason `SI-01` exists at all, which is why they are deferred rather than dropped. | `UT-IO-23` |
 | `IMP-0382` | `SW-0382` | `WP-30` | `NEW` | `src/simcore/io/codecs/{rosbag,imagedir,carmaker}.cpp` — `R2`. Each is one reader class plus one `Register` line, which is `SW-0021`'s claim being paid off. | `UT-IO-24` |
 | `IMP-0383` | `SW-0383` | `WP-01` | `KEEP` | `scripts/check_invariants.py` gains an `io`-scope rule: no identifier under `src/simcore/io/codecs/**` names a module, and no module manifest names a codec. Extends the existing `GT-1` grep rather than adding a second scanner. | `ANL-SW-72` |
 | `IMP-0384` | `SW-0384` | `WP-18` | `MOVE` | `src/simcore/io/codecs/{mcap,csv_writer,parquet_writer}.cpp` — CSV ports `io/csv.py`; MCAP is the round-trippable one; Parquet is registered **write-only** so `IMP-0024` refuses it as an input. | `UT-IO-25` |
@@ -2008,14 +2024,14 @@ Not open questions of this document's making — five inherited from SwReq §34.
 | `IMP-0272`, `IMP-0323`, `IMP-0369` | `SW-0272`, `SW-0323`, `SW-0369` | `OQ-14` — the numbers for per-cycle cost, throughput, frame time | The harnesses are built; the thresholds cannot be set, so the requirements cannot be failed |
 | `IMP-0348` | `SW-0348` | `OQ-16` — the common configuration changes and their budgets | The requirement closest to the success measure cannot be failed |
 | requirement style, evidence, document set | all | `OQ-17` — tool qualification or functional-safety constraints | Potentially the whole verification approach. **Answer early** |
-| `IMP-0381`'s second and third readers | `SW-0381` | **A sample file.** There is no MF4 and no bench capture in hand (`DD-13`) | MCAP ships; the other two are written the week a sample arrives. Not a design problem — an input this project does not yet have |
-| `CN-0282`'s wording | — | The **concept is the master** and still reads *"driving a live simulator is a plugin concern"* | `DD-12` is stronger: not even as a plugin. **Proposed amendment, not applied here** — §33 states it, and the concept's owner takes it. Leaving the two in disagreement is exactly the drift `CN-0287` forbids, so this should not sit open |
+| `IMP-0381`'s second and third readers | `SW-0381` | **A sample file.** There is no MDF4 and no TDMS in hand (`DD-13`) | MCAP ships; the other two are written the week a sample arrives. Not a design problem — an input this project does not yet have |
+| ~~`CN-0282`'s wording~~ | — | ~~The **concept is the master** and still reads *"driving a live simulator is a plugin concern"*~~ | **Closed 2026-08-11.** `DD-12` confirmed, and the amendment applied in the concept — `CN-0282` now reads *"out of scope entirely"*. §33 records it |
 
 **None of the five blocks starting.** Each blocks *finishing* one requirement, and each has a named harness built regardless so the answer can be dropped in rather than designed around.
 
-## 33. Proposed amendment to the concept baseline
+## 33. Amendment to the concept baseline — applied
 
-One line of the master document is now weaker than the decision it is supposed to govern. It is **proposed here and not applied**, because the concept is the baseline every other document derives from and amending it is its owner's act, not a derived document's.
+One line of the master document was weaker than the decision it is supposed to govern. It was **proposed here and not applied**, because the concept is the baseline every other document derives from and amending it is its owner's act, not a derived document's. **The owner confirmed `DD-12` on 2026-08-11 and the amendment is now applied in the concept.** Recorded here rather than deleted, so the change to a baselined document has a stated reason and a date.
 
 | UID | Reads today | Proposed | Why |
 |---|---|---|---|
