@@ -158,7 +158,7 @@ flowchart TB
     ERR["SI-07 errors"]
     EDG["SI-08 engine diagnostics"]
   end
-  EXE["SI-09 sim-engine (thin exe)"]
+  EXE["SI-09 simengine (thin exe)"]
   subgraph PLAYER["Player — separate process, display rate"]
     SES["SI-18 session"] --> PLR["SI-21 player"]
     SCN["SI-19 scene"] --> RND["SI-20 render"]
@@ -185,7 +185,7 @@ flowchart TB
 | `SI-06` | `RUN` | `simcore/runner` | C++ | per tick | The cycle loop, injection boundary, divergence detection, streaming output, checkpointing |
 | `SI-07` | `ERR` | `simcore/errors` | C++ | on failure | The closed error taxonomy, message shape, exit-code mapping |
 | `SI-08` | `EDG` | `simcore/diagnostics` | C++ | per run / per tick when enabled | Graph and schedule dump, cycle trace, timing statistics, byte counters |
-| `SI-09` | `EXE` | `sim-engine` | C++ | once | Argument handling, debugger hooks, spec load, lifecycle, exit code — and nothing else |
+| `SI-09` | `EXE` | `simengine` | C++ | once | Argument handling, debugger hooks, spec load, lifecycle, exit code — and nothing else |
 | `SI-10` | `CFG` | `config` | Python | once per run | Parse, schema validation, four-layer merge, includes, variables, round-trip |
 | `SI-11` | `GRF` | `graph` | Python | once per run | Graph build, wiring validation, port-type match, coherence classification, remedies |
 | `SI-12` | `ING` | `ingest` | Python | once per run | Ingest map parse and validation, family matching, declared holes, description resolution |
@@ -226,7 +226,7 @@ Stated as a set because the failure mode is drift, and drift is cheapest to prev
 | `SI-04` `module_host` | Resolve a path, search a directory, or parse a configuration file. It receives an absolute path. |
 | `SI-05` `mutate` | Contain an expression evaluator, a scripting hook, or a user-supplied callable. |
 | `SI-06` `runner` | Contain a second execution path, a single-rate loop, or a "fast mode". |
-| `SI-09` `sim-engine` | Contain a configuration parser, validation, path search or inference. |
+| `SI-09` `simengine` | Contain a configuration parser, validation, path search or inference. |
 | `SI-10` `config` | Execute anything, load a library, or open a recording's payload. |
 | `SI-11` `graph` | Read a message. Classification is computable with no recording opened. |
 | `SI-12` `ingest` | Compute. Renaming, tagging, and a declared factor and offset — nothing else. |
@@ -257,7 +257,7 @@ A working Python framework exists and is substantial: a `Scene` intermediate rep
 
 ### 2.2 Finding 1 — the engine seed is in a component-adjacent module, not in the framework
 
-The C++ code that concept §21.2 identifies as *the seed of the engine* — the thing that becomes `simcore` and `sim-engine` — lives today in **`modules/sil_host`**, a module whose stated role is *"the SIL integration host … proves that component C-API DLLs can be composed and run in one process. Not a shippable ADAS component."*
+The C++ code that concept §21.2 identifies as *the seed of the engine* — the thing that becomes `simcore` and `simengine` — lives today in **`modules/sil_host`**, a module whose stated role is *"the SIL integration host … proves that component C-API DLLs can be composed and run in one process. Not a shippable ADAS component."*
 
 That module now contains, in ~1.9 kLOC: a pipeline loader with schema versioning and load-time validation (`pipeline.cpp`, 416 lines), a component host over the generic ABI with symbol binding and buffer grow-and-retry (`sil_component.cpp`), a library resolver by stem and search path (`library_loader.cpp`), an ingest-map parser (`ingest_map.cpp`), a recording reader (`recording_reader.cpp`), a resim runner (`resim_runner.cpp`), a per-execution timeout (`exec_timeout.cpp`), a graph and schedule dump (`graph_dump.cpp`) and a four-kind error taxonomy (`errors.hpp`).
 
@@ -1346,7 +1346,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 
 ---
 
-## 13. `SI-09` — `sim-engine`: the thin executable
+## 13. `SI-09` — `simengine`: the thin executable
 
 **`SW-0141`** · `SI-09` · `P0` · `R1` — Arguments and lifecycle only
 **Shall.** The executable shall contain argument handling, debugger hooks, spec load, engine construction, run and exit-code return, and nothing else.
@@ -3019,7 +3019,7 @@ Dated **2026-08-10**. See §0.7 for what these values do and do not claim.
 | `SI-06` `runner` | 2 | 3 | 2 | 1 | 6 | **14** |
 | `SI-07` `errors` | — | 4 | 1 | 2 | 3 | **10** |
 | `SI-08` engine diagnostics | 1 | 2 | — | 1 | 6 | **10** |
-| `SI-09` `sim-engine` | 3 | 2 | — | 1 | 3 | **9** |
+| `SI-09` `simengine` | 3 | 2 | — | 1 | 3 | **9** |
 | `SI-10` `config` | 3 | 6 | — | 7 | 5 | **21** |
 | `SI-11` `graph` | 1 | 7 | 2 | 9 | 7 | **26** |
 | `SI-12` `ingest` | 2 | 2 | 1 | 5 | 6 | **16** |
@@ -3062,7 +3062,7 @@ The C++ host is ~1,940 lines across nine source pairs plus the executable's entr
 | `src/pipeline.cpp/.hpp` | 558 | Pipeline load, validation, base grid, single-rate `Exec`, multi-rate `Step` | **SPLIT** | Load, validation and grid **die** (`SW-0018`); `Step`'s due-tick gating, hold and age move to `simcore/scheduler` (`SI-03`); `Exec` **dies** with the single-rate path (`SW-0061`) |
 | `src/ingest_map.cpp/.hpp` | 198 | Ingest map parse **and** apply | **SPLIT** | Parsing **dies** (`SW-0018`, `SW-0187`); application moves to `simcore/io` (`SW-0032`) |
 | `src/library_loader.cpp/.hpp` | 162 | Resolve by stem **and** open | **SPLIT** | Resolution **dies** (`SW-0018`, `SW-0203`); opening moves to `simcore/module_host` (`SW-0079`) |
-| `main.cpp` | 179 | Arguments, lifecycle | **MOVE, trimmed** | `sim-engine` (`SI-09`) — already close to `SW-0141`'s shape |
+| `main.cpp` | 179 | Arguments, lifecycle | **MOVE, trimmed** | `simengine` (`SI-09`) — already close to `SW-0141`'s shape |
 | | **1,943** | | | |
 
 **Three consequences the plan must carry:**
@@ -3107,7 +3107,7 @@ All five come from the same finding (§2.5) and would be closed by one addition 
 |---|---:|---|
 | `check/expect.py`, `check/runner.py`, `check/report.py` | ~1,040 | **Out of scope** (`SW-0126`). The expectation vocabulary, the evaluator and the report compute verdicts, which the external automation framework now owns. **The mechanism is good and should be offered to whoever builds that framework**, not deleted from the world — `SYS` §25.3 says the same about its v1 parent. |
 | `contracts/scenario.py`'s `expect:` and `markers:` blocks | part of 524 | **Split.** The scenario schema's world, sensor-model and fault sections stay; the expectation block leaves with `check/`. |
-| `sources/carla/` | ~1,080 | **Demoted, not deleted** (`CN-0282`, `SYS-0109`). Becomes one optional input plug-in with no privileged status — no more special than a measurement-format reader. Nothing above `SI-01` may name it. |
+| `sources/carla/` + `sources/base.py` | ~1,150 | **Deleted.** *Superseded 2026-08-10 — this row originally read "demoted, not deleted".* The customer removed live world-model clients from the system entirely (Implementation Design `DD-12`, and `SYS-0282` reworked accordingly). A world-driving client does not fit the architecture, and keeping one as a plug-in preserves the shape of the thing that does not fit. **The capability survives without the coupling:** `SYS-0109` already requires a foreign simulator's output to be read as an ordinary input source through the same reader and ingest-map path as a measurement, with no privileged code path — so a simulator that emits MCAP is fully supported by the codec table and an ingest map, with no code in `modules/sim` naming it. `sources/recorder.py` moves to `io/`; `sources/synthetic.py` becomes a test fixture that writes MCAP (`R-SIM-12`'s own advice for a mock). |
 
 None of the three is a defect. All three are scope that the concept moved outward, and recording them here is what stops them being carried forward by momentum.
 
@@ -3163,6 +3163,11 @@ Per identifier: preconditions and fixtures, exact steps, exact expected values, 
 
 ## 34. Open questions
 
+**All of them, in one place: `SIM_Open_Questions_v0.1.md`** — a view over this
+section, SYS §26 and the Design's `DD-nn` statuses, assembled so that answering
+is one pass instead of four. That document is a view; **this section stays
+authoritative** for the `SWQ-nn` below.
+
 ### 34.1 Inherited, and blocking
 
 All twenty-two of the System Requirements' open questions (SYS §26) are inherited unchanged. Five block baselining there and therefore here. Two of them change this document's content rather than only its numbers:
@@ -3179,7 +3184,7 @@ All twenty-two of the System Requirements' open questions (SYS §26) are inherit
 
 | ID | Question | Blocks | Owner |
 |---|---|---|---|
-| `SWQ-01` | **Where does the C++ subtree live?** `modules/sim` currently declares itself as having no compiled artifact. Adding `simcore` and `sim-engine` changes its build shape, its package type and its dependency graph. Is that a change to `modules/sim`, or a second module the package delivers from? | §32.1's move, and therefore everything downstream of it. **Close first.** | SIM team |
+| `SWQ-01` | **Where does the C++ subtree live?** `modules/sim` currently declares itself as having no compiled artifact. Adding `simcore` and `simengine` changes its build shape, its package type and its dependency graph. Is that a change to `modules/sim`, or a second module the package delivers from? | §32.1's move, and therefore everything downstream of it. **Close first.** | SIM team |
 | `SWQ-02` | Does the port model carry a **static/parameter** port class, or is static data a separate concept beside ports? | `SW-0060`, `SW-0199`, and §32.3's proposed `SYS` addition | SIM team + a recording owner |
 | `SWQ-03` | Is description resolution (§2.5) one artifact kind or several typed ones with independent version sets? | `SW-0197`, `SW-0198` | SIM team + a recording owner |
 | `SWQ-04` | What is the Resolved Run Spec's serialisation? `SW-0012` requires text and diffability; the choice of concrete format is open and affects `SW-0004`'s canonicalisation rules. | `SW-0001`, `SW-0004`, `SW-0012` | SIM team |

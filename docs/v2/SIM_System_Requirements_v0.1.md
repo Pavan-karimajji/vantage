@@ -119,7 +119,7 @@ The system comprises:
 | Item | Nature |
 |---|---|
 | `simcore` | C++ library — everything during a run |
-| `sim-engine` | Thin native executable wrapping `simcore` — no GUI, no Python |
+| `simengine` | Thin native executable wrapping `simcore` — no GUI, no Python |
 | Configuration layer | Python — everything before a run: parse, validate, resolve, emit the Resolved Run Spec |
 | Player | Separate process — renders a session |
 | Launcher | Interactive front-end that writes a run configuration and nothing else |
@@ -1899,10 +1899,12 @@ Constraints are obligations on *how* the system is built, imposed because a corr
 **Accept.** A schema change is releasable without touching any project's content; a content change is made without a package release.
 **Verify.** I · `INSP-12`   **Trace.** CN-0015
 
-**`SYS-0282`** · `P0` · `R1` — Codec concerns stay separate from source concerns
-**Shall.** Format codecs and world-model clients shall be separate abstractions and shall not be merged.
-**Accept.** No codec names a world model and no world-model client implements a codec method. A world-model client is one optional input plugin with no privileged status.
-**Verify.** A · `ANL-55`   **Trace.** CN-0282, CN-0136
+**`SYS-0282`** · `P0` · `R1` — A codec moves bytes and knows nothing above itself
+**Shall.** A format codec shall know only named, timestamped payloads, and no software above the codec layer shall name a codec, a format or a producing tool.
+**Accept.** No codec source file names a port, a module, a graph or a producing tool; no file above the codec layer names a format. Adding a format changes the new codec and the registry, and nothing else.
+**Verify.** A · `ANL-55`   **Trace.** CN-0282, CN-0136, CN-0004
+
+> **Reworked 2026-08-10, under a stable UID.** The original text required *"format codecs and world-model clients"* to be separate abstractions. The customer has since removed live world-model clients from the system entirely (Implementation Design `DD-12`): a scene-authoring, actor-spawning, world-driving client does not fit this architecture, and keeping one as a plugin would preserve the shape of the thing that does not fit. **The capability is not lost** — `SYS-0109` already requires a world simulator's output to be read as an ordinary input source, *"through the same reader and ingest-map path as a measurement, with no privileged code path"*. What is lost is the coupling. The requirement therefore keeps its number and states the invariant that survives, which is the stronger half of the original: the codec boundary. `SYS-0109` is unchanged and now carries the whole of the foreign-simulator story.
 
 ---
 
@@ -2064,6 +2066,8 @@ Everything else is continuity.
 ## 26. Open questions and required decisions
 
 `CN-0379` requires that every concept open question becomes a decision record or a documented assumption **before** these requirements are baselined. Each is listed with what it blocks, so the order to close them is visible.
+
+**Consolidated view for answering: `SIM_Open_Questions_v0.1.md`**, which gathers these twenty-two together with the Software Requirements' `SWQ-nn`, the Design's `DD-nn` confirmations and the `SignalHeader` questions. It is a view; this table stays authoritative.
 
 | ID | Question | Blocks | Owner |
 |---|---|---|---|

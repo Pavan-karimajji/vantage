@@ -275,7 +275,7 @@ flowchart TB
     C3["Data bus + buffers"]
     C4["Readers / exporters"]
   end
-  EXE["sim-engine<br/>thin native executable<br/>(no GUI, no Python)"]
+  EXE["simengine<br/>thin native executable<br/>(no GUI, no Python)"]
   PLAYER["Player process"]
   PY --> SPEC --> CORE
   EXE --> CORE
@@ -286,7 +286,7 @@ flowchart TB
 | # | UID | Statement |
 |---|---|---|
 | 5.3.1 | CN-0047 | The engine shall be built as a **library** (`simcore`) with a stable C ABI, not as an application. |
-| 5.3.2 | CN-0048 | A **thin native executable** (`sim-engine`) shall wrap the library. No GUI dependency, no Python requirement. This is what CI runs, what batch spawns, and what a debugger attaches to. |
+| 5.3.2 | CN-0048 | A **thin native executable** (`simengine`) shall wrap the library. No GUI dependency, no Python requirement. This is what CI runs, what batch spawns, and what a debugger attaches to. |
 | 5.3.3 | CN-0049 | The **player is a separate process**. It never reads engine memory directly. |
 | 5.3.4 | CN-0050 | The transport behind that interface is replaceable: in-process pass-through, local shared memory, or network. Changing transport shall not change the interface. |
 | 5.3.5 | CN-0051 | Phase 1 may ship the player launching a local engine over local shared memory. To the engineer this feels like one application; architecturally it is already two processes. |
@@ -1099,7 +1099,7 @@ The C++ host is roughly 1,800 lines and is **further along than expected**. It i
 | Today | Becomes |
 |---|---|
 | C++ core library | **`simcore`** — the engine library (5.3.1) |
-| C++ host executable | **`sim-engine`** — the thin native wrapper (5.3.2) |
+| C++ host executable | **`simengine`** — the thin native wrapper (5.3.2) |
 
 ### Three fates, not one
 
@@ -1161,7 +1161,7 @@ simcore/                    C++ library — everything DURING the run
   errors/                   closed taxonomy
   diagnostics/              graph/schedule dump, timing statistics
 
-sim-engine/                 thin native executable
+simengine/                 thin native executable
   main.cpp                  arguments, debugger hooks, spec load, exit code
 
 <python package>/           everything BEFORE the run
@@ -1431,7 +1431,7 @@ Rules for the derived documents:
 | **Run manifest** | The record of everything that defined a run, stored with its results |
 | **Resolved Run Spec** | The flat, fully-resolved document Python hands the engine — the language boundary |
 | **simcore** | The C++ engine library |
-| **sim-engine** | The thin native executable wrapping simcore |
+| **simengine** | The thin native executable wrapping simcore |
 
 ---
 
