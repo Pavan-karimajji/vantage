@@ -54,6 +54,7 @@ Thirteen v0.2 UIDs no longer appear, because their sections were restructured. T
 | CN-0054 … CN-0062 | The v0.2 language-split table rows | Section 6 in full — `CN-0288` … `CN-0296` |
 | CN-0075, CN-0076, CN-0077 | Source aliasing by fallback list | `CN-0304` … `CN-0310` (ingest maps) and `CN-0118` … `CN-0121` (explicit mode) |
 | CN-0169 | Backward stepping requires re-run or recorded output | `CN-0335` — executing and viewing are separated, so backwards seek is free |
+| CN-0147 | A snap tolerance may align near-values | `CN-0394` — a period that is not an integer multiple of the grid is a load error, never rounded. Snapping and the no-rounding rule were two answers to one question, and the second is the one the drift argument supports |
 
 ---
 
@@ -332,6 +333,9 @@ Display rate is not tick rate. A viewer redraws about 30 times a second; the eng
 | 6.2.3 | CN-0294 | Consequence of 6.2.2: the engine needs **no YAML parser**. Its input is already resolved. |
 | 6.2.4 | CN-0295 | The engine shall never call back into Python during a run. |
 | 6.2.5 | CN-0296 | The Resolved Run Spec is written into the run artifacts and is sufficient on its own to reproduce the run. |
+| 6.2.6 | CN-0396 | **Resolution is two passes, not one: probe, then emit.** Several fields of the spec can only be filled by knowing what a recording and a module actually contain — which ports a file carries, which timing rung each supports, which ports it never carries, and each module's declared period. Python therefore reads a **recording index** and a **module manifest** before it emits, and both reads are once-per-run. |
+| 6.2.7 | CN-0397 | The probe pass uses the **same readers the run uses**, through the engine's own interface — never a second, simpler parser written for configuration time. A configuration layer that reads a file differently from the way the run reads it will one day approve a run that then fails at tick 0. |
+| 6.2.8 | CN-0398 | What the probe pass returns is **data, not a connection**. The recording index and the manifest are plain structures; the graph, coherence and ingest layers receive them as arguments and open nothing themselves. |
 
 ## 6.3 Responsibility map
 
@@ -350,6 +354,9 @@ Display rate is not tick rate. A viewer redraws about 30 times a second; the eng
 | Player state — viewport, transport, layer tree | **Python** |
 | Scene build and render at display rate | **Python** |
 | Diagnostics — explain, doctor, probe | **Python** |
+| **— probe pass: called once by Python, executed by C++ (6.2.6) —** | |
+| Recording index — topics, types, bounds, per-port timing rung | **C++, called once** |
+| Module manifest read — ports, periods, ABI version, schemas | **C++ library, called once** |
 | **— boundary: the Resolved Run Spec —** | |
 | Recording open, index build, seek | **C++** |
 | Per-tick message read and grouping | **C++** |
@@ -399,18 +406,27 @@ The current codebase does the opposite — see 21.3, where four subsystems exist
 | `t_source` | module signal header | true time of computation |
 | `counter` | module signal header | cycle identity, gap and repeat detection |
 | `status` | module signal header | validity |
-| `t_capture` | recording | transport/jitter analysis, fallback |
+| `t_capture` | source, where it carries one | the instant the data describes |
 | `t_sim` | engine | which cycle it was delivered in |
 | `producer` | engine | module id or `RECORDING` |
 | `mode` | engine | `simulate` or `measured` |
 | `is_repeat` | engine | no new data since last cycle |
 
+**Reception time is `t_recv`, and it is not a header field.** It is the instant
+the recorder wrote the message, so it belongs to the recording envelope rather
+than to the data. It is what transport and jitter analysis measures, and it is
+the last rung the engine falls back to when reconstructing cycle structure
+(12.2). Keeping it out of the header is what stops it being read as *when this
+was true*: `t_capture` answers that question and is left explicitly unknown
+when nothing supplies it.
+
 | # | UID | Statement |
 |---|---|---|
 | 7.2.1 | CN-0072 | Every port value shall carry the header above. |
-| 7.2.2 | CN-0073 | `t_source` is preferred over `t_capture` where available. The engine records which was used, per port, in the run manifest. |
+| 7.2.2 | CN-0073 | `t_source` is preferred over `t_recv` where available. The engine records which was used, per port, in the run manifest. |
 | 7.2.3 | CN-0074 | If neither `t_source` nor `counter` is available, the engine warns and marks that port's timing as approximated. |
 | 7.2.4 | CN-0298 | A recording shall carry **two distinct timestamps** — capture and reception. Collapsing them into one makes every latency question unanswerable from a recording. |
+| 7.2.5 | CN-0391 | **Capture and reception are never the same field and never the same name.** `t_capture` is validity, `t_recv` is arrival, and `t_capture` is never filled from `t_recv` — equality there manufactures an age of exactly zero that is indistinguishable from a true one. |
 
 ## 7.3 Provenance tagging
 
@@ -722,28 +738,40 @@ Recordings in scope carry no explicit task/cycle marking. The structure is prese
 |---|---|---|
 | `counter` in header | New counter value = new cycle. Exact. | **Best** |
 | `t_source` in header | Changed timestamp = new data. Exact for rate. | Good |
-| `t_capture` only | Arrival time includes transport jitter. | Weak — warn |
+| `t_recv` only | Arrival time includes transport jitter. | Weak — warn |
 
 | # | UID | Statement |
 |---|---|---|
-| 12.2.1 | CN-0140 | The engine derives per-port cycle structure from the signal header, preferring `counter`, then `t_source`, then `t_capture`. |
+| 12.2.1 | CN-0140 | The engine derives per-port cycle structure from the signal header, preferring `counter`, then `t_source`, then `t_recv`. |
 | 12.2.2 | CN-0141 | The method used is reported per port in the run manifest. |
 | 12.2.3 | CN-0142 | The engine reports the **measured** rate of each port against the **configured** rate, and warns on mismatch. |
 | 12.2.4 | CN-0330 | **A cycle boundary shall never be defined as "messages sharing an identical file timestamp."** In a recording the framework did not produce, no two signals share a timestamp, and such a rule degenerates into one cycle per message. |
 
 ## 12.3 Triggering and the base grid
 
+**One clock, two ways of being due.** Three different things in this document
+decide that a module runs — new data on its key input, its own period, and, for
+a `measured` module, the rate the recording carries. On a recording this
+framework produced, all three agree by construction, because every port was
+written on the grid. On a recording produced by anyone else — which is the
+primary input (1.2) — they cannot agree, and a tool that does not say which
+wins will silently pick one. So the engine has exactly one clock, and both
+kinds of due-ness are predicates evaluated on its ticks.
+
 | # | UID | Statement |
 |---|---|---|
-| 12.3.1 | CN-0143 | The default trigger for a module is `on_new(<port>)`: it runs when a new value of its key input appears, detected by the freshness key. |
-| 12.3.2 | CN-0144 | `periodic(period, offset)` is available for modules with no data-driven trigger. |
-| 12.3.3 | CN-0145 | The engine maintains a base grid whose step is the **greatest common divisor** of all declared periods. GCD, not minimum: with 20 ms and 30 ms, a 20 ms step can never fire the 30 ms module correctly. |
-| 12.3.4 | CN-0146 | If the computed base step is below a configurable threshold, or produces more than a configurable number of steps, the engine warns and prints the estimated cost. |
-| 12.3.5 | CN-0147 | A snap tolerance may align near-values. Any snapping applied is printed. |
-| 12.3.6 | CN-0331 | **The multi-rate scheduler is the only execution path.** A single-rate path that runs every module every cycle shall not exist as a parallel option, because it will become the default by accident. |
-| 12.3.7 | CN-0332 | A module that is not due **holds** its last output rather than re-running: marked not-updated, with the exact elapsed time since it was last due, computed from integer nanoseconds. |
-| 12.3.8 | CN-0333 | A consumer wired to a not-due producer sees that producer's last real value, never a gap. |
-| 12.3.9 | CN-0334 | The module's own reported update flag is **authoritative** over the predicted schedule. A disagreement is a reported finding, never hidden. |
+| 12.3.1 | CN-0392 | **`t_sim` advances by exactly one base-grid step per tick**, from the declared run start. There is no second time axis, and no arrival, cycle boundary or module output ever moves it. |
+| 12.3.2 | CN-0143 | The default trigger for a module is `on_new(<port>)`: it runs on the first tick at which its key input's freshness key differs from the one it last saw. It is a **predicate evaluated on a tick**, not a clock of its own. |
+| 12.3.3 | CN-0144 | `periodic(period, offset)` is available for modules with no data-driven trigger. |
+| 12.3.4 | CN-0393 | **Every module's declared period enters the base grid, whether it is triggered by data or by period.** A data-driven module whose period stayed out would let the grid be coarser than its own data, and 12.3.2's predicate would then miss arrivals between ticks. The period is what says how fine the grid must be; the trigger is what says whether this tick counts. |
+| 12.3.5 | CN-0145 | The engine maintains a base grid whose step is the **greatest common divisor** of all declared periods. GCD, not minimum: with 20 ms and 30 ms, a 20 ms step can never fire the 30 ms module correctly. |
+| 12.3.6 | CN-0394 | A declared period that is not an integer multiple of the base grid is a **load error naming both numbers**, and is never rounded, snapped or nearest-matched. A rounded period accumulates into drift that reads as an algorithm defect in the module rather than as a scheduling defect in the tool. |
+| 12.3.7 | CN-0146 | If the computed base step is below a configurable threshold, or produces more than a configurable number of steps, the engine warns and prints the estimated cost. |
+| 12.3.8 | CN-0331 | **The multi-rate scheduler is the only execution path.** A single-rate path that runs every module every cycle shall not exist as a parallel option, because it will become the default by accident. |
+| 12.3.9 | CN-0332 | A module that is not due **holds** its last output rather than re-running: marked not-updated, with the exact elapsed time since it was last due, computed from integer nanoseconds. |
+| 12.3.10 | CN-0333 | A consumer wired to a not-due producer sees that producer's last real value, never a gap. |
+| 12.3.11 | CN-0334 | The module's own reported update flag is **authoritative** over the predicted schedule. A disagreement is a reported finding, never hidden. |
+| 12.3.12 | CN-0395 | A `measured` module's outputs are delivered on the ticks its **reconstructed** cycle structure (12.2) places them on. Where that rate disagrees with its declared period, the disagreement is reported (12.2.3) and the data wins — a recording cannot be made to have been recorded differently. |
 
 ### Example schedule
 
@@ -914,6 +942,7 @@ sim explain  --run runs/aeb_tuning.yaml    # resolved spec, graph, schedule, coh
 sim probe    <recording>|<library>         # what ports exist; which cuts are feasible
 sim run      --run runs/aeb_tuning.yaml    # with player
 sim run      --run runs/aeb_tuning.yaml --headless --out out/exp17
+sim resim    <recording> --run runs/aeb_tuning.yaml   # execute an existing recording
 sim batch    --run runs/aeb_tuning.yaml --list set.txt --jobs 8
 sim index    data/*.mf4                    # build / refresh index cache
 sim check    data/*.mf4                    # integrity check (section 20)

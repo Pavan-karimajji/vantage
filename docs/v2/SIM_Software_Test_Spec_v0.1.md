@@ -23,13 +23,14 @@ So every row below gives a **fixture** and **steps**, and its expected value is 
 
 Every identifier below is **cited by a requirement in the Software Requirements**; none is invented here. `SW-0371` requires the identifier to appear inside the test that implements it, so the link is found by `grep` and not by a sentence in a plan.
 
-| Prefix | Level | Count | Proves |
-|---|---|---:|---|
-| `UT-<item>-nn` | Unit | 338 | One software item through its own interface, collaborators stubbed |
-| `IT-nn` | Integration | 22 | Two or more items across one named interface — most often the seam or the module ABI |
-| `ANL-SW-nn` | Analysis | 74 | A static or derived property: a grep, a symbol dump, an import direction, a counter, a hash |
-| `INSP-SW-nn` | Inspection | 10 | A property with no possible execution, against a **named** checklist |
-| | **Total** | **444** | |
+| Prefix | Level | Proves |
+|---|---|---|
+| `UT-<item>-nn` | Unit | One software item through its own interface, collaborators stubbed |
+| `IT-nn` | Integration | Two or more items across one named interface — most often the seam or the module ABI |
+| `ANL-SW-nn` | Analysis | A static or derived property: a grep, a symbol dump, an import direction, a counter, a hash |
+| `INSP-SW-nn` | Inspection | A property with no possible execution, against a **named** checklist |
+
+**The counts are emitted by `docs/v2/py/trace_check.py --counts`, not typed here.** They were typed in an earlier draft and were wrong by one within a day, which is `SW-0373`'s own argument arriving a category smaller than it was written for: a number derivable from the document is a second stored copy, and a second copy drifts whether it holds a status or a total.
 
 Item tokens: `IO` `BUS` `SCH` `HOST` `MUT` `RUN` `ERR` `EDG` `EXE` `CFG` `GRF` `ING` `RES` `SPC` `ORC` `PRP` `DIA` `SES` `SCN` `RND` `PLR` `LNC` `API` `PLG` `TRN`.
 
@@ -60,7 +61,7 @@ Named once, reused everywhere. A test that needs a fixture not listed here needs
 |---|---|---|
 | **`F-TINY`** | The existing `tests/fixtures/tiny.mcap` — framework-produced, every message sharing a `log_time_ns` per cycle. **The case that works today.** | codec, bus, runner |
 | **`F-FOREIGN`** | A crafted recording in which **no two messages share a timestamp** and each carries its own `counter`, `t_source` and `status`. **The case that does not work today** (`SW-0049`) and the single most important fixture in this suite. | `UT-BUS-07`…`UT-BUS-13`, `ANL-SW-16` |
-| **`F-LADDER`** | Four variants of `F-FOREIGN`, one per recovery-ladder rung: with a source cycle id · counter only · source time only · arrival time only. | `UT-BUS-08`, `UT-BUS-09` |
+| **`F-LADDER`** | Five variants of `F-FOREIGN`: one per recovery-ladder rung — a source cycle id · counter only · source time only · reception time only — plus one whose source time is present but **not monotonic**, for the demotion case. | `UT-BUS-08`, `UT-BUS-09` |
 | **`F-LONG`** | The same content at 1×, 5× and 20× duration, for streaming and memory claims. | `ANL-SW-12`, `UT-IO-05`, `UT-SES-*` |
 | **`F-BULK`** | A recording carrying a large per-message payload (point cloud or image) beside small signals. | `UT-IO-06`, `UT-BUS-17`, `UT-SCN-*` |
 | **`F-MULTI`** | Three sources with different time domains, one sharing a capture-group identity. | `UT-IO-15`…`UT-IO-17`, `UT-PRP-02` |
@@ -76,6 +77,7 @@ Named once, reused everywhere. A test that needs a fixture not listed here needs
 | **`F-MAP`** | An ingest map with units, array shape, header binding, an `absent:` block, and a second map claiming one of the same ports. | `UT-ING-*` |
 | **`F-LIBDIR`** | A deployed library directory: binary + `config/` bundle + `sim/` plug-ins + `bundle.sha256`, with **no source checkout reachable**. | `IT-14`, `IT-15`, `IT-17`, `UT-RES-*` |
 | **`F-RUNPAIR`** | Two completed runs of one spec, differing in exactly one manifest dimension, one pair per determinism axis. | `UT-DIA-08`…`UT-DIA-12` |
+| **`F-INDEX`** | A hand-written `RecordingIndex` and `ModuleManifest` set — no file on disk, no library present. What lets the graph, coherence and ingest suites run with nothing to open. | `UT-GRF-*`, `UT-ING-*`, `UT-CFG-*` |
 | **`F-PLANTED`** | Per `ANL-*` check, a copy of the tree with exactly one deliberate violation. **`TV-3`.** | every `ANL-*` |
 
 ---
@@ -87,13 +89,13 @@ The mechanised checks. These are the highest-leverage tests in the suite: each o
 | ID | Serves | What it scans | How it fails |
 |---|---|---|---|
 | `ANL-SW-01` | `SW-0001` | An emitted spec against the spec schema | Any field that is a reference, stem, relative path, applied default or expression |
-| `ANL-SW-02` | `SW-0006`, `SW-0062` | `cpp/**` for `gcd`, snap and time-unit conversion | Any period arithmetic in the engine |
-| `ANL-SW-03` | `SW-0007` | `cpp/**` for dotted-address splitting and `self`/`source` prefixes | Any reference parser in the engine |
-| `ANL-SW-04` | `SW-0011`, `SW-0032` | `cpp/**` for a YAML open and for an ingest-map parser | The engine reading a map file |
+| `ANL-SW-02` | `SW-0006`, `SW-0062` | `src/simcore/**`, `src/simengine/**` for `gcd`, `snap` and time-unit conversion | Any period arithmetic in the engine. `snap` must also return nothing in `adas_sim/graph/**` (`SW-0173`) |
+| `ANL-SW-03` | `SW-0007` | `src/simcore/**`, `src/simengine/**` for dotted-address splitting and `self`/`source` prefixes | Any reference parser in the engine |
+| `ANL-SW-04` | `SW-0011`, `SW-0032` | `src/simcore/**`, `src/simengine/**` for a YAML open and for an ingest-map parser | The engine reading a map file |
 | `ANL-SW-05` | `SW-0013` | Call graph from every per-tick entry point | Any Python frame reachable per message |
 | `ANL-SW-06` | `SW-0016`, `SW-0142` | Symbol dump of `simcore` and `simengine` | Any interpreter symbol |
-| `ANL-SW-07` | `SW-0017` | Imports of `ctypes` and shared-memory handles | Either outside `pyapi/` and `transport/` |
-| `ANL-SW-08` | `SW-0018`, `SW-0079`, `SW-0187`, `SW-0203` | The four capabilities by name across `cpp/**` | Any implementation of config parse, ingest parse, wiring validation or library search |
+| `ANL-SW-07` | `SW-0017`, `SW-0409` | **Symbols**, not imports: which C entry points each Python package reaches | A binding outside `pyapi/`, `transport/` and `resolve/`; or any initialise, execute, shutdown or step entry point reachable from the configuration layer |
+| `ANL-SW-08` | `SW-0018`, `SW-0079`, `SW-0187`, `SW-0203` | The four capabilities by name across `src/simcore/**`, `src/simengine/**` | Any implementation of config parse, ingest parse, wiring validation or library search |
 | `ANL-SW-09` | `SW-0019` | `prove_equal.py`'s report, plus coverage before/after each deletion | An unexplained failure, or coverage decreasing |
 | `ANL-SW-10` | `SW-0020` | The **seven** named duplicated capabilities | Any with two implementations |
 | `ANL-SW-11` | `SW-0021` | Diff of adding a format | A changed file outside the new codec and the registry |
@@ -119,7 +121,7 @@ The mechanised checks. These are the highest-leverage tests in the suite: each o
 | `ANL-SW-31` | `SW-0141` | Non-comment line count of `simengine/main.cpp` | Above 100 (`CN-0389`'s review check, mechanised) |
 | `ANL-SW-32` | `SW-0145` | Binary hash invoked by interactive, batch and CI paths | Any difference |
 | `ANL-SW-33` | `SW-0146` | Link line and `stdin` reads in `simengine` | A GUI toolkit, or a prompt |
-| `ANL-SW-34` | `SW-0164` | Imports of `io`/`ctypes` from `config/`, `graph/`, `ingest/`, `resolve/`, `runspec/` | Any payload-opening import in the configuration layer |
+| `ANL-SW-34` | `SW-0164`, `SW-0411` | Imports of `io`/`ctypes` from `config/`, `graph/`, `ingest/`, `runspec/` | Any payload-opening import in those four. `resolve/` is excluded here and covered by `ANL-SW-07` instead, because its obligation is *not executing*, which a folder check states wrongly |
 | `ANL-SW-35` | `SW-0167` | `graph/` for a hard-coded stage sequence | Any chain not built from manifests |
 | `ANL-SW-36` | `SW-0202` | `ingest/**` for `eval`/`exec`/`lambda`/`compile` and operator tokens | Any, outside `units.py`'s factor and offset |
 | `ANL-SW-37` | `SW-0212` | Call sites of `resolve_library` | More than one |
@@ -138,7 +140,7 @@ The mechanised checks. These are the highest-leverage tests in the suite: each o
 | `ANL-SW-50` | `SW-0311` | Providers for history-dependent state | Any integration of a time-varying signal |
 | `ANL-SW-51` | `SW-0317` | Colour literals across the tree | Any outside `render/theme.py` |
 | `ANL-SW-52` `⊘` | `SW-0323` | Frame time at the stated tick and layer count | Above budget. **Blocked on `OQ-14`** |
-| `ANL-SW-53` | `SW-0325`, `SW-0357` | `src/**` and `cpp/**` for `aeb`/`bsd`/`lca`/`acc`/`ldw`/`lka` | Any hit. `tests/` deliberately out of scope (`R-SIM-1`) |
+| `ANL-SW-53` | `SW-0325`, `SW-0357` | `src/**` — which is `adas_sim/`, `simcore/` and `simengine/` together — for `aeb`/`bsd`/`lca`/`acc`/`ldw`/`lka` and the world-model client's name | Any hit. `tests/` deliberately out of scope (`R-SIM-1`) |
 | `ANL-SW-54` | `SW-0326` | Toolkit imports under `player/panels/**` | Any Qt import below the shell |
 | `ANL-SW-55` | `SW-0331` | The plot panel's address space | Any second addressing mechanism |
 | `ANL-SW-56` | `SW-0340` | `SURFACE` vs the user documentation | An action in one and not the other |
@@ -160,6 +162,7 @@ The mechanised checks. These are the highest-leverage tests in the suite: each o
 | `ANL-SW-72` | `SW-0383` | `io/codecs/**` for module names; manifests for codec names | Any hit either way |
 | `ANL-SW-73` | `SW-0405` | Plug-in access to module memory | Any pointer read instead of a named subscription |
 | `ANL-SW-74` | `SW-0408` | Every `SW` for a non-empty `Accept` and ≥1 test | Any with neither. **SV-1** |
+| `ANL-SW-75` | `SW-0413` | Writers of the scheduler's simulation-time member | More than one, a public setter, or any assignment from a message timestamp |
 
 ---
 
@@ -172,7 +175,7 @@ Each crosses one named interface. The seam (`IF-09`) and the module ABI (`IF-01`
 | `IT-01` | `SW-0002` | `IF-09` | `F-SPEC`, `F-STUB`, `F-TINY` | Emit a spec; **delete the configuration source tree**; run the engine with only spec, recording and binary present; compare port values against the run made with the tree present. **The test that proves the seam is closed.** |
 | `IT-02` | `SW-0011` | `IF-09` | `F-MAP`, `F-FOREIGN` | Emit a spec from a map; run; confirm every translation applied came from the spec and no map file was opened. |
 | `IT-03` | `SW-0013` | `IF-09` | `F-LONG`, `F-STUB` | Profile a representative run; inspect the per-message path for interpreter frames. Confirms `ANL-SW-05`; does not replace it. |
-| `IT-04` | `SW-0019` | — | each retiring implementation's own corpus | Run the retiring tests against the survivor before deletion. **Gates `WP-16`.** |
+| `IT-04` | `SW-0019` | — | each retiring implementation's own corpus | Run the retiring tests against the survivor before deletion. **Is `WP-15a`, the gate in front of `WP-16`.** |
 | `IT-05` | `SW-0077` | `IF-09` | `F-STUB`, `F-STUB2` | Run one spec on an idle and a loaded machine; diff port values. |
 | `IT-06` | `SW-0086` | `IF-01` | `F-STUB`, `F-CHAIN4` | Wire `Init`/`Reset`/cycle-end as control ports in the same file and grammar as data; observe each transition at the module. |
 | `IT-07` | `SW-0087` | `IF-01` | `F-LIBDIR` | `adasInit(NULL)`; confirm the bundle resolved module-relative; repeat with an explicit path and with a project mismatch. |
@@ -276,7 +279,7 @@ Expected values are the served requirement's `Accept` clause (§0.1). Each row g
 | `UT-BUS-21` | `SW-0389` | `F-CHAIN4` | Move a port between two producers; re-open a recording and a plug-in made before the move. |
 | `UT-BUS-22` | `SW-0390` | `F-SPEC` | Declare a project-namespaced port; then one colliding with a core port. |
 
-### 5.3 `SI-03` `scheduler` — `UT-SCH-01` … `UT-SCH-12`
+### 5.3 `SI-03` `scheduler` — `UT-SCH-01` … `UT-SCH-14`
 
 | ID | Serves | Fixture | Steps |
 |---|---|---|---|
@@ -292,6 +295,8 @@ Expected values are the served requirement's `Accept` clause (§0.1). Each row g
 | `UT-SCH-10` | `SW-0073` | `F-CHAIN4` | Declare an edge delay of zero, then one; observe which cycle's value the consumer receives. |
 | `UT-SCH-11` | `SW-0076` | `F-CHAIN4`, `F-STUB2` | Read the schedule dump before tick 0; compare against what executed. |
 | `UT-SCH-12` | `SW-0078` | `F-LONG` | Run a paced and an unpaced session over one spec; diff port values. |
+| `UT-SCH-13` | `SW-0413` | `F-FOREIGN`, `F-STUB2` | Run over a recording whose message density varies; enumerate the simulation-time sequence and compare it against the arithmetic sequence the grid step defines. Repeat over `F-TINY`. |
+| `UT-SCH-14` | `SW-0414` | `F-FOREIGN`, `F-STUB2` | Declare a period of 20 ms against a port recorded at 25 ms; enumerate the ticks the values were delivered on, and read both rates from the run manifest. |
 
 ### 5.4 `SI-04` `module_host` — `UT-HOST-01` … `UT-HOST-18`
 
@@ -407,7 +412,7 @@ Expected values are the served requirement's `Accept` clause (§0.1). Each row g
 | `UT-CFG-17` | `SW-0363` | `F-CFGSET` | Run one byte-identical configuration set on both platforms; compare results; read the per-platform binary from the manifest. |
 | `UT-CFG-18` | `SW-0398` | `F-CFGSET` | Author a composition file naming another unit. |
 
-### 5.11 `SI-11` `graph` — `UT-GRF-01` … `UT-GRF-26`
+### 5.11 `SI-11` `graph` — `UT-GRF-01` … `UT-GRF-27`
 
 | ID | Serves | Fixture | Steps |
 |---|---|---|---|
@@ -421,7 +426,7 @@ Expected values are the served requirement's `Accept` clause (§0.1). Each row g
 | `UT-GRF-08` | `SW-0170` | `F-CHAIN4`, `F-MAP` | Mismatch types stage-to-stage, then recording-to-stage. |
 | `UT-GRF-09` | `SW-0171` | `F-CHAIN4` | Wire a data port to a control port. |
 | `UT-GRF-10` | `SW-0172` | `F-CHAIN4` | Derive the grid from 20 ms and 30 ms periods; then set `base_grid:` in a file. |
-| `UT-GRF-11` | `SW-0173` | `F-CHAIN4` | Declare periods within the snap tolerance; read every snap printed. Then exceed the tolerance. |
+| `UT-GRF-11` | `SW-0173` | `F-CHAIN4` | Declare a 19.99 ms period beside a 20 ms one; then search the schema and the graph package for any tolerance key or rounding call. |
 | `UT-GRF-12` | `SW-0174` | `F-CHAIN4` | **simulate → measured → measured → simulate**; enumerate stale stages and the path that made each stale. |
 | `UT-GRF-13` | `SW-0175` | `F-CHAIN4` | The same graph; enumerate each stale stage's transitive simulate descendants. |
 | `UT-GRF-14` | `SW-0176` | `F-CHAIN4` | Construct one graph per verdict; read the verdict returned for each. |
@@ -437,6 +442,7 @@ Expected values are the served requirement's `Accept` clause (§0.1). Each row g
 | `UT-GRF-24` | `SW-0186` | `F-FOREIGN` | Declare a trace catalogue that disagrees with the file; read both sides of the divergence. |
 | `UT-GRF-25` | `SW-0400` | `F-CHAIN4` | Override mode on one output port; read it in the manifest and in the classification. |
 | `UT-GRF-26` | `SW-0401` | `F-CHAIN4` | Instantiate one manifest twice with distinct instance names; enumerate the port space. |
+| `UT-GRF-27` | `SW-0411` | `F-INDEX` | Run coherence, cut feasibility, `measured` validation and family matching against a **hand-written** index and manifest set, with no file on disk and no library present. |
 
 ### 5.12 `SI-12` `ingest` — `UT-ING-01` … `UT-ING-14`
 
@@ -457,7 +463,7 @@ Expected values are the served requirement's `Accept` clause (§0.1). Each row g
 | `UT-ING-13` | `SW-0200` | `F-FOREIGN` | Record a decision about a recording; compare the recording's bytes and mtime before and after. |
 | `UT-ING-14` | `SW-0201` | `F-MULTI` | Read the precedence from `explain`; place a sidecar at each tier and confirm the declared order holds. |
 
-### 5.13 `SI-13` `resolve` — `UT-RES-01` … `UT-RES-09`
+### 5.13 `SI-13` `resolve` — `UT-RES-01` … `UT-RES-11`
 
 | ID | Serves | Fixture | Steps |
 |---|---|---|---|
@@ -470,8 +476,10 @@ Expected values are the served requirement's `Accept` clause (§0.1). Each row g
 | `UT-RES-07` | `SW-0210` | `F-LIBDIR` | Record a run with plug-ins; inspect the recording for plug-in code and for its hash and identity. |
 | `UT-RES-08` | `SW-0211` | `F-LIBDIR` | Present a plug-in whose declared generation is unsupported; count imports performed. |
 | `UT-RES-09` | `SW-0213` | `F-LIBDIR` | Resolve a locally built library whose hash matches no published build. |
+| `UT-RES-10` | `SW-0409` | `F-LIBDIR`, `F-STUB` | Enumerate the C entry points each Python package reaches; then attempt an execute call from the configuration layer. |
+| `UT-RES-11` | `SW-0410` | `F-FOREIGN`, `F-STUB` | Probe a recording and a module; compare the index against what a full read reports and the manifest against what the module host reads; then serialise both and check no handle survives. |
 
-### 5.14 `SI-14` `runspec` — `UT-SPC-01` … `UT-SPC-22`
+### 5.14 `SI-14` `runspec` — `UT-SPC-01` … `UT-SPC-24`
 
 | ID | Serves | Fixture | Steps |
 |---|---|---|---|
@@ -497,6 +505,8 @@ Expected values are the served requirement's `Accept` clause (§0.1). Each row g
 | `UT-SPC-20` | `SW-0227` | `F-CHAIN4` | Interrupt the write; inspect the destination for a partial manifest. |
 | `UT-SPC-21` | `SW-0228` | `F-CHAIN4` | Validate a manifest against its published schema; then one a major version ahead. |
 | `UT-SPC-22` | `SW-0402` | `F-CHAIN4` | Run with a one-step edge delay; read the latency model from the manifest. |
+| `UT-SPC-23` | `SW-0006` | `F-CHAIN4`, `F-STUB2` | Emit a spec; add a data-driven stage at a shorter period and re-emit; add a static port and re-emit. Compare the three grid steps. |
+| `UT-SPC-24` | `SW-0412` | `F-SPEC`, `F-TINY` | Emit a spec; replace the named recording with a different file of the same name; load. Then re-emit against the replacement and load again. |
 
 ### 5.15 `SI-15` `orchestrate` — `UT-ORC-01` … `UT-ORC-27`
 
@@ -621,7 +631,7 @@ Expected values are the served requirement's `Accept` clause (§0.1). Each row g
 
 | ID | Serves | Fixture | Steps |
 |---|---|---|---|
-| `UT-PLR-01` | `SW-0325` | — | Grep `src/**` and `cpp/**` for the six function tokens. |
+| `UT-PLR-01` | `SW-0325` | — | Grep `src/**` — `adas_sim/`, `simcore/` and `simengine/` — for the six function tokens. |
 | `UT-PLR-02` | `SW-0326` | `F-CHAIN4` | Construct and drive every panel with no window and no toolkit imported. |
 | `UT-PLR-03` | `SW-0327` | `F-CHAIN4` | Toggle a layer; count SUT executions and scene rebuilds. |
 | `UT-PLR-04` | `SW-0328` | `F-CHAIN4` | Change layout interactively; save; diff the file; reload. |

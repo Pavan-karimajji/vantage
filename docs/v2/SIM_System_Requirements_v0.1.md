@@ -167,7 +167,7 @@ This specification was written against three sources, not one. Where they disagr
 
 **Why this is not a footnote.** If cycle marking is present in the recordings actually in scope, then header-driven reconstruction from `counter`/`t_source` is a *fallback*, not the primary mechanism — and the primary mechanism is both cheaper and exact. Building the fallback first, and only discovering later that the recordings carried the answer, would mean the most load-bearing part of phase 1 was designed against a false premise.
 
-**What this specification does about it.** Rather than pick a side, §8.2 requires a **declared recovery ladder** in which a source-provided cycle marking is the highest-quality rung when present, `counter` the next, `t_source` the next, and arrival time the last — with the rung actually used reported per port in the run manifest. This is correct under either answer, and it makes the answer *measurable* on the first real recording instead of assumed. `CN-0373` is flagged in §22 as an assumption requiring confirmation, and `CN-0330` (never define a cycle by identical file timestamps) survives untouched — it was right for a different reason.
+**What this specification does about it.** Rather than pick a side, §8.2 requires a **declared recovery ladder** in which a source-provided cycle marking is the highest-quality rung when present, `counter` the next, `t_source` the next, and reception time the last — with the rung actually used reported per port in the run manifest. This is correct under either answer, and it makes the answer *measurable* on the first real recording instead of assumed. `CN-0373` is flagged in §22 as an assumption requiring confirmation, and `CN-0330` (never define a cycle by identical file timestamps) survives untouched — it was right for a different reason.
 
 ### 2.2 Finding 2 — configuration decomposition, confirmed
 
@@ -689,10 +689,22 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Accept.** No time value inside the engine is a floating-point type. A period expressed in configuration is integer microseconds and is refused if fractional.
 **Verify.** A · `ANL-10` · T · `SYT-TIM-02`   **Trace.** CN-0139
 
+**`SYS-0283`** · `P0` · `R1` — Simulation time advances by one grid step, and by nothing else
+**Shall.** Simulation time shall advance by exactly one base-grid step per tick from the declared run start, and no arrival, reconstructed cycle boundary or module output shall move it.
+**Accept.** Over a run, the sequence of simulation-time values is the arithmetic sequence the grid step defines, independent of the recording's own timestamps and of which modules executed. A recording whose data is dense in one interval and sparse in another produces the same tick sequence as one that is uniform.
+**Verify.** T · `SYT-TIM-14`   **Trace.** CN-0392, CN-0137
+*Note:* stated because three things in the concept decide that a module runs — data arrival, a declared period, and a recorded rate. They agree on a self-produced recording and cannot agree on a foreign one. Fixing one clock and making both kinds of due-ness predicates on its ticks is what removes the ambiguity rather than deferring it to whichever implementation lands first.
+
+**`SYS-0284`** · `P0` · `R1` — Reception time is not a header field
+**Shall.** Reception time shall be carried by the recording envelope and not by the signal header, and shall be named distinctly from the instant the data describes.
+**Accept.** No header field is filled from reception time. A value whose describing instant is unknown reports it as unknown, and its age is derived from the hold schedule rather than computed against reception.
+**Verify.** T · `SYT-TIM-15`   **Trace.** CN-0391, CN-0298
+*Note:* the two are one word apart and mean opposite things. Collapsing them produces an age of exactly zero that cannot be told from a true one, which is the failure `CN-0298` exists to prevent.
+
 ### 8.2 Cycle reconstruction
 
 **`SYS-0061`** · `P0` · `R1` — A declared recovery ladder
-**Shall.** The system shall derive per-port cycle structure using a declared ordered ladder: (1) a source-provided cycle identifier where the recording carries one; (2) the header cycle counter; (3) source time; (4) arrival time.
+**Shall.** The system shall derive per-port cycle structure using a declared ordered ladder: (1) a source-provided cycle identifier where the recording carries one; (2) the header cycle counter; (3) source time; (4) reception time from the recording envelope.
 **Accept.** For each port, the rung actually used is reported in the run manifest. Forcing a lower rung on a recording that supports a higher one is possible, is recorded, and is warned about.
 **Verify.** T · `SYT-TIM-03`   **Trace.** CN-0140, CN-0141; **evidence** §2.1
 *Note:* rung (1) exists because of the finding in §2.1. If `OQ-01` closes as "no recording in scope carries cycle marking", rung (1) becomes inert rather than wrong.
@@ -709,30 +721,38 @@ These are the sequences the system exists to support, end to end. Each becomes o
 
 ### 8.3 Triggering and the base grid
 
-**`SYS-0064`** · `P0` · `R1` — Data-driven trigger by default
-**Shall.** The default trigger for a module shall be the arrival of new data on its key input, detected by the freshness key.
-**Accept.** A module with a 20 ms input runs once per new input value and not on repeats.
-**Verify.** T · `SYT-TIM-06`   **Trace.** CN-0143
+**`SYS-0064`** · `P0` · `R1` — Data-driven trigger by default, evaluated on a tick
+**Shall.** The default trigger for a module shall be the arrival of new data on its key input, detected by the freshness key, and shall be evaluated as a predicate on a simulation tick rather than as an independent clock.
+**Accept.** A module with a 20 ms input runs once per new input value and not on repeats. It never executes between ticks, and two arrivals inside one grid step produce one execution with the later value, reported as a coalesced arrival rather than dropped silently.
+**Verify.** T · `SYT-TIM-06`   **Trace.** CN-0143, CN-0392
 
 **`SYS-0065`** · `P1` · `R1` — Periodic trigger available
 **Shall.** A periodic trigger with a period and an offset shall be available for modules with no data-driven trigger.
 **Accept.** A periodic module fires on exactly the expected ticks over a 60-second run, with zero drift.
 **Verify.** T · `SYT-TIM-07`   **Trace.** CN-0144
 
-**`SYS-0066`** · `P0` · `R1` — The base grid is the GCD
-**Shall.** The base grid step shall be the greatest common divisor of all declared periods, derived and never configured.
-**Accept.** With 20 ms and 30 ms declared, the grid is 10 ms and both modules fire on their correct ticks. A declared period that is not an integer multiple of the derived grid is a load error naming both numbers.
-**Verify.** T · `SYT-TIM-08`   **Trace.** CN-0145
+**`SYS-0066`** · `P0` · `R1` — The base grid is the GCD, and a period is never rounded to fit it
+**Shall.** The base grid step shall be the greatest common divisor of all declared periods, derived and never configured; a declared period that is not an integer multiple of it shall be a load error naming both numbers, and shall never be rounded, snapped or matched to a nearest value.
+**Accept.** With 20 ms and 30 ms declared, the grid is 10 ms and both modules fire on their correct ticks. A period of 19.99 ms beside one of 20 ms is refused naming both, and no configured tolerance can make it accepted.
+**Verify.** T · `SYT-TIM-08`   **Trace.** CN-0145, CN-0394
+*Note:* a rounded period does not stay a rounding. It accumulates, and it surfaces as a module producing values at the wrong moments — which reads as a defect in the module rather than in the scheduling that caused it.
+
+**`SYS-0285`** · `P0` · `R1` — Every declared period enters the grid, whatever triggers the module
+**Shall.** A module's declared period shall contribute to the base-grid derivation whether that module is triggered by data or by period.
+**Accept.** Adding a data-driven module with a 5 ms period to a graph of 20 ms modules changes the grid to 5 ms. Its arrivals are each observed on their own tick.
+**Verify.** T · `SYT-TIM-16`   **Trace.** CN-0393
+*Note:* without this the grid can be coarser than a data-driven module's own data, and `SYS-0064`'s predicate then coalesces arrivals it should have seen separately. The period says how fine the grid must be; the trigger says whether this tick counts.
 
 **`SYS-0067`** · `P1` · `R1` — Pathological grids are reported before they are paid for
 **Shall.** If the computed base step falls below a configurable threshold, or produces more than a configurable number of steps, the system shall warn and print the estimated cost.
 **Accept.** A period set producing a 1 µs grid warns before executing, quoting the step count.
 **Verify.** T · `SYT-TIM-09`   **Trace.** CN-0146
 
-**`SYS-0068`** · `P2` · `R1` — Snapping is allowed and always printed
-**Shall.** A snap tolerance may align near-equal periods, and any snapping applied shall be printed.
-**Accept.** Snapping 19.99 ms to 20 ms is reported with both values; with tolerance zero the same input is a load error.
-**Verify.** T · `SYT-TIM-10`   **Trace.** CN-0147
+**`SYS-0286`** · `P0` · `R1` — A recorded rate that contradicts a declared period is reported, and the recording wins
+**Shall.** Where a `measured` module's reconstructed cycle structure places its outputs at a rate other than its declared period, the system shall deliver them on the ticks the reconstruction places them on and shall report the disagreement naming both rates.
+**Accept.** A port declared at 20 ms and recorded at 25 ms is delivered on its recorded cadence, and the run manifest carries both numbers. No value is resampled, interpolated or dropped to make the recorded rate match the declared one.
+**Verify.** T · `SYT-TIM-17`   **Trace.** CN-0395, CN-0142
+*Note:* the declared period is what the module would run at; the recording is what happened. Making the second match the first would be fabricating data to satisfy configuration, and the disagreement is itself the finding worth surfacing.
 
 **`SYS-0069`** · `P0` · `R1` — One execution path
 **Shall.** The multi-rate scheduler shall be the only execution path; no single-rate path shall exist.
@@ -1267,6 +1287,18 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The Resolved Run Spec shall carry absolute, already-resolved paths for every module binary; the engine shall perform no stem expansion and consult no search path.
 **Accept.** Which file was chosen is decided once, recorded in the manifest, and reproducible. Changing the search path after resolution cannot change which binary the engine loads.
 **Verify.** T · `SYT-CFG-09`   **Trace.** CN-0384, CN-0385
+
+**`SYS-0287`** · `P0` · `R1` — Resolution is two passes: probe, then emit
+**Shall.** The system shall obtain, before emitting a Resolved Run Spec, a **recording index** stating what each named recording carries and a **module manifest** stating what each named module declares; and both shall be read through the same interfaces the run itself uses.
+**Accept.** Every spec field that depends on a file's contents — the ports a recording provides, the timing rung each supports, the ports it declares it never carries, and each module's period, ABI version and port set — is filled from the probe pass and from no other source. A configuration approved by the probe pass is never rejected by the run for a reason the probe could have seen.
+**Verify.** T · `SYT-CFG-14`   **Trace.** CN-0396, CN-0397, CN-0165
+*Note:* stated because the spec's own rule is that the engine decides nothing the configuration layer could have decided — and several of those fields cannot be decided without opening a file. Naming the probe pass is what keeps that rule true instead of quietly reintroducing a second, simpler reader for configuration time.
+
+**`SYS-0288`** · `P0` · `R1` — What the probe returns is data, and it is passed, not fetched
+**Shall.** The recording index and the module manifest shall be plain data structures, and the graph, coherence, ingest and launcher functions that need them shall receive them as arguments rather than opening any file or library themselves.
+**Accept.** Coherence classification, cut feasibility, ingest-family matching and mode validation all run against in-memory structures with no file open and no library loaded, and are testable with a hand-written index.
+**Verify.** T · `SYT-CFG-15`   **Trace.** CN-0398, CN-0089
+*Note:* this is what lets those functions stay free of any dependency on the reader, which is the property their unit tests rest on.
 
 **`SYS-0167`** · `P0` · `R1` — The engine states what it actually loaded
 **Shall.** The engine shall independently print the graph and schedule it loaded, so it can be compared against what the configuration layer predicted.
@@ -2073,7 +2105,7 @@ Everything else is continuity.
 |---|---|---|---|
 | **`OQ-01`** | **Do the recordings in scope carry task/cycle marking?** The concept assumes not (`CN-0373`); the evidence in §2.1 says a toolchain of this class does. | `SYS-0061` rung 1, and the sizing of migration phase 1. **Close first.** | SIM team + a recording owner |
 | `OQ-02` | Is ego re-integration needed in release one? | `SYS-0108` | Algorithm teams |
-| `OQ-03` | How many instances of one module must a run support? | `SYS-0043` | Algorithm teams |
+| ~~`OQ-03`~~ | ~~How many instances of one module must a run support?~~ **Answered 2026-08-12: declared unbounded, exercised at two, shipped at one.** `SYS-0043` already requires instance renaming and `SYS-0036` makes port identity independent of which component produces it, so an additional instance costs a name prefix and nothing else. Asking for a number invites an answer that becomes a limit. | `SYS-0043` | **Closed** |
 | `OQ-04` | Is module-level staging plus per-port override sufficient granularity? | `SYS-0080`, `SYS-0082` | Algorithm teams |
 | `OQ-05` | Which components have real, functional libraries today, and which are structural only? | What can actually be validated in `E2E-02`, `E2E-03`, `E2E-10` | Module teams |
 | `OQ-06` | Do existing modules support reset without destroy? | `SYS-0048`, `SYS-0192` | Module teams |
@@ -2083,18 +2115,20 @@ Everything else is continuity.
 | `OQ-10` | Preferred exchange format for outputs. | `SYS-0111` | Algorithm teams + external automation owner |
 | `OQ-11` | Does an internal port model or signal catalogue already exist that should be adopted rather than defined? | `SYS-0023` — **adopting beats defining**, and this must be asked before the port model is authored | SIM team |
 | `OQ-12` | Do any modules change rate at run time? | `SYS-0066`, `SYS-0071`, `SYS-0072` | Module teams |
-| `OQ-13` | Is same-step execution acceptable as default, or must transport delays be modelled from day one? | `SYS-0077` | Algorithm teams |
+| ~~`OQ-13`~~ | ~~Is same-step execution acceptable as default, or must transport delays be modelled from day one?~~ **Answered 2026-08-12: same-step is the default, and the per-edge delay is carried from day one with a value of zero.** The Resolved Run Spec already declares `delay_steps` per edge and `SYS-0077` is `R1`, so the field costs nothing to carry and the modelling becomes data rather than a later redesign. The question was answered by the artifact before it was asked. | `SYS-0077` | **Closed** |
 | `OQ-14` | The numbers for the per-cycle cost budget, campaign throughput budget and player frame-time budget, and the reference configurations they are measured on. | `SYS-0234`, `SYS-0235`, `SYS-0238` — **a performance requirement with no number cannot be failed** | SIM team |
 | `OQ-15` | Which CI system, and what artifact retention? | `SYS-0201`, `SYS-0184` | DevOps |
 | `OQ-16` | The stated set of common configuration changes and the time budget for each. | `SYS-0175` — this is §1.3's success measure; it is not measurable until this closes | SIM team + a customer team |
 | `OQ-17` | Are there tool qualification or functional-safety process constraints on this system? | **Potentially everything.** It changes the requirement style, the verification evidence and the documentation set. Answer early. | Quality / safety |
 | `OQ-18` | Who maintains project configuration after handover, and what is the support model? | `SYS-0281` | SIM team + algorithm teams |
 | `OQ-19` | Campaign retention policy — kept as baseline, regenerable, deleted. | `SYS-0117`, `SYS-0184` | Campaign owner |
-| `OQ-20` | Product and workspace naming: adopt v1's names, or the concept's neutral role names? | Nothing technical. Documentation and UI strings only. | SIM team |
-| `OQ-21` | Build or adopt the interactive viewer surface. | `SYS-0128`–`SYS-0157` implementation cost, not their content | SIM team |
+| ~~`OQ-20`~~ | ~~Product and workspace naming: adopt v1's names, or the concept's neutral role names?~~ **Answered 2026-08-12: the requirement documents use the neutral role names — player, launcher, batch; the product and its user interface keep their own names.** Two vocabularies for one thing is only a problem when both claim to be normative, and this settles which is. Blocking in exactly one place: the module's own context file still uses the product names throughout and cannot be corrected while this is open. | Documentation and UI strings only | **Closed** |
+| ~~`OQ-21`~~ | ~~Build or adopt the interactive viewer surface.~~ **Answered 2026-08-12: keep what exists.** The scene layer is the strongest area of the current codebase and the viewer work is a split of a working surface, not a rewrite. Adopting a third-party surface would discard the one part of the previous effort that is unambiguously right, to solve a problem nobody has reported. | `SYS-0128`–`SYS-0157` implementation cost | **Closed** |
 | `OQ-22` | Licence and distribution situation for proprietary format readers. | `SYS-0011` | Legal + SIM team |
 
-**`OQ-01`, `OQ-11`, `OQ-14`, `OQ-16` and `OQ-17` should close before this document is baselined.** The rest can be carried as documented assumptions into the Software Requirements.
+**`OQ-01`, `OQ-11`, `OQ-14`, `OQ-16` and `OQ-17` are baselining gates, not rows.** This document is not baselined until each has an answer or a written fallback. The rest can be carried as documented assumptions into the Software Requirements.
+
+**`OQ-17` carries a stated fallback, because it is the only one that can invalidate the form of every other answer.** If it is unanswered by the time the seam is built, the chain is developed in the style these documents already use, and re-styling for a qualification regime is accepted as a known, scoped cost recorded against this row. An unanswered question with a written fallback is a managed risk; one without is a surprise arriving after the work is cut.
 
 ---
 

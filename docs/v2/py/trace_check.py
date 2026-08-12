@@ -17,7 +17,19 @@ Run it before any commit to `docs/v2/`:
 
     python docs/v2/py/trace_check.py            # full check, non-zero exit on failure
     python docs/v2/py/trace_check.py --progress # work-package checkbox counts
+    python docs/v2/py/trace_check.py --counts   # the Test Specification's own totals
     python docs/v2/py/trace_check.py --matrix   # emit the derived trace matrix
+
+**Scan-path handling.** An analysis check that names a directory which does not
+exist scans nothing and therefore *passes*, which is indistinguishable from a
+check that scanned everything -- right up to the day it should have failed. The
+Test Specification's scan column is therefore checked against the Design's target
+tree, so a superseded or misspelt path is a failure here rather than a silence
+later.
+
+**Counts.** The Test Specification quotes no totals; they are emitted by
+`--counts`. A number derivable from the documents is a second stored copy, and a
+second copy drifts whether it holds a status or a total.
 
 **Known-gap handling.** SwReq §32.3 records five `SW` requirements with no `SYS`
 parent. They are *reported as known*, never passed silently -- passing them would
@@ -104,8 +116,15 @@ def parse_sw(text: str) -> dict[str, Sw]:
     return out
 
 
+# A work package may carry a letter suffix: a package inserted after the
+# numbering is fixed is lettered rather than renumbered, so that the plan's
+# "lowest-numbered unticked package" rule keeps pointing at the right work
+# (Plan 0.3). A checker that did not know this would read `WP-15a` as
+# `WP-15` and silently mis-assign every requirement the new package lands.
+WP_ID = r"WP-\d+[a-z]?"
+
 IMP_ROW = re.compile(
-    r"^\| `(IMP-\d+)` \| `(SW-\d+)` \| (?:`(WP-\d+)`|—) \| `(\w+)` \| (.*?) \| (.*?) \|\s*$",
+    r"^\| `(IMP-\d+)` \| `(SW-\d+)` \| (?:`(" + WP_ID + r")`|—) \| `(\w+)` \| (.*?) \| (.*?) \|\s*$",
     re.M,
 )
 
@@ -129,7 +148,7 @@ def parse_plan(text: str) -> tuple[dict[str, set[str]], dict[str, bool]]:
     ticked: dict[str, bool] = {}
     current = ""
     for line in text.split("\n"):
-        h = re.match(r"^### (WP-\d+) ", line)
+        h = re.match(r"^### (" + WP_ID + r") ", line)
         if h:
             current = h.group(1)
             ticked.setdefault(current, True)
@@ -154,9 +173,44 @@ def parse_testspec(text: str) -> set[str]:
     return {m.group(1) for m in re.finditer(r"^\| `(" + TEST_ID.pattern[2:-2] + r")`", text, re.M)}
 
 
+# A path a check scans, as written in the Test Specification: `src/simcore/**`,
+# `adas_sim/graph/**`, `io/codecs/**`. Only the first segment is checked -- what
+# matters is whether the check is pointed at a place the design says will exist.
+SCAN_PATH = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)/[A-Za-z0-9_.*/]+`")
+
+# Roots the target tree does not enumerate because they are not deliverables:
+# the checks' own home, and the module root itself.
+TREE_IMPLICIT = {"src", "modules"}
+
+
+def parse_scan_paths(text: str) -> dict[str, set[str]]:
+    """Return check id -> the root of every path its scan column names."""
+    out: dict[str, set[str]] = defaultdict(set)
+    for line in text.split("\n"):
+        m = re.match(r"^\| `(ANL-SW-\d+)` \|[^|]*\|([^|]*)\|", line)
+        if m:
+            out[m.group(1)] |= set(SCAN_PATH.findall(m.group(2)))
+    return out
+
+
+def parse_tree_paths(design_text: str) -> set[str]:
+    """Every directory name the Design's target tree (section 2.1) declares.
+
+    Read as a set of names rather than as a nesting: the question a scan path
+    asks is *does this place exist in the plan*, not *where does it sit*. The
+    tree writes siblings on one line (`io/  bus/  scheduler/`), so the whole
+    block is scanned rather than one name per line.
+    """
+    block = re.search(r"### 2\.1 The tree.*?```\n(.*?)```", design_text, re.S)
+    if not block:
+        return set()
+    return set(re.findall(r"([A-Za-z_][A-Za-z0-9_.]*)/", block.group(1))) | TREE_IMPLICIT
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--progress", action="store_true", help="work-package checkbox counts")
+    ap.add_argument("--counts", action="store_true", help="the Test Specification's own totals")
     ap.add_argument("--matrix", action="store_true", help="emit the derived trace matrix")
     args = ap.parse_args()
 
@@ -252,8 +306,17 @@ def main() -> int:
             bad(f"{name}: references non-existent {s}")
         for s in sorted(parse_uids(text, "IMP") - set(imp)):
             bad(f"{name}: references non-existent {s}")
-        for w in sorted(set(re.findall(r"(?<![A-Za-z-])(WP-\d+)\b", text)) - plan_wps):
+        for w in sorted(set(re.findall(r"(?<![A-Za-z-])(" + WP_ID + r")(?![\w-])", text)) - plan_wps):
             bad(f"{name}: references non-existent work package {w}")
+
+    # ---- 8. a check must scan somewhere that exists ----------------------
+    tree = parse_tree_paths(imp_text)
+    scans = parse_scan_paths(test_text)
+    if not tree:
+        bad("could not read the design's target tree -- the scan-path check would pass on nothing")
+    for check, roots in sorted(scans.items()):
+        for root in sorted(roots - tree):
+            bad(f"{check}: scans '{root}/', which the design's target tree does not declare")
 
     # ---- report ----------------------------------------------------------
     print("=" * 72)
@@ -279,6 +342,24 @@ def main() -> int:
             print(f"    [{'x' if ticked[wp] else ' '}] {wp}  {n:3d} IMP")
         print(f"    ticked {done} / {len(plan_wps)}")
         print("    (counts boxes; makes no verification claim -- Plan 0.4)")
+
+    if args.counts:
+        print()
+        print("  test specification totals (Test Spec 0.2 quotes none; these are them)")
+        by_kind: dict[str, int] = defaultdict(int)
+        for t in spec_tests:
+            if t.startswith("UT-"):
+                by_kind["UT"] += 1
+            elif t.startswith("IT-"):
+                by_kind["IT"] += 1
+            elif t.startswith("ANL-"):
+                by_kind["ANL-SW"] += 1
+            elif t.startswith("INSP-"):
+                by_kind["INSP-SW"] += 1
+        for kind in ("UT", "IT", "ANL-SW", "INSP-SW"):
+            print(f"    {kind:<10s} {by_kind[kind]:5d}")
+        print(f"    {'total':<10s} {len(spec_tests):5d}")
+        print(f"    checks with a scan path {len(scans):3d}")
 
     if args.matrix:
         print()

@@ -196,9 +196,9 @@ No new hosting design, no new ABI, and `SYS-0058`'s deferral of out-of-process m
 
 **`DD-11`** · new, not in `SWQ` · **`ADOPTED`** — **The signal header is built before the cycle ladder, and both are built before anything is deleted.**
 
-SwReq §32.5's closing paragraph names `SW-0049` and `SW-0043` as what the largest number of other requirements sit on. `SW-0050`'s ladder reads three of the header's eight fields, so the header is not merely first among equals — it is the ladder's input. The Plan orders them `WP-05` then `WP-06`, both inside `MP-1`, and neither behind any deletion.
+SwReq §32.5's closing paragraph names `SW-0049` and `SW-0043` as what the largest number of other requirements sit on. `SW-0050`'s ladder reads three of the header's eight fields, so the header is not merely first among equals — it is the ladder's input. The Plan orders them `WP-07` then `WP-08`, both inside `MP-1`, and neither behind any deletion.
 
-**`WP-05`'s contract-side input is `docs/interfaces_signal_header_plan.md`** (superproject root, 2026-08-11). Three of `SW-0043`'s eight fields — source time, cycle counter, status — can only stop being *unknown* if the payload carries them, so the header this item reads is `adas.common.SignalHeader`, defined in `modules/interfaces` and filled by each producing component at its `ProPort`. That plan makes header carriage a rule (**a message that can be a port payload carries exactly one `sig_header`; nothing nested inside it does**) and widens the one field that cannot survive this design: `uint32 time_stamp` wraps in 4.3 seconds read as nanoseconds. **Nothing in `simcore` learns a message by name** — the header is read by descriptor, which is possible precisely because the field name is uniform, and which `R-SIM-11` already guarantees is available without generated bindings.
+**`WP-07`'s contract-side input is `docs/interfaces_signal_header_plan.md`** (superproject root, 2026-08-11). Three of `SW-0043`'s eight fields — source time, cycle counter, status — can only stop being *unknown* if the payload carries them, so the header this item reads is `adas.common.SignalHeader`, defined in `modules/interfaces` and filled by each producing component at its `ProPort`. That plan makes header carriage a rule (**a message that can be a port payload carries exactly one `sig_header`; nothing nested inside it does**) and widens the one field that cannot survive this design: `uint32 time_stamp` wraps in 4.3 seconds read as nanoseconds. **Nothing in `simcore` learns a message by name** — the header is read by descriptor, which is possible precisely because the field name is uniform, and which `R-SIM-11` already guarantees is available without generated bindings.
 
 ---
 
@@ -225,7 +225,7 @@ SwReq §32.5's closing paragraph names `SW-0049` and `SW-0043` as what the large
 | `sources/recorder.py` → `adas_sim/io/recorder.py` | It writes recordings; it never drove a world |
 | `sources/synthetic.py` → `tests/fixtures/make_synthetic_mcap.py` | A stimulus generator becomes what `R-SIM-12` already says a mock should be: *"freeze its output into the mcap, then resim with that stage `measured`"* — production side, not a live source |
 
-**`ANL-SW-12` becomes a deletion check, not an import check:** the six function tokens `R-SIM-1` already greps for gain a seventh entry for the world-model client's name, scoped to `src/**`, with the planted-violation test `SW-0370` requires. A name that cannot reappear is a stronger guarantee than a name confined to one directory.
+**`ANL-SW-53` becomes a deletion check, not an import check:** the six function tokens `R-SIM-1` already greps for gain a seventh entry for the world-model client's name, scoped to `src/**`, with the planted-violation test `SW-0370` requires. A name that cannot reappear is a stronger guarantee than a name confined to one directory.
 
 ---
 
@@ -308,6 +308,11 @@ modules/sim/
       cli/                           stays — argument parsing only, no logic (SW-0229)
                                      NOTE: no sources/ — DD-12 removes it entirely
 
+  scripts/                           the analysis checks — every ANL-SW-nn that is
+                                     a grep, a symbol dump or an import direction,
+                                     plus prove_equal.py (WP-15a). Not packaged,
+                                     not imported by src/. Built at WP-01, before
+                                     the code any of them governs.
   contrib/check/                [N]  archived, unpackaged, unimported (DD-08)
   tests/                             UT-* (Python items) + IT-*
   docs/v2/py/                   [N]  trace_check.py and the derived matrices
@@ -331,12 +336,14 @@ SwReq §32.1 fixes the disposition; this fixes the destination path. **Nothing i
 | `src/recording_reader.cpp/.hpp` | 191 | `src/simcore/io/` **and** `src/simcore/bus/cycle.cpp` — split by §4/§5 | `MOVE`, internals replaced | `WP-06`, `WP-08` |
 | `src/pipeline.cpp/.hpp` — `Step()` | ~120 of 558 | `src/simcore/scheduler/due.cpp` | `MOVE` | `WP-09` |
 | `src/pipeline.cpp/.hpp` — load, validate, grid, `Exec()` | ~438 of 558 | — | `DEDUPE`, deleted | `WP-16` |
-| `src/ingest_map.cpp/.hpp` — apply half | ~80 of 198 | `src/simcore/io/translate.cpp` | `MOVE` | `WP-06` |
-| `src/ingest_map.cpp/.hpp` — parse half | ~118 of 198 | — | `DEDUPE`, deleted | `WP-16` |
-| `src/library_loader.cpp/.hpp` — open half | ~60 of 162 | `src/simcore/module_host/dso.cpp` | `MOVE` | `WP-10` |
-| `src/library_loader.cpp/.hpp` — resolve half | ~102 of 162 | — | `DEDUPE`, deleted | `WP-16` |
+| `src/ingest_map.cpp/.hpp` — apply half (`ResolveIngestOverrides`) | 42 of 198 | `src/simcore/io/translate.cpp` | `MOVE` | `WP-06` |
+| `src/ingest_map.cpp/.hpp` — parse half (`ParseIngestMapFile`, `DiscoverIngestMaps`) | 58 of 198 | — | `DEDUPE`, deleted | `WP-16` |
+| `src/library_loader.cpp/.hpp` — open half (`DynamicLibrary`) | 41 of 162 | `src/simcore/module_host/dso.cpp` | `MOVE` | `WP-10` |
+| `src/library_loader.cpp/.hpp` — resolve half (`ResolveLibrary` + its two message helpers) | 55 of 162 | — | `DEDUPE`, deleted | `WP-16` |
 | `main.cpp` | 179 | `src/simengine/main.cpp` | `MOVE`, trimmed to `SW-0141` | `WP-14` |
 | `tests/**` | 933 | `src/simcore/tests/` and `src/simengine/tests/` | `MOVE` — these are `SW-0019`'s corpus | `WP-06`…`WP-15` |
+
+**The line counts are measured, not estimated.** Each split row was counted against the file, including its header block and the anonymous namespace its half owns; a `.cpp/.hpp` pair is counted together. They are quoted because `WP-16` is a deletion package whose only real content is this ledger — an approximate ledger would make the one package that removes ~2,500 lines the one package nobody can check.
 
 **The tests move first, not last.** `SW-0019` says nothing is deleted before the survivor passes the retiring implementation's own tests. That is only executable if the tests are already running against the new location, so each `MOVE` row carries its tests with it and `WP-16` — the deletion package — runs last and does nothing but delete.
 
@@ -379,7 +386,7 @@ One mechanical pass, one commit, no behaviour change. Listed in full because a r
 | `sources/synthetic.py` (93) | `tests/fixtures/make_synthetic_mcap.py` — a fixture, not a source (`DD-12`) | — |
 | `cli/**` | `cli/` unchanged — argument parsing only | `SI-15` |
 
-**`render/viewer.py` is 1990 lines and is the one file this rename does not fix.** It is moved, not split, in the rename pass; `WP-22` splits it, and the split is a requirement (`SW-0326`: panel state separable from rendering, testable with no window) rather than a tidying exercise.
+**`render/viewer.py` is 1990 lines and is the one file this rename does not fix.** It is moved, not split, in the rename pass; `WP-26` splits it, and the split is a requirement (`SW-0326`: panel state separable from rendering, testable with no window) rather than a tidying exercise.
 
 ---
 
@@ -397,6 +404,7 @@ Fixed here, ahead of the Interface Specification, because SwReq §32.5 makes it 
   "grid": { "step_ns": 10000000 },            // SW-0006 — computed, not derivable here
   "sources": [ {
       "path": "C:/abs/rec.mcap",              // SW-0001 — absolute, always
+      "sha256": "…",                          // SW-0412 — the file the probe pass read
       "codec": "mcap",              // DD-13 — the only codec in R1
       "identity": { "family":"…","model":"…","name":"…","instance":0 },  // SW-0196, DD-06
       "descriptions": [ {"type":"…","version":"…","path":"…","tier":"embedded"} ],
@@ -446,6 +454,30 @@ Fixed here, ahead of the Interface Specification, because SwReq §32.5 makes it 
 > **If the engine has to *decide* something the configuration layer could have decided, the spec is missing a field.**
 
 `ANL-SW-01` is the mechanical form: a checker walks the emitted spec and reports any value that is a reference, a stem, a relative path, an expression, or absent-where-required. Zero, or the emit fails.
+
+### 3.3a Resolution is two passes — probe, then emit
+
+The rule above has a consequence the seam's shape does not show on its own. Several of §3.1's fields cannot be decided from configuration alone: `ingest[].ladder_floor` depends on what timing each topic actually carries, `absent[]` on what the file does not carry, `stages[].period_ns` and `abi_version` on what the module declares, and every `measured` stage's validity on whether its outputs are in the file. **The configuration layer therefore has to read before it can resolve** — and the items that need those facts are exactly the items forbidden to open anything.
+
+```
+  probe  ──►  RecordingIndex   per source   (SI-13, through simcore's reader)
+              ModuleManifest   per stage    (SI-13, through the module ABI)
+                     │
+                     ▼  passed as data — no handle, no import        (SW-0411)
+  resolve ─►  graph · coherence · ingest family · feasibility        (SI-10..SI-12)
+                     │
+                     ▼
+  emit   ──►  Resolved Run Spec, carrying each source's sha256       (SW-0412)
+```
+
+| Rule | Why |
+|---|---|
+| The probe reads through **the same interfaces the run uses** — `io.hpp::Describe` and `adasManifest` | A second, simpler reader written for configuration time would one day approve a run that then fails at tick 0, and the disagreement would be invisible because only one of the two is ever compared against the recording |
+| What comes back is **plain data**, never an open handle | It is what makes `graph/`, `ingest/` and `config/` testable with a hand-written index and no file on disk, which is the property their whole unit-test surface rests on |
+| The spec carries **each source's content hash** | Two passes without this is strictly worse than one: the spec would assert properties of a file nobody re-checked. `simcore` refuses a mismatch naming both hashes |
+| `SI-13` is the **only** Python item that binds the C interface for this, and is bounded by symbol | `SW-0409`. Manifest, version and describe may be called; initialise, execute, shutdown and step may not — a stricter statement than forbidding the binding by folder, and the only one that survives the probe pass existing |
+
+**This does not weaken `CN-0293`.** The engine's input is still the spec and nothing else; what is added is a statement about how the spec came to be fillable. The alternative — leaving it unstated — does not remove the read, it only leaves the reader unnamed.
 
 ### 3.4 Canonical serialisation (`SW-0004`, `SW-0012`)
 
@@ -500,7 +532,7 @@ class ArrayView:                         # SW-0014, SW-0015
 | `IMP-0016` | `SW-0016` | `WP-14` | `KEEP` | `simcore` registers no callback into the scripting layer; the C ABI is one-directional by shape — every function takes plain data and returns an `int`. `ANL-SW-06` is the symbol scan. | `ANL-SW-06` |
 | `IMP-0017` | `SW-0017` | `WP-27` | `NEW` | `ANL-SW-07` — an import-direction check: no module outside `adas_sim/pyapi/` and `adas_sim/transport/` may import `ctypes` or open a shared-memory handle. `DD-10`'s package rename is what makes this check writable at all. | `ANL-SW-07` |
 | `IMP-0018` | `SW-0018` | `WP-16` | `DEDUPE` | `scripts/check_no_cpp_config.py` — enumerates the four capabilities by name (config parse, ingest parse, wiring validation, library search) and asserts zero implementations under `src/simcore/` or `src/simengine/`. Satisfied by `WP-16`'s deletions; the check is what stops them coming back. | `ANL-SW-08` |
-| `IMP-0019` | `SW-0019` | `WP-16` | `NEW` | `scripts/prove_equal.py` — runs the retiring implementation's own test corpus against the survivor and writes a table of pass/deliberate-change/fail. **`WP-16` cannot start until this reports zero unexplained failures**, which is what makes the migration reversible rather than brave. | `IT-04`, `ANL-SW-09` |
+| `IMP-0019` | `SW-0019` | `WP-15a` | `NEW` | `scripts/prove_equal.py` — runs the retiring implementation's own test corpus against the survivor and writes a table of pass/deliberate-change/fail. It is **its own work package**, in front of `WP-16` rather than inside it: a gate written into the package it guards is opened by whoever opens the package, and this one guards the removal of ~2,500 lines and a whole module. As a separate package it is a ticked prerequisite, which is the mechanism the rest of the plan relies on. | `IT-04`, `ANL-SW-09` |
 | `IMP-0020` | `SW-0020` | `WP-01` | `NEW` | `scripts/check_no_duplication.py` — names the **seven** historically duplicated capabilities (SwReq's six plus `DD-04`'s codec) and fails the build if any has two implementations. Runs from `WP-01`, so it is green before it has anything to catch and red the moment it does. | `ANL-SW-10` |
 
 
@@ -660,7 +692,7 @@ src/io/
 namespace simcore::bus {
 
 enum class Origin  { Measured, Truth, Mocked, Simulated, Overridden, Unknown };   // SW-0048, closed
-enum class Rung    { SourceCycleId, HeaderCounter, SourceTime, ArrivalTime };     // SW-0050, ordered
+enum class Rung    { SourceCycleId, HeaderCounter, SourceTime, ReceptionTime };   // SW-0050, ordered
 enum class Quality { Exact, Derived, Approximated };                              // SW-0052
 enum class PortKind{ Data, Control, Static };                                     // DD-05, SW-0060
 
@@ -673,6 +705,11 @@ struct Header {
   Unknown<uint32_t> status;          // validity
   Unknown<int64_t>  t_capture_ns;    // validity instant      — never defaulted to reception
   int64_t           t_sim_ns;        // delivery cycle        — always known
+  // NOTE: reception time is NOT here. It is `RawMessage::t_recv_ns`, on the
+  // envelope, which is why Rung::ReceptionTime reads the message and not the
+  // header. Two fields one word apart that mean opposite things is how the
+  // defaulting SW-0044 forbids becomes an easy mistake instead of an
+  // unwritable one (SW-0044, SYS-0284).
   ProducerId        producer;        // module id or RECORDING
   Mode              mode;            // Simulate | Measured | Off
   bool              is_repeat;       // no new data since last cycle
@@ -771,28 +808,47 @@ namespace simcore::sched {
 enum class Sampling { LatestAtOrBefore, Nearest, Strict, Interpolate, AllSinceLast };  // SW-0068
 enum class OnMissing{ Hold, SkipCycle, Zero, Error };                                  // SW-0070
 
-// The grid is CONSUMED, never computed (SW-0062). There is no Gcd() in simcore.
+// The grid is CONSUMED, never computed (SW-0062). There is no Gcd() in simcore,
+// and no Snap() in either language (SW-0173).
 class Scheduler {
  public:
   explicit Scheduler(const RunSpec&);                 // step_ns and period_ns arrive resolved
+  void                    Advance();                            // t_sim_ns_ += step_ns. Only writer. (SW-0413)
+  int64_t                 TSimNs() const;
   bool                    IsDue(StageId, int64_t tick) const;   // integer predicate (SW-0064)
+  bool                    HasFreshInput(StageId) const;         // the on_new predicate (SW-0065)
   std::span<const StageId> Order() const;                       // topological, from the spec (SW-0072)
   int64_t                 DelaySteps(EdgeId) const;             // whole grid steps (SW-0073)
   PortValue               Sample(PortId, int64_t t_sim_ns) const;
   void                    ReconcileUpdated(StageId, PortId, bool reported);  // SW-0066
+  void                    ReconcileMeasuredRate(StageId);                    // SW-0414
   ScheduleDump            Dump() const;                         // emitted before execution (SW-0076)
+ private:
+  int64_t t_sim_ns_;      // no setter, and no assignment from any message stamp
 };
 }
 ```
 
 ```
 src/scheduler/
-  due.cpp        IsDue — (tick * step_ns) % period_ns == 0; from pipeline.cpp::Step
+  due.cpp        Advance, IsDue, HasFreshInput; from pipeline.cpp::Step
   sample.cpp     the five policies, the four missing-data behaviours
   order.cpp      topological order consumed from the spec; delay in whole steps
-  reconcile.cpp  declared-schedule vs the module's own updated flag
+  reconcile.cpp  declared schedule vs the module's own updated flag, and
+                 declared period vs the recording's reconstructed cadence
   dump.cpp       ScheduleDump — the pre-execution emission
 ```
+
+**One clock, two predicates.** Three requirements decide that a module runs — a
+fresh key input (`SW-0065`), a declared period (`SW-0064`), and a `measured`
+stage's recorded cadence (`SW-0414`). They agree by construction on a recording
+this framework produced and cannot agree on one it did not, which is why
+`Advance()` is the only writer of `t_sim_ns_` and both kinds of due-ness are
+`const` predicates over it. `HasFreshInput` compares the freshness key
+`IMP-0054` set against the one the stage last consumed, so two arrivals inside
+one grid step yield one execution with the later value and one counted
+*coalesced arrival* — the grid being fine enough for that to be rare is
+`SW-0006`'s job, not the scheduler's.
 
 ### 6.2 Design requirements
 
@@ -814,6 +870,8 @@ src/scheduler/
 | `IMP-0076` | `SW-0076` | `WP-15` | `EXTEND` | `src/simcore/scheduler/dump.cpp::ScheduleDump` — emitted before tick 0 and compared against the configuration layer's prediction by `IMP-0131`. Extends `graph_dump.cpp`, which dumps the graph but not the schedule. | `UT-SCH-11` |
 | `IMP-0077` | `SW-0077` | `WP-09` | `KEEP` | `IT-05` runs one spec on a loaded and an idle machine and diffs port values; no `std::chrono` call appears in `src/simcore/scheduler/**` outside `dump.cpp`'s reporting. Already true of `pipeline.cpp::Step`. | `IT-05` |
 | `IMP-0078` | `SW-0078` | `WP-25` | `EXTEND` | `adas_sim/session/pacing.py` — play-rate lives in the player, reads `t_exec` and never writes `t_sim`. Extends `view/transport.py`; the separation is asserted by running a paced and an unpaced session and diffing port values. | `UT-SCH-12` |
+| `IMP-0413` | `SW-0413` | `WP-09` | `NEW` | `src/simcore/scheduler/due.cpp::Scheduler::Advance` — `t_sim_ns_ += spec.grid.step_ns` and nothing else writes that member; it is `private` with no setter, so an arrival cannot move it even by mistake. `ANL-SW-75` asserts no assignment to it from a message timestamp. This is `IMP-0049`'s change seen from the scheduler: today the tick index advances per grouped message set, so the recording's own density decides the tick sequence. | `UT-SCH-13`, `ANL-SW-75` |
+| `IMP-0414` | `SW-0414` | `WP-09` | `NEW` | `reconcile.cpp::ReconcileMeasuredRate` — a `measured` stage's outputs are delivered on the ticks `IMP-0050`'s reconstruction places them on; where that cadence differs from `stages[].period_ns` beyond `IMP-0055`'s band, one finding names both rates and the recording's cadence is used. The same mechanism `IMP-0066` uses for a live module's own `updated` flag, applied to the recording — in both cases the observed fact outranks the declared one. | `UT-SCH-14` |
 
 > **Two rows in this table are not `SI-03`'s**, and are placed here because they read with the sampling and pacing they constrain rather than with their owning item: `IMP-0069` belongs to `SI-10` (§13) and `IMP-0078` to `SI-18` (§21). Ownership is the `SW`'s, never the section's — `docs/v2/py/trace_check.py` reads it from the Software Requirements, so a section heading can never re-assign an item.
 
@@ -1241,7 +1299,7 @@ def remedies(f: Finding) -> tuple[Remedy, ...]: ...                # smallest ch
 |---|---|---|---|---|---|
 | `IMP-0063` | `SW-0063` | `WP-20` | `DEDUPE` | `graph/grid.py::check_period_multiples` — a period that is not an integer multiple of the derived step is an `Authoring` error naming both numbers, never rounded. The C++ twin in `pipeline.cpp` dies at `WP-16`. | `UT-GRF-01` |
 | `IMP-0074` | `SW-0074` | `WP-20` | `NEW` | `graph/build.py::check_zero_delay_cycles` — Tarjan over edges whose `delay_steps == 0`; the error names the loop's stages in cycle order. A non-zero delay edge legitimately closes a loop and is not reported. | `UT-GRF-02` |
-| `IMP-0111` | `SW-0111` | `WP-20` | `MOVE` | `graph/feasible.py::check_measured_supported` — compares each `measured` stage's declared outputs against the recording's topic index; the error names stage, ports and file. Ports today's check, which runs at first tick. | `UT-GRF-03` |
+| `IMP-0111` | `SW-0111` | `WP-20` | `MOVE` | `graph/feasible.py::check_measured_supported` — compares each `measured` stage's declared outputs against the `RecordingIndex` it is handed (`IMP-0411`); the error names stage, every missing port and the file. Ports today's check, which runs at first tick against an open recording. | `UT-GRF-03` |
 | `IMP-0115` | `SW-0115` | `WP-20` | `MOVE` | `graph/record_policy.py::check_consumed_ports_recorded` — `excluded`/`decimate` on a port a `simulate` stage consumes is a load error **at record time**; at resim time the same fact is only an infeasible cut. Ports the rule from `contracts/pipeline.py`. | `UT-GRF-04` |
 | `IMP-0167` | `SW-0167` | `WP-20` | `KEEP` | `graph/build.py::build` — nodes come from manifests plus the active module list; `ANL-SW-35` greps for a hard-coded stage sequence. Already true and is the property that makes `E2E-10`'s no-help onboarding possible. | `UT-GRF-05`, `ANL-SW-35` |
 | `IMP-0168` | `SW-0168` | `WP-20` | `MOVE` | `build.py::check_single_producer` — two active producers for one port is an `Authoring` error naming both stages and the port. Ports today's check. | `UT-GRF-06` |
@@ -1249,7 +1307,7 @@ def remedies(f: Finding) -> tuple[Remedy, ...]: ...                # smallest ch
 | `IMP-0170` | `SW-0170` | `WP-20` | `EXTEND` | `build.py::check_port_types` — compares `proto_type` at both ends including the ingest table's, at load. Extends today's check, which compares names but not the recording side. | `UT-GRF-08` |
 | `IMP-0171` | `SW-0171` | `WP-20` | `NEW` | `build.py::check_port_kinds` — a `Data` port wired to a `Control` port is an `Authoring` error. Needed the moment `IMP-0086` makes lifecycle wiring ordinary rather than exceptional. | `UT-GRF-09` |
 | `IMP-0172` | `SW-0172` | `WP-20` | `DEDUPE` | `grid.py::derive_step` — GCD of declared periods, derived and never read from configuration; a `base_grid:` key in any file is an `Authoring` error. `ComputeBaseGridNs` dies at `WP-16`. | `UT-GRF-10` |
-| `IMP-0173` | `SW-0173` | `WP-20` | `NEW` | `grid.py::snap` — a declared tolerance, applied once, and **every** snap printed with both values. Unbounded snapping would hide exactly the rate defect `IMP-0055` exists to surface. | `UT-GRF-11` |
+| `IMP-0173` | `SW-0173` | `WP-20` | `NEW` | `grid.py` has **no** `snap` function and the schema has no tolerance key, so `ANL-SW-02`'s grep for `snap` returns nothing in either language. A period that is not an integer multiple of the derived grid raises naming both integers and the grid. Any tolerance would hide exactly the rate defect `IMP-0055` exists to surface, and a rounded period accumulates into drift that reads as a defect in the module rather than in the scheduling that caused it. | `UT-GRF-11` |
 | `IMP-0174` | `SW-0174` | `WP-20` | `EXTEND` | `graph/coherence.py::ancestors` — full transitive closure. **This replaces `contracts/pipeline.py::severed_chains`'s one-hop upstream scan.** It is the single correctness defect in the codebase (SwReq §30.3) and the reason `MP-3` exists as its own phase. | `UT-GRF-12` |
 | `IMP-0175` | `SW-0175` | `WP-20` | `EXTEND` | `coherence.py::descendants` — full transitive closure, replacing the one-hop downstream scan in the same function. `UT-GRF-13` uses the concept's own case: simulate → measured → measured → simulate. | `UT-GRF-13` |
 | `IMP-0176` | `SW-0176` | `WP-20` | `EXTEND` | `coherence.py::Verdict` — three values; `classify` returns exactly one `Finding` per stale stage. Today the code returns `SeveredChain` tuples with no verdict, so orphan and broken are indistinguishable to a caller. | `UT-GRF-14` |
@@ -1261,9 +1319,10 @@ def remedies(f: Finding) -> tuple[Remedy, ...]: ...                # smallest ch
 | `IMP-0182` | `SW-0182` | `WP-20` | `EXTEND` | `coherence.py` — one `ProvenanceWarning` per run naming every orphan, and a `computed_not_consumed` flag per stage for the GUI badge. Extends today's single warning, which fires per `with_mode` call rather than per run. | `UT-GRF-20` |
 | `IMP-0183` | `SW-0183` | `WP-20` | `MOVE` | `graph/modes.py::with_mode(close_gaps=True)` — default closes, `close_gaps=False` forces open and warns. Ports `contracts/pipeline.py::with_mode` unchanged; only the staleness function underneath it changes. | `UT-GRF-21` |
 | `IMP-0184` | `SW-0184` | `WP-20` | `MOVE` | `modes.py::with_mode` returns a **new** `Pipeline`; the caller keeps the old one, so every toggle is undoable (`CN-0325`). Ports today's behaviour, which is already correct. | `UT-GRF-22` |
-| `IMP-0185` | `SW-0185` | `WP-20` | `MOVE` | `graph/feasible.py::feasible_cuts` — from the recording's topic index plus the manifests present; reported by `sim probe` and the start page. Ports today's implementation. | `UT-GRF-23` |
+| `IMP-0185` | `SW-0185` | `WP-20` | `MOVE` | `graph/feasible.py::feasible_cuts` — from the `RecordingIndex` and `ModuleManifest` set it is **handed** (`IMP-0411`), never from a file it opens; reported by `sim probe` and the start page. Ports today's implementation. | `UT-GRF-23` |
 | `IMP-0186` | `SW-0186` | `WP-20` | `EXTEND` | `graph/catalogue.py::validate_trace_catalogue` — the project's declared catalogue (`CN-0021`) is compared against what the file carries, and a divergence names both. Extends `feasible.py`, which reads the file but has no declaration to compare against. | `UT-GRF-24` |
 | `IMP-0400` | `SW-0400` | `WP-20` | `NEW` | `modes.py::with_port_mode` — a per-output-port mode override for expert cases (`CN-0119`); the override appears in the run manifest and participates in coherence exactly as a stage mode does. | `UT-GRF-25` |
+| `IMP-0411` | `SW-0411` | `WP-20` | `NEW` | `graph/build.py` and `graph/feasible.py` take `RecordingIndex` and `ModuleManifest` as **parameters**; `ANL-SW-34` asserts no codec or C-interface import anywhere in `SI-10`…`SI-12` or `SI-14`. This is what makes the whole `UT-GRF-*` surface runnable against hand-written structures with no file on disk, which is why it is a requirement and not a coding preference. | `UT-GRF-27`, `ANL-SW-34` |
 | `IMP-0401` | `SW-0401` | `WP-30` | `NEW` | `build.py::instantiate` — one manifest, N instances, each with a declared instance name that prefixes its ports. `R2`. Port identity stays independent of the instance (`IMP-0389`). | `UT-GRF-26` |
 
 ---
@@ -1332,6 +1391,10 @@ def to_spec_rows(m: IngestMap) -> tuple[IngestRow, ...]: ...               # SW-
 #   bundle.py     config bundle: module-relative, explicit wins, mismatch warns
 #   plugins.py    plug-in bundles from a path of library directories
 #   component.py  from contracts/component.py — PROBE ONLY, no execution path
+#   probe.py      the probe pass: RecordingIndex + ModuleManifest, as data  (SW-0409, SW-0410)
+#                 the ONLY C-interface binding outside pyapi/ and transport/,
+#                 bounded by SYMBOL: Describe / adasManifest / adasAbiVersion
+#                 only — never adasInit, adasExec, adasShutdown or a step call
 #   order.py      the one shared "ordered tiers, report the tier" helper
 
 @dataclass(frozen=True)
@@ -1363,6 +1426,8 @@ def is_available   (stem: str, search: Sequence[Path], platform: Platform) -> bo
 | `IMP-0212` | `SW-0212` | `WP-21` | `EXTEND` | `ANL-SW-37` — an import check that `resolve_library` is called from exactly one place (`runspec/emit.py`) and its `Resolution` is what the spec, the manifest and the launcher all read. Today the launcher panel resolves independently. | `ANL-SW-37` |
 | `IMP-0213` | `SW-0213` | `WP-21` | `MOVE` | `plugins.py::pin_status` — a library whose hash matches no published build is reported `unpinnable`, never silently pinned. Ports today's determinism-side behaviour into resolution where it belongs. | `UT-RES-09` |
 | `IMP-0214` | `SW-0214` | `WP-21` | `EXTEND` | `resolve/order.py::ordered_tiers` — the one helper all three resolvers use, so the shape cannot diverge. `ANL-SW-38` asserts each resolver returns `Resolution[...]` and calls the helper. Today the three are similar by convention. | `ANL-SW-38` |
+| `IMP-0409` | `SW-0409` | `WP-21` | `EXTEND` | `resolve/probe.py` — the only Python module outside `pyapi/` and `transport/` that binds the C interface. `ANL-SW-07` becomes a **symbol** scan rather than an import scan: `Describe`, `adasManifest` and `adasAbiVersion` are permitted here; `adasInit`, `adasExec`, `adasShutdown` and every engine step entry point are permitted nowhere in the configuration layer. Extends `contracts/component.py`'s existing manifest read, which does the right thing from the wrong package. | `ANL-SW-07`, `UT-RES-10` |
+| `IMP-0410` | `SW-0410` | `WP-21` | `EXTEND` | `resolve/probe.py::describe_recording` / `read_manifest` — returns frozen `RecordingIndex` and `ModuleManifest` dataclasses, no handle retained. Both read through the interfaces the run uses (`IMP-0021`'s `Describe`, `IMP-0090`'s manifest read), so neither can describe an artifact differently from the way the run will. **Until this lands, `WP-05` uses today's Python equivalents** — `io/base.py`'s topic scan and `contracts/component.py`'s probe — exactly as it uses today's `resolve_library` for `IMP-0003`; `WP-21` re-homes both and re-points them at `simcore`. | `UT-RES-11` |
 
 ---
 
@@ -1397,13 +1462,14 @@ def write_manifest(m: RunManifest, dir: Path) -> None: ...           # atomic, a
 | `IMP-0003` | `SW-0003` | `WP-05` | `MOVE` | `emit.py` writes `IMP-0204`'s `Resolution` into `stages[].impl` as `{path, pattern, search}`. The engine consults no search path (`IMP-0079`). | `UT-SPC-02` |
 | `IMP-0004` | `SW-0004` | `WP-05` | `EXTEND` | `runspec/canon.py::canonical` + `write_run_spec` — SHA-256 over §3.4's form with `spec_sha256` blanked. Extends `core/ids.py`, which hashes inputs but has no canonical spec to hash. | `UT-SPC-03` |
 | `IMP-0005` | `SW-0005` | `WP-05` | `MOVE` | `emit.py` writes `schema: adas.sim.runspec/1.0`; `simcore::LoadRunSpec` refuses outside its range naming both, and a missing version naming the omission. The version mechanism ports from `contracts/pipeline.py`. | `UT-SPC-04` |
-| `IMP-0006` | `SW-0006` | `WP-05` | `DEDUPE` | `emit.py` writes `grid.step_ns` and `stages[].period_ns` only; `ANL-SW-02` greps `simcore` for `gcd`, `snap` and unit conversion. `ComputeBaseGridNs` dies at `WP-16`. | `ANL-SW-02` |
+| `IMP-0006` | `SW-0006` | `WP-05` | `DEDUPE` | `emit.py` writes `grid.step_ns` and `stages[].period_ns` only; the GCD is taken over **every** stage's declared period whatever triggers it, and over no port of static kind. `ANL-SW-02` greps `simcore` for `gcd`, `snap` and unit conversion — `snap` now appears in neither language, since `IMP-0173` removes the tolerance rather than relocating it. `ComputeBaseGridNs` dies at `WP-16`. | `ANL-SW-02`, `UT-SPC-23` |
 | `IMP-0007` | `SW-0007` | `WP-05` | `NEW` | `emit.py` writes `inputs[] = {port, producer, producer_port, delay_steps}`; `ANL-SW-03` greps `simcore` for dotted-address splitting and for the `self`/`source` prefixes. The grammar lives once, in `IMP-0008`. | `ANL-SW-03` |
 | `IMP-0008` | `SW-0008` | `WP-05` | `EXTEND` | `runspec/address.py::resolve_address` — separates resolution from application, which `contracts/binding.py` today fuses. Emits `{stage, port, path[], index, all_elements}`; `IMP-0099` consumes it and parses nothing. | `UT-SPC-05` |
 | `IMP-0009` | `SW-0009` | `WP-05` | `MOVE` | `emit.py` writes `record` on **every** port; a port with no policy is an emit-time error. Ports `contracts/pipeline.py::RecordVerb` and `core/manifest.py::_record_policy_records` — a re-homing within Python. | `UT-SPC-06` |
 | `IMP-0010` | `SW-0010` | `WP-05` | `NEW` | `emit.py` writes `sampling` and `on_missing` per port from the type's declared default resolved at config load, so `IMP-0068` and `IMP-0070` need no default table in the engine. | `UT-SPC-07` |
 | `IMP-0011` | `SW-0011` | `WP-05` | `DEDUPE` | `emit.py` writes `sources[].ingest` from `IMP-0187`'s parsed map; `ANL-SW-04` asserts `simcore` opens no `.yaml`. `ingest_map.cpp`'s parse half dies at `WP-16`. | `ANL-SW-04`, `IT-02` |
 | `IMP-0012` | `SW-0012` | `WP-05` | `NEW` | `canon.py` — §3.4's rules, chosen so a one-mode change is a one-line diff. `UT-SPC-08` emits two specs differing in one mode and asserts the diff's line count. | `UT-SPC-08` |
+| `IMP-0412` | `SW-0412` | `WP-05` | `NEW` | `emit.py` writes `sources[].sha256` from the probe pass; `simcore::LoadRunSpec` rehashes each named recording and refuses a mismatch naming both digests. Two-pass resolution without this is strictly worse than one pass, because the spec would assert properties of a file nobody re-checked. | `UT-SPC-24` |
 | `IMP-0215` | `SW-0215` | `WP-22` | `EXTEND` | `runspec/manifest.py::write_manifest` — every run, every face, machine-readable. Extends `core/manifest.py`, which writes a manifest for a recording session but not for every run shape. | `UT-SPC-09` |
 | `IMP-0216` | `SW-0216` | `WP-22` | `EXTEND` | `manifest.py` embeds the Resolved Run Spec and its hash, so `IT-16` reproduces a run from the manifest alone. Extends today's manifest, which references inputs but does not carry the spec. | `IT-16` |
 | `IMP-0217` | `SW-0217` | `WP-22` | `MOVE` | `IMP-0038`'s `MetaKind::run_manifest` block is written by every writer, so every artifact traces back to what produced it. Ports today's embedding into the C++ writer. | `UT-SPC-10` |
@@ -2023,8 +2089,8 @@ Not open questions of this document's making — five inherited from SwReq §34.
 | `IMP-0388` | `SW-0388` | `OQ-11` — does a signal catalogue already exist? | A catalogue is authored that may have to be replaced |
 | `IMP-0272`, `IMP-0323`, `IMP-0369` | `SW-0272`, `SW-0323`, `SW-0369` | `OQ-14` — the numbers for per-cycle cost, throughput, frame time | The harnesses are built; the thresholds cannot be set, so the requirements cannot be failed |
 | `IMP-0348` | `SW-0348` | `OQ-16` — the common configuration changes and their budgets | The requirement closest to the success measure cannot be failed |
-| requirement style, evidence, document set | all | `OQ-17` — tool qualification or functional-safety constraints | Potentially the whole verification approach. **Answer early** |
-| `IMP-0381`'s second and third readers | `SW-0381` | **A sample file.** There is no MDF4 and no TDMS in hand (`DD-13`) | MCAP ships; the other two are written the week a sample arrives. Not a design problem — an input this project does not yet have |
+| requirement style, evidence, document set | all | `OQ-17` — tool qualification or functional-safety constraints | Potentially the whole verification approach. Now a **baselining gate with a written fallback** (SYS §26): unanswered by the time the seam is built, the chain is developed in the present style and re-styling is accepted as a known, scoped cost |
+| `IMP-0381`'s second and third readers, **and `MP-1`'s exit** | `SW-0381`, `SW-0049`, `SW-0050` | **A sample file.** There is no MDF4 and no TDMS in hand (`DD-13`) | MCAP ships; the other two are written the week a sample arrives. **The cost is larger than one requirement:** `F-FOREIGN` is crafted, so it encodes the same assumptions the recovery ladder does and validates the guess rather than the data. `MP-1`'s exit is therefore provisional until `WP-18` re-runs the ladder tests against a real sample. Not a design problem — an input this project does not yet have |
 | ~~`CN-0282`'s wording~~ | — | ~~The **concept is the master** and still reads *"driving a live simulator is a plugin concern"*~~ | **Closed 2026-08-11.** `DD-12` confirmed, and the amendment applied in the concept — `CN-0282` now reads *"out of scope entirely"*. §33 records it |
 
 **None of the five blocks starting.** Each blocks *finishing* one requirement, and each has a named harness built regardless so the answer can be dropped in rather than designed around.

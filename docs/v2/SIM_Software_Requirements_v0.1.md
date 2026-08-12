@@ -189,7 +189,7 @@ flowchart TB
 | `SI-10` | `CFG` | `config` | Python | once per run | Parse, schema validation, four-layer merge, includes, variables, round-trip |
 | `SI-11` | `GRF` | `graph` | Python | once per run | Graph build, wiring validation, port-type match, coherence classification, remedies |
 | `SI-12` | `ING` | `ingest` | Python | once per run | Ingest map parse and validation, family matching, declared holes, description resolution |
-| `SI-13` | `RES` | `resolve` | Python | once per run | Library resolution by stem, configuration bundle resolution, plugin bundle resolution |
+| `SI-13` | `RES` | `resolve` | Python | once per run | Library resolution by stem, configuration bundle resolution, plugin bundle resolution, **the probe pass** — recording index and module manifest, as data |
 | `SI-14` | `SPC` | `runspec` | Python | once per run | Resolved Run Spec emission and hashing, run manifest assembly |
 | `SI-15` | `ORC` | `orchestrate` | Python | once per run / per batch | CLI verbs, batch scheduling, subprocess pool, resume, aggregation |
 | `SI-16` | `PRP` | `prep` | Python | offline | Integrity check, content hash, extract, convert, index, inspect, lineage |
@@ -228,8 +228,9 @@ Stated as a set because the failure mode is drift, and drift is cheapest to prev
 | `SI-06` `runner` | Contain a second execution path, a single-rate loop, or a "fast mode". |
 | `SI-09` `simengine` | Contain a configuration parser, validation, path search or inference. |
 | `SI-10` `config` | Execute anything, load a library, or open a recording's payload. |
-| `SI-11` `graph` | Read a message. Classification is computable with no recording opened. |
-| `SI-12` `ingest` | Compute. Renaming, tagging, and a declared factor and offset — nothing else. |
+| `SI-11` `graph` | Read a message, or open anything. It receives the probe pass's data and classifies over it. |
+| `SI-12` `ingest` | Compute. Renaming, tagging, and a declared factor and offset — nothing else. Match a family by opening the file; it matches against the index it is handed. |
+| `SI-13` `resolve` | Execute a module or advance a run. It may open a binary and a recording, and may call only the manifest, version and describe entry points. |
 | `SI-19` `scene` | Compute a pixel, import a renderer, hold state between ticks, or touch disk. |
 | `SI-21` `player` | Talk to a library, a world model or a file format. Its input is a `Session`. |
 | `SI-22` `launcher` | Hold state that is not in the file it writes. |
@@ -326,6 +327,25 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Verify.** T · `UT-SPC-01` · A · `ANL-SW-01`   **Trace.** SYS-0165, SYS-0166
 **Now.** `PARTIAL` — `core/manifest.py`'s `RunSpec`/`load_run_spec` is a run-configuration reader, not a resolved-spec emitter; resolution today happens inside `contracts/pipeline.py` at load and is never serialised as one artifact.
 
+**`SW-0410`** · `SI-13` · `P0` · `R1` — The probe pass produces a recording index and a module manifest, as data
+**Shall.** `SI-13` shall produce, before emission, a `RecordingIndex` per named recording — per topic: declared payload type, message count, first and last timestamp, the highest timing rung the data supports, and the origin tag where the file carries one — and a `ModuleManifest` per named module, both as plain structures with no open handle.
+**Accept.** The index is obtained through the same reader a run uses and the manifest through the same entry point the module host uses, so neither can describe a file differently from the way the run will read it. Both are serialisable, and a hand-written one drives every consumer's unit tests with no file and no binary present.
+**Verify.** T · `UT-RES-11`   **Trace.** SYS-0287, SYS-0288; CN-0396, CN-0397, CN-0398
+**Now.** `PARTIAL` — `contracts/component.py`'s probe path reads manifests correctly; nothing produces a recording index, and the checks that need one read the recording at first tick instead.
+
+**`SW-0411`** · `SI-11` · `P0` · `R1` — The graph and ingest layers receive the index; they never open anything
+**Shall.** Cut feasibility, `measured`-mode validation, coherence classification and ingest-family matching shall take the `RecordingIndex` and the `ModuleManifest` set as arguments, and shall open no recording, load no library and import no codec.
+**Accept.** Every one of those functions runs to completion against hand-written structures with no file on disk. An import check finds no codec or C-interface import in `SI-10`, `SI-11`, `SI-12` or `SI-14`.
+**Verify.** T · `UT-GRF-27` · A · `ANL-SW-34`   **Trace.** SYS-0288; CN-0398
+**Now.** `PARTIAL` — the classification functions are already pure over the pipeline object; the feasibility checks are not, because they have no index to be pure over.
+
+**`SW-0412`** · `SI-14` · `P0` · `R1` — Emission records what it was told, so a spec cannot be run against a different file
+**Shall.** The spec shall carry a content hash of every recording the probe pass read, and the engine shall refuse a recording whose hash differs from the one emitted against, naming both.
+**Accept.** Replacing a recording between emission and execution is refused before the first tick. Re-emitting against the replaced file succeeds.
+**Verify.** T · `UT-SPC-24`   **Trace.** SYS-0287, SYS-0222; CN-0396
+**Now.** `PARTIAL` — `core/ids.py` hashes inputs for the run id; nothing compares a hash at load.
+*Note:* without this, two passes is strictly worse than one — the spec would assert properties of a file nobody re-checked.
+
 **`SW-0002`** · `SI-14` · `P0` · `R1` — The spec is the engine's only input
 **Shall.** `SI-14` shall emit a spec sufficient on its own to construct and run the engine, with no other file consulted at run time except the recordings and module binaries the spec names by absolute path.
 **Accept.** Running the engine with the configuration source tree deleted, and only the spec, the named recordings and the named binaries present, produces identical port values.
@@ -351,10 +371,10 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Now.** `DONE·MOVE` — the `version:` field plus upgrader semantics exist in `contracts/pipeline.py` and are mirrored in `sil_host/src/pipeline.cpp`; the mechanism is right, the artifact it guards is the pipeline file rather than the spec.
 
 **`SW-0006`** · `SI-14` · `P0` · `R1` — The spec declares the base grid, not the ingredients
-**Shall.** The spec shall carry the computed base grid step and each module's period as integers in nanoseconds, and shall not carry the derivation.
-**Accept.** `simcore` performs no greatest-common-divisor computation, no snapping and no unit conversion. A grep for period arithmetic in the engine returns nothing.
-**Verify.** A · `ANL-SW-02`   **Trace.** SYS-0066, SYS-0060; CN-0293
-**Now.** `DONE·TWICE` — computed in `contracts/pipeline.py` and again in `sil_host/src/pipeline.cpp::ComputeBaseGridNs`; the C++ copy is deleted under `SW-0018`.
+**Shall.** The spec shall carry the computed base grid step and each module's period as integers in nanoseconds, and shall not carry the derivation. The grid shall be the greatest common divisor of the declared periods of **every** module in the graph, whatever triggers each one, and of no port of static kind.
+**Accept.** `simcore` performs no greatest-common-divisor computation, no snapping and no unit conversion. A grep for period arithmetic in the engine returns nothing. Adding a data-driven module with a shorter period changes the emitted grid; adding a static port does not change it at all.
+**Verify.** A · `ANL-SW-02` · T · `UT-SPC-23`   **Trace.** SYS-0066, SYS-0285, SYS-0060; CN-0293, CN-0393
+**Now.** `DONE·TWICE` — computed in `contracts/pipeline.py` and again in `sil_host/src/pipeline.cpp::ComputeBaseGridNs`; the C++ copy is deleted under `SW-0018`. Neither excludes static ports, because neither has a static port kind yet (`SW-0060`).
 
 **`SW-0007`** · `SI-14` · `P0` · `R1` — The spec declares the resolved wiring, not the wiring rules
 **Shall.** The spec shall express wiring as a resolved producer for every consumer port, and shall not carry the reference grammar that produced it.
@@ -421,10 +441,17 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Now.** `DONE` — `sil_host` links no interpreter today. The property survives the move; it is recorded so it is not lost during it.
 
 **`SW-0017`** · `SI-15` · `P0` · `R1` — Python drives the engine through the spec or the transport, never through shared memory of its own
-**Shall.** The scripting layer shall interact with a running engine only through `IF-09` at start and `IF-11` thereafter.
+**Shall.** The scripting layer shall interact with a **running** engine only through `IF-09` at start and `IF-11` thereafter.
 **Accept.** No Python module holds an engine pointer, maps an engine buffer outside `SI-25`, or reads an engine-internal file.
 **Verify.** A · `ANL-SW-07`   **Trace.** SYS-0271, SYS-0273; CN-0049
 **Now.** `NEW`.
+
+**`SW-0409`** · `SI-13` · `P0` · `R1` — The probe pass is the one exception, and it is bounded by symbol, not by folder
+**Shall.** `SI-13` shall be permitted to open a module binary and a recording for the probe pass (`SW-0410`), calling only the manifest and version entry points and only the reader's describe entry point; every entry point that executes a module or advances a run shall be unreachable from the configuration layer.
+**Accept.** A symbol-level check finds the manifest, ABI-version and describe calls in `SI-13` and nowhere else in the configuration layer, and finds no initialise, execute, shutdown or step call anywhere outside `SI-23` and `SI-25`. Three Python packages may bind the C interface: `resolve`, `pyapi` and `transport`, and no fourth.
+**Verify.** A · `ANL-SW-07` · T · `UT-RES-10`   **Trace.** SYS-0287, SYS-0288; CN-0396, CN-0397
+**Now.** `PARTIAL` — `contracts/pipeline.py` loads component libraries to read their manifests, which is the right operation in the wrong package.
+*Note:* stated as a symbol rule rather than an import rule because the obligation is *not executing*, and a check on folder membership forbids the wrong thing. Forbidding execution by symbol is stricter than forbidding the binding by directory, and it is the form that survives the probe pass existing at all.
 
 **`SW-0018`** · `SI-06` · `P0` · `R1` — Four capabilities are deleted from C++, not moved
 **Shall.** `simcore` shall contain no configuration-file parser, no ingest-map parser, no wiring validator and no library search-path resolution.
@@ -536,7 +563,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 
 **`SW-0033`** · `SI-01` · `P0` · `R1` — Unit correction is a factor and an offset, applied once
 **Shall.** A declared unit correction shall be a multiplicative factor and an additive offset applied once, at ingest, to the named field, and shall be recorded per port in the manifest.
-**Accept.** Applying the same map twice is refused. The manifest states the factor and offset for every port that carried one, so a downstream reader can undo it.
+**Accept.** Applying the same map twice is refused. The manifest states the factor and offset for every port that carried one, so a downstream reader can undo it. Where a source states its time in a coarser unit than the bus, the fixed integer scale to nanoseconds is applied here, exactly once, and is the only unit conversion anywhere in the engine — which is what keeps the scheduler's prohibition on unit arithmetic (`SW-0006`) checkable rather than approximate.
 **Verify.** T · `UT-IO-13`   **Trace.** SYS-0019; CN-0309
 **Now.** `NEW` — `io/ingest.py` is rename-and-tag only; scale and offset are the widening `CN-0309` asks for.
 
@@ -649,11 +676,12 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Verify.** T · `UT-BUS-01`   **Trace.** SYS-0029; CN-0072
 **Now.** `PARTIAL` — `core/tick.py::PortValue` carries payload, `valid`, `updated`, `origin`, a derived `age_s` and a capture stamp; the source-time, cycle-counter and status fields of the signal header do not exist, because today's recordings are framework-produced and carry none.
 
-**`SW-0044`** · `SI-02` · `P0` · `R1` — Two clocks, never collapsed
-**Shall.** A port value shall carry reception time and validity time as two distinct integer-nanosecond quantities, and validity time shall be explicitly unknown rather than defaulted to reception time.
-**Accept.** A derived data age of exactly zero occurs only where the two genuinely coincide and is distinguishable from unknown at every surface.
-**Verify.** T · `UT-BUS-02`   **Trace.** SYS-0030; CN-0298
+**`SW-0044`** · `SI-02` · `P0` · `R1` — Two clocks, never collapsed, never one name
+**Shall.** A port value shall carry reception time and validity time as two distinct integer-nanosecond quantities under two distinct names; validity time shall belong to the signal header and shall be explicitly unknown rather than defaulted; reception time shall belong to the recording envelope and shall never appear as a header field.
+**Accept.** A derived data age of exactly zero occurs only where the two genuinely coincide and is distinguishable from unknown at every surface. No constructor, conversion or default takes reception time as validity time. The two names differ at every surface — type, export, evidence answer and log.
+**Verify.** T · `UT-BUS-02`   **Trace.** SYS-0030, SYS-0284; CN-0298, CN-0391
 **Now.** `DONE·MOVE` — `core/tick.py`'s `capture_ns: int | None` with `None` never replaced, plus `io/base.Capabilities.capture_time`; the rule and its tests are directly reusable.
+*Note:* the separation is by **location**, not only by value. Validity describes the data and travels with it; reception describes the recording and travels with the message. Putting reception in the header is what makes the two look interchangeable, and once they look interchangeable the defaulting this requirement forbids becomes an easy mistake to make rather than an unwritable one.
 
 **`SW-0045`** · `SI-02` · `P0` · `R1` — Data age is derived, never stored
 **Shall.** Data age shall be computed from validity time where known and from the hold schedule otherwise, and shall not be stored as an independent field.
@@ -688,10 +716,11 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Now.** `DONE·TWICE`, both wrong — `io/base.group_by_log_time` and `sil_host/src/recording_reader.cpp` both do exactly what this forbids. This is the single most consequential replacement in the migration.
 
 **`SW-0050`** · `SI-02` · `P0` · `R1` — The recovery ladder is ordered and declared
-**Shall.** Cycle structure shall be derived per port using the ordered ladder: (1) a source-provided cycle identifier; (2) the header cycle counter; (3) source time; (4) arrival time — descending to the next rung only when the one above is unavailable for that port.
-**Accept.** Each rung is individually exercised on a crafted recording. The rung used is reported per port in the run manifest.
+**Shall.** Cycle structure shall be derived per port using the ordered ladder: (1) a source-provided cycle identifier; (2) the header cycle counter; (3) source time; (4) reception time from the recording envelope — descending to the next rung only when the one above is unavailable **or demonstrably unsound** for that port.
+**Accept.** Each rung is individually exercised on a crafted recording. The rung used is reported per port in the run manifest. A port whose source time is not monotonic is demoted from rung 3 to rung 4, and the demotion is reported with the offending pair of stamps — never silently used, and never clamped into order.
 **Verify.** T · `UT-BUS-08`   **Trace.** SYS-0061; **evidence** SYS §2.1
 **Now.** `NEW`.
+*Note:* "unavailable" is not the only way a rung fails. A present but non-monotonic source time is worse than an absent one, because the ladder would otherwise claim rung 3's quality for data that cannot support it.
 
 **`SW-0051`** · `SI-02` · `P1` · `R1` — A rung may be forced downward, never upward, and is recorded
 **Shall.** A configuration may force a port to a lower rung than the recording supports; it shall not be able to claim a higher rung than the data provides.
@@ -729,7 +758,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Where a producer is not due, the bus shall present its last produced value marked not-updated with the exact elapsed nanoseconds since it was last produced.
 **Accept.** A consumer never observes a gap. Elapsed time is exact to the nanosecond and is derived from integers.
 **Verify.** T · `UT-BUS-14`   **Trace.** SYS-0070; CN-0332, CN-0333
-**Now.** `DONE·TWICE` — implemented in `contracts/pipeline.py::Pipeline.step` and in `sil_host/src/pipeline.cpp::Step`, and **called by neither driver**. Concept §22.2, confirmed in both files' own comments.
+**Now.** `DONE·TWICE` — implemented in `contracts/pipeline.py::Pipeline.step` and in `sil_host/src/pipeline.cpp::Step`. **Neither resim driver calls it**: both take the single-rate path, each citing the other's choice. The Python one is reached only from the recording path (`cli/run.py`, `sources/recorder.py`) and its unit tests, so the hold semantics are exercised but the loop that matters is not.
 
 **`SW-0057`** · `SI-02` · `P0` · `R1` — A consumer always receives its full port set
 **Shall.** A module shall receive a value for every port it declares, on every tick it executes, regardless of any producer's due-ness or mode.
@@ -790,7 +819,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The multi-rate scheduler shall be the only path by which a module is executed; no single-rate path shall exist.
 **Accept.** The engine contains one function that decides a module executes. Every test in the suite reaches it. A grep finds no alternative per-cycle execution route.
 **Verify.** A · `ANL-SW-17` · T · `UT-SCH-01`   **Trace.** SYS-0069; CN-0331; **defect** concept §22.2
-**Now.** `DONE·TWICE`, unused — both `Pipeline.exec`/`Pipeline.step` in Python and `Exec()`/`Step()` in C++ exist as a pair, and in both languages the *unused* one is the multi-rate one. Deleting the single-rate half in both is the whole of this requirement.
+**Now.** `DONE·TWICE` — both `Pipeline.exec`/`Pipeline.step` in Python and `Exec()`/`Step()` in C++ exist as a pair, and in both languages the resim driver takes the *single-rate* half. The Python multi-rate half survives only on the recording path, which two of the adopted scope decisions remove; deleting the single-rate half in both, and keeping the multi-rate half exercised while that happens, is the whole of this requirement.
 
 **`SW-0062`** · `SI-03` · `P0` · `R1` — The base grid is consumed, not computed
 **Shall.** The scheduler shall take the base grid step from the spec and shall not derive it.
@@ -810,11 +839,24 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Verify.** T · `UT-SCH-02`   **Trace.** SYS-0065, SYS-0066
 **Now.** `DONE·TWICE` — implemented in both `Pipeline.step` and `Pipeline::Step`.
 
-**`SW-0065`** · `SI-03` · `P0` · `R1` — The data-driven trigger is the default
-**Shall.** A module's default trigger shall be the arrival of new data on its declared key input, detected by the freshness key, with a periodic trigger available for modules that declare no key input.
-**Accept.** A module with a 20 ms input runs once per new value and not on repeats. A periodic module runs on its ticks regardless of arrivals.
-**Verify.** T · `UT-SCH-03`   **Trace.** SYS-0064, SYS-0065
+**`SW-0065`** · `SI-03` · `P0` · `R1` — The data-driven trigger is the default, and it is a predicate on a tick
+**Shall.** A module's default trigger shall be the arrival of new data on its declared key input, detected by the freshness key and evaluated on a simulation tick, with a periodic trigger available for modules that declare no key input. No trigger shall advance simulation time.
+**Accept.** A module with a 20 ms input runs once per new value and not on repeats. A periodic module runs on its ticks regardless of arrivals. Two arrivals inside one grid step produce one execution carrying the later value and a counted *coalesced arrival* finding — never two executions, and never a silent discard.
+**Verify.** T · `UT-SCH-03`   **Trace.** SYS-0064, SYS-0065, SYS-0283
 **Now.** `PARTIAL` — periodic triggering exists in both `step` implementations; the data-driven trigger does not exist in either.
+
+**`SW-0413`** · `SI-03` · `P0` · `R1` — Simulation time advances by one grid step and by nothing else
+**Shall.** The scheduler shall advance simulation time by exactly the spec's grid step per tick from the declared run start, and no arrival, reconstructed cycle boundary or module output shall move it.
+**Accept.** The tick sequence is the arithmetic sequence the grid step defines. A recording whose data is dense in one interval and sparse in another yields the same tick sequence as a uniform one. There is no code path that writes simulation time from a message timestamp.
+**Verify.** T · `UT-SCH-13` · A · `ANL-SW-75`   **Trace.** SYS-0283; CN-0392
+**Now.** `NEW` — today's tick index advances per grouped message set, so the recording's own density decides the tick sequence. That is the same defect as `SW-0049` seen from the scheduler's side.
+
+**`SW-0414`** · `SI-03` · `P0` · `R1` — A recorded rate that contradicts a declared period is reported, and the recording wins
+**Shall.** Where a `measured` module's reconstructed cycle structure places its outputs at a rate other than its declared period, the scheduler shall deliver them on the ticks the reconstruction places them on and report the disagreement naming both rates.
+**Accept.** A port declared at 20 ms and recorded at 25 ms is delivered on its recorded cadence, and both numbers reach the run manifest. No value is resampled, interpolated or dropped to make the recorded rate match the declared one.
+**Verify.** T · `UT-SCH-14`   **Trace.** SYS-0286; CN-0395
+**Now.** `NEW`.
+*Note:* the declared period says what the module would run at; the recording says what happened. Reshaping the second to match the first would be fabricating data to satisfy configuration, and the disagreement is itself the finding worth surfacing — it is usually a stale manifest or a degraded sensor.
 
 **`SW-0066`** · `SI-03` · `P0` · `R1` — The module's own update flag is authoritative
 **Shall.** Where a module's reported update flag disagrees with the predicted schedule, the module's flag shall be taken and the disagreement reported.
@@ -1500,10 +1542,10 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Now.** `DONE` — implemented as `<COMPONENT>_<FN>_PERIOD_US` in the bundle, surfaced through the generated manifest.
 
 **`SW-0164`** · `SI-10` · `P1` · `R1` — The configuration layer opens no payload
-**Shall.** `SI-10` shall not decode a message payload, load a module binary, or execute anything.
-**Accept.** A static check finds no codec payload access and no library load from the configuration layer.
-**Verify.** A · `ANL-SW-34`   **Trace.** SYS-0089, SYS-0202
-**Now.** `PARTIAL` — `contracts/pipeline.py` loads component libraries at load time to read their manifests, which is legitimate but must move behind `SI-13`.
+**Shall.** `SI-10`, `SI-11`, `SI-12` and `SI-14` shall not decode a message payload, open a recording, load a module binary, or execute anything; what they need about a file or a module shall reach them as the probe pass's data (`SW-0410`, `SW-0411`).
+**Accept.** A static check finds no codec payload access and no library load in any of the four. `SI-13` is the sole exception and is bounded by symbol rather than by folder (`SW-0409`).
+**Verify.** A · `ANL-SW-34`   **Trace.** SYS-0089, SYS-0202, SYS-0288
+**Now.** `PARTIAL` — `contracts/pipeline.py` loads component libraries at load time to read their manifests, which is the right operation in the wrong package.
 
 **`SW-0165`** · `SI-10` · `P1` · `R1` — A configuration set is validated with no recording and no binary present
 **Shall.** A fast validation mode shall check everything checkable without opening a recording or loading a module.
@@ -1569,11 +1611,12 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Verify.** T · `UT-GRF-10`   **Trace.** SYS-0066
 **Now.** `DONE·TWICE` — computed in `contracts/pipeline.py` and again in C++; the Python one survives (`SW-0006`, `SW-0062`).
 
-**`SW-0173`** · `SI-11` · `P2` · `R1` — Snapping is permitted, bounded and always printed
-**Shall.** A configured snap tolerance may align near-equal periods, and every applied snap shall be printed with both values.
-**Accept.** Snapping is reported with the original and the snapped value. With tolerance zero, the same input is a load error.
-**Verify.** T · `UT-GRF-11`   **Trace.** SYS-0068
+**`SW-0173`** · `SI-11` · `P0` · `R1` — No tolerance makes a period fit the grid
+**Shall.** `SI-11` shall provide no snap tolerance, no nearest-multiple correction and no rounding of any kind on a declared period; a period that is not an integer multiple of the derived grid shall be refused naming both integers.
+**Accept.** No configuration key can cause 19.99 ms to be accepted beside 20 ms. The refusal names both values and the grid they were checked against.
+**Verify.** T · `UT-GRF-11`   **Trace.** SYS-0066; CN-0394
 **Now.** `NEW`.
+*Note:* a rounded period does not stay a rounding — it accumulates, and it surfaces as a module producing values at the wrong moments, which reads as a defect in the module rather than in the scheduling that caused it. That is why this is stated as a prohibition on the tool rather than as advice to the user.
 
 ### 15.1 Coherence
 
@@ -3168,13 +3211,14 @@ section, SYS §26 and the Design's `DD-nn` statuses, assembled so that answering
 is one pass instead of four. That document is a view; **this section stays
 authoritative** for the `SWQ-nn` below.
 
-**As of 2026-08-11: §34.2's eight are all closed** by design decisions that have
-since been confirmed. What remains open is §34.1's inherited set, minus `OQ-08`
-(the format list — MCAP, MDF4, TDMS).
+**As of 2026-08-12: §34.2's eight are all closed** by design decisions that have
+since been confirmed, and §34.3 records six further questions that arose from
+reading the decomposition against itself — every one of them closed here. What
+remains open is §34.1's inherited set, minus the five closed in SYS §26.
 
 ### 34.1 Inherited, and blocking
 
-All twenty-two of the System Requirements' open questions (SYS §26) are inherited. **`OQ-08` closed 2026-08-11** (the format list: MCAP interchange, MDF4 vehicle measurement, TDMS bench capture), leaving twenty-one, of which four block baselining there and therefore here. Two of them change this document's content rather than only its numbers:
+The System Requirements' open questions (SYS §26) are inherited. **Five have closed** — `OQ-08` (the format list: MCAP interchange, MDF4 vehicle measurement, TDMS bench capture), `OQ-03`, `OQ-13`, `OQ-20` and `OQ-21` — leaving seventeen, of which five are baselining gates there and therefore here. Two of them change this document's content rather than only its numbers:
 
 | ID | Question | What it changes here |
 |---|---|---|
@@ -3182,7 +3226,7 @@ All twenty-two of the System Requirements' open questions (SYS §26) are inherit
 | `OQ-11` | Does an internal port model or signal catalogue already exist that should be adopted rather than defined? | **Adopting beats defining.** This must be asked before `SI-19`'s port model is authored, and the answer changes `SW-0383`'s scope substantially |
 | `OQ-14` | The numbers for per-cycle cost, campaign throughput and frame time | `SW-0369`, `SW-0323`, `SW-0272` cannot be failed without them |
 | `OQ-16` | The stated set of common configuration changes and each one's time budget | `SW-0348` cannot be failed without them |
-| `OQ-17` | Are there tool qualification or functional-safety process constraints? | Potentially the requirement style, the verification evidence and the documentation set. Answer early |
+| `OQ-17` | Are there tool qualification or functional-safety process constraints? | Potentially the requirement style, the verification evidence and the documentation set. It is a **baselining gate with a written fallback** (SYS §26): unanswered by the time the seam is built, the chain is developed in the present style and re-styling is accepted as a known, scoped cost |
 
 ### 34.2 New, arising from the decomposition — all eight closed
 
@@ -3200,6 +3244,26 @@ All twenty-two of the System Requirements' open questions (SYS §26) are inherit
 | `SWQ-08` | Does per-stage isolation reuse the module ABI over a pipe, or need out-of-process hosting? | `DD-09` — the module ABI over a pipe, hosted by a second `simengine` in single-stage mode. `SYS-0058`'s deferral is untouched |
 
 **`SWQ-01` was the one where the wrong answer would have been expensive to reverse**, which is why the Design closed it first and marked it `ADOPTED` rather than `CONFIRM`.
+
+### 34.3 Arising from reading the decomposition against itself — all six closed
+
+Six questions that no document asked, because each is invisible while only one
+document is open. Every one is answered above; they are listed so that the
+answer is legible as a decision rather than as a sentence somebody happened to
+write.
+
+| ID | The question | Closed by |
+|---|---|---|
+| `SWQ-09` | **How does simulation time advance?** Three requirements decide that a module runs — data arrival, a declared period, and a `measured` module's recorded rate — and none of them says what one tick *is*. On a self-produced recording all three agree by construction; on a foreign recording they cannot | `SW-0413` — one grid step per tick, from the run start, moved by nothing else. `SW-0065` makes the data-driven trigger a predicate on a tick rather than a second clock, and `SW-0414` gives the recording the last word where a recorded rate contradicts a declared one |
+| `SWQ-10` | **Does a data-driven module's period enter the base grid?** If it does not, the grid can be coarser than that module's own data and the trigger predicate silently coalesces arrivals it should have seen separately | `SW-0006` — every module's declared period enters the grid whatever triggers it; no static port does. The period says how fine the grid must be; the trigger says whether this tick counts |
+| `SWQ-11` | **Is a near-equal period snapped to fit the grid, or refused?** Two requirements answered this in opposite directions | `SW-0173` — refused, naming both integers, with no tolerance key anywhere. A rounded period accumulates into drift that reads as a defect in the module rather than in the scheduling that caused it |
+| `SWQ-12` | **Who reads what is inside a recording, before the run?** Cut feasibility, `measured`-mode validation and ingest-family matching all need a file's topic list, and all three live in items forbidden to open a file | `SW-0410`, `SW-0411` — `SI-13` produces a recording index and a module manifest as plain data through the same interfaces the run uses; every consumer receives them as arguments and opens nothing |
+| `SWQ-13` | **Is the spec emitted in one pass or two?** Several of its fields cannot be filled without knowing what a file contains, which the emitting layer is not allowed to open | `SW-0410` and `SW-0412` — two passes, probe then emit, with every probed recording's hash carried in the spec so a spec cannot be executed against a file it was not emitted against |
+| `SWQ-14` | **May the configuration layer bind the C interface at all?** It must, to read a manifest — and the obvious check forbids exactly that | `SW-0409` — yes, in `SI-13` only, bounded **by symbol**: manifest, version and describe may be called; initialise, execute, shutdown and step may not. Forbidding execution by symbol is stricter than forbidding the binding by folder, and it is the form that survives the probe pass existing |
+
+**Five of the six are one question wearing different clothes:** *what does the
+configuration layer know, and how did it find out?* The seam was specified as a
+document handed downward, and these are the inputs the document itself needs.
 
 ---
 

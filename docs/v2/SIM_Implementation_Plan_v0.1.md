@@ -27,14 +27,16 @@ At the time of writing that is **`WP-01`**, and `WP-01` is CI and the check harn
 
 #### The AI-operational-layer files that must change, and when
 
-Root `.claude/` is **root-canonical** (`docs/ai_operational_layer_spec.md`) and is changed *only on extreme need*. Three rules and one module file currently describe an architecture this plan replaces, so they would actively mislead. **They change inside `WP-02`, with the code they govern — never before it.** A rule edited ahead of its code describes a state that does not exist, which is the same defect as a rule edited after.
+Root `.claude/` is **root-canonical** (`docs/ai_operational_layer_spec.md`) and is changed *only on extreme need*. Five rules and one module file currently describe an architecture this plan replaces, so they would actively mislead. **They change inside `WP-02`, with the code they govern — never before it.** A rule edited ahead of its code describes a state that does not exist, which is the same defect as a rule edited after.
 
 | File | What must change | Why it is extreme need |
 |---|---|---|
 | `.claude/rules/sim.md` — `R-SIM-13` | Delete the corollary *"CARLA is a server we drive"*. Foreign simulators reach the system **only** as a codec plus an ingest map (`SYS-0109`). | It names a live-integration path `DD-12` removes. An implementer reading it would build the thing being deleted. |
 | `.claude/rules/sim.md` — `R-SIM-14` | Delete *"Keep `io/` (format codecs) distinct from `sources/` (world-model clients)"*. There is no `sources/`. | It mandates an abstraction that no longer exists. |
 | `.claude/rules/sim.md` — `R-SIM-9` | Drop the `modules/sim/…/sources/<world>/` path from the reusable-sensor-model sentence. | The path is gone; the rest of the rule stands unchanged. |
-| `modules/sim/CLAUDE.md` | Same `io/`-vs-`sources/` clause; **and** the doc pointers, which name `docs/sim_*.md` while those files are now `docs/v1/` and the live set is `docs/v2/`. | This is the first file an implementation session reads. Pointing it at the superseded set is the highest-leverage way to waste a session. |
+| `.claude/rules/sim.md` — `R-SIM-5` | The three-way *sim / resim / replay* distinction keeps its shape, but *sim* no longer means *"live world model, non-deterministic"* — there is no live world model. Restate it as a run that **produces** a recording while executing (`SW-0233`'s middle verb), which is what remains true. | A branch of a normative distinction that names nothing is worse than a missing one: it reads as a capability that must exist somewhere. |
+| `.claude/rules/sim.md` — `R-SIM-18` | The rule says a period that is not an integer multiple of the grid is a load error *"never rounded"*, which is now the whole answer — the snap tolerance that stood beside it is gone (`SW-0173`). Delete nothing; add that no tolerance key exists. | The rule and the requirement set previously gave opposite instructions on the same input. Only one can be followed. |
+| `modules/sim/CLAUDE.md` | Same `io/`-vs-`sources/` clause; **and** the doc pointers, which name `docs/sim_*.md` while those files are now `docs/v1/` and the live set is `docs/v2/`; **and** the product names, now that the requirement documents use neutral role names and the interface keeps its own (`OQ-20`). | This is the first file an implementation session reads. Pointing it at the superseded set is the highest-leverage way to waste a session. |
 
 **No skill, template or workflow needs changing.** `skills/c_api_dll_pattern.md`, `skills/sil_python_binding.md`, `skills/sim_scene_layers.md` and `workflows/add_sim_layer.md` mention CARLA only as incidental examples referring to `modules/df/tools/carla/` — a **df-side legacy tool**, outside this module and outside this plan's scope. Checked 2026-08-10.
 
@@ -59,7 +61,7 @@ A `WP` box is ticked when its **Exit** gate passes, never when its files exist.
 | Prefix | Means | Allocated by |
 |---|---|---|
 | `MP-0`…`MP-6` | Migration phase, from concept §23 unchanged | Concept |
-| `WP-01`…`WP-31` | Work package. Stable; a dissolved package's number is retired | This document |
+| `WP-01`…`WP-31` | Work package. Stable; a dissolved package's number is retired. A package inserted after numbering is **lettered** (`WP-15a`) rather than renumbered, so §0.1's *lowest-numbered unticked package* rule keeps pointing at the right work | This document |
 | `IMP-nnnn` | Implementation design requirement | Implementation Design |
 | `SW-nnnn` / `SYS-nnnn` / `CN-nnnn` | Requirement UIDs | Their own documents |
 
@@ -84,8 +86,8 @@ Concept §23's seven phases, unchanged, with the packages that belong to each.
 | Phase | Goal | Packages | Ends when |
 |---|---|---|---|
 | **`MP-0`** — Freeze the seam | Stop the drift | `WP-01`…`WP-05` | The Resolved Run Spec exists and the engine reads nothing else |
-| **`MP-1`** — Fix the clock | Make foreign data possible | `WP-06`…`WP-12` | A recording the framework did not produce reconstructs into cycles correctly |
-| **`MP-2`** — Fix the reader, one engine | Make real recordings possible | `WP-13`…`WP-19` | `sil_host` is retired and no capability has two implementations |
+| **`MP-1`** — Fix the clock | Make foreign data possible | `WP-06`…`WP-12` | A recording the framework did not produce reconstructs into cycles correctly — **provisionally**, against a crafted fixture; confirmed at `WP-18` against a real one |
+| **`MP-2`** — Fix the reader, one engine | Make real recordings possible | `WP-13`…`WP-19`, incl. `WP-15a` | `sil_host` is retired and no capability has two implementations |
 | **`MP-3`** — Fix coherence | Make results trustworthy | `WP-20`…`WP-24` | Transitive staleness blocks a broken chain before it produces a wrong answer |
 | **`MP-4`** — Split the process | Make batch and CI real | `WP-25`…`WP-29` | The player attaches to a running engine over a transport |
 | **`MP-5`** — Images | Make multi-camera possible | `WP-30` | A multi-camera recording opens without materialising |
@@ -101,7 +103,7 @@ Six. Each has a stated failure if violated.
 | **O-2** | **The seam (`WP-05`) precedes every deletion.** | Until the Resolved Run Spec exists, the engine has nothing else to read, so nothing on the C++ side can be removed. SwReq §32.5 states this first. |
 | **O-3** | **The signal header (`WP-07`) precedes the cycle ladder (`WP-08`).** | `DD-11`. `SW-0050`'s ladder reads three of the header's eight fields; the header is the ladder's input, not its peer. |
 | **O-4** | **`WP-07`/`WP-08` precede everything measurable.** | SwReq §32.5: they are what the largest number of other requirements depend on. *"They are not the easiest first stage. They are the one whose absence makes the rest unmeasurable."* |
-| **O-5** | **`WP-16` (deletion) is last in `MP-2` and does nothing but delete.** | `SW-0019`. Every move carries its tests with it, so the survivor is already passing the retiring implementation's corpus before anything is removed. |
+| **O-5** | **`WP-16` (deletion) is last in `MP-2`, does nothing but delete, and cannot begin until `WP-15a` is green.** | `SW-0019`. Every move carries its tests with it, so the survivor is already passing the retiring implementation's corpus before anything is removed — and `WP-15a` is where that is *proven*, in front of the deletion rather than inside it. |
 | **O-6** | **`SWQ-01` (`DD-01`) closes before `WP-03`.** | SwReq §34.2: *"the only one where the wrong answer is expensive to reverse."* |
 
 ### 1.3 The dependency graph
@@ -125,8 +127,10 @@ flowchart LR
   W11 --> W13
   W13 --> W14["WP-14 simengine + C ABI"]
   W13 --> W15["WP-15 engine diagnostics"]
+  W10 --> W15a["WP-15a EQUIVALENCE GATE"]
   W14 --> W16["WP-16 DELETION"]
   W15 --> W16
+  W15a --> W16
   W12 --> W16
   W16 --> W17["WP-17 index/seek"]
   W17 --> W18["WP-18 codecs/export"]
@@ -156,8 +160,11 @@ flowchart LR
 - [ ] **Lands:** `IMP-0020`, `IMP-0357`, `IMP-0361`, `IMP-0366`, `IMP-0367`, `IMP-0370`…`IMP-0376`, `IMP-0378`, `IMP-0383`, `IMP-0408` — 15.
 - [ ] **Files:** `.github/workflows/*` · `scripts/check_no_duplication.py` · `check_closed_sets.py` · `check_imports.py` · `check_trace.py` · `check_headers.py` · `check_time_units.py` · `measure.py` · `docs/v2/py/trace_check.py` · a planted-violation test per check.
 - [ ] **Exit:** the suite runs on **Windows and Linux** and compares (`IMP-0366`); every `scripts/check_*.py` has a planted-violation test that fails when it should (`IMP-0370`); `trace_check.py` reports `CN → SYS → SW → IMP → WP → test` closed with SwReq §32.3's five unparented requirements listed as **known** rather than passed.
+- [ ] **Exit:** every check reports **how many files it scanned**, and a check that scanned zero reports `SKIPPED`, never `PASSED`. Every path a check names is asserted to exist in the tree.
 
 > **Why this is first and not last.** Every negative check in this plan — no second implementation, no Python on the per-message path, no GCD in the engine, no component name in the framework — is worthless if it is written after the thing it forbids. Written now, each is green today and turns red at the exact commit that breaks it.
+
+> **And why the scan count is part of the gate.** Half of these checks govern C++ that does not exist until `WP-03`, and one walks a per-tick call graph that does not exist until `WP-13`. Their planted-violation tests prove the *check* works; they do not prove it is pointed at anything. A green check that scanned nothing is indistinguishable from a green check that scanned everything, and it stays indistinguishable right up to the day it should have failed — which is the same failure a check written after its code has, arriving by a different route. A misspelt or superseded path is the ordinary way this happens, so the path assertion is not defensive: it is the check on the checks.
 
 ### WP-02 · `MP-0` · Python restructure, world-model removal, archive
 - [ ] **Prereq:** `WP-01` (the import-direction and name checks must exist before the imports move).
@@ -174,6 +181,7 @@ flowchart LR
 - [ ] Delete `tests/unit/test_c2_carla_actor_behaviour.py`, `test_c2_carla_frame_convert.py`, `test_c2_carla_portability.py`.
 - [ ] Move `sources/recorder.py` → `io/recorder.py`; move `sources/synthetic.py` → `tests/fixtures/make_synthetic_mcap.py`. Delete the now-empty `sources/` package.
 - [ ] Remove the wiring: `cli/record.py` (`--source carla`, the `CarlaSource` import, `--component-lib` gating), `cli/run.py`'s `--source`.
+- [ ] **Keep `io/recorder.py` driving `Pipeline.step`.** It is the only remaining caller of the multi-rate path, and `WP-09` is where its replacement lands. Move the module; do not unwire the call.
 - [ ] Remove `contracts/scenario.py`'s `carla:` / `world:` blocks — world bindings describe a world nobody drives. `run.faults` and the sensor-error-model sections **stay**: they apply to recorded data and are still meaningful.
 - [ ] Strip the name from comments in `io/base.py`, `io/ingest.py`, `model/objects.py`, `sources/recorder.py`, and from `scripts/{check_invariants,ci_gate,gui}.py`, `scripts/gui_config.json`, `vantage.bat`, `tests/fixtures/scenarios/*.yaml`.
 - [ ] `DD-14`: remove `record` from the verb set; `convert`/`run`/`resim` are `SW-0233`'s three.
@@ -189,6 +197,8 @@ flowchart LR
 - [ ] **Exit:** the full existing suite green before and after, minus the three deleted CARLA tests; `ANL-SW-27` confirms nothing under `src/` imports `contrib`; the extended name check is green and its planted-violation test fails as designed; a grep for the world-model client's name over `src/`, `scripts/`, `tests/` and `docs/v2/` returns nothing.
 
 > **Do (a) in one commit.** A rename that is 90% done is worse than one not started: for the duration both layouts are live and every subsequent merge conflicts. **(b), (c) and (d) are separate commits** — a deletion mixed into a rename is a deletion nobody can review, and the whole argument for `SW-0019` is that removals are visible.
+
+> **The one thing (b) must not take with it.** `Pipeline.step` — the multi-rate path — is reached in production only from `cli/run.py` and `sources/recorder.py`. Removing both here would leave the migration with **no** integration-level exercise of multi-rate stepping from `WP-02` until `WP-09`, running for two phases on the single-rate path that `SW-0061` exists to abolish, which is `CN-0360` violated in the one place it matters most. The recorder moves to `io/` in (a) and keeps calling `step`; it stops when `WP-09`'s scheduler replaces it, and the retirement of its own driver is `WP-16`'s business like every other deletion.
 
 ### WP-03 · `MP-0` · The C++ subtree, and the error taxonomy
 - [ ] **Prereq:** `WP-02`; **and `SWQ-01` closed** (`O-6`).
@@ -206,7 +216,10 @@ flowchart LR
 - [ ] **Prereq:** `WP-03`, `WP-04`. **This is `O-2`: nothing is deleted before this exists.**
 - [ ] **Lands:** `IMP-0001`…`IMP-0012` — 12.
 - [ ] **Files:** `adas_sim/runspec/{emit,canon,address}.py` · `runspec/schema/run_spec.schema.json` · `include/simcore/runspec.hpp` + `src/simcore/runspec/load.cpp` · `src/simcore/third_party/` (single-header JSON, `DD-02`).
+- [ ] **Lands:** `IMP-0412` — the emitted spec carries each source's content hash and `LoadRunSpec` refuses a mismatch naming both digests.
 - [ ] **Exit:** `IT-01` — the engine runs with the configuration source tree **deleted**, only the spec, the named recordings and the named binaries present, and produces identical port values. `ANL-SW-01` reports zero unresolved constructs in an emitted spec.
+
+> **Emission is two passes, and the first one is borrowed until `WP-21`.** Several spec fields cannot be filled from configuration alone — the timing rung a topic supports, the ports a file never carries, a module's declared period and ABI version. `emit.py` therefore probes before it resolves (Design §3.3a). The probe's permanent home is `resolve/probe.py` at `WP-21`; until then it calls today's Python equivalents, exactly as `IMP-0003` calls today's `resolve_library` before `WP-21` re-homes that too. Borrowing an existing implementation is not the same as building a second one, and `ANL-SW-10` is what keeps the distinction honest.
 
 > **`MP-0` ends here.** From this point one implementation per concept is enforceable, because there is finally something for the engine to read that is not a configuration file.
 
@@ -240,9 +253,10 @@ flowchart LR
 
 ### WP-09 · `MP-1` · `SI-03` `scheduler`
 - [ ] **Prereq:** `WP-08`.
-- [ ] **Lands:** `IMP-0056`…`IMP-0058`, `IMP-0061`, `IMP-0062`, `IMP-0064`…`IMP-0068`, `IMP-0070`, `IMP-0072`, `IMP-0073`, `IMP-0075`, `IMP-0077` — 15.
+- [ ] **Lands:** `IMP-0056`…`IMP-0058`, `IMP-0061`, `IMP-0062`, `IMP-0064`…`IMP-0068`, `IMP-0070`, `IMP-0072`, `IMP-0073`, `IMP-0075`, `IMP-0077`, `IMP-0413`, `IMP-0414` — 17.
 - [ ] **Files:** `include/simcore/scheduler.hpp` · `src/simcore/scheduler/{due,sample,order,reconcile}.cpp` · `src/simcore/bus/port_bus.cpp` · `sil_host/src/pipeline.cpp`'s **`Step()` moved**.
-- [ ] **Exit:** `ANL-SW-17` — exactly one stepping entry point. `ANL-SW-02` — no GCD, snap or unit conversion anywhere in `simcore`. **The multi-rate path is the only path**, closing concept §22.2's *implemented twice, used never*.
+- [ ] **Exit:** `ANL-SW-17` — exactly one stepping entry point. `ANL-SW-02` — no GCD, snap or unit conversion anywhere in `simcore`. **The multi-rate path is the only path**, closing concept §22.2's *implemented twice, never on the path that matters*.
+- [ ] **Exit:** `ANL-SW-75` — `Advance()` is the only writer of simulation time, and no message timestamp is ever assigned to it. One clock; a fresh key input and a due period are both `const` predicates over it, and a `measured` stage's recorded cadence is reconciled against its declared period rather than either overwriting the other silently.
 
 ### WP-10 · `MP-1` · `SI-04` `module_host`
 - [ ] **Prereq:** `WP-03` (needs the taxonomy and the build, not the scheduler).
@@ -285,10 +299,17 @@ flowchart LR
 - [ ] **Files:** `include/simcore/diagnostics.hpp` · `src/simcore/diagnostics/{graph_dump,trace,cost,modules,breakpoints,reproducer}.cpp` · **from** `sil_host/src/graph_dump.cpp`.
 - [ ] **Exit:** `IT-10` — the engine's own graph-and-schedule dump diffs clean against the configuration layer's prediction. **A disagreement is a defect in the seam, and this is how it is caught** (`CN-0386`). Bytes read is counted, not estimated, so `WP-17` and `WP-30` have something to assert against.
 
+### WP-15a · `MP-2` · The equivalence gate
+- [ ] **Prereq:** `WP-10` (the module host is the last capability whose corpus must pass before anything is removed).
+- [ ] **Lands:** `IMP-0019` — 1.
+- [ ] **Files:** `scripts/prove_equal.py` · `scripts/check_coverage_delta.py`.
+- [ ] **Exit:** the report is produced and **is green** — zero unexplained failures across all seven rows of Design §28.3, each retiring implementation's own corpus run against its survivor, with any difference recorded as a deliberate behaviour change and a reason. `ANL-SW-09` fails the build if coverage decreases across a deletion.
+
+> **Why this is a package and not a line inside `WP-16`.** It gates the removal of ~2,500 lines and a whole module, and risk `R-2` is that it gets started before the gate is clean *because the deletions look obvious*. A gate written inside the package it guards is opened by whoever opens the package. As its own `WP` it is a **ticked prerequisite**, which is the only mechanism this plan trusts anywhere else. It is lettered rather than numbered so that §0.1's *"lowest-numbered unticked package"* rule keeps pointing at the right work.
+
 ### WP-16 · `MP-2` · **DELETION** — retire `sil_host`, end seven duplications
-- [ ] **Prereq:** `WP-12`, `WP-14`, `WP-15`. **`O-5`: this package does nothing but delete.**
-- [ ] **Gate first:** `scripts/prove_equal.py` (`IMP-0019`) reports **zero unexplained failures** across all seven rows of Design §28.3. Any failure is either fixed or recorded as a deliberate behaviour change with a reason. Coverage does not decrease.
-- [ ] **Lands:** `IMP-0013`, `IMP-0018`, `IMP-0019` — 3.  The package's real content is Design 28.1's table.
+- [ ] **Prereq:** `WP-12`, `WP-14`, `WP-15`, **`WP-15a` ticked and green**. **`O-5`: this package does nothing but delete.**
+- [ ] **Lands:** `IMP-0013`, `IMP-0018` — 2.  The package's real content is Design 28.1's table.
 - [ ] **Delete:**
   - [ ] `core/runner.py` (351), `core/resim.py` (257)
   - [ ] `contracts/component.py`'s execution path (~300 of 519) — the probe path survives
@@ -313,6 +334,7 @@ flowchart LR
 - [ ] **Lands:** `IMP-0042`, `IMP-0381`, `IMP-0384`…`IMP-0386` — 5.
 - [ ] **Files:** `src/simcore/io/codecs/{csv_writer,parquet_writer}.cpp` · `src/simcore/io/{export,merged_output}.cpp` · `codecs/{mf4,pxi}.cpp` **when, and only when, a sample file exists**.
 - [ ] **Exit, unconditional:** three export targets; Parquet registered **write-only** so the loader refuses it as a resim input by capability rather than by convention. `E2E-07`'s merged output loads on its own with no other input.
+- [ ] **Exit, conditional (`DD-13`):** re-run `UT-BUS-07`…`UT-BUS-13` against the **real** sample, not the crafted fixture. Any rung that behaves differently reopens `WP-08`; it is not a `WP-18` finding. This is where `MP-1`'s provisional exit becomes a real one.
 - [ ] **Exit, conditional (`DD-13`):** `SW-0381`'s second and third readers. **Blocked on an input this project does not have** — there is no MDF4 and no TDMS sample in hand (the three formats were named 2026-08-11: MCAP interchange, MDF4 measurement, TDMS bench capture). A reader written against a specification and no file is a reader that fails on the first real file, and `F-FOREIGN`, which the whole of `MP-1` is validated against, would have to be synthesised from the same guess. Ship MCAP; add each of the other two the week its first sample arrives.
 
 ### WP-19 · `MP-2` · `SI-16` `prep`
@@ -327,7 +349,7 @@ flowchart LR
 
 ### WP-20 · `MP-3` · `SI-11` `graph` — wiring and **transitive** coherence
 - [ ] **Prereq:** `WP-16`.
-- [ ] **Lands:** `IMP-0063`, `IMP-0074`, `IMP-0111`, `IMP-0115`, `IMP-0167`…`IMP-0186`, `IMP-0400` — 25.
+- [ ] **Lands:** `IMP-0063`, `IMP-0074`, `IMP-0111`, `IMP-0115`, `IMP-0167`…`IMP-0186`, `IMP-0400`, `IMP-0411` — 26.
 - [ ] **Files:** `adas_sim/graph/{build,grid,coherence,waiver,feasible,modes,catalogue,record_policy}.py` — from `contracts/pipeline.py`'s graph half.
 - [ ] **Exit:** `UT-GRF-12`/`UT-GRF-13` use the concept's own case — **simulate → measured → measured → simulate** — and it is detected in both directions. Three outcomes, never two. A broken chain blocks naming the path and the landing point; a waiver needs a flag *and* a written reason and marks permanently.
 
@@ -335,9 +357,10 @@ flowchart LR
 
 ### WP-21 · `MP-3` · `SI-13` `resolve`
 - [ ] **Prereq:** `WP-20`.
-- [ ] **Lands:** `IMP-0194`, `IMP-0203`…`IMP-0214` — 13.
+- [ ] **Lands:** `IMP-0194`, `IMP-0203`…`IMP-0214`, `IMP-0409`, `IMP-0410` — 15.
 - [ ] **Files:** `adas_sim/resolve/{library,bundle,plugins,component,order}.py`.
 - [ ] **Exit:** `ANL-SW-38` — all three resolvers return the same `Resolution[...]` shape through one shared helper. `ANL-SW-37` — `resolve_library` is called from exactly one place, and its result is what the spec, the manifest and the launcher all read.
+- [ ] **Exit:** `ANL-SW-07` is now a **symbol** scan. `resolve/probe.py` is the one binding outside `pyapi/` and `transport/`; `Describe`, `adasManifest` and `adasAbiVersion` are reachable from it and no execute, initialise, shutdown or step entry point is reachable from the configuration layer at all. The probe returns frozen structures, so `ANL-SW-34` stays green with `graph/` and `ingest/` importing nothing.
 
 ### WP-22 · `MP-3` · `SI-14` — the run manifest
 - [ ] **Prereq:** `WP-21`.
@@ -425,14 +448,14 @@ flowchart LR
 |---|---:|---:|
 | `MP-0` Freeze the seam | 5 | 0 / 5 |
 | `MP-1` Fix the clock | 7 | 0 / 7 |
-| `MP-2` Fix the reader | 7 | 0 / 7 |
+| `MP-2` Fix the reader | 8 | 0 / 8 |
 | `MP-3` Fix coherence | 5 | 0 / 5 |
 | `MP-4` Split the process | 5 | 0 / 5 |
 | `MP-5` Images | 1 | 0 / 1 |
 | `MP-6` Package | 1 | 0 / 1 |
-| **Total** | **31** | **0 / 31** |
+| **Total** | **32** | **0 / 32** |
 
-Counted by `docs/v2/py/trace_check.py --progress`, which reads the checkboxes above. It counts boxes; it makes no claim about verification (§0.4).
+Counted by `docs/v2/py/trace_check.py --progress`, which reads the checkboxes above. It counts boxes; it makes no claim about verification (§0.4). **Every count in §8 is emitted by that script, never typed** — a hand-typed total is the same second stored copy `SW-0373` forbids, one category smaller.
 
 ### 8.2 Work by package
 
@@ -441,21 +464,22 @@ Counted by `docs/v2/py/trace_check.py --progress`, which reads the checkboxes ab
 | `WP-01` | `MP-0` | 15 | `WP-17` | `MP-2` | 7 |
 | `WP-02` | `MP-0` | 1 | `WP-18` | `MP-2` | 5 |
 | `WP-03` | `MP-0` | 9 | `WP-19` | `MP-2` | 14 |
-| `WP-04` | `MP-0` | 20 | `WP-20` | `MP-3` | 25 |
-| `WP-05` | `MP-0` | 12 | `WP-21` | `MP-3` | 13 |
+| `WP-04` | `MP-0` | 20 | `WP-20` | `MP-3` | 26 |
+| `WP-05` | `MP-0` | 13 | `WP-21` | `MP-3` | 15 |
 | `WP-06` | `MP-1` | 14 | `WP-22` | `MP-3` | 15 |
 | `WP-07` | `MP-1` | 11 | `WP-23` | `MP-3` | 26 |
 | `WP-08` | `MP-1` | 8 | `WP-24` | `MP-3` | 17 |
-| `WP-09` | `MP-1` | 15 | `WP-25` | `MP-4` | 15 |
+| `WP-09` | `MP-1` | 17 | `WP-25` | `MP-4` | 15 |
 | `WP-10` | `MP-1` | 21 | `WP-26` | `MP-4` | 40 |
 | `WP-11` | `MP-1` | 12 | `WP-27` | `MP-4` | 10 |
 | `WP-12` | `MP-1` | 15 | `WP-28` | `MP-4` | 7 |
 | `WP-13` | `MP-2` | 10 | `WP-29` | `MP-4` | 9 |
 | `WP-14` | `MP-2` | 10 | `WP-30` | `MP-5` | 5 |
 | `WP-15` | `MP-2` | 11 | `WP-31` | `MP-6` | 12 |
-| `WP-16` | `MP-2` | 3  + the deletion ledger | — | — | — |
+| `WP-15a` | `MP-2` | 1 | — | — | — |
+| `WP-16` | `MP-2` | 2  + the deletion ledger | — | — | — |
 
-**`WP-16`'s three is not a mistake.** A deletion package lands almost no new design requirements; its content is Design §28.3's ledger and its weight is the gate in front of it.
+**`WP-16`'s two is not a mistake, and neither is `WP-15a`'s one.** A deletion package lands almost no new design requirements; its content is Design §28.3's ledger and its weight is the gate in front of it — which is now `WP-15a`, a package whose single requirement is the gate itself.
 
 ### 8.3 Where a finding goes
 
@@ -477,9 +501,11 @@ A finding recorded only in a plan is a finding the next reader of the requiremen
 | # | Risk | Impact | Mitigation |
 |---|---|---|---|
 | R-1 | **`WP-02`'s rename stalls half-done**, leaving two layouts live and every merge conflicting | High | One commit, no behaviour change, full suite green either side. If it cannot be one commit, it is not ready to start |
-| R-2 | **`WP-16` is started before `prove_equal.py` is clean**, because the deletions look obvious | Very high | The gate is written into the package as its first line; `ANL-SW-09` fails the build if coverage decreases across a deletion |
+| R-2 | **`WP-16` is started before `prove_equal.py` is clean**, because the deletions look obvious | Very high | The gate is its own package (`WP-15a`) and therefore a ticked prerequisite, not a line inside the package it guards; `ANL-SW-09` fails the build if coverage decreases across a deletion |
 | R-3 | **`DD-04` is reversed after `WP-16`**, requiring a second Python codec to be rebuilt | High | Close it at review, before `WP-06`. It is Assumption A-2 and the cheapest point to overturn it is now |
 | R-4 | **`OQ-14`'s numbers never arrive**, so three performance requirements can never be failed | Medium | The harnesses are built regardless (`WP-24`, `WP-26`, `WP-31`) so the number is a configuration change, not a build. But *a requirement nobody can fail is a requirement that will be declared satisfied* |
 | R-5 | **`WP-26`'s viewer split quietly re-couples panels to Qt** under schedule pressure | Medium | `IMP-0326`'s no-window unit tests exist before the split, not after |
 | R-6 | **The `P0` distortion is inherited and never re-triaged** — 229 of 408 marked `P0` | Medium | SYS §0.6 records it as a customer decision. When SYS is re-triaged both columns re-derive mechanically. Until then, **this plan's order is the real priority signal**, and it is ordered by dependency rather than by label |
 | R-7 | **`contrib/check/` becomes permanent by silence** | Low | `WP-31` forces the decision: claimed or deleted |
+| R-8 | **`MP-1` is declared finished against a fixture the team wrote itself.** `F-FOREIGN` encodes the same assumptions the recovery ladder does, so it validates the guess rather than the data | High | `MP-1`'s exit is **provisional** and `WP-18` carries the re-validation box; a rung that behaves differently against a real sample reopens `WP-08`. Ten seconds of real bench capture retires this entirely, which is why `OQ-09` is worth more than its position in the register suggests |
+| R-9 | **A negative check passes because it scanned nothing** — a superseded or misspelt path, a tree that does not exist yet | High | `WP-01`'s exit: every check reports its scan count, zero reports `SKIPPED` rather than `PASSED`, and every path a check names is asserted to exist |
