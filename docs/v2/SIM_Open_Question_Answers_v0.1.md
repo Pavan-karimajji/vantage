@@ -46,7 +46,7 @@ Six groups, twenty rows.
 
 | # | Group | Rows | What the group turns on |
 |---|---|---|---|
-| `G1` | **The clocks** | `IFQ-01` `IFQ-02` `IFQ-06` `OQ-01` | Time is declared in one unit, converted in one place, and degraded explicitly — never estimated |
+| `G1` | **The clocks** | `IFQ-01` *(+ 3 written back)* | Time is declared in one unit, converted in one place, and degraded explicitly — never estimated |
 | `G2` | **What the compiled contract can already do** | `OQ-05` `OQ-06` `OQ-12` | Three questions addressed to module teams that the ABI in this repository answers without asking anyone |
 | `G3` | **Recordings in, artifacts out** | `OQ-09` `OQ-10` `OQ-11` `OQ-22` | A format is a codec of four methods, so naming one costs a table row; what is genuinely open is never *which format* but *whether a real sample exists* |
 | `G4` | **Where the knobs are** | `OQ-02` `OQ-04` `OQ-07` | All three ask "should the system do more here?" and all three were answered by an artifact that predates the question |
@@ -55,14 +55,11 @@ Six groups, twenty rows.
 
 ### 0.3 Status board
 
-Updated as each row concludes. `—` means not yet worked.
+Updated as each row concludes. **A row leaves this table when its answer has been written into the owning document** — the closed rows of `G1` are gone because `docs/interfaces_signal_header_plan.md`, `SW-0043`/`SW-0044`/`SW-0050`/`SW-0410` and the register now carry them.
 
 | Row | Group | Verdict | Write-back target |
 |---|---|---|---|
 | `IFQ-01` | `G1` | `NARROWED` — recommend `timestamp_ns`, reverses a stated default, needs one nod | `interfaces_signal_header_plan.md`; if ratified also `SW-0033` |
-| `IFQ-02` | `G1` | `CLOSED` — required, non-decreasing, per port, binds source time | `SW-0050` accept text (3 refinements) |
-| `IFQ-06` | `G1` | `CLOSED` — **two** fields, capture `optional`/unset | `interfaces_signal_header_plan.md`; `SW-0043`/`SW-0044` `Now.` lines |
-| `OQ-01` | `G1` | `CLOSED` — measured per recording by `RecordingIndex`, not answered globally | Register §2; `SW-0410` |
 | `OQ-05` | `G2` | `CLOSED` — a `sim probe` measurement; **three** ABI modules, not two | Register §3; `IT-22` candidate list |
 | `OQ-06` | `G2` | `CLOSED` — no reset export; shutdown+init is exact, subprocess is exacter | `SYS-0048`, `SYS-0192` `Now.` lines |
 | `OQ-12` | `G2` | `CLOSED` — unrepresentable over the ABI; residue is `SYS-0071` | `SYS-0066`/`SYS-0071`/`SYS-0072` notes |
@@ -84,112 +81,24 @@ Updated as each row concludes. `—` means not yet worked.
 
 ## 1. `G1` — The clocks
 
-**The pool.** `IFQ-01` (unit), `IFQ-02` (monotonicity), `IFQ-06` (one stamp or
-two), `OQ-01` (does the data carry cycle marking). Read separately they look
-like four preferences. Read together they are one question — *what does a
-producer know, and what may a reader infer from it?* — and answering it in that
-form settles three of the four without the missing value file.
+**The pool was** `IFQ-01` (unit), `IFQ-02` (monotonicity), `IFQ-06` (one stamp
+or two), `OQ-01` (does the data carry cycle marking). Read separately they
+looked like four preferences. Read together they were one question — *what does
+a producer know, and what may a reader infer from it?*
 
 **The principle the group produced.** A time field exists on the wire **iff a
 producer can fill it from its own knowledge**. Reception time fails that test
 (reception happens after the producer is finished), which is why `SW-0044` puts
-it in the envelope. Capture time passes it *conditionally* (a producer can
-propagate it if its inputs carried one). Source time passes it
-unconditionally. That single test decides `IFQ-06`, removes `IFQ-06`'s stated
-dependency on `OQ-09`, and reframes `IFQ-01` as a risk question rather than a
-taste question.
+it in the envelope. Capture time passes it *conditionally*; source time passes
+it unconditionally. That single test decided `IFQ-06`, removed `IFQ-06`'s
+stated dependency on `OQ-09`, and reframed `IFQ-01` as a risk question rather
+than a taste question.
 
-### 1.1 `IFQ-06` — one timestamp or two? · **`CLOSED` — two**
+**Three of the four are closed and written back** — `IFQ-06` and `IFQ-02` into
+`docs/interfaces_signal_header_plan.md` §3/§9 and `SW-0043`/`SW-0044`/`SW-0050`;
+`OQ-01` into `SW-0410` and the register's §4.7. One remains.
 
-**Answer: two fields. `source_timestamp_*` is always filled;
-`capture_timestamp_*` is `optional` and left unset when unknown.** This
-reverses the register's *"one field now"* and, more usefully, removes its
-conditionality on `OQ-09` — the bench capture no longer decides anything here.
-
-Four reasons, in descending strength:
-
-1. **`SW-0044` already requires it.** *"Validity time shall belong to the
-   signal header and shall be explicitly unknown rather than defaulted."* A
-   header with one stamp has nowhere to put validity, so the requirement is
-   unsatisfiable as the schema stands. proto3 `optional` supplies exactly the
-   presence semantics the requirement asks for: unset is distinguishable from
-   zero, at no cost when unset.
-2. **The two stamps have two different `R1` consumers.** Ladder rung 3
-   (`SW-0050`) derives *cycle structure* and wants the producer's emit cadence
-   — source time. `age_s` (`SW-0045`) asks *how old is this information* and
-   wants validity — capture time. One field cannot serve both without one
-   consumer silently reading the other's number, which is `SW-0044`'s
-   "collapsed" failure arriving through the back door.
-3. **`time_stamp`, today's name, is the name `SW-0044` forbids.** *"Never one
-   name … the two names differ at every surface."* A field called `time_stamp`
-   names neither clock, so whichever clock it turns out to hold, every reader
-   has to be told out of band. Renaming it is not extra work — it is work the
-   requirement already mandates, and it is free while the field is unproduced
-   (`IFQ-04`: the three legacy messages are dummy).
-4. **Adding the second field later is the expensive direction of a cheap
-   change.** A new field number is wire-compatible, so "add it when needed"
-   is technically available — but the schema check (`R-IFACE-4`), the eight-field
-   `PortValue` (`SW-0043`), the evidence answer (`R-SIM-25`) and every export
-   column would each move on that day. Declaring the shape now costs one
-   `optional` field that most producers never set.
-
-**What this does *not* claim.** It does not claim any component can fill
-capture time in `R1`. Most cannot — propagating a measurement instant through a
-fusion chain is component work nobody has scheduled. `R1` behaviour is
-therefore: source filled, capture unset, `age_s` falling back to the hold
-schedule exactly as `SW-0045` already permits (*"from validity time where
-known and from the hold schedule otherwise"*). The fallback is written, so an
-unset capture time is a declared state and not a gap.
-
-**Trigger to revisit:** none. The field exists whether or not it is filled;
-the day a producer can fill it, it fills it.
-
-### 1.2 `IFQ-02` — is the stamp monotonic? · **`CLOSED`, with three refinements**
-
-**Answer: required; a violation is reported and demotes the port to rung 4;
-never clamped.** The register's answer stands and `SW-0050`'s acceptance text
-already carries it, so this row is closed by an artifact rather than by a new
-decision. Three refinements are added because each one prevents a check that
-would be wrong in a way nobody would notice:
-
-| # | Refinement | Why it matters |
-|---|---|---|
-| a | **Non-decreasing, not strictly increasing** | Two messages legitimately share a stamp — same cycle, two ports, or one port emitting twice within a period. A strict check fails correct data, and a check that cries wolf is a check that gets disabled |
-| b | **Per port, never across ports** | Two producers share no clock discipline and owe each other no ordering. A cross-port check would flag a correct recording as broken and send someone hunting a producer bug that is not there |
-| c | **It binds `source_timestamp_*`; an out-of-order `capture_timestamp_*` is reported but does not demote** | The demotion exists to protect *rung 3*, which is source time. Capture time feeds `age_s`, not cycle structure. Its failure mode is a **negative age**, and the answer to a negative age is to report it — never to clamp it to zero, which would manufacture the exact `0.0` that `R-SIM-14` and `NR-SIM-4` exist to keep distinguishable from a true one |
-
-Refinement (c) is `IFQ-06`'s dividend: the question *"monotonic — which stamp?"*
-was unanswerable while there was one field.
-
-### 1.3 `OQ-01` — do the recordings carry task/cycle marking? · **`CLOSED` — it stopped being a question**
-
-**Answer: it is not answered globally; it is *measured per recording*, by an
-artifact that already exists.** `SW-0410`'s `RecordingIndex` reports, per topic,
-*"the highest timing rung the data supports"*. So the question *"do the
-recordings in scope carry task/cycle marking?"* is the value of a field that
-`SI-13`'s probe pass computes before every run and that `sim probe` prints.
-
-This is the same move that closed `SWQ-12` and `OQ-13`: the artifact answered
-the question before it was asked, and nobody had re-read it. Three
-consequences:
-
-- **The register's "half-answered" framing dissolves.** There is no owned half
-  and unowned half — there is one field, computed for our recordings and
-  foreign ones alike.
-- **Rung 1 being inert is now observable rather than assumed.** If no recording
-  in scope carries a source cycle identifier, `RecordingIndex` says so on every
-  file and rung 1 costs nothing. `SYS` §22 already argued the ladder's shape is
-  right either way; this makes the claim checkable instead of reassuring.
-- **The `SignalHeader` half is confirmed and dated:** once §1.1 lands, every
-  platform-produced payload carries a header, so those recordings report rung 2
-  by construction. The measurement will show it — it does not have to be
-  believed.
-
-**Residue, deliberately not carried as a question:** whether any *foreign*
-recording reaches rung 1 or 2. That is `OQ-09`'s sample-file problem (§3.1),
-and it now changes one printed field rather than a design.
-
-### 1.4 `IFQ-01` — microseconds or nanoseconds? · **`NARROWED` — recommend reversing to `timestamp_ns`; needs one ratification**
+### 1.1 `IFQ-01` — microseconds or nanoseconds? · **`NARROWED` — recommend reversing to `timestamp_ns`; needs one ratification**
 
 **This row is deliberately not closed.** The register's standing default is
 `timestamp_us` and it was argued on 2026-08-12. Reading it against the

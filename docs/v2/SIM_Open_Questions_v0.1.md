@@ -25,18 +25,16 @@ remains open is either external (§2, §3) or narrow (§1).
 
 ## 1. Open and answerable here
 
-### 1.1 `SignalHeader` — three left, all now argued
+### 1.1 `SignalHeader` — one left
 
 From `docs/interfaces_signal_header_plan.md`, the contract-side input to
-`DD-11`'s `WP-07`. All three carry a default, so silence is safe. What changed
-on 2026-08-12 is that each default now rests on an argument that does not
-depend on the missing input.
+`DD-11`'s `WP-07`. `IFQ-02` and `IFQ-06` closed on 2026-08-12 and are recorded
+in §4.5. The one that remains carries a default, so silence is safe — but it is
+the default whose argument has weakened, so silence should be deliberate.
 
 | ID | Question | Where it stands |
 |---|---|---|
-| `IFQ-01` | **Microseconds or nanoseconds?** The width is settled (`uint64`); only the unit is open. Today's `uint32 time_stamp` read as ns wraps in 4.3 s | **`timestamp_us`.** The decisive argument is **unit agreement**, and it needs no value file: the cycle period is already fixed as `<COMPONENT>_<FN>_PERIOD_US` in integer microseconds (`R-SIM-18`, `SYS-0072`) and a fractional one is refused, so a nanosecond stamp puts two units in adjacent fields of one contract. Width decides nothing — `uint64` µs is 584,000 years, `uint64` ns is 584 years. **Carry one consequence with it:** the bus stays integer nanoseconds (`SW-0046`), so the fixed ×1000 happens exactly once, at ingest, and is named in `SW-0033` as the only unit conversion in the engine — otherwise `ANL-SW-02`'s ban on unit arithmetic trips on it. **Still awaiting the value file**; a source finer than 1 µs flips it back |
-| `IFQ-02` | Is the stamp **monotonic within a run** — required, or best-effort? | **Required; a violation is reported, never clamped.** Clamping turns a producer's timing bug into a plausible-looking zero. **One consequence added:** a present-but-non-monotonic source time is *worse* than an absent one, because the recovery ladder would otherwise claim rung-3 quality for data that cannot support it — so the violation **demotes that port to rung 4** (`SW-0050`) and reports the offending pair of stamps |
-| `IFQ-06` | **One timestamp or two?** `SW-0043` lists *source time* and *capture time* as different fields; the header has one stamp and nothing for the measurement instant | **One field now** — but the answer is **conditional on `OQ-09`**, not independent of it, and saying so is the whole change. One field is safe only while the *recording* supplies reception time from its envelope, which MCAP does. If the bench capture carries no per-message reception stamp, this flips to two fields, because `SW-0044` forbids filling either clock from the other and there would be nothing else to fill it from |
+| `IFQ-01` | **Microseconds or nanoseconds?** The width is settled (`uint64`); only the unit is open. Today's `uint32 time_stamp` read as ns wraps in 4.3 s | **`timestamp_us` stands as the default; `timestamp_ns` is recommended and needs ratification** (`SIM_Open_Question_Answers_v0.1.md` §1.4). The **unit-agreement** argument for µs is weaker than it read: the two units *already* coexist in a shipped contract — `ComponentManifest.period_ns`, consumed at `modules/df/src/platform/cm/src/host/cm_host.cpp:105`, sits beside `period_us` in the same `conf/ports.yaml` — so one-unit-per-contract is a state that would have to be **created**, not one being protected. Against it: `SW-0044` calls validity time an integer-**nanosecond** quantity *belonging to this header*; `PERIOD_US` is **authored** calibration whose fractional values must be refusable (`SW-0046`) while a stamp is **measured**, and unit agreement is worth having within a kind of value rather than across kinds; and — decisively — **µs depends on the missing value file and ns does not**, since nanoseconds represent everything microseconds can. Ratifying ns also *deletes* the ×1000 carve-out in `SW-0033` rather than documenting it. Cost of being wrong: µs truncates a shipped wire contract, ns costs ≈1 varint byte per message. **One thing is settled either way and has already landed:** the field is renamed so it says which clock it is (`SW-0044`) |
 
 **`IFQ-05` is reframed rather than open** — see that plan's §8.1. The question
 was whether the schema check should read every component's `conf/ports.yaml`
@@ -52,15 +50,15 @@ requires every check to report its scan count and to read `SKIPPED` rather than
 
 ---
 
-## 2. Inherited from the System Requirements — the five baselining gates
+## 2. Inherited from the System Requirements — the baselining gates
 
-`SIM_System_Requirements_v0.1.md` §26 lists twenty-two, of which five have
-closed. Five of the remainder are **gates rather than rows**: that document is
-not baselined until each has an answer or a written fallback.
+`SIM_System_Requirements_v0.1.md` §26 lists twenty-two. Four remain that are
+**gates rather than rows**: that document is not baselined until each has an
+answer or a written fallback. (`OQ-01` was the fifth and closed on 2026-08-12 —
+§4.7.)
 
 | ID | Question | Why it matters | Owner |
 |---|---|---|---|
-| `OQ-01` | **Do the recordings in scope carry task/cycle marking?** | `SW-0050` rung 1. **Half-answered:** for recordings *this platform produces* the answer becomes *yes by construction* once §1.1 lands — every payload carries a `sig_header`, so every port sits on rung 2. **Foreign recordings remain open**, and that half is `OQ-09` | SIM team + a recording owner |
 | `OQ-11` | Does an internal **port model or signal catalogue** already exist that should be adopted rather than defined? | **Adopting beats defining.** Must be asked before `SW-0388`'s catalogue is authored; changes its scope substantially. Design carries it as assumption `A-4` | SIM team |
 | `OQ-14` | The **numbers** for per-cycle cost, campaign throughput and player frame time, and the configurations they are measured on | `BLOCKS` — `SW-0272`, `SW-0323`, `SW-0369` cannot be *failed* without them. The harnesses are built either way | SIM team |
 | `OQ-16` | The stated set of **common configuration changes** and each one's time budget | `BLOCKS` — `SW-0348`, the requirement closest to the project's own success measure | SIM team + a customer team |
@@ -161,10 +159,12 @@ ingest-map path."* Design §33 records the change and its date. This was the one
 item the Design said *"should not sit open"*, because the next reader of the
 concept would have believed the weaker wording.
 
-### 4.5 `SignalHeader` — two of six
+### 4.5 `SignalHeader` — four of six
 
 | ID | Answer |
 |---|---|
+| `IFQ-06` | **Two fields, not one** (2026-08-12, *reversing* the previous day's "one field now" — and removing its stated dependency on `OQ-09`). `source_timestamp_*` is always filled; `capture_timestamp_*` is proto3 `optional` and unset when unknown. The decision rests on **what a producer can know**, not on what a reader receives, which is why the bench capture no longer decides it. `SW-0044` requires validity time *in this header* as an explicit unknown, which one field cannot satisfy; ladder rung 3 and `age_s` are two `R1` consumers wanting two different stamps; and `time_stamp` was exactly the ambiguous name `SW-0044` forbids. Most producers leave capture unset in `R1` — a declared state, with `SW-0045`'s hold-schedule fallback already written. Argued in `SIM_Open_Question_Answers_v0.1.md` §1.1 |
+| `IFQ-02` | **Required; a violation is reported and demotes the port to rung 4; never clamped** — clamping turns a producer's timing bug into a plausible-looking zero. `SW-0050`'s acceptance already carried this; closing it added three refinements, each preventing a check that would be wrong unnoticeably: **non-decreasing, not strictly increasing** (two messages legitimately share a stamp); **per port, never across ports** (two producers share no clock discipline); and **it binds source time** — an out-of-order capture time is reported but does not demote, since it yields a negative `age_s` that must surface rather than be clamped. §1.2 there |
 | `IFQ-03` | **Wrap at `uint32`.** The bus handles wrap explicitly, so rung 2 never reads a wrap as a gap |
 | `IFQ-04` | **The three legacy messages are dummy**, so they are left untouched — no field added, `adas.common.Header` not deprecated. This *reverses* the plan's draft ("add it while the field is free"): wire compatibility protects encoded bytes that exist, and for a message nobody produces there are none. `R-IFACE-4` is scoped by *"can be a port payload"*, so the schema check demands a header the day one gains a real producer — the obligation is enforced when it becomes real, with no list to remember |
 
@@ -184,6 +184,17 @@ concept would have believed the weaker wording.
 **Also settled, without having been a numbered question:** the `simcore` /
 `sim-engine` spelling split, resolved to `simcore` / `simengine` and written
 into `DD-01` as a rule so it cannot drift back.
+
+### 4.7 Closed by the 2026-08-12 answers pass
+
+Worked in `SIM_Open_Question_Answers_v0.1.md`, which groups the register's rows
+by shared mechanism rather than by owner and argues each to a verdict. The
+recurring finding is worth stating once: **most of these were already answered
+by an artifact nobody had re-read.**
+
+| ID | Answer |
+|---|---|
+| `OQ-01` | **It stopped being a question.** *"Do the recordings in scope carry task/cycle marking?"* is not answered globally for a corpus nobody has enumerated — `SW-0410`'s `RecordingIndex` already reports, per topic, *"the highest timing rung the data supports"*, computed by `SI-13`'s probe pass before every run and printed by `sim probe`. So the register's owned/foreign split dissolves: one field, measured on our files and foreign ones alike. A capture format nobody has seen yields an unknown **value**, never an unanswered question, and rung 1 being inert becomes observable rather than assumed. The `SignalHeader` half is confirmed and dated — once §1.1 lands every platform-produced payload reports rung 2 by construction, and the measurement will *show* it rather than it having to be believed. §1.3 there |
 
 ## 5. Assumptions this register does not turn into questions
 
