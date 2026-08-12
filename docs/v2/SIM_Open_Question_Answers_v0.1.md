@@ -48,21 +48,19 @@ Six groups, twenty rows.
 |---|---|---|---|
 | `G1` | **The clocks** | `IFQ-01` *(+ 3 written back)* | Time is declared in one unit, converted in one place, and degraded explicitly — never estimated |
 | `G2` | **What the compiled contract can already do** | *(all 3 written back)* | Three questions addressed to module teams that the ABI in this repository answers without asking anyone |
-| `G3` | **Recordings in, artifacts out** | `OQ-09` `OQ-10` `OQ-11` `OQ-22` | A format is a codec of four methods, so naming one costs a table row; what is genuinely open is never *which format* but *whether a real sample exists* |
+| `G3` | **Recordings in, artifacts out** | `OQ-09` `OQ-22` *(+ 2 written back)* | A format is a codec of four methods, so naming one costs a table row; what is genuinely open is never *which format* but *whether a real sample exists* |
 | `G4` | **Where the knobs are** | `OQ-02` `OQ-04` `OQ-07` | All three ask "should the system do more here?" and all three were answered by an artifact that predates the question |
 | `G5` | **Numbers nobody here can invent** | `OQ-14` `OQ-16` | An absolute threshold nobody can supply becomes a recorded baseline plus a regression bound — failable on day two without a guess on day one |
 | `G6` | **Organisation** | `OQ-15` `OQ-17` `OQ-18` `OQ-19` | De-block by making the technical artifact independent of the organisational answer, then let the answer arrive late without cost |
 
 ### 0.3 Status board
 
-Updated as each row concludes. **A row leaves this table when its answer has been written into the owning document** — the closed rows of `G1` and `G2` are gone because `docs/interfaces_signal_header_plan.md`, `SW-0043`/`SW-0044`/`SW-0050`/`SW-0410` and the register now carry them.
+Updated as each row concludes. **A row leaves this table when its answer has been written into the owning document** — the closed rows of `G1`, `G2` and `G3` are gone because `docs/interfaces_signal_header_plan.md`, `SW-0043`/`SW-0044`/`SW-0050`/`SW-0410` and the register now carry them.
 
 | Row | Group | Verdict | Write-back target |
 |---|---|---|---|
 | `IFQ-01` | `G1` | `NARROWED` — recommend `timestamp_ns`, reverses a stated default, needs one nod | `interfaces_signal_header_plan.md`; if ratified also `SW-0033` |
 | `OQ-09` | `G3` | `NARROWED` — one 10-second sample; blocks no `WP`, keeps `MP-1` provisional | Plan risk `R-8`; `WP-18` |
-| `OQ-10` | `G3` | `CLOSED` — MCAP + write-only CSV; a preference is a codec row | `SYS-0111` `Now.`; drop from gate set |
-| `OQ-11` | `G3` | `CLOSED` — derive the catalogue from manifests; adopt vocabulary only | `SW-0388` `Now.`; Design `A-4` |
 | `OQ-22` | `G3` | `PROPOSED` — legal/commercial; contained by the codec seam; due per format | Register §2 → attach to format `WP`s |
 | `OQ-02` | `G4` | `CLOSED` — no for `R1`; trigger restated as a per-recording rung condition | `SYS-0108` deferral note |
 | `OQ-04` | `G4` | `CLOSED` — four levels exist, not two; the missing axis is closed on purpose | `SYS-0080`/`SYS-0082` notes; `R-SIM-15` |
@@ -148,10 +146,11 @@ consequence travels with it: `SW-0033`'s "the only unit conversion in the
 engine" carve-out is **removed**, not amended, and `ANL-SW-02`'s ban on unit
 arithmetic needs no exception.
 
-**One thing is settled either way and should be written back now:** the field
-is **renamed** from `time_stamp` to a name that says which clock it is
-(§1.1 reason 3). That is `SW-0044`'s explicit requirement and it does not wait
-on the unit.
+**One thing is settled either way and has already been written back:** the
+field is **renamed** from `time_stamp` to a name that says which clock it is —
+`SW-0044` requires the two clocks to differ in name at every surface, and
+`time_stamp` named neither. That landed with `IFQ-06`
+(`docs/interfaces_signal_header_plan.md` §3) and did not wait on the unit.
 
 ## 2. `G2` — What the compiled contract can already do · **all three closed and written back**
 
@@ -174,97 +173,24 @@ candidate because it sits upstream of `df` on a real data path.
 
 ## 3. `G3` — Recordings in, artifacts out
 
-**The pool.** `OQ-11` (is there a port catalogue to adopt), `OQ-10` (preferred
-export format), `OQ-22` (licences for proprietary readers), `OQ-09` (what the
-bench capture writes). Two are about *naming things that cross the boundary*
-and two are about *formats crossing it*.
+**The pool was** `OQ-11` (is there a port catalogue to adopt), `OQ-10`
+(preferred export format), `OQ-22` (licences for proprietary readers), `OQ-09`
+(what the bench capture writes). Two were about *naming things that cross the
+boundary* and two about *formats crossing it*.
 
 **The principle the group produced.** **A description that is generated cannot
-drift; a description that is authored beside it will.** That single line closes
+drift; a description that is authored beside it will.** That single line closed
 `OQ-11` outright and explains why `OQ-10` and `OQ-22` are so much cheaper than
 they look: a format is a codec of four methods behind a registered interface
 (`R-SIM-14`), so naming a format costs a table row and *choosing wrongly* costs
 a week — whereas authoring a second description of our own ports would cost a
 permanent maintenance obligation. Spend the caution where it belongs.
 
-### 3.1 `OQ-11` — is there a port catalogue to adopt? · **`CLOSED` — derive it; neither adopt nor define**
+**Two are closed and written back** — `OQ-11` into `SW-0388` and Design `A-4`,
+`OQ-10` into `SYS-0111`, both into the register's §4.7. Two remain, and
+neither is answerable here.
 
-**Answer: the catalogue is the union of the `ModuleManifest`s present in the
-run, computed at load. There is no authored catalogue file, and there must not
-be one.**
-
-`SW-0388` requires *"a versioned catalogue of named ports carrying typed
-payloads"* against which every configured port resolves at load, with its
-version in the run manifest. Its `Now.` line says no catalogue exists above the
-manifests and asks `OQ-11` first, on the reasoning that *adopting beats
-defining*. There is a third option and it is strictly better than both:
-
-- **Defining one** creates a second description of a port set we own, free to
-  drift from the manifests — which is precisely what `R-SIM-16` forbids:
-  *"Hand-mapping a port set we own would create a second description free to
-  drift from the manifest."*
-- **Adopting an external one** as the *resolution authority* has the same
-  defect and adds a dependency: an outside document would decide whether a port
-  our compiler emitted is legal.
-- **Deriving it** has neither. The manifest is already generated from
-  `conf/ports.yaml` (`R-SIM-22`), which is already gated by `ENABLED_FUNCTIONS`
-  (`R-VAR-5`), so the manifests are *by construction* a description of what
-  compiled. Their union is a catalogue that cannot disagree with the binaries,
-  because it is read out of them.
-
-**How each of `SW-0388`'s clauses is met by the derived form:**
-
-| `SW-0388` requires | Met by |
-|---|---|
-| A catalogue of named ports with typed payloads | The union of `adasManifest()` outputs for the modules named in the resolved run spec |
-| Every configured port resolves at load | `SI-13`'s probe pass already produces a `ModuleManifest` per module (`SW-0411`) *before* emission — the resolution point exists already |
-| Unresolvable port fails the load, naming near matches | `R-SIM-21`'s `AuthoringError`, which already lists every port the manifest declares |
-| The catalogue's version is recorded | The set of `(module, manifest version, library hash)` triples, already in the run manifest |
-
-**The external half, narrowed to something that changes names and nothing
-else.** If an organisation-level signal catalogue does exist, adopt it as a
-**naming source** — so our port names match the house vocabulary — and never as
-a resolution authority. That keeps `R-IFACE-1`/`R-NAME-4` intact and means the
-answer arriving late costs a rename, not a redesign. Assumption `A-4` in the
-Design should be restated in those terms: *not* "we may have to adopt a
-catalogue", but "we may have to adopt vocabulary".
-
-### 3.2 `OQ-10` — preferred exchange format for outputs · **`CLOSED` — `R1` is already fixed; a preference is an addition, not a change**
-
-**Answer: the `R1` set is decided by artifacts that predate the question.**
-`SYS-0111` requires exports to *the interchange format, a columnar text format,
-and a replayable recording the system can read back*; `DD-13` fixes the
-interchange format as **MCAP only in `R1`**. So `R1` is: **MCAP** (interchange
-and replayable — the same codec serves both, which is why `SYS-0112`'s chaining
-is free) and **CSV/TSV** (columnar text, registered **write-only** per
-`R-SIM-14`, because it cannot round-trip).
-
-That set is not a guess about anyone's preference; it is the smallest set that
-satisfies three separate requirements, and it is already implied by decisions
-taken.
-
-**Why a team's stated preference cannot block.** `R-SIM-14` makes a format a
-codec of ~4 methods behind one registered interface, and `SYS-0110` makes every
-exporter a plug-in of which *none is mandatory*. A team answering "we live in
-MDF4" or "we want Parquet" therefore adds a row to the codec table — a bounded
-piece of work, no design impact, no change to `Session`, the pipeline, the
-Scene or any expectation. This is the same signal `OQ-08` produced: naming
-three formats *changed the plan's shape not at all*, which is how you know the
-seam is in the right place.
-
-**Still worth asking, for adoption rather than for design.** An export nobody
-opens is dead weight, and the question *"what do you actually load these into?"*
-decides which optional codec is written first. It is a scheduling input, not a
-gate. **It should be dropped from the baselining set and re-asked at the first
-export review.**
-
-**One line to write back, because it is the part that could be got wrong:** an
-export is **lossy and terminal** and is never accepted as a resim input
-(`R-SIM-14`), so a CSV of a run is not a smaller recording — it is a different
-kind of artifact, and the loader refuses it **by capability, not by
-convention**.
-
-### 3.3 `OQ-22` — licence and distribution for proprietary readers · **`PROPOSED` — not this document's call; contained, and not yet due**
+### 3.1 `OQ-22` — licence and distribution for proprietary readers · **`PROPOSED` — not this document's call; contained, and not yet due**
 
 **Not concluded.** Licence acceptability and distribution terms are a legal and
 commercial decision belonging to whoever ships the deliverable. What this
@@ -297,7 +223,7 @@ option B is even a candidate, the redistribution terms question should be
 opened with the vendor now — a licence negotiation is the only item in this
 whole register whose latency is measured in months.
 
-### 3.4 `OQ-09` — what does the bench capture write? · **`NARROWED` — one small ask, and its cost is now one printed field**
+### 3.2 `OQ-09` — what does the bench capture write? · **`NARROWED` — one small ask, and its cost is now one printed field**
 
 **Not answerable here** — no bench capture file exists in this repository, and
 no amount of reasoning substitutes for ten seconds of real data. What has
@@ -307,10 +233,10 @@ changed is how much rides on it.
 blocking `SYS-0015`, `SYS-0029`, `SYS-0061`, the foreign half of `OQ-01`, and
 `IFQ-06`. After §1:
 
-- **`IFQ-06` no longer depends on it** (§1.1). The header carries two fields
+- **`IFQ-06` no longer depends on it** (closed; register §4.5). The header carries two fields
   regardless of what the bench writes, because the decision rests on what a
   *producer* can know, not on what a *reader* receives.
-- **`OQ-01` no longer depends on it** (§1.3). The highest supported rung is a
+- **`OQ-01` no longer depends on it** (closed; register §4.7). The highest supported rung is a
   measured field of `RecordingIndex`, computed per file. An unknown capture
   format means an unknown *value*, not an unanswered question.
 - **`SYS-0015`/`SYS-0029`/`SYS-0061` are satisfiable without it** — they
@@ -336,7 +262,7 @@ much smaller than "specify the capture":
 exists (decides rung 4 availability, and therefore whether `Capabilities`
 degrades for that codec); whether the signal header survives end to end
 (decides rungs 2 and 3); and the finest timestamp resolution present — which is
-one of the two inputs to `IFQ-01` (§1.4).
+one of the two inputs to `IFQ-01` (§1.1).
 
 **Cost of leaving it open:** `MP-1` stays provisional and `R-8` stays on the
 risk list. **No work package is blocked**, because `DD-13` ships MCAP first and
@@ -432,8 +358,8 @@ unknown, and shipping it before the divergence machinery (`SYS-0105`–`SYS-0107
 is trusted would let it be used as though it removed the open-loop limit."*
 
 **The revisit trigger needs restating, because `G1` moved it.** The deferral
-note ends *"revisit once `OQ-01` is answered"*, and §1.3 has now closed
-`OQ-01` — but into a **measurement**, not a global yes/no. The dependency was
+note ends *"revisit once `OQ-01` is answered"*, and `OQ-01` has now closed
+(register §4.7) — but into a **measurement**, not a global yes/no. The dependency was
 never arbitrary: re-integrating ego pose means integrating over per-cycle `dt`,
 which is only as sound as the timing rung the recording supports. So the
 trigger becomes evaluable per recording rather than globally, and is worth
@@ -508,7 +434,7 @@ setups look like a regression and burn a day each time. Pin all five:
 
 | Axis | Declared as |
 |---|---|
-| Module set | `df` alone for per-cycle cost (the only functional module, §2.1); `perception-core` → `df` for the multi-module figure |
+| Module set | `df` alone for per-cycle cost (the only module with substantial algorithm code — `OQ-05`, register §4.7); `perception-core` → `df` for the multi-module figure |
 | Recording | One named MCAP fixture, hash recorded, committed as a fixture rather than referenced by path |
 | Tick count | Fixed and stated — `SW-0323` requires *"a stated tick count and layer count"*, so this is the requirement's own wording, not an addition |
 | Layer count | Fixed and stated, per the same clause |
@@ -728,7 +654,7 @@ would genuinely hurt.
 could have answered.** `WP-01` is de-blocked by splitting the harness from the
 trigger (§6.1); `SW-0369`/`SW-0323`/`SW-0348` become failable through a baseline
 plus a bound (§5); `MP-1` stays provisional on one ten-second sample file
-(§3.4) and blocks no package.
+(§3.2) and blocks no package.
 
 **Where the closures came from, which is the useful pattern.** Only three of
 the eleven needed a genuinely new decision (`IFQ-06`, and the reframings in
@@ -833,7 +759,7 @@ The pass reduced twenty rows to **five asks**. Four are one sentence each.
 | # | Ask | Of whom | Why it is worth asking now |
 |---|---|---|---|
 | 1 | *Does any output of this tool enter a safety argument?* | Quality / safety | One sentence; determines whether `OQ-17`'s fallback is ever exercised. Cheapest question here to ask, potentially the most expensive to leave (§6.4) |
-| 2 | **Ten seconds of bench capture**, its channel list, and one sentence on re-stamping | A recording owner | Retires plan risk `R-8` and makes `MP-1`'s exit real rather than provisional (§3.4) |
+| 2 | **Ten seconds of bench capture**, its channel list, and one sentence on re-stamping | A recording owner | Retires plan risk `R-8` and makes `MP-1`'s exit real rather than provisional (§3.2) |
 | 3 | *Ratify `timestamp_ns`, or keep `timestamp_us`?* | Whoever owns the interfaces contract | Reverses a stated default, so it needs a nod rather than silence (§1.4) |
 | 4 | Which CI system, and the retention policy for both CI artifacts and campaigns | DevOps + whoever owns storage/audit | One answer, two consumers (§6.1, §6.2). Only the ~10-line trigger waits on it |
 | 5 | Wall-clock budgets for the five configuration changes — **after** we measure them once and show the numbers | A customer team | A number to react to gets an answer where an open question does not (§5.2) |
