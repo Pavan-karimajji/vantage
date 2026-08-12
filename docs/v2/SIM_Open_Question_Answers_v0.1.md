@@ -49,22 +49,19 @@ Six groups, twenty rows.
 | `G1` | **The clocks** | `IFQ-01` *(+ 3 written back)* | Time is declared in one unit, converted in one place, and degraded explicitly — never estimated |
 | `G2` | **What the compiled contract can already do** | *(all 3 written back)* | Three questions addressed to module teams that the ABI in this repository answers without asking anyone |
 | `G3` | **Recordings in, artifacts out** | `OQ-09` `OQ-22` *(+ 2 written back)* | A format is a codec of four methods, so naming one costs a table row; what is genuinely open is never *which format* but *whether a real sample exists* |
-| `G4` | **Where the knobs are** | `OQ-02` `OQ-04` `OQ-07` | All three ask "should the system do more here?" and all three were answered by an artifact that predates the question |
+| `G4` | **Where the knobs are** | *(all 3 written back)* | All three ask "should the system do more here?" and all three were answered by an artifact that predates the question |
 | `G5` | **Numbers nobody here can invent** | `OQ-14` `OQ-16` | An absolute threshold nobody can supply becomes a recorded baseline plus a regression bound — failable on day two without a guess on day one |
 | `G6` | **Organisation** | `OQ-15` `OQ-17` `OQ-18` `OQ-19` | De-block by making the technical artifact independent of the organisational answer, then let the answer arrive late without cost |
 
 ### 0.3 Status board
 
-Updated as each row concludes. **A row leaves this table when its answer has been written into the owning document** — the closed rows of `G1`, `G2` and `G3` are gone because `docs/interfaces_signal_header_plan.md`, `SW-0043`/`SW-0044`/`SW-0050`/`SW-0410` and the register now carry them.
+Updated as each row concludes. **A row leaves this table when its answer has been written into the owning document** — the closed rows of `G1`–`G4` are gone because `docs/interfaces_signal_header_plan.md`, `SW-0043`/`SW-0044`/`SW-0050`/`SW-0410` and the register now carry them.
 
 | Row | Group | Verdict | Write-back target |
 |---|---|---|---|
 | `IFQ-01` | `G1` | `NARROWED` — recommend `timestamp_ns`, reverses a stated default, needs one nod | `interfaces_signal_header_plan.md`; if ratified also `SW-0033` |
 | `OQ-09` | `G3` | `NARROWED` — one 10-second sample; blocks no `WP`, keeps `MP-1` provisional | Plan risk `R-8`; `WP-18` |
 | `OQ-22` | `G3` | `PROPOSED` — legal/commercial; contained by the codec seam; due per format | Register §2 → attach to format `WP`s |
-| `OQ-02` | `G4` | `CLOSED` — no for `R1`; trigger restated as a per-recording rung condition | `SYS-0108` deferral note |
-| `OQ-04` | `G4` | `CLOSED` — four levels exist, not two; the missing axis is closed on purpose | `SYS-0080`/`SYS-0082` notes; `R-SIM-15` |
-| `OQ-07` | `G4` | `CLOSED` — pass a path, never a value; sweeps are bundle variants | `SYS-0177`/`SYS-0179` notes |
 | `OQ-14` | `G5` | `NARROWED` — budget file + reference config closable; absolute target stays with owner | `SW-0369`/`SW-0323` `Now.` lines |
 | `OQ-16` | `G5` | `NARROWED` — set already written in `SW-0348`; structural gate proposed | `SW-0348` `Now.` line; register row |
 | `OQ-15` | `G6` | `PROPOSED` — vendor is the org's; `WP-01` de-blocked by splitting harness from trigger | `WP-01` split; register §2 |
@@ -268,121 +265,21 @@ one of the two inputs to `IFQ-01` (§1.1).
 risk list. **No work package is blocked**, because `DD-13` ships MCAP first and
 the crafted fixture exercises every rung.
 
-## 4. `G4` — Where the knobs are
+## 4. `G4` — Where the knobs are · **all three closed and written back**
 
-**The pool.** `OQ-02` (ego re-integration in `R1`), `OQ-04` (is the override
-granularity enough), `OQ-07` (inject parameters or point at a file). The
-register addresses all three to *algorithm teams*, and all three read as
-*"should the system do more here?"*.
+`OQ-07`, `OQ-04` and `OQ-02`. Written back 2026-08-12 into `SYS-0177`,
+`SYS-0082`, `SYS-0108` and the register's §4.7.
 
-**The principle the group produced.** Each of the three already has a written
-answer that says **no, and names what to do instead** — a deferral with two
-grounds, a closed verb list with two alternatives, a bundle rule with an
-explicit ban on a second edit site. So the work here is not to decide; it is to
-**find the existing decision, check it still holds, and state the condition
-under which it would be reopened**. A question re-asked without noticing it was
-answered is how a closed list gets quietly reopened, and every one of these
-three would have enlarged the build if answered afresh.
-
-### 4.1 `OQ-07` — inject parameters, or point at the module's parameter file? · **`CLOSED` — point at a bundle; injection is forbidden by name**
-
-**Answer: the system passes a *path* and never a *value*.** `adasInit` takes
-`configPath`, and `SYS-0177`/`R-SIM-3a` already settle the rest: one atomic
-bundle per (project, build), packed beside the library, resolved module-relative
-when the path is `NULL`, with an explicit path always winning.
-
-**Why injection is not a close call.** `R-SIM-3a` states the ban directly — the
-bundle is *"a build output, never a second place to edit a value"* — and gives
-the failure it prevents: **the viewer must read the bundle the SUT was
-initialised with**. Inject a value and there are two answers to *"what
-wheelbase did this run use?"* — the file's and the injected one — with the
-run and the picture free to disagree. That is the same class of defect as
-back-filling a timestamp (`G1`): a plausible number with no single source.
-
-**How a parameter sweep works without injection**, since that is the use case
-behind the question. Generate a **bundle variant**: copy the bundle, change the
-one key, re-hash, point `adasInit` at it, and record the hash in the run
-manifest. This satisfies `SYS-0072`'s acceptance verbatim — *"a rate sweep
-changes only a calibration value; no rebuild occurs and no host file is
-edited"* — because producing a bundle variant is neither a rebuild nor a host
-edit. The single reader stays single, the hash keeps the evidence chain intact
-(`R-SIM-25`), and the viewer reads exactly what the SUT read.
-
-**The one small thing this implies, named so it is not discovered late:** a
-bundle-variant helper (copy · patch one key · re-hash) is needed beside the run
-spec. It is a file, not a mechanism, and `SYS-0072`'s acceptance already
-assumes something plays that role.
-
-### 4.2 `OQ-04` — is module staging plus per-port override enough granularity? · **`CLOSED` — the granularity is already finer than the question assumes**
-
-**Answer: yes — and the question understates what exists.** Addressability
-today is four levels deep, not two:
-
-| Level | Mechanism |
-|---|---|
-| Per module (stage) | `mode:` / `impl:`, two independent axes — `SYS-0080`, `R-SIM-10` |
-| Per port | Per-port mode override — `SYS-0082` |
-| **Per field path within a port** | `egoDyn.vx` — `R-SIM-15` |
-| **Per element of a repeated field** | `[i]` and `[*]` — `R-SIM-15`'s closed index grammar |
-
-So *"module-level staging plus per-port override"* describes the coarsest two
-of four. The honest answer to "is it sufficient" is that nobody has yet needed
-the two finer levels that already exist.
-
-**The one axis that is missing is missing on purpose.** There is no
-**time-varying** or **conditional** override — no predicate in the index
-grammar, no expression language, no user-supplied callable. `R-SIM-15` closes
-that list and gives the reason: *an override may destroy or attenuate
-information; it may never create an entity*, and an open expression grammar is
-*"how a flexible tool becomes an over-configured one"*. Two alternatives are
-written for the cases that ask for it: **edit the scenario** (which is also
-data, and is versioned and hashed) or **a `stub:` stage** (which is code, in
-the open, and testable).
-
-**This is the row in the register most likely to enlarge the build if answered
-afresh**, which is why it is closed rather than re-opened. Answering *"is it
-sufficient?"* by asking teams invites *"it would be nice if…"*, and each
-nice-to-have is a predicate in a grammar that is closed for a written reason.
-
-**Reopen condition, deliberately demanding:** a concrete case, with an example
-recording, that **neither** editing the scenario **nor** a `stub:` stage
-serves. That is a change request with evidence attached, not an open question —
-and if one arrives, the answer is still more likely to be a fifth verb than a
-predicate.
-
-### 4.3 `OQ-02` — is ego re-integration needed in release one? · **`CLOSED` — no; already deferred on two grounds, only one of which was tied to `OQ-01`**
-
-**Answer: no.** `SYS-0108` is already marked `P2 · DEF`, *off by default*, with
-its deferral argued: *"it is an approximation whose validity envelope is
-unknown, and shipping it before the divergence machinery (`SYS-0105`–`SYS-0107`)
-is trusted would let it be used as though it removed the open-loop limit."*
-
-**The revisit trigger needs restating, because `G1` moved it.** The deferral
-note ends *"revisit once `OQ-01` is answered"*, and `OQ-01` has now closed
-(register §4.7) — but into a **measurement**, not a global yes/no. The dependency was
-never arbitrary: re-integrating ego pose means integrating over per-cycle `dt`,
-which is only as sound as the timing rung the recording supports. So the
-trigger becomes evaluable per recording rather than globally, and is worth
-writing back in that form:
-
-> Ego re-integration may be considered for a recording whose ports report
-> rung 3 or better, and only once the divergence machinery is trusted. On a
-> rung-4 recording the integration would run on reception time — the clock
-> `SW-0044` exists to keep separate from validity — so the feature is not
-> merely approximate there, it is measuring the wrong thing.
-
-**Two grounds, and the second is untouched.** Even with perfect timing,
-`SYS-0105`–`SYS-0107` must be trusted first. That has not moved, so `R1` is
-unaffected whatever the timing evidence shows.
-
-**The framework-side constraint worth recording alongside it.** Ego
-re-integration is dead-reckoning, which `R-SIM-7` bans outright in a layer
-provider: *"never integrating a time-varying signal … into information nobody
-produced. That is an algorithm."* `SYS-0108` puts it in the engine rather than
-in a provider, which is the right side of that line — but only while its
-output stays *labelled an approximation everywhere*, which its acceptance
-criterion already demands. **If it is ever implemented, the label is the
-requirement, not the transform.**
+**The principle is kept here because it applies to rows not yet worked.** All
+three were addressed to *algorithm teams* and all three read as *"should the
+system do more here?"*. Each already had a written answer saying **no, and
+naming what to do instead** — a deferral with two grounds, a closed verb list
+with two alternatives, a bundle rule with an explicit ban on a second edit
+site. So the work was not to decide but to **find the existing decision, check
+it still holds, and state the condition under which it would be reopened**. A
+question re-asked without noticing it was answered is how a closed list gets
+quietly reopened, and every one of these three would have enlarged the build if
+answered afresh.
 
 ## 5. `G5` — Numbers nobody here can invent
 
@@ -478,7 +375,7 @@ actually determines whether the task takes ten minutes or a day:
 | Change | Structural gate (checkable in CI) |
 |---|---|
 | Switch a module's mode | One field in the run spec. No other file touched |
-| Change a calibration value | One key in one bundle (`G4`, §4.1). No rebuild, no code edit |
+| Change a calibration value | One key in one bundle (`OQ-07`, register §4.7). No rebuild, no code edit |
 | Add a recording | One entry in the recording list. No code edit; the ingest map is edited only for a *new family*, not a new file |
 | Change the layout | One workspace file. No framework file touched |
 | Add an export | One exporter entry. No engine file touched (`SYS-0110` — exporters are plug-ins) |
@@ -544,7 +441,7 @@ by decisions taken: it must run **Windows and Ubuntu** (`P-1`…`P-10`), and the
 harness lives in `contrib/` per `DD-08`.
 
 **Not concluded:** the vendor, and the retention numbers. The retention half is
-the same question as `OQ-19` (§6.4) and should be answered once, there, for
+the same question as `OQ-19` (§6.2) and should be answered once, there, for
 both.
 
 ### 6.2 `OQ-19` — campaign retention: baseline, regenerable, or deleted? · **`PROPOSED` — but the question is about *inputs*, not results**
@@ -648,107 +545,70 @@ would genuinely hurt.
 
 ## 7. Where this pass ended
 
-**Twenty rows worked: eleven `CLOSED`, four `NARROWED`, five `PROPOSED`.**
+**Twenty rows worked: eleven `CLOSED`, four `NARROWED`, five `PROPOSED`.** The
+eleven closed rows have been **written back into their owning documents and
+removed from this one** — this document is a queue that drains, not a second
+register. What is left below is what is genuinely still open.
 
 **Nothing in the implementation plan is blocked by a question this document
 could have answered.** `WP-01` is de-blocked by splitting the harness from the
-trigger (§6.1); `SW-0369`/`SW-0323`/`SW-0348` become failable through a baseline
-plus a bound (§5); `MP-1` stays provisional on one ten-second sample file
-(§3.2) and blocks no package.
+trigger (§6.1); `SW-0369`/`SW-0323`/`SW-0348` become failable through a
+baseline plus a bound (§5); `MP-1` stays provisional on one ten-second sample
+file (§3.2) and blocks no package.
 
 **Where the closures came from, which is the useful pattern.** Only three of
-the eleven needed a genuinely new decision (`IFQ-06`, and the reframings in
-§3.1 and §5). The other eight were **already answered by an artifact nobody had
-re-read** — the ABI header answered three module-team questions (§2), an
-acceptance criterion answered two (§4.2, §4.3), and a `RecordingIndex` field
-answered one (§1.3). That is the third time this pattern has appeared in this
-project (`SWQ-12`, `OQ-13`, and now eight more), and it is worth naming as a
-habit: **before asking anyone, check whether the artifact already decided.**
+the eleven needed a genuinely new decision (`IFQ-06`, and the reframings that
+closed `OQ-11` and produced §5's baseline-plus-bound). The other eight were
+**already answered by an artifact nobody had re-read** — `adas_sil_abi.h`
+answered three module-team questions, an acceptance criterion answered two, and
+a `RecordingIndex` field answered one. That is the third time this pattern has
+appeared in this project (`SWQ-12`, `OQ-13`, and now eight more), and it is
+worth naming as a habit: **before asking anyone, check whether the artifact
+already decided.**
 
-**Two corrections the pass produced, both of which change planning:**
+**Two corrections the pass produced, both applied:**
 
-1. **`OQ-05`: three modules carry `conf/ports.yaml` and a SIL C interface, not
-   two** — `perception-core` as well as `df` and `vdy`. `IT-22` and the
-   multi-module `E2E` rows have a third candidate, and the more interesting one.
-2. **`OQ-16`: the set of common configuration changes is already written**, in
-   `SW-0348` itself. Only the budget was ever open, which halves the question.
+1. **Three** modules carry `conf/ports.yaml` and a SIL C interface, not two —
+   `perception-core` as well as `df` and `vdy`, and it is the better `IT-22`
+   candidate because it sits upstream of `df` on a real data path. Applied to
+   Design `IMP-0379`.
+2. **The set of common configuration changes was never open** — `SW-0348`
+   states it. Only the budget was, which halves `OQ-16`.
 
-**One reversal and one recommended reversal, flagged because they undo argued
-positions:** `IFQ-06` moves from one header stamp to two (§1.1 — closed, the
-argument does not depend on the missing input). `IFQ-01` is *recommended* to
-move from `timestamp_us` to `timestamp_ns` (§1.4) — **not adopted**; silence
-leaves the standing default in place.
+**One reversal applied and one recommended:** `IFQ-06` moved from one header
+stamp to two and is in `docs/interfaces_signal_header_plan.md` §3. `IFQ-01` is
+*recommended* to move from `timestamp_us` to `timestamp_ns` (§1.1) and is
+**not** adopted — silence leaves the standing default in place.
 
 ---
 
-## 8. Write-back list
+## 8. Write-backs
 
-One line per edit an owning document needs. Nothing here is applied yet — this
-document produces answers; the owning documents remain authoritative.
+### 8.1 Landed 2026-08-12
 
-**`interfaces_signal_header_plan.md`**
+| Rows | Documents edited |
+|---|---|
+| `IFQ-06`, `IFQ-02` | `docs/interfaces_signal_header_plan.md` §3, §3.1, §5, §6, §8, §9 (two stamps, the rename, and the three monotonicity refinements); `SW-0043`, `SW-0044`, `SW-0050` |
+| `OQ-01` | `SW-0410` (the highest-supported-rung field *is* the answer); register §4.7 |
+| `OQ-05`, `OQ-06`, `OQ-12` | `SYS-0048`, `SYS-0192`, `SYS-0071`, `SYS-0072`, Design `IMP-0379`; register §3 module-teams block emptied |
+| `OQ-10`, `OQ-11` | `SYS-0111`, `SW-0388`, Design `A-4` |
+| `OQ-02`, `OQ-04`, `OQ-07` | `SYS-0108`, `SYS-0082`, `SYS-0177`; register §3 algorithm-teams block emptied |
 
-- `IFQ-06` → **two fields**: `source_timestamp_*` always filled,
-  `capture_timestamp_*` `optional` and unset when unknown. Remove the stated
-  dependency on `OQ-09`.
-- Rename `time_stamp` to a name that says which clock it is — required by
-  `SW-0044` regardless of the unit decision.
-- `IFQ-01` → record the counter-evidence (§1.4) beside the standing default;
-  mark that ratification, not silence, adopts `timestamp_ns`.
+### 8.2 Outstanding — these wait on a row that is not closed
 
-**`SIM_Software_Requirements_v0.1.md`**
-
-- `SW-0043` / `SW-0044` `Now.` → the header's two stamps are decided; capture is
-  explicit-unknown in `R1`, `age_s` uses `SW-0045`'s hold-schedule fallback.
-- `SW-0050` accept → three refinements: non-decreasing (not strict), per port,
-  binds source time; an out-of-order capture time is reported, never clamped.
-- `SW-0388` `Now.` → the catalogue is **derived** as the union of the run's
-  `ModuleManifest`s; no authored catalogue file. `OQ-11` no longer gates it.
-- `SW-0369` / `SW-0323` `Now.` → budget file + declared reference configuration;
-  values are regression bounds seeded from the first measurement.
-- `SW-0348` `Now.` → the change set is already stated here; add the structural
-  gate (§5.2); the wall-clock budget remains open.
-- `SW-0033` → **only if `IFQ-01` is ratified to ns**: remove the
-  "only unit conversion in the engine" carve-out rather than amending it.
-
-**`SIM_System_Requirements_v0.1.md`**
-
-- `SYS-0048` / `SYS-0192` `Now.` → reset is `adasShutdown` + `adasInit`; exact
-  for handle-scoped state; the surviving-static hazard is detected by
-  `SYS-0192`'s own shuffle criterion; subprocess isolation where exactness must
-  be guaranteed.
-- `SYS-0066` / `SYS-0071` / `SYS-0072` → run-time rate change is
-  unrepresentable over the ABI; the grid cannot go stale; the residue is
-  `SYS-0071`'s reported disagreement.
-- `SYS-0108` deferral note → restate the revisit trigger as *rung 3 or better,
-  per recording* plus the untouched `SYS-0105`–`SYS-0107` ground.
-- `SYS-0080` / `SYS-0082` → note that addressability is four levels deep, and
-  that the missing axis is closed by `R-SIM-15` with two written alternatives.
-- `SYS-0177` / `SYS-0179` → the system passes a path, never a value; sweeps are
-  bundle variants.
-- `SYS-0111` → `R1` export set is fixed (MCAP + write-only CSV); an added format
-  is a codec row.
-
-**`SIM_Implementation_Design_v0.1.md`**
-
-- `A-4` → restate as *"we may have to adopt vocabulary"*, not *"we may have to
-  adopt a catalogue"*.
-
-**`SIM_Implementation_Plan_v0.1.md`**
-
-- `WP-01` → split into harness (vendor-independent, do now) and trigger (~10
-  lines, on the vendor answer). Note the `contrib/` home per `DD-08`.
-- `WP-18` / risk `R-8` → restate the ask as the four-item minimum in §3.4.
-
-**`SIM_Open_Questions_v0.1.md`** (the register itself)
-
-- Move eleven rows to §4 with the answers above.
-- Correct the `OQ-05` row: **three** modules on the ABI, naming
-  `perception-core`.
-- Correct the `OQ-16` row: the change set is not open.
-- Move `OQ-22` out of the baselining gates and attach it to the two format work
-  packages.
-- Merge `OQ-19` with `OQ-15`'s retention half into one policy question.
+- **`SW-0033`** — remove the "only unit conversion in the engine" carve-out
+  rather than amending it. **Only if `IFQ-01` is ratified to ns** (§1.1).
+- **`SW-0369` / `SW-0323` `Now.`** — budget file plus declared reference
+  configuration; values as regression bounds seeded from the first measurement
+  (§5.1). Held until the reference *host* is known, which is `OQ-15`.
+- **`SW-0348` `Now.`** — add the structural gate (§5.2); the wall-clock budget
+  stays open.
+- **`WP-01`** — split into harness (vendor-independent, do now) and trigger
+  (~10 lines, on the vendor answer), with the `contrib/` home per `DD-08`
+  (§6.1).
+- **`WP-18` / risk `R-8`** — restate the ask as the four-item minimum in §3.2.
+- **Register hygiene** — move `OQ-22` out of the baselining gates and attach it
+  to the two format work packages; merge `OQ-19` into `OQ-15`'s retention half.
 
 ---
 
@@ -760,9 +620,9 @@ The pass reduced twenty rows to **five asks**. Four are one sentence each.
 |---|---|---|---|
 | 1 | *Does any output of this tool enter a safety argument?* | Quality / safety | One sentence; determines whether `OQ-17`'s fallback is ever exercised. Cheapest question here to ask, potentially the most expensive to leave (§6.4) |
 | 2 | **Ten seconds of bench capture**, its channel list, and one sentence on re-stamping | A recording owner | Retires plan risk `R-8` and makes `MP-1`'s exit real rather than provisional (§3.2) |
-| 3 | *Ratify `timestamp_ns`, or keep `timestamp_us`?* | Whoever owns the interfaces contract | Reverses a stated default, so it needs a nod rather than silence (§1.4) |
+| 3 | *Ratify `timestamp_ns`, or keep `timestamp_us`?* | Whoever owns the interfaces contract | Reverses a stated default, so it needs a nod rather than silence (§1.1) |
 | 4 | Which CI system, and the retention policy for both CI artifacts and campaigns | DevOps + whoever owns storage/audit | One answer, two consumers (§6.1, §6.2). Only the ~10-line trigger waits on it |
 | 5 | Wall-clock budgets for the five configuration changes — **after** we measure them once and show the numbers | A customer team | A number to react to gets an answer where an open question does not (§5.2) |
 
-Everything else in the register is either closed above or attached to the work
-package where it becomes real.
+Everything else in the register is either closed and written back (§8.1) or
+attached to the work package where it becomes real.
