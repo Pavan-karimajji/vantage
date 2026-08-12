@@ -75,13 +75,8 @@ Carried as documented assumptions. Grouped by who can answer.
 | `OQ-09` | What exactly does the **bench capture** write, and **does it preserve the signal header end to end**? | `SYS-0015`, `SYS-0029`, `SYS-0061`; the foreign half of `OQ-01`; and now `IFQ-06`, which is conditional on it. **Raised in value again on 2026-08-12:** `MP-1`'s exit is provisional against a crafted fixture until a real sample exists (`WP-18`), so ten seconds of real bench capture retires plan risk `R-8` outright |
 | `OQ-22` | Licence and distribution situation for **proprietary format readers** | `SYS-0011` — now concrete: MDF4 and TDMS are the two |
 
-**Module teams**
-
-| ID | Question | Blocks |
-|---|---|---|
-| `OQ-05` | Which components have **real, functional libraries** today, and which are structural only? | What can actually be validated in `E2E-02`, `E2E-03`, `E2E-10`. **Narrowed 2026-08-12:** `df` and `vdy` are the two with generated port manifests and real libraries, so `IT-22`'s *"a second component completes the checklist unaided"* can be planned against them now. What is still open is which of the remaining nine are functional rather than structural |
-| `OQ-06` | Do existing modules support **reset without destroy**? | `SYS-0048`, `SYS-0192` |
-| `OQ-12` | Do any modules **change rate at run time**? | `SYS-0066`, `SYS-0071`, `SYS-0072` |
+**Module teams** — *none left. All three closed on 2026-08-12 (§4.7): the ABI
+answered them, so nobody was asked.*
 
 **Algorithm teams**
 
@@ -194,6 +189,9 @@ by an artifact nobody had re-read.**
 
 | ID | Answer |
 |---|---|
+| `OQ-05` | **A measurement, not a survey — and the criterion is not "functional".** `R-SIM-16` already makes a component onboard itself by manifest and `SYS-0050` forbids compile-time linkage, so what `E2E-02`/`E2E-03`/`E2E-10`/`IT-22` can be planned against is the output of `sim probe <lib>`, dated, rather than a document that goes stale. **Measured 2026-08-12: three** modules carry `conf/ports.yaml` and a SIL C interface — `df` (9 215 `src/` C++ lines, two real functions), `perception-core` (517, three detector/tracker units) and `vdy` (409) — **correcting this register's earlier "df and vdy are the two"**. `sil_host` is functional but is the host, not a module under test; `mathlib` is a library with no ports, correctly; `interfaces` and `shared_config` have no library by design; and `isp`, `perception-lane`, `planning`, `platform-services` have **zero C++ source**, so "structural" is measured rather than assumed. `perception-core` is the most useful `IT-22` candidate: it sits upstream of `df` on a real data path. §2.1 there |
+| `OQ-06` | **No module supports it, none can, and nothing depends on it.** The ABI has five exports and no reset entry point, so this was never a module-team question. `adasShutdown` + `adasInit` is an **exact** reset for all handle-scoped state and needs zero module changes; its only cost is a config-bundle re-parse. The one hazard it does not cover — a surviving process-level `static` — is detected by `SYS-0192`'s *own* acceptance criterion (a shuffled batch differs), and `DD-09`'s one-subprocess-per-recording guarantees exactness where it must be guaranteed rather than tested. An optional `adasReset` export is the named optimisation **if a measurement ever justifies one**; it is not proposed now, because adding an export against an unmeasured cost is how a five-symbol ABI becomes a seven-symbol one. §2.2 there |
+| `OQ-12` | **No — unrepresentable over this ABI.** The period is read from the config bundle at manifest-build time and reported through `adasManifest`, which is callable before `adasInit` and returns a snapshot; `adasExec` takes `dtS` and no rate argument. No export exists by which a module could announce a new period mid-run, so `SYS-0066`'s grid can be computed once at load and cannot go stale. The residue — a module that *behaves* at a rate other than the one it declares — is already `SYS-0071`, and that is a **stronger** guarantee than a survey answer, because it also holds for modules that would have answered wrongly. §2.3 there |
 | `OQ-01` | **It stopped being a question.** *"Do the recordings in scope carry task/cycle marking?"* is not answered globally for a corpus nobody has enumerated — `SW-0410`'s `RecordingIndex` already reports, per topic, *"the highest timing rung the data supports"*, computed by `SI-13`'s probe pass before every run and printed by `sim probe`. So the register's owned/foreign split dissolves: one field, measured on our files and foreign ones alike. A capture format nobody has seen yields an unknown **value**, never an unanswered question, and rung 1 being inert becomes observable rather than assumed. The `SignalHeader` half is confirmed and dated — once §1.1 lands every platform-produced payload reports rung 2 by construction, and the measurement will *show* it rather than it having to be believed. §1.3 there |
 
 ## 5. Assumptions this register does not turn into questions

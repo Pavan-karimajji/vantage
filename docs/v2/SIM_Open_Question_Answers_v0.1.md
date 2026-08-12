@@ -47,7 +47,7 @@ Six groups, twenty rows.
 | # | Group | Rows | What the group turns on |
 |---|---|---|---|
 | `G1` | **The clocks** | `IFQ-01` *(+ 3 written back)* | Time is declared in one unit, converted in one place, and degraded explicitly — never estimated |
-| `G2` | **What the compiled contract can already do** | `OQ-05` `OQ-06` `OQ-12` | Three questions addressed to module teams that the ABI in this repository answers without asking anyone |
+| `G2` | **What the compiled contract can already do** | *(all 3 written back)* | Three questions addressed to module teams that the ABI in this repository answers without asking anyone |
 | `G3` | **Recordings in, artifacts out** | `OQ-09` `OQ-10` `OQ-11` `OQ-22` | A format is a codec of four methods, so naming one costs a table row; what is genuinely open is never *which format* but *whether a real sample exists* |
 | `G4` | **Where the knobs are** | `OQ-02` `OQ-04` `OQ-07` | All three ask "should the system do more here?" and all three were answered by an artifact that predates the question |
 | `G5` | **Numbers nobody here can invent** | `OQ-14` `OQ-16` | An absolute threshold nobody can supply becomes a recorded baseline plus a regression bound — failable on day two without a guess on day one |
@@ -55,14 +55,11 @@ Six groups, twenty rows.
 
 ### 0.3 Status board
 
-Updated as each row concludes. **A row leaves this table when its answer has been written into the owning document** — the closed rows of `G1` are gone because `docs/interfaces_signal_header_plan.md`, `SW-0043`/`SW-0044`/`SW-0050`/`SW-0410` and the register now carry them.
+Updated as each row concludes. **A row leaves this table when its answer has been written into the owning document** — the closed rows of `G1` and `G2` are gone because `docs/interfaces_signal_header_plan.md`, `SW-0043`/`SW-0044`/`SW-0050`/`SW-0410` and the register now carry them.
 
 | Row | Group | Verdict | Write-back target |
 |---|---|---|---|
 | `IFQ-01` | `G1` | `NARROWED` — recommend `timestamp_ns`, reverses a stated default, needs one nod | `interfaces_signal_header_plan.md`; if ratified also `SW-0033` |
-| `OQ-05` | `G2` | `CLOSED` — a `sim probe` measurement; **three** ABI modules, not two | Register §3; `IT-22` candidate list |
-| `OQ-06` | `G2` | `CLOSED` — no reset export; shutdown+init is exact, subprocess is exacter | `SYS-0048`, `SYS-0192` `Now.` lines |
-| `OQ-12` | `G2` | `CLOSED` — unrepresentable over the ABI; residue is `SYS-0071` | `SYS-0066`/`SYS-0071`/`SYS-0072` notes |
 | `OQ-09` | `G3` | `NARROWED` — one 10-second sample; blocks no `WP`, keeps `MP-1` provisional | Plan risk `R-8`; `WP-18` |
 | `OQ-10` | `G3` | `CLOSED` — MCAP + write-only CSV; a preference is a codec row | `SYS-0111` `Now.`; drop from gate set |
 | `OQ-11` | `G3` | `CLOSED` — derive the catalogue from manifests; adopt vocabulary only | `SW-0388` `Now.`; Design `A-4` |
@@ -156,132 +153,24 @@ is **renamed** from `time_stamp` to a name that says which clock it is
 (§1.1 reason 3). That is `SW-0044`'s explicit requirement and it does not wait
 on the unit.
 
-## 2. `G2` — What the compiled contract can already do
+## 2. `G2` — What the compiled contract can already do · **all three closed and written back**
 
-**The pool.** `OQ-05` (which modules are real), `OQ-06` (reset without
-destroy), `OQ-12` (run-time rate change). The register addresses all three to
-*module teams*. **All three are answered by one file in this repository** —
-`modules/interfaces/include/adas/adas_sil_abi.h`, the generic ABI every SIL
-library exports — plus a census that a command can reproduce.
+`OQ-05`, `OQ-06` and `OQ-12`. Written back 2026-08-12 into `SYS-0048`,
+`SYS-0192`, `SYS-0071`, `SYS-0072`, Design `IMP-0379` and the register's §4.7.
 
-**The principle the group produced.** *A question about what modules do is a
-question about what the contract lets them do.* The ABI has exactly five
-exports — `adasAbiVersion`, `adasManifest`, `adasInit`, `adasExec`,
-`adasShutdown`. There is **no reset entry point and no rate-change entry
-point**, and there is no per-module variation to survey, because a module
-either speaks this ABI or is not a module. Asking eleven teams what their
-libraries support would have produced eleven answers to a question the header
-answers once — and, worse, would have invited a team to answer *"yes, through
-our own extra symbol"*, which is how a generic ABI acquires a per-component
-special case.
+**The principle is kept here because it applies to rows not yet worked.** All
+three were addressed to *module teams*; all three were answered by one file in
+this repository — `modules/interfaces/include/adas/adas_sil_abi.h`. *A question
+about what modules do is a question about what the contract lets them do.* The
+ABI has five exports and no per-module variation to survey, so asking eleven
+teams would have produced eleven answers to a question the header answers once
+— and would have invited a *"yes, through our own extra symbol"*, which is how
+a generic ABI acquires a per-component special case.
 
-### 2.1 `OQ-05` — which components have real libraries? · **`CLOSED` — as a measurement, not a survey**
-
-**Answer: the durable answer is `sim probe <lib>`, and the criterion is not
-"functional" but "exports the ABI and a manifest".** `R-SIM-16` already makes a
-component onboard itself by manifest; `SYS-0050` already forbids compile-time
-linkage to any component. So the question *"what can `E2E-02`/`E2E-03`/`E2E-10`
-and `IT-22` actually be planned against?"* is the output of a command, dated,
-and it does not go stale in a document.
-
-**Measured snapshot, 2026-08-12** (source lines exclude `build*/` and tests):
-
-| Module | `src/` C++ lines | `conf/ports.yaml` | `sim/` plug-ins | Reading |
-|---|---:|:---:|:---:|---|
-| `df` | 9 215 | ✔ | ✔ | **Functional.** Two real functions (`aeb`, `bsd`), generated port shim, CarMaker host |
-| `sil_host` | 1 155 | — | — | Functional, but it is the **host**, not a module under test |
-| `perception-core` | 517 | ✔ | ✔ | **On the ABI**: `perception_core_interface_c.cpp` + three detector/tracker units |
-| `vdy` | 409 | ✔ | — | **On the ABI**: `vdy_interface_c.cpp`, one component unit, manifest dump |
-| `mathlib` | 52 | — | — | A library, not a module — no ports, correctly |
-| `interfaces`, `shared_config` | 0 | — | — | Contract/data repos — no library by design |
-| `isp`, `perception-lane`, `planning`, `platform-services` | 0 | — | — | **Structural only** — no C++ source at all |
-
-**One correction to the register.** Its `OQ-05` row reads *"`df` and `vdy` are
-the two with generated port manifests"*. **There are three** —
-`perception-core` carries `conf/ports.yaml` and a SIL C interface as well. That
-matters directly: `IT-22`'s *"a second component completes the checklist
-unaided"* has a **third** candidate, and `perception-core` is the more
-interesting one because it sits upstream of `df` on a real data path, so
-`E2E-03`-style multi-module wiring can be planned without waiting for anything.
-
-**What genuinely remains, and why it is not carried as a question.** Whether
-the other four are *functional* rather than structural is not open — they have
-**zero C++ source**, so the answer is structural, today, measurably. When one
-gains a library it gains a manifest, and `sim probe` reports it the same day.
-The only real judgement left is per test — *"does this assertion need a braking
-decision, or just a port that moves?"* — and that belongs in the test's own
-row, not in a global census.
-
-### 2.2 `OQ-06` — do modules support reset without destroy? · **`CLOSED` — no, and it is an optimisation rather than a requirement**
-
-**Answer: no module supports it and none can, because the ABI has no reset
-export. Nothing depends on that, because `adasShutdown` + `adasInit` is an
-exact reset for all handle-scoped state and needs zero module changes.**
-
-`SYS-0048` names the lifecycle `create → configure → init → step (many) →
-reset → destroy`, and `SYS-0192` defaults to *reset-and-init before each
-entry*. Both are satisfiable **today**:
-
-| Lifecycle transition | Implemented as | Cost |
-|---|---|---|
-| create · configure · init | `adasInit(configPath)` | Re-reads and re-parses the config bundle |
-| step | `adasExec(handle, dtS, in, out)` | — |
-| **reset** | `adasShutdown(handle)` then `adasInit(...)` | One bundle re-parse per batch entry |
-| destroy | `adasShutdown(handle)` | — |
-
-**The one real hazard, and the fact that it is already detected.** Shutdown +
-init clears everything reachable from the handle. It does **not** clear
-process-level state — a file-scope global or a function-local `static` inside a
-component library survives, because the library stays loaded. That is exactly
-the failure `SYS-0192`'s own acceptance criterion catches: *"with the default,
-run order does not affect results — shuffling the list produces identical
-per-run outputs"*. A surviving static makes a shuffled batch differ. So the
-detector for the hazard is a test the requirement already mandates, and it
-needs no new mechanism.
-
-Where exactness must be guaranteed rather than tested, the design already has
-the stronger tool: `DD-09`/`R-SIM-19` run **one subprocess per recording** in
-batch, which resets process state by construction.
-
-**The optimisation, named so nobody invents a different one.** If measurement
-shows the per-entry bundle re-parse is material at campaign scale, the answer
-is an **optional** `adasReset(void* handle)` export, bound by name like every
-other symbol (`SYS-0050`), with *absent* meaning *fall back to shutdown+init*.
-That is additive — a host binding it optionally works against old and new
-libraries alike, and `ADAS_SIL_ABI_VERSION` does not move, since neither the
-structs nor the existing call semantics change. **It is not proposed now:**
-nobody has measured the re-parse, and adding an export to satisfy an
-unmeasured cost is how a five-symbol ABI becomes a seven-symbol one.
-
-**Trigger:** a campaign measurement (`G5`, `OQ-14`) showing init cost as a
-material share of per-entry time.
-
-### 2.3 `OQ-12` — do any modules change rate at run time? · **`CLOSED` — unrepresentable over this ABI**
-
-**Answer: no, and the contract makes it impossible to answer otherwise.** A
-module's period is read from its config bundle at manifest-build time
-(`<COMPONENT>_<FN>_PERIOD_US`, `buildManifest()`'s `periodLookupUs`) and
-reported through `adasManifest`, which is callable **before** `adasInit` and
-returns a snapshot. `adasExec` takes `dtS` and no rate argument. There is no
-export by which a module could announce a new period mid-run, and no host call
-that would ask.
-
-So `SYS-0066` (grid is the GCD), `SYS-0071` (the module's own update flag wins)
-and `SYS-0072` (period declared by the module, calibrated in configuration) are
-unaffected: the grid can be computed once at load, and it cannot go stale.
-
-**The residue is already a requirement, not a question.** A module may still
-*behave* at a rate other than the one it declares — internal sub-gating,
-skipping a cycle under load, a stale calibration key. `SYS-0071` covers exactly
-that: the module's own `updated` flag is authoritative over the predicted
-schedule and any disagreement is *reported as a named finding in the run
-manifest, never a silent value*. That is a stronger guarantee than an answer
-from a module team would have been, because it holds for modules that answer
-the survey wrongly.
-
-**What would reopen this:** a module needing a genuinely variable rate would
-need a new export, so it arrives as an ABI change request and cannot slip in
-quietly. Nothing in the current eleven modules is heading that way.
+**One correction it produced, carried forward because it changes planning:**
+**three** modules carry `conf/ports.yaml` and a SIL C interface, not two —
+`perception-core` as well as `df` and `vdy`, and it is the better `IT-22`
+candidate because it sits upstream of `df` on a real data path.
 
 ## 3. `G3` — Recordings in, artifacts out
 

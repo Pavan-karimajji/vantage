@@ -621,6 +621,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The module host shall load the library, resolve ABI entry points, and drive the lifecycle `create → configure → init → step (many) → reset → destroy`.
 **Accept.** Every transition is observable in the cycle trace. A module that fails any transition is reported with the transition named.
 **Verify.** T · `SYT-PRC-12`   **Trace.** CN-0096
+*Note (`OQ-06`, closed 2026-08-12):* the ABI has **five** exports — `adasAbiVersion`, `adasManifest`, `adasInit`, `adasExec`, `adasShutdown` — and **no reset entry point**, so *"do modules support reset without destroy?"* is a question about the contract rather than about eleven module teams. The lifecycle maps onto it today with no module change: create/configure/init is `adasInit(configPath)`, step is `adasExec`, **reset is `adasShutdown` then `adasInit`**, destroy is `adasShutdown`. That is exact for all handle-scoped state; its cost is one config-bundle re-parse per reset. Reset-without-destroy is therefore an **optimisation, never a semantic requirement** — see `SYS-0192` for the hazard it does not cover and `SIM_Open_Question_Answers_v0.1.md` §2.2 for the optional-export shape it would take if a measurement ever justified one.
 
 **`SYS-0049`** · `P0` · `R1` — Failures name the module and the cycle
 **Shall.** Module errors and crashes shall be reported as the module, the cycle, and the input snapshot at that cycle.
@@ -768,11 +769,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A module's own reported update flag shall be authoritative over the predicted schedule, and any disagreement shall be reported.
 **Accept.** A module whose internal rate gating disagrees with its declared period produces a named finding in the run manifest, never a silent value.
 **Verify.** T · `SYT-TIM-12`   **Trace.** CN-0334
+*Note:* this is what remains of `OQ-12` once the ABI has answered it (`SYS-0072`). A module cannot *declare* a new rate mid-run, but it may still **behave** at one — internal sub-gating, a cycle skipped under load, a stale calibration key. This requirement covers exactly that, and it is a **stronger** guarantee than an answer from a module team would have been, because it also holds for the modules that would have answered the survey wrongly.
 
 **`SYS-0072`** · `P0` · `R1` — Period is declared by the module, calibrated in configuration
 **Shall.** A module shall declare its cycle period as configuration read from its config bundle in integer microseconds, reported through its manifest; the host shall never set it.
 **Accept.** A rate sweep changes only a calibration value; no rebuild occurs and no host file is edited.
 **Verify.** T · `SYT-TIM-13`   **Trace.** CN-0284; v1 `NR-SIM-6`
+*Note (`OQ-12`, closed 2026-08-12):* *"do any modules change rate at run time?"* is answered by the contract, not by the module teams — **no**, and unrepresentably so. The period is read from the config bundle at manifest-build time (`<COMPONENT>_<FN>_PERIOD_US`, `buildManifest()`'s `periodLookupUs`) and reported through `adasManifest`, which is callable before `adasInit` and returns a snapshot; `adasExec` takes `dtS` and no rate argument. There is no export by which a module could announce a new period mid-run. So the base grid (`SYS-0066`) can be computed once at load and cannot go stale, and a module needing a variable rate would arrive as an ABI change request rather than slipping in quietly.
 
 ### 8.4 Sampling and order
 
@@ -1434,6 +1437,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Reset mode shall be configurable as none / reset / reset-and-init, and reset timing as before the whole batch / before each entry / before each section, defaulting to reset-and-init before each entry; the chosen policy shall be recorded in the run manifest.
 **Accept.** With the default, run order does not affect results — shuffling the list produces identical per-run outputs. With `none`, order dependence is demonstrable, proving the test has power.
 **Verify.** T · `SYT-BAT-12`   **Trace.** CN-0194, CN-0195, CN-0196, CN-0197; **evidence** §2.2
+*Note:* the default is implementable today as `adasShutdown` + `adasInit` (`SYS-0048`). That clears everything reachable from the handle but **not** process-level state — a file-scope global or a function-local `static` survives, because the library stays loaded. **This requirement's own acceptance criterion is the detector:** a surviving static makes a shuffled batch differ, which is exactly what *"shuffling the list produces identical per-run outputs"* fails on. So the hazard needs no new mechanism to find. Where exactness must be *guaranteed* rather than tested, `DD-09`'s one-subprocess-per-recording resets process state by construction.
 
 **`SYS-0193`** · `P1` · `R1` — Read-error policy
 **Shall.** The behaviour on a read error shall be configurable as stop / skip entry / abort batch / skip the damaged package and continue; skipped packages shall be counted, reported, and shall flag the run.
