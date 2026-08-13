@@ -33,8 +33,8 @@ from pathlib import Path
 
 import pytest
 
-from adas_sim.contracts.component import CtypesSilComponent
-from adas_sim.core.errors import EnvironmentError_
+from adas_sim.resolve.component import CtypesSilComponent
+from adas_sim.diagnostics.errors import EnvironmentError_
 
 _FIXTURE_SRC = (
     Path(__file__).resolve().parents[1] / "fixtures" / "c5_bundle_fixture" / "adas_fixture.cpp"

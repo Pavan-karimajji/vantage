@@ -24,10 +24,10 @@ for _p in (_SRC, _DF_ROOT):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from adas_sim.core.console import reconfigure_console_utf8  # noqa: E402
-from adas_sim.core.history import FrameTree, HistoryView, LayerCtx  # noqa: E402
+from adas_sim.diagnostics.console import reconfigure_console_utf8  # noqa: E402
+from adas_sim.session.history import FrameTree, HistoryView, LayerCtx  # noqa: E402
 from adas_sim.core.runner import build_session_from_recording  # noqa: E402
-from adas_sim.model.project import ProjectModel  # noqa: E402
+from adas_sim.config.project import ProjectModel  # noqa: E402
 from adas_sim.scene import default_layers  # noqa: E402
 from adas_sim.scene.codec import encode_scene  # noqa: E402
 from adas_sim.scene.types import Scene  # noqa: E402

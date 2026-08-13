@@ -16,7 +16,7 @@ from google.protobuf import descriptor_pb2 as _dpb
 from google.protobuf import descriptor_pool as _dpool
 from google.protobuf import message_factory as _mfactory
 
-from adas_sim.core.errors import ContractError
+from adas_sim.diagnostics.errors import ContractError
 from adas_sim.scene.codec import SceneProto, decode_scene, encode_scene
 from adas_sim.scene.types import BulkRef, Layer, Prim, Scene
 

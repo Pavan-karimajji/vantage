@@ -13,7 +13,7 @@ import numpy as np
 
 from adas_sim.render.bev import render_scene
 from adas_sim.scene.types import Layer, Prim, Scene
-from adas_sim.view.viewport import Viewport
+from adas_sim.player.panels.viewport import Viewport
 
 _VP = Viewport(size_px=(200, 200), scale_px_per_m=10.0)
 

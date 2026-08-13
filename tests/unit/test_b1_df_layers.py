@@ -35,10 +35,10 @@ _GENERATED_PY = MODULES_ROOT / "interfaces" / "build" / "generated_py"
 if str(DF_ROOT) not in sys.path:
     sys.path.insert(0, str(DF_ROOT))
 
-from adas_sim.core.history import FrameTree, HistoryView, LayerCtx  # noqa: E402
-from adas_sim.core.tick import Pose2D, PortValue, Tick  # noqa: E402
-from adas_sim.model.project import ProjectModel  # noqa: E402
-from adas_sim.model.sensors import SensorModel  # noqa: E402
+from adas_sim.session.history import FrameTree, HistoryView, LayerCtx  # noqa: E402
+from adas_sim.session.tick import Pose2D, PortValue, Tick  # noqa: E402
+from adas_sim.config.project import ProjectModel  # noqa: E402
+from adas_sim.config.sensors import SensorModel  # noqa: E402
 
 _POSE = Pose2D(x_m=0.0, y_m=0.0, yaw_rad=0.0)
 

@@ -19,7 +19,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from adas_sim.cli.batch import run as batch_run
-from adas_sim.contracts.pipeline import Pipeline
+from adas_sim.graph.build import Pipeline
 from adas_sim.core.resim import resim_pipeline
 
 _TINY = Path(__file__).resolve().parent.parent / "fixtures" / "tiny.mcap"
@@ -62,7 +62,7 @@ def test_batch_over_20_recordings_one_report_failure_does_not_abort(tmp_path, mo
     # compiled component exists in this shell to exercise the CLI's own
     # argv path end to end (test_cli_reports_failure_via_exit_code below
     # covers the CLI layer with a case that needs no stub at all).
-    from adas_sim.core.batch import run_batch, write_report
+    from adas_sim.orchestrate.batch import run_batch, write_report
 
     results = run_batch(recordings, pipeline, test_stub_echo=("echo",), timeout_s=5.0)
     write_report(results, report_path)
@@ -88,7 +88,7 @@ def test_pipeline_runs_identically_under_resim_and_batch(tmp_path):
     recording."""
     pipeline_path = _echo_pipeline(tmp_path)
 
-    from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent
+    from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent
 
     manifest = ComponentManifest(
         component="echo", version="test", abi_version=1, build_id="test",
@@ -102,7 +102,7 @@ def test_pipeline_runs_identically_under_resim_and_batch(tmp_path):
     finally:
         pipeline.shutdown_components()
 
-    from adas_sim.core.batch import run_batch
+    from adas_sim.orchestrate.batch import run_batch
 
     batch_results = run_batch([_TINY], pipeline_path, test_stub_echo=("echo",))
 
@@ -116,7 +116,7 @@ def test_batch_of_20_with_one_crash_one_hang_exit_code_reflects_failure(tmp_path
     recordings = _copy_recordings(tmp_path, _RECORDING_COUNT)
     monkeypatch.setenv("ADAS_SIM_BATCH_TEST_STUB_MAP", "rec_03=crash;rec_11=hang")
 
-    from adas_sim.core.batch import run_batch
+    from adas_sim.orchestrate.batch import run_batch
 
     results = run_batch(recordings, pipeline, test_stub_echo=("echo",), timeout_s=3.0)
 

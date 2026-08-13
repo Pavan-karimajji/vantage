@@ -10,7 +10,7 @@ pure state (`UT-B3-17`'s own layering)."""
 from __future__ import annotations
 
 from adas_sim.scene.types import Layer
-from adas_sim.view.layers import LayerTreeState
+from adas_sim.player.panels.layers import LayerTreeState
 
 _LAYERS = (
     Layer(id="df.common.ego", group="df", label="Ego", level=1, default_on=True),

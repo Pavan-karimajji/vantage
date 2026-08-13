@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from adas_sim.cli import doctor
-from adas_sim.core.diagnostics import component_checklist
+from adas_sim.diagnostics.diagnostics import component_checklist
 
 SIM_ROOT = Path(__file__).resolve().parent.parent.parent
 MODULES_ROOT = SIM_ROOT.parent

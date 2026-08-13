@@ -32,7 +32,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Literal
 
-from adas_sim.core.errors import AuthoringError
+from adas_sim.diagnostics.errors import AuthoringError
 
 Theme = Literal["dark", "light", "print", "forced"]
 THEMES: tuple[Theme, ...] = ("dark", "light", "print", "forced")

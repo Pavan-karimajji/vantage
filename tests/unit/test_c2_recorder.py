@@ -28,12 +28,12 @@ from pathlib import Path
 
 import yaml
 
-from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent, PortSpec
-from adas_sim.contracts.pipeline import Pipeline
-from adas_sim.contracts.scenario import (
+from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
+from adas_sim.graph.build import Pipeline
+from adas_sim.config.scenario import (
     EgoScenario, RoadHint, RunControl, Scenario, ScenarioContent, SensorModelRef, SutRef,
 )
-from adas_sim.core.manifest import build_manifest
+from adas_sim.runspec.manifest import build_manifest
 from adas_sim.io.base import CAPTURE_TIME_MANIFEST_VERSION, Provenance, RunManifest
 from adas_sim.io.mcap import McapReader
 from adas_sim.sources.recorder import REVISE_AFTER_TICKS, Recorder
@@ -44,7 +44,7 @@ def _scenario(name: str = "t") -> Scenario:
     return Scenario(
         schema=2, id=name, doc="",
         scenario=ScenarioContent(road=RoadHint(), ego=EgoScenario(speed_mps=0.0), actors=()),
-        world={}, sensor_model=SensorModelRef(), run=RunControl(), sut=SutRef(),
+        sensor_model=SensorModelRef(), run=RunControl(), sut=SutRef(),
     )
 
 

@@ -18,8 +18,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from adas_sim.io.base import Provenance, RunManifest, TopicInfo
-from adas_sim.io.ingest import IngestMap, IngestRecordingReader, ProvidedPort
-from adas_sim.io.registry import reader_for, writer_for
+from adas_sim.ingest.map import IngestMap, IngestRecordingReader, ProvidedPort
+from adas_sim.plugins.registry import reader_for, writer_for
 
 import adas_sim.io.jsonl  # noqa: E402,F401 -- registers the ".jsonl" codec
 import adas_sim.io.mcap  # noqa: E402,F401 -- registers the ".mcap" codec

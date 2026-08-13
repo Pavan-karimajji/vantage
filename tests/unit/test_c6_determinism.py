@@ -14,9 +14,9 @@ import pytest
 import yaml
 from google.protobuf import descriptor_pb2, wrappers_pb2
 
-from adas_sim.core.determinism import compare_exact, compare_with_tolerance, derive_axis
-from adas_sim.core.errors import AuthoringError
-from adas_sim.core.tolerance import ToleranceRow, ToleranceSet, load_tolerance
+from adas_sim.diagnostics.determinism import compare_exact, compare_with_tolerance, derive_axis
+from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.diagnostics.tolerance import ToleranceRow, ToleranceSet, load_tolerance
 from adas_sim.io.base import ComponentBuildInfo, Provenance, RunManifest, TopicInfo
 
 

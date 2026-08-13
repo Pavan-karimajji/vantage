@@ -22,9 +22,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from adas_sim.contracts.component import CtypesSilComponent, PortSpec
-from adas_sim.core.session import Session
-from adas_sim.io.registry import is_registered_recording_extension
+from adas_sim.resolve.component import CtypesSilComponent, PortSpec
+from adas_sim.session.session import Session
+from adas_sim.plugins.registry import is_registered_recording_extension
 
 
 def build_parser() -> argparse.ArgumentParser:

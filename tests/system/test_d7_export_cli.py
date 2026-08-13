@@ -14,7 +14,7 @@ import pytest
 
 from adas_sim.cli.export import run
 from adas_sim.io.base import ComponentBuildInfo, Provenance, RunManifest, TopicInfo
-from adas_sim.io.registry import writer_for
+from adas_sim.plugins.registry import writer_for
 import adas_sim.io.csv  # noqa: F401 -- registers ".csv"
 import adas_sim.io.mcap  # noqa: F401 -- registers ".mcap"
 

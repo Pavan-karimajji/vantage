@@ -15,9 +15,9 @@ through `cli.explain._explain_with_style_tokens` instead.
 from __future__ import annotations
 
 from adas_sim.cli.explain import _explain_with_style_tokens
-from adas_sim.core.explain import explain
-from adas_sim.core.session import Session
-from adas_sim.core.tick import Pose2D, PortValue, Tick
+from adas_sim.diagnostics.explain import explain
+from adas_sim.session.session import Session
+from adas_sim.session.tick import Pose2D, PortValue, Tick
 from adas_sim.scene.registry import layer_provider
 
 _POSE = Pose2D(x_m=0.0, y_m=0.0, yaw_rad=0.0)

@@ -27,9 +27,9 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, fields
 from types import MappingProxyType
 
-from adas_sim.contracts.binding import try_resolve_component_ref
-from adas_sim.core.errors import AuthoringError
-from adas_sim.core.history import Interaction
+from adas_sim.runspec.address import try_resolve_component_ref
+from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.session.history import Interaction
 from adas_sim.scene.types import Layer
 
 #: The vocabulary a provider's `reacts_to=` may name -- read off `Interaction`

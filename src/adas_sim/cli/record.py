@@ -5,12 +5,11 @@
 
 """`sim record <scenario> -o <out>` -- produce a recording, execute nothing.
 
-Drives a world model and writes every port it emits. No pipeline runs, so the
-result is stimulus only. Use `sim run` to record and execute in one pass.
+Drives the scripted synthetic source and writes every port it emits. No
+pipeline runs, so the result is stimulus only. Use `sim run` to record and
+execute in one pass.
 
-`--source synthetic` needs a scripted YAML of per-tick bytes (`--script`);
-`--source carla` drives the scenario file itself, resolving its message
-classes from a real built component's `adasManifest()` (`--component-lib`).
+Needs a scripted YAML of per-tick bytes (`--script`).
 """
 
 # Design refs: `GT-9` · `R-SIM-12` producing and executing are two sides ·
@@ -21,12 +20,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from adas_sim.contracts.component import CtypesSilComponent, resolve_message_classes
-from adas_sim.contracts.scenario import load_scenario
-from adas_sim.core.errors import AuthoringError
-from adas_sim.core.manifest import build_manifest
-from adas_sim.sources.carla import CarlaSource
-from adas_sim.sources.carla.mocks import PORT_PROTO_TYPES
+from adas_sim.config.scenario import load_scenario
+from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.runspec.manifest import build_manifest
 from adas_sim.sources.recorder import Recorder
 from adas_sim.sources.synthetic import SyntheticSource
 
@@ -35,10 +31,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="sim record", description=__doc__)
     parser.add_argument("scenario", type=Path, help="scenario YAML")
     parser.add_argument("-o", "--output", type=Path, required=True, help="output recording (.mcap)")
-    parser.add_argument("--source", choices=["synthetic", "carla"], default="synthetic")
-    parser.add_argument("--script", type=Path, help="--source synthetic only: a YAML script of per-tick bytes")
-    parser.add_argument("--component-lib", type=Path, help="--source carla only: a built component library (dll:/stubdll:) to resolve message classes from (contracts.component.resolve_message_classes)")
-    parser.add_argument("--ticks", type=int, help="ticks to record (defaults to --script's own length, --source synthetic only)")
+    parser.add_argument("--script", type=Path, required=True, help="a YAML script of per-tick bytes")
+    parser.add_argument("--ticks", type=int, help="ticks to record (defaults to --script's own length)")
     parser.add_argument("--dt-ms", type=float, default=50.0, help="tick period in milliseconds")
     parser.add_argument("--project", default="base")
     return parser
@@ -49,27 +43,8 @@ def _build_source(args: argparse.Namespace):
     latter two are a source's own port->proto_type map plus one shared
     `FileDescriptorSet`, passed straight through to `Recorder` so `source.*`
     topics get a real schema instead of a placeholder qualified port name
-    (empty for a source with no real schema to offer, e.g. synthetic)."""
-    if args.source == "synthetic":
-        if args.script is None:
-            raise AuthoringError(
-                expected="--script <path> with --source synthetic", found="--script absent",
-                where="sim record", hint="a synthetic source needs a scripted YAML of per-tick bytes",
-            )
-        return SyntheticSource.from_yaml(args.script), {}, b""
-    # --source carla: message classes come from a real component's own
-    # manifest (`contracts.component.resolve_message_classes`, R-SIM-11) --
-    # no generated bindings, no `interfaces` checkout.
-    if args.component_lib is None:
-        raise AuthoringError(
-            expected="--component-lib <path> with --source carla", found="--component-lib absent",
-            where="sim record", hint="a live CARLA source resolves its DfObjList/VehDyn/"
-                  "VehSig message classes from a built component's adasManifest()",
-        )
-    component = CtypesSilComponent(args.component_lib)
-    manifest = component.manifest
-    source = CarlaSource(message_classes=resolve_message_classes(manifest))
-    return source, PORT_PROTO_TYPES, manifest.descriptor_set
+    (empty here -- the synthetic source has no real schema to offer)."""
+    return SyntheticSource.from_yaml(args.script), {}, b""
 
 
 def _tick_count(args: argparse.Namespace, source) -> int:
@@ -80,7 +55,7 @@ def _tick_count(args: argparse.Namespace, source) -> int:
     except TypeError as exc:
         raise AuthoringError(
             expected="--ticks <n>", found="--ticks absent and this source has no natural length",
-            where="sim record", hint="pass --ticks explicitly for a live source (e.g. --source carla)",
+            where="sim record", hint="pass --ticks explicitly",
         ) from exc
 
 

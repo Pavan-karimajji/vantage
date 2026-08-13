@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from adas_sim.core.errors import AuthoringError
+from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.scene.registry import layer_provider, registered_providers
 
 

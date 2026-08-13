@@ -27,11 +27,11 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
-from adas_sim.contracts.pipeline import Pipeline, _split_ref
-from adas_sim.core.errors import AuthoringError
+from adas_sim.graph.build import Pipeline, _split_ref
+from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.io.base import Provenance, RunManifest, TopicInfo, group_by_log_time
-from adas_sim.io.ingest import IngestRecordingReader, discover_ingest_maps
-from adas_sim.io.registry import reader_for, writer_for
+from adas_sim.ingest.map import IngestRecordingReader, discover_ingest_maps
+from adas_sim.plugins.registry import reader_for, writer_for
 
 
 def _topic_to_port_name(topic: str) -> str:

@@ -26,13 +26,13 @@ from adas_sim.check.report import format_report_json, format_report_md, suite_pa
 from adas_sim.check.runner import (
     ScenarioCheckResult, check_scenario, check_scenarios, default_recording_stem_for, discover_pipelines,
 )
-from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent, PortSpec
-from adas_sim.contracts.pipeline import Pipeline
-from adas_sim.contracts.scenario import (
+from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
+from adas_sim.graph.build import Pipeline
+from adas_sim.config.scenario import (
     EgoScenario, RoadHint, RunControl, Scenario, ScenarioContent, SensorModelRef, SutRef,
 )
-from adas_sim.core.errors import AuthoringError
-from adas_sim.core.manifest import build_manifest
+from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.runspec.manifest import build_manifest
 from adas_sim.sources.recorder import Recorder
 from adas_sim.sources.synthetic import SyntheticSource
 
@@ -170,7 +170,7 @@ def _record_widget_recording(tmp_path: Path, values: list[float], *, descriptor_
     recorder.open(Scenario(
         schema=2, id="t", doc="",
         scenario=ScenarioContent(road=RoadHint(), ego=EgoScenario(speed_mps=0.0), actors=()),
-        world={}, sensor_model=SensorModelRef(), run=RunControl(), sut=SutRef(),
+        sensor_model=SensorModelRef(), run=RunControl(), sut=SutRef(),
     ))
     for _ in values:
         recorder.tick(100_000_000)
@@ -263,7 +263,7 @@ def _record_echo_recording(tmp_path: Path, values: list[float], *, descriptor_se
     recorder.open(Scenario(
         schema=2, id="t", doc="",
         scenario=ScenarioContent(road=RoadHint(), ego=EgoScenario(speed_mps=0.0), actors=()),
-        world={}, sensor_model=SensorModelRef(), run=RunControl(), sut=SutRef(),
+        sensor_model=SensorModelRef(), run=RunControl(), sut=SutRef(),
     ))
     for _ in values:
         recorder.tick(100_000_000)

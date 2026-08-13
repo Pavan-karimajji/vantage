@@ -193,7 +193,7 @@ class RunManifest:
     run_kind: str = ""  # "sim" | "resim"
     created_utc: str = ""
     host: str = ""
-    source_kind: str = ""  # "carla" | "mcap" | "carmaker" | "synthetic"
+    source_kind: str = ""  # "mcap" | "carmaker" | "synthetic"
     scenario: str = ""
     scenario_sha256: str = ""
     recording: str = ""

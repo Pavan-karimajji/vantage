@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from adas_sim.contracts.loader import resolve_library
-from adas_sim.core.errors import EnvironmentError_
+from adas_sim.resolve.library import resolve_library
+from adas_sim.diagnostics.errors import EnvironmentError_
 
 
 @pytest.mark.parametrize(

@@ -36,11 +36,11 @@ from pathlib import Path
 import pytest
 
 from adas_sim.cli.probe import run as probe_run
-from adas_sim.contracts.pipeline import Pipeline
-from adas_sim.core.manifest import build_manifest
+from adas_sim.graph.build import Pipeline
+from adas_sim.runspec.manifest import build_manifest
 from adas_sim.core.resim import resim_pipeline_merged
-from adas_sim.core.session import Session
-from adas_sim.io.registry import reader_for
+from adas_sim.session.session import Session
+from adas_sim.plugins.registry import reader_for
 
 _FIXTURE_SRC = Path(__file__).resolve().parents[1] / "fixtures" / "echo_stub" / "echo_stub_with_output.c"
 _INTERFACES_INCLUDE = Path(__file__).resolve().parents[3] / "interfaces" / "include"

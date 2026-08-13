@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from adas_sim.contracts.override import Override, OverrideVerb, parse_override_verb
-from adas_sim.core.errors import AuthoringError
+from adas_sim.config.override import Override, OverrideVerb, parse_override_verb
+from adas_sim.diagnostics.errors import AuthoringError
 
 
 def test_const_returns_its_value_regardless_of_current_or_first():

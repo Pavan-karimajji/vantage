@@ -25,8 +25,8 @@ from pathlib import Path
 import pytest
 
 from adas_sim.cli import resim as resim_cli
-from adas_sim.core.errors import ContractError
-from adas_sim.io.registry import reader_for, writer_for
+from adas_sim.diagnostics.errors import ContractError
+from adas_sim.plugins.registry import reader_for, writer_for
 
 SIM_ROOT = Path(__file__).resolve().parent.parent.parent
 MODULES_ROOT = SIM_ROOT.parent

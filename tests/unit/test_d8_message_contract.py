@@ -17,12 +17,12 @@ from pathlib import Path
 
 import pytest
 
-from adas_sim.app.shell.workspace import CAMPAIGN, WorkspacePermissionError
-from adas_sim.contracts.component import CtypesSilComponent
-from adas_sim.contracts.pipeline import Pipeline
-from adas_sim.core.errors import SimError
-from adas_sim.model.plugins import PluginBundle
-from adas_sim.model.project import materialize_derived_bundle
+from adas_sim.player.shell.shell.workspace import CAMPAIGN, WorkspacePermissionError
+from adas_sim.resolve.component import CtypesSilComponent
+from adas_sim.graph.build import Pipeline
+from adas_sim.diagnostics.errors import SimError
+from adas_sim.resolve.plugins import PluginBundle
+from adas_sim.config.project import materialize_derived_bundle
 
 
 def _induce_pipeline_missing_impl(tmp_path: Path) -> None:

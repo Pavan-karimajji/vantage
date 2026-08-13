@@ -14,7 +14,7 @@ import pytest
 
 from adas_sim.io.base import CAPTURE_TIME_MANIFEST_VERSION, Provenance, RunManifest, TopicInfo
 from adas_sim.io.jsonl import CAPABILITIES, JsonlReader, JsonlWriter
-from adas_sim.io.registry import reader_for, registered_extensions, writer_for
+from adas_sim.plugins.registry import reader_for, registered_extensions, writer_for
 
 _TOPICS = {
     "source/veh_dyn": TopicInfo(schema_name="adas_sim.test.VehDyn", provenance=Provenance.MEASURED),

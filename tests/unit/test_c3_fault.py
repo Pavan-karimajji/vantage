@@ -17,9 +17,9 @@ from google.protobuf import descriptor_pb2 as _dpb
 from google.protobuf import descriptor_pool as _dpool
 from google.protobuf import message_factory as _mfactory
 
-from adas_sim.contracts.fault import Fault, FaultVerb, apply_fault, parse_fault, parse_fault_verb
-from adas_sim.core.errors import AuthoringError
-from adas_sim.core.tick import PortValue
+from adas_sim.config.fault import Fault, FaultVerb, apply_fault, parse_fault, parse_fault_verb
+from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.session.tick import PortValue
 
 
 def _scalar_message_cls():

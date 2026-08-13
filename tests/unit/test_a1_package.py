@@ -16,18 +16,24 @@ from pathlib import Path
 SIM_ROOT = Path(__file__).resolve().parent.parent.parent
 SRC_ROOT = SIM_ROOT / "src" / "adas_sim"
 
-#: sim_api_reference.md §1's package map, byte for byte.
+#: docs/v2/SIM_Implementation_Design_v0.1.md §2.1/§2.3's package map, as of
+#: WP-02(a)'s rename (`sources/` and `check/` still present -- WP-02(b)/(c)
+#: remove them later in this same work package).
 EXPECTED_SUBPACKAGES = {
-    "core", "model", "scene", "contracts", "io", "sources",
-    "view", "render", "check", "cli", "app",
+    "core", "scene", "io", "sources", "check", "cli",
+    "config", "graph", "ingest", "resolve", "runspec", "orchestrate",
+    "diagnostics", "session", "render", "player", "plugins",
 }
 
 #: UT-A1-2: importing any subpackage must not pull these in as a side effect.
 FORBIDDEN_AT_IMPORT = ("PySide6", "matplotlib", "mcap", "google.protobuf")
 
-#: UT-A1-6: the import direction sim_api_reference.md §1 requires.
-_LOWER_LAYER = ("core", "model", "scene", "contracts", "io", "check")
-_UPPER_LAYER = ("view", "render", "cli", "app")
+#: UT-A1-6: the import direction docs/v2/SIM_Implementation_Design_v0.1.md §2.1 requires.
+_LOWER_LAYER = (
+    "core", "scene", "io", "check", "config", "graph", "ingest",
+    "resolve", "runspec", "orchestrate", "diagnostics", "session", "plugins",
+)
+_UPPER_LAYER = ("player", "render", "cli")
 
 
 def test_import_adas_sim_succeeds_with_nonempty_version():

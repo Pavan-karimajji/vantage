@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import pytest
 
-from adas_sim.core.errors import AuthoringError
-from adas_sim.core.session import Session
-from adas_sim.core.tick import Pose2D, PortValue, Tick
-from adas_sim.view.transport import CancelToken, ResumeOption, Transport
+from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.session.session import Session
+from adas_sim.session.tick import Pose2D, PortValue, Tick
+from adas_sim.player.panels.transport import CancelToken, ResumeOption, Transport
 
 _ORIGIN_POSE = Pose2D(x_m=0.0, y_m=0.0, yaw_rad=0.0)
 

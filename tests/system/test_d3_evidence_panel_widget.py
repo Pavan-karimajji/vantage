@@ -30,18 +30,18 @@ pytest.importorskip("PySide6")
 from PySide6 import QtWidgets  # noqa: E402
 
 from adas_sim.cli import explain as explain_cli  # noqa: E402
-from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent, PortSpec  # noqa: E402
-from adas_sim.contracts.pipeline import Pipeline  # noqa: E402
-from adas_sim.contracts.scenario import (  # noqa: E402
+from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec  # noqa: E402
+from adas_sim.graph.build import Pipeline  # noqa: E402
+from adas_sim.config.scenario import (  # noqa: E402
     EgoScenario, RoadHint, RunControl, Scenario, ScenarioContent, SensorModelRef, SutRef,
 )
-from adas_sim.core.evidence import evidence, format_evidence  # noqa: E402
-from adas_sim.core.manifest import build_manifest  # noqa: E402
+from adas_sim.diagnostics.evidence import evidence, format_evidence  # noqa: E402
+from adas_sim.runspec.manifest import build_manifest  # noqa: E402
 from adas_sim.core.runner import build_session_from_recording  # noqa: E402
-from adas_sim.render.viewer import EvidencePanel  # noqa: E402
+from adas_sim.player.shell.qt_window import EvidencePanel  # noqa: E402
 from adas_sim.sources.recorder import Recorder  # noqa: E402
 from adas_sim.sources.synthetic import SyntheticSource  # noqa: E402
-from adas_sim.view.evidence_panel import EvidencePanelState  # noqa: E402
+from adas_sim.player.panels.evidence_panel import EvidencePanelState  # noqa: E402
 
 _UNDER_TEST_MANIFEST = ComponentManifest(
     component="under_test", version="1", abi_version=1, build_id="test",
@@ -55,7 +55,7 @@ def _scenario() -> Scenario:
     return Scenario(
         schema=2, id="d3_evidence", doc="",
         scenario=ScenarioContent(road=RoadHint(), ego=EgoScenario(speed_mps=0.0), actors=()),
-        world={}, sensor_model=SensorModelRef(), run=RunControl(), sut=SutRef(),
+        sensor_model=SensorModelRef(), run=RunControl(), sut=SutRef(),
     )
 
 

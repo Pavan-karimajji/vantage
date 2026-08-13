@@ -9,8 +9,8 @@ stays headless-testable)."""
 
 from __future__ import annotations
 
-from adas_sim.core.tick import Pose2D, PortValue, Tick
-from adas_sim.view.hud import (
+from adas_sim.session.tick import Pose2D, PortValue, Tick
+from adas_sim.player.panels.hud import (
     HudInfo, format_hud_lines, format_stale_banner, format_stimulus_only_banner, stale_ports,
 )
 

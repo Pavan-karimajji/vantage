@@ -83,10 +83,10 @@ def _install_real_df_sil(prefix: Path) -> Path:
 _CHECK_SCRIPT = """
 import sys
 sys.path.insert(0, {src!r})
-from adas_sim.core.history import FrameTree, HistoryView, LayerCtx
-from adas_sim.core.tick import Pose2D, Tick
-from adas_sim.model.plugins import PluginBundle
-from adas_sim.model.project import ProjectModel
+from adas_sim.session.history import FrameTree, HistoryView, LayerCtx
+from adas_sim.session.tick import Pose2D, Tick
+from adas_sim.resolve.plugins import PluginBundle
+from adas_sim.config.project import ProjectModel
 from adas_sim.scene.registry import registered_providers
 
 bundle = PluginBundle.resolve(library_dir={sim_dir!r})

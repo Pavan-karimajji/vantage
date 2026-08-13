@@ -14,14 +14,14 @@ import json
 
 import pytest
 
-from adas_sim.core.session import Session
-from adas_sim.core.tick import Pose2D, PortValue, Tick
+from adas_sim.session.session import Session
+from adas_sim.session.tick import Pose2D, PortValue, Tick
 from adas_sim.io.base import ComponentBuildInfo, RunManifest
-from adas_sim.model.project import ProjectModel
+from adas_sim.config.project import ProjectModel
 from adas_sim.scene import registry as scene_registry
 from adas_sim.scene.registry import layer_provider
 from adas_sim.scene.types import Layer, Prim
-from adas_sim.view.viewport import Viewport
+from adas_sim.player.panels.viewport import Viewport
 
 pytest.importorskip("imageio")
 

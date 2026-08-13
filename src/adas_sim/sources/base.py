@@ -6,21 +6,21 @@
 """`Source` Protocol + `Scenario` (`sim_api_reference.md` §8, `S-C2`).
 
 A `Source` is the production-side counterpart to `SilComponent`
-(`contracts/component.py`): where a `SilComponent` executes a stage, a
-`Source` drives `source.*` stimulus -- live (`sources/carla`) or scripted
-(`sources/synthetic.py`). `emits()` is `Source`'s own manifest analogue:
-`Pipeline.load`'s `source.*` wiring is validated against it exactly as a
-stage-to-stage reference is validated against a producer's `PortSpec.name`s
-(`contracts/pipeline.py` `_validate_wiring`), so a pipeline asking a source
-for more than it can produce is a load error naming both ends (`R-SIM-10`).
+(`resolve/component.py`): where a `SilComponent` executes a stage, a
+`Source` drives `source.*` stimulus -- scripted (`sources/synthetic.py`;
+the live CARLA world-model client is removed, `DD-12`). `emits()` is
+`Source`'s own manifest analogue: `Pipeline.load`'s `source.*` wiring is
+validated against it exactly as a stage-to-stage reference is validated
+against a producer's `PortSpec.name`s (`graph/build.py` `_validate_wiring`),
+so a pipeline asking a source for more than it can produce is a load error
+naming both ends (`R-SIM-10`).
 
 `poll()` returns raw serialized bytes per port, unqualified (no `source.`
 prefix) -- exactly the shape `Pipeline.exec`/`step`'s `stimulus:` parameter
 already expects, since `source.*` is split into `("source", port)` before
-either function ever looks at the map (`contracts/pipeline.py`
-`_split_ref`).
+either function ever looks at the map (`graph/build.py` `_split_ref`).
 
-`Scenario` (`contracts.scenario.Scenario`, `S-C3`) is the schema-v2 type --
+`Scenario` (`config.scenario.Scenario`, `S-C3`) is the schema-v2 type --
 this module's own interim `{name, raw}` wrapper (`S-C2`'s stand-in, before
 `S-C3` existed) has been retired in its favour, since `S-C3` is exactly the
 "next stage [that] owns that design" this docstring used to point at.
@@ -31,7 +31,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import ClassVar, Protocol
 
-from adas_sim.contracts.scenario import Scenario
+from adas_sim.config.scenario import Scenario
 
 __all__ = ["Scenario", "Source"]
 
@@ -39,7 +39,7 @@ __all__ = ["Scenario", "Source"]
 class Source(Protocol):
     """`sim_api_reference.md` §8. `name` identifies the source in
     diagnostics and the run manifest's `source_kind` field
-    (`io.base.RunManifest`, e.g. `"carla"` / `"synthetic"`)."""
+    (`io.base.RunManifest`, e.g. `"synthetic"`)."""
 
     name: ClassVar[str]
 

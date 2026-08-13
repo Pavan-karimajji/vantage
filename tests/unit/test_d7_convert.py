@@ -16,8 +16,8 @@ from pathlib import Path
 import pytest
 
 from adas_sim.cli.convert import run
-from adas_sim.core.errors import AuthoringError
-from adas_sim.io.registry import reader_for
+from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.plugins.registry import reader_for
 import adas_sim.io.csv  # noqa: F401 -- registers ".csv" (write-only)
 import adas_sim.io.mcap  # noqa: F401 -- registers ".mcap"
 

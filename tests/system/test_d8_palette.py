@@ -19,7 +19,7 @@ import pytest
 pytest.importorskip("PySide6")
 from PySide6 import QtCore, QtGui, QtWidgets  # noqa: E402
 
-from adas_sim.app.shell.palette import CommandPalette, PaletteAction, actions_from_window, install_shortcut  # noqa: E402
+from adas_sim.player.shell.shell.palette import CommandPalette, PaletteAction, actions_from_window, install_shortcut  # noqa: E402
 
 
 def _app() -> QtWidgets.QApplication:

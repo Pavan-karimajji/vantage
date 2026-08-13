@@ -18,9 +18,9 @@ _SRC = Path(__file__).resolve().parents[2] / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from adas_sim.core.console import reconfigure_console_utf8  # noqa: E402
+from adas_sim.diagnostics.console import reconfigure_console_utf8  # noqa: E402
 from adas_sim.io.base import ComponentBuildInfo, Provenance, RunManifest, TopicInfo  # noqa: E402
-from adas_sim.io.registry import writer_for  # noqa: E402
+from adas_sim.plugins.registry import writer_for  # noqa: E402
 import adas_sim.io.mcap  # noqa: E402,F401 -- registers the ".mcap" codec
 
 OUT_PATH = Path(__file__).resolve().parent / "tiny.mcap"

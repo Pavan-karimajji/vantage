@@ -24,7 +24,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
-from adas_sim.core.errors import AuthoringError, ContractError
+from adas_sim.diagnostics.errors import AuthoringError, ContractError
 from adas_sim.scene.frames import is_known_frame, known_frame_kinds
 
 #: Closed set (sim_visualization_spec.md §2). Adding a kind is a framework

@@ -53,7 +53,7 @@ def run(argv: list[str] | None = None) -> int:
     # every other `sim` verb, including `sim render`, must stay importable
     # with no Qt installed at all (`UT-A1-2`'s own discipline, extended
     # from protobuf to Qt).
-    from adas_sim.app.gui import launch
+    from adas_sim.player.shell.gui import launch
 
     return launch(
         args.session, project=args.project, workspace_path=args.workspace,

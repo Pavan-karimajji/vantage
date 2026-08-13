@@ -24,14 +24,14 @@ import pytest
 pytest.importorskip("PySide6")
 from PySide6 import QtWidgets  # noqa: E402
 
-from adas_sim.app.gui import launch  # noqa: E402
+from adas_sim.player.shell.gui import launch  # noqa: E402
 from adas_sim.cli import main as cli_main  # noqa: E402
 from adas_sim.cli.view import build_parser  # noqa: E402
 from adas_sim.io.base import ComponentBuildInfo, Provenance, RunManifest, TopicInfo  # noqa: E402
-from adas_sim.io.registry import writer_for  # noqa: E402
+from adas_sim.plugins.registry import writer_for  # noqa: E402
 import adas_sim.io.mcap  # noqa: E402,F401 -- registers the ".mcap" codec
-import adas_sim.render.viewer as viewer_module  # noqa: E402
-from adas_sim.render.viewer import MainWindow, set_high_dpi_policy  # noqa: E402
+import adas_sim.player.shell.qt_window as viewer_module  # noqa: E402
+from adas_sim.player.shell.qt_window import MainWindow, set_high_dpi_policy  # noqa: E402
 import yaml  # noqa: E402
 
 _PROJECT = "base"
@@ -230,7 +230,7 @@ def test_launch_passes_preset_and_at_through_to_mainwindow(tmp_path, monkeypatch
     monkeypatch.setattr(QtWidgets.QApplication, "exec", lambda self: 0)
 
     captured = {}
-    from adas_sim.render import viewer as viewer_mod
+    import adas_sim.player.shell.qt_window as viewer_mod
     real_init = viewer_mod.MainWindow.__init__
 
     def _spy_init(self, *args, **kwargs):
@@ -253,7 +253,7 @@ def test_launch_passes_scenario_path_through_to_mainwindow(tmp_path, monkeypatch
     monkeypatch.setattr(QtWidgets.QApplication, "exec", lambda self: 0)
 
     captured = {}
-    from adas_sim.render import viewer as viewer_mod
+    import adas_sim.player.shell.qt_window as viewer_mod
     real_init = viewer_mod.MainWindow.__init__
 
     def _spy_init(self, *args, **kwargs):
@@ -280,7 +280,7 @@ def test_view_via_the_main_dispatcher_delegates_to_launch(tmp_path, monkeypatch)
         called.update(kwargs)
         return 0
 
-    monkeypatch.setattr("adas_sim.app.gui.launch", _fake_launch)
+    monkeypatch.setattr("adas_sim.player.shell.gui.launch", _fake_launch)
     monkeypatch.setattr(sys, "argv", ["sim", "view", str(recording), "--project", "cus1"])
     assert cli_main() == 0
     assert called["session"] == recording

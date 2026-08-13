@@ -18,9 +18,9 @@ from __future__ import annotations
 import shlex
 from pathlib import Path
 
-from adas_sim.app.shell.campaign import batch_invocation_text
+from adas_sim.player.shell.shell.campaign import batch_invocation_text
 from adas_sim.cli.batch import build_parser
-from adas_sim.core.batch import expand_recordings
+from adas_sim.orchestrate.batch import expand_recordings
 
 
 def _parse_shown_invocation(text: str):

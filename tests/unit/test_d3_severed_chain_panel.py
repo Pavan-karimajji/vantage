@@ -19,9 +19,9 @@ from pathlib import Path
 
 import yaml
 
-from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent, PortSpec
-from adas_sim.contracts.pipeline import Pipeline
-from adas_sim.view.pipeline_panel import PipelinePanelState
+from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
+from adas_sim.graph.build import Pipeline
+from adas_sim.player.panels.pipeline_panel import PipelinePanelState
 
 
 def _manifest(*, component: str, inputs=(), outputs=()) -> ComponentManifest:

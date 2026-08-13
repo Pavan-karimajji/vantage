@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from adas_sim.io.ingest import IngestRecordingReader, discover_ingest_maps
+from adas_sim.ingest.map import IngestRecordingReader, discover_ingest_maps
 from adas_sim.io.mcap import McapReader, McapWriter
 
 SIM_ROOT = Path(__file__).resolve().parent.parent.parent

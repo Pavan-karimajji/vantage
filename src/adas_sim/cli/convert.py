@@ -17,8 +17,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from adas_sim.core.errors import AuthoringError
-from adas_sim.io.registry import reader_for, writer_for
+from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.plugins.registry import reader_for, writer_for
 
 
 def build_parser() -> argparse.ArgumentParser:

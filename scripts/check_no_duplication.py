@@ -45,11 +45,11 @@ SIMCORE = SIM_ROOT / "src" / "simcore"
 # capability -> (python home, cpp home). A "home" is real if the file
 # exists and is non-empty; either side may not exist yet.
 CAPABILITY_HOMES: dict[str, tuple[Path, Path]] = {
-    "pipeline_load_validate": (ADAS_SIM / "contracts" / "pipeline.py", SIL_HOST / "pipeline.cpp"),
-    "ingest_map_parse": (ADAS_SIM / "io" / "ingest.py", SIL_HOST / "ingest_map.cpp"),
-    "component_host": (ADAS_SIM / "contracts" / "component.py", SIL_HOST / "sil_component.cpp"),
+    "pipeline_load_validate": (ADAS_SIM / "graph" / "build.py", SIL_HOST / "pipeline.cpp"),
+    "ingest_map_parse": (ADAS_SIM / "ingest" / "map.py", SIL_HOST / "ingest_map.cpp"),
+    "component_host": (ADAS_SIM / "resolve" / "component.py", SIL_HOST / "sil_component.cpp"),
     "recording_read_group": (ADAS_SIM / "io" / "base.py", SIL_HOST / "recording_reader.cpp"),
-    "library_resolve": (ADAS_SIM / "contracts" / "loader.py", SIL_HOST / "library_loader.cpp"),
+    "library_resolve": (ADAS_SIM / "resolve" / "library.py", SIL_HOST / "library_loader.cpp"),
     "multi_rate_scheduler": (ADAS_SIM / "core" / "runner.py", SIL_HOST / "pipeline.cpp"),
     "codec": (ADAS_SIM / "io" / "mcap.py", SIMCORE / "io" / "codecs" / "mcap.cpp"),
 }

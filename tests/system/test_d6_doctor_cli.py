@@ -25,8 +25,8 @@ import pytest
 
 from adas_sim.cli import doctor
 from adas_sim.io.base import RunManifest
-from adas_sim.io.registry import writer_for
-from adas_sim.model.project import bundle_bytes_for_recording
+from adas_sim.plugins.registry import writer_for
+from adas_sim.config.project import bundle_bytes_for_recording
 
 SIM_ROOT = Path(__file__).resolve().parent.parent.parent
 MODULES_ROOT = SIM_ROOT.parent
@@ -118,7 +118,7 @@ def test_doctor_exits_non_zero_on_a_recording_with_no_registered_codec(tmp_path,
 def test_doctor_reports_feasible_cuts_for_the_real_recording():
     """ST-D6-3-adjacent, informational: which stages this recording could
     drive as mode: measured (R-SIM-12/R-SIM-23)."""
-    from adas_sim.core.diagnostics import doctor_report
+    from adas_sim.diagnostics.diagnostics import doctor_report
 
     report = doctor_report(
         pipeline_path=_PIPELINE_PATH, search=[_DF_SIL_DIR], config_path=_DF_SIL_CONFIG,

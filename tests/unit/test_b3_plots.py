@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import pytest
 
-from adas_sim.core.errors import AuthoringError
-from adas_sim.view.plots import PlotState
+from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.player.panels.plots import PlotState
 
 
 def test_unknown_kind_raises():

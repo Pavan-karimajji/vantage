@@ -87,6 +87,18 @@ _CODEC_NAME_TOKENS = re.compile(r"(?<![A-Za-z0-9_])(mcap|csv|jsonl|mdf4|tdms)(?!
 # point of use (sim_player.md itself: "Vantage", "Bench", "Campaign").
 _WORKSPACE_TOKENS = re.compile(r"(?<![A-Za-z0-9])(Vantage|Bench|Campaign)(?![A-Za-z0-9])")
 
+# WP-02(b) / DD-12: the live world-model client is removed from the system
+# entirely -- no live stimulus of any kind, every input is a recording read
+# through a codec. Deliberately narrower than GT-1's bare-token grep: `df`'s
+# own real recordings are named `carla_scenarios`/`carla_testruns` (they
+# were captured from CARLA) and that provenance naming is legitimate data,
+# not a leak of the deleted client -- a blanket "carla" substring ban would
+# flag `check/runner.py`'s real directory-naming convention. What must never
+# come back is the deleted CLIENT: its class name and its import path.
+_WORLD_MODEL_CLIENT_TOKENS = re.compile(
+    r"(?<![A-Za-z0-9_])(CarlaSource|sources[./\\]carla)(?![A-Za-z0-9_])", re.IGNORECASE
+)
+
 
 def _iter_py_files(root: Path):
     if not root.is_dir():
@@ -164,14 +176,16 @@ def check_gt11(superproject_root: Path = SUPERPROJECT_ROOT) -> list[str]:
 
 def check_ut_d8_9(src_root: Path = SRC_ROOT) -> list[str]:
     """`UT-D8-9` (`S-D8`) -- no `Vantage`/`Bench`/`Campaign` token anywhere
-    in `adas_sim/` outside `app/` (`sim_player.md`'s own naming rule: "no
-    workspace name appears in `adas_sim/` outside `app/`" -- the engine
-    must not know which workspace is open, same discipline `GT-1` applies
-    to a driving function's name). Scoped exactly like `GT-2`/`GT-3` scope
-    to their own subtrees -- everything under `src_root` except `app/`
-    itself, which is the one place these tokens are the whole point."""
+    in `adas_sim/` outside `player/shell/` (`sim_player.md`'s own naming
+    rule: "no workspace name appears in `adas_sim/` outside `app/`" -- the
+    engine must not know which workspace is open, same discipline `GT-1`
+    applies to a driving function's name). `app/` became `player/shell/` at
+    `WP-02`'s rename (Design §2.3); the exemption moved with it. Scoped
+    exactly like `GT-2`/`GT-3` scope to their own subtrees -- everything
+    under `src_root` except `player/shell/` itself, which is the one place
+    these tokens are the whole point."""
     findings = []
-    app_dir = (src_root / "app").resolve()
+    app_dir = (src_root / "player" / "shell").resolve()
     for path in _iter_py_files(src_root):
         if app_dir in path.resolve().parents or path.resolve() == app_dir:
             continue
@@ -196,6 +210,23 @@ def check_codec_scope_no_function_name(sim_root: Path = SIM_ROOT) -> list[str]:
     return findings
 
 
+def check_no_world_model_client(sim_root: Path = SIM_ROOT) -> list[str]:
+    """WP-02(b) / DD-12: no live world-model client survives -- the deleted
+    `sources/carla/` directory and its `CarlaSource` class/import path must
+    never reappear anywhere under `src/**` (all three roots: `adas_sim`,
+    `simcore`, `simengine`)."""
+    findings = []
+    src_dir = sim_root / "src"
+    carla_dir = src_dir / "adas_sim" / "sources" / "carla"
+    if carla_dir.exists():
+        findings.append(f"WP-02(b) {carla_dir}: the deleted world-model client's directory has reappeared")
+    for path in _iter_py_files(src_dir):
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if _WORLD_MODEL_CLIENT_TOKENS.search(line):
+                findings.append(f"WP-02(b) {path}:{lineno}: deleted world-model client reappeared: {line.strip()!r}")
+    return findings
+
+
 def check_no_manifest_names_codec(superproject_root: Path = SUPERPROJECT_ROOT) -> list[str]:
     """IMP-0383 half 2: no module manifest (`conf/ports.yaml`, IMP-0392,
     lands `WP-10`) names a codec format -- a component's port declaration
@@ -217,6 +248,7 @@ def run_all(src_root: Path = SRC_ROOT, superproject_root: Path = SUPERPROJECT_RO
         *check_gt6(src_root),
         *check_gt11(superproject_root),
         *check_ut_d8_9(src_root),
+        *check_no_world_model_client(sim_root),
         *check_codec_scope_no_function_name(sim_root),
         *check_no_manifest_names_codec(superproject_root),
     ]
@@ -229,7 +261,7 @@ def main(argv: list[str] | None = None) -> int:
     if findings:
         print(f"\n{len(findings)} invariant violation(s)")
         return 1
-    print("GT-1, GT-2, GT-3, GT-6, GT-11, UT-D8-9: clean")
+    print("GT-1, GT-2, GT-3, GT-6, GT-11, UT-D8-9, WP-02(b): clean")
     return 0
 
 

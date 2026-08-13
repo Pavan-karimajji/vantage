@@ -18,7 +18,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from adas_sim.core.batch import expand_recordings, run_batch, write_report
+from adas_sim.orchestrate.batch import expand_recordings, run_batch, write_report
 
 
 def build_parser() -> argparse.ArgumentParser:

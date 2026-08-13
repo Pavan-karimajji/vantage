@@ -30,9 +30,9 @@ from unittest.mock import MagicMock, patch
 import yaml
 
 from adas_sim.cli.resim import run as resim_run
-from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent, PortSpec
-from adas_sim.contracts.pipeline import Pipeline
-from adas_sim.core.manifest import write_run_manifest
+from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
+from adas_sim.graph.build import Pipeline
+from adas_sim.runspec.manifest import write_run_manifest
 
 
 def _manifest(*, component: str, outputs=()) -> ComponentManifest:
@@ -110,7 +110,7 @@ def test_missing_recording_in_both_the_cli_and_the_manifest_is_an_authoring_erro
     write_run_manifest(manifest_path, pipeline=seed)  # no recording= given at all
 
     import pytest
-    from adas_sim.core.errors import AuthoringError
+    from adas_sim.diagnostics.errors import AuthoringError
 
     with pytest.raises(AuthoringError, match="recording"):
         resim_run(["--pipeline", str(manifest_path)])

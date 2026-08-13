@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from adas_sim.core.errors import AuthoringError
-from adas_sim.model.sensors import parse_sensors
+from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.config.sensors import parse_sensors
 
 #: Real shape, real numbers, from modules/df/src/project/base/default.yaml's
 #: bsd: section -- ported here as plain data, never as a "bsd" import (GT-1).

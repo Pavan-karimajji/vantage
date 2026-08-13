@@ -303,7 +303,7 @@ def vantage_recent_files() -> list[Path]:
     """
     try:
         sys.path.insert(0, str(SIM_DIR / "src"))
-        from adas_sim.app.shell.startpage import load_recent_files
+        from adas_sim.player.shell.shell.startpage import load_recent_files
         return list(load_recent_files())
     except Exception:                                        # noqa: BLE001
         return []

@@ -23,10 +23,10 @@ import yaml
 pytest.importorskip("PySide6")
 from PySide6 import QtWidgets  # noqa: E402
 
-from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent, PortSpec  # noqa: E402
-from adas_sim.contracts.pipeline import Pipeline  # noqa: E402
-from adas_sim.render.viewer import PipelinePanel  # noqa: E402
-from adas_sim.view.pipeline_panel import PipelinePanelState  # noqa: E402
+from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec  # noqa: E402
+from adas_sim.graph.build import Pipeline  # noqa: E402
+from adas_sim.player.shell.qt_window import PipelinePanel  # noqa: E402
+from adas_sim.player.panels.pipeline_panel import PipelinePanelState  # noqa: E402
 
 
 def _manifest(*, component: str, outputs=()) -> ComponentManifest:

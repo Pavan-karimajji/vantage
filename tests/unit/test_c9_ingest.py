@@ -16,12 +16,12 @@ from pathlib import Path
 import pytest
 import yaml
 
-from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent, PortSpec
-from adas_sim.contracts.pipeline import Pipeline
-from adas_sim.core.errors import AuthoringError
-from adas_sim.core.session import Session
+from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
+from adas_sim.graph.build import Pipeline
+from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.session.session import Session
 from adas_sim.io.base import Provenance, TopicInfo
-from adas_sim.io.ingest import AbsentPort, IngestMap, IngestRecordingReader, ProvidedPort, _parse_ingest_map
+from adas_sim.ingest.map import AbsentPort, IngestMap, IngestRecordingReader, ProvidedPort, _parse_ingest_map
 
 MODULES_ROOT = Path(__file__).resolve().parents[3]
 DF_INGEST_MAP = MODULES_ROOT / "df" / "sim" / "ingest" / "carla_legacy.yaml"

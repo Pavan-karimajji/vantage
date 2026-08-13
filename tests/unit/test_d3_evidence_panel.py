@@ -10,10 +10,10 @@ is a thin, headless wrapper around `core.evidence.evidence` +
 
 from __future__ import annotations
 
-from adas_sim.core.evidence import evidence, format_evidence
-from adas_sim.core.session import Session
-from adas_sim.core.tick import Pose2D, PortValue, Tick
-from adas_sim.view.evidence_panel import EvidencePanelState
+from adas_sim.diagnostics.evidence import evidence, format_evidence
+from adas_sim.session.session import Session
+from adas_sim.session.tick import Pose2D, PortValue, Tick
+from adas_sim.player.panels.evidence_panel import EvidencePanelState
 
 _POSE = Pose2D(x_m=0.0, y_m=0.0, yaw_rad=0.0)
 

@@ -109,7 +109,7 @@ spec.loader.exec_module(vantage_script)
 from PySide6 import QtCore, QtWidgets
 import adas_sim.io.mcap  # noqa: F401 -- registers the ".mcap" codec
 from adas_sim.core.runner import build_scene
-from adas_sim.render.viewer import MainWindow, set_high_dpi_policy
+from adas_sim.player.shell.qt_window import MainWindow, set_high_dpi_policy
 
 set_high_dpi_policy()
 app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])

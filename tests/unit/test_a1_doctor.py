@@ -10,8 +10,8 @@ UT-A1-n label of their own."""
 from __future__ import annotations
 
 from adas_sim.cli import main
-from adas_sim.core.console import reconfigure_console_utf8
-from adas_sim.core.diagnostics import doctor_report
+from adas_sim.diagnostics.console import reconfigure_console_utf8
+from adas_sim.diagnostics.diagnostics import doctor_report
 
 
 def test_doctor_report_carries_the_s_a1_environment_facts():

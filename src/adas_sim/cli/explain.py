@@ -23,10 +23,10 @@ import argparse
 import difflib
 from pathlib import Path
 
-from adas_sim.core.evidence import evidence, format_evidence
-from adas_sim.core.explain import explain, known_names
+from adas_sim.diagnostics.evidence import evidence, format_evidence
+from adas_sim.diagnostics.explain import explain, known_names
 from adas_sim.core.runner import build_session_from_recording
-from adas_sim.core.session import Session
+from adas_sim.session.session import Session
 from adas_sim.render.theme import THEMES, all_tokens, resolve as resolve_style_token
 
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from adas_sim.view.viewport import Viewport
+from adas_sim.player.panels.viewport import Viewport
 
 
 @pytest.mark.parametrize("x_m,y_m", [(0.0, 0.0), (10.0, 5.0), (-3.0, 7.0), (42.0, -18.5)])

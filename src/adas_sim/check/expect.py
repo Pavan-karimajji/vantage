@@ -28,16 +28,16 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from adas_sim.contracts.binding import resolve as resolve_component_address
-from adas_sim.contracts.component import ComponentManifest
-from adas_sim.contracts.scenario import (
+from adas_sim.runspec.address import resolve as resolve_component_address
+from adas_sim.resolve.component import ComponentManifest
+from adas_sim.config.scenario import (
     BecomesAnchor, ConstantAnchor, CrossesAnchor, Marker, Scenario,
 )
-from adas_sim.core.errors import AuthoringError, InternalError
-from adas_sim.core.history import FrameTree, HistoryView, LayerCtx
-from adas_sim.core.signals import registered_signals, resolve_tick
-from adas_sim.core.tick import Tick
-from adas_sim.model.project import ProjectModel
+from adas_sim.diagnostics.errors import AuthoringError, InternalError
+from adas_sim.session.history import FrameTree, HistoryView, LayerCtx
+from adas_sim.session.signals import registered_signals, resolve_tick
+from adas_sim.session.tick import Tick
+from adas_sim.config.project import ProjectModel
 
 #: `(stage_name, manifest)` for the pipeline's own single `mode: simulate`
 #: stage (`ST-C1c-2`'s canonical algo-test shape) -- what a `self.<port>`

@@ -11,8 +11,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from adas_sim.core.errors import InternalError
-from adas_sim.core.ids import REQUIRED_KEYS, new_run_id
+from adas_sim.diagnostics.errors import InternalError
+from adas_sim.runspec.ids import REQUIRED_KEYS, new_run_id
 
 _CLOCK = datetime(2026, 7, 28, 14, 30, 12, tzinfo=timezone.utc)
 _BASE_INPUTS = {

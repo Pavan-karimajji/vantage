@@ -20,9 +20,9 @@ from __future__ import annotations
 
 import pytest
 
-from adas_sim.core.history import FrameTree, HistoryView, LayerCtx
-from adas_sim.core.tick import Pose2D, Tick
-from adas_sim.model.project import ProjectModel
+from adas_sim.session.history import FrameTree, HistoryView, LayerCtx
+from adas_sim.session.tick import Pose2D, Tick
+from adas_sim.config.project import ProjectModel
 from adas_sim.scene import default_layers
 
 _POSE = Pose2D(x_m=0.0, y_m=0.0, yaw_rad=0.0)

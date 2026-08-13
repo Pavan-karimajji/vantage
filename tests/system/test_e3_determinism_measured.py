@@ -38,8 +38,8 @@ from pathlib import Path
 import pytest
 
 from adas_sim.cli.resim import run as resim_run
-from adas_sim.core.determinism import compare_exact, derive_axis
-from adas_sim.io.registry import reader_for
+from adas_sim.diagnostics.determinism import compare_exact, derive_axis
+from adas_sim.plugins.registry import reader_for
 
 SIM_ROOT = Path(__file__).resolve().parent.parent.parent
 MODULES_ROOT = SIM_ROOT.parent

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from adas_sim.core.logging import Event, log
+from adas_sim.diagnostics.logging import Event, log
 
 
 def test_log_emits_one_line_with_fields_in_the_fixed_order(capsys):

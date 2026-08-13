@@ -19,9 +19,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent
-from adas_sim.contracts.pipeline import Pipeline
-from adas_sim.core.batch import RecordingOutcome, expand_recordings, run_batch, write_report
+from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent
+from adas_sim.graph.build import Pipeline
+from adas_sim.orchestrate.batch import RecordingOutcome, expand_recordings, run_batch, write_report
 from adas_sim.core.resim import resim_pipeline
 
 _TINY = Path(__file__).resolve().parent.parent / "fixtures" / "tiny.mcap"

@@ -30,13 +30,13 @@ kinds:
   - name: run_manifest
     cited: false
     writers:
-      - src/adas_sim/core/manifest.py::write_run_manifest
+      - src/adas_sim/runspec/manifest.py::write_run_manifest
 
   - name: report
     cited: false
     writers:
       - src/adas_sim/check/report.py::write_report
-      - src/adas_sim/core/batch.py::write_report
+      - src/adas_sim/orchestrate/batch.py::write_report
 
   - name: snapshot
     cited: false

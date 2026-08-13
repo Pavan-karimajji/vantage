@@ -29,12 +29,12 @@ from pathlib import Path
 
 import pytest
 
-from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent, PortSpec
-from adas_sim.contracts.pipeline import Pipeline
+from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
+from adas_sim.graph.build import Pipeline
 from adas_sim.core.resim import resim_pipeline
 from adas_sim.io.base import Provenance, RunManifest, TopicInfo
-from adas_sim.io.ingest import IngestMap, ProvidedPort
-from adas_sim.io.registry import writer_for
+from adas_sim.ingest.map import IngestMap, ProvidedPort
+from adas_sim.plugins.registry import writer_for
 
 import adas_sim.io.mcap  # noqa: E402,F401 -- registers the ".mcap" codec
 

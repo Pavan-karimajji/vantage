@@ -20,7 +20,7 @@ import pytest
 pytest.importorskip("PySide6")
 from PySide6 import QtWidgets  # noqa: E402
 
-from adas_sim.app.panels.console import ConsolePanel  # noqa: E402
+from adas_sim.player.shell.panels.console import ConsolePanel  # noqa: E402
 
 
 def _app() -> QtWidgets.QApplication:

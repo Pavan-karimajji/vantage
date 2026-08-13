@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import pytest
 
-from adas_sim.app.shell.workspace import BENCH, CAMPAIGN, WORKSPACES, Workspace, WorkspacePermissionError
+from adas_sim.player.shell.shell.workspace import BENCH, CAMPAIGN, WORKSPACES, Workspace, WorkspacePermissionError
 
 
 def test_bench_permits_everything():

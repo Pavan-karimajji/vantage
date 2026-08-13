@@ -29,7 +29,7 @@ the same `df_sil.dll` build and compares every declared output port
 byte-for-byte, tick by tick:
 
   - the GENERIC path: a real `Pipeline` (`S-C9`) built from a `Session`
-    (`adas_sim.core.session.Session.open`, itself built through the
+    (`adas_sim.session.session.Session.open`, itself built through the
     declared `df.carla_legacy` ingest map, `modules/df/sim/ingest/
     carla_legacy.yaml` -- no per-test topic constant). `Pipeline.exec` drives
     `CtypesSilComponent` (`adasInit`/`adasManifest`/`adasExec`), ports
@@ -72,11 +72,11 @@ from pathlib import Path
 
 import pytest
 
-from adas_sim.contracts.component import CtypesSilComponent
-from adas_sim.contracts.loader import resolve_library
-from adas_sim.contracts.pipeline import Pipeline, Stage
-from adas_sim.core.errors import EnvironmentError_
-from adas_sim.core.session import Session
+from adas_sim.resolve.component import CtypesSilComponent
+from adas_sim.resolve.library import resolve_library
+from adas_sim.graph.build import Pipeline, Stage
+from adas_sim.diagnostics.errors import EnvironmentError_
+from adas_sim.session.session import Session
 
 SIM_ROOT = Path(__file__).resolve().parent.parent.parent
 MODULES_ROOT = SIM_ROOT.parent

@@ -24,10 +24,10 @@ import argparse
 from pathlib import Path
 
 from adas_sim.core.runner import build_session_from_recording
-from adas_sim.model.plugins import register_plugin_root
-from adas_sim.model.project import ProjectModel
+from adas_sim.resolve.plugins import register_plugin_root
+from adas_sim.config.project import ProjectModel
 from adas_sim.render.capture import snapshot
-from adas_sim.view.viewport import DEFAULT_PRESETS, Viewport
+from adas_sim.player.panels.viewport import DEFAULT_PRESETS, Viewport
 
 
 def build_parser() -> argparse.ArgumentParser:

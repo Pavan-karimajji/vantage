@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from adas_sim.model.objects import Footprint, ObjectModel
+from adas_sim.config.objects import Footprint, ObjectModel
 
 _FALLBACK = Footprint(length_m=1.0, width_m=1.0)
 _CLASS_TABLE = {

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from adas_sim.core.errors import AuthoringError
+from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.render.theme import THEMES, all_tokens, resolve
 
 

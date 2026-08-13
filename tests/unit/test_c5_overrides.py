@@ -30,11 +30,11 @@ from pathlib import Path
 import pytest
 import yaml
 
-from adas_sim.contracts.component import ComponentManifest
-from adas_sim.contracts.pipeline import Pipeline
-from adas_sim.core.errors import AuthoringError
-from adas_sim.core.manifest import resolve_swept_config
-from adas_sim.model.project import ProjectModel, materialize_derived_bundle
+from adas_sim.resolve.component import ComponentManifest
+from adas_sim.graph.build import Pipeline
+from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.runspec.manifest import resolve_swept_config
+from adas_sim.config.project import ProjectModel, materialize_derived_bundle
 
 
 def _make_nested_bundle(bundle_dir: Path) -> None:

@@ -27,7 +27,7 @@ import numpy as np  # noqa: E402
 
 from adas_sim.render.theme import Theme, resolve  # noqa: E402
 from adas_sim.scene.types import Layer, Prim, Scene  # noqa: E402
-from adas_sim.view.viewport import Viewport  # noqa: E402
+from adas_sim.player.panels.viewport import Viewport  # noqa: E402
 
 
 def _visible_prims(scene: Scene, layer_selection: frozenset[str] | None) -> list[tuple[Layer, Prim]]:

@@ -14,9 +14,9 @@ from pathlib import Path
 import pytest
 
 from adas_sim.core.runner import build_session_from_recording
-from adas_sim.core.session import Session
-from adas_sim.core.tick import Pose2D, PortValue, Tick
-from adas_sim.view.transport import ResumeOption, Transport
+from adas_sim.session.session import Session
+from adas_sim.session.tick import Pose2D, PortValue, Tick
+from adas_sim.player.panels.transport import ResumeOption, Transport
 
 SIM_ROOT = Path(__file__).resolve().parent.parent.parent
 MODULES_ROOT = SIM_ROOT.parent

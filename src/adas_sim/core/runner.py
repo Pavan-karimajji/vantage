@@ -25,14 +25,14 @@ from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 
-from adas_sim.core.history import FrameTree, HistoryView, Interaction, LayerCtx, interaction_cache_key
-from adas_sim.core.session import Session
-from adas_sim.core.tick import Pose2D, PortValue, Tick
-from adas_sim.core.tick import decode_message  # noqa: F401 -- re-exported, see below
+from adas_sim.session.history import FrameTree, HistoryView, Interaction, LayerCtx, interaction_cache_key
+from adas_sim.session.session import Session
+from adas_sim.session.tick import Pose2D, PortValue, Tick
+from adas_sim.session.tick import decode_message  # noqa: F401 -- re-exported, see below
 from adas_sim.io.base import Provenance, group_by_log_time
-from adas_sim.io.ingest import IngestRecordingReader, discover_ingest_maps
-from adas_sim.io.registry import reader_for
-from adas_sim.model.project import ProjectModel
+from adas_sim.ingest.map import IngestRecordingReader, discover_ingest_maps
+from adas_sim.plugins.registry import reader_for
+from adas_sim.config.project import ProjectModel
 from adas_sim.scene.registry import registered_providers
 from adas_sim.scene.types import Layer, Scene
 

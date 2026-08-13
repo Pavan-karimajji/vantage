@@ -13,7 +13,7 @@ import argparse
 import sys
 
 from adas_sim.cli import doctor, explain
-from adas_sim.core.console import reconfigure_console_utf8
+from adas_sim.diagnostics.console import reconfigure_console_utf8
 
 
 def main(argv: list[str] | None = None) -> int:

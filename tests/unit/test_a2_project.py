@@ -18,8 +18,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from adas_sim.core.errors import AuthoringError, ProvenanceWarning
-from adas_sim.model.project import ProjectModel, bundle_bytes_for_recording, extract_embedded_bundle
+from adas_sim.diagnostics.errors import AuthoringError, ProvenanceWarning
+from adas_sim.config.project import ProjectModel, bundle_bytes_for_recording, extract_embedded_bundle
 
 #: modules/interfaces/scripts, sibling submodule -- not a pip dependency of
 #: adas_sim (R-SIM-11: a component's build must not require adas_sim, and

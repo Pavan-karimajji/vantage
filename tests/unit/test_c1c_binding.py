@@ -25,13 +25,13 @@ from google.protobuf import descriptor_pb2 as _dpb
 from google.protobuf import descriptor_pool as _dpool
 from google.protobuf import message_factory as _mfactory
 
-from adas_sim.contracts.binding import (
+from adas_sim.runspec.address import (
     Address, AddressSegment, apply_override, parse_address, resolve, resolve_component_ref,
     try_resolve_component_ref,
 )
-from adas_sim.contracts.component import ComponentManifest, PortSpec
-from adas_sim.contracts.override import Override, OverrideVerb
-from adas_sim.core.errors import AuthoringError, ContractError
+from adas_sim.resolve.component import ComponentManifest, PortSpec
+from adas_sim.config.override import Override, OverrideVerb
+from adas_sim.diagnostics.errors import AuthoringError, ContractError
 
 
 def _container_cls():

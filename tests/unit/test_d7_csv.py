@@ -18,10 +18,10 @@ from google.protobuf import descriptor_pb2 as _dpb
 from google.protobuf import descriptor_pool as _dpool
 from google.protobuf import message_factory as _mfactory
 
-from adas_sim.core.errors import AuthoringError
+from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.io.base import ComponentBuildInfo, Provenance, RunManifest, TopicInfo
 from adas_sim.io.csv import CsvWriter
-from adas_sim.io.registry import reader_for
+from adas_sim.plugins.registry import reader_for
 import adas_sim.io.csv  # noqa: F401 -- registers the ".csv" codec (write-only)
 
 _DT_NS = 50_000_000

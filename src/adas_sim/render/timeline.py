@@ -31,7 +31,7 @@ matplotlib.use("Agg")  # headless: must work with no display, must be set before
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-from adas_sim.view.timeline import EventMarker  # noqa: E402
+from adas_sim.player.panels.timeline import EventMarker  # noqa: E402
 
 _BG = "#1a1a19"
 _FG = "#dddddd"

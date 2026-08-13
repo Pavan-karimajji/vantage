@@ -19,10 +19,10 @@ from pathlib import Path
 import pytest
 import yaml
 
-from adas_sim.contracts.scenario import (
+from adas_sim.config.scenario import (
     CURRENT_SCENARIO_VERSION, ConstantAnchor, CrossesAnchor, Scenario, load_scenario,
 )
-from adas_sim.core.errors import AuthoringError
+from adas_sim.diagnostics.errors import AuthoringError
 
 _FIXTURES = Path(__file__).resolve().parent.parent / "fixtures" / "scenarios"
 
@@ -43,7 +43,6 @@ def test_v1_lead_sugar_upgrades_to_one_actor_dead_ahead():
     assert actor.speed_mps == 0.0
     assert actor.classification == "CAR"
     assert actor.lateral_profile == ()
-    assert scenario.world["carla"]["actor_blueprints"] == {"lead": "vehicle.fixture.target"}
 
 
 def test_v1_actors_list_preserves_every_field():
@@ -60,13 +59,9 @@ def test_v1_actors_list_preserves_every_field():
     assert actor.lateral_profile[0].duration_s == 8.0
 
 
-def test_v1_ego_and_world_carla_fields_move_correctly():
+def test_v1_ego_fields_move_correctly():
     scenario = load_scenario(_FIXTURES / "fixture_actors_v1.yaml")
     assert scenario.scenario.ego.speed_mps == 20.0
-    assert scenario.world["carla"]["map"] == "FixtureTown"
-    assert scenario.world["carla"]["host"] == "127.0.0.1"
-    assert scenario.world["carla"]["spawn_point_index"] == 12
-    assert scenario.world["carla"]["ego_blueprint"] == "vehicle.fixture.ego"
 
 
 def test_v1_end_condition_present_is_preserved():
@@ -123,8 +118,8 @@ def test_v1_doc_captures_the_full_leading_comment_block():
     scenario = load_scenario(_FIXTURES / "fixture_lead_v1.yaml")
     assert "Fixture: v1 shape using the `lead:` sugar" in scenario.doc
     assert "UT-C3-1-equivalent" in scenario.doc
-    # The block stops at the first non-comment line -- `carla:` never leaks in.
-    assert "carla:" not in scenario.doc
+    # The block stops at the first non-comment line -- content below it never leaks in.
+    assert "object_range_m" not in scenario.doc
 
 
 def test_v1_id_defaults_to_the_file_stem():
@@ -133,7 +128,7 @@ def test_v1_id_defaults_to_the_file_stem():
 
 
 # ---------------------------------------------------------------------------
-# v2-authored round trip -- markers, expect, world, sut.pipeline
+# v2-authored round trip -- markers, expect, sut.pipeline
 # ---------------------------------------------------------------------------
 
 
@@ -149,7 +144,6 @@ def test_v2_authored_scenario_round_trips_every_section():
     assert len(scenario.scenario.actors) == 1
     assert scenario.scenario.actors[0].classification == "CAR"
 
-    assert scenario.world["carla"]["spawn_point_index"] == 54
     assert scenario.sensor_model.preset == "fixture_ideal"
     assert scenario.run.end_condition == {"type": "time_elapsed", "max_s": 21.0}
     assert scenario.sut.pipeline == "fixture_only"

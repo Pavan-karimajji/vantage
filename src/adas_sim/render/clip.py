@@ -21,13 +21,13 @@ import tempfile
 from pathlib import Path
 
 from adas_sim.core.runner import build_scene
-from adas_sim.core.session import Session
-from adas_sim.model.project import ProjectModel
+from adas_sim.session.session import Session
+from adas_sim.config.project import ProjectModel
 from adas_sim.render import capture
 from adas_sim.render.bev import render_scene
 from adas_sim.render.theme import Theme
 from adas_sim.scene.types import Prim
-from adas_sim.view.viewport import Viewport
+from adas_sim.player.panels.viewport import Viewport
 
 _DEFAULT_FPS = 10.0
 

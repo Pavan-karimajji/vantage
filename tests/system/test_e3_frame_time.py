@@ -37,7 +37,7 @@ for _p in (DF_ROOT, FIXTURES_DIR):
 
 from adas_sim.core.runner import build_session_from_recording  # noqa: E402
 from adas_sim.render.bev import render_scene  # noqa: E402
-from adas_sim.view.viewport import Viewport  # noqa: E402
+from adas_sim.player.panels.viewport import Viewport  # noqa: E402
 from make_bsd_golden import RECORDING, build_scene  # noqa: E402
 
 

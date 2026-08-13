@@ -20,7 +20,7 @@ import pytest
 pytest.importorskip("PySide6")
 from PySide6 import QtCore  # noqa: E402
 
-from adas_sim.render.viewer import _SessionLoadWorker, set_high_dpi_policy  # noqa: E402
+from adas_sim.player.shell.qt_window import _SessionLoadWorker, set_high_dpi_policy  # noqa: E402
 
 FIXTURES_DIR = Path(__file__).resolve().parent.parent / "fixtures"
 TINY_MCAP = FIXTURES_DIR / "tiny.mcap"

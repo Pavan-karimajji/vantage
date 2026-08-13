@@ -19,8 +19,8 @@ from pathlib import Path
 
 import pytest
 
-from adas_sim.contracts import component as component_mod
-from adas_sim.contracts.component import (
+from adas_sim.resolve import component as component_mod
+from adas_sim.resolve.component import (
     ComponentManifest,
     CtypesSilComponent,
     InputMeta,
@@ -28,8 +28,8 @@ from adas_sim.contracts.component import (
     parse_manifest,
     resolve_message_classes,
 )
-from adas_sim.contracts.loader import resolve_library
-from adas_sim.core.errors import ContractError, EnvironmentError_
+from adas_sim.resolve.library import resolve_library
+from adas_sim.diagnostics.errors import ContractError, EnvironmentError_
 
 SIM_ROOT = Path(__file__).resolve().parent.parent.parent
 MODULES_ROOT = SIM_ROOT.parent

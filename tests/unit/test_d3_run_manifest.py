@@ -17,10 +17,10 @@ from pathlib import Path
 import pytest
 import yaml
 
-from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent, PortSpec
-from adas_sim.contracts.pipeline import Pipeline
-from adas_sim.core.errors import AuthoringError
-from adas_sim.core.manifest import RunSpec, load_run_spec, write_run_manifest
+from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
+from adas_sim.graph.build import Pipeline
+from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.runspec.manifest import RunSpec, load_run_spec, write_run_manifest
 
 
 def _manifest(*, component: str, outputs=(), inputs=()) -> ComponentManifest:

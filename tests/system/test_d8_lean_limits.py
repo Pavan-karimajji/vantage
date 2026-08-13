@@ -24,10 +24,10 @@ from PySide6 import QtCore, QtWidgets  # noqa: E402
 
 QtCore.QStandardPaths.setTestModeEnabled(True)  # P-7: never touch the real user profile in tests
 
-from adas_sim.app.shell.window import VantageWindow  # noqa: E402
+from adas_sim.player.shell.shell.window import VantageWindow  # noqa: E402
 from adas_sim.io.base import ComponentBuildInfo, Provenance, RunManifest, TopicInfo  # noqa: E402
-from adas_sim.io.registry import writer_for  # noqa: E402
-from adas_sim.render.viewer import TransportBar, set_high_dpi_policy  # noqa: E402
+from adas_sim.plugins.registry import writer_for  # noqa: E402
+from adas_sim.player.shell.qt_window import TransportBar, set_high_dpi_policy  # noqa: E402
 
 import adas_sim.io.mcap  # noqa: E402,F401 -- registers the ".mcap" codec
 

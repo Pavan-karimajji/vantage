@@ -14,7 +14,7 @@ import numpy as np
 
 from adas_sim.render.bev import anchor_points_m, hit_test, render_scene, scene_bounds_m
 from adas_sim.scene.types import Layer, Prim, Scene
-from adas_sim.view.viewport import Viewport
+from adas_sim.player.panels.viewport import Viewport
 
 
 def _scene():

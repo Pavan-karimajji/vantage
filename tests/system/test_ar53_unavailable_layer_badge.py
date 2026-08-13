@@ -22,9 +22,9 @@ import pytest
 pytest.importorskip("PySide6")
 from PySide6 import QtCore, QtWidgets  # noqa: E402
 
-from adas_sim.render.viewer import LayersPanel  # noqa: E402
+from adas_sim.player.shell.qt_window import LayersPanel  # noqa: E402
 from adas_sim.scene.types import Layer  # noqa: E402
-from adas_sim.view.layers import LayerTreeState  # noqa: E402
+from adas_sim.player.panels.layers import LayerTreeState  # noqa: E402
 
 
 def _app() -> QtWidgets.QApplication:

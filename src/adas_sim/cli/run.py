@@ -3,11 +3,12 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`sim run <scenario> --pipeline <p.yaml>` -- drive a world model and execute.
+"""`sim run <scenario> --pipeline <p.yaml>` -- drive the scripted synthetic
+source and execute.
 
-Runs a scenario live against a world model with the pipeline in the loop, and
-writes a session recording by default. The non-deterministic mode: use
-`sim resim` to re-execute the result reproducibly.
+Runs a scenario live against the synthetic source with the pipeline in the
+loop, and writes a session recording by default. The non-deterministic mode:
+use `sim resim` to re-execute the result reproducibly.
 """
 
 # Design refs: `GT-9` · `R-SIM-5` sim is the non-deterministic mode · `R-SIM-6` a sim run
@@ -19,9 +20,9 @@ import argparse
 from pathlib import Path
 
 from adas_sim.cli.record import _build_source, _tick_count
-from adas_sim.contracts.pipeline import Pipeline
-from adas_sim.contracts.scenario import load_scenario
-from adas_sim.core.manifest import build_manifest
+from adas_sim.graph.build import Pipeline
+from adas_sim.config.scenario import load_scenario
+from adas_sim.runspec.manifest import build_manifest
 from adas_sim.sources.recorder import Recorder
 
 
@@ -30,9 +31,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("scenario", type=Path, help="scenario YAML")
     parser.add_argument("--pipeline", type=Path, required=True, help="the pipeline YAML to execute")
     parser.add_argument("--record", type=Path, help="also write a recording to this path")
-    parser.add_argument("--source", choices=["synthetic", "carla"], default="synthetic")
-    parser.add_argument("--script", type=Path, help="--source synthetic only: a YAML script of per-tick bytes")
-    parser.add_argument("--ticks", type=int, help="ticks to run (defaults to --script's own length, --source synthetic only)")
+    parser.add_argument("--script", type=Path, required=True, help="a YAML script of per-tick bytes")
+    parser.add_argument("--ticks", type=int, help="ticks to run (defaults to --script's own length)")
     parser.add_argument("--dt-ms", type=float, default=50.0, help="tick period in milliseconds")
     parser.add_argument("--project", default="base")
     parser.add_argument(
@@ -45,7 +45,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def run(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    source = _build_source(args)
+    source, _source_proto_types, _source_descriptor_set = _build_source(args)
     ticks = _tick_count(args, source)
     dt_ns = int(args.dt_ms * 1_000_000)
 

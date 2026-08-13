@@ -38,12 +38,12 @@ if str(SRC) not in sys.path:
 # exist yet -- reported as NOT_YET, never silently omitted from the count.
 _CLOSED_SETS: dict[str, tuple[str, str, frozenset[str], str] | None] = {
     "OverrideVerb": (
-        "adas_sim.contracts.override", "OverrideVerb",
+        "adas_sim.config.override", "OverrideVerb",
         frozenset({"const", "hold", "offset", "scale", "select", "drop"}),
         "R-SIM-15",
     ),
     "FaultVerb": (
-        "adas_sim.contracts.fault", "FaultVerb",
+        "adas_sim.config.fault", "FaultVerb",
         frozenset({"drop", "stale", "delay", "invalidate", "corrupt"}),
         "R-SIM-8 / SS9.2",
     ),

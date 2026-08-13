@@ -13,8 +13,8 @@ import math
 
 import pytest
 
-from adas_sim.view.measure import MeasureState, measure, snap_point
-from adas_sim.view.viewport import Viewport
+from adas_sim.player.panels.measure import MeasureState, measure, snap_point
+from adas_sim.player.panels.viewport import Viewport
 
 
 def test_measure_distance_dx_dy_correct():

@@ -22,9 +22,9 @@ import argparse
 import shutil
 from pathlib import Path
 
-from adas_sim.contracts.pipeline import Pipeline
-from adas_sim.core.errors import AuthoringError
-from adas_sim.core.manifest import (
+from adas_sim.graph.build import Pipeline
+from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.runspec.manifest import (
     build_manifest,
     check_library_provenance,
     load_run_spec,
@@ -33,7 +33,7 @@ from adas_sim.core.manifest import (
 )
 from adas_sim.core.resim import resim_pipeline
 from adas_sim.io.base import Provenance, TopicInfo
-from adas_sim.io.registry import writer_for
+from adas_sim.plugins.registry import writer_for
 from adas_sim.sources.recorder import topic_for
 
 

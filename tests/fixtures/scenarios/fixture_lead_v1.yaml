@@ -3,14 +3,7 @@
 # coverage) -- names no function, asserts nothing about any component
 # (sim_scenarios_and_expectations.md SS0).
 
-carla:
-  host: 127.0.0.1
-  port: 2000
-  map: FixtureTown
-
 ego:
-  blueprint: vehicle.fixture.ego
-  spawn_point_index: 7
   speed_mps: 10.0
 
 lead:

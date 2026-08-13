@@ -22,8 +22,8 @@ import pytest
 pytest.importorskip("PySide6")
 from PySide6 import QtWidgets  # noqa: E402
 
-from adas_sim.app.panels.probe import ProbePanel  # noqa: E402
-from adas_sim.contracts.component import ComponentManifest, PortSpec  # noqa: E402
+from adas_sim.player.shell.panels.probe import ProbePanel  # noqa: E402
+from adas_sim.resolve.component import ComponentManifest, PortSpec  # noqa: E402
 
 
 def _app() -> QtWidgets.QApplication:
@@ -65,7 +65,7 @@ def test_probing_a_nonexistent_path_emits_load_failed(tmp_path):
 
 def test_probing_a_real_manifest_renders_inputs_and_outputs(monkeypatch, tmp_path):
     _app()
-    monkeypatch.setattr("adas_sim.app.panels.probe.CtypesSilComponent", _FakeComponent)
+    monkeypatch.setattr("adas_sim.player.shell.panels.probe.CtypesSilComponent", _FakeComponent)
     panel = ProbePanel()
     panel.probe(tmp_path / "demo.dll")
 
@@ -83,7 +83,7 @@ def test_probing_a_real_manifest_renders_inputs_and_outputs(monkeypatch, tmp_pat
 
 def test_probing_a_real_manifest_emits_manifest_loaded(monkeypatch, tmp_path):
     _app()
-    monkeypatch.setattr("adas_sim.app.panels.probe.CtypesSilComponent", _FakeComponent)
+    monkeypatch.setattr("adas_sim.player.shell.panels.probe.CtypesSilComponent", _FakeComponent)
     panel = ProbePanel()
     received = []
     panel.manifest_loaded.connect(received.append)

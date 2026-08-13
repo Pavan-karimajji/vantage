@@ -17,10 +17,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from adas_sim.contracts.component import CtypesSilComponent
+from adas_sim.resolve.component import CtypesSilComponent
 from adas_sim.core.runner import build_static_scene
-from adas_sim.core.session import Session
-from adas_sim.io.registry import reader_for
+from adas_sim.session.session import Session
+from adas_sim.plugins.registry import reader_for
 
 
 def build_parser() -> argparse.ArgumentParser:

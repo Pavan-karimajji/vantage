@@ -33,7 +33,7 @@ _SRC = _SIM_ROOT / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from adas_sim.model.plugins import PluginBundle, register_plugin_root  # noqa: E402
+from adas_sim.resolve.plugins import PluginBundle, register_plugin_root  # noqa: E402
 
 
 def _register_plugin_root(library_dir: Path) -> Path:
@@ -88,7 +88,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.version:
-        from adas_sim.app.version import format_version_text
+        from adas_sim.player.shell.version import format_version_text
         print(format_version_text())
         return 0
     # `recording` is genuinely optional (S-D8): with none given, Vantage
@@ -113,7 +113,7 @@ def main() -> int:
             config_library_dir = resolved_config_dir
 
     import adas_sim.io.mcap  # noqa: F401 -- registers the ".mcap" codec
-    from adas_sim.app.gui import launch
+    from adas_sim.player.shell.gui import launch
 
     return launch(
         args.recording, project=args.project, workspace_path=args.workspace,

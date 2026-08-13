@@ -21,13 +21,13 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from adas_sim.contracts.scenario import (  # noqa: E402
+from adas_sim.config.scenario import (  # noqa: E402
     ConstantAnchor, EgoScenario, Marker, RoadHint, RunControl, Scenario, ScenarioContent,
     SensorModelRef, SutRef,
 )
-from adas_sim.core.session import Session  # noqa: E402
-from adas_sim.core.tick import PortValue, Pose2D, Tick  # noqa: E402
-from adas_sim.render.viewer import _index_expectation_windows  # noqa: E402
+from adas_sim.session.session import Session  # noqa: E402
+from adas_sim.session.tick import PortValue, Pose2D, Tick  # noqa: E402
+from adas_sim.player.shell.qt_window import _index_expectation_windows  # noqa: E402
 
 _PERIOD_NS = 100_000_000  # 0.1 s/tick
 
@@ -36,7 +36,7 @@ def _scenario(expect: list[dict], markers: dict | None = None) -> Scenario:
     return Scenario(
         schema=2, id="t", doc="",
         scenario=ScenarioContent(road=RoadHint(), ego=EgoScenario(speed_mps=0.0), actors=()),
-        world={}, sensor_model=SensorModelRef(), run=RunControl(), sut=SutRef(),
+        sensor_model=SensorModelRef(), run=RunControl(), sut=SutRef(),
         markers=markers or {}, expect=tuple(expect),
     )
 

@@ -23,8 +23,8 @@ import pytest
 pytest.importorskip("PySide6")
 from PySide6 import QtCore, QtWidgets  # noqa: E402
 
-from adas_sim.app.shell.campaign import CampaignWidget, batch_invocation_text  # noqa: E402
-from adas_sim.core.batch import RecordingOutcome  # noqa: E402
+from adas_sim.player.shell.shell.campaign import CampaignWidget, batch_invocation_text  # noqa: E402
+from adas_sim.orchestrate.batch import RecordingOutcome  # noqa: E402
 
 
 def _app() -> QtWidgets.QApplication:
@@ -130,7 +130,7 @@ def test_run_button_drives_run_batch_off_the_gui_thread_and_populates_results(mo
     the table once the (mocked) subprocess batch completes."""
     _app()
     canned = [RecordingOutcome(recording=Path("a.mcap"), outcome="ok", duration_s=0.1, tick_count=3)]
-    monkeypatch.setattr("adas_sim.app.shell.campaign.run_batch", lambda *a, **k: canned)
+    monkeypatch.setattr("adas_sim.player.shell.shell.campaign.run_batch", lambda *a, **k: canned)
 
     widget = CampaignWidget()
     widget.load_recording_set([Path("a.mcap")], Path("p.yaml"))
@@ -167,7 +167,7 @@ def test_run_failure_is_reported_and_never_crashes(monkeypatch):
     def _raise(*a, **k):
         raise RuntimeError("subprocess launch failed")
 
-    monkeypatch.setattr("adas_sim.app.shell.campaign.run_batch", _raise)
+    monkeypatch.setattr("adas_sim.player.shell.shell.campaign.run_batch", _raise)
     widget = CampaignWidget()
     widget.load_recording_set([Path("a.mcap")], Path("p.yaml"))
     widget._on_run_clicked()

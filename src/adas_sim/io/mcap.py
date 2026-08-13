@@ -33,7 +33,7 @@ from adas_sim.io.base import (
     manifest_from_dict,
     manifest_to_dict,
 )
-from adas_sim.io.registry import register
+from adas_sim.plugins.registry import register
 
 CAPABILITIES = Capabilities(
     embedded_schemas=True, random_access=True, meta_blocks=True,

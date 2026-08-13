@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from adas_sim.core.errors import (
+from adas_sim.diagnostics.errors import (
     AuthoringError,
     ContractError,
     EnvironmentError_,

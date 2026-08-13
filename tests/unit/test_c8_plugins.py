@@ -19,10 +19,10 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "interfaces" / "scripts"))
 import pack_plugin_bundle  # noqa: E402
 
-from adas_sim.core.errors import AuthoringError
-from adas_sim.core.explain import explain
-from adas_sim.core.session import Session
-from adas_sim.model.plugins import PluginBundle
+from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.diagnostics.explain import explain
+from adas_sim.session.session import Session
+from adas_sim.resolve.plugins import PluginBundle
 from adas_sim.scene.registry import registered_providers
 
 

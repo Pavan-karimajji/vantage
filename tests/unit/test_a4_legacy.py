@@ -23,7 +23,7 @@ from pathlib import Path
 from mcap.writer import Writer as RawMcapWriter
 
 from adas_sim.io.base import Provenance, RunManifest, TopicInfo
-from adas_sim.io.ingest import IngestRecordingReader, discover_ingest_maps
+from adas_sim.ingest.map import IngestRecordingReader, discover_ingest_maps
 from adas_sim.io.mcap import McapReader, McapWriter
 
 

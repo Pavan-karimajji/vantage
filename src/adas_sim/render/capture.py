@@ -27,13 +27,13 @@ import matplotlib.image
 
 from adas_sim import __version__ as TOOL_VERSION
 from adas_sim.core.runner import build_scene
-from adas_sim.core.session import Session
-from adas_sim.model.project import ProjectModel
+from adas_sim.session.session import Session
+from adas_sim.config.project import ProjectModel
 from adas_sim.render.bev import render_scene, render_scene_vector
 from adas_sim.render.theme import Theme
 from adas_sim.scene.types import Prim, Scene
-from adas_sim.view.layers import LayerTreeState
-from adas_sim.view.viewport import Viewport
+from adas_sim.player.panels.layers import LayerTreeState
+from adas_sim.player.panels.viewport import Viewport
 
 
 def resolve_layer_selection(layer_selection: frozenset[str] | None, scene: Scene) -> frozenset[str]:

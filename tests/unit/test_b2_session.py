@@ -15,8 +15,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from adas_sim.core.session import Session
-from adas_sim.core.tick import Pose2D, PortValue, Tick
+from adas_sim.session.session import Session
+from adas_sim.session.tick import Pose2D, PortValue, Tick
 
 _ORIGIN_POSE = Pose2D(x_m=0.0, y_m=0.0, yaw_rad=0.0)
 

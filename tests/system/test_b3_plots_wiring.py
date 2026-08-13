@@ -27,10 +27,10 @@ pytest.importorskip("PySide6")
 from PySide6 import QtCore, QtWidgets  # noqa: E402
 
 from adas_sim.io.base import ComponentBuildInfo, Provenance, RunManifest, TopicInfo  # noqa: E402
-from adas_sim.io.registry import writer_for  # noqa: E402
+from adas_sim.plugins.registry import writer_for  # noqa: E402
 import adas_sim.io.mcap  # noqa: E402,F401 -- registers the ".mcap" codec
-import adas_sim.render.viewer as viewer_module  # noqa: E402
-from adas_sim.render.viewer import MainWindow, set_high_dpi_policy  # noqa: E402
+import adas_sim.player.shell.qt_window as viewer_module  # noqa: E402
+from adas_sim.player.shell.qt_window import MainWindow, set_high_dpi_policy  # noqa: E402
 
 _PROJECT = "base"
 _TICK_COUNT = 10
@@ -184,7 +184,7 @@ def test_stepping_the_transport_updates_every_open_plot_panel(tmp_path, monkeypa
 def test_xy_and_distribution_panels_use_a_plain_non_clickable_label(tmp_path, monkeypatch):
     """`render/plots.py`'s own documented gap: `xy`/`distribution` axes are
     data-scaled, not click-seekable."""
-    from adas_sim.render.viewer import _ClickableImageLabel
+    from adas_sim.player.shell.qt_window import _ClickableImageLabel
 
     recording = tmp_path / "rec.mcap"
     _write_synthetic_recording(recording)

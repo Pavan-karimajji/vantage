@@ -25,7 +25,7 @@ framework's own contribution rather than only to a component's).
 
 from __future__ import annotations
 
-from adas_sim.core.history import LayerCtx
+from adas_sim.session.history import LayerCtx
 from adas_sim.scene.registry import layer_provider
 from adas_sim.scene.types import Layer, Prim
 

@@ -38,9 +38,9 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Literal
 
-from adas_sim.core.errors import AuthoringError
+from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.io.base import Capabilities, RunManifest, TopicInfo, group_by_log_time
-from adas_sim.io.registry import register
+from adas_sim.plugins.registry import register
 
 CAPABILITIES = Capabilities(
     embedded_schemas=False, random_access=False, meta_blocks=True,

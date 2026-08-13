@@ -89,8 +89,9 @@ Normative rules: root `.claude/rules/sim.md` (`R-SIM-1..25`).
   delete real coverage).
 - **Layer providers emit geometry, renderers emit pixels** (R-SIM-2) — metres,
   named frames, semantic style tokens. No provider imports a renderer.
-- **`io/` holds format codecs; `sources/` holds world-model clients** (R-SIM-14).
-  Different abstractions — do not merge them.
+- **`io/` holds format codecs; `sources/` holds the scripted stimulus source
+  and its recorder** (R-SIM-14) — the live world-model client is removed
+  (`DD-12`, `WP-02`). Different abstractions — do not merge them.
 - **The viewer's only input is a `Session`** (R-SIM-13). It never talks to a
   world model, a DLL or a file.
 - **A plug-in never spells a port address** (R-SIM-21). `self.<port>`, resolved
@@ -136,9 +137,13 @@ Normative rules: root `.claude/rules/sim.md` (`R-SIM-1..25`).
 
 `\.claude/prompts/sim_audit.md` (here, in this module) is the entry point for a
 full-scope audit. It binds the root method
-(`../../.claude/prompts/system_audit_and_replan.md`) to sim's document triad —
-`docs/sim_requirements.md` (master register) → `docs/sim_architecture.md` →
-`docs/sim_implementation_plan.md` → code. **A finding is a checkbox in the
+(`../../.claude/prompts/system_audit_and_replan.md`) to sim's **v1** document
+triad — `docs/v1/sim_requirements.md` (master register) →
+`docs/v1/sim_architecture.md` → `docs/v1/sim_implementation_plan.md` → code.
+**This triad predates the v1/v2 restructure and is not the current build
+order** — see this file's own `▶ An implementation session starts here`
+note above; `sim_audit.md` itself has not yet been repointed at the v2 set
+and is not authoritative until it is. **A finding is a checkbox in the
 stage that will fix it** — there is no separate ledger. A requirements- or
 design-level finding is not closable until that master document has been
 edited; see the plan's §9a.

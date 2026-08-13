@@ -24,7 +24,7 @@ from PySide6 import QtCore, QtWidgets  # noqa: E402
 
 QtCore.QStandardPaths.setTestModeEnabled(True)  # P-7: never touch the real user profile in tests
 
-from adas_sim.app.shell.startpage import (  # noqa: E402
+from adas_sim.player.shell.shell.startpage import (  # noqa: E402
     MAX_RECENT_FILES,
     SamplePipeline,
     StartPage,

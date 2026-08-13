@@ -12,8 +12,8 @@ from pathlib import Path
 import pytest
 
 import adas_sim.io.mcap  # noqa: F401 -- registers ".mcap"
-from adas_sim.core.errors import AuthoringError
-from adas_sim.io.registry import reader_for, writer_for
+from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.plugins.registry import reader_for, writer_for
 
 
 def test_unknown_extension_raises_naming_registered_codecs():

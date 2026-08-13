@@ -32,8 +32,8 @@ from pathlib import Path
 
 import pytest
 
-from adas_sim.contracts.component import CtypesSilComponent
-from adas_sim.core.errors import EnvironmentError_
+from adas_sim.resolve.component import CtypesSilComponent
+from adas_sim.diagnostics.errors import EnvironmentError_
 
 SIM_ROOT = Path(__file__).resolve().parent.parent.parent
 MODULES_ROOT = SIM_ROOT.parent

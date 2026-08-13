@@ -25,10 +25,10 @@ import sys
 
 import pytest
 
-from adas_sim.model.cameras import CameraModel
+from adas_sim.config.cameras import CameraModel
 from adas_sim.render.image_view import ProjectedPoint, project_box, project_point, unproject_pixel
 from adas_sim.scene.types import BulkRef, Layer, MAX_INLINE_PRIM_ELEMENTS, Prim, Scene
-from adas_sim.core.errors import ContractError
+from adas_sim.diagnostics.errors import ContractError
 
 
 def _camera(**overrides) -> CameraModel:

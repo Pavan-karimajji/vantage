@@ -43,12 +43,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from adas_sim.check.expect import ExpectationResult, evaluate_scenario
-from adas_sim.contracts.component import ComponentManifest, resolve_message_classes
-from adas_sim.contracts.pipeline import Pipeline
-from adas_sim.contracts.scenario import load_scenario
-from adas_sim.core.errors import AuthoringError
+from adas_sim.resolve.component import ComponentManifest, resolve_message_classes
+from adas_sim.graph.build import Pipeline
+from adas_sim.config.scenario import load_scenario
+from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.core.resim import resim_pipeline
-from adas_sim.core.tick import Pose2D, PortValue, Tick
+from adas_sim.session.tick import Pose2D, PortValue, Tick
 
 #: check/runner.py -> check -> adas_sim -> src -> sim -> modules -> superproject root.
 _SUPERPROJECT_ROOT = Path(__file__).resolve().parents[5]

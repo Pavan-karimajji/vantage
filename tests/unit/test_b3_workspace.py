@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from adas_sim.core.errors import AuthoringError
-from adas_sim.view.workspace import (
+from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.player.panels.workspace import (
     Workspace, WorkspaceSplit, WorkspaceTab, WorkspaceView,
     default_workspace, load_workspace, parse_workspace,
 )

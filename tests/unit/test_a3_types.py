@@ -12,7 +12,7 @@ import dataclasses
 
 import pytest
 
-from adas_sim.core.errors import AuthoringError, ContractError
+from adas_sim.diagnostics.errors import AuthoringError, ContractError
 from adas_sim.scene.types import MAX_INLINE_PRIM_ELEMENTS, BulkRef, Layer, Prim, Scene
 
 #: One valid construction per catalogue kind (sim_visualization_spec.md §2).

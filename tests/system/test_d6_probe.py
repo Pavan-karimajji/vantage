@@ -28,7 +28,7 @@ from pathlib import Path
 import pytest
 
 from adas_sim.cli.probe import run
-from adas_sim.io.registry import is_registered_recording_extension
+from adas_sim.plugins.registry import is_registered_recording_extension
 
 _FIXTURE_SRC = Path(__file__).resolve().parents[1] / "fixtures" / "echo_stub" / "echo_stub.c"
 _INTERFACES_INCLUDE = Path(__file__).resolve().parents[3] / "interfaces" / "include"

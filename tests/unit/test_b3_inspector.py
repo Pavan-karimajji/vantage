@@ -10,7 +10,7 @@ stays headless-testable (`UT-B3-17`'s own layering, extended)."""
 from __future__ import annotations
 
 from adas_sim.scene.types import Layer, Prim, Scene
-from adas_sim.view.inspector import InspectorState, copy_as_text
+from adas_sim.player.panels.inspector import InspectorState, copy_as_text
 
 _OBJ_7 = Prim(kind="box", cx_m=10.0, cy_m=1.0, length_m=4.5, width_m=1.8, style="object.label",
               pick_id="object.7", fields=(("dist_x", "10.00 m"), ("dist_y", "1.00 m")))

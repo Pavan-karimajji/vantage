@@ -18,9 +18,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from adas_sim.core.determinism import AXIS_LABELS, compare_exact, compare_with_tolerance, derive_axis
-from adas_sim.core.tolerance import ToleranceSet, load_tolerance
-from adas_sim.io.registry import reader_for
+from adas_sim.diagnostics.determinism import AXIS_LABELS, compare_exact, compare_with_tolerance, derive_axis
+from adas_sim.diagnostics.tolerance import ToleranceSet, load_tolerance
+from adas_sim.plugins.registry import reader_for
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from adas_sim.core.errors import AuthoringError
-from adas_sim.model.ego import EgoModel
+from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.config.ego import EgoModel
 
 
 def test_ego_model_load_base_matches_the_published_landmark_numbers():

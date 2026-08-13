@@ -13,7 +13,7 @@ from __future__ import annotations
 import numpy as np
 
 from adas_sim.render.timeline import px_to_tick, render_timeline
-from adas_sim.view.timeline import EventMarker
+from adas_sim.player.panels.timeline import EventMarker
 
 _SIZE_PX = (400, 200)
 

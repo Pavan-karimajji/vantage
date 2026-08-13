@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import pytest
 
-from adas_sim.contracts.scenario import (
+from adas_sim.config.scenario import (
     EgoScenario, RoadHint, RunControl, Scenario, ScenarioContent, SensorModelRef, SutRef,
 )
-from adas_sim.core.errors import AuthoringError, InternalError
+from adas_sim.diagnostics.errors import AuthoringError, InternalError
 from adas_sim.sources.synthetic import SyntheticSource
 
 
@@ -21,7 +21,7 @@ def _scenario() -> Scenario:
     return Scenario(
         schema=2, id="test", doc="",
         scenario=ScenarioContent(road=RoadHint(), ego=EgoScenario(speed_mps=0.0), actors=()),
-        world={}, sensor_model=SensorModelRef(), run=RunControl(), sut=SutRef(),
+        sensor_model=SensorModelRef(), run=RunControl(), sut=SutRef(),
     )
 
 

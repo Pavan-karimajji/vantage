@@ -9,7 +9,7 @@ bookkeeping. No Qt (`view/` stays headless-testable)."""
 
 from __future__ import annotations
 
-from adas_sim.view.timeline import EventMarker, TimelineState, event_markers
+from adas_sim.player.panels.timeline import EventMarker, TimelineState, event_markers
 
 
 def test_event_markers_fires_only_on_a_real_transition():

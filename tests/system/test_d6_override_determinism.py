@@ -23,12 +23,12 @@ from google.protobuf import descriptor_pb2 as _dpb
 from google.protobuf import descriptor_pool as _dpool
 from google.protobuf import message_factory as _mfactory
 
-from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent, PortSpec
-from adas_sim.contracts.pipeline import Pipeline
-from adas_sim.contracts.scenario import (
+from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
+from adas_sim.graph.build import Pipeline
+from adas_sim.config.scenario import (
     EgoScenario, RoadHint, RunControl, Scenario, ScenarioContent, SensorModelRef, SutRef,
 )
-from adas_sim.core.manifest import build_manifest
+from adas_sim.runspec.manifest import build_manifest
 from adas_sim.core.resim import resim_pipeline
 from adas_sim.sources.recorder import Recorder
 from adas_sim.sources.synthetic import SyntheticSource
@@ -62,7 +62,7 @@ def _scenario() -> Scenario:
     return Scenario(
         schema=2, id="d6_override_determinism", doc="",
         scenario=ScenarioContent(road=RoadHint(), ego=EgoScenario(speed_mps=0.0), actors=()),
-        world={}, sensor_model=SensorModelRef(), run=RunControl(), sut=SutRef(),
+        sensor_model=SensorModelRef(), run=RunControl(), sut=SutRef(),
     )
 
 

@@ -35,11 +35,11 @@ from collections.abc import Mapping
 from pathlib import Path
 from types import MappingProxyType
 
-from adas_sim.contracts.pipeline import Pipeline, RecordVerb, _split_ref, record_policy_for
-from adas_sim.contracts.scenario import Scenario
-from adas_sim.core.errors import InternalError
+from adas_sim.graph.build import Pipeline, RecordVerb, _split_ref, record_policy_for
+from adas_sim.config.scenario import Scenario
+from adas_sim.diagnostics.errors import InternalError
 from adas_sim.io.base import Provenance, RunManifest, TopicInfo
-from adas_sim.io.registry import writer_for
+from adas_sim.plugins.registry import writer_for
 from adas_sim.sources.base import Source
 
 #: `max_bytes: 0` (undeclared) fallback -- mirrors `contracts/component.py`'s

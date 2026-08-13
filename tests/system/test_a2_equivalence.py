@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from adas_sim.model.ego import EgoModel
+from adas_sim.config.ego import EgoModel
 
 SIM_ROOT = Path(__file__).resolve().parent.parent.parent
 MODULES_ROOT = SIM_ROOT.parent

@@ -30,7 +30,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from adas_sim.model.cameras import CameraModel
+from adas_sim.config.cameras import CameraModel
 from adas_sim.scene.types import Prim
 
 

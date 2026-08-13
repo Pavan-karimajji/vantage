@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from adas_sim.core.diagnostics import component_checklist
+from adas_sim.diagnostics.diagnostics import component_checklist
 
 
 def _minimal_required_tree(root: Path, *, component: str = "widget") -> None:

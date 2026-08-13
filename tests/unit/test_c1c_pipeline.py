@@ -25,12 +25,12 @@ from google.protobuf import descriptor_pb2 as _dpb
 from google.protobuf import descriptor_pool as _dpool
 from google.protobuf import message_factory as _mfactory
 
-from adas_sim.contracts import pipeline as pipeline_mod
-from adas_sim.contracts.component import ComponentManifest, InProcessSilComponent, PortSpec
-from adas_sim.contracts.fault import Fault, FaultVerb
-from adas_sim.contracts.override import Override, OverrideVerb
-from adas_sim.contracts.pipeline import Pipeline
-from adas_sim.core.errors import AuthoringError, ContractError, InternalError, ProvenanceWarning
+from adas_sim.graph import build as pipeline_mod
+from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
+from adas_sim.config.fault import Fault, FaultVerb
+from adas_sim.config.override import Override, OverrideVerb
+from adas_sim.graph.build import Pipeline
+from adas_sim.diagnostics.errors import AuthoringError, ContractError, InternalError, ProvenanceWarning
 
 
 def _manifest(

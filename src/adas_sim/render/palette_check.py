@@ -22,7 +22,7 @@ import math
 import sys
 from collections.abc import Sequence
 
-from adas_sim.core.console import reconfigure_console_utf8
+from adas_sim.diagnostics.console import reconfigure_console_utf8
 from adas_sim.render.theme import CATEGORICAL_SETS, THEMES, Theme, resolve
 
 # ── thresholds (identical to the data-viz skill's validator) ────────────────

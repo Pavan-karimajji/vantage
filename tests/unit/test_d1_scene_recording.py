@@ -21,7 +21,7 @@ pytest.importorskip("foxglove")  # optional extra (pyproject `[foxglove]`); P-10
 
 import adas_sim.io.mcap  # noqa: E402,F401 -- registers ".mcap"
 from adas_sim.io.base import RunManifest  # noqa: E402
-from adas_sim.io.registry import reader_for, writer_for  # noqa: E402
+from adas_sim.plugins.registry import reader_for, writer_for  # noqa: E402
 from adas_sim.render.foxglove import (  # noqa: E402
     FRAME_TRANSFORMS_TOPIC, SCENE_TOPIC, scene_recording_topics, write_scene_snapshot,
 )

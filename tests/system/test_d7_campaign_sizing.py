@@ -25,7 +25,7 @@ from pathlib import Path
 
 import pytest
 
-from adas_sim.core.batch import run_batch
+from adas_sim.orchestrate.batch import run_batch
 
 SIM_ROOT = Path(__file__).resolve().parent.parent.parent
 MODULES_ROOT = SIM_ROOT.parent

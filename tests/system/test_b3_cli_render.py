@@ -20,7 +20,7 @@ import pytest
 from adas_sim.cli import main as cli_main
 from adas_sim.cli.render import build_parser, run
 from adas_sim.io.base import ComponentBuildInfo, Provenance, RunManifest, TopicInfo
-from adas_sim.io.registry import writer_for
+from adas_sim.plugins.registry import writer_for
 import adas_sim.io.mcap  # noqa: F401 -- registers the ".mcap" codec
 from adas_sim.scene.registry import layer_provider
 from adas_sim.scene.types import Layer, Prim

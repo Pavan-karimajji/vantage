@@ -24,10 +24,10 @@ from PySide6 import QtCore, QtWidgets  # noqa: E402
 
 QtCore.QStandardPaths.setTestModeEnabled(True)  # P-7: never touch the real user profile in tests
 
-from adas_sim.app.shell.window import VantageWindow  # noqa: E402
+from adas_sim.player.shell.shell.window import VantageWindow  # noqa: E402
 from adas_sim.io.base import ComponentBuildInfo, Provenance, RunManifest, TopicInfo  # noqa: E402
-from adas_sim.io.registry import writer_for  # noqa: E402
-from adas_sim.render.viewer import set_high_dpi_policy  # noqa: E402
+from adas_sim.plugins.registry import writer_for  # noqa: E402
+from adas_sim.player.shell.qt_window import set_high_dpi_policy  # noqa: E402
 
 import adas_sim.io.mcap  # noqa: E402,F401 -- registers the ".mcap" codec
 
@@ -150,7 +150,7 @@ def test_workspace_toolbar_actions_reflect_the_current_workspace(tmp_path):
 
 
 def test_current_workspace_property_matches_the_permission_set(tmp_path):
-    from adas_sim.app.shell.workspace import BENCH, CAMPAIGN
+    from adas_sim.player.shell.shell.workspace import BENCH, CAMPAIGN
 
     recording = tmp_path / "rec.mcap"
     _write_synthetic_recording(recording)
@@ -231,13 +231,13 @@ def test_opening_a_recording_adds_it_to_recent_files_and_refreshes_the_start_pag
     window.open_recording(recording)
     _pump_until_loaded(window)
 
-    from adas_sim.app.shell.startpage import load_recent_files
+    from adas_sim.player.shell.shell.startpage import load_recent_files
     assert recording in load_recent_files()
     assert window._start_page._recent_list.count() >= 1
 
 
 def test_sample_pipeline_requested_opens_its_recording_and_pipeline(tmp_path):
-    from adas_sim.app.shell.startpage import SamplePipeline
+    from adas_sim.player.shell.shell.startpage import SamplePipeline
 
     set_high_dpi_policy()
     QtWidgets.QApplication.instance() or QtWidgets.QApplication([])

@@ -19,7 +19,7 @@ import argparse
 from pathlib import Path
 
 from adas_sim.io.csv import CsvWriter
-from adas_sim.io.registry import reader_for
+from adas_sim.plugins.registry import reader_for
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -22,6 +22,7 @@ from check_invariants import (  # noqa: E402
     check_gt3,
     check_gt11,
     check_no_manifest_names_codec,
+    check_no_world_model_client,
     check_ut_d8_9,
     run_all,
 )
@@ -46,7 +47,7 @@ def test_check_gt1_fails_on_a_deliberately_planted_function_identifier(tmp_path)
 
 
 def test_run_all_is_clean_on_the_current_skeleton():
-    """All six checks (GT-1, GT-2, GT-3, GT-6, GT-11, UT-D8-9) hold on the tree as it stands."""
+    """All seven checks (GT-1, GT-2, GT-3, GT-6, GT-11, UT-D8-9, WP-02(b)) hold on the tree as it stands."""
     assert run_all() == []
 
 
@@ -94,12 +95,12 @@ def test_check_ut_d8_9_passes_on_an_empty_tree(tmp_path):
 
 
 def test_check_ut_d8_9_passes_on_the_current_skeleton():
-    """`S-D8`: no `Vantage`/`Bench`/`Campaign` token in `adas_sim/` outside `app/`."""
+    """`S-D8`: no `Vantage`/`Bench`/`Campaign` token in `adas_sim/` outside `player/shell/`."""
     assert check_ut_d8_9() == []
 
 
 def test_check_ut_d8_9_fails_on_a_workspace_token_outside_app(tmp_path):
-    (tmp_path / "app").mkdir()
+    (tmp_path / "player" / "shell").mkdir(parents=True)
     (tmp_path / "core").mkdir()
     (tmp_path / "core" / "session.py").write_text('# only in the Bench workspace\n', encoding="utf-8")
     findings = check_ut_d8_9(src_root=tmp_path)
@@ -108,8 +109,8 @@ def test_check_ut_d8_9_fails_on_a_workspace_token_outside_app(tmp_path):
 
 
 def test_check_ut_d8_9_allows_the_token_inside_app(tmp_path):
-    app_dir = tmp_path / "app"
-    app_dir.mkdir()
+    app_dir = tmp_path / "player" / "shell"
+    app_dir.mkdir(parents=True)
     (app_dir / "window.py").write_text('WORKSPACE_NAME = "Bench"\n', encoding="utf-8")
     assert check_ut_d8_9(src_root=tmp_path) == []
 
@@ -128,6 +129,40 @@ def test_check_codec_scope_fails_on_a_planted_function_identifier(tmp_path):
     findings = check_codec_scope_no_function_name(sim_root=tmp_path)
     assert findings
     assert "IMP-0383" in findings[0]
+
+
+def test_check_no_world_model_client_passes_on_the_current_skeleton():
+    """WP-02(b) / DD-12: the deleted `sources/carla` client stays deleted."""
+    assert check_no_world_model_client() == []
+
+
+def test_check_no_world_model_client_fails_on_a_reappeared_directory(tmp_path):
+    carla_dir = tmp_path / "src" / "adas_sim" / "sources" / "carla"
+    carla_dir.mkdir(parents=True)
+    findings = check_no_world_model_client(sim_root=tmp_path)
+    assert findings
+    assert "WP-02(b)" in findings[0]
+
+
+def test_check_no_world_model_client_fails_on_a_planted_class_reference(tmp_path):
+    src_dir = tmp_path / "src" / "adas_sim" / "cli"
+    src_dir.mkdir(parents=True)
+    (src_dir / "record.py").write_text("from adas_sim.sources.carla import CarlaSource\n", encoding="utf-8")
+    findings = check_no_world_model_client(sim_root=tmp_path)
+    assert findings
+    assert "WP-02(b)" in findings[0]
+
+
+def test_check_no_world_model_client_allows_df_s_own_recording_naming_convention(tmp_path):
+    """`carla_scenarios`/`carla_testruns` (`check/runner.py`'s real directory
+    convention for data df actually captured from CARLA) is provenance
+    naming, not the deleted client -- must not be flagged."""
+    src_dir = tmp_path / "src" / "adas_sim" / "check"
+    src_dir.mkdir(parents=True)
+    (src_dir / "runner.py").write_text(
+        '_SCENARIOS_DIR_NAME = "carla_scenarios"\n_RECORDINGS_DIR_NAME = "carla_testruns"\n', encoding="utf-8",
+    )
+    assert check_no_world_model_client(sim_root=tmp_path) == []
 
 
 def test_check_no_manifest_names_codec_reports_clean_when_no_manifest_exists_yet():

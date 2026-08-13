@@ -15,10 +15,10 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError
 
-from adas_sim.app import version as version_mod
-from adas_sim.app.version import format_version_text, version_info
-from adas_sim.contracts.component import ADAS_SIL_ABI_VERSION
-from adas_sim.contracts.pipeline import CURRENT_PIPELINE_VERSION
+from adas_sim.player.shell import version as version_mod
+from adas_sim.player.shell.version import format_version_text, version_info
+from adas_sim.resolve.component import ADAS_SIL_ABI_VERSION
+from adas_sim.graph.build import CURRENT_PIPELINE_VERSION
 from adas_sim.io.base import CAPTURE_TIME_MANIFEST_VERSION
 from adas_sim.scene.codec import SUPPORTED_MAJOR as SCENE_MAJOR_VERSION
 

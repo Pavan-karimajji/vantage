@@ -23,9 +23,9 @@ from adas_sim.check.expect import (
     EqualsDuring, EqualsWhenever, Monotonic, Never, TimeRef,
     evaluate_expectation, evaluate_scenario, parse_expectation, resolve_marker, resolve_markers,
 )
-from adas_sim.contracts.scenario import BecomesAnchor, ConstantAnchor, CrossesAnchor, Marker, load_scenario
-from adas_sim.core.errors import AuthoringError
-from adas_sim.core.tick import PortValue, Pose2D, Tick
+from adas_sim.config.scenario import BecomesAnchor, ConstantAnchor, CrossesAnchor, Marker, load_scenario
+from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.session.tick import PortValue, Pose2D, Tick
 
 _FIXTURES = Path(__file__).resolve().parent.parent / "fixtures" / "scenarios"
 _PERIOD_NS = 100_000_000  # 0.1 s/tick

@@ -1,14 +1,7 @@
 # Fixture: v1 shape using the general `actors:` list, one actor with a
 # lateral_profile phase list. Same scope note as fixture_lead_v1.yaml.
 
-carla:
-  host: 127.0.0.1
-  port: 2000
-  map: FixtureTown
-
 ego:
-  blueprint: vehicle.fixture.ego
-  spawn_point_index: 12
   speed_mps: 20.0
 
 actors:

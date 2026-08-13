@@ -13,7 +13,7 @@ from google.protobuf import descriptor_pb2 as _dpb
 from google.protobuf.message import DecodeError
 
 from adas_sim.core.runner import build_session_from_recording
-from adas_sim.core.tick import PortValue
+from adas_sim.session.tick import PortValue
 from adas_sim.io.base import Provenance, RunManifest, TopicInfo
 from adas_sim.io.mcap import McapWriter
 
