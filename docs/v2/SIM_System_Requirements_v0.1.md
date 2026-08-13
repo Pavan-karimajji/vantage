@@ -3,7 +3,7 @@
 
 **Owner:** SIM Team (tool supplier)
 **Derived from:** `SIM_Concept_Document_v0.3.1.md` (this directory) — the concept baseline.
-**Status:** Draft for review. Not baselined. No requirement here is authoritative until §22's open decisions are closed.
+**Status:** Draft for review. **All five baselining gates closed 2026-08-13** (§26.1) — the barrier to baselining is now review, not an open decision. Two rows remain open and neither is a gate: `OQ-09` (a bench sample, evidence rather than design) and `OQ-15` (the CI vendor, ~10 lines).
 **Audience:** SIM developers, algorithm-team integrators, CI/DevOps, and the authors of the Software Requirements, Interface Specification and Test Specification derived from this document.
 
 ---
@@ -435,6 +435,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Accept.** Each of the three opens a real file supplied by its owning team, and `E2E-01` completes against each.
 **Verify.** T · `SYT-INP-11`   **Trace.** CN-0004
 *Note:* the definitive format list was `OQ-08` in §22, **closed 2026-08-11 — MCAP (interchange), MDF4 (vehicle measurement), TDMS (bench capture)**.
+*Note (`OQ-22` closed 2026-08-13):* **acquiring third-party readers for MDF4 and TDMS is agreed in principle**, and the licence question moves out of the baselining gates and onto the two format work packages — asked, per format, in the week its first sample file arrives, by somebody holding a real file rather than in the abstract. That is safe because one decision bounds it completely: a codec is about four methods behind a registered interface, touching no engine code and replaceable without a single caller changing, so the choice between an open-source reader, a vendor SDK and a clean-room implementation is **procurement, not architecture**. Two things to check when each is asked: the licence class against how the deliverable ships — **the case that bites is a copyleft reader statically linked into a delivered library**, with dynamic linkage the usual mitigation and still needing sign-off — and, for any SDK, redistribution terms plus coverage of **both** Windows and Ubuntu. **One item should start early regardless:** if a vendor SDK is even a candidate, open the redistribution-terms conversation now. It is the only open item in this document whose latency is measured in months rather than days.
 
 **`SYS-0012`** · `P2` · `R2` — Second-tier formats
 **Shall.** The system shall provide readers for an image folder with index, and for a synthetic-scenario tool's output.
@@ -1371,9 +1372,18 @@ These are the sequences the system exists to support, end to end. Each becomes o
 
 **`SYS-0175`** · `P0` · `R1` — Configuration is simple enough to change alone
 **Shall.** An algorithm engineer shall be able to make a stated set of common changes — switch a module's mode, change a calibration value, add a recording, change the active layout, add an export — without assistance and without editing framework code.
-**Accept.** Each change in the stated set is completed by a representative engineer, unaided, within a declared time budget, measured and recorded. Lines-of-configuration per project is tracked as a health metric across releases.
-**Verify.** D · `SYT-CFG-18` · `ANL-25`   **Trace.** CN-0016, CN-0275, CN-0035
-*Note:* this is the success measure of §1.3 made falsifiable. The stated set and the time budget are `OQ-16` in §22 and must be fixed before baseline.
+**Accept.** Each change in the stated set touches **exactly its declared file set and no other file**, requires no rebuild and no source edit, and is completed unaided — checked mechanically by making the change and asserting the resulting diff. Lines-of-configuration per project is tracked as a health metric across releases.
+
+| Change | Declared file set |
+|---|---|
+| Switch a module's mode | One field in the run spec |
+| Change a calibration value | One key in one configuration bundle |
+| Add a recording | One entry in the recording list — the ingest map is edited for a new *family*, never for a new file |
+| Change the active layout | One workspace file |
+| Add an export | One exporter entry |
+
+**Verify.** A · `ANL-25` · D · `SYT-CFG-18`   **Trace.** CN-0016, CN-0275, CN-0035
+*Note:* this is the success measure of §1.3 made falsifiable. **`OQ-16` closed 2026-08-13:** the set was never open — it is named in the `Shall` above — and the **structural gate is what CI enforces**. The wall-clock budget deliberately is not: measuring *"a representative engineer, unaided, within a declared budget"* needs an engineer who has not seen the system, a facilitator and a repeat each release, which is the right acceptance criterion and the wrong gate — an expensive instrument gets run once and quoted for two years. The structural shape is what actually decides whether a task takes ten minutes or a day, it is failable today, and it catches the regression this requirement exists to prevent: **a change that used to be one file starting to need three.** The wall clock is measured once against these five tasks, recorded as an **observation rather than a target**, and put to the customer team then — a number to react to gets an answer where an open question gets silence. `SYT-CFG-18` remains the demonstration and carries the observation.
 
 **`SYS-0176`** · `P0` · `R1` — Configuration lives in the customer's repository
 **Shall.** Configuration files shall live in the algorithm team's repository, versioned with their code; the system shall require nothing to be added to its own installation to run a project.
@@ -1424,6 +1434,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Each run shall write to its own artifact directory.
 **Accept.** No two concurrent runs write to the same path. A run's directory opens standalone.
 **Verify.** T · `SYT-BAT-04`   **Trace.** CN-0187
+*Note (`OQ-19` closed 2026-08-13):* **campaign results are retained by the customer**, in the result format named in the run configuration, in storage the customer owns. Retention durations are therefore not this system's to set and no requirement here states one. What the system owes is that a retained result is **self-describing** — which `SYS-0114` and `SYS-0123` already require, and which is what makes this answer safe rather than merely convenient: a result kept for years, on storage the tool never sees, still identifies the run, the binaries and the configuration that produced it. The one thing a retention policy cannot wish away is worth recording where the owner will read it: **regeneration needs the binary, not merely its hash.** A build that can no longer be obtained makes its results unregenerable, and at that moment the stored results become the only evidence the run happened.
 
 **`SYS-0185`** · `P1` · `R1` — A failing run does not stop the batch
 **Shall.** A failing run shall not stop the batch by default.
@@ -1512,8 +1523,9 @@ These are the sequences the system exists to support, end to end. Each becomes o
 
 **`SYS-0201`** · `P0` · `R1` — CI exists from the start of the build order
 **Shall.** Automated execution of the test suite shall be established at the start of the build order, not at the end.
-**Accept.** The first delivered increment is accompanied by a running pipeline. Manual verification is never the sole evidence for any requirement.
+**Accept.** The first delivered increment is accompanied by a running pipeline. Manual verification is never the sole evidence for any requirement. Every check is runnable as one plain command on a developer machine, on both platforms, reporting its exit code and the number of items it scanned.
 **Verify.** A · `ANL-28`   **Trace.** CN-0351; v1 `NR-SIM-25`
+*Note (`OQ-15` answered 2026-08-13, partially):* **the CI system is not yet chosen** — Jenkins is the likely candidate, not a commitment. This requirement is written so that it does not matter, and the last clause of the `Accept` is what does the work. The obligation splits in two: the **harness** — every check as one plain command, vendor-independent, all the work and all the value — and the **trigger**, roughly ten lines of vendor file written the day the vendor is known. `WP-01` completes on the harness alone. The property that outranks the schedule: **every check stays runnable on a developer machine**, which is what keeps checks being run at all. Two constraints travel to whichever system is chosen: it must run Windows and Ubuntu, and the harness lives in the contributed-tooling directory rather than the shipped source tree.
 
 ---
 
@@ -1675,6 +1687,69 @@ These are the sequences the system exists to support, end to end. Each becomes o
 
 > **The governing principle.** Cost is dominated by what each step *reads and decodes*, not by the number of steps. Six thousand cycles is trivial; decoding six thousand camera frames is not. Every requirement below is a lever on the first, not the second.
 
+### 18.0 The reference configuration and the supplied absolute
+
+*Added 2026-08-13, closing `OQ-14` in §26.*
+
+**The absolute, as supplied.** *A campaign of **1000 recordings** must finish
+**overnight** on a **PC with 8 cores and 32 GB of RAM**, running a **lean `df`
+library**. On a server it goes higher, because more runs can be executed at
+once.*
+
+**One interpretation is added, and it is the only invented number here.**
+*Overnight* is read as a **12-hour window**. It is stated as a declared constant
+in the budget file rather than folded into the requirements, so correcting it to
+8 h or 16 h is one edit and every derived figure below moves with it.
+
+**The derivation, and why it is expressed per worker.** `SYS-0236` puts
+parallelism across runs and never inside one, and `SYS-0183` runs one subprocess
+per recording in batch. So the campaign figure is not a property of the system —
+it is `workers × per-worker rate`, and only the second factor is ours:
+
+| Quantity | Value on the reference host | How it is obtained |
+|---|---|---|
+| Campaign window | 12 h | Declared interpretation of *overnight* |
+| Campaign size | 1000 recordings | Supplied |
+| Aggregate throughput | ≥ 83.3 recordings / hour | 1000 ÷ 12 |
+| Workers | 8 | One per core |
+| **Per-worker throughput** | **≥ 10.4 recordings / hour** | 83.3 ÷ 8 |
+| **Wall time per recording** | **≤ 5 min 46 s** | 3600 ÷ 10.4 |
+| **Peak resident memory per worker** | **≤ 4 GB** | 32 GB ÷ 8, so eight workers fit |
+| Per-cycle cost | per-recording budget ÷ the reference fixture's cycle count | Declared in the budget file, so a fixture change moves one number |
+
+**The consequence worth stating, because it is why the requirement is written
+this way.** *"On a server it gets higher"* needs **no second requirement and no
+re-baseline**: the budget is per worker, the campaign figure is derived from the
+worker count, and a 64-core server changes the derived figure and nothing else.
+A campaign throughput requirement stated as an absolute would have had to be
+re-negotiated on every host, which is how a performance budget quietly becomes
+advisory.
+
+**The reference configuration — the half that actually causes trouble.** An
+unstated reference configuration is worse than an unstated number, because two
+measurements taken on different setups look like a regression and burn a day
+each time. All six axes are pinned:
+
+| Axis | Pinned as |
+|---|---|
+| Host | 8 cores, 32 GB — recorded **beside every budget**, per `SYS-0251`, so a move to CI hardware is a visible re-baseline rather than a mystery regression |
+| Module set | `df` alone, lean build, for per-cycle cost; `perception-core` → `df` for the multi-module figure |
+| Recording | One named MCAP fixture, committed with its hash — never referenced by a path that can change underneath |
+| Tick count · layer count | Fixed and stated (`SYS-0235`'s own wording) |
+| Build configuration | `RelWithDebInfo`, matching the platform suffix already in use. Never a debug build, never implicit |
+| Workers | 8, one per core |
+
+**Where no absolute was supplied — player frame time and estimate accuracy —
+the budget is the first measurement.** Both requirements are written to catch a
+**regression**, and a regression is a comparison, so the first measurement on
+the reference configuration supplies the number and the requirement becomes
+failable from the second run. The budget file is the shape `SYS-0243` already
+defines for determinism tolerance: one row per metric, a value, a mandatory
+written reason, its hash in the run manifest, and **the consumed headroom
+printed on pass as well as on fail** — the one anti-spiral device that does not
+depend on somebody choosing to look. This is deliberately not a second
+mechanism.
+
 **`SYS-0230`** · `P0` · `R1` — Read only what the graph needs
 **Shall.** The system shall read and decode only the ports the active graph requires.
 **Accept.** A run of a function alone over a recording containing camera data decodes zero image bytes. Bytes-read is reported per run and is compared against the theoretical minimum for the port set.
@@ -1696,14 +1771,14 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Verify.** A · `ANL-33` · T · `SYT-NFR-04`   **Trace.** CN-0290, CN-0229, CN-0288; **defect** concept §22.5
 
 **`SYS-0234`** · `P0` · `R1` — Per-cycle cost is budgeted with a number and measured
-**Shall.** Per-cycle cost and campaign throughput shall each carry a declared numeric budget, measured on a declared reference configuration, and reported per release.
-**Accept.** The budget is a number a run can exceed. A release whose measurement exceeds its budget is reported as a regression, not re-baselined silently.
+**Shall.** Per-cycle cost and per-worker campaign throughput shall each carry a declared numeric budget, measured on §18.0's reference configuration, and reported per release.
+**Accept.** A worker clearing fewer than **10.4 recordings per hour**, a recording taking more than **5 min 46 s** of wall time, or a worker whose peak resident memory exceeds **4 GB**, fails. The aggregate campaign figure is derived as `workers × per-worker rate` and is reported, never separately budgeted. A release whose measurement exceeds its budget is reported as a regression, not re-baselined silently.
 **Verify.** A · `ANL-34`   **Trace.** CN-0356, CN-0232; v1 `NR-SIM-41`
-*Note:* the numbers themselves are `OQ-14` in §22 and must be fixed before baseline. A performance requirement with no number is exactly the requirement `CN-0356` says will be declared satisfied.
+*Note:* the numbers derive from the supplied absolute — 1000 recordings overnight on 8 cores and 32 GB with a lean `df` — via §18.0, whose 12-hour reading of *overnight* is the one declared interpretation. Budgeting **per worker** is what makes *"on a server it goes higher"* a derived figure rather than a second requirement.
 
 **`SYS-0235`** · `P1` · `R1` — Player responsiveness has a stated budget
 **Shall.** Player frame time shall have a stated budget at a stated tick count and layer count.
-**Accept.** Measured on the reference configuration and reported; exceeding it is a regression.
+**Accept.** Measured on §18.0's reference configuration and reported; exceeding it is a regression. No absolute was supplied, so the budget is **seeded from the first measurement** and the requirement is failable from the second run onward; the seeding run is marked as such in the budget file and its consumed headroom prints on pass.
 **Verify.** A · `ANL-35`   **Trace.** CN-0357; v1 `NR-SIM-5`
 
 **`SYS-0236`** · `P1` · `R1` — Parallelism across runs only
@@ -1718,8 +1793,9 @@ These are the sequences the system exists to support, end to end. Each becomes o
 
 **`SYS-0238`** · `P1` · `R1` — Duration is estimated before execution
 **Shall.** The dry run shall estimate run duration before execution.
-**Accept.** The estimate is within a declared factor of the measured duration on the reference configurations, and the factor is reported alongside the estimate.
+**Accept.** The estimate is within a declared factor of the measured duration on §18.0's reference configuration, and the factor is reported alongside the estimate. No absolute was supplied, so the factor is **measured on the first campaign and declared from it**; a later campaign whose estimate falls outside the declared factor fails.
 **Verify.** A · `ANL-37`   **Trace.** CN-0233
+*Note:* this estimate is what `SYS-0117`'s pre-campaign refusal reads, so its accuracy is what decides whether a 1000-recording campaign is refused for the right reason.
 
 ---
 
@@ -1961,6 +2037,7 @@ Constraints are obligations on *how* the system is built, imposed because a corr
 **Shall.** The SIM team shall own configuration format and schema; the algorithm team shall own configuration content after handover.
 **Accept.** A schema change is releasable without touching any project's content; a content change is made without a package release.
 **Verify.** I · `INSP-12`   **Trace.** CN-0015
+*Note (`OQ-18` closed 2026-08-13):* the content owner after handover is the customer's **algorithm test manager or product owner** — a named role, not a team to be formed. This requires no change to the requirement, which is the useful part: the split it already states is exactly the one the answer names, because project configuration is data in versioned files with no code (no central project roster, per-project calibration directories, and a configuration bundle that is a build *output* rather than a second place anyone edits a value). So *"who maintains it"* was always a question about repository access and review, never about capability — **nobody needs to be able to program to own it.** What actually sizes the support model is the diagnostics: `sim explain`, `sim doctor`, and an authoring error that names the plug-in, the port it asked for and every port the manifest declares. A thin support model is viable in proportion to how good those messages are, which turns a staffing question into an engineering target and is why those rules are normative rather than nice-to-have.
 
 **`SYS-0282`** · `P0` · `R1` — A codec moves bytes and knows nothing above itself
 **Shall.** A format codec shall know only named, timestamped payloads, and no software above the codec layer shall name a codec, a format or a producing tool.
@@ -1968,6 +2045,74 @@ Constraints are obligations on *how* the system is built, imposed because a corr
 **Verify.** A · `ANL-55`   **Trace.** CN-0282, CN-0136, CN-0004
 
 > **Reworked 2026-08-10, under a stable UID.** The original text required *"format codecs and world-model clients"* to be separate abstractions. The customer has since removed live world-model clients from the system entirely (Implementation Design `DD-12`): a scene-authoring, actor-spawning, world-driving client does not fit this architecture, and keeping one as a plugin would preserve the shape of the thing that does not fit. **The capability is not lost** — `SYS-0109` already requires a world simulator's output to be read as an ordinary input source, *"through the same reader and ingest-map path as a measurement, with no privileged code path"*. What is lost is the coupling. The requirement therefore keeps its number and states the invariant that survives, which is the stronger half of the original: the codec boundary. `SYS-0109` is unchanged and now carries the whole of the foreign-simulator story.
+
+---
+
+## 23a. Tool qualification and the safety argument
+
+*Added 2026-08-13, closing `OQ-17` in §26. **Lettered rather than renumbered**,
+by the convention the Implementation Plan already uses for `WP-15a`: a section
+inserted after the numbering is fixed takes a letter, so every existing
+cross-reference to §24…§28 keeps pointing at what it meant.*
+
+**The answer, and its scope.** Outputs of this system **will** be cited as
+evidence in a functional-safety argument, and a functional-safety concept for
+the tool will be asked for (concept §2.4). The three requirements below are the
+**first level** of that obligation and no more. They deliberately name no
+standard and no confidence level: the classification is quality's to make, and
+a requirement that pre-empted it would be rewritten rather than used. What
+these fix is the part that is expensive to retrofit and cheap now — knowing
+*which* outputs are cited, *what* they may be relied on for, and *what would
+catch one that is wrong*.
+
+**Why the blast radius is small.** The set is already in the shape a
+qualification argument asks for — a falsifiable `Accept` per requirement
+(`SYS-0276`), a `Verify` naming a test that exists (`SYS-0278`), a `Trace`
+upward (`SYS-0279`), status derived rather than stored (`SYS-0277`) — and it
+was built that way because a requirement nobody can fail is worthless, not in
+anticipation of this answer. So the cost of the *yes* is **addition**, not
+re-styling. The one thing that must not lapse while the classification is
+pending is the `Trace` discipline: reconstructing traceability after thirty-two
+work packages are cut is the only part of this that would genuinely hurt.
+
+**`SYS-0289`** · `P0` · `R1` — Every artifact kind declares whether it may be cited
+**Shall.** The system shall declare, per artifact kind it writes, whether that artifact may be cited as evidence in a safety argument.
+**Accept.** Every artifact kind the system writes appears exactly once in the declaration, marked cited or not-cited. A writer producing a kind absent from the declaration fails the release check, naming the kind and the writer; the check reports how many writers it scanned and reads `SKIPPED`, never `PASSED`, at zero.
+**Verify.** A · `ANL-56`   **Trace.** CN-0400
+
+**`SYS-0290`** · `P0` · `R1` — Use constraints and known limits ship with the release
+**Shall.** The release shall ship a use-constraints statement naming, per cited artifact kind, what it may be relied upon for, the known limits that bound it, and the open defects that affect it.
+**Accept.** The statement is present in the delivered package and names every kind `SYS-0289` marks cited. Each entry carries at least one limit, or the literal *none known* with a date — a blank entry fails. A cited kind with no entry fails the release check.
+**Verify.** A · `ANL-57` · I · `INSP-13`   **Trace.** CN-0401
+*Note:* the limits this collects are mostly already written and scattered — the open-loop limit (§9), a rung-4 reconstruction's approximation (§8), a value reconstructed by a layer rather than published by a module (`SYS-0035`), and a divergence past which results are not to be trusted. Collecting them is the work; discovering them is not.
+
+**`SYS-0291`** · `P0` · `R1` — Every cited artifact kind names what would catch a wrong value
+**Shall.** For each artifact kind marked cited, the system shall name the check that would detect a wrong value in it, or shall declare that none exists.
+**Accept.** Every cited kind resolves either to at least one test identifier that exists in the suite, or to the literal `undetected`. An identifier resolving to no test fails, naming it; a blank fails. The count of `undetected` kinds is printed in the release report on success as well as on failure, so it cannot decay unobserved.
+**Verify.** A · `ANL-58`   **Trace.** CN-0402
+*Note:* printing the count on **pass** is the same anti-spiral device `SYS-0243` uses for tolerance headroom, and it is here for the same reason: a number that is only shown when something is already wrong is a number nobody watches.
+
+### The fourth obligation, deliberately not written here
+
+Every tool-confidence scheme asks for a **fourth** thing beside impact,
+detection and use constraints: that a cited result identify the exact tool
+version, configuration and binaries that produced it. **It is already required,
+twice, and is not restated.** `SYS-0123` fixes the run manifest's contents —
+tool version, resolved spec and its hash, module ids, versions and binary
+hashes, input hashes, host platform, *"each either a value or an explicit
+unknown"* — and `SYS-0114` requires every artifact to embed it, so that *"any
+artifact, taken alone to another machine, identifies the run that produced
+it."* A fifth requirement saying the same thing in qualification vocabulary
+would be the second copy `CN-0287` exists to prevent, and the copy that drifts
+is always the one written for a review rather than for a build.
+
+This is worth stating rather than leaving silent, because the natural reflex on
+receiving a qualification obligation is to write a requirement per clause of the
+obligation. Two of the four clauses were already discharged before the question
+was asked. **That is also the honest answer to *"how rigid is the tool"*:** the
+identity chain, the falsifiable acceptance criteria, the derived status and the
+planted-violation twins were not built for an auditor, which is precisely what
+makes them evidence.
 
 ---
 
@@ -2142,24 +2287,49 @@ Everything else is continuity.
 | `OQ-06` | Do existing modules support reset without destroy? | `SYS-0048`, `SYS-0192` | Module teams |
 | `OQ-07` | Should the system inject parameters, or point at a module's existing parameter file? | `SYS-0177`, `SYS-0179` | SIM team + module teams |
 | ~~`OQ-08`~~ | ~~Definitive input format list for release one, in priority order.~~ **Answered 2026-08-11: MCAP (the system's own interchange format), MDF4 (vehicle measurement), TDMS (bench capture).** Priority order is moot — `DD-13` ships MCAP now and writes each other reader the week its first sample file arrives. | `SYS-0011`, `SYS-0012` | **Closed** |
-| `OQ-09` | What exactly does the bench capture write, and does it preserve the signal header end to end? | `SYS-0015`, `SYS-0029`, `SYS-0061` | Bench owner |
+| `OQ-09` | **What exactly does the bench capture write, and does it preserve the signal header end to end?** **Answered 2026-08-13: a sample is obtainable.** What remains is the file itself, and it is **verification evidence rather than design input** — `IFQ-06` no longer depends on it (the header carries two stamps regardless of what a reader receives) and neither does `OQ-01` (the supported rung is a measured per-recording field). Three things are read on arrival: whether a per-message reception stamp exists (decides whether rung 4 is available for that format at all), whether the signal header survives end to end (decides rungs 2 and 3), and the **finest timestamp resolution present** — the named trigger for reopening `IFQ-01`, since a sub-microsecond source would be truncated by the ratified microsecond contract. Ten seconds from a routine run is the whole ask; it retires plan risk `R-8` at `WP-18` | `SYS-0015`, `SYS-0029`, `SYS-0061` — none blocked; `MP-1`'s exit is provisional until it lands | Bench owner — **scheduled** |
 | `OQ-10` | Preferred exchange format for outputs. | `SYS-0111` | Algorithm teams + external automation owner |
 | `OQ-11` | Does an internal port model or signal catalogue already exist that should be adopted rather than defined? | `SYS-0023` — **adopting beats defining**, and this must be asked before the port model is authored | SIM team |
 | `OQ-12` | Do any modules change rate at run time? | `SYS-0066`, `SYS-0071`, `SYS-0072` | Module teams |
 | ~~`OQ-13`~~ | ~~Is same-step execution acceptable as default, or must transport delays be modelled from day one?~~ **Answered 2026-08-12: same-step is the default, and the per-edge delay is carried from day one with a value of zero.** The Resolved Run Spec already declares `delay_steps` per edge and `SYS-0077` is `R1`, so the field costs nothing to carry and the modelling becomes data rather than a later redesign. The question was answered by the artifact before it was asked. | `SYS-0077` | **Closed** |
-| `OQ-14` | The numbers for the per-cycle cost budget, campaign throughput budget and player frame-time budget, and the reference configurations they are measured on. | `SYS-0234`, `SYS-0235`, `SYS-0238` — **a performance requirement with no number cannot be failed** | SIM team |
-| `OQ-15` | Which CI system, and what artifact retention? | `SYS-0201`, `SYS-0184` | DevOps |
-| `OQ-16` | The stated set of common configuration changes and the time budget for each. | `SYS-0175` — this is §1.3's success measure; it is not measurable until this closes | SIM team + a customer team |
-| `OQ-17` | Are there tool qualification or functional-safety process constraints on this system? | **Potentially everything.** It changes the requirement style, the verification evidence and the documentation set. Answer early. | Quality / safety |
-| `OQ-18` | Who maintains project configuration after handover, and what is the support model? | `SYS-0281` | SIM team + algorithm teams |
-| `OQ-19` | Campaign retention policy — kept as baseline, regenerable, deleted. | `SYS-0117`, `SYS-0184` | Campaign owner |
+| ~~`OQ-14`~~ | ~~The numbers for the per-cycle cost budget, campaign throughput budget and player frame-time budget, and the reference configurations they are measured on.~~ **Answered 2026-08-13:** *a campaign of 1000 recordings must finish overnight on 8 cores and 32 GB with a lean `df` library.* §18.0 derives the per-worker budgets from it (≥ 10.4 recordings/hour, ≤ 5 min 46 s per recording, ≤ 4 GB peak) and pins the six-axis reference configuration. Budgeting **per worker** makes *"a server goes higher"* a derived figure rather than a second requirement. Frame time and estimate accuracy had no absolute and are **seeded from their first measurement**, failable from the second run | `SYS-0234`, `SYS-0235`, `SYS-0238` | **Closed** |
+| `OQ-15` | **Which CI system, and what artifact retention?** *Vendor undecided as of 2026-08-13 — Jenkins likely, not committed.* De-blocked rather than waiting: the harness is vendor-independent and completes `WP-01`; the trigger is ~10 lines written the day the vendor is known (`SYS-0201`'s note). The retention half is answered with `OQ-19` | `SYS-0201` — **not blocked**, one small file deferred | DevOps |
+| ~~`OQ-16`~~ | ~~The stated set of common configuration changes and the time budget for each.~~ **Answered 2026-08-13:** the set was never open — it is named in `SYS-0175`'s own `Shall`. The **structural** gate is what CI enforces (each change touches exactly its declared file set, no rebuild, no source edit) and is failable today; the wall clock is measured once, recorded as an **observation rather than a target**, and put to the customer team then | `SYS-0175` | **Closed** |
+| ~~`OQ-17`~~ | ~~Are there tool qualification or functional-safety process constraints on this system?~~ **Answered 2026-08-13: yes.** Tool outputs will be cited in a safety argument and a functional-safety concept will be asked for. The fallback below was **not** exercised: the cost is addition, not re-styling — concept §2.4 (`CN-0400`…`CN-0402`) and **§23a** (`SYS-0289`…`SYS-0291`). Two of the four obligations any confidence scheme asks for were already discharged by `SYS-0114`/`SYS-0123` and are deliberately not restated. The classification itself stays with quality and is not pre-empted here | requirement style — **unchanged**; §23a added | **Closed** |
+| ~~`OQ-18`~~ | ~~Who maintains project configuration after handover, and what is the support model?~~ **Answered 2026-08-13: the algorithm test manager or the product owner.** No requirement changes — `SYS-0281`'s split is already the one the answer names, because configuration is data in versioned files with no code | `SYS-0281` | **Closed** |
+| ~~`OQ-19`~~ | ~~Campaign retention policy — kept as baseline, regenerable, deleted.~~ **Answered 2026-08-13: results are retained by the customer**, in the result format named in the run configuration, on storage the customer owns. Durations are not this system's to set; what it owes is that a retained result is self-describing (`SYS-0114`, `SYS-0123`) | `SYS-0117`, `SYS-0184` | **Closed** |
 | ~~`OQ-20`~~ | ~~Product and workspace naming: adopt v1's names, or the concept's neutral role names?~~ **Answered 2026-08-12: the requirement documents use the neutral role names — player, launcher, batch; the product and its user interface keep their own names.** Two vocabularies for one thing is only a problem when both claim to be normative, and this settles which is. Blocking in exactly one place: the module's own context file still uses the product names throughout and cannot be corrected while this is open. | Documentation and UI strings only | **Closed** |
 | ~~`OQ-21`~~ | ~~Build or adopt the interactive viewer surface.~~ **Answered 2026-08-12: keep what exists.** The scene layer is the strongest area of the current codebase and the viewer work is a split of a working surface, not a rewrite. Adopting a third-party surface would discard the one part of the previous effort that is unambiguously right, to solve a problem nobody has reported. | `SYS-0128`–`SYS-0157` implementation cost | **Closed** |
-| `OQ-22` | Licence and distribution situation for proprietary format readers. | `SYS-0011` | Legal + SIM team |
+| ~~`OQ-22`~~ | ~~Licence and distribution situation for proprietary format readers.~~ **Answered 2026-08-13: agreed in principle, and moved out of the gates onto the two format work packages** — asked per format in the week its first sample arrives, by somebody holding a real file. A codec is four methods behind a registered interface, so this is procurement, not architecture. `SYS-0011`'s note carries what to check; the vendor-SDK redistribution conversation is the one item to start early | `SYS-0011` | **Closed** |
 
-**`OQ-01`, `OQ-11`, `OQ-14`, `OQ-16` and `OQ-17` are baselining gates, not rows.** This document is not baselined until each has an answer or a written fallback. The rest can be carried as documented assumptions into the Software Requirements.
+### 26.1 The gates are clear
 
-**`OQ-17` carries a stated fallback, because it is the only one that can invalidate the form of every other answer.** If it is unanswered by the time the seam is built, the chain is developed in the style these documents already use, and re-styling for a qualification regime is accepted as a known, scoped cost recorded against this row. An unanswered question with a written fallback is a managed risk; one without is a surprise arriving after the work is cut.
+**All five baselining gates are closed.** `OQ-01` and `OQ-11` closed on
+2026-08-12; `OQ-14`, `OQ-16` and `OQ-17` on 2026-08-13. **This document has no
+remaining barrier to baselining**, and the two rows still carrying text —
+`OQ-09` and `OQ-15` — are neither gates nor blockers: one is a sample file whose
+absence weakens *evidence* rather than *design*, the other is a vendor choice
+worth ten lines of configuration.
+
+**`OQ-17`'s fallback was never exercised, and that is worth recording rather
+than deleting.** The fallback read: *if unanswered by the time the seam is
+built, the chain is developed in the present style and re-styling is accepted as
+a known, scoped cost.* The answer arrived first, and it turned out the fallback
+had over-provisioned for it — the yes cost **three concept statements, three
+system requirements and three design rows**, because the set was already written
+in a shape a qualification argument asks for. It was written that way because a
+requirement nobody can fail is worthless, not in anticipation of an auditor,
+**which is exactly what makes it usable as evidence.** The one discipline that
+must not lapse while the classification is pending is `Trace` completeness:
+reconstructing traceability after thirty-two work packages are cut is the only
+part of that fallback that would genuinely have hurt.
+
+**What the closures did *not* do is also the useful signal.** Naming three
+formats changed the plan's shape not at all; naming the performance absolute
+changed no interface; answering the qualification question added requirements
+and moved none. A seam that absorbs an answer without deforming is a seam drawn
+in the right place — and the converse held too: had `OQ-17` demanded a different
+requirement *style*, that would have been the finding.
 
 ---
 

@@ -95,12 +95,21 @@ number.
 | Marked | Waiting on |
 |---|---|
 | `SYT-NFR-03.c1`, `ANL-32` | The "declared factor" for slice-cost scaling |
-| `ANL-34`, `ANL-35` | The per-cycle and frame-time budgets — *`SYS-0234` requires "a number a run can exceed"; none exists yet* |
-| `ANL-37` | The duration-estimate factor |
-| `SYT-CFG-18`, `ANL-25` | The unaided-change time budget (`OQ-14`) |
-| `SYT-NFR-22`, `ANL-40` | The onboarding budget (`OQ-14`) |
+| ~~`ANL-34`~~ | **Supplied 2026-08-13** (`OQ-14`): ≥ 10.4 recordings/hour per worker, ≤ 5 min 46 s per recording, ≤ 4 GB peak per worker, on SysReq §18.0's reference configuration |
+| ~~`ANL-35`~~, ~~`ANL-37`~~, ~~`ANL-40`~~ | **Resolved 2026-08-13** (`OQ-14`): no absolute was supplied for these, so each is **seeded from its first measurement** on the reference configuration and is failable from the second run. A seeded row is not an unsupplied row — it has a number, a reason and printed headroom |
+| ~~`SYT-CFG-18`, `ANL-25`~~ | **Resolved 2026-08-13** (`OQ-16`): the gate is **structural** — each change touches exactly its declared file set — and is failable today. The wall clock is recorded as an observation, not a bound |
+| ~~`SYT-NFR-22`~~ | **Resolved 2026-08-13** with `ANL-40`, same mechanism |
 | `SYT-PLR-18` | The figure/live pixel tolerance |
 | `SYT-OUT-07` | The volume-estimate factor and the campaign budget |
+
+**On seeding, so `⊘` keeps meaning something.** A baseline-seeded budget is
+*not* the same as an unsupplied one, and collapsing the two would empty this
+marker of content. `⊘` means **no observation could fail this row today**. A
+seeded row has a number the second run can exceed, a written reason, and its
+consumed headroom printed on pass (`SYS-0243`'s device, reused rather than
+rebuilt). What a seeded row does **not** answer is *"is it fast enough?"* —
+that is an absolute and it stays with whoever owns throughput expectations. It
+just no longer holds up the harness.
 
 ---
 
@@ -174,7 +183,7 @@ ships its `S-PLANTED` variant** (`TV-3`), stated once as the universal `.c2`:
 | `ANL-22` | `SYS-0154` | Code paths capable of producing an evidence answer | exactly one / a second exists |
 | `ANL-23` | `SYS-0156` | Engine-boundary bytes with context video active vs inactive | equal / display-only data crosses the engine |
 | `ANL-24` | `SYS-0165` | Engine for a configuration parser, inference, validation, search-path logic | none present / any |
-| `ANL-25` | `SYS-0175` | ⊘ Recorded unaided-change sessions; lines-of-configuration per project | every change completed unaided within the budget / assistance needed — **budget not supplied** |
+| `ANL-25` | `SYS-0175` | Each of the five changes made on a reference project, then the resulting diff; plus lines-of-configuration per project | each diff touches exactly the declared file set, with no rebuild and no source edit, and the metric is tracked / any change touches a file outside its set, needs a rebuild, or the metric is untracked |
 | `ANL-26` | `SYS-0194` | Index build cost across a batch of N | once per recording / once per run |
 | `ANL-27` | `SYS-0196` | Engine binary hash, CI path vs desktop path | identical / differing |
 | `ANL-28` | `SYS-0201` | The first delivered increment's pipeline | a running pipeline accompanies it / manual verification is the sole evidence for any requirement |
@@ -183,13 +192,13 @@ ships its `S-PLANTED` variant** (`TV-3`), stated once as the universal `.c2`:
 | `ANL-31` | `SYS-0230` | Image bytes decoded by a signal-only run | zero, and bytes-read reported against the theoretical minimum / any image decode |
 | `ANL-32` | `SYS-0232` | ⊘ Wall time for a 6 s slice of a 20 min recording | scales with slice within the declared factor / with file length — **factor not supplied** |
 | `ANL-33` | `SYS-0233` | Per-message path profile | no scripting-layer frame, no per-element conversion / any |
-| `ANL-34` | `SYS-0234` | ⊘ Per-cycle cost and campaign throughput against declared budgets | measured, reported, a regression flagged / **no budget number exists — this row cannot fail today, which is precisely what `SYS-0234` forbids** |
-| `ANL-35` | `SYS-0235` | ⊘ Player frame time at a stated tick and layer count | within budget, reported / **budget not supplied** |
+| `ANL-34` | `SYS-0234` | Per-worker throughput, per-recording wall time and peak resident memory over the reference campaign, on SysReq §18.0's host | ≥ 10.4 recordings/hour per worker, ≤ 5 min 46 s per recording, ≤ 4 GB peak per worker, aggregate derived and reported / any bound exceeded, or the host not recorded beside the measurement |
+| `ANL-35` | `SYS-0235` | Player frame time at the stated tick and layer count, against the seeded budget | within the seeded budget with headroom printed / above it, or the budget re-seeded without the seeding run being marked |
 | `ANL-36` | `SYS-0236` | Intra-run thread pools; outputs across core counts | none, and outputs invariant / any pool, or core-count-dependent output or order |
-| `ANL-37` | `SYS-0238` | ⊘ Estimated vs measured duration on the reference configurations | within the declared factor, factor reported / **factor not supplied** |
+| `ANL-37` | `SYS-0238` | Estimated vs measured duration on the reference configuration, against the factor declared from the first campaign | within the declared factor, factor reported alongside the estimate / outside it, or the factor claimed in prose rather than measured |
 | `ANL-38` | `SYS-0240` | Reproducibility across the four axes of `S-RUNPAIR` | each reported separately; same-process divergence blocks; a passing far axis prints headroom / any axis merged, or a pass printing no headroom |
 | `ANL-39` | `SYS-0262` | Each phase boundary: retired implementation, and its tests | retired one gone, replacement carries its tests / either survives, or coverage decreases |
-| `ANL-40` | `SYS-0265` | ⊘ The recorded onboarding demonstration; documentation size per release | completed unaided within the budget, size reported / **budget not supplied** |
+| `ANL-40` | `SYS-0265` | The recorded onboarding demonstration against the seeded budget; documentation size per release | completed unaided within the seeded budget, size reported / above it, or size untracked |
 | `ANL-41` | `SYS-0267` | A sampled name in log, configuration and display | the identical string in all three / any surface renames for presentation |
 | `ANL-42` | `SYS-0268` | CLI verbs, file kinds, panel types, extension points | each enumerable, size reported per release / a member added without a requirement |
 | `ANL-43` | `SYS-0269` | Every module against the per-tick/per-run rule | every one classifiable with no judgement call / any per-message path in the scripting layer |
@@ -205,6 +214,9 @@ ships its `S-PLANTED` variant** (`TV-3`), stated once as the universal `.c2`:
 | `ANL-53` | `SYS-0279` | Every `SYS` `Trace` field; every live `CN` UID | all trace to a live `CN`, and uncovered `CN` UIDs are reported / any unparented, or the reverse report missing |
 | `ANL-54` | `SYS-0280` | Delivered artifact hash across projects | identical / any project-specific code path |
 | `ANL-55` | `SYS-0282` | Codec sources for port/module/graph/tool names; files above the codec layer for format names | neither direction hits; adding a format changes codec + registry only / any hit, or a third file changes |
+| `ANL-56` | `SYS-0289` | Every artifact writer in the tree, against the artifact-kind declaration | every kind written appears once, marked cited or not-cited, and the scanned-writer count is printed / a kind is written that the declaration does not carry, or the count is zero and the row reads `PASSED` rather than `SKIPPED` |
+| `ANL-57` | `SYS-0290` | The delivered package for the use-constraints statement, against the cited kinds `ANL-56` found | every cited kind has an entry carrying a limit or a dated *none known* / a cited kind is missing, or an entry is blank |
+| `ANL-58` | `SYS-0291` | Each cited kind's named detecting check, resolved against the test suite | each resolves to a test that exists or to `undetected`, and the `undetected` count is printed on pass / an identifier resolves to nothing, or the cell is blank |
 
 ---
 
@@ -228,6 +240,7 @@ completes with no finding · **FAIL** any item unanswered or answered "unclear".
 | `INSP-10` | `SYS-0256` | Every project-specific behaviour in the reference projects, against *"is this a plugin or a fork?"* | SIM team + each project owner |
 | `INSP-11` | `SYS-0269` | Every module's language assignment, against *"did this need judgement?"* | SIM team |
 | `INSP-12` | `SYS-0281` | The format/content boundary, against *"can a schema change ship without touching project content, and vice versa?"* | SIM team + one algorithm team |
+| `INSP-13` | `SYS-0290` | Each use-constraints entry, against *"could a reader take this limit as narrower than it is?"* and *"is a limit stated here that no requirement or test governs?"* — the second catches a constraint invented for the document | SIM team + quality/safety |
 
 ---
 
@@ -445,7 +458,7 @@ gives the fixture, the steps and the cases.
 | `SYT-CFG-15` | `SYS-0172` | `S-CFGSET` | Read then write every file in the corpus. | `.c1` PASS byte-identical, including comments and ordering where the format preserves them · FAIL any reformatting |
 | `SYT-CFG-16` | `SYS-0173` | `S-CFGSET` | Reference one fragment from two configurations. | `.c1` PASS identical resolved values in both · FAIL divergence<br>`.c2` PASS `explain` names the fragment as the source layer · FAIL it names the including file |
 | `SYT-CFG-17` | `SYS-0174` | `S-CFGSET` | Swap the layout; then swap the ingest map. | `.c1` PASS swapping the layout touches no composition file · FAIL it does<br>`.c2` PASS swapping the ingest map touches no connections file · FAIL it does |
-| `SYT-CFG-18` | `SYS-0175` | `S-CHAIN4` | ⊘ A representative engineer performs each change in the stated set, unaided, timed and recorded. | `.c1` PASS each completed unaided within the budget · FAIL assistance or a framework edit needed — **budget not supplied**<br>`.c2` PASS lines-of-configuration per project is tracked across releases · FAIL untracked |
+| `SYT-CFG-18` | `SYS-0175` | `S-CHAIN4` | A representative engineer performs each change in the stated set, unaided; the diff is captured and the elapsed time recorded as an observation. | `.c1` PASS each completed unaided, with the diff touching exactly its declared file set and no rebuild · FAIL assistance or a framework edit needed, or the diff reaches a file outside the set<br>`.c2` PASS lines-of-configuration per project is tracked across releases · FAIL untracked<br>`.c3` PASS the elapsed times are recorded and reported as observations · FAIL not recorded — **an observation, deliberately not a bound (`OQ-16`)** |
 | `SYT-CFG-19` | `SYS-0176` | `S-LIBDIR` | Run a project from a read-only installation of the package. | `.c1` PASS it runs · FAIL anything must be added to the installation |
 | `SYT-CFG-20` | `SYS-0177` | `S-LIBDIR` | Edit a calibration value in the bundle and re-run; then compare what the viewer read against what the module was initialised with. | `.c1` PASS no rebuild required · FAIL configuration is compiled in<br>`.c2` PASS the viewer reads the same bundle and **states which** · FAIL the two agree only by coincidence |
 | `SYT-CFG-21` | `SYS-0178` | `S-LIBDIR`, `S-CHAIN4` | Make two modules disagree about a shared vehicle parameter; separately, use modules from two projects. | `.c1` PASS the shared-parameter disagreement is a hard error with no escape · FAIL a warning or an escape exists<br>`.c2` PASS the project disagreement warns and records the escape · FAIL it errors, or the escape is unrecorded |
@@ -540,7 +553,7 @@ gives the fixture, the steps and the cases.
 | `SYT-NFR-19` | `SYS-0251` | `S-TWOHOST` | Submit a measurement with no platform attribution. | `.c1` PASS rejected by the reporting tooling · FAIL it depends on a reviewer noticing |
 | `SYT-NFR-20` | `SYS-0263` | `S-CHAIN4` | Enumerate every execution path and look for its dry-run path. | `.c1` PASS every path has one · FAIL any capability executes without an explainable plan |
 | `SYT-NFR-21` | `SYS-0264` | `S-BROKENENV` | Trigger every entry in the error catalogue. | `.c1` PASS every message contains an actionable instruction, verified by test · FAIL any verified only by review, or stating only what is wrong |
-| `SYT-NFR-22` | `SYS-0265` | — | ⊘ An engineer who did not build the tool completes the named onboarding path, unaided, recorded. | `.c1` PASS completed within the declared budget · FAIL assistance needed — **budget not supplied**<br>`.c2` PASS documentation size per release measured and reported · FAIL untracked |
+| `SYT-NFR-22` | `SYS-0265` | — | An engineer who did not build the tool completes the named onboarding path, unaided, recorded. | `.c1` PASS completed unaided within the seeded budget · FAIL assistance needed, or above the budget<br>`.c2` PASS documentation size per release measured and reported · FAIL untracked |
 
 ### 4.13 `CON` — extensibility, packaging and constraints
 

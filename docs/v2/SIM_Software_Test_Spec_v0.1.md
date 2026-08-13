@@ -45,11 +45,27 @@ Item tokens: `IO` `BUS` `SCH` `HOST` `MUT` `RUN` `ERR` `EDG` `EXE` `CFG` `GRF` `
 | TV-5 | No test restates an `Accept` clause. | Review, `INSP-SW-08` |
 | TV-6 | Verification status lives in the suite's results, never in a column here. | `ANL-SW-67`, `INSP-SW-08` |
 
-### 0.4 Three tests cannot be written yet, and are marked `⊘`
+### 0.4 The four thresholds that were missing — supplied or seeded, 2026-08-13
 
-Not an omission — a missing input. `⊘` means the harness is specified and buildable but the threshold is the customer's (`OQ-14`, `OQ-16`). **A requirement nobody can fail is a requirement that will be declared satisfied**, so these are marked rather than given a plausible number.
+`⊘` means the harness is specified and buildable but no observation could fail
+it, because the bound is the customer's (`R-REQ-10`). **A requirement nobody can
+fail is a requirement that will be declared satisfied**, so such a row is marked
+rather than given a plausible number.
 
-`ANL-SW-43` · `ANL-SW-52` · `ANL-SW-57` · `ANL-SW-63`.
+**Four rows carried the mark and none does now** (`OQ-14`, `OQ-16` closed):
+
+| Row | Now |
+|---|---|
+| `ANL-SW-63` | **Supplied.** ≥ 10.4 recordings/hour per worker, ≤ 5 min 46 s per recording, ≤ 4 GB peak per worker, on SysReq §18.0's reference configuration — derived from *1000 recordings overnight, 8 cores, 32 GB, lean `df`* |
+| `ANL-SW-52`, `ANL-SW-43` | **Seeded.** No absolute was supplied, so each takes its bound from its first measurement on the reference configuration and is failable from the second run, with the seeding run marked and the consumed headroom printed on pass |
+| `ANL-SW-57` | **Restructured.** The gate is the **diff**, not the stopwatch: each of the five common changes must touch exactly its declared file set. Failable today; the wall clock is recorded as an observation |
+
+**Seeded is not unsupplied.** A seeded row has a number the next run can exceed,
+a written reason and printed headroom; an unsupplied row has none of those. What
+a seeded row does not answer is *"is it fast enough?"* — an absolute, and it
+stays with whoever owns throughput expectations. Two rows elsewhere still carry
+`⊘` for a different reason (`UT-DIA-02`, `UT-RND-06`): those await an
+implementation, not a number.
 
 ---
 
@@ -130,7 +146,7 @@ The mechanised checks. These are the highest-leverage tests in the suite: each o
 | `ANL-SW-40` | `SW-0232` | `VERBS` length vs the published CLI reference | A verb in one and not the other |
 | `ANL-SW-41` | `SW-0238`, `SW-0338` | Engine invocation sites across every face | More than one invocation shape |
 | `ANL-SW-42` | `SW-0256` | Configuration schemas the batch face accepts | Any batch-only schema |
-| `ANL-SW-43` `⊘` | `SW-0272` | Estimate vs measured duration over a sample | Outside the stated accuracy band. **Blocked on `OQ-14`** |
+| `ANL-SW-43` | `SW-0272` | Estimate vs measured duration over a sample, against the factor declared from the first campaign | Outside the declared factor, or the factor claimed rather than measured |
 | `ANL-SW-44` | `SW-0273` | Producers of an `Evidence` record | More than one |
 | `ANL-SW-45` | `SW-0287` | Imports from `player/**` | Any of `io`, `resolve`, `transport` reached directly |
 | `ANL-SW-46` | `SW-0302` | Provider imports and filesystem calls | A renderer, `cv2`, `matplotlib`, Qt, or disk access |
@@ -139,18 +155,18 @@ The mechanised checks. These are the highest-leverage tests in the suite: each o
 | `ANL-SW-49` | `SW-0305` | Plug-in sources for spelled port addresses | Any literal address other than `self.<port>`/`source.<port>` |
 | `ANL-SW-50` | `SW-0311` | Providers for history-dependent state | Any integration of a time-varying signal |
 | `ANL-SW-51` | `SW-0317` | Colour literals across the tree | Any outside `render/theme.py` |
-| `ANL-SW-52` `⊘` | `SW-0323` | Frame time at the stated tick and layer count | Above budget. **Blocked on `OQ-14`** |
+| `ANL-SW-52` | `SW-0323` | Frame time at the stated tick and layer count, against the seeded budget | Above the seeded budget, or re-seeded without the seeding run being marked |
 | `ANL-SW-53` | `SW-0325`, `SW-0357` | `src/**` — which is `adas_sim/`, `simcore/` and `simengine/` together — for `aeb`/`bsd`/`lca`/`acc`/`ldw`/`lka` and the world-model client's name | Any hit. `tests/` deliberately out of scope (`R-SIM-1`) |
 | `ANL-SW-54` | `SW-0326` | Toolkit imports under `player/panels/**` | Any Qt import below the shell |
 | `ANL-SW-55` | `SW-0331` | The plot panel's address space | Any second addressing mechanism |
 | `ANL-SW-56` | `SW-0340` | `SURFACE` vs the user documentation | An action in one and not the other |
-| `ANL-SW-57` `⊘` | `SW-0348` | Timed walkthrough of the declared common changes | Above budget. **Blocked on `OQ-16`** |
+| `ANL-SW-57` | `SW-0348` | The diff produced by each of the five declared common changes on a reference project | Any change touching a file outside its declared set, needing a rebuild, or needing a source edit |
 | `ANL-SW-58` | `SW-0350` | Engine pointers and buffer maps outside `transport/` | Any. **The line concept §5.3 says must not be crossed** |
 | `ANL-SW-59` | `SW-0354` | Imports from `transport/**` | Any from `io`, or any format name |
 | `ANL-SW-60` | `SW-0362` | Package contents across two projects | Any difference |
 | `ANL-SW-61` | `SW-0364` | `LoadLibrary`/`dlopen` calls and separator arithmetic | Any outside `dso.cpp` and `config/paths.py` |
 | `ANL-SW-62` | `SW-0368` | Thread pools inside `simcore`, `--jobs` inside a run | Any intra-run parallelism |
-| `ANL-SW-63` `⊘` | `SW-0369` | Per-cycle cost against the reference configuration | Above budget. **Blocked on `OQ-14`** |
+| `ANL-SW-63` | `SW-0369` | Per-worker throughput, per-recording wall time and peak resident memory over the reference campaign | Below 10.4 recordings/hour per worker, above 5 min 46 s per recording, above 4 GB peak per worker, or the host not recorded beside the measurement |
 | `ANL-SW-64` | `SW-0370` | Every `scripts/check_*.py` against its `F-PLANTED` variant | Any check that passes a planted violation. **`TV-3`** |
 | `ANL-SW-65` | `SW-0371` | Every cited identifier vs the test sources | Any identifier not appearing in its test |
 | `ANL-SW-66` | `SW-0372` | `SW → SYS` links | Any `SW` with no parent, except the five §32.3 records as known |
@@ -163,6 +179,9 @@ The mechanised checks. These are the highest-leverage tests in the suite: each o
 | `ANL-SW-73` | `SW-0405` | Plug-in access to module memory | Any pointer read instead of a named subscription |
 | `ANL-SW-74` | `SW-0408` | Every `SW` for a non-empty `Accept` and ≥1 test | Any with neither. **SV-1** |
 | `ANL-SW-75` | `SW-0413` | Writers of the scheduler's simulation-time member | More than one, a public setter, or any assignment from a message timestamp |
+| `ANL-SW-76` | `SW-0415` | Every artifact writer across `adas_sim/**`, `src/simcore/**`, against the artifact-kind declaration | A kind written that the declaration does not carry; or a scanned-writer count of zero reported as `PASSED` rather than `SKIPPED` |
+| `ANL-SW-77` | `SW-0416` | The generated use-constraints statement against the declaration and the recorded limit entries, plus its content hash | A cited kind with no entry, a blank entry, or a hash mismatch showing the generated file was hand-edited |
+| `ANL-SW-78` | `SW-0417` | Each cited kind's named detecting check, resolved against the suite by `scripts/check_trace.py`'s resolver | An identifier resolving to no test, or a blank cell. `undetected` passes and is counted |
 
 ---
 
@@ -213,6 +232,7 @@ Used only where no execution is possible. Each names its checklist; *"inspected"
 | `INSP-SW-08` | `SW-0373` | The document set, against *"is verification status stored anywhere by hand?"* — **including this document** | SIM team |
 | `INSP-SW-09` | `SW-0393` | The module ABI contract text, against *"is the clock prohibition stated where a module author reads it?"* | SIM team + one component team |
 | `INSP-SW-10` | `SW-0399` | The format/content split: what ships in the package versus what lives in the customer repository | SIM team + one algorithm team |
+| `INSP-SW-11` | `SW-0416` | Each recorded limit entry, against *"is this limit governed by a requirement or a test, or was it written for this document?"* | SIM team + quality/safety |
 
 ---
 
@@ -657,7 +677,7 @@ Expected values are the served requirement's `Accept` clause (§0.1). Each row g
 | `UT-LNC-04` | `SW-0345` | `F-FOREIGN`, `F-TINY` | Add two recordings with different feasible cuts; read what is offered per recording. |
 | `UT-LNC-05` | `SW-0346` | `F-CHAIN4` | Add recordings, choose a layout, set modes, save and launch; count screens and actions. |
 | `UT-LNC-06` | `SW-0347` | `F-CFGSET` | Write a configuration from the launcher; validate it with the same loader `sim run` uses. |
-| `UT-LNC-07` | `SW-0348` `⊘` | `F-CFGSET` | Time each declared common change. **Blocked on `OQ-16`.** |
+| `UT-LNC-07` | `SW-0348` | `F-CFGSET` | Make each declared common change; assert the diff touches exactly its declared file set with no rebuild and no source edit. Record the elapsed time as an observation, not a bound (`OQ-16`). |
 
 ### 5.23 `SI-23` `pyapi` — `UT-API-01` … `UT-API-05`
 

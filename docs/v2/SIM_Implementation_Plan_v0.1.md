@@ -157,8 +157,9 @@ flowchart LR
 
 ### WP-01 · `MP-0` · CI and the analysis-check harness
 - [ ] **Prereq:** none. This is the entry point (`O-1`).
-- [ ] **Lands:** `IMP-0020`, `IMP-0357`, `IMP-0361`, `IMP-0366`, `IMP-0367`, `IMP-0370`…`IMP-0376`, `IMP-0378`, `IMP-0383`, `IMP-0408` — 15.
-- [ ] **Files:** `.github/workflows/*` · `scripts/check_no_duplication.py` · `check_closed_sets.py` · `check_imports.py` · `check_trace.py` · `check_headers.py` · `check_time_units.py` · `measure.py` · `docs/v2/py/trace_check.py` · a planted-violation test per check.
+- [ ] **Lands:** `IMP-0020`, `IMP-0357`, `IMP-0361`, `IMP-0366`, `IMP-0367`, `IMP-0370`…`IMP-0376`, `IMP-0378`, `IMP-0383`, `IMP-0408`, `IMP-0415`, `IMP-0417` — 17.
+- [ ] **Files:** the CI trigger file for whichever system is chosen (`OQ-15`, undecided — Jenkins likely; ~10 lines, written the day it is known) · `scripts/check_no_duplication.py` · `check_closed_sets.py` · `check_imports.py` · `check_trace.py` · `check_headers.py` · `check_time_units.py` · `check_artifact_kinds.py` · `measure.py` · `conf/artifact_kinds.yaml` · `docs/v2/py/trace_check.py` · a planted-violation test per check.
+- [ ] **Exit:** the harness half is complete and vendor-independent — every check runs as one plain command on a developer machine, on both platforms, returning an exit code. **The trigger file is the only part that waits on `OQ-15`**, and it does not gate this package.
 - [ ] **Exit:** the suite runs on **Windows and Linux** and compares (`IMP-0366`); every `scripts/check_*.py` has a planted-violation test that fails when it should (`IMP-0370`); `trace_check.py` reports `CN → SYS → SW → IMP → WP → test` closed with SwReq §32.3's five unparented requirements listed as **known** rather than passed.
 - [ ] **Exit:** every check reports **how many files it scanned**, and a check that scanned zero reports `SKIPPED`, never `PASSED`. Every path a check names is asserted to exist in the tree.
 
@@ -379,7 +380,7 @@ flowchart LR
 - [ ] **Lands:** `IMP-0130`, `IMP-0271`…`IMP-0285`, `IMP-0403` — 17.
 - [ ] **Files:** `adas_sim/diagnostics/**`.
 - [ ] **Exit:** `sim explain <signal> --at <tick>` and the GUI evidence panel return **identical** answers because they call one producer with two formatters. A passing determinism report prints the tolerance used **and the headroom consumed** — the only anti-spiral mechanism that does not depend on someone choosing to look.
-- [ ] **Blocked-but-not-blocking:** `IMP-0272` needs `OQ-14`. Build the estimator and its accuracy band; the threshold arrives later.
+- [ ] **`OQ-14` closed 2026-08-13:** `IMP-0272`'s accuracy band is declared from the first campaign on SysReq §18.0's reference configuration. Build the estimator and its band; the band is measured, not awaited.
 
 ---
 
@@ -429,14 +430,15 @@ flowchart LR
 
 ### WP-31 · `MP-6` · Package — delivery, self-test, budgets, documentation
 - [ ] **Prereq:** `WP-30`.
-- [ ] **Lands:** `IMP-0348`, `IMP-0360`, `IMP-0362`, `IMP-0363`, `IMP-0369`, `IMP-0377`, `IMP-0379`, `IMP-0380`, `IMP-0397`, `IMP-0399`, `IMP-0406`, `IMP-0407` — 12.
-- [ ] **Files:** `selftest/**` · `docs/v2/component_checklist.md` · `docs/v2/debugging.md` · `.vscode/launch.json` and the Visual Studio `.natvis` · `scripts/measure_docs.py` · `plugins/version.py`'s generated matrix · `pyproject.toml`/`conanfile.py` version pin · `sim migrate`.
+- [ ] **Lands:** `IMP-0348`, `IMP-0360`, `IMP-0362`, `IMP-0363`, `IMP-0369`, `IMP-0377`, `IMP-0379`, `IMP-0380`, `IMP-0397`, `IMP-0399`, `IMP-0406`, `IMP-0407`, `IMP-0416` — 13.
+- [ ] **Files:** `selftest/**` · `docs/v2/component_checklist.md` · `docs/v2/debugging.md` · `.vscode/launch.json` and the Visual Studio `.natvis` · `scripts/measure_docs.py` · `plugins/version.py`'s generated matrix · `pyproject.toml`/`conanfile.py` version pin · `sim migrate` · `contrib/qual/gen_use_constraints.py` · `conf/known_limits.yaml` · the generated `USE_CONSTRAINTS.md`.
 - [ ] **Exit:** a customer installs the package on a clean machine on both platforms and `sim doctor --selftest` runs a bundled miniature recording through a bundled stub chain. `IMP-0379`'s checklist is proven sufficient by a **second** component completing it unaided.
 - [ ] **Then, and only then:**
   - [ ] Delete SwReq's `Now.` field in one pass (SwReq §0.7 rule 3).
   - [ ] Delete this document's checkboxes (§0.4).
   - [ ] Decide `contrib/check/`: handed to the automation-framework owner, or deleted (`DD-08`).
-- [ ] **Blocked-but-not-blocking:** `IMP-0348` needs `OQ-16`; `IMP-0369` needs `OQ-14`.
+- [ ] **`OQ-14` and `OQ-16` closed 2026-08-13:** `IMP-0369` carries supplied per-worker numbers (§18.0); `IMP-0348`'s gate is the diff, not the stopwatch. Neither waits on anything.
+- [ ] **Ship the qualification artifacts** (`IMP-0416`): `conf/known_limits.yaml` filled for every cited kind, `USE_CONSTRAINTS.md` generated into the package, `INSP-SW-11` reviewed with quality/safety.
 
 ---
 
@@ -461,7 +463,7 @@ Counted by `docs/v2/py/trace_check.py --progress`, which reads the checkboxes ab
 
 | `WP` | Phase | `IMP` | `WP` | Phase | `IMP` |
 |---|---|---:|---|---|---:|
-| `WP-01` | `MP-0` | 15 | `WP-17` | `MP-2` | 7 |
+| `WP-01` | `MP-0` | 17 | `WP-17` | `MP-2` | 7 |
 | `WP-02` | `MP-0` | 1 | `WP-18` | `MP-2` | 5 |
 | `WP-03` | `MP-0` | 9 | `WP-19` | `MP-2` | 14 |
 | `WP-04` | `MP-0` | 20 | `WP-20` | `MP-3` | 26 |
@@ -475,7 +477,7 @@ Counted by `docs/v2/py/trace_check.py --progress`, which reads the checkboxes ab
 | `WP-12` | `MP-1` | 15 | `WP-28` | `MP-4` | 7 |
 | `WP-13` | `MP-2` | 10 | `WP-29` | `MP-4` | 9 |
 | `WP-14` | `MP-2` | 10 | `WP-30` | `MP-5` | 5 |
-| `WP-15` | `MP-2` | 11 | `WP-31` | `MP-6` | 12 |
+| `WP-15` | `MP-2` | 11 | `WP-31` | `MP-6` | 13 |
 | `WP-15a` | `MP-2` | 1 | — | — | — |
 | `WP-16` | `MP-2` | 2  + the deletion ledger | — | — | — |
 
@@ -503,9 +505,9 @@ A finding recorded only in a plan is a finding the next reader of the requiremen
 | R-1 | **`WP-02`'s rename stalls half-done**, leaving two layouts live and every merge conflicting | High | One commit, no behaviour change, full suite green either side. If it cannot be one commit, it is not ready to start |
 | R-2 | **`WP-16` is started before `prove_equal.py` is clean**, because the deletions look obvious | Very high | The gate is its own package (`WP-15a`) and therefore a ticked prerequisite, not a line inside the package it guards; `ANL-SW-09` fails the build if coverage decreases across a deletion |
 | R-3 | **`DD-04` is reversed after `WP-16`**, requiring a second Python codec to be rebuilt | High | Close it at review, before `WP-06`. It is Assumption A-2 and the cheapest point to overturn it is now |
-| R-4 | **`OQ-14`'s numbers never arrive**, so three performance requirements can never be failed | Medium | The harnesses are built regardless (`WP-24`, `WP-26`, `WP-31`) so the number is a configuration change, not a build. But *a requirement nobody can fail is a requirement that will be declared satisfied* |
+| ~~R-4~~ | ~~**`OQ-14`'s numbers never arrive**, so three performance requirements can never be failed~~ | ~~Medium~~ | **Retired 2026-08-13.** One absolute supplied (1000 recordings overnight, 8 cores, 32 GB, lean `df`) and the other two metrics seeded from their first measurement. The harnesses were built regardless, which is why the answer was a configuration change and not a build — the mitigation worked as written |
 | R-5 | **`WP-26`'s viewer split quietly re-couples panels to Qt** under schedule pressure | Medium | `IMP-0326`'s no-window unit tests exist before the split, not after |
 | R-6 | **The `P0` distortion is inherited and never re-triaged** — 229 of 408 marked `P0` | Medium | SYS §0.6 records it as a customer decision. When SYS is re-triaged both columns re-derive mechanically. Until then, **this plan's order is the real priority signal**, and it is ordered by dependency rather than by label |
 | R-7 | **`contrib/check/` becomes permanent by silence** | Low | `WP-31` forces the decision: claimed or deleted |
-| R-8 | **`MP-1` is declared finished against a fixture the team wrote itself.** `F-FOREIGN` encodes the same assumptions the recovery ladder does, so it validates the guess rather than the data | High | `MP-1`'s exit is **provisional** and `WP-18` carries the re-validation box; a rung that behaves differently against a real sample reopens `WP-08`. Ten seconds of real bench capture retires this entirely, which is why `OQ-09` is worth more than its position in the register suggests |
+| R-8 | **`MP-1` is declared finished against a fixture the team wrote itself.** `F-FOREIGN` encodes the same assumptions the recovery ladder does, so it validates the guess rather than the data | High | `MP-1`'s exit is **provisional** and `WP-18` carries the re-validation box; a rung that behaves differently against a real sample reopens `WP-08`. Ten seconds of real bench capture retires this entirely, which is why `OQ-09` is worth more than its position in the register suggests. **2026-08-13: a sample is obtainable** — the risk is now scheduled rather than open, and it retires at `WP-18` when the file lands |
 | R-9 | **A negative check passes because it scanned nothing** — a superseded or misspelt path, a tree that does not exist yet | High | `WP-01`'s exit: every check reports its scan count, zero reports `SKIPPED` rather than `PASSED`, and every path a check names is asserted to exist |

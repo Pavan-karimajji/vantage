@@ -139,6 +139,46 @@ Staged simulation is only possible for data that was actually recorded. These ar
 | 2.3.6 | CN-0024 | Where a source format supports it, the signal header shall be preserved on conversion, so data from different source systems can be combined in one run. |
 | 2.3.7 | CN-0284 | Each component shall declare its cycle period as **configuration**, not as a compiled constant, so a rate sweep needs no rebuild. The period is reported through the manifest, never set by the host. |
 
+## 2.4 Qualification obligations
+
+*Added v0.3.2, 2026-08-13, closing `OQ-17` — see §30.5. The answer is **yes**:
+outputs of this tool will be cited in a functional-safety argument, and a
+functional-safety concept for the tool will be asked for. What follows is the
+**first level** of that obligation, and deliberately no more: three statements
+that make a confidence claim provable, none of which requires knowing which
+standard or confidence level will eventually be named.*
+
+**Why three, and why these three.** Every tool-confidence scheme asks the same
+two questions before it asks anything else — *how bad is it if this tool is
+wrong* (impact) and *would we notice* (detection). `CN-0401` is the input to the
+first and `CN-0402` to the second. `CN-0400` is what makes both answerable from
+the build rather than from a workshop. Naming a standard is deliberately not
+done here: the classification is quality's to make, and a concept that
+pre-empted it would be re-written rather than used.
+
+| # | UID | Statement |
+|---|---|---|
+| 2.4.1 | CN-0400 | Outputs of this tool will be **cited as evidence in a safety argument**. The tool shall therefore be built so a confidence claim about it can be **evidenced rather than asserted**, and the evidence shall be a by-product of the ordinary build — never a package assembled afterwards from memory. |
+| 2.4.2 | CN-0401 | The tool shall state, per artifact kind it produces, **what it may be relied upon for and what it may not** — the use constraints, the known limits that bound them, and the open defects that affect them — shipped with the release rather than held in review notes. |
+| 2.4.3 | CN-0402 | For every artifact kind that may be cited, the tool shall **name the check that would catch a wrong value in it**, or declare that none exists. An undetected-error path that is declared is a managed risk; one that is merely absent is a surprise. |
+
+> **This is an addition, not a re-styling.** The set was already written in a
+> shape a qualification argument asks for — numbered `shall` statements, an
+> `Accept` criterion per requirement, a `Verify` method naming its test, a
+> `Trace` link upward — and it was written that way because *a requirement
+> nobody can fail is worthless* (`CN-0356`), not in anticipation of this answer.
+> The expensive parts of qualification — classifying the tool, producing the
+> validation evidence for that classification, and writing the tool safety
+> manual — are process work **downstream** of these documents. So the cost of
+> the yes is mostly addition, which is why three concept statements carry it.
+>
+> **What was already true and is now claimable.** `CN-0040` (provenance
+> everywhere) and the evidence chain built on it mean every rendered or exported
+> value already traces to the bytes that produced it. `CN-0402`'s detection half
+> is largely the negative checks and their planted-violation twins that
+> `CN-0356`'s argument already forced into existence. These statements make
+> those properties **cited**, not new.
+
 ---
 
 # 3. Concept overview
@@ -1387,6 +1427,11 @@ Requirement status vocabulary distinguishes decided from built, which is correct
 
 # 30. Open questions
 
+> **The live view is `SIM_Open_Questions_v0.1.md`**, which carries these
+> together with the derived documents' own questions and records each answer
+> with its date and its consequence. Struck-through items below are closed;
+> this list stays as the concept's own record of what was asked.
+
 ### 30.1 Concept
 1. Is ego re-integration (11.6.4) needed in release one, or deferred?
 2. Is module-level staging plus port override sufficient granularity?
@@ -1399,10 +1444,10 @@ Requirement status vocabulary distinguishes decided from built, which is correct
 7. Is the manifest approach acceptable to all module teams, and can a first draft be generated from the build skeleton?
 
 ### 30.3 Data
-8. Definitive input format list for release one, in priority order.
-9. Exactly what does the bench capture write, and does it preserve the signal header end to end?
-10. Preferred exchange format for outputs.
-11. Does an internal port model or signal catalogue already exist that should be adopted rather than defined?
+8. ~~Definitive input format list for release one, in priority order.~~ **Answered 2026-08-11:** MCAP (interchange) · MDF4 (vehicle measurement) · TDMS (bench capture).
+9. ~~Exactly what does the bench capture write, and does it preserve the signal header end to end?~~ **Answered 2026-08-13: a sample is obtainable.** It is verification evidence, not design input — no decision waits on it.
+10. ~~Preferred exchange format for outputs.~~ **Answered 2026-08-12:** MCAP and CSV/TSV, the latter registered write-only.
+11. ~~Does an internal port model or signal catalogue already exist that should be adopted rather than defined?~~ **Answered 2026-08-12: derive it** from the manifests present in the run — neither adopt nor define.
 
 ### 30.4 Timing
 12. Do any modules change rate at runtime?
@@ -1410,11 +1455,11 @@ Requirement status vocabulary distinguishes decided from built, which is correct
 14. How much jitter exists between capture time and internal time in practice?
 
 ### 30.5 Operations
-15. Which CI system, and what artifact retention?
-16. Are there tool qualification or functional-safety process constraints on SIM? This materially changes the requirements and test strategy and should be answered early.
-17. Who maintains project configuration after handover, and what is the support model?
-18. Campaign retention policy — what is kept as a baseline, what is regenerable, what is deleted.
-19. Licence and distribution situation for proprietary format readers.
+15. **Which CI system, and what artifact retention?** *Undecided as of 2026-08-13; Jenkins is the likely candidate, not a commitment.* De-blocked rather than waiting: the check harness is vendor-independent and the trigger file is written the day the vendor is known (§17).
+16. ~~Are there tool qualification or functional-safety process constraints on SIM?~~ **Answered 2026-08-13: yes.** Tool outputs will be cited in a safety argument and a functional-safety concept will be asked for. The first-level obligations are §2.4 (`CN-0400`…`CN-0402`); the classification itself is quality's, and is not pre-empted here.
+17. ~~Who maintains project configuration after handover, and what is the support model?~~ **Answered 2026-08-13: the algorithm test manager or the product owner** — a named role in the customer organisation, matching `CN-0015`'s schema/content split exactly.
+18. ~~Campaign retention policy — what is kept as a baseline, what is regenerable, what is deleted.~~ **Answered 2026-08-13: campaign results are retained by the customer**, in the result format named in the run configuration; storage and durations are the customer's. What the tool owes is that a retained result is self-describing (§2.4, `CN-0400`).
+19. ~~Licence and distribution situation for proprietary format readers.~~ **Answered 2026-08-13: acceptable to pursue**, per format, at the week its first sample file arrives. It is a procurement question, not an architectural one — a codec is four methods behind a registered interface.
 
 ### 30.6 Process
 20. Numbering: keep both heading number and UID, or single number with a frozen skeleton?

@@ -1,13 +1,30 @@
 # SIM v2 — Open Question Answers
 
-**Working document.** Started 2026-08-12. The companion to
-`SIM_Open_Questions_v0.1.md`: that document is the *register* (what is open,
-who owns it, what it blocks); this one is the *worked answer* for each row.
-The register stays the index — when a row here reaches `CLOSED`, the answer is
-written back into the owning document and the register's row moves to its §4.
+**Working document — fully drained 2026-08-13. Historical from here on.**
+Started 2026-08-12 as the companion to `SIM_Open_Questions_v0.1.md`: that
+document is the *register* (what is open, who owns it, what it blocks); this one
+was the *worked answer* for each row.
 
-**This document does not move rows in the register.** It produces the argued
-answer and names the write-back target. Moving the row is the last step, done
+**Every row below has been answered and written back.** The register's §4 and
+its plain-language §6 carry the outcomes; the owning documents carry the
+requirement text. **Where this document and the register now disagree, the
+register is right** — this one preserves the *argument as it stood on
+2026-08-12*, including two recommendations the owner did not adopt, and it is
+kept for that reason rather than corrected into agreement.
+
+> **The two unadopted recommendations, named up front so nobody quotes them as
+> current.** §1.1 recommended reversing the timestamp unit to **nanoseconds**;
+> `IFQ-01` was ratified on 2026-08-13 as **microseconds**, because `CN-0019` had
+> mandated µs in the concept baseline the whole time and neither this document
+> nor the register had noticed. §5.1 proposed that the performance absolute
+> stay with its owner indefinitely; the owner supplied it — *1000 recordings
+> overnight on 8 cores and 32 GB* — so the baseline-plus-bound mechanism now
+> applies only to the two metrics that still have no absolute. Both are
+> instructive: a careful argument built on the documents that were open can
+> still be beaten by one line in a document nobody re-opened.
+
+**This document does not move rows in the register.** It produced the argued
+answer and named the write-back target. Moving the row was the last step, done
 against the owning document, not here.
 
 ---
@@ -57,17 +74,20 @@ Six groups, twenty rows.
 
 Updated as each row concludes. **A row leaves this table when its answer has been written into the owning document** — the closed rows of `G1`–`G4` are gone because `docs/interfaces_signal_header_plan.md`, `SW-0043`/`SW-0044`/`SW-0050`/`SW-0410` and the register now carry them.
 
-| Row | Group | Verdict | Write-back target |
+**The board is empty. All nine concluded on 2026-08-13** and are recorded below
+as the argument that was put, beside the answer that came back.
+
+| Row | Verdict as of 2026-08-12 | Answer, 2026-08-13 | Recommendation held? |
 |---|---|---|---|
-| `IFQ-01` | `G1` | `NARROWED` — recommend `timestamp_ns`, reverses a stated default, needs one nod | `interfaces_signal_header_plan.md`; if ratified also `SW-0033` |
-| `OQ-09` | `G3` | `NARROWED` — one 10-second sample; blocks no `WP`, keeps `MP-1` provisional | Plan risk `R-8`; `WP-18` |
-| `OQ-22` | `G3` | `PROPOSED` — legal/commercial; contained by the codec seam; due per format | Register §2 → attach to format `WP`s |
-| `OQ-14` | `G5` | `NARROWED` — budget file + reference config closable; absolute target stays with owner | `SW-0369`/`SW-0323` `Now.` lines |
-| `OQ-16` | `G5` | `NARROWED` — set already written in `SW-0348`; structural gate proposed | `SW-0348` `Now.` line; register row |
-| `OQ-15` | `G6` | `PROPOSED` — vendor is the org's; `WP-01` de-blocked by splitting harness from trigger | `WP-01` split; register §2 |
-| `OQ-17` | `G6` | `PROPOSED` — replace with the one-sentence binary; blast radius bounded | `SYS` §26 fallback note |
-| `OQ-18` | `G6` | `PROPOSED` — three shapes, third recommended; architecture already neutral | Register §3 |
-| `OQ-19` | `G6` | `PROPOSED` — reframed to *inputs*; answer with `OQ-15`'s retention half | Register §3; merge with `OQ-15` |
+| `IFQ-01` | `NARROWED` — recommend `timestamp_ns` | **Microseconds** | **No** — `CN-0019` settled it the other way |
+| `OQ-09` | `NARROWED` — one 10-second sample | **Obtainable**; scheduled at `WP-18` | Yes |
+| `OQ-22` | `PROPOSED` — due per format | **Agreed**; moved onto the format `WP`s | Yes |
+| `OQ-14` | `NARROWED` — absolute stays with its owner | **Supplied**: 1000 recordings overnight, 8 cores, 32 GB | **Partly** — the owner answered rather than deferring; the mechanism now covers only the two metrics with no absolute |
+| `OQ-16` | `NARROWED` — structural gate proposed | **Structural gate adopted**; wall clock is an observation | Yes |
+| `OQ-15` | `PROPOSED` — split harness from trigger | **Vendor undecided** (Jenkins likely); split adopted | Yes |
+| `OQ-17` | `PROPOSED` — replace with the one-sentence binary | **Yes** — outputs enter a safety argument | Yes — and the binary was the right question: it scoped the answer to three statements per layer |
+| `OQ-18` | `PROPOSED` — three shapes, third recommended | **Algorithm test manager or product owner** — the joint shape | Yes |
+| `OQ-19` | `PROPOSED` — reframed to *inputs* | **Customer retains results** | Yes |
 
 ---
 

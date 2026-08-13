@@ -567,6 +567,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Accept.** Applying the same map twice is refused. The manifest states the factor and offset for every port that carried one, so a downstream reader can undo it. Where a source states its time in a coarser unit than the bus, the fixed integer scale to nanoseconds is applied here, exactly once, and is the only unit conversion anywhere in the engine — which is what keeps the scheduler's prohibition on unit arithmetic (`SW-0006`) checkable rather than approximate.
 **Verify.** T · `UT-IO-13`   **Trace.** SYS-0019; CN-0309
 **Now.** `NEW` — `io/ingest.py` is rename-and-tag only; scale and offset are the widening `CN-0309` asks for.
+*Note (2026-08-13):* the coarser-unit clause is **load-bearing, not vestigial**. `IFQ-01` ratified the signal header in **microseconds** while `SW-0046` keeps all engine-internal time in integer nanoseconds, so the ×1000 lands here — once, at ingest, descriptor-driven, in the one component that owns the nanosecond timebase. Had `IFQ-01` gone the other way this clause would have been deleted; it was not, so the exception `ANL-SW-02` grants to this site stays and is exercised on every run rather than being an unused escape hatch. **One boundary, and this is it** — a second conversion anywhere else is the defect `SW-0006` and `ANL-SW-02` exist to catch.
 
 **`SW-0034`** · `SI-01` · `P0` · `R1` — A type mismatch is refused, never coerced
 **Shall.** A source payload whose type does not match the target port's declared type shall be refused, including between numeric widths.
@@ -684,6 +685,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Verify.** T · `UT-BUS-02`   **Trace.** SYS-0030, SYS-0284; CN-0298, CN-0391
 **Now.** `DONE·MOVE` — `core/tick.py`'s `capture_ns: int | None` with `None` never replaced, plus `io/base.Capabilities.capture_time`; the rule and its tests are directly reusable. What has been missing is not the *place* but a **producer** that could fill it; `IFQ-06`'s `capture_timestamp_*` supplies one, and this requirement's *"belongs to the signal header"* clause is what decided that question.
 *Note:* the separation is by **location**, not only by value. Validity describes the data and travels with it; reception describes the recording and travels with the message. Putting reception in the header is what makes the two look interchangeable, and once they look interchangeable the defaulting this requirement forbids becomes an easy mistake to make rather than an unwritable one.
+*Note (2026-08-13):* *"integer-nanosecond"* here describes the **engine's internal representation** (`SW-0046`), not the wire. `IFQ-01` ratified the header's unit as **microseconds** — agreeing with `CN-0019`, which has required µs on every module output interface since the concept baseline — and `SW-0033`'s single ingest conversion is what joins the two. This is written down because the nanosecond wording in this `Shall` was cited during `IFQ-01` as an argument for a nanosecond wire field, and a reader arriving later would make the same inference. **The two clauses do not conflict: one fixes a unit at the boundary, the other inside it.**
 
 **`SW-0045`** · `SI-02` · `P0` · `R1` — Data age is derived, never stored
 **Shall.** Data age shall be computed from validity time where known and from the hold schedule otherwise, and shall not be stored as an independent field.
@@ -2273,9 +2275,9 @@ Everything in this part exists to make one sentence true in code rather than in 
 
 **`SW-0272`** · `SI-17` · `P1` · `R1` — The duration estimate is stated with its own accuracy
 **Shall.** The estimated duration shall be reported together with the factor within which it has been measured to fall.
-**Accept.** The factor is a measured number on the reference configurations, reported alongside the estimate rather than claimed in prose.
+**Accept.** The factor is a measured number on the reference configuration of SysReq §18.0, reported alongside the estimate rather than claimed in prose. It is declared from the first campaign's measurement; a later campaign whose estimate falls outside it fails.
 **Verify.** A · `ANL-SW-43`   **Trace.** SYS-0238
-**Now.** `NEW`.
+**Now.** `NEW` — **`OQ-14` closed 2026-08-13**; baseline-seeded, failable from the second campaign.
 
 **`SW-0273`** · `SI-17` · `P0` · `R1` — One evidence producer, two formatters
 **Shall.** There shall be exactly one function producing an evidence record for an address at a tick, and both the graphical panel and the command-line query shall format its output.
@@ -2611,9 +2613,9 @@ Everything in this part exists to make one sentence true in code rather than in 
 
 **`SW-0323`** · `SI-20` · `P1` · `R1` — Frame time has a stated budget at a stated load
 **Shall.** Player frame time shall carry a declared numeric budget at a stated tick count and layer count, measured on a reference configuration and reported per release.
-**Accept.** The budget is a number a run can exceed, and exceeding it is reported as a regression rather than re-baselined.
+**Accept.** The budget is a number a run can exceed, and exceeding it is reported as a regression rather than re-baselined. No absolute was supplied, so the value is seeded from the first measurement on the reference configuration, the seeding run is marked as such in the budget file, and the consumed headroom prints on pass.
 **Verify.** A · `ANL-SW-52`   **Trace.** SYS-0235
-**Now.** `PARTIAL` — a frame-time measurement exists; the budget number is `OQ-14`, open.
+**Now.** `PARTIAL` — a frame-time measurement exists; **`OQ-14` closed 2026-08-13** with no absolute for this metric, so it is baseline-seeded and failable from the second run.
 
 **`SW-0324`** · `SI-20` · `P1` · `R2` — Display-only data is decoded only for frames shown
 **Shall.** Data displayed but consumed by no module shall be read directly by the player and decoded only for the frames actually rendered.
@@ -2769,9 +2771,9 @@ Everything in this part exists to make one sentence true in code rather than in 
 
 **`SW-0348`** · `SI-22` · `P1` · `R1` — A common configuration change is completed unaided within a budget
 **Shall.** A declared set of common changes — switch a module's mode, change a calibration value, add a recording, change the layout, add an export — shall each be completable by a representative engineer unaided within a declared time budget.
-**Accept.** Each is measured and recorded. Lines of configuration per project is tracked as a health metric across releases.
-**Verify.** D · `UT-LNC-07` · A · `ANL-SW-57`   **Trace.** SYS-0175
-**Now.** `PARTIAL` — an onboarding walkthrough exists; the stated change set and the time budget are `OQ-16`, open, so the requirement cannot currently be failed.
+**Accept.** Each change touches exactly its declared file set and no other file, requires no rebuild and no source edit — asserted by making the change and diffing. Lines of configuration per project is tracked as a health metric across releases. The wall clock is measured and recorded as an observation; it is not a gate.
+**Verify.** A · `ANL-SW-57` · D · `UT-LNC-07`   **Trace.** SYS-0175
+**Now.** `PARTIAL` — an onboarding walkthrough exists. **`OQ-16` closed 2026-08-13:** the change set was already named in this requirement's own `Shall`; the **structural** gate is what CI enforces and is failable today, and the wall-clock budget is measured once and then put to the customer team rather than guessed. SysReq `SYS-0175` carries the file-set table.
 
 ---
 
@@ -2892,7 +2894,7 @@ These bind every software item, so none owns them alone; the item field reads `a
 **Shall.** The reference test suite shall run on both operating systems and compare results, and a difference shall be reported as a defect.
 **Accept.** A cross-platform difference fails the build rather than being tolerated as an environment difference.
 **Verify.** T · `UT-ORC-23`   **Trace.** SYS-0250
-**Now.** `NEW` — and blocked on `OQ-15` plus a runner with a compiler toolchain.
+**Now.** `NEW` — needs a runner with a compiler toolchain on both platforms. **`OQ-15`'s vendor is undecided (Jenkins likely) and does not block this**: the comparison itself is a plain command, so what waits is hardware access, not a choice.
 
 **`SW-0367`** · all · `P1` · `R1` — Every measured claim names its platform and shell
 **Shall.** Every measured claim shall name the platform and the shell that produced it.
@@ -2907,10 +2909,10 @@ These bind every software item, so none owns them alone; the item field reads `a
 **Now.** `DONE` — true today, and the batch face is already the only parallelism.
 
 **`SW-0369`** · all · `P0` · `R1` — Per-cycle cost carries a number that a run can exceed
-**Shall.** Per-cycle cost and campaign throughput shall each carry a declared numeric budget, measured on a declared reference configuration and reported per release.
-**Accept.** A release whose measurement exceeds its budget is reported as a regression rather than silently re-baselined.
+**Shall.** Per-cycle cost and per-worker campaign throughput shall each carry a declared numeric budget, measured on the reference configuration of SysReq §18.0 and reported per release.
+**Accept.** A worker clearing fewer than 10.4 recordings per hour, a recording exceeding 5 min 46 s of wall time, or a worker whose peak resident memory exceeds 4 GB, fails. The aggregate campaign figure is derived as `workers × per-worker rate` and reported, never separately budgeted. A release exceeding a budget is reported as a regression rather than silently re-baselined.
 **Verify.** A · `ANL-SW-63`   **Trace.** SYS-0234
-**Now.** `NEW` — the numbers are `OQ-14`, open. Until they exist, this requirement cannot be failed, which is exactly what `CN-0356` warns about.
+**Now.** `NEW` — **`OQ-14` closed 2026-08-13.** The budget file and the reference configuration are declared and the numbers derive from the supplied absolute (1000 recordings overnight, 8 cores, 32 GB, lean `df`). The requirement is failable from the first run, which is what `CN-0356` was asking for.
 
 **`SW-0370`** · all · `P0` · `R1` — A negative check ships with a planted-violation test
 **Shall.** Every check that passes when nothing is wrong shall ship with a test that plants a violation and proves the check catches it.
@@ -2950,9 +2952,9 @@ These bind every software item, so none owns them alone; the item field reads `a
 
 **`SW-0376`** · all · `P0` · `R1` — Automated execution exists from the first increment
 **Shall.** Automated execution of the test suite shall be established at the start of the build order, and manual verification shall never be the sole evidence for any requirement.
-**Accept.** The first delivered increment is accompanied by a running pipeline, and every requirement's `Verify` field names at least one non-manual method or an inspection with a named checklist.
+**Accept.** The first delivered increment is accompanied by a running pipeline, and every requirement's `Verify` field names at least one non-manual method or an inspection with a named checklist. Every check runs as one plain command on a developer machine, reporting its exit code and the number of items it scanned.
 **Verify.** A · `ANL-SW-70`   **Trace.** SYS-0201
-**Now.** `PARTIAL` — a substantial suite exists and gates locally; no shared pipeline runs it, which is `OQ-15`.
+**Now.** `PARTIAL` — a substantial suite exists and gates locally; no shared pipeline runs it. **`OQ-15`'s vendor is undecided (Jenkins likely) and blocks only the trigger file**, roughly ten lines: the harness half is vendor-independent and is where all the work and all the value are. The last `Accept` clause is what keeps that true — a check that only ever runs in a pipeline stops being runnable when the pipeline moves.
 
 **`SW-0377`** · all · `P1` · `R1` — Every release ships a self-test
 **Shall.** Every release shall ship a self-test running a bundled miniature recording through a bundled stub chain.
@@ -2995,6 +2997,34 @@ These bind every software item, so none owns them alone; the item field reads `a
 **Accept.** An automated check confirms both for every entry and reports every entry failing either. A requirement no test could fail is demoted to prose in the next revision.
 **Verify.** A · `ANL-SW-74`   **Trace.** SYS-0276
 **Now.** `NEW`.
+
+### 29.1 Tool qualification — the software half
+
+*Added 2026-08-13, decomposing SysReq §23a (`OQ-17` answered: **yes**, tool
+outputs will be cited in a safety argument). Three requirements, one per system
+obligation. Each is a **check plus a declaration**, and that is the whole
+design: the qualification artifacts are generated from data the build already
+has, so that they cannot be right on the day of a review and wrong on every
+other day. Nothing here is a new capability — `SYS-0114`/`SYS-0123` already
+carry the identity half and are deliberately not re-decomposed (SysReq §23a).*
+
+**`SW-0415`** · all · `P0` · `R1` — The artifact-kind declaration is data, and every writer is checked against it
+**Shall.** The set of artifact kinds the system writes shall be declared in one file, each marked cited or not-cited, and every writer shall be checked against that file.
+**Accept.** A writer producing a kind the file does not carry fails the check, naming the kind and the writer. The check reports how many writers it scanned, and reads `SKIPPED` rather than `PASSED` when that count is zero.
+**Verify.** A · `ANL-SW-76`   **Trace.** SYS-0289
+**Now.** `NEW` — no such declaration exists; the writers do, scattered across the exporter and recorder paths, which is the reason the declaration has to be checked rather than trusted.
+
+**`SW-0416`** · all · `P0` · `R1` — The use-constraints statement is generated, never typed
+**Shall.** The use-constraints statement shall be generated from the artifact-kind declaration and the recorded limit entries, and generation shall fail where a cited kind has no entry.
+**Accept.** Generation fails naming the kind when an entry is missing, and fails on a blank entry. A hand-edit to the generated file is detected by content hash on the next build and reported as a finding rather than overwritten silently.
+**Verify.** A · `ANL-SW-77` · I · `INSP-SW-11`   **Trace.** SYS-0290
+**Now.** `NEW` — the limits themselves are mostly written already and scattered (open-loop limit, rung-4 approximation, reconstructed-not-published values, the divergence point); what does not exist is one place that collects them and one check that notices a gap.
+
+**`SW-0417`** · all · `P0` · `R1` — A named detecting check resolves to a test that exists
+**Shall.** Every detecting check named against a cited artifact kind shall resolve to a test identifier present in the suite, or to the literal `undetected`.
+**Accept.** An identifier resolving to no test fails, naming it; a blank fails. `undetected` passes and its count is printed in the report on success as well as on failure.
+**Verify.** A · `ANL-SW-78`   **Trace.** SYS-0291
+**Now.** `NEW` — the resolution machinery is `SW-0371`'s, which already resolves a cited identifier to its implementing test. This is that check pointed at a second table, not a second implementation of it.
 
 ---
 
@@ -3213,22 +3243,29 @@ section, SYS §26 and the Design's `DD-nn` statuses, assembled so that answering
 is one pass instead of four. That document is a view; **this section stays
 authoritative** for the `SWQ-nn` below.
 
-**As of 2026-08-12: §34.2's eight are all closed** by design decisions that have
-since been confirmed, and §34.3 records six further questions that arose from
-reading the decomposition against itself — every one of them closed here. What
-remains open is §34.1's inherited set, minus the five closed in SYS §26.
+**As of 2026-08-13: every question this document inherits or raised is closed
+except one, and that one is an input rather than a decision.** §34.2's eight
+closed by confirmed design decisions; §34.3's six closed here; §34.1's inherited
+gates all closed across 2026-08-12 and 2026-08-13. What remains is a bench
+sample file (`OQ-09`) and a CI vendor (`OQ-15`), neither of which blocks a
+requirement in this document.
 
-### 34.1 Inherited, and blocking
+### 34.1 Inherited — all five gates closed
 
-The System Requirements' open questions (SYS §26) are inherited. **Five have closed** — `OQ-08` (the format list: MCAP interchange, MDF4 vehicle measurement, TDMS bench capture), `OQ-03`, `OQ-13`, `OQ-20` and `OQ-21` — leaving seventeen, of which five are baselining gates there and therefore here. Two of them change this document's content rather than only its numbers:
+The System Requirements' open questions (SYS §26) are inherited. **All five baselining gates are now closed** and no requirement here is unfailable for want of an answer:
 
-| ID | Question | What it changes here |
+| ID | Question | What it changed here |
 |---|---|---|
-| `OQ-01` | Do the recordings in scope carry task/cycle marking? | `SW-0050` rung 1. If no recording carries it, rung 1 becomes inert rather than wrong — but the ladder's shape is correct either way, which is why it was built as a ladder |
-| `OQ-11` | Does an internal port model or signal catalogue already exist that should be adopted rather than defined? | **Adopting beats defining.** This must be asked before `SI-19`'s port model is authored, and the answer changes `SW-0383`'s scope substantially |
-| `OQ-14` | The numbers for per-cycle cost, campaign throughput and frame time | `SW-0369`, `SW-0323`, `SW-0272` cannot be failed without them |
-| `OQ-16` | The stated set of common configuration changes and each one's time budget | `SW-0348` cannot be failed without them |
-| `OQ-17` | Are there tool qualification or functional-safety process constraints? | Potentially the requirement style, the verification evidence and the documentation set. It is a **baselining gate with a written fallback** (SYS §26): unanswered by the time the seam is built, the chain is developed in the present style and re-styling is accepted as a known, scoped cost |
+| ~~`OQ-01`~~ | ~~Do the recordings in scope carry task/cycle marking?~~ | **Closed 2026-08-12** — it stopped being a global question. `SW-0410`'s `RecordingIndex` reports the highest rung each topic supports, measured per file before every run, so an unseen capture format yields an unknown **value** rather than an unanswered question. `SW-0050`'s ladder is unchanged, which is the ladder having been the right shape |
+| ~~`OQ-11`~~ | ~~Does an internal port model or signal catalogue already exist that should be adopted rather than defined?~~ | **Closed 2026-08-12 — derive it**, neither adopt nor define. `SW-0388`'s catalogue is the union of the `ModuleManifest`s present in the run, computed at load, and therefore *by construction* a description of what compiled. `SW-0383`'s scope is unchanged |
+| ~~`OQ-14`~~ | ~~The numbers for per-cycle cost, campaign throughput and frame time~~ | **Closed 2026-08-13.** `SW-0369` carries supplied per-worker numbers derived from *1000 recordings overnight on 8 cores and 32 GB with a lean `df`* (SysReq §18.0); `SW-0323` and `SW-0272` are seeded from their first measurement. All three are failable |
+| ~~`OQ-16`~~ | ~~The stated set of common configuration changes and each one's time budget~~ | **Closed 2026-08-13.** The set was already in `SW-0348`'s own `Shall`; the gate is now the **diff**, not the stopwatch, and is failable in CI today |
+| ~~`OQ-17`~~ | ~~Are there tool qualification or functional-safety process constraints?~~ | **Closed 2026-08-13: yes** — tool outputs will be cited in a safety argument. **The requirement style did not change**, which was the risk this row carried; the cost was three new requirements (§29.1, `SW-0415`…`SW-0417`) decomposing SysReq §23a. The identity half was already discharged by `SW-0215`'s run manifest and is not restated |
+
+**One row is open and it is not a gate.** `OQ-09` — a real bench capture — is
+*verification evidence*: `SW-0050`'s rungs are specified and buildable either
+way, and what the sample changes is whether `MP-1`'s exit rests on a fixture the
+team wrote itself. A sample was confirmed obtainable on 2026-08-13.
 
 ### 34.2 New, arising from the decomposition — all eight closed
 
