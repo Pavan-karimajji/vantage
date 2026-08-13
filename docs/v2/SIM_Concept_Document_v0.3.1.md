@@ -214,22 +214,36 @@ Each box carries a **mode** and an **implementation** — two independent axes, 
 
 # 4. Design principles
 
-| # | UID | Principle | Plain meaning |
-|---|---|---|---|
-| 4.1.1 | CN-0035 | Configuration over code | Users describe *what*, not *how*. No user writes a loop. |
-| 4.1.2 | CN-0036 | One package, many projects | No project branches of the tool. Ever. |
-| 4.1.3 | CN-0037 | Declarative modules | Each module describes itself in a manifest. The engine reads manifests; it hardcodes no chain. |
-| 4.1.4 | CN-0038 | Deterministic by default | Same input + config + binaries = identical output, on both operating systems. |
-| 4.1.5 | CN-0039 | Fail loud, fail early | Invalid or physically meaningless setups are rejected before the run, naming what to change. |
-| 4.1.6 | CN-0040 | Provenance everywhere | For every value: which module, which mode, which source, which original timestamp. |
-| 4.1.7 | CN-0041 | Headless first | The player is an optional consumer. The engine never needs a screen. |
-| 4.1.8 | CN-0042 | Pay only for what you use | Nothing is read, decoded or computed unless the active graph needs it. |
-| 4.1.9 | CN-0043 | Same behaviour on both operating systems | Differences between Windows and Linux results are defects. |
-| 4.1.10 | CN-0044 | Open at the edges, closed at the core | Readers, exporters, views and modules are plugins. Scheduler, port model and config engine are not. |
-| 4.1.11 | CN-0045 | Explainable runs | The tool can always print what it will do before doing it. |
-| 4.1.12 | CN-0046 | Debuggable by construction | Attaching a native debugger and stepping through a module is a designed-in workflow. |
-| 4.1.13 | CN-0286 | Closed vocabularies | Verb lists, primitive kinds, error classes and log events are closed sets. A seventh verb is a design change requiring a requirement, never a quiet extension point. |
-| 4.1.14 | CN-0287 | One implementation per concept | Any rule that exists in two languages will drift. Every concept has exactly one home. See section 6. |
+| # | UID | Principle | Plain meaning | Validated by |
+|---|---|---|---|---|
+| 4.1.1 | CN-0035 | Configuration over code | Users describe *what*, not *how*. No user writes a loop. | `CT-01` |
+| 4.1.2 | CN-0036 | One package, many projects | No project branches of the tool. Ever. | `CT-02` |
+| 4.1.3 | CN-0037 | Declarative modules | Each module describes itself in a manifest. The engine reads manifests; it hardcodes no chain. | `CT-03` |
+| 4.1.4 | CN-0038 | Deterministic by default | Same input + config + binaries = identical output, on both operating systems. | `CT-04` |
+| 4.1.5 | CN-0039 | Fail loud, fail early | Invalid or physically meaningless setups are rejected before the run, naming what to change. | `CT-05` |
+| 4.1.6 | CN-0040 | Provenance everywhere | For every value: which module, which mode, which source, which original timestamp. | `CT-06` |
+| 4.1.7 | CN-0041 | Headless first | The player is an optional consumer. The engine never needs a screen. | `CT-07` |
+| 4.1.8 | CN-0042 | Pay only for what you use | Nothing is read, decoded or computed unless the active graph needs it. | `CT-08` |
+| 4.1.9 | CN-0043 | Same behaviour on both operating systems | Differences between Windows and Linux results are defects. | `CT-09` |
+| 4.1.10 | CN-0044 | Open at the edges, closed at the core | Readers, exporters, views and modules are plugins. Scheduler, port model and config engine are not. | `CT-10` |
+| 4.1.11 | CN-0045 | Explainable runs | The tool can always print what it will do before doing it. | `CT-11` |
+| 4.1.12 | CN-0046 | Debuggable by construction | Attaching a native debugger and stepping through a module is a designed-in workflow. | `CT-12` |
+| 4.1.13 | CN-0286 | Closed vocabularies | Verb lists, primitive kinds, error classes and log events are closed sets. A seventh verb is a design change requiring a requirement, never a quiet extension point. | `CT-13` |
+| 4.1.14 | CN-0287 | One implementation per concept | Any rule that exists in two languages will drift. Every concept has exactly one home. See section 6. | `CT-14` |
+
+**The `Validated by` column is the downward half of the trace** (`CN-0399`,
+added v0.3.2). `CN-0380` makes these principles acceptance criteria for the
+product as a whole, so each is asserted by one validation test in
+`SIM_Concept_Test_Spec_v0.1.md`; that document's `Asserts` column is the upward
+half. The two are checked against each other by `py/trace_check.py`, in both
+directions, so neither can be edited alone.
+
+**`CN-0016` (§2.2.4) is validated by `CT-15`.** It is not a section-4 principle
+but it is the stated *main measure of success*, and `CN-0380`'s argument applies
+to it unchanged: it is a property of the assembled product, not of any single
+requirement. It is recorded here rather than as a column in §2.2 because it is
+the only row in that table with a validation test, and a column of thirteen
+blanks would suggest the other rows were overlooked rather than out of scope.
 
 ---
 
@@ -1430,6 +1444,7 @@ Rules for the derived documents:
 | 31.1.5 | CN-0381 | A requirement shall be **falsifiable**. If no test can contradict it, it is a motivation, not a requirement, and the checklist it points to is the requirement instead. |
 | 31.1.6 | CN-0382 | Verification status is **derived** from the test suite, never stored by hand in a second place. |
 | 31.1.7 | CN-0383 | A test identifier cited by a requirement shall appear in the test that implements it, so the link is discoverable by search rather than by one sentence in a plan. |
+| 31.1.8 | CN-0399 | **A trace link shall be written from both ends and checked for agreement.** The requirement names its test; the test names its requirement. This is deliberately the one permitted second copy — each document must be readable standalone, since a test specification whose rows do not say what they verify is unreviewable, and a requirement that does not say how it is verified is unfalsifiable. The copy is made safe by **checking** it, never by deleting one end. A link asserted at one end only is a link nobody can contradict, and two ends left unchecked drift while each document still passes review on its own — which is precisely how a traceability matrix becomes confidently wrong. Every layer obeys this, including this document, whose section 4 carries a `Validated by` column for the purpose. |
 
 ---
 

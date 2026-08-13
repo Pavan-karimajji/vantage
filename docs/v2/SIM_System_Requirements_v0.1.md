@@ -27,9 +27,12 @@ flowchart LR
 |---|---|---|
 | Concept (`v0.3.1`) | *What was asked for, and why* | yes |
 | **System Requirements (this)** | *What the system must do, observably, at its boundary* | **this draft** |
-| Software Requirements | *What each software item must do, internally* | not yet |
+| Software Requirements | *What each software item must do, internally* | `SIM_Software_Requirements_v0.1.md` |
+| Implementation Design | *Which file, which symbol, which signature* | `SIM_Implementation_Design_v0.1.md` |
 | Interface Specification | *The exact bytes, signatures and schemas at each named interface* | not yet — §3.4 is its table of contents |
-| Test Specification | *The system and end-to-end test cases* | not yet — §4 and §19 are its skeleton |
+| **System Test Specification** | *The `SYT-*` / `ANL-*` / `INSP-*` verification cases* | `SIM_System_Test_Spec_v0.1.md` |
+| **Concept Test Specification** | *The `CT-*` / `E2E-*` validation cases* | `SIM_Concept_Test_Spec_v0.1.md` |
+| Software Test Specification | *The `UT-*` / `IT-*` cases* | `SIM_Software_Test_Spec_v0.1.md` |
 
 **No separate architecture document is produced.** The concept document's §5 (process architecture), §6 (the C++/Python boundary), §7 (data model), §21.4 (target package structure) and §26 (extension points) already constitute the architectural baseline, and duplicating them here would create the two-copies-that-drift failure that `CN-0287` exists to prevent. What is genuinely missing is *interface* detail, which belongs in the Interface Specification, not in a second architecture narrative. §3.4 below names every interface that document must specify.
 
@@ -73,14 +76,33 @@ New requirements append at the end of their section. A retired requirement is re
 
 ### 0.5 Test identifier scheme
 
-Reserved here so the Test Specification has a fixed namespace and every `Verify` link below resolves.
+Reserved here so the Test Specifications have a fixed namespace and every
+`Verify` link below resolves.
 
-| Prefix | Level | Scope |
-|---|---|---|
-| `SYT-<area>-nn` | System test | One capability of the assembled system, exercised through its external interfaces. |
-| `E2E-nn` | End-to-end | A complete operational scenario from §4, start to finish, one user goal. |
-| `ANL-nn` | Analysis | A measurement or static check. |
-| `INSP-nn` | Inspection | A checklist review. |
+| Prefix | Level | Scope | Specified in |
+|---|---|---|---|
+| `SYT-<area>-nn` | System test | One capability of the assembled system, exercised through its external interfaces. | `SIM_System_Test_Spec_v0.1.md` |
+| `ANL-nn` | Analysis | A measurement or static check. | `SIM_System_Test_Spec_v0.1.md` |
+| `INSP-nn` | Inspection | A checklist review. | `SIM_System_Test_Spec_v0.1.md` |
+| `E2E-nn` | End-to-end | A complete operational scenario from §4, start to finish, one user goal. | **`SIM_Concept_Test_Spec_v0.1.md`** |
+
+**Why `E2E-*` is specified one level up** *(decided 2026-08-13, when the test
+specifications were written)*. This document originally reserved all four
+prefixes in one namespace. An end-to-end scenario asks *"can the user complete
+this job?"* — **validation** — while `SYT`/`ANL`/`INSP` ask *"does the boundary
+behave as specified?"* — **verification**. The two are different levels of the
+V, so they are specified in different documents.
+
+**The identifiers do not change.** `E2E-01`…`E2E-12` are exactly as §4 defines
+them and as `SYS-0112`, `SYS-0124`, `SYS-0130`, `SYS-0197` and `SYS-0266` cite
+them. Only the document that specifies them moved; §4 remains their definition
+and the Concept Test Specification adds fixtures and pass/fail cases without
+restating the steps.
+
+**Identifier allocation is document-wide, never section-local** (`R-REQ-2`).
+Six duplicates entered this document when late-added requirements took the next
+number local to their subsection — see `SIM_System_Test_Spec_v0.1.md` §6 for the
+finding and the renumbering. `trace_check.py` now fails on a duplicate.
 
 Areas: `INP` input · `DAT` data model · `PRC` processing · `TIM` timing · `STG` staging · `OUT` output · `PLR` player · `CFG` configuration · `BAT` batch/CI · `DIA` diagnostics · `REC` recording prep · `NFR` non-functional · `CON` constraints.
 
@@ -693,13 +715,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **`SYS-0283`** · `P0` · `R1` — Simulation time advances by one grid step, and by nothing else
 **Shall.** Simulation time shall advance by exactly one base-grid step per tick from the declared run start, and no arrival, reconstructed cycle boundary or module output shall move it.
 **Accept.** Over a run, the sequence of simulation-time values is the arithmetic sequence the grid step defines, independent of the recording's own timestamps and of which modules executed. A recording whose data is dense in one interval and sparse in another produces the same tick sequence as one that is uniform.
-**Verify.** T · `SYT-TIM-14`   **Trace.** CN-0392, CN-0137
+**Verify.** T · `SYT-TIM-21`   **Trace.** CN-0392, CN-0137
 *Note:* stated because three things in the concept decide that a module runs — data arrival, a declared period, and a recorded rate. They agree on a self-produced recording and cannot agree on a foreign one. Fixing one clock and making both kinds of due-ness predicates on its ticks is what removes the ambiguity rather than deferring it to whichever implementation lands first.
 
 **`SYS-0284`** · `P0` · `R1` — Reception time is not a header field
 **Shall.** Reception time shall be carried by the recording envelope and not by the signal header, and shall be named distinctly from the instant the data describes.
 **Accept.** No header field is filled from reception time. A value whose describing instant is unknown reports it as unknown, and its age is derived from the hold schedule rather than computed against reception.
-**Verify.** T · `SYT-TIM-15`   **Trace.** CN-0391, CN-0298
+**Verify.** T · `SYT-TIM-22`   **Trace.** CN-0391, CN-0298
 *Note:* the two are one word apart and mean opposite things. Collapsing them produces an age of exactly zero that cannot be told from a true one, which is the failure `CN-0298` exists to prevent.
 
 ### 8.2 Cycle reconstruction
@@ -741,7 +763,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **`SYS-0285`** · `P0` · `R1` — Every declared period enters the grid, whatever triggers the module
 **Shall.** A module's declared period shall contribute to the base-grid derivation whether that module is triggered by data or by period.
 **Accept.** Adding a data-driven module with a 5 ms period to a graph of 20 ms modules changes the grid to 5 ms. Its arrivals are each observed on their own tick.
-**Verify.** T · `SYT-TIM-16`   **Trace.** CN-0393
+**Verify.** T · `SYT-TIM-23`   **Trace.** CN-0393
 *Note:* without this the grid can be coarser than a data-driven module's own data, and `SYS-0064`'s predicate then coalesces arrivals it should have seen separately. The period says how fine the grid must be; the trigger says whether this tick counts.
 
 **`SYS-0067`** · `P1` · `R1` — Pathological grids are reported before they are paid for
@@ -752,7 +774,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **`SYS-0286`** · `P0` · `R1` — A recorded rate that contradicts a declared period is reported, and the recording wins
 **Shall.** Where a `measured` module's reconstructed cycle structure places its outputs at a rate other than its declared period, the system shall deliver them on the ticks the reconstruction places them on and shall report the disagreement naming both rates.
 **Accept.** A port declared at 20 ms and recorded at 25 ms is delivered on its recorded cadence, and the run manifest carries both numbers. No value is resampled, interpolated or dropped to make the recorded rate match the declared one.
-**Verify.** T · `SYT-TIM-17`   **Trace.** CN-0395, CN-0142
+**Verify.** T · `SYT-TIM-24`   **Trace.** CN-0395, CN-0142
 *Note:* the declared period is what the module would run at; the recording is what happened. Making the second match the first would be fabricating data to satisfy configuration, and the disagreement is itself the finding worth surfacing.
 
 **`SYS-0069`** · `P0` · `R1` — One execution path
@@ -1298,13 +1320,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **`SYS-0287`** · `P0` · `R1` — Resolution is two passes: probe, then emit
 **Shall.** The system shall obtain, before emitting a Resolved Run Spec, a **recording index** stating what each named recording carries and a **module manifest** stating what each named module declares; and both shall be read through the same interfaces the run itself uses.
 **Accept.** Every spec field that depends on a file's contents — the ports a recording provides, the timing rung each supports, the ports it declares it never carries, and each module's period, ABI version and port set — is filled from the probe pass and from no other source. A configuration approved by the probe pass is never rejected by the run for a reason the probe could have seen.
-**Verify.** T · `SYT-CFG-14`   **Trace.** CN-0396, CN-0397, CN-0165
+**Verify.** T · `SYT-CFG-24`   **Trace.** CN-0396, CN-0397, CN-0165
 *Note:* stated because the spec's own rule is that the engine decides nothing the configuration layer could have decided — and several of those fields cannot be decided without opening a file. Naming the probe pass is what keeps that rule true instead of quietly reintroducing a second, simpler reader for configuration time.
 
 **`SYS-0288`** · `P0` · `R1` — What the probe returns is data, and it is passed, not fetched
 **Shall.** The recording index and the module manifest shall be plain data structures, and the graph, coherence, ingest and launcher functions that need them shall receive them as arguments rather than opening any file or library themselves.
 **Accept.** Coherence classification, cut feasibility, ingest-family matching and mode validation all run against in-memory structures with no file open and no library loaded, and are testable with a hand-written index.
-**Verify.** T · `SYT-CFG-15`   **Trace.** CN-0398, CN-0089
+**Verify.** T · `SYT-CFG-25`   **Trace.** CN-0398, CN-0089
 *Note:* this is what lets those functions stay free of any dependency on the reader, which is the property their unit tests rest on.
 
 **`SYS-0167`** · `P0` · `R1` — The engine states what it actually loaded
