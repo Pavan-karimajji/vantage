@@ -216,6 +216,7 @@ ships its `S-PLANTED` variant** (`TV-3`), stated once as the universal `.c2`:
 | `ANL-55` | `SYS-0282` | Codec sources for port/module/graph/tool names; files above the codec layer for format names | neither direction hits; adding a format changes codec + registry only / any hit, or a third file changes |
 | `ANL-56` | `SYS-0289` | Every artifact writer in the tree, against the artifact-kind declaration | every kind written appears once, marked cited or not-cited, and the scanned-writer count is printed / a kind is written that the declaration does not carry, or the count is zero and the row reads `PASSED` rather than `SKIPPED` |
 | `ANL-57` | `SYS-0290` | The delivered package for the use-constraints statement, against the cited kinds `ANL-56` found | every cited kind has an entry carrying a limit or a dated *none known* / a cited kind is missing, or an entry is blank |
+| `ANL-59` | `SYS-0292` | Every generated progress mark in the requirement documents, against the implementation plan's checkboxes | every mark matches its derived value, and a hand-edited mark fails naming both / any mark disagrees without failing, or a requirement document is the source of its own mark |
 | `ANL-58` | `SYS-0291` | Each cited kind's named detecting check, resolved against the test suite | each resolves to a test that exists or to `undetected`, and the `undetected` count is printed on pass / an identifier resolves to nothing, or the cell is blank |
 
 ---

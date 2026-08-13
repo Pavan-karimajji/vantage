@@ -2325,6 +2325,13 @@ Constraints are obligations on *how* the system is built, imposed because a corr
 **Verify.** A · `ANL-51`   **Trace.** CN-0382; **defect** concept §22.6
 **Built.** ○ not started — 0/1 software requirements done, in `WP-01`
 
+**`SYS-0292`** · `P0` · `R1` — A progress mark is generated and verified, never typed
+**Shall.** A progress mark carried in a requirement document shall be generated from the implementation plan's checkboxes and shall be re-verified on every check run.
+**Accept.** Hand-editing a generated mark fails the next check run, naming the requirement, the stored value and the derived one. No requirement document is the source of its own mark. A mark that cannot be derived — because no requirement of the layer below decomposes this one — reads *unknowable* and is never rendered as *not started*.
+**Verify.** A · `ANL-59`   **Trace.** CN-0403, CN-0382
+**Built.** ○ not started — 0/1 software requirements done, in `WP-01`
+*Note:* this is the obligation behind §0.3a's `**Built.**` field, and it exists because the field would otherwise be machinery with no requirement governing it — a check nobody has seen fail. `SYS-0277` is unchanged and remains the stronger prohibition: **verification** status is still derived from the suite and appears in no specification. This one authorises *implementation progress* only, and only in the generated-and-checked form `CN-0403` sets out.
+
 **`SYS-0278`** · `P0` · `R1` — A cited test identifier appears in the test
 **Shall.** Every test identifier cited by a requirement shall appear literally in the test that implements it.
 **Accept.** A check resolves every `Verify` identifier in this document to at least one occurrence in the test suite, and reports every identifier that resolves to none. A test claiming an identifier in a docstring without implementing it is reported as over-claiming.

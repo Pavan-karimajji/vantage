@@ -229,7 +229,7 @@ flowchart LR
 
 ### WP-01 · `MP-0` · CI and the analysis-check harness
 - [ ] **Prereq:** none. This is the entry point (`O-1`).
-- [ ] **Lands:** `IMP-0020`, `IMP-0357`, `IMP-0361`, `IMP-0366`, `IMP-0367`, `IMP-0370`…`IMP-0376`, `IMP-0378`, `IMP-0383`, `IMP-0408`, `IMP-0415`, `IMP-0417` — 17.
+- [ ] **Lands:** `IMP-0020`, `IMP-0357`, `IMP-0361`, `IMP-0366`, `IMP-0367`, `IMP-0370`…`IMP-0376`, `IMP-0378`, `IMP-0383`, `IMP-0408`, `IMP-0415`, `IMP-0417`, `IMP-0418` — 18.
   - [ ] `IMP-0020` · `SW-0020` · `NEW` — `scripts/check_no_duplication.py`
   - [ ] `IMP-0357` · `SW-0357` · `KEEP` — `scripts/check_invariants.py`
   - [ ] `IMP-0361` · `SW-0361` · `EXTEND` — `scripts/check_closed_sets.py`
@@ -247,6 +247,7 @@ flowchart LR
   - [ ] `IMP-0408` · `SW-0408` · `NEW` — `docs/v2/py/trace_check.py::check_falsifiable`
   - [ ] `IMP-0415` · `SW-0415` · `NEW` — `conf/artifact_kinds.yaml`
   - [ ] `IMP-0417` · `SW-0417` · `EXTEND` — `scripts/check_trace.py` gains a second table: each cited kind's `detect…
+  - [ ] `IMP-0418` · `SW-0418` · `EXTEND` — `docs/v2/py/trace_check.py::roll_up`
 - [ ] **Files:** the CI trigger file for whichever system is chosen (`OQ-15`, undecided — Jenkins likely; ~10 lines, written the day it is known) · `scripts/check_no_duplication.py` · `check_closed_sets.py` · `check_imports.py` · `check_trace.py` · `check_headers.py` · `check_time_units.py` · `check_artifact_kinds.py` · `measure.py` · `conf/artifact_kinds.yaml` · `docs/v2/py/trace_check.py` · a planted-violation test per check.
 - [ ] **Exit:** the harness half is complete and vendor-independent — every check runs as one plain command on a developer machine, on both platforms, returning an exit code. **The trigger file is the only part that waits on `OQ-15`**, and it does not gate this package.
 - [ ] **Exit:** the suite runs on **Windows and Linux** and compares (`IMP-0366`); every `scripts/check_*.py` has a planted-violation test that fails when it should (`IMP-0370`); `trace_check.py` reports `CN → SYS → SW → IMP → WP → test` closed with SwReq §32.3's five unparented requirements listed as **known** rather than passed.
@@ -951,7 +952,7 @@ Counted by `docs/v2/py/trace_check.py --progress`, which reads the checkboxes ab
 
 | `WP` | Phase | `IMP` | `WP` | Phase | `IMP` |
 |---|---|---:|---|---|---:|
-| `WP-01` | `MP-0` | 17 | `WP-17` | `MP-2` | 7 |
+| `WP-01` | `MP-0` | 18 | `WP-17` | `MP-2` | 7 |
 | `WP-02` | `MP-0` | 1 | `WP-18` | `MP-2` | 5 |
 | `WP-03` | `MP-0` | 9 | `WP-19` | `MP-2` | 14 |
 | `WP-04` | `MP-0` | 20 | `WP-20` | `MP-3` | 26 |

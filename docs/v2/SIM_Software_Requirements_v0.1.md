@@ -126,7 +126,7 @@ Four rules keep this honest:
 3. **`Now.` is deleted, not maintained.** When the migration completes, this field is removed from the document in one pass. A permanently-maintained "implemented?" column is exactly the second stored copy `SYS-0277` forbids, and the way this one avoids becoming that is by having an end.
 4. **`DONE` never means "verified".** It means "there is code here to reuse". Whether the requirement is *met* is answered by the test suite and by nothing else, including this field.
 
-§31 collects every `Now.` value into one table so the migration can be sized without reading 408 requirements.
+§31 collects every `Now.` value into one table so the migration can be sized without reading the whole document. Requirements added after the snapshot date carry a `Now.` written when they were added, and the current total is emitted by `trace_check.py`, never typed here.
 
 ### 0.8 The `**Built.**` line — and why it is not a second `Now.`
 
@@ -3362,6 +3362,13 @@ These bind every software item, so none owns them alone; the item field reads `a
 **Built.** ○ not started — `IMP-0373` in `WP-01`
 **Now.** `NEW`.
 
+**`SW-0418`** · all · `P0` · `R1` — The progress rollup has one source, and is checked rather than trusted
+**Shall.** Implementation progress shall be rolled up from a single stored source — the implementation plan's per-design-requirement checkboxes — and the ordinary check run shall recompute every derived mark and fail on disagreement.
+**Accept.** A hand-edited mark fails the check, naming the requirement and both values. Regeneration is idempotent: running it twice leaves the documents byte-identical. A partially-complete box carrying no `closed by` clause fails. A requirement with no child to derive from is reported *unknowable*, distinct from *not started*. Each of these four ships a planted-violation case proving the check catches it.
+**Verify.** A · `ANL-SW-79`   **Trace.** SYS-0292
+**Built.** ○ not started — `IMP-0418` in `WP-01`
+**Now.** `PARTIAL` — the rollup, the writer and the verifier exist in `docs/v2/py/trace_check.py` as of 2026-08-13 and were exercised by hand; **nothing runs them as a test yet**, which is the half `WP-01` lands. A verifier nobody has watched fail is exactly what `SW-0370` exists to forbid, and it applies to this one no less than to the checks it governs.
+
 **`SW-0374`** · all · `P0` · `R1` — Every source file carries the file-header block
 **Shall.** Every new source file shall carry the declared file-header block including the owning component token.
 **Accept.** A check over the tree finds no source file without it.
@@ -3469,7 +3476,7 @@ carry the identity half and are deliberately not re-decomposed (SysReq §23a).*
 
 ## 30. What the existing implementation already does
 
-This section answers the first half of the question this document was written to answer: **which of these 408 obligations already have working code behind them.** It is a reuse assessment, not a verification claim (§0.7).
+This section answers the first half of the question this document was written to answer: **which obligations already have working code behind them.** It is a reuse assessment taken against the **408 requirements that existed on 2026-08-10**, not a verification claim (§0.7) and not a current total — later requirements carry a `Now.` written when they were added, and `trace_check.py` emits the live count.
 
 ### 30.1 The headline
 
