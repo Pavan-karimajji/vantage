@@ -32,6 +32,14 @@ an artifact nobody had re-read** — the C ABI header closed three module-team
 questions without anyone being asked, and two acceptance criteria closed two
 more.
 
+> **If you are here to give an opinion rather than to look up a row, read
+> §6 — the plain-language briefing.** It explains the nine still-open items
+> (eight `OQ` plus `IFQ-01`) from the beginning: what is being asked, how the
+> question arose, what each answer causes downstream, what silence adopts, and
+> the one thing each row actually needs from you. §1–§3 are the index; §6 is
+> the reading copy. The two never disagree — §6 adds background, never a
+> different answer.
+
 ---
 
 ## 1. Open and answerable here
@@ -214,3 +222,560 @@ with its consequence named. They are listed here only so that "not in the open
 questions register" is not read as "nobody thought about it". `A-4` in
 particular is `OQ-11` wearing different clothes: if `OQ-11` closes the other
 way, `A-4` is what has to change.
+
+---
+
+## 6. Plain-language briefing — the nine that are still open
+
+**Why this section exists.** The rows above are written for someone who already
+knows the design; they compress the argument into one cell. This section
+un-compresses it. Each of the nine open items is told from the start: what is
+being asked, why the question came up at all, what happens downstream if it goes
+one way or the other, what is *already* decided so that the damage is bounded,
+what happens if nobody answers, and the one thing the row actually needs from
+you. No new decisions are taken here — where §1–§3 and §6 both speak, they say
+the same thing.
+
+**How to use it.** Read the item, then say your opinion in one line. Where a row
+already has a recommendation, *"agreed"* is a complete answer; a *"no, because…"*
+is more valuable than a long alternative, because the reason is what gets written
+into the requirement.
+
+### 6.0 Six words you need first
+
+The nine rows keep reaching for the same six ideas. They are explained once here
+so the rows themselves stay short.
+
+| Word | What it means, plainly |
+|---|---|
+| **Port** | One named input or output of a software module — `df.bsd.outputs`. The tool never addresses data by position, only by name, because a name survives a code change and a position does not. |
+| **Recording** | A file of timestamped messages. Ours, another team's, a bench tool's, a foreign simulator's — the tool treats all of them as the same shape. |
+| **Resim** | Re-running the *real* algorithm library against a recording. Not a replay: a replay just draws what was already computed, a resim actually executes the code again and can therefore disagree with the file. This is the thing that goes in CI. |
+| **Cycle recovery ladder** | The hard part of reading somebody else's recording is not parsing bytes — it is working out **which messages belong to the same computation step**. Our own files say so outright. A foreign file may not, so there is a declared ordered ladder of four fallbacks: (1) a cycle id the source itself wrote, (2) the cycle counter in our signal header, (3) source time, (4) reception time from the file envelope. **Rung 4 is the bad one** — it groups messages by when a logger happened to receive them, which is approximately right and quietly wrong at the edges. Which rung a file supports is *measured per file*, not assumed. |
+| **Codec** | A reader/writer for one file format, about four methods, sitting behind one registered interface. This is why "which formats?" is a cheap question: naming a format adds a table row, not a design. |
+| **Work package (`WP-nn`) / milestone (`MP-n`)** | The unit of build work in the implementation plan, and the phase it belongs to. `MP-1` — *"fix the clock"* — is the phase whose entire purpose is making foreign recordings reconstruct into correct cycles. |
+
+### 6.1 The nine at a glance
+
+| # | Row | In one sentence | Who can actually answer | What silence costs |
+|---|---|---|---|---|
+| 1 | `IFQ-01` | Do message timestamps count microseconds or nanoseconds? | You (contract owner) | Keeps `µs` — the option whose main argument no longer holds |
+| 2 | `OQ-09` | Can somebody send ten seconds of real bench capture? | A recording owner | One milestone stays *provisionally* finished, forever |
+| 3 | `OQ-22` | Are the licences of third-party format readers acceptable to ship? | Legal / commercial | Nothing now; it becomes urgent the week a real file arrives |
+| 4 | `OQ-14` | What are the performance numbers, measured on what? | You + whoever owns throughput | Three performance requirements that cannot be failed |
+| 5 | `OQ-16` | How long may a common configuration change take? | You + a customer team | The project's own success measure stays unmeasurable |
+| 6 | `OQ-17` | Does this tool need functional-safety qualification? | Quality / safety | A fallback is already written; risk is managed, not zero |
+| 7 | `OQ-15` | Which CI system, and how long are artifacts kept? | DevOps | ~10 lines of the first work package wait; nothing else |
+| 8 | `OQ-19` | Are campaign results kept, or regenerated on demand? | Storage / audit owner | Answer it with row 7 — one policy, two consumers |
+| 9 | `OQ-18` | Who maintains project configuration after handover? | Organisation | Nothing technical; it is a staffing shape |
+
+Rows 1, 4, 5 are the ones **you** can move today. Rows 2, 3, 6, 7, 8, 9 need
+somebody outside this repository, and every one of them has already been
+de-blocked so that the wait costs nothing.
+
+---
+
+### 6.2 `IFQ-01` — do timestamps count microseconds or nanoseconds?
+
+**What is being asked.** One word. Every message that crosses a component
+boundary carries a small header saying who produced it and when. The question is
+the *unit* of that "when": millionths of a second, or billionths.
+
+**How we got here.** The header that exists today has a field called
+`time_stamp`, 32 bits wide. Two defects in it were found and are already fixed:
+
+- **32 bits of nanoseconds wraps to zero every 4.29 seconds.** Widened to 64 bits.
+  Not controversial, already settled.
+- **The name did not say which clock it was.** There are genuinely *two* clocks
+  in play. **Source time** is *"when the producer computed this"* — always
+  knowable, because the producer is the one filling the field. **Capture time**
+  is *"the instant the data actually describes"* — when the camera shutter
+  opened, when the radar swept. A producer often does not know that, and when it
+  does not, the field must read *unknown* rather than being quietly filled with
+  something plausible. That is also already settled: two separate, differently
+  named fields, capture optional.
+
+So the width is fixed, the naming is fixed, the two-clock question is fixed.
+**Only the unit remains**, and it remains because it is the one piece that has to
+be right before anything is encoded.
+
+**Why one word gets this much attention.** This is a wire contract. Every
+component fills it, every consumer reads it, every recording stores it, the age
+of a held value is computed from it, and rung 3 of the cycle ladder is literally
+this field. Changing the unit after recordings exist means either re-encoding
+every stored file or carrying a version flag forever. It costs one word now and
+a migration later.
+
+**The original argument for microseconds, and why it weakened.** We decided
+elsewhere that a module's sample period is written in configuration as integer
+microseconds (`<COMPONENT>_<FN>_PERIOD_US`), because a YAML floating-point number
+rounds badly and a rounded period accumulates into drift that reads like an
+algorithm bug. From there, *"keep one unit across the contract"* sounded obviously
+right. Reading it against the repository weakens it in three places:
+
+1. **The two units already coexist, in shipped code.** `period_ns` is a live
+   manifest field consumed by real host code, and it sits in the same
+   `conf/ports.yaml` as `period_us`. So *"one contract, one unit"* is not a
+   property being protected — it is a property that would have to be **created**,
+   and creating it would mean changing the manifest field too.
+2. **A configured value and a measured value are different kinds of thing.**
+   Microseconds are mandated for the period because a *person types it* and a
+   fractional entry must be refusable. Nobody types a timestamp. Unit agreement
+   is worth having *within* a kind of value, not across kinds.
+3. **The requirement that owns the header already calls its stamp a nanosecond
+   quantity** (`SW-0044`). A microsecond wire field is defensible only by
+   re-reading that as *"after ingest"*.
+
+**The decisive argument, which is about risk rather than taste.** Nanoseconds can
+represent everything microseconds can. So:
+
+- If a data source turns out to have finer than 1 µs resolution, **microseconds
+  truncate** — silent data loss inside a shipped contract.
+- If nanoseconds are the "wrong" choice, the cost is roughly **one extra byte per
+  message**.
+- And microseconds' correctness *depends on a file we have not received yet*
+  (`OQ-09`, the bench sample, which is one of the two things that would tell us
+  the finest resolution in play). Nanoseconds do not depend on it at all.
+
+Under an unresolved external input, the choice that makes the input irrelevant is
+the cheaper one to be wrong about.
+
+**A small bonus, worth naming because it removes a rule rather than adding one.**
+If nanoseconds are ratified, `SW-0033`'s carve-out — *"the engine performs exactly
+one unit conversion"*, the ×1000 — is **deleted**, and `ANL-SW-02`'s ban on unit
+arithmetic needs no exception. Microseconds require both to be written down and
+maintained.
+
+**What silence does.** Keeps `timestamp_us`. That is precisely why this is being
+asked out loud instead of assumed: the standing default was argued in good faith
+one day earlier, and reversing an argued cross-component decision should be a nod
+somebody gives, not something a document takes.
+
+**Recommendation.** `source_timestamp_ns` / `capture_timestamp_ns`.
+
+**What is needed from you.** One word: *ratify ns*, or *keep µs*.
+
+---
+
+### 6.3 `OQ-09` — ten seconds of real bench capture
+
+**What is being asked.** Not a specification, not a format document. One real
+file, its channel list, and one sentence.
+
+**How we got here.** The tool must read recordings it did not produce — three
+formats are in scope: our own interchange format, a vehicle measurement format,
+and a bench capture format. Parsing bytes is the easy half. The hard half is the
+cycle ladder (§6.0): grouping messages into the computation step they belong to.
+Our own files answer that directly. A foreign file may only support rung 4 —
+grouping by when the logger received things — which produces a picture that looks
+right and is wrong in exactly the places that matter.
+
+**The chain of effect.** `MP-1` is the milestone whose whole purpose is making
+foreign recordings reconstruct correctly. Its exit criterion is currently tested
+against a fixture **we wrote ourselves**. The implementation plan states the
+problem in blunt terms as risk `R-8`: *a fixture the team wrote encodes the same
+assumptions the recovery ladder does, so it validates the guess rather than the
+data.* That is a real hazard — it is the kind of thing that passes every test
+for six months and then fails on the first customer file. Ten seconds of real
+capture retires it outright.
+
+**What has already been removed from this question, so nobody over-weights it.**
+`OQ-09` used to block two other decisions, and it now blocks neither:
+
+- **The header decision** no longer depends on it, because that decision rests on
+  what a *producer can know*, not on what a *reader receives*. What the bench
+  writes cannot change what a producer knows.
+- **The "do recordings carry cycle marking?" question** no longer depends on it,
+  because that stopped being a global yes/no. Every recording is probed before
+  every run and reports, per topic, the highest rung its data supports. A capture
+  format nobody has seen yields an unknown **value**, not an unanswered question.
+
+So what is left is **verification evidence, not design input**. No work package
+is blocked; the design does not move either way.
+
+**The ask, kept deliberately small so it is easy to say yes to.**
+
+1. One file, **ten seconds**, from any routine bench run — no special
+   configuration, no scenario, nothing staged.
+2. The **channel/topic list** as the tool exports it.
+3. **One sentence**: does the capture chain re-stamp messages as it records them,
+   or pass the producer's own stamp through?
+
+**What we would do with it on arrival.** Check whether a per-message reception
+stamp exists (decides whether rung 4 is even available for that format, and
+therefore whether the codec has to declare a degraded capability); whether our
+signal header survives end to end (decides rungs 2 and 3); and the finest
+timestamp resolution present (one of the two inputs to `IFQ-01`, §6.2).
+
+**What silence costs.** `MP-1`'s exit stays *provisional* and `R-8` stays on the
+risk list — permanently, if the file never arrives. Nothing stops, nothing is
+blocked, and no schedule moves. It is a quality-of-evidence cost, not a progress
+cost.
+
+**What is needed from you.** Either a name — someone who can drop one file — or
+an explicit *"no such file will be available"*, in which case we record the
+provisional exit as permanent and stop carrying the ask.
+
+---
+
+### 6.4 `OQ-22` — licences for the third-party format readers
+
+**What is being asked.** Two of the three formats in scope are not ours. Reading
+them means one of three things, and somebody has to say which is acceptable to
+ship.
+
+**Why it is much smaller than it sounds.** One decision already taken bounds it
+completely: **exactly one codec implementation, in C++, behind a registered
+interface of about four methods.** A reader therefore touches no engine code,
+appears in no other component, and can be replaced without a single caller
+changing. That is what makes this a **procurement** question rather than an
+architectural one — and it is the same signal seen twice before in this register:
+naming a format changed the plan's shape not at all, which is how you know the
+seam was drawn in the right place.
+
+**The three shapes.**
+
+| Option | What it costs | What must be checked |
+|---|---|---|
+| An open-source C++ reader per format | Least code | The licence class against how the deliverable ships. **The case that bites is a copyleft reader statically linked into a delivered library.** Dynamic linkage is the usual mitigation and still needs a sign-off |
+| A vendor or consortium SDK | Least risk of misreading the format | Redistribution terms, per-seat or per-deliverable cost, and platform coverage — the portability contract requires **both** Windows and Ubuntu |
+| A clean-room reader from the published specification | No licence exposure at all, full control | The largest engineering cost, and only reasonable for the subset of the format actually present in our files |
+
+**When it is due.** Per format, the week its first sample file arrives — because
+each non-primary reader is written then, not before. This is the reason the
+recommendation is to **move this row out of the baselining gates** and attach it
+to the two format work packages: it is then asked by someone holding a real file
+rather than in the abstract, which is the only way that question gets a precise
+answer.
+
+**The one thing worth starting early.** If a vendor SDK is even a candidate, open
+the redistribution-terms conversation now. It is the only item in this entire
+register whose latency is measured in **months** rather than days.
+
+**What is needed from you.** Two things: agreement to attach this to the format
+work packages rather than treat it as a gate; and whether any standing
+organisational rule about licence classes and static linking already exists that
+we should simply apply rather than re-ask.
+
+---
+
+### 6.5 `OQ-14` — the performance numbers
+
+**What is being asked.** Three numbers — the cost of one simulation cycle, how
+many recordings a batch campaign clears per hour, and how long the player takes
+to draw one frame — plus the configuration each is measured on.
+
+**Why an absent number is a real defect and not a formality.** The concept says
+it directly: *a performance requirement with no threshold cannot be **failed***.
+Two requirements are in exactly that state today. A requirement nobody can fail
+is a requirement that will be declared satisfied, which is worse than not having
+one, because it occupies the slot where a real check should be.
+
+**The reframe that unblocks it — read the requirements' own words.** Both say
+that a measurement exceeding its budget is *"reported as a regression rather than
+silently re-baselined"*. A regression is a **comparison**. A comparison needs a
+**previous measurement**, not an absolute target. So:
+
+> Declare the reference configuration → take the first measurement → the
+> requirement is failable from the **second** run onward, with nobody having
+> guessed a number on the first.
+
+**Do not build this mechanism twice.** The determinism rule already defines this
+exact discipline for numerical tolerance: a file of rows, each carrying a
+mandatory `why:`, its hash recorded in the run manifest, and — the part that
+matters most — **a passing report prints the budget it used and the headroom
+consumed**. That is described there as *the only anti-spiral mechanism that does
+not depend on someone choosing to look*: it is what stops a budget being widened
+by 10% each release until it means nothing. A performance budget is the same
+artifact with a different unit.
+
+**The half that actually causes the trouble is not the number.** It is the
+**reference configuration**. Two measurements taken on different setups look like
+a regression and burn a day of investigation every single time. The software half
+can be pinned today, and should be:
+
+| Axis | Pinned as |
+|---|---|
+| Which modules | `df` alone for per-cycle cost — it is the only module with substantial algorithm code; `perception-core` → `df` for the multi-module figure |
+| Which recording | One named fixture, committed to the repository with its hash recorded — never referenced by a path that can change underneath |
+| Tick count and layer count | Fixed and stated — this is the requirement's own wording, not an addition |
+| Build configuration | Release-with-debug-info, matching the platform suffix already in use. Never a debug build, and never left implicit |
+
+**The hardware half is genuinely coupled to `OQ-15`** and should be recorded as
+such: a budget measured on a developer laptop will not survive the move to a
+build runner. The mitigation is the same one the determinism rule uses — **record
+the host beside each budget**, so that moving to CI hardware becomes a visible
+re-baseline with a stated reason rather than a mystery regression.
+
+**What stays with an owner regardless.** A baseline-derived budget answers
+*"did we get slower?"* rigorously, from the second run. It does **not** answer
+*"is it fast enough?"* — that is an absolute, and it belongs to whoever knows how
+many recordings must clear overnight. That half does not block the harness; it
+only blocks the claim.
+
+**What is needed from you.** Two things: agreement that baseline-plus-bound is
+the mechanism (which makes the requirements failable without inventing numbers);
+and any absolute you already know — *"a campaign of N recordings must finish
+overnight"* is exactly the shape that would be useful.
+
+---
+
+### 6.6 `OQ-16` — how long may a common configuration change take?
+
+**A correction first: half of this was never open.** The register asked for *"the
+set of common configuration changes **and** each one's budget"*, as if both were
+missing. The set is already written into the requirement itself — **switch a
+module's mode · change a calibration value · add a recording · change the layout ·
+add an export.** Five items, named. Only the budget is missing, which halves the
+question before anyone answers anything.
+
+**Why this row matters more than its size suggests.** It is the closest thing the
+project has to its own success measure. The whole point of the tool is that a
+routine change is a routine change; if adding a recording takes a day, the tool
+has failed regardless of how good its internals are.
+
+**Why the remaining half resists being answered as written.** The requirement
+says each change is *"completable by a representative engineer unaided within a
+declared time budget"*. Measuring that properly needs an engineer who has not
+seen the system, a facilitator to observe, and a repeat every release. That is an
+expensive instrument, and expensive instruments get run once and then quoted for
+two years. It is the right **acceptance criterion** and the wrong **gate**.
+
+**The proposal: gate structurally, measure the clock separately.** Each of the
+five has an objective, mechanically checkable shape — and the shape is what
+actually decides whether the task takes ten minutes or a day:
+
+| Change | The structural gate |
+|---|---|
+| Switch a module's mode | One field in the run spec. No other file touched |
+| Change a calibration value | One key in one config bundle. No rebuild, no code edit |
+| Add a recording | One entry in the recording list. No code edit — the ingest map is edited for a new *family* of recordings, never for a new file |
+| Change the layout | One workspace file. No framework file touched |
+| Add an export | One exporter entry. No engine file touched |
+
+Each becomes a planted-violation test of the kind the requirements already demand
+generally: make the change, assert the diff touches exactly the declared set of
+files. That is **failable today**, costs no facilitator, and catches the actual
+regression this requirement exists to prevent — *a change that used to be one file
+starting to need three.*
+
+**And keep the health metric that already exists:** lines of configuration per
+project, tracked across releases. It needs no stakeholder, no stopwatch and no
+representative engineer, and it moves in the right direction for the right
+reasons.
+
+**What is deliberately not concluded.** The wall-clock budgets themselves.
+*"Within thirty minutes"* versus *"within a day"* is a statement about what a
+customer's engineers are expected to absorb, and this document has no standing to
+set it. **The recommendation is a sequence, not a number:** run the five tasks
+once, record the times as **observations rather than targets**, and put those
+observations in front of the customer team. A number to react to gets an answer
+where an open question gets silence.
+
+**What is needed from you.** Agreement that the structural gate is what CI
+enforces, and that the wall-clock question is asked *after* we have measured
+ourselves once — not before.
+
+---
+
+### 6.7 `OQ-17` — does this tool need functional-safety qualification?
+
+**What is being asked.** Whether the tool falls under a tool-qualification
+regime, i.e. whether its correctness has to be *argued and evidenced* rather than
+merely tested.
+
+**Why this is the highest-variance row in the register.** It is the only one that
+can invalidate the **form** of every other answer. It can reach the requirement
+style, the verification evidence, and the shape of the whole document set — so
+answering it late is not like answering the others late.
+
+**Why the blast radius is nonetheless smaller than it looks — and this is worth
+knowing so the fallback is not over-provisioned.** The document set is *already*
+in qualification-friendly shape: numbered `shall` statements, an `Accept`
+criterion per requirement, a `Verify` method naming the test, a `Trace` link
+upward, and a `Now.` line stating implementation status. That is most of the
+structure a qualification argument asks for, and it was not built for that reason
+— it was built because a requirement nobody can fail is worthless. The genuinely
+expensive parts of qualification — classifying the tool (how bad is an error, how
+likely are we to catch it, hence what confidence level is required), producing
+the validation evidence for that classification, and writing a tool safety manual
+— are **process work downstream of the documents**, not a rewrite of them. So the
+fallback's cost is mostly **addition**, not **re-styling**, which makes it a much
+safer risk to carry than the register's *"potentially everything"* suggests.
+
+**The fallback already written.** If it is unanswered by the time the seam is
+built, the chain is developed in the present style and re-styling is accepted as a
+known, scoped cost recorded against this row. *An unanswered question with a
+written fallback is a managed risk; one without is a surprise arriving after
+thirty-two work packages are cut.*
+
+**The actual recommendation: replace the question with a sharper one.** *"Are
+there tool qualification constraints?"* invites a study, and a study takes a
+quarter. The decisive input is a single sentence:
+
+> **Does any output of this tool enter a safety argument — as verification
+> evidence for a safety requirement, or as the basis for a claim about a
+> production component's behaviour?**
+
+If **no**, this row closes with no qualification obligation and the fallback is
+never exercised. If **yes**, the classification work begins, and its scope is set
+by *which* outputs — which is a much smaller investigation than the general
+question. This is the cheapest question in the register to ask and potentially
+the most expensive to leave unasked.
+
+**One thing that should not wait for the answer, because it is cheap either way.**
+Keep the `Trace.` fields complete as requirements are written. Reconstructing
+traceability after thirty-two packages are cut is the one part of the fallback
+that would genuinely hurt — everything else in it is additive.
+
+**What is needed from you.** Whether you can answer that binary yourself, or
+whether it needs a quality/safety function; and, as today's working position,
+whether this tool's output is intended as a development aid only.
+
+---
+
+### 6.8 `OQ-15` — which CI system, and how long are artifacts kept?
+
+**What is being asked.** Which continuous-integration system runs our checks on
+every push, and how long its artifacts are retained.
+
+**Why it looks like it blocks everything, and does not.** There is **no CI
+configuration of any kind** in the repository today. Meanwhile the *first* work
+package in the plan is CI and the check harness, on the stated reasoning that
+*manual verification is the mechanism that fails first* — checks that depend on
+somebody remembering to run them stop being run, quietly, at exactly the moment
+the project gets busy. Read together, those two facts look like the plan is stuck
+at package one.
+
+**The split that unblocks it.**
+
+| Half | Does it depend on the vendor? | Precedent already in the tree |
+|---|---|---|
+| **The harness** — every check runnable as one plain command, returning an exit code and printing how many things it scanned | **No** | `docs/py/run_all.py`, already required before any docs commit; `scripts/check_invariants.py` for the grep-based invariants |
+| **The trigger** — the vendor file that runs that command on push | Yes | — |
+
+All the work and all the value are in the harness; the trigger is roughly ten
+lines and is written the day the vendor is known. So the first work package is
+completable except for one small file. And the property that matters more than
+the schedule: **every check stays runnable on a developer machine**, which is
+what keeps checks being run at all.
+
+**One detail inside the harness worth knowing about, because it is the failure it
+prevents.** A check that scans a path that has been renamed, or a tree that does
+not exist yet, **passes** — silently, forever, catching nothing. So every check
+reports its scan count, and a check that scanned nothing reads `SKIPPED` rather
+than `PASSED`. That is why the harness half is not trivial work despite being
+vendor-independent.
+
+**Two constraints to carry into whichever system is chosen**, both already implied
+by decisions taken: it must run **Windows and Ubuntu** (the portability contract
+is normative for every stage), and the harness lives in the contributed-tooling
+directory rather than in the shipped source tree.
+
+**What is needed from you.** Whether there is an existing CI system we are
+expected to use or whether it is our choice; and who owns storage and retention —
+because the retention half of this row is the same question as `OQ-19` below and
+should be answered once, for both.
+
+---
+
+### 6.9 `OQ-19` — are campaign results kept, or regenerated?
+
+**What is being asked.** After a batch campaign runs hundreds of recordings, are
+its results kept as a baseline, deleted, or regenerated on demand?
+
+**The reframe, which is this row's real contribution.** Because resim is
+deterministic *by design*, and because that determinism is **measured** rather
+than asserted, a campaign result is **regenerable if and only if its inputs still
+exist** — the recording, the resolved run spec, the config bundle, and the exact
+library binary. Inputs are kilobytes; the recording already embeds the config
+bundle's bytes. Results are large. **So keeping inputs and regenerating results is
+the cheap direction — and it is available only because determinism was designed
+in from the start.** This is one of the places where an early architectural
+decision pays a storage bill years later.
+
+**The one hard constraint no policy can wish away.** Regeneration needs the
+**binary**, not merely its hash. A component build that can no longer be obtained
+makes its results unregenerable — and at that moment the stored results become
+the only evidence that the run ever happened. The determinism work has a
+*rebuilt-binary* axis precisely because rebuilding is not guaranteed to reproduce
+bit-for-bit. So any retention policy needs an explicit rule for *"the binary is
+gone"*: either the outputs are promoted to long retention, or the baseline is
+knowingly abandoned. Both are acceptable; leaving it unstated is not.
+
+**A three-tier shape to react to — offered, not adopted.**
+
+| Tier | Kept | Why |
+|---|---|---|
+| Inputs — recording reference and hash, resolved spec, bundle bytes, library hash | Long | Kilobytes. Without them nothing is reproducible or auditable |
+| Run manifests and reports | Long | This is the audit trail proper, and it is small |
+| Bulk per-tick outputs | Short, regenerated on demand | Large, and recoverable while the binary is obtainable |
+| Any run whose binary can no longer be obtained | Outputs promoted to long | The exception above |
+
+**What is deliberately not concluded.** The actual durations, and whether an audit
+obligation forces bulk retention regardless of regenerability. Those are a storage
+budget and a compliance question, in that order.
+
+**What is needed from you.** Whether any audit or customer obligation forces us
+to keep the results themselves; and confirmation that this is answered together
+with `OQ-15`'s retention half — one policy, two consumers.
+
+---
+
+### 6.10 `OQ-18` — who maintains project configuration after handover?
+
+**What is being asked.** Once the tool is handed to a customer team, who owns the
+per-project configuration — the calibration values, the pipelines, the layouts —
+and what support model comes with it?
+
+**Nothing technical is blocked, and it is worth recording *why*, because this is a
+property that was designed for rather than a happy accident.** Project
+configuration is **data in versioned files with no code**: there is no central
+project roster (a project exists because some module's build file declares it),
+calibration lives in per-project directories, and the config bundle is a build
+*output* rather than a second place anyone edits a value. So *"who maintains it"*
+is a question about repository access and review, not about capability. Nobody
+needs to be able to program to own it.
+
+**What actually determines the support model's cost — and this is worth saying to
+whoever chooses.** The **diagnostics**. The explain and doctor commands, and an
+authoring error that names the plug-in, the port it asked for, and every port the
+manifest actually declares. Those are what let a customer team answer its own
+questions instead of raising a ticket. **A thin support model is viable in
+proportion to how good those messages are** — which turns this from a headcount
+argument into an engineering target, and is the reason the diagnostics rules are
+normative rather than nice-to-have.
+
+**Three shapes, not chosen here.**
+
+1. The customer team owns configuration, with the supplier on call for defects.
+2. The supplier owns configuration as a service.
+3. **Joint — the supplier owns the schema, the customer owns the values.**
+
+**Recommendation is the third**, because it matches the artifacts exactly: the
+schema *is* `conf/*.yaml` and the values *are* the per-project directories, so the
+split follows a line that already exists in the repository rather than one drawn
+across it.
+
+**What is needed from you.** Which shape; and whether handover is even in scope
+within the timeframe currently being planned — if it is not, this row can be
+parked with the recommendation recorded rather than carried as open.
+
+---
+
+### 6.11 What answering these actually unlocks
+
+So the state is honest about itself: **nothing in the implementation plan is
+blocked by a design decision.** What remains is one contract word, one file, and
+seven organisational answers, each already de-blocked so that its lateness costs
+nothing.
+
+| Answer | Immediately unlocks |
+|---|---|
+| `IFQ-01` ratified | The header work package can encode; one carve-out rule is deleted rather than written |
+| `OQ-09` file arrives | `MP-1`'s exit becomes real instead of provisional; plan risk `R-8` retires |
+| `OQ-14` mechanism agreed | Three performance requirements become failable, from the second run |
+| `OQ-16` gate agreed | The project's own success measure becomes checkable in CI |
+| `OQ-17` binary answered | Either no qualification obligation at all, or a scoped one — instead of an open-ended risk |
+| `OQ-15` + `OQ-19` answered | Ten lines of the first work package, and one retention policy serving both |
+| `OQ-18` shape chosen | A staffing answer; no code changes either way |
