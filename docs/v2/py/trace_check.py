@@ -15,10 +15,32 @@ the first time a requirement moves. This reads the documents.
 
 Run it before any commit to `docs/v2/`:
 
-    python docs/v2/py/trace_check.py            # full check, non-zero exit on failure
-    python docs/v2/py/trace_check.py --progress # work-package checkbox counts
-    python docs/v2/py/trace_check.py --counts   # the Test Specification's own totals
-    python docs/v2/py/trace_check.py --matrix   # emit the derived trace matrix
+    python docs/v2/py/trace_check.py                # full check, non-zero exit on failure
+    python docs/v2/py/trace_check.py --status       # progress per layer, and the next WP
+    python docs/v2/py/trace_check.py --write-status # regenerate the `**Built.**` lines
+    python docs/v2/py/trace_check.py --progress     # work-package checkbox counts
+    python docs/v2/py/trace_check.py --counts       # the Test Specification's own totals
+    python docs/v2/py/trace_check.py --matrix       # emit the derived trace matrix
+    python docs/v2/py/trace_check.py --exec-rows all  # Test Execution Record skeleton
+
+**Progress, and why it is written into the requirement documents at all**
+(`R-REQ-6a`, `CN-0403`, added 2026-08-13). *"Has this been verified?"* and *"has
+this been built yet?"* are different questions, and the second is what a session
+resuming tomorrow asks. No suite answers it: a test that has never run and a test
+for code nobody has written are indistinguishable in a suite.
+
+So the plan's per-`IMP` checkboxes are the **single** stored progress state, and
+`SW`, `SYS` and `CN` marks are *rolled up* from them by `roll_up` and written by
+`--write-status`. The ordinary run **recomputes every mark and fails on
+disagreement**, which is the half that separates this from the hand-kept status
+column `R-REQ-6` forbids -- v1's register read `frozen` on 68 of 77 rows because
+nobody updated it and nothing checked it. `R-REQ-11`'s principle, in its own
+words: the copy is made safe by checking it, not by deleting it.
+
+Three box states (`[x]`, `[ ]`, `[~]`), and `[~]` must say `closed by <what>`.
+Two marks are deliberately not progress and are never coloured as such:
+`deferred` (no work package) and `orphan` (nothing decomposes it -- a finding
+about the decomposition, which is how `SYS-0109` and `SYS-0257` were found).
 
 **Scan-path handling.** An analysis check that names a directory which does not
 exist scans nothing and therefore *passes*, which is indistinguishable from a
@@ -60,6 +82,15 @@ CNTESTSPEC = V2 / "SIM_Concept_Test_Spec_v0.1.md"
 
 # SwReq section 32.3 -- unparented by finding, not by oversight.
 KNOWN_UNPARENTED = {"SW-0060", "SW-0196", "SW-0199"}
+
+# The mirror gap, found 2026-08-13 by the status rollup on its first run: system
+# requirements no software requirement decomposes. Their progress is therefore
+# not merely zero, it is *unknowable* -- there is nothing under them to tick.
+# Listed rather than failed for the same reason as KNOWN_UNPARENTED: a gate that
+# is red before any work starts is a gate nobody can act on. The list is checked
+# in both directions, so a requirement cannot leave it silently and one that
+# gains a decomposition cannot stay.
+KNOWN_UNDECOMPOSED = {"SYS-0109", "SYS-0257"}
 
 TEST_ID = re.compile(r"\b(UT-[A-Z]+-\d+|IT-\d+|ANL-SW-\d+|INSP-SW-\d+)\b")
 
@@ -300,10 +331,35 @@ def parse_imp(text: str) -> dict[str, Imp]:
     return out
 
 
-def parse_plan(text: str) -> tuple[dict[str, set[str]], dict[str, bool]]:
-    """Return (wp -> IMP ids it claims to land, wp -> all-boxes-ticked)."""
+# The three box states (Plan 0.4). `~` is *started, a stated part complete*, and
+# it had to enter this regex on the same day it entered the document: while the
+# class was `[ x]` a `~` matched nothing, so a package whose every other box was
+# ticked reported **ticked** while carrying unfinished work. A third state in the
+# prose alone makes the progress count confidently wrong.
+BOX = re.compile(r"^(\s*)- \[([ x~])\] (.*)$")
+
+# A per-IMP box under a package's `Lands:` line: `  - [ ] \`IMP-0020\` · ...`
+IMP_BOX = re.compile(r"^\s+- \[([ x~])\] `(IMP-\d+)`(.*)$")
+
+DONE, PARTIAL, OPEN, DEFERRED, ORPHAN = "done", "partial", "open", "deferred", "orphan"
+_STATE = {"x": DONE, "~": PARTIAL, " ": OPEN}
+
+
+def parse_plan(
+    text: str,
+) -> tuple[dict[str, set[str]], dict[str, bool], dict[str, str], list[str]]:
+    """Return (wp -> IMP ids claimed, wp -> all-ticked, IMP -> state, findings).
+
+    The third value is the **only** hand-maintained progress state in the
+    document set (Plan 0.5); `SW`, `SYS` and `CN` marks are rolled up from it and
+    never typed. The fourth is the caveat check: a `[~]` whose text says nothing
+    beyond the identifier records that somebody was unsure, not where to resume,
+    so it is a finding rather than a state.
+    """
     lands: dict[str, set[str]] = defaultdict(set)
     ticked: dict[str, bool] = {}
+    imp_state: dict[str, str] = {}
+    findings: list[str] = []
     current = ""
     for line in text.split("\n"):
         h = re.match(r"^### (" + WP_ID + r") ", line)
@@ -313,17 +369,192 @@ def parse_plan(text: str) -> tuple[dict[str, set[str]], dict[str, bool]]:
             continue
         if not current:
             continue
-        box = re.match(r"^\s*- \[( |x)\] ", line)
-        if box:
-            if box.group(1) != "x":
-                ticked[current] = False
-            if "**Lands:**" in line:
-                lands[current] |= set(re.findall(r"\b(IMP-\d+)\b", line))
-                # ranges written `IMP-0021`…`IMP-0027` are expanded by the caller
-                for a, b in re.findall(r"`(IMP-\d+)`…`(IMP-\d+)`", line):
-                    for n in range(int(a[4:]), int(b[4:]) + 1):
-                        lands[current].add(f"IMP-{n:04d}")
-    return lands, ticked
+        box = BOX.match(line)
+        if not box:
+            continue
+        mark, body = box.group(2), box.group(3)
+        if mark != "x":
+            ticked[current] = False
+        ib = IMP_BOX.match(line)
+        if ib:
+            uid = ib.group(2)
+            if uid in imp_state:
+                findings.append(f"{uid}: has more than one checkbox in the plan")
+            imp_state[uid] = _STATE[mark]
+            # Plan 0.4: the value of `~` is entirely in the caveat, so the caveat
+            # is required *positively* -- the line must say `closed by <what>`.
+            # Measuring "is there extra text?" cannot work here: the generated
+            # stem already carries an artifact hint, so any length or
+            # difference test would accept a bare `[~]` on a long row and reject
+            # a terse caveat on a short one. A required token is exact, and it
+            # forces the one thing that makes the state useful to the next
+            # session -- what closes it.
+            if mark == "~" and "closed by" not in ib.group(3).lower():
+                findings.append(
+                    f"{uid}: `[~]` must say `closed by <command or condition>` (Plan 0.4)"
+                )
+            continue
+        if "**Lands:**" in body:
+            lands[current] |= set(re.findall(r"\b(IMP-\d+)\b", line))
+            # ranges written `IMP-0021`…`IMP-0027` are expanded by the caller
+            for a, b in re.findall(r"`(IMP-\d+)`…`(IMP-\d+)`", line):
+                for n in range(int(a[4:]), int(b[4:]) + 1):
+                    lands[current].add(f"IMP-{n:04d}")
+    return lands, ticked, imp_state, findings
+
+
+def roll_up(
+    imp: dict[str, Imp],
+    sw: dict[str, Sw],
+    sysreqs: dict[str, SysR],
+    imp_state: dict[str, str],
+) -> tuple[dict[str, str], dict[str, str], dict[str, str], list[str]]:
+    """Roll the plan's per-IMP boxes up the chain: IMP -> SW -> SYS -> CN.
+
+    One stored source, three derived layers (Plan 0.5). The rule at every level
+    is the same and is deliberately pessimistic: **done only when every child is
+    done**, partial when any child has started, open otherwise. A parent that
+    reported done while a child was open would be the one failure that makes a
+    progress display worth less than none.
+
+    Two shapes are *not* progress and must never be coloured as such:
+    `DEFERRED` -- an IMP with no work package, deferred with its parent -- and
+    `ORPHAN` -- a requirement with no child at all, which is a gap in the
+    decomposition and is returned as a finding rather than as a status.
+    """
+    findings: list[str] = []
+
+    def combine(children: list[str]) -> str:
+        real = [c for c in children if c != DEFERRED]
+        if not real:
+            return DEFERRED if children else ORPHAN
+        if all(c == DONE for c in real):
+            return DONE
+        if any(c in (DONE, PARTIAL) for c in real):
+            return PARTIAL
+        return OPEN
+
+    imp_st: dict[str, str] = {}
+    for uid, o in imp.items():
+        if not o.wp:
+            imp_st[uid] = DEFERRED
+        elif uid in imp_state:
+            imp_st[uid] = imp_state[uid]
+        else:
+            imp_st[uid] = OPEN
+            findings.append(f"{uid}: assigned to {o.wp} but has no checkbox there")
+
+    # IMP -> SW is 1:1 across all 417 rows, so this aggregation is a lookup
+    # today. It is written as an aggregation anyway: the day one SW gains a
+    # second IMP, a lookup would silently report the first one's state.
+    by_sw: dict[str, list[str]] = defaultdict(list)
+    for uid, o in imp.items():
+        by_sw[o.serves].append(imp_st[uid])
+    sw_st = {u: combine(by_sw.get(u, [])) for u in sw}
+
+    by_sys: dict[str, list[str]] = defaultdict(list)
+    for u, r in sw.items():
+        for parent in r.trace:
+            by_sys[parent].append(sw_st[u])
+    sys_st = {u: combine(by_sys.get(u, [])) for u in sysreqs}
+
+    by_cn: dict[str, list[str]] = defaultdict(list)
+    for u, r in sysreqs.items():
+        for parent in r.trace:
+            by_cn[parent].append(sys_st[u])
+    cn_st = {u: combine(v) for u, v in by_cn.items()}
+
+    return imp_st, sw_st, sys_st, findings
+
+
+GLYPH = {DONE: "●", PARTIAL: "◐", OPEN: "○", DEFERRED: "◌", ORPHAN: "⚠"}
+WORD = {
+    DONE: "done",
+    PARTIAL: "started",
+    OPEN: "not started",
+    DEFERRED: "deferred",
+    ORPHAN: "unknowable",
+}
+
+BUILT = re.compile(r"^\*\*Built\.\*\* ")
+
+
+def built_line_sw(uid: str, sw_st: dict[str, str], imp: dict[str, Imp]) -> str:
+    """The generated `**Built.**` line for one software requirement."""
+    st = sw_st[uid]
+    rows = sorted((o for o in imp.values() if o.serves == uid), key=lambda o: o.uid)
+    where = ", ".join(f"`{o.uid}` in `{o.wp}`" if o.wp else f"`{o.uid}` (no package)" for o in rows)
+    return f"**Built.** {GLYPH[st]} {WORD[st]} — {where or 'no design requirement serves it'}"
+
+
+def built_line_sys(uid: str, sys_st: dict[str, str], kids: dict[str, list[str]], wps: dict[str, set[str]]) -> str:
+    """The generated `**Built.**` line for one system requirement."""
+    st = sys_st[uid]
+    if st == ORPHAN:
+        return "**Built.** ⚠ unknowable — no software requirement decomposes this (finding)"
+    child = kids.get(uid, [])
+    done = sum(1 for c in child if c == DONE)
+    pkgs = ", ".join(f"`{w}`" for w in sorted(wps.get(uid, ())))
+    tail = f", in {pkgs}" if pkgs and st != DONE else ""
+    return f"**Built.** {GLYPH[st]} {WORD[st]} — {done}/{len(child)} software requirements done{tail}"
+
+
+def apply_built(text: str, prefix: str, line_for) -> str:
+    """Rewrite every `**Built.**` line in a requirement document.
+
+    Idempotent by construction: the old line is dropped and a fresh one inserted
+    after `**Trace.**`, so running this twice is the same as running it once.
+    Placed beside `Verify`/`Trace` rather than at the end of the block because
+    that is where a reader already looks for "how do I know", and because a
+    trailing field drifts under later `*Note:*` additions.
+    """
+    out: list[str] = []
+    current = ""
+    fenced = False
+    head = re.compile(r"^\*\*`(" + prefix + r"-\d+)`\*\*")
+    for line in text.split("\n"):
+        # A fenced block is prose *about* the field -- section 0.3a shows a
+        # specimen line. Rewriting inside one would eat the documentation of the
+        # thing being generated, which is how this function broke the first time
+        # it ran against its own explanation.
+        if line.startswith("```"):
+            fenced = not fenced
+            out.append(line)
+            continue
+        if fenced:
+            out.append(line)
+            continue
+        m = head.match(line)
+        if m:
+            current = m.group(1)
+        if BUILT.match(line):
+            continue  # regenerated below
+        out.append(line)
+        if current and "**Trace.**" in line:
+            out.append(line_for(current))
+            current = ""
+    return "\n".join(out)
+
+
+def read_built(text: str, prefix: str) -> dict[str, str]:
+    """The `**Built.**` lines a document currently carries, per requirement."""
+    found: dict[str, str] = {}
+    current = ""
+    fenced = False
+    head = re.compile(r"^\*\*`(" + prefix + r"-\d+)`\*\*")
+    for line in text.split("\n"):
+        if line.startswith("```"):
+            fenced = not fenced
+            continue
+        if fenced:
+            continue
+        m = head.match(line)
+        if m:
+            current = m.group(1)
+        elif current and BUILT.match(line):
+            found[current] = line.rstrip()
+            current = ""
+    return found
 
 
 def parse_testspec(text: str) -> set[str]:
@@ -376,6 +607,12 @@ def main() -> int:
         choices=("system", "concept", "software", "all"),
         help="emit Test Execution Record rows for a level, all Not Run",
     )
+    ap.add_argument("--status", action="store_true", help="progress per layer, and the next work package")
+    ap.add_argument(
+        "--write-status",
+        action="store_true",
+        help="regenerate every `**Built.**` line from the plan's checkboxes (idempotent)",
+    )
     args = ap.parse_args()
 
     cn_text, sys_text = _read(CONCEPT), _read(SYSREQ)
@@ -388,7 +625,7 @@ def main() -> int:
     sysreqs = parse_sys(sys_text)
     sw = parse_sw(sw_text)
     imp = parse_imp(imp_text)
-    lands, ticked = parse_plan(plan_text)
+    lands, ticked, imp_boxes, box_findings = parse_plan(plan_text)
     spec_tests = parse_testspec(test_text)
     sys_spec_tests = parse_spec_ids(systest_text, SYS_TEST_ID)
     cn_spec_tests = parse_spec_ids(cntest_text, CN_TEST_ID)
@@ -578,6 +815,74 @@ def main() -> int:
     for msg in r1 + r2 + r3 + r4:
         bad(msg)
 
+    # ---- 7f. the status rollup, and the marks it writes -------------------
+    # One stored source (the plan's per-IMP boxes), three derived layers, and
+    # the derived halves are *checked* rather than trusted. This is R-REQ-11's
+    # rule applied to progress: the copy is made safe by checking it, not by
+    # deleting it -- which is what separates it from the hand-kept status column
+    # R-REQ-6 forbids, and from v1's register that read `frozen` on 68 of 77.
+    imp_st, sw_st, sys_st, roll_findings = roll_up(imp, sw, sysreqs, imp_boxes)
+    for msg in box_findings + roll_findings:
+        bad(msg)
+    for uid in sorted(imp_boxes):
+        if uid not in imp:
+            bad(f"plan: checkbox for non-existent {uid}")
+
+    # The undecomposed list, checked in both directions like KNOWN_UNPARENTED.
+    for uid in sorted(sysreqs):
+        if sys_st[uid] == ORPHAN:
+            if uid in KNOWN_UNDECOMPOSED:
+                notes.append(f"{uid}: no SW decomposes it -- KNOWN (SwReq 32.3a)")
+            else:
+                bad(f"{uid}: no SW requirement decomposes it and it is not a known gap")
+    for uid in sorted(KNOWN_UNDECOMPOSED):
+        if uid in sys_st and sys_st[uid] != ORPHAN:
+            bad(f"{uid}: listed as undecomposed but now has a SW child -- update the list")
+
+    sys_kids: dict[str, list[str]] = defaultdict(list)
+    sys_wps: dict[str, set[str]] = defaultdict(set)
+    for u, r in sw.items():
+        for parent in r.trace:
+            sys_kids[parent].append(sw_st[u])
+            for o in imp.values():
+                if o.serves == u and o.wp:
+                    sys_wps[parent].add(o.wp)
+
+    want_sw = {u: built_line_sw(u, sw_st, imp) for u in sw}
+    want_sys = {u: built_line_sys(u, sys_st, sys_kids, sys_wps) for u in sysreqs}
+
+    if args.write_status:
+        SWREQ.write_text(
+            apply_built(sw_text, "SW", lambda u: want_sw[u]), encoding="utf-8", newline="\n"
+        )
+        SYSREQ.write_text(
+            apply_built(sys_text, "SYS", lambda u: want_sys[u]), encoding="utf-8", newline="\n"
+        )
+        print(f"  wrote {len(want_sw)} SW and {len(want_sys)} SYS `**Built.**` lines")
+        return 0
+
+    # The ordinary run verifies rather than writes. A mark that disagrees with
+    # the plan is a failure here, so the generated half can never drift while
+    # each document still passes inspection on its own.
+    have_sw, have_sys = read_built(sw_text, "SW"), read_built(sys_text, "SYS")
+    if have_sw or have_sys:
+        for uid in sorted(sw):
+            if have_sw.get(uid) != want_sw[uid]:
+                bad(
+                    f"{uid}: `Built.` line disagrees with the plan -- run --write-status\n"
+                    f"        have: {have_sw.get(uid, '(missing)')}\n"
+                    f"        want: {want_sw[uid]}"
+                )
+        for uid in sorted(sysreqs):
+            if have_sys.get(uid) != want_sys[uid]:
+                bad(
+                    f"{uid}: `Built.` line disagrees with the plan -- run --write-status\n"
+                    f"        have: {have_sys.get(uid, '(missing)')}\n"
+                    f"        want: {want_sys[uid]}"
+                )
+    else:
+        notes.append("no `Built.` lines present -- run --write-status to create them")
+
     # ---- 8. a check must scan somewhere that exists ----------------------
     tree = parse_tree_paths(imp_text)
     scans = parse_scan_paths(test_text)
@@ -604,6 +909,60 @@ def main() -> int:
     print(f"  SW covered by an IMP     {len(served):5d} / {len(sw)}")
     print(f"  SW with a SYS parent     {sum(1 for r in sw.values() if r.trace):5d} / {len(sw)}")
     print(f"  known unparented         {len(KNOWN_UNPARENTED):5d}  (SwReq 32.3)")
+
+    if args.status:
+        # Plan 0.1's resume pointer: the lowest-numbered package not yet done
+        # whose prerequisites are done. Prereqs are prose, so this reports the
+        # lowest unticked package and leaves 1.2's ordering to the reader --
+        # claiming to have checked a dependency it cannot parse would be worse
+        # than saying which one it used.
+        def layer(name: str, st: dict[str, str]) -> None:
+            c = defaultdict(int)
+            for v in st.values():
+                c[v] += 1
+            total = len(st)
+            print(
+                f"  {name:<22s} {c[DONE]:4d} done  {c[PARTIAL]:4d} started  "
+                f"{c[OPEN]:4d} open  {c[DEFERRED]:3d} deferred  "
+                f"{c[ORPHAN]:2d} unknowable   / {total}"
+            )
+
+        cn_st_l: dict[str, list[str]] = defaultdict(list)
+        for u, r in sysreqs.items():
+            for p in r.trace:
+                cn_st_l[p].append(sys_st[u])
+
+        def _comb(v: list[str]) -> str:
+            real = [c for c in v if c != DEFERRED]
+            if not real:
+                return DEFERRED
+            if all(c == DONE for c in real):
+                return DONE
+            return PARTIAL if any(c in (DONE, PARTIAL) for c in real) else OPEN
+
+        cn_st = {u: _comb(v) for u, v in cn_st_l.items()}
+        print()
+        print("  progress -- derived from the plan's checkboxes, nothing else")
+        layer("CN concept", cn_st)
+        layer("SYS system", sys_st)
+        layer("SW software", sw_st)
+        layer("IMP design", imp_st)
+        print()
+        nxt = [w for w in sorted(plan_wps) if not ticked[w]]
+        if not nxt:
+            print("  next work package    every package is ticked")
+        else:
+            w = nxt[0]
+            mine = sorted(u for u, o in imp.items() if o.wp == w)
+            left = [u for u in mine if imp_st[u] != DONE]
+            print(f"  ▶ next work package  {w}   ({len(mine) - len(left)}/{len(mine)} IMP done)")
+            for u in left[:12]:
+                print(f"      {GLYPH[imp_st[u]]} {u}  {imp[u].serves}")
+            if len(left) > 12:
+                print(f"      … and {len(left) - 12} more")
+            started = [w2 for w2 in nxt if any(imp_st[u] == PARTIAL for u, o in imp.items() if o.wp == w2)]
+            if started:
+                print(f"  packages with started-but-unfinished work: {', '.join(started)}")
 
     if args.progress:
         print()
