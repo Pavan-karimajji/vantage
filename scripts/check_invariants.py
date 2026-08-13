@@ -70,6 +70,15 @@ _REQUIRES_ARG = re.compile(r"requires\s*=\s*[\(\[]([^)\]]*)[\)\]]")
 _PORT_CALL_ARG = re.compile(r"\.port\(([^)]*)\)")
 _GT11_EXEMPT_PREFIXES = ("self.", "source.")
 
+# IMP-0383 / ANL-SW-72 (WP-01, WP-06): no identifier under
+# src/simcore/io/codecs/** names a driving function, and no module manifest
+# names a codec. Extends GT-1's own grep rather than adding a second
+# scanner. Neither directory exists yet -- src/simcore/io/codecs/ lands
+# WP-06, a module manifest (conf/ports.yaml, IMP-0392) lands WP-10 -- so
+# this reports zero files scanned today rather than a false PASS, exactly
+# like WP-01's other new checks (Plan WP-01 Exit gate 3).
+_CODEC_NAME_TOKENS = re.compile(r"(?<![A-Za-z0-9_])(mcap|csv|jsonl|mdf4|tdms)(?![A-Za-z0-9_])", re.IGNORECASE)
+
 # UT-D8-9 (S-D8, sim_player.md's own naming rule): no workspace/product token
 # outside app/. Case-SENSITIVE, unlike GT-1's tokens -- "Vantage"/"Bench"/
 # "Campaign" are ordinary English words in lowercase ("a Bench" vs. "a test
@@ -172,7 +181,35 @@ def check_ut_d8_9(src_root: Path = SRC_ROOT) -> list[str]:
     return findings
 
 
+def check_codec_scope_no_function_name(sim_root: Path = SIM_ROOT) -> list[str]:
+    """IMP-0383 half 1: no identifier under `src/simcore/io/codecs/**`
+    names a driving function (GT-1's own tokens, R-SIM-1). `WP-06`'s job to
+    populate; this is `WP-01`'s job to be watching before it does."""
+    findings = []
+    codecs_dir = sim_root / "src" / "simcore" / "io" / "codecs"
+    if not codecs_dir.is_dir():
+        return findings
+    for path in sorted(p for p in codecs_dir.rglob("*") if p.is_file()):
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if _FUNCTION_TOKENS.search(line):
+                findings.append(f"IMP-0383 {path}:{lineno}: function-name token in a codec: {line.strip()!r}")
+    return findings
+
+
+def check_no_manifest_names_codec(superproject_root: Path = SUPERPROJECT_ROOT) -> list[str]:
+    """IMP-0383 half 2: no module manifest (`conf/ports.yaml`, IMP-0392,
+    lands `WP-10`) names a codec format -- a component's port declaration
+    must not know which codec `sim` happens to read it with."""
+    findings = []
+    for manifest in sorted(superproject_root.glob("modules/*/conf/ports.yaml")):
+        for lineno, line in enumerate(manifest.read_text(encoding="utf-8").splitlines(), start=1):
+            if _CODEC_NAME_TOKENS.search(line):
+                findings.append(f"IMP-0383 {manifest}:{lineno}: module manifest names a codec: {line.strip()!r}")
+    return findings
+
+
 def run_all(src_root: Path = SRC_ROOT, superproject_root: Path = SUPERPROJECT_ROOT) -> list[str]:
+    sim_root = src_root.parent.parent
     return [
         *check_gt1(src_root),
         *check_gt2(superproject_root),
@@ -180,6 +217,8 @@ def run_all(src_root: Path = SRC_ROOT, superproject_root: Path = SUPERPROJECT_RO
         *check_gt6(src_root),
         *check_gt11(superproject_root),
         *check_ut_d8_9(src_root),
+        *check_codec_scope_no_function_name(sim_root),
+        *check_no_manifest_names_codec(superproject_root),
     ]
 
 

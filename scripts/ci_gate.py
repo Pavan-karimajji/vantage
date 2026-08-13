@@ -5,21 +5,32 @@
 
 """S-C0 -- the automatic gate (docs/sim_implementation_plan.md #0a/#S-C0).
 
-One entry point for the three checks a stage already owes: pytest,
-scripts/check_invariants.py, docs/py/run_all.py. Invoked identically by hand
-and by .github/workflows/sim-ci.yml, so "the job passes" and "this script
-exits 0" are the same claim -- there is no second, hand-rolled version of
-what the job runs.
+One entry point for the checks a stage already owes: pytest,
+scripts/check_invariants.py, scripts/check_headers.py,
+scripts/check_closed_sets.py, scripts/check_no_duplication.py,
+scripts/check_artifact_kinds.py, scripts/check_trace.py. Invoked identically
+by hand and by .github/workflows/sim-ci.yml, so "the job passes" and "this
+script exits 0" are the same claim -- there is no second, hand-rolled
+version of what the job runs.
 
     python scripts/ci_gate.py [--since GIT_REF] [--artifact-dir DIR]
 
 Exit code 0 = pass, 1 = fail.
 
 --since restricts the skip decision: if every path changed since GIT_REF is
-a document (under docs/ or *.md), pytest and check_invariants.py are skipped
-with a named reason -- docs/py/run_all.py always runs regardless, because a
-docs commit is fast but never unchecked. Omit --since to always run in full
-(the safe default for a local, ad hoc invocation).
+a document (under docs/ or *.md), pytest and the WP-01 harness checks are
+skipped with a named reason -- scripts/check_trace.py always runs
+regardless, because a docs commit is fast but never unchecked. Omit --since
+to always run in full (the safe default for a local, ad hoc invocation).
+
+**`docs/py/run_all.py` (v1) is no longer wired in here.** It scans
+`docs/sim_*.md`, superseded by `docs/v2/` (`modules/sim/CLAUDE.md`'s own
+"known-red since the v1/v2 restructure" note); `scripts/check_trace.py`
+is its v2 replacement and is what this gate treats as authoritative
+(WP-01 item, per that same CLAUDE.md pointer: "repointing or retiring the
+v1 checks is a WP-01 item" -- retired, not repointed, because `docs/v1/`
+is frozen evidence, never an authority, and its five sub-checks would
+otherwise duplicate what `trace_check.py` already does correctly for v2).
 
 The known-flake tolerance and the pytest floor are read from
 scripts/ci_gate_config.yaml, not hard-coded here, so bumping the floor after
@@ -243,27 +254,34 @@ def main(argv: list[str] | None = None) -> int:
 
     ok = True
     if docs_only:
-        print(f"skip reason: docs-only push -- pytest and check_invariants.py skipped, "
-              f"docs/py/run_all.py still required")
+        print(f"skip reason: docs-only push -- pytest and the WP-01 harness checks skipped, "
+              f"scripts/check_trace.py still required")
     else:
         pytest_ok, pytest_detail = _run_pytest(artifact_dir)
         print(pytest_detail)
         ok = ok and pytest_ok
 
-        inv_ok, inv_detail = _run_subprocess_check(
-            [sys.executable, "scripts/check_invariants.py"], SIM_ROOT, artifact_dir, "check_invariants.txt"
-        )
-        print(f"check_invariants.py: {inv_detail}")
-        ok = ok and inv_ok
+        for script, log_name in (
+            ("scripts/check_invariants.py", "check_invariants.txt"),
+            ("scripts/check_headers.py", "check_headers.txt"),
+            ("scripts/check_closed_sets.py", "check_closed_sets.txt"),
+            ("scripts/check_no_duplication.py", "check_no_duplication.txt"),
+            ("scripts/check_artifact_kinds.py", "check_artifact_kinds.txt"),
+        ):
+            check_ok, check_detail = _run_subprocess_check(
+                [sys.executable, script], SIM_ROOT, artifact_dir, log_name
+            )
+            print(f"{script}: {check_detail}")
+            ok = ok and check_ok
 
         sim_check_ok, sim_check_detail = _run_sim_check(artifact_dir)
         print(sim_check_detail)
         ok = ok and sim_check_ok
 
     docs_ok, docs_detail = _run_subprocess_check(
-        [sys.executable, "docs/py/run_all.py"], SIM_ROOT, artifact_dir, "run_all.txt"
+        [sys.executable, "scripts/check_trace.py"], SIM_ROOT, artifact_dir, "check_trace.txt"
     )
-    print(f"docs/py/run_all.py: {docs_detail}")
+    print(f"scripts/check_trace.py: {docs_detail}")
     ok = ok and docs_ok
 
     status = "pass" if ok else "fail"

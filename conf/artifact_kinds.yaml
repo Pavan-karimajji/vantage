@@ -1,0 +1,45 @@
+# Copyright (c) <ORG>. All Rights Reserved.
+# Proprietary and Confidential.
+# COMPONENT: SIM
+#
+# IMP-0415 / ANL-SW-76 (docs/v2/SIM_Implementation_Plan_v0.1.md WP-01) --
+# one row per artifact kind this module writes to disk. `scripts/
+# check_artifact_kinds.py` walks the known writer entry points below and
+# fails if code produces a kind this file does not declare, or declares a
+# kind no writer produces -- so an undeclared writer is a WP-01-era finding,
+# not a WP-31 surprise.
+#
+# `cited: true` means some entry in `conf/known_limits.yaml` documents this
+# kind's limits for `USE_CONSTRAINTS.md` (IMP-0416, WP-31). None is cited
+# yet -- there is no delivered package to document limits for.
+#
+# `writers` names the function(s) that produce this kind today, as
+# `path::function`, checked to still exist by `check_artifact_kinds.py`.
+
+kinds:
+  - name: recording
+    cited: false
+    writers:
+      - src/adas_sim/sources/recorder.py::Recorder
+
+  - name: export
+    cited: false
+    writers:
+      - src/adas_sim/render/clip.py::export_clip
+
+  - name: run_manifest
+    cited: false
+    writers:
+      - src/adas_sim/core/manifest.py::write_run_manifest
+
+  - name: report
+    cited: false
+    writers:
+      - src/adas_sim/check/report.py::write_report
+      - src/adas_sim/core/batch.py::write_report
+
+  - name: snapshot
+    cited: false
+    writers:
+      - src/adas_sim/render/capture.py::snapshot
+      - src/adas_sim/render/capture.py::write_pair

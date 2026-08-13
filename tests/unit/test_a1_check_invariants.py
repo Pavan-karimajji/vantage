@@ -16,7 +16,15 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from check_invariants import check_gt1, check_gt3, check_gt11, check_ut_d8_9, run_all  # noqa: E402
+from check_invariants import (  # noqa: E402
+    check_codec_scope_no_function_name,
+    check_gt1,
+    check_gt3,
+    check_gt11,
+    check_no_manifest_names_codec,
+    check_ut_d8_9,
+    run_all,
+)
 
 
 def test_check_gt1_passes_on_an_empty_tree(tmp_path):
@@ -104,6 +112,37 @@ def test_check_ut_d8_9_allows_the_token_inside_app(tmp_path):
     app_dir.mkdir()
     (app_dir / "window.py").write_text('WORKSPACE_NAME = "Bench"\n', encoding="utf-8")
     assert check_ut_d8_9(src_root=tmp_path) == []
+
+
+def test_check_codec_scope_reports_clean_when_simcore_io_codecs_does_not_exist_yet():
+    """IMP-0383: `src/simcore/io/codecs/` lands WP-06 -- today it does not
+    exist, and the check must not silently pass a nonexistent tree the
+    way a false PASS would."""
+    assert check_codec_scope_no_function_name() == []
+
+
+def test_check_codec_scope_fails_on_a_planted_function_identifier(tmp_path):
+    codecs_dir = tmp_path / "src" / "simcore" / "io" / "codecs"
+    codecs_dir.mkdir(parents=True)
+    (codecs_dir / "mcap.cpp").write_text("// BSD_ZONE_WIDTH_M reused here\n", encoding="utf-8")
+    findings = check_codec_scope_no_function_name(sim_root=tmp_path)
+    assert findings
+    assert "IMP-0383" in findings[0]
+
+
+def test_check_no_manifest_names_codec_reports_clean_when_no_manifest_exists_yet():
+    """`conf/ports.yaml` (IMP-0392) lands WP-10 -- no manifest exists
+    anywhere in the superproject yet."""
+    assert check_no_manifest_names_codec() == []
+
+
+def test_check_no_manifest_names_codec_fails_on_a_planted_codec_literal(tmp_path):
+    manifest_dir = tmp_path / "modules" / "df" / "conf"
+    manifest_dir.mkdir(parents=True)
+    (manifest_dir / "ports.yaml").write_text("port: objects\ncodec_hint: mcap\n", encoding="utf-8")
+    findings = check_no_manifest_names_codec(superproject_root=tmp_path)
+    assert findings
+    assert "IMP-0383" in findings[0]
 
 
 def test_check_ut_d8_9_is_case_sensitive_so_ordinary_english_survives(tmp_path):

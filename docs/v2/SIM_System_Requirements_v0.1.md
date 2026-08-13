@@ -557,7 +557,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Readers shall produce port values and modules shall consume port values; neither shall address the other.
 **Accept.** No reader names a module and no module names a reader, in configuration or in code.
 **Verify.** A · `ANL-03`   **Trace.** CN-0067
-**Built.** ○ not started — 0/1 software requirements done, in `WP-01`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0025`** · `P1` · `R1` — Port model versioning
 **Shall.** The port model shall be versioned, with adding an optional field a minor change and removing or changing one a major change.
@@ -986,7 +986,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A stub implementation shall exist so framework tests run with no compiled component present.
 **Accept.** The full test suite passes on a machine with no component library installed.
 **Verify.** T · `SYT-STG-06`   **Trace.** CN-0321
-**Built.** ○ not started — 0/2 software requirements done, in `WP-01`, `WP-31`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-01`, `WP-31`
 
 **`SYS-0086`** · `P1` · `R1` — A stand-in is a stage, never a source feature
 **Shall.** A stand-in for a module that does not yet exist shall be expressed as a stage, and the reader layer shall never grow the ability to manufacture module output.
@@ -1755,7 +1755,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Automated execution of the test suite shall be established at the start of the build order, not at the end.
 **Accept.** The first delivered increment is accompanied by a running pipeline. Manual verification is never the sole evidence for any requirement. Every check is runnable as one plain command on a developer machine, on both platforms, reporting its exit code and the number of items it scanned.
 **Verify.** A · `ANL-28`   **Trace.** CN-0351; v1 `NR-SIM-25`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-01`
+**Built.** ● done — 1/1 software requirements done
 *Note (`OQ-15` answered 2026-08-13, partially):* **the CI system is not yet chosen** — Jenkins is the likely candidate, not a commitment. This requirement is written so that it does not matter, and the last clause of the `Accept` is what does the work. The obligation splits in two: the **harness** — every check as one plain command, vendor-independent, all the work and all the value — and the **trigger**, roughly ten lines of vendor file written the day the vendor is known. `WP-01` completes on the harness alone. The property that outranks the schedule: **every check stays runnable on a developer machine**, which is what keeps checks being run at all. Two constraints travel to whichever system is chosen: it must run Windows and Ubuntu, and the harness lives in the contributed-tooling directory rather than the shipped source tree.
 
 ---
@@ -2143,13 +2143,13 @@ mechanism.
 **Shall.** The reference test suite shall run on both operating systems and compare results.
 **Accept.** A difference between platforms is a defect and is reported as such, not tolerated as an environment difference.
 **Verify.** T · `SYT-NFR-18`   **Trace.** CN-0247, CN-0043
-**Built.** ○ not started — 0/1 software requirements done, in `WP-01`
+**Built.** ◐ started — 0/1 software requirements done, in `WP-01`
 
 **`SYS-0251`** · `P1` · `R1` — A measured claim names its platform
 **Shall.** Every measured claim — performance, throughput, reproducibility — shall name the platform and the shell that produced it.
 **Accept.** A measurement with no platform attribution is rejected by the reporting tooling, not by a reviewer.
 **Verify.** T · `SYT-NFR-19`   **Trace.** CN-0247; v1 `NR-SIM-47`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-01`
+**Built.** ● done — 1/1 software requirements done
 
 ---
 
@@ -2223,7 +2223,7 @@ mechanism.
 **Shall.** No existing capability shall be removed before its replacement is proven, and no two implementations of one concept shall survive a phase boundary.
 **Accept.** At each phase boundary, an automated check confirms that the retired implementation is gone and the replacement carries the retired one's tests.
 **Verify.** A · `ANL-39`   **Trace.** CN-0360, CN-0361, CN-0362; v1 `NR-SIM-30`, `NR-SIM-31`
-**Built.** ○ not started — 0/2 software requirements done, in `WP-01`, `WP-15a`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-01`, `WP-15a`
 
 ---
 
@@ -2257,7 +2257,7 @@ mechanism.
 **Shall.** Names visible to a user — ports, layers, error codes, log events, style tokens, run ids — shall follow a published convention chosen so that a name in a log, a name in a configuration file and a name on screen are the same string.
 **Accept.** For a sampled set, the string in the log, the configuration and the display is identical; no surface renames a concept for presentation.
 **Verify.** A · `ANL-41`   **Trace.** CN-0352; v1 `FR-SIM-49`
-**Built.** ○ not started — 0/2 software requirements done, in `WP-01`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-01`
 
 **`SYS-0268`** · `P1` · `R1` — The interface stays lean
 **Shall.** The user-facing surface — CLI verbs, configuration file kinds, panel types, extension points — shall be a closed, published, countable set, and growth shall require a requirement.
@@ -2281,7 +2281,7 @@ Constraints are obligations on *how* the system is built, imposed because a corr
 **Shall.** No concept shall be implemented in both languages; where one exists on both sides today, one side shall be deleted rather than maintained in step.
 **Accept.** A named check enumerates the four historically duplicated subsystems — configuration load and validation, ingest-map parsing, module hosting, recording read and grouping — and confirms exactly one implementation of each. Any concept found in both languages is a defect.
 **Verify.** A · `ANL-44`   **Trace.** CN-0291, CN-0358, CN-0287; **defect** concept §21.3, §22.2
-**Built.** ○ not started — 0/5 software requirements done, in `WP-01`, `WP-03`, `WP-12`, `WP-16`, `WP-21`
+**Built.** ◐ started — 1/5 software requirements done, in `WP-01`, `WP-03`, `WP-12`, `WP-16`, `WP-21`
 
 **`SYS-0271`** · `P0` · `R1` — The engine never calls back into the scripting layer
 **Shall.** The engine shall never call back into Python during a run.
@@ -2305,44 +2305,44 @@ Constraints are obligations on *how* the system is built, imposed because a corr
 **Shall.** The framework's own shipped source shall contain no function name and no component name.
 **Accept.** An automated check over the framework's source directories passes on every build, and a companion test proves the check itself fails on a planted violation. The check's scope is the shipped framework source; test fixtures that legitimately name a component to prove parity are outside it, by written exception.
 **Verify.** A · `ANL-48` · T · `SYT-CON-11`   **Trace.** CN-0283, CN-0028; v1 `CR-SIM-1`
-**Built.** ○ not started — 0/4 software requirements done, in `WP-01`, `WP-26`
+**Built.** ◐ started — 2/4 software requirements done, in `WP-01`, `WP-26`
 
 **`SYS-0275`** · `P0` · `R1` — Closed vocabularies stay closed
 **Shall.** Every closed set in this specification — override verbs, fault verbs, address grammar, origin tags, sampling policies, record policies, error classes, log events, primitive kinds, exit codes, extension points, missing-data policies, reset modes, reset timings, read-error policies, step granularities, codec capabilities, determinism axes — shall be enumerable from a published schema and shall not grow without a requirement change.
 **Accept.** Each set's membership is machine-readable and compared against the published schema on every build. A member added in code but absent from the schema fails the build.
 **Verify.** A · `ANL-49`   **Trace.** CN-0286, CN-0044
-**Built.** ○ not started — 0/2 software requirements done, in `WP-01`, `WP-11`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-01`, `WP-11`
 
 **`SYS-0276`** · `P0` · `R1` — Every requirement is falsifiable
 **Shall.** Every requirement in this specification shall carry an acceptance criterion that an observation could contradict.
 **Accept.** An automated check confirms every `SYS` entry has an `Accept` line and a `Verify` line with at least one resolvable identifier. A requirement whose acceptance criterion no test could fail is demoted to prose in the next revision.
 **Verify.** A · `ANL-50`   **Trace.** CN-0381
-**Built.** ○ not started — 0/1 software requirements done, in `WP-01`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0277`** · `P0` · `R1` — Verification status is derived, never stored
 **Shall.** Verification status shall be derived from the test suite and shall never be stored by hand in a second place.
 **Accept.** No document in the set carries a hand-maintained status column. The derived report is the sole authority on what is verified.
 **Verify.** A · `ANL-51`   **Trace.** CN-0382; **defect** concept §22.6
-**Built.** ○ not started — 0/1 software requirements done, in `WP-01`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0292`** · `P0` · `R1` — A progress mark is generated and verified, never typed
 **Shall.** A progress mark carried in a requirement document shall be generated from the implementation plan's checkboxes and shall be re-verified on every check run.
 **Accept.** Hand-editing a generated mark fails the next check run, naming the requirement, the stored value and the derived one. No requirement document is the source of its own mark. A mark that cannot be derived — because no requirement of the layer below decomposes this one — reads *unknowable* and is never rendered as *not started*.
 **Verify.** A · `ANL-59`   **Trace.** CN-0403, CN-0382
-**Built.** ○ not started — 0/1 software requirements done, in `WP-01`
+**Built.** ● done — 1/1 software requirements done
 *Note:* this is the obligation behind §0.3a's `**Built.**` field, and it exists because the field would otherwise be machinery with no requirement governing it — a check nobody has seen fail. `SYS-0277` is unchanged and remains the stronger prohibition: **verification** status is still derived from the suite and appears in no specification. This one authorises *implementation progress* only, and only in the generated-and-checked form `CN-0403` sets out.
 
 **`SYS-0278`** · `P0` · `R1` — A cited test identifier appears in the test
 **Shall.** Every test identifier cited by a requirement shall appear literally in the test that implements it.
 **Accept.** A check resolves every `Verify` identifier in this document to at least one occurrence in the test suite, and reports every identifier that resolves to none. A test claiming an identifier in a docstring without implementing it is reported as over-claiming.
 **Verify.** A · `ANL-52`   **Trace.** CN-0383; **defect** v1 §12.7
-**Built.** ○ not started — 0/1 software requirements done, in `WP-01`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0279`** · `P0` · `R1` — Every system requirement traces to the concept
 **Shall.** Every requirement in this specification shall trace to at least one concept UID.
 **Accept.** An automated check confirms every `SYS` entry has a non-empty `Trace` field resolving to a live concept UID, and reports every live concept UID with no `SYS` requirement covering it.
 **Verify.** A · `ANL-53`   **Trace.** CN-0377
-**Built.** ○ not started — 0/1 software requirements done, in `WP-01`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0280`** · `P0` · `R1` — One package, no project branches
 **Shall.** The package shall be one product, identical for all projects; project behaviour shall come only from configuration and plugins.
@@ -2398,7 +2398,7 @@ work packages are cut is the only part of this that would genuinely hurt.
 **Shall.** The system shall declare, per artifact kind it writes, whether that artifact may be cited as evidence in a safety argument.
 **Accept.** Every artifact kind the system writes appears exactly once in the declaration, marked cited or not-cited. A writer producing a kind absent from the declaration fails the release check, naming the kind and the writer; the check reports how many writers it scanned and reads `SKIPPED`, never `PASSED`, at zero.
 **Verify.** A · `ANL-56`   **Trace.** CN-0400
-**Built.** ○ not started — 0/1 software requirements done, in `WP-01`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0290`** · `P0` · `R1` — Use constraints and known limits ship with the release
 **Shall.** The release shall ship a use-constraints statement naming, per cited artifact kind, what it may be relied upon for, the known limits that bound it, and the open defects that affect it.
@@ -2411,7 +2411,7 @@ work packages are cut is the only part of this that would genuinely hurt.
 **Shall.** For each artifact kind marked cited, the system shall name the check that would detect a wrong value in it, or shall declare that none exists.
 **Accept.** Every cited kind resolves either to at least one test identifier that exists in the suite, or to the literal `undetected`. An identifier resolving to no test fails, naming it; a blank fails. The count of `undetected` kinds is printed in the release report on success as well as on failure, so it cannot decay unobserved.
 **Verify.** A · `ANL-58`   **Trace.** CN-0402
-**Built.** ○ not started — 0/1 software requirements done, in `WP-01`
+**Built.** ◐ started — 0/1 software requirements done, in `WP-01`
 *Note:* printing the count on **pass** is the same anti-spiral device `SYS-0243` uses for tolerance headroom, and it is here for the same reason: a number that is only shown when something is already wrong is a number nobody watches.
 
 ### The fourth obligation, deliberately not written here

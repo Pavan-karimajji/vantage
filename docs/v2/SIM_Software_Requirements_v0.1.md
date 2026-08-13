@@ -513,7 +513,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** At each migration phase boundary an automated check shall confirm that no capability in the duplicated set has two implementations.
 **Accept.** The check names the four historically duplicated capabilities explicitly and fails the build if any has two. Adding a fifth duplicated capability requires adding it to the check.
 **Verify.** A · `ANL-SW-10`   **Trace.** SYS-0270, SYS-0262; CN-0362
-**Built.** ○ not started — `IMP-0020` in `WP-01`
+**Built.** ● done — `IMP-0020` in `WP-01`
 **Now.** `NEW`.
 
 ---
@@ -712,7 +712,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** A reader shall produce port values and a module shall consume them; neither shall address the other, in code or in configuration.
 **Accept.** A static check finds no module name in any codec and no codec name in any module-facing path.
 **Verify.** A · `ANL-SW-72`   **Trace.** SYS-0024
-**Built.** ○ not started — `IMP-0383` in `WP-01`
+**Built.** ● done — `IMP-0383` in `WP-01`
 **Now.** `DONE` — true by construction of `io/` and `contracts/component.py`.
 
 **`SW-0384`** · `SI-01` · `P0` · `R1` — Release one exports to three targets
@@ -3247,7 +3247,7 @@ These bind every software item, so none owns them alone; the item field reads `a
 **Shall.** No shipped framework source file shall contain a component name or a function name.
 **Accept.** An automated check over the framework's source directories passes on every build, and a companion test proves the check fails on a planted violation. Test fixtures that legitimately name a component to prove parity are outside the scope, by written exception.
 **Verify.** A · `ANL-SW-53` · T · `UT-PLG-01`   **Trace.** SYS-0274
-**Built.** ○ not started — `IMP-0357` in `WP-01`
+**Built.** ● done — `IMP-0357` in `WP-01`
 **Now.** `DONE` — `scripts/check_invariants.py` scoped to `src/adas_sim/**`, with the planted-violation test and the written test-directory exception.
 
 **`SW-0358`** · `SI-24` · `P0` · `R1` — Exactly four extension points
@@ -3275,7 +3275,7 @@ These bind every software item, so none owns them alone; the item field reads `a
 **Shall.** Every closed set this specification names shall be enumerable at run time and compared against a published schema on every build.
 **Accept.** A member added in code but absent from the schema fails the build, naming the set and the member.
 **Verify.** A · `ANL-SW-24`   **Trace.** SYS-0275
-**Built.** ○ not started — `IMP-0361` in `WP-01`
+**Built.** ● done — `IMP-0361` in `WP-01`
 **Now.** `PARTIAL` — see `SW-0106`. The sets are enumerable; the comparison does not exist, so "closed" is currently unfalsifiable.
 
 **`SW-0362`** · `SI-24` · `P0` · `R1` — The delivered package is identical across projects
@@ -3310,14 +3310,14 @@ These bind every software item, so none owns them alone; the item field reads `a
 **Shall.** The reference test suite shall run on both operating systems and compare results, and a difference shall be reported as a defect.
 **Accept.** A cross-platform difference fails the build rather than being tolerated as an environment difference.
 **Verify.** T · `UT-ORC-23`   **Trace.** SYS-0250
-**Built.** ○ not started — `IMP-0366` in `WP-01`
+**Built.** ◐ started — `IMP-0366` in `WP-01`
 **Now.** `NEW` — needs a runner with a compiler toolchain on both platforms. **`OQ-15`'s vendor is undecided (Jenkins likely) and does not block this**: the comparison itself is a plain command, so what waits is hardware access, not a choice.
 
 **`SW-0367`** · all · `P1` · `R1` — Every measured claim names its platform and shell
 **Shall.** Every measured claim shall name the platform and the shell that produced it.
 **Accept.** A measurement with no platform attribution is rejected by the reporting tooling, not by a reviewer.
 **Verify.** T · `UT-ORC-24`   **Trace.** SYS-0251
-**Built.** ○ not started — `IMP-0367` in `WP-01`
+**Built.** ● done — `IMP-0367` in `WP-01`
 **Now.** `PARTIAL` — the convention is written into the portability contract; nothing rejects an unattributed measurement.
 
 **`SW-0368`** · all · `P0` · `R1` — Parallelism is across runs, never inside one
@@ -3338,56 +3338,56 @@ These bind every software item, so none owns them alone; the item field reads `a
 **Shall.** Every check that passes when nothing is wrong shall ship with a test that plants a violation and proves the check catches it.
 **Accept.** For each such check, the planted-violation test exists and fails the check.
 **Verify.** A · `ANL-SW-64`   **Trace.** SYS-0274; SYS §24.2 V-8
-**Built.** ○ not started — `IMP-0370` in `WP-01`
+**Built.** ● done — `IMP-0370` in `WP-01`
 **Now.** `PARTIAL` — done for the invariant checks; not done for the newer analysis checks this document adds.
 
 **`SW-0371`** · all · `P0` · `R1` — Every cited test identifier appears in its test
 **Shall.** Every test identifier cited in this document shall appear literally in the test that implements it.
 **Accept.** A check resolves every `Verify` identifier to at least one occurrence in the suite and reports every identifier resolving to none. A test claiming an identifier without implementing it is reported as over-claiming.
 **Verify.** A · `ANL-SW-65`   **Trace.** SYS-0278
-**Built.** ○ not started — `IMP-0371` in `WP-01`
+**Built.** ● done — `IMP-0371` in `WP-01`
 **Now.** `PARTIAL` — the convention is followed in the existing suite; nothing checks it.
 
 **`SW-0372`** · all · `P0` · `R1` — Every software requirement traces to a system requirement
 **Shall.** Every requirement in this document shall carry a non-empty trace to at least one system requirement, or shall be listed in §32.3 as a gap.
 **Accept.** An automated check confirms every entry has a resolvable trace or an entry in §32.3, and reports every system requirement with no software requirement decomposing it.
 **Verify.** A · `ANL-SW-66`   **Trace.** SYS-0279
-**Built.** ○ not started — `IMP-0372` in `WP-01`
+**Built.** ● done — `IMP-0372` in `WP-01`
 **Now.** `NEW`.
 
 **`SW-0373`** · all · `P0` · `R1` — Verification status is derived, never stored
 **Shall.** Verification status shall be derived from the test suite and shall never be stored by hand.
 **Accept.** No document in the set carries a hand-maintained verification column. The `Now.` field of this document is a dated planning snapshot, explicitly not a verification claim, and is removed when the migration completes.
 **Verify.** A · `ANL-SW-67` · I · `INSP-SW-08`   **Trace.** SYS-0277
-**Built.** ○ not started — `IMP-0373` in `WP-01`
+**Built.** ● done — `IMP-0373` in `WP-01`
 **Now.** `NEW`.
 
 **`SW-0418`** · all · `P0` · `R1` — The progress rollup has one source, and is checked rather than trusted
 **Shall.** Implementation progress shall be rolled up from a single stored source — the implementation plan's per-design-requirement checkboxes — and the ordinary check run shall recompute every derived mark and fail on disagreement.
 **Accept.** A hand-edited mark fails the check, naming the requirement and both values. Regeneration is idempotent: running it twice leaves the documents byte-identical. A partially-complete box carrying no `closed by` clause fails. A requirement with no child to derive from is reported *unknowable*, distinct from *not started*. Each of these four ships a planted-violation case proving the check catches it.
 **Verify.** A · `ANL-SW-79`   **Trace.** SYS-0292
-**Built.** ○ not started — `IMP-0418` in `WP-01`
+**Built.** ● done — `IMP-0418` in `WP-01`
 **Now.** `PARTIAL` — the rollup, the writer and the verifier exist in `docs/v2/py/trace_check.py` as of 2026-08-13 and were exercised by hand; **nothing runs them as a test yet**, which is the half `WP-01` lands. A verifier nobody has watched fail is exactly what `SW-0370` exists to forbid, and it applies to this one no less than to the checks it governs.
 
 **`SW-0374`** · all · `P0` · `R1` — Every source file carries the file-header block
 **Shall.** Every new source file shall carry the declared file-header block including the owning component token.
 **Accept.** A check over the tree finds no source file without it.
 **Verify.** A · `ANL-SW-68`   **Trace.** SYS-0267
-**Built.** ○ not started — `IMP-0374` in `WP-01`
+**Built.** ● done — `IMP-0374` in `WP-01`
 **Now.** `DONE` — enforced today across the Python tree and the C++ host.
 
 **`SW-0375`** · all · `P1` · `R1` — A name is the same string in the log, the configuration and the display
 **Shall.** A user-visible name shall be identical in the log, in configuration and on screen, with no surface renaming a concept for presentation.
 **Accept.** For a sampled set the three strings are identical, checked automatically.
 **Verify.** A · `ANL-SW-69`   **Trace.** SYS-0267
-**Built.** ○ not started — `IMP-0375` in `WP-01`
+**Built.** ◐ started — `IMP-0375` in `WP-01`
 **Now.** `PARTIAL` — the naming rules are written and largely followed; nothing compares the three surfaces.
 
 **`SW-0376`** · all · `P0` · `R1` — Automated execution exists from the first increment
 **Shall.** Automated execution of the test suite shall be established at the start of the build order, and manual verification shall never be the sole evidence for any requirement.
 **Accept.** The first delivered increment is accompanied by a running pipeline, and every requirement's `Verify` field names at least one non-manual method or an inspection with a named checklist. Every check runs as one plain command on a developer machine, reporting its exit code and the number of items it scanned.
 **Verify.** A · `ANL-SW-70`   **Trace.** SYS-0201
-**Built.** ○ not started — `IMP-0376` in `WP-01`
+**Built.** ● done — `IMP-0376` in `WP-01`
 **Now.** `PARTIAL` — a substantial suite exists and gates locally; no shared pipeline runs it. **`OQ-15`'s vendor is undecided (Jenkins likely) and blocks only the trigger file**, roughly ten lines: the harness half is vendor-independent and is where all the work and all the value are. The last `Accept` clause is what keeps that true — a check that only ever runs in a pipeline stops being runnable when the pipeline moves.
 
 **`SW-0377`** · all · `P1` · `R1` — Every release ships a self-test
@@ -3401,7 +3401,7 @@ These bind every software item, so none owns them alone; the item field reads `a
 **Shall.** A stub implementation on the same generic interface shall exist so the framework's tests run with no compiled component present.
 **Accept.** The full test suite passes on a machine with no component library installed.
 **Verify.** T · `UT-ORC-27`   **Trace.** SYS-0085
-**Built.** ○ not started — `IMP-0378` in `WP-01`
+**Built.** ● done — `IMP-0378` in `WP-01`
 **Now.** `DONE` — `contracts/component.py`'s in-process implementation plus the compiled stub for the no-interpreter case.
 
 **`SW-0379`** · all · `P1` · `R1` — What a component owes is a checklist, proven by a second component
@@ -3436,7 +3436,7 @@ These bind every software item, so none owns them alone; the item field reads `a
 **Shall.** Every requirement here shall carry an acceptance criterion an observation could contradict, and a `Verify` field with at least one resolvable identifier.
 **Accept.** An automated check confirms both for every entry and reports every entry failing either. A requirement no test could fail is demoted to prose in the next revision.
 **Verify.** A · `ANL-SW-74`   **Trace.** SYS-0276
-**Built.** ○ not started — `IMP-0408` in `WP-01`
+**Built.** ● done — `IMP-0408` in `WP-01`
 **Now.** `NEW`.
 
 ### 29.1 Tool qualification — the software half
@@ -3453,7 +3453,7 @@ carry the identity half and are deliberately not re-decomposed (SysReq §23a).*
 **Shall.** The set of artifact kinds the system writes shall be declared in one file, each marked cited or not-cited, and every writer shall be checked against that file.
 **Accept.** A writer producing a kind the file does not carry fails the check, naming the kind and the writer. The check reports how many writers it scanned, and reads `SKIPPED` rather than `PASSED` when that count is zero.
 **Verify.** A · `ANL-SW-76`   **Trace.** SYS-0289
-**Built.** ○ not started — `IMP-0415` in `WP-01`
+**Built.** ● done — `IMP-0415` in `WP-01`
 **Now.** `NEW` — no such declaration exists; the writers do, scattered across the exporter and recorder paths, which is the reason the declaration has to be checked rather than trusted.
 
 **`SW-0416`** · all · `P0` · `R1` — The use-constraints statement is generated, never typed
@@ -3467,7 +3467,7 @@ carry the identity half and are deliberately not re-decomposed (SysReq §23a).*
 **Shall.** Every detecting check named against a cited artifact kind shall resolve to a test identifier present in the suite, or to the literal `undetected`.
 **Accept.** An identifier resolving to no test fails, naming it; a blank fails. `undetected` passes and its count is printed in the report on success as well as on failure.
 **Verify.** A · `ANL-SW-78`   **Trace.** SYS-0291
-**Built.** ○ not started — `IMP-0417` in `WP-01`
+**Built.** ◐ started — `IMP-0417` in `WP-01`
 **Now.** `NEW` — the resolution machinery is `SW-0371`'s, which already resolves a cited identifier to its implementing test. This is that check pointed at a second table, not a second implementation of it.
 
 ---

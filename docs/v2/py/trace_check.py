@@ -69,6 +69,11 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except AttributeError:
+    pass
+
 V2 = Path(__file__).resolve().parent.parent
 
 CONCEPT = V2 / "SIM_Concept_Document_v0.3.1.md"
@@ -284,6 +289,19 @@ def parse_principles(concept_text: str) -> dict[str, set[str]]:
     for uid, ct in prose:
         out.setdefault(uid, set()).add(ct)
     return out
+
+
+def check_falsifiable(sw: dict[str, Sw]) -> list[str]:
+    """IMP-0408 / ANL-SW-74 / SV-1: every SW requirement has a non-empty
+    `Accept` and cites at least one test id -- a requirement with neither
+    is a motivation, reported rather than passed silently."""
+    findings: list[str] = []
+    for uid, r in sorted(sw.items()):
+        if not r.accept:
+            findings.append(f"{uid}: no Accept clause -- a motivation, not a requirement")
+        if not r.tests:
+            findings.append(f"{uid}: cites no test identifier")
+    return findings
 
 
 def duplicate_test_ids(reqs: dict[str, SysR]) -> dict[str, list[str]]:
@@ -650,12 +668,9 @@ def main() -> int:
         if uid in sw and sw[uid].trace:
             bad(f"{uid}: listed as a known gap but now has a SYS parent -- update the list")
 
-    # ---- 2. SW falsifiability (SV-1, ANL-SW-74) --------------------------
-    for uid, r in sorted(sw.items()):
-        if not r.accept:
-            bad(f"{uid}: no Accept clause -- a motivation, not a requirement")
-        if not r.tests:
-            bad(f"{uid}: cites no test identifier")
+    # ---- 2. SW falsifiability (SV-1, ANL-SW-74, IMP-0408) -----------------
+    for msg in check_falsifiable(sw):
+        bad(msg)
 
     # ---- 3. SW <-> IMP ---------------------------------------------------
     served = defaultdict(list)

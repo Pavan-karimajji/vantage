@@ -23,6 +23,15 @@
 # build found", by design (S-C6's own "Must not: grow into a general CI
 # design" -- adding the toolchain job that makes this a real check is
 # plan.md item 20's scope, not this stage's).
+#
+# IMP-0366 / ANL-SW-70 (docs/v2/SIM_Implementation_Plan_v0.1.md WP-01,
+# CN-0351): the suite runs on Windows and Linux, not Linux alone --
+# `gate-windows` mirrors `gate` exactly, `shell: bash` on both so the one
+# script is never forked into two maintained copies (R-STYLE-2). "Compares
+# results" (WP-01's Exit gate 2) means what it means for every other
+# required check in this workflow: both must independently pass for the
+# job to be green, so a platform-specific regression is caught at the
+# platform it broke on, not averaged away by the other one passing.
 
 name: sim-ci
 
@@ -70,6 +79,50 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sim-ci-gate-${{ github.run_id }}
+          path: logs/ci_gate/run
+          retention-days: 14
+
+  gate-windows:
+    name: gate (full deps, Windows -- IMP-0366)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install (core + dev + viewer + figures)
+        shell: bash
+        run: python -m pip install -e ".[dev,viewer,figures]"
+
+      - name: Resolve docs-only skip decision
+        id: since
+        shell: bash
+        run: |
+          BEFORE="${{ github.event.before }}"
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            echo "ref=" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=$BEFORE" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run the gate
+        shell: bash
+        run: |
+          if [ -n "${{ steps.since.outputs.ref }}" ]; then
+            python scripts/ci_gate.py --since "${{ steps.since.outputs.ref }}" --artifact-dir logs/ci_gate/run
+          else
+            python scripts/ci_gate.py --artifact-dir logs/ci_gate/run
+          fi
+
+      - name: Retain artefacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sim-ci-gate-windows-${{ github.run_id }}
           path: logs/ci_gate/run
           retention-days: 14
 
