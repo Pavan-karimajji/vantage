@@ -530,28 +530,28 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** A codec shall implement a fixed interface of open, describe, seek, read-range and close on the read side, and open, write-message, write-meta and close on the write side, and shall implement nothing else that the engine calls.
 **Accept.** Adding a format adds one reader class, one writer class and one registration line. No file outside the new codec and the registry changes.
 **Verify.** T · `UT-IO-01` · A · `ANL-SW-11`   **Trace.** SYS-0001, SYS-0121
-**Built.** ○ not started — `IMP-0021` in `WP-06`
+**Built.** ● done — `IMP-0021` in `WP-06`
 **Now.** `DONE·MOVE` — `io/base.py`'s `RecordingReader`/`RecordingWriter` protocols and `io/registry.py` are exactly this shape and are proven across three codecs (`io/mcap.py`, `io/jsonl.py`, `io/csv.py`). The shape is reusable; the language is not.
 
 **`SW-0022`** · `SI-01` · `P0` · `R1` — A codec declares its capabilities as data
 **Shall.** A codec shall declare, as a value the registry can read without opening a file: embedded schemas, random access, round-trip, capture time, arbitrary topics, meta blocks.
 **Accept.** The registry refuses a codec for a use its declared capabilities do not permit, naming the missing capability — never by a branch on the codec's identity.
 **Verify.** T · `UT-IO-02`   **Trace.** SYS-0010, SYS-0122
-**Built.** ○ not started — `IMP-0022` in `WP-06`
+**Built.** ● done — `IMP-0022` in `WP-06`
 **Now.** `DONE·MOVE` — `io/base.Capabilities` plus `io/registry.reader_for`'s refusal on `round_trips=False` is precisely this, including the write-only export case.
 
 **`SW-0023`** · `SI-01` · `P0` · `R1` — Codecs are registered, and lookup is by extension
 **Shall.** Codecs shall be discovered by registration, and a source shall be matched to a codec by its extension, with an explicit override available.
 **Accept.** An unknown extension raises naming every registered codec. An explicit override selects a codec whose extension does not match, and the manifest records which codec was used.
 **Verify.** T · `UT-IO-03`   **Trace.** SYS-0001, SYS-0009
-**Built.** ○ not started — `IMP-0023` in `WP-06`
+**Built.** ● done — `IMP-0023` in `WP-06`
 **Now.** `DONE·MOVE` — `io/registry.py`.
 
 **`SW-0024`** · `SI-01` · `P1` · `R1` — Readers and writers are symmetric where capabilities allow
 **Shall.** A codec that declares round-trip shall be registered for both reading and writing, and format conversion shall be a consequence of the capability table rather than a per-pair implementation.
 **Accept.** Conversion between any two round-trip codecs works with no code specific to that pair. A pair whose capabilities forbid it refuses, naming the missing capability.
 **Verify.** T · `UT-IO-04`   **Trace.** SYS-0224, SYS-0122
-**Built.** ○ not started — `IMP-0024` in `WP-06`
+**Built.** ● done — `IMP-0024` in `WP-06`
 **Now.** `DONE·MOVE` — `cli/convert.py` over `io/registry.py` already derives conversion from the table.
 
 ### 5.2 Streaming and memory
@@ -560,14 +560,14 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** A reader shall deliver messages in bounded batches and shall at no point hold more than a declared working set resident.
 **Accept.** Peak resident bytes for a run over recordings of 1×, 5× and 20× duration vary by less than 20%. No code path constructs a container sized by the message count of the file.
 **Verify.** T · `UT-IO-05` · A · `ANL-SW-12`   **Trace.** SYS-0002; CN-0302, CN-0355; **defect** concept §22.3
-**Built.** ○ not started — `IMP-0025` in `WP-06`
+**Built.** ● done — `IMP-0025` in `WP-06`
 **Now.** `DONE·TWICE`, both wrong — `io/base.py` builds a message list and a regrouped dictionary; `sil_host/src/recording_reader.cpp` builds `std::vector<RecordingTick> ticks_` over the whole file. Both must be replaced, not ported.
 
 **`SW-0026`** · `SI-01` · `P0` · `R1` — A read batch is bounded on three independent axes
 **Shall.** A read batch shall be bounded by a maximum message count, a maximum total payload in bytes, and a maximum time span in nanoseconds, whichever is reached first, each configurable.
 **Accept.** Each bound is individually demonstrable as the one that ended a batch. A single message larger than the byte bound is delivered alone rather than deadlocking.
 **Verify.** T · `UT-IO-06`   **Trace.** SYS-0002; **evidence** §2.6
-**Built.** ○ not started — `IMP-0026` in `WP-06`
+**Built.** ● done — `IMP-0026` in `WP-06`
 **Now.** `NEW`.
 *Note:* one bound is not enough, and this is `[REF-TC]` evidence rather than a preference: a count bound alone fails on video payloads, a byte bound alone fails on sparse signals, and a time bound alone fails when a burst arrives inside one interval.
 
@@ -575,7 +575,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** A reader shall return payload bytes without decoding them, and decoding shall occur only when a consumer requires the decoded value.
 **Accept.** A run whose graph consumes no image performs zero image decode, measured by a decode counter, not inferred from timing.
 **Verify.** T · `UT-IO-07`   **Trace.** SYS-0231, SYS-0230
-**Built.** ○ not started — `IMP-0027` in `WP-06`
+**Built.** ● done — `IMP-0027` in `WP-06`
 **Now.** `PARTIAL` — `core/tick.py`'s `PortValue.message` is lazily parsed and memoised, which is the right idea at the wrong layer; the reader below it has already materialised everything.
 
 ### 5.3 Index, seek and selective read
@@ -615,14 +615,14 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** A reader shall apply the topic-to-port table the spec carries — rename, origin tag, unit factor and offset — and shall contain no parser, no schema and no validation for ingest maps.
 **Accept.** The engine opens no ingest map file. A topic absent from the table is delivered untranslated and tagged `unknown`, never guessed.
 **Verify.** T · `UT-IO-12` · A · `ANL-SW-04`   **Trace.** SYS-0013, SYS-0019, SYS-0033; CN-0309
-**Built.** ○ not started — `IMP-0032` in `WP-06`
+**Built.** ● done — `IMP-0032` in `WP-06`
 **Now.** `DONE·TWICE` — `sil_host/src/ingest_map.cpp` both parses and applies. The application half is what survives.
 
 **`SW-0033`** · `SI-01` · `P0` · `R1` — Unit correction is a factor and an offset, applied once
 **Shall.** A declared unit correction shall be a multiplicative factor and an additive offset applied once, at ingest, to the named field, and shall be recorded per port in the manifest.
 **Accept.** Applying the same map twice is refused. The manifest states the factor and offset for every port that carried one, so a downstream reader can undo it. Where a source states its time in a coarser unit than the bus, the fixed integer scale to nanoseconds is applied here, exactly once, and is the only unit conversion anywhere in the engine — which is what keeps the scheduler's prohibition on unit arithmetic (`SW-0006`) checkable rather than approximate.
 **Verify.** T · `UT-IO-13`   **Trace.** SYS-0019; CN-0309
-**Built.** ○ not started — `IMP-0033` in `WP-06`
+**Built.** ● done — `IMP-0033` in `WP-06`
 **Now.** `NEW` — `io/ingest.py` is rename-and-tag only; scale and offset are the widening `CN-0309` asks for.
 *Note (2026-08-13):* the coarser-unit clause is **load-bearing, not vestigial**. `IFQ-01` ratified the signal header in **microseconds** while `SW-0046` keeps all engine-internal time in integer nanoseconds, so the ×1000 lands here — once, at ingest, descriptor-driven, in the one component that owns the nanosecond timebase. Had `IFQ-01` gone the other way this clause would have been deleted; it was not, so the exception `ANL-SW-02` grants to this site stays and is exercised on every run rather than being an unused escape hatch. **One boundary, and this is it** — a second conversion anywhere else is the defect `SW-0006` and `ANL-SW-02` exist to catch.
 
@@ -630,7 +630,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** A source payload whose type does not match the target port's declared type shall be refused, including between numeric widths.
 **Accept.** The refusal names both types and the topic. No silent widening, narrowing or reinterpretation occurs on any path.
 **Verify.** T · `UT-IO-14`   **Trace.** SYS-0020
-**Built.** ○ not started — `IMP-0034` in `WP-06`
+**Built.** ● done — `IMP-0034` in `WP-06`
 **Now.** `PARTIAL` — `io/ingest.py` checks the declared `proto_type`; numeric-width coercion is not a case it can encounter yet and is unhandled.
 
 **`SW-0035`** · `SI-01` · `P1` · `R1` — Multiple sources are merged under a declared policy
@@ -661,28 +661,28 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** A codec declaring meta-block support shall read and write the declared block kinds — run manifest, configuration bundle, topic provenance, plugin identity — and shall preserve unknown block kinds on a round trip.
 **Accept.** A recording written by a newer version and read by an older one loses no meta block on re-write.
 **Verify.** T · `UT-IO-18`   **Trace.** SYS-0114, SYS-0253
-**Built.** ○ not started — `IMP-0038` in `WP-06`
+**Built.** ● done — `IMP-0038` in `WP-06`
 **Now.** `DONE·MOVE` — `io/mcap.py` reads and writes exactly these blocks and `io/base.py` types them.
 
 **`SW-0039`** · `SI-01` · `P0` · `R1` — A recording with no provenance yields `unknown`
 **Shall.** A recording carrying no provenance metadata shall yield the origin tag `unknown` for every topic.
 **Accept.** No code path substitutes `measured` for a missing tag. The value `unknown` is distinguishable from every other member of the set at every surface.
 **Verify.** T · `UT-IO-19`   **Trace.** SYS-0033; CN-0300
-**Built.** ○ not started — `IMP-0039` in `WP-06`
+**Built.** ● done — `IMP-0039` in `WP-06`
 **Now.** `DONE·MOVE` — `io/base.Provenance` plus `io/mcap.py`'s reader behaviour, covered by an existing test.
 
 **`SW-0040`** · `SI-01` · `P0` · `R1` — Two writes of the same messages are byte-identical
 **Shall.** Writing an identical message sequence twice shall produce byte-identical files, excluding fields that are by definition per-run.
 **Accept.** The excluded fields are enumerated in the codec's declaration; everything else compares equal byte for byte.
 **Verify.** T · `UT-IO-20`   **Trace.** SYS-0239, SYS-0242
-**Built.** ○ not started — `IMP-0040` in `WP-06`
+**Built.** ● done — `IMP-0040` in `WP-06`
 **Now.** `DONE·MOVE` — `io/mcap.py` satisfies this today under an existing test.
 
 **`SW-0041`** · `SI-01` · `P1` · `R1` — Output is written as it is produced
 **Shall.** The writer shall write each tick's output as it is produced and shall not accumulate a run's output in memory.
 **Accept.** Peak writer memory is bounded by one batch. Terminating a run mid-way leaves a readable file up to the last completed tick.
 **Verify.** T · `UT-IO-21`   **Trace.** SYS-0002, SYS-0188
-**Built.** ○ not started — `IMP-0041` in `WP-06`
+**Built.** ● done — `IMP-0041` in `WP-06`
 **Now.** `PARTIAL` — `sources/recorder.py` writes incrementally; `core/resim.py` accumulates every tick's outputs into a list first.
 
 **`SW-0042`** · `SI-01` · `P1` · `R1` — A merged output is self-sufficient

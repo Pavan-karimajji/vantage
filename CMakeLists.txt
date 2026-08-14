@@ -8,3 +8,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # (adas_sim, installed via `pip install -e .`/pyproject.toml, unrelated to
 # this file) and the C++ engine are sibling deliverables of one component.
 add_subdirectory(src)
+
+# WP-06: BUILD_TESTING is set by the gtest-vs2026 preset (CMakePresets.json),
+# OFF by sil-vs2026 -- mirrors sil_host/CMakeLists.txt's identical guard.
+if(BUILD_TESTING)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

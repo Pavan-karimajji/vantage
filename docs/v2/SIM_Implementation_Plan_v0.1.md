@@ -371,25 +371,31 @@ flowchart LR
 > **Goal: make foreign data possible.** This phase is why the tool does not yet work on a recording it did not produce.
 
 ### WP-06 · `MP-1` · `SI-01` `io` — codec contract, streaming, translate
-- [ ] **Prereq:** `WP-05`.
-- [ ] **Lands:** `IMP-0021`…`IMP-0027`, `IMP-0032`…`IMP-0034`, `IMP-0038`…`IMP-0041` — 14.
-  - [ ] `IMP-0021` · `SW-0021` · `MOVE` — `io.hpp::Reader/Writer`
-  - [ ] `IMP-0022` · `SW-0022` · `MOVE` — `io.hpp::Capabilities`
-  - [ ] `IMP-0023` · `SW-0023` · `MOVE` — `src/simcore/io/registry.cpp::CodecRegistry::Register`
-  - [ ] `IMP-0024` · `SW-0024` · `MOVE` — `registry.cpp`
-  - [ ] `IMP-0025` · `SW-0025` · `DEDUPE` — `src/simcore/io/reader_base.cpp::ReadRange`
-  - [ ] `IMP-0026` · `SW-0026` · `NEW` — `io.hpp::ReadBounds` + `reader_base.cpp`
-  - [ ] `IMP-0027` · `SW-0027` · `EXTEND` — `src/simcore/io/decode.cpp::LazyPayload`
-  - [ ] `IMP-0032` · `SW-0032` · `DEDUPE` — `src/simcore/io/translate.cpp::Translator`
-  - [ ] `IMP-0033` · `SW-0033` · `NEW` — `translate.cpp::Apply`
-  - [ ] `IMP-0034` · `SW-0034` · `EXTEND` — `translate.cpp`
-  - [ ] `IMP-0038` · `SW-0038` · `MOVE` — `src/simcore/io/meta.cpp::MetaKind`
-  - [ ] `IMP-0039` · `SW-0039` · `MOVE` — `meta.cpp::OriginOrUnknown`
-  - [ ] `IMP-0040` · `SW-0040` · `MOVE` — `src/simcore/io/writer_base.cpp`
-  - [ ] `IMP-0041` · `SW-0041` · `EXTEND` — `writer_base.cpp::WriteMessage`
-- [ ] **Files:** `include/simcore/io.hpp` · `src/simcore/io/{registry,reader_base,writer_base,decode,translate,meta}.cpp` · `src/simcore/io/codecs/mcap.cpp` · `sil_host/src/recording_reader.cpp` **moved, internals replaced** · `sil_host/src/ingest_map.cpp`'s **apply half moved**.
-- [ ] **Exit:** `ANL-SW-12` — a 20-minute recording opens with resident memory bounded by the working set, not by file length. `ANL-SW-04` — `simcore` opens no `.yaml`. `ANL-SW-11` — adding a format touches the new codec and the registry and nothing else, demonstrated by a throwaway codec.
-- [ ] **`DD-13`: MCAP is the only registration.** Everything else `SI-01` owns — the contract, streaming, bounds, translation, meta — is format-neutral and is proven here against the one format available. A second codec is `WP-18`, gated on a sample file existing.
+- [x] **Prereq:** `WP-05`.
+- [x] **Lands:** `IMP-0021`…`IMP-0027`, `IMP-0032`…`IMP-0034`, `IMP-0038`…`IMP-0041` — 14/14 done.
+  - [x] `IMP-0021` · `SW-0021` · `MOVE` — `io.hpp::Reader/Writer` — `UT-IO-01` green
+  - [x] `IMP-0022` · `SW-0022` · `MOVE` — `io.hpp::Capabilities` — `UT-IO-02` green
+  - [x] `IMP-0023` · `SW-0023` · `MOVE` — `src/simcore/io/registry.cpp::CodecRegistry::Register` — `UT-IO-03` green
+  - [x] `IMP-0024` · `SW-0024` · `MOVE` — `registry.cpp` — `UT-IO-04` green
+  - [x] `IMP-0025` · `SW-0025` · `DEDUPE` — `src/simcore/io/reader_base.cpp::ReadRange` — `UT-IO-05` green
+  - [x] `IMP-0026` · `SW-0026` · `NEW` — `io.hpp::ReadBounds` + `reader_base.cpp` — `UT-IO-06` green
+  - [x] `IMP-0027` · `SW-0027` · `EXTEND` — `src/simcore/io/decode.cpp::LazyPayload` — `UT-IO-07` green
+  - [x] `IMP-0032` · `SW-0032` · `DEDUPE` — `src/simcore/io/translate.cpp::Translator` — `UT-IO-12` green
+  - [x] `IMP-0033` · `SW-0033` · `NEW` — `translate.cpp::Apply` — `UT-IO-13` green
+  - [x] `IMP-0034` · `SW-0034` · `EXTEND` — `translate.cpp` — `UT-IO-14` green
+  - [x] `IMP-0038` · `SW-0038` · `MOVE` — `src/simcore/io/meta.cpp::MetaKind` — `UT-IO-18` green
+  - [x] `IMP-0039` · `SW-0039` · `MOVE` — `meta.cpp::OriginOrUnknown` — `UT-IO-19` green
+  - [x] `IMP-0040` · `SW-0040` · `MOVE` — `src/simcore/io/writer_base.cpp` — `UT-IO-20` green
+  - [x] `IMP-0041` · `SW-0041` · `EXTEND` — `writer_base.cpp::WriteMessage` — `UT-IO-21` green
+- [~] **Files:** `include/simcore/io.hpp` · `src/simcore/io/{registry,reader_base,writer_base,decode,translate,meta}.cpp` · `src/simcore/io/codecs/mcap.cpp` · `sil_host/src/recording_reader.cpp` **moved, internals replaced** · `sil_host/src/ingest_map.cpp`'s **apply half moved**. — closed by: the `simcore/io` half is done and tested (all files above landed, `conf/build.yml`/`CMakeLists.txt`/`CMakePresets.json` wired with a real `gtest-vs2026` target — modules/sim had none before this stage). The `sil_host` half is **not done**: `sil_host` has no dependency on `adas-sim` today (`conf/build.yml` requires `protobuf`/`yaml-cpp`/`mcap`/`adas-interfaces`/`adas-df`/`adas-vdy`, no `adas-sim`), and wiring it would make `sil_host` the FIRST real Conan consumer of `adas-sim` as an editable dependency — which is exactly the latent `conanfile.py` `layout()` mismatch `WP-03`'s own scoping note already flagged and deferred ("revisit when a real consumer needs simcore's headers/lib through Conan"). Retiring `sil_host`'s own `RecordingReader`/`ingest_map` parse-and-apply in favour of `simcore::io` is a real, separate cross-submodule migration; every `SW-0021`…`SW-0041` Accept clause above is satisfied by `simcore::io` standing alone (`UT-IO-*` tests it directly), so the IMP boxes are honestly closable without it. Revisit alongside `WP-03`'s own deferred item.
+- [~] **Exit:** `ANL-SW-12` — a 20-minute recording opens with resident memory bounded by the working set, not by file length. `ANL-SW-04` — `simcore` opens no `.yaml`. `ANL-SW-11` — adding a format touches the new codec and the registry and nothing else, demonstrated by a throwaway codec. — closed by: `ANL-SW-04`/`ANL-SW-11` confirmed (`scripts/check_invariants.py` green, `UT-IO-01`'s throwaway codec). `ANL-SW-12` — a genuine RSS sample (`GetProcessMemoryInfo` on Windows) is not implemented; `UT-IO-05`/`UT-IO-21` instead test the STRUCTURAL property that causes the bounded-memory result (batches/writes never exceed their declared bound, at 1x/5x/20x duration) rather than measuring bytes directly — see the scoping notes at the top of `tests/unit/test_ut_io_streaming_and_memory.cpp` and `test_ut_io_writer.cpp`. A literal `ANL-SW-12` measurement is a follow-up, not blocking this WP's own `SW-0025`/`SW-0041` closure.
+- [x] **`DD-13`: MCAP is the only registration.** Everything else `SI-01` owns — the contract, streaming, bounds, translation, meta — is format-neutral and is proven here against the one format available. A second codec is `WP-18`, gated on a sample file existing.
+
+**Scoping notes, discovered mid-`WP`, not silently assumed (2026-08-14):**
+- **`RunManifest` has no C++ representation yet.** `SW-0038`'s `MetaKind` blocks (`run_manifest`, `config_bundle`, `plugin_identity`, `lineage`, `tolerance`) are opaque named byte blobs to `io` — read/written verbatim, never parsed — because `io` "knows nothing of ports, modules, graphs or cycles" (design §5's own boundary) and nothing in C++ yet constructs a structured `RunManifest` to parse into. One consequence: the `.mcap` codec does not replicate `io/mcap.py`'s `manifest_version >= CAPTURE_TIME_MANIFEST_VERSION` gate for whether `publishTime` is a real capture stamp on a *legacy* recording — no `WP-06` test exercises that gate, and this codec's own writer always sets `publishTime` deliberately. Revisit once `RunManifest` has a C++ home.
+- **`SW-0033`'s factor/offset applies to `RawMessage::log_time_ns`/`capture_time_ns` only**, not an arbitrary decoded payload field — the Shall clause's general "the named field" language is satisfied for the one case its own 2026-08-13 note calls load-bearing (the source-timestamp-unit-to-nanoseconds scale); a general per-payload-field correction would need protobuf reflection `io` deliberately does not have. See `translate.cpp`'s own top-of-file note.
+- **The `.mcap` writer sets `noChunking = true`**, trading the format's usual zstd-chunked compression for `SW-0041`'s Accept clause ("terminating a run mid-way leaves a readable file up to the last completed tick") — the mcap C++ library exposes no mid-stream chunk-flush primitive short of `close()`, so direct-to-data-section writing is the honest way to meet that clause with what the library gives.
+- **`RunSpec::sources[].ingest`** (`SW-0032`'s "constructed from `RunSpec::sources[].ingest`") **is not wired in this pass.** `emit_run_spec` already emits `"ingest": []` (always empty, `WP-12` not landed) and `load.cpp` does not yet parse it — `Translator` takes a `std::vector<IngestRow>` directly, and something in a later `WP` (once `WP-12`'s resolved table exists) wires `RunSpec` through to it. Same "build the mechanism, do not author the table yet" precedent as `IMP-0388`.
 
 ### WP-07 · `MP-1` · `SI-02` `bus` — the signal header
 - [ ] **Prereq:** `WP-06`. **`O-3`/`O-4`: this precedes the ladder and everything measurable.**

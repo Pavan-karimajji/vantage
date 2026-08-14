@@ -409,13 +409,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The system shall read source data exclusively through Reader plugins that open a source, build a time index, seek by time, and return port values.
 **Accept.** Adding support for a new format requires no change to any file in `simcore` outside the new reader and its registration.
 **Verify.** T · `SYT-INP-01`   **Trace.** CN-0078, CN-0085; v1 `NR-SIM-20`
-**Built.** ○ not started — 0/2 software requirements done, in `WP-06`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0002`** · `P0` · `R1` — Readers stream
 **Shall.** A reader shall stream, and the system shall never require a whole recording to be resident in memory.
 **Accept.** Peak resident memory for a run over a 20-minute recording is bounded by the declared working set and does not scale with recording length; measured across three recordings of 1×, 5× and 20× duration, peak memory varies by less than 20%.
 **Verify.** T · `SYT-INP-02` · `ANL-01`   **Trace.** CN-0302, CN-0355
-**Built.** ○ not started — 0/6 software requirements done, in `WP-06`, `WP-09`, `WP-25`
+**Built.** ◐ started — 3/6 software requirements done, in `WP-06`, `WP-09`, `WP-25`
 
 **`SYS-0003`** · `P0` · `R1` — Random access by time
 **Shall.** A reader shall support random access by time, or provide an index that makes it possible.
@@ -457,13 +457,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Where a source format carries its own data description, the reader shall use it, and shall accept an external override.
 **Accept.** A recording carrying an embedded description loads with no external description file; supplying one overrides the embedded description and the manifest records which was used.
 **Verify.** T · `SYT-INP-09`   **Trace.** CN-0086
-**Built.** ○ not started — 0/4 software requirements done, in `WP-06`, `WP-12`
+**Built.** ◐ started — 1/4 software requirements done, in `WP-06`, `WP-12`
 
 **`SYS-0010`** · `P0` · `R1` — Codecs declare capabilities
 **Shall.** Every codec shall declare its capabilities explicitly — at minimum: embedded schemas, random access, round-trip, capture time, arbitrary topics, meta blocks.
 **Accept.** A codec that does not declare round-trip is refused as a simulation input **by capability check at load**, not by a special case in the loader; the refusal names the missing capability.
 **Verify.** T · `SYT-INP-10`   **Trace.** CN-0303, CN-0371(io)
-**Built.** ○ not started — 0/1 software requirements done, in `WP-06`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0011`** · `P1` · `R1` — Format priority for release one
 **Shall.** Release one shall provide readers for, in priority order: a vehicle measurement format, a bench capture export, and the system's own interchange format.
@@ -485,7 +485,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The bridge from a recording's own signal vocabulary to the port model shall be a declared file, never code.
 **Accept.** A new recording family is onboarded with no compiled artifact rebuilt and no Python module edited.
 **Verify.** T · `SYT-INP-13`   **Trace.** CN-0068, CN-0304; v1 `FR-SIM-66`
-**Built.** ◐ started — 0/3 software requirements done, in `WP-05`, `WP-06`, `WP-12`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-05`, `WP-06`, `WP-12`
 
 **`SYS-0014`** · `P0` · `R1` — What an ingest map declares
 **Shall.** An ingest map shall declare, per source signal: target port, payload type, origin tag, unit, scale and offset, and array shape where applicable.
@@ -521,13 +521,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** An ingest map shall permit unit conversion by a declared factor and offset from a closed vocabulary, and shall permit nothing else — no expression, no field arithmetic, no scripting, no user-supplied callable.
 **Accept.** A map containing any construct outside the closed vocabulary is refused at load. The vocabulary's members are enumerable from the published schema.
 **Verify.** T · `SYT-INP-19` · `INSP-01`   **Trace.** CN-0309, CN-0286
-**Built.** ◐ started — 0/5 software requirements done, in `WP-05`, `WP-06`, `WP-12`
+**Built.** ◐ started — 2/5 software requirements done, in `WP-05`, `WP-06`, `WP-12`
 
 **`SYS-0020`** · `P0` · `R1` — Type mismatch means the cut is unsupported
 **Shall.** A source signal whose type does not match the target port's declared type shall mean the recording does not support that cut.
 **Accept.** The refusal names both types. No silent coercion occurs, including between numeric widths.
 **Verify.** T · `SYT-INP-20`   **Trace.** CN-0303, CN-0070
-**Built.** ○ not started — 0/2 software requirements done, in `WP-06`, `WP-20`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-06`, `WP-20`
 
 **`SYS-0021`** · `P1` · `R1` — Ingest maps deploy beside the library
 **Shall.** Ingest maps shall be deployed beside the component library and resolved from there, never read from a source checkout.
@@ -615,7 +615,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Every port shall carry an origin tag from the closed set: `measured`, `truth`, `mocked`, `simulated`, `overridden`, `unknown`.
 **Accept.** No seventh value can be produced by any code path. A recording with no provenance metadata yields `unknown`, never `measured`.
 **Verify.** T · `SYT-DAT-10` · `ANL-04`   **Trace.** CN-0299, CN-0300, CN-0286; v1 `CR-SIM-20`
-**Built.** ○ not started — 0/4 software requirements done, in `WP-06`, `WP-07`, `WP-11`
+**Built.** ◐ started — 2/4 software requirements done, in `WP-06`, `WP-07`, `WP-11`
 
 **`SYS-0034`** · `P0` · `R1` — Reconstructed values are marked
 **Shall.** A value reconstructed rather than read shall be marked as reconstructed everywhere it is rendered, exported or explained.
@@ -1174,7 +1174,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Every artifact shall embed the run manifest.
 **Accept.** Any artifact, taken alone to another machine, identifies the run that produced it.
 **Verify.** T · `SYT-OUT-04`   **Trace.** CN-0111, CN-0203
-**Built.** ○ not started — 0/2 software requirements done, in `WP-06`, `WP-22`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-06`, `WP-22`
 
 **`SYS-0115`** · `P0` · `R1` — Exports preserve the header
 **Shall.** Exported data shall preserve the signal header, including origin and mode.
@@ -1216,13 +1216,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The recording model shall be `meta` plus typed topics plus two-clock messages, and no consumer of a recording — layer provider, renderer, expectation, analysis — shall be able to learn which format it came from.
 **Accept.** A new format is added as one reader and one writer of a small fixed method set; no consumer file changes.
 **Verify.** T · `SYT-OUT-11` · `ANL-15`   **Trace.** CN-0303; v1 `NR-SIM-20`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-06`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0122`** · `P1` · `R1` — Recording and export are different artifacts
 **Shall.** A recording shall round-trip and be re-executable; an export shall be lossy and terminal, selecting an explicit port subset by manifest name, and shall never be accepted as a re-execution input.
 **Accept.** Attempting to re-execute an export is refused by capability check, naming the missing capability.
 **Verify.** T · `SYT-OUT-12`   **Trace.** CN-0303, CN-0110; v1 `FR-SIM-52`
-**Built.** ○ not started — 0/5 software requirements done, in `WP-06`, `WP-18`, `WP-23`
+**Built.** ◐ started — 2/5 software requirements done, in `WP-06`, `WP-18`, `WP-23`
 
 ### 10.1 The run manifest and the handover
 
@@ -1672,7 +1672,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Every crash shall record recording, configuration, last completed cycle, captured standard error and run id; a worker shall checkpoint progress so a crashing run's last completed cycle is known.
 **Accept.** From the crash record alone, the failure is reopened in process on a developer machine.
 **Verify.** T · `SYT-BAT-08`   **Trace.** CN-0348, CN-0349, CN-0223; v1 `NR-SIM-22`
-**Built.** ○ not started — 0/6 software requirements done, in `WP-06`, `WP-13`, `WP-22`, `WP-23`, `WP-27`
+**Built.** ◐ started — 1/6 software requirements done, in `WP-06`, `WP-13`, `WP-22`, `WP-23`, `WP-27`
 
 **`SYS-0189`** · `P1` · `R1` — Parameter sweeps
 **Shall.** Parameter sweeps shall be supported.
@@ -1906,7 +1906,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The system shall convert between formats and produce an indexed intermediate form for fast repeated replay.
 **Accept.** Conversion is a consequence of the codec capability table, not a special feature; a codec pair whose capabilities do not permit a conversion refuses it, naming the missing capability.
 **Verify.** T · `SYT-REC-05`   **Trace.** CN-0238, CN-0303
-**Built.** ○ not started — 0/2 software requirements done, in `WP-06`, `WP-19`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-06`, `WP-19`
 
 **`SYS-0225`** · `P1` · `R1` — Inspect
 **Shall.** The system shall list a recording's ports, rates, sources, time range and available data descriptions.
@@ -2013,13 +2013,13 @@ mechanism.
 **Shall.** The system shall read and decode only the ports the active graph requires.
 **Accept.** A run of a function alone over a recording containing camera data decodes zero image bytes. Bytes-read is reported per run and is compared against the theoretical minimum for the port set.
 **Verify.** T · `SYT-NFR-01` · `ANL-31`   **Trace.** CN-0224, CN-0042
-**Built.** ○ not started — 0/5 software requirements done, in `WP-06`, `WP-09`, `WP-15`, `WP-17`, `WP-25`
+**Built.** ◐ started — 1/5 software requirements done, in `WP-06`, `WP-09`, `WP-15`, `WP-17`, `WP-25`
 
 **`SYS-0231`** · `P1` · `R1` — Lazy decode
 **Shall.** Data shall be decoded only when a simulating module consumes it or the player displays it.
 **Accept.** A signal-only run over a multi-camera recording performs no image decode.
 **Verify.** T · `SYT-NFR-02`   **Trace.** CN-0225
-**Built.** ○ not started — 0/2 software requirements done, in `WP-06`, `WP-25`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-06`, `WP-25`
 
 **`SYS-0232`** · `P1` · `R1` — Time-sliced runs
 **Shall.** The system shall simulate only a requested time range.
@@ -2073,7 +2073,7 @@ mechanism.
 **Shall.** The same inputs, the same Resolved Run Spec and the same binaries shall produce identical outputs.
 **Accept.** Byte-identical port values across repeated runs, on both platforms, with no wall-clock dependency, no unseeded randomness and no dependence on thread scheduling in the default mode.
 **Verify.** T · `SYT-NFR-07`   **Trace.** CN-0249, CN-0250, CN-0038
-**Built.** ○ not started — 0/7 software requirements done, in `WP-06`, `WP-09`, `WP-11`, `WP-15`, `WP-23`
+**Built.** ◐ started — 1/7 software requirements done, in `WP-06`, `WP-09`, `WP-11`, `WP-15`, `WP-23`
 
 **`SYS-0240`** · `P0` · `R1` — Four axes, two gates and two measurements
 **Shall.** Reproducibility shall be reported separately for four axes — same process, fresh process, rebuilt binary, different machine — with the first two exact and blocking, and the last two measured, declared and tracked against a bound.
@@ -2091,7 +2091,7 @@ mechanism.
 **Shall.** Reproducibility comparison shall be over port values, never over recording file bytes.
 **Accept.** Two recordings of one deterministic run, differing in run id and timestamp, compare equal.
 **Verify.** T · `SYT-NFR-10`   **Trace.** CN-0364
-**Built.** ○ not started — 0/2 software requirements done, in `WP-06`, `WP-24`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-06`, `WP-24`
 
 **`SYS-0243`** · `P0` · `R1` — Tolerance is declared once, with a mandatory reason
 **Shall.** Tolerance shall be declared once per component and field, defaulting to exact, with integers and enumerations exact and not overridable, every row carrying a mandatory written reason, and the declaration's hash recorded in the run manifest.
@@ -2165,7 +2165,7 @@ mechanism.
 **Shall.** A recording shall carry a plugin's identity and hash, never its implementation.
 **Accept.** Opening a recording produced elsewhere executes no code from that recording. A missing plugin degrades to *these layers unavailable*, naming the hashes expected.
 **Verify.** T · `SYT-CON-02`   **Trace.** CN-0367; v1 `NR-SIM-44`
-**Built.** ○ not started — 0/3 software requirements done, in `WP-06`, `WP-21`, `WP-26`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-06`, `WP-21`, `WP-26`
 
 **`SYS-0254`** · `P0` · `R1` — The plugin API carries its own version, in a file
 **Shall.** The plugin API shall carry its own version range, independent of the recording format and the module ABI, declared in a file the player reads *before* importing the plugin.

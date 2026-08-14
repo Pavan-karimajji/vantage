@@ -21,9 +21,29 @@
         "TARGET_TYPE": "sil",
         "BUILD_TESTING": "OFF"
       }
+    },
+    {
+      "name": "gtest-vs2026",
+      "displayName": "GTest vs2026",
+      "inherits": "vs2026",
+      "binaryDir": "${sourceDir}/build-gtest-vs2026",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build-gtest-vs2026/conan_toolchain.cmake",
+        "TARGET_TYPE": "gtest",
+        "BUILD_TESTING": "ON"
+      }
     }
   ],
   "buildPresets": [
-    { "name": "sil-vs2026", "configurePreset": "sil-vs2026", "configuration": "Release" }
+    { "name": "sil-vs2026", "configurePreset": "sil-vs2026", "configuration": "Release" },
+    { "name": "gtest-vs2026", "configurePreset": "gtest-vs2026", "configuration": "Release" }
+  ],
+  "testPresets": [
+    {
+      "name": "gtest-vs2026",
+      "configurePreset": "gtest-vs2026",
+      "configuration": "Release",
+      "output": { "outputOnFailure": true }
+    }
   ]
 }

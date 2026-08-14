@@ -26,6 +26,17 @@ recipe:
 
 variants:
   base:
+    requires:
+      # WP-06 (SI-01, DD-13): the one codec io/ registers -- the same
+      # conancenter mcap/1.2.0 sil_host already vendors for its own
+      # RecordingReader (reused, not a second pinned version).
+      - mcap/1.2.0
     sil:
-      platforms:
+      platforms: &base_platforms
         - build: vs2026
+    # WP-06: UT-IO-* need a real test binary -- modules/sim had none before
+    # this stage (WP-03's own scoping note: "no gtest target, no C++ tests
+    # exist yet"). Same list, aliased -- not a second, independently
+    # maintained copy (sil_host's own gtest: does this identically).
+    gtest:
+      platforms: *base_platforms
