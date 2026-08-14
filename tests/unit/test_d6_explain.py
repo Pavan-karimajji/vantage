@@ -85,7 +85,7 @@ def test_explain_resolves_environment_error_without_the_builtin_shadowing_unders
     facts = explain("EnvironmentError", _session())
     assert facts["kind"] == "error_code"
     assert facts["taxonomy"] == "environment"
-    assert facts["exit_code"] == 3
+    assert facts["exit_code"] == 6
 
 
 def test_explain_reports_unknown_with_a_fuzzy_suggestion_rather_than_failing_bare():

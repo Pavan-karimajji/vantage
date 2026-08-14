@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 
 from adas_sim.diagnostics.errors import (
+    EXIT_CODES as ALL_EXIT_CODES,
     AuthoringError,
     ContractError,
     EnvironmentError_,
@@ -20,9 +21,16 @@ from adas_sim.diagnostics.errors import (
 
 EXIT_CODES = {
     AuthoringError: 2,
-    EnvironmentError_: 3,
+    EnvironmentError_: 6,
     ContractError: 4,
-    InternalError: 70,
+    InternalError: 8,
+}
+
+KINDS = {
+    AuthoringError: "authoring",
+    EnvironmentError_: "environment",
+    ContractError: "contract",
+    InternalError: "internal",
 }
 
 
@@ -35,7 +43,16 @@ def test_each_error_class_carries_expected_found_where_and_its_exit_code():
         assert err.where == "the pipeline file"
         assert err.hint == "add it"
         assert cls.exit_code == code
+        assert cls.kind == KINDS[cls]
         assert isinstance(err, SimError)
+
+
+def test_every_kinds_exit_code_is_a_value_in_the_published_exit_codes_table():
+    """WP-03/SW-0125: a Kind's default exit code (SimError.exit_code) must
+    be one of the eight published ExitCode values, not an orphaned number
+    check_error_parity.py's errors.hpp comparison wouldn't catch on its own."""
+    for cls, code in EXIT_CODES.items():
+        assert code in ALL_EXIT_CODES.values(), f"{cls.__name__}.exit_code={code} not in EXIT_CODES"
 
 
 def test_error_classes_are_distinguishable_by_type():

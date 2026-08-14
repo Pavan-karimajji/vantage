@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import sys
 from datetime import datetime, timezone
-from enum import StrEnum
+
+from adas_sim.diagnostics.events import Event
 
 # Level is derived from `event`, not a caller-supplied parameter (the
 # api-reference signature has none): the fixed vocabulary already says how
@@ -17,23 +18,6 @@ from enum import StrEnum
 # second place for that judgement to drift from the first.
 _WARN_EVENTS = frozenset({"port_missing", "port_overridden", "degrade"})
 _ERROR_EVENTS = frozenset({"exec_fail", "expect_fail", "bundle_mismatch"})
-
-
-class Event(StrEnum):
-    """The closed `event=` vocabulary (N-10). Adding a value is a review."""
-
-    RUN_START = "run_start"
-    RUN_END = "run_end"
-    STAGE_INIT = "stage_init"
-    STAGE_SHUTDOWN = "stage_shutdown"
-    EXEC_OK = "exec_ok"
-    EXEC_FAIL = "exec_fail"
-    PORT_MISSING = "port_missing"
-    PORT_OVERRIDDEN = "port_overridden"
-    DEGRADE = "degrade"
-    EXPECT_PASS = "expect_pass"
-    EXPECT_FAIL = "expect_fail"
-    BUNDLE_MISMATCH = "bundle_mismatch"
 
 
 def _level_for(event: Event) -> str:

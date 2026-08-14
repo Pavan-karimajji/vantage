@@ -46,6 +46,16 @@ def test_check_gt1_fails_on_a_deliberately_planted_function_identifier(tmp_path)
     assert "GT-1" in findings[0]
 
 
+def test_check_gt1_fails_on_a_planted_function_identifier_in_a_cpp_file(tmp_path):
+    """WP-03: GT-1's scope now includes simcore/simengine's C++ sources,
+    not only adas_sim's Python -- the check is tested against a .hpp too."""
+    (tmp_path / "zone.hpp").write_text("constexpr double BSD_ZONE_WIDTH_M = 2.0;\n", encoding="utf-8")
+    findings = check_gt1(src_root=tmp_path)
+    assert findings
+    assert "GT-1" in findings[0]
+    assert "zone.hpp" in findings[0]
+
+
 def test_run_all_is_clean_on_the_current_skeleton():
     """All seven checks (GT-1, GT-2, GT-3, GT-6, GT-11, UT-D8-9, WP-02(b)) hold on the tree as it stands."""
     assert run_all() == []

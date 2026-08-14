@@ -1242,13 +1242,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The system shall return distinct, documented exit codes for at least: success, configuration error, coherence violation, module failure, input or integrity error, and infrastructure error — identical on both platforms.
 **Accept.** Each is produced by a crafted case; the set is closed and published; the same case yields the same code on both operating systems.
 **Verify.** T · `SYT-OUT-14`   **Trace.** CN-0115, CN-0202, CN-0248
-**Built.** ○ not started — 0/3 software requirements done, in `WP-03`, `WP-14`, `WP-23`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-03`, `WP-14`, `WP-23`
 
 **`SYS-0126`** · `P0` · `R1` — Structured logs from a closed vocabulary
 **Shall.** The system shall emit structured logs from a closed event vocabulary, with a human-readable console option, and console encoding shall be forced at every entry point.
 **Accept.** Every emitted event is a member of the published vocabulary; the same run's console output is byte-comparable across platforms after normalising line endings.
 **Verify.** T · `SYT-OUT-15`   **Trace.** CN-0116, CN-0286, CN-0363
-**Built.** ○ not started — 0/2 software requirements done, in `WP-03`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-03`
 
 **`SYS-0127`** · `P0` · `R1` — The system does not decide pass or fail
 **Shall.** The system shall not decide whether a run passed.
@@ -1536,13 +1536,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Every configuration file shall be validated against a published schema, and errors shall name file, line, the wrong value and the allowed values.
 **Accept.** Each of those four elements is present in every schema error message, checked by test.
 **Verify.** T · `SYT-CFG-11`   **Trace.** CN-0182
-**Built.** ○ not started — 0/2 software requirements done, in `WP-03`, `WP-04`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-03`, `WP-04`
 
 **`SYS-0169`** · `P0` · `R1` — Unknown keys are errors
 **Shall.** An unknown configuration key shall be an error, not a warning.
 **Accept.** A typo'd key fails the load and the message offers near matches.
 **Verify.** T · `SYT-CFG-12`   **Trace.** CN-0183
-**Built.** ○ not started — 0/2 software requirements done, in `WP-03`, `WP-04`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-03`, `WP-04`
 
 **`SYS-0170`** · `P0` · `R1` — Every file carries a schema version
 **Shall.** Every configuration file shall carry a schema version, and an unrecognised version shall be refused rather than best-guessed.
@@ -1798,7 +1798,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Any name — port, topic, layer, error code, style token, run id — shall resolve to an explanation, with near-match suggestions on failure.
 **Accept.** A misspelled name of each kind produces the correct suggestion.
 **Verify.** T · `SYT-DIA-06`   **Trace.** CN-0352
-**Built.** ○ not started — 0/2 software requirements done, in `WP-03`, `WP-24`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-03`, `WP-24`
 
 **`SYS-0208`** · `P0` · `R1` — An environment report that never raises
 **Shall.** A single command shall report library resolution, configuration agreement, recording cut support and plugin inspection, and shall never raise an exception.
@@ -1810,7 +1810,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Errors shall come from a closed taxonomy — authoring, environment, contract, internal — each carrying expected, found, where and hint, in one fixed shape.
 **Accept.** Every error the system can emit is a member of the taxonomy and carries all four fields. An error outside the taxonomy fails a static check.
 **Verify.** T · `SYT-DIA-08` · `ANL-29`   **Trace.** CN-0354, CN-0286
-**Built.** ○ not started — 0/4 software requirements done, in `WP-03`, `WP-10`, `WP-21`
+**Built.** ◐ started — 2/4 software requirements done, in `WP-03`, `WP-10`, `WP-21`
 
 **`SYS-0210`** · `P0` · `R1` — Provenance query
 **Shall.** For any value, the system shall answer where it came from.
@@ -2131,13 +2131,13 @@ mechanism.
 **Shall.** Path handling, case sensitivity, separators and dynamic library loading shall be abstracted behind the system.
 **Accept.** No user-facing surface exposes a platform difference. A configuration written on one platform loads on the other with no edit.
 **Verify.** T · `SYT-NFR-16`   **Trace.** CN-0244, CN-0245
-**Built.** ○ not started — 0/3 software requirements done, in `WP-03`, `WP-10`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-03`, `WP-10`
 
 **`SYS-0249`** · `P0` · `R1` — Floating-point expectations are part of the contract
 **Shall.** Compiler flag expectations affecting floating-point behaviour shall be part of the delivery contract, and deviations shall be warned about at load.
 **Accept.** A library built with a non-conforming flag set produces a load-time warning naming the flag, before its results are used.
 **Verify.** T · `SYT-NFR-17`   **Trace.** CN-0246, CN-0277
-**Built.** ○ not started — 0/1 software requirements done, in `WP-03`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0250`** · `P0` · `R1` — The reference suite runs on both and compares
 **Shall.** The reference test suite shall run on both operating systems and compare results.
@@ -2239,7 +2239,7 @@ mechanism.
 **Shall.** Invalid or physically meaningless setups shall be rejected before the run, naming what to change.
 **Accept.** For every entry in the error catalogue, the message contains an actionable instruction, verified by test rather than by review.
 **Verify.** T · `SYT-NFR-21`   **Trace.** CN-0039, CN-0346
-**Built.** ○ not started — 0/1 software requirements done, in `WP-03`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0265`** · `P0` · `R1` — The tool is survivable by someone who did not build it
 **Shall.** The documentation set shall be sized so a new maintainer becomes productive without reading all of it, and the set's own size shall be tracked.
@@ -2281,7 +2281,7 @@ Constraints are obligations on *how* the system is built, imposed because a corr
 **Shall.** No concept shall be implemented in both languages; where one exists on both sides today, one side shall be deleted rather than maintained in step.
 **Accept.** A named check enumerates the four historically duplicated subsystems — configuration load and validation, ingest-map parsing, module hosting, recording read and grouping — and confirms exactly one implementation of each. Any concept found in both languages is a defect.
 **Verify.** A · `ANL-44`   **Trace.** CN-0291, CN-0358, CN-0287; **defect** concept §21.3, §22.2
-**Built.** ◐ started — 1/5 software requirements done, in `WP-01`, `WP-03`, `WP-12`, `WP-16`, `WP-21`
+**Built.** ◐ started — 2/5 software requirements done, in `WP-01`, `WP-03`, `WP-12`, `WP-16`, `WP-21`
 
 **`SYS-0271`** · `P0` · `R1` — The engine never calls back into the scripting layer
 **Shall.** The engine shall never call back into Python during a run.

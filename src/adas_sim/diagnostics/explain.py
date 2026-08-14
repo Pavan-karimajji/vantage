@@ -17,9 +17,10 @@ test), so this module cannot import it. `cli/explain.py`, which may import
 
 from __future__ import annotations
 
-import difflib
 import sys
 
+from adas_sim.diagnostics.errors import AuthoringError, ContractError, EnvironmentError_, InternalError
+from adas_sim.diagnostics.suggest import near_matches
 from adas_sim.session.session import Session
 from adas_sim.plugins.registry import codec_info, registered_extensions
 from adas_sim.scene.registry import registered_providers
@@ -27,27 +28,24 @@ from adas_sim.scene.registry import registered_providers
 #: DG-5's closed error taxonomy (`sim_naming_and_diagnostics.md`), matched
 #: by taxonomy name (`"authoring"`), class name with or without the
 #: builtin-shadowing trailing underscore (`EnvironmentError`/
-#: `EnvironmentError_`, `core/errors.py`), or the bare exit code as a
-#: string (`"2"`) -- whichever a developer actually has in hand: a
+#: `EnvironmentError_`, `diagnostics/errors.py`), or the bare exit code as
+#: a string (`"2"`) -- whichever a developer actually has in hand: a
 #: traceback names the class, a script checks the exit code, the docs name
-#: the taxonomy.
+#: the taxonomy. Built from the real `SimError` subclasses (`WP-03`) rather
+#: than a second hand-copied table, so `exit_code` cannot drift from
+#: `errors.py`'s own values.
+_ERROR_MEANS: dict[str, tuple[str, str]] = {
+    "authoring": ("the YAML/pipeline/scenario is wrong", "the person who wrote the file"),
+    "environment": ("a library, bundle or dependency is missing", "sim doctor says which"),
+    "contract": ("an ABI/manifest/version mismatch", "the component's build"),
+    "internal": ("a framework bug", "an issue, with the run_id"),
+}
 _ERROR_TAXONOMY: dict[str, dict[str, object]] = {
-    "authoring": {
-        "exit_code": 2, "error_class": "AuthoringError",
-        "means": "the YAML/pipeline/scenario is wrong", "who_fixes_it": "the person who wrote the file",
-    },
-    "environment": {
-        "exit_code": 3, "error_class": "EnvironmentError_",
-        "means": "a library, bundle or dependency is missing", "who_fixes_it": "sim doctor says which",
-    },
-    "contract": {
-        "exit_code": 4, "error_class": "ContractError",
-        "means": "an ABI/manifest/version mismatch", "who_fixes_it": "the component's build",
-    },
-    "internal": {
-        "exit_code": 70, "error_class": "InternalError",
-        "means": "a framework bug", "who_fixes_it": "an issue, with the run_id",
-    },
+    cls.kind: {
+        "exit_code": cls.exit_code, "error_class": cls.__name__,
+        "means": _ERROR_MEANS[cls.kind][0], "who_fixes_it": _ERROR_MEANS[cls.kind][1],
+    }
+    for cls in (AuthoringError, EnvironmentError_, ContractError, InternalError)
 }
 
 
@@ -136,7 +134,7 @@ def explain(name: str, session: Session) -> dict[str, object]:
     if error_kind is not None:
         return {"kind": "error_code", "name": name, "taxonomy": error_kind, **_ERROR_TAXONOMY[error_kind]}
 
-    matches = difflib.get_close_matches(name, known_names(session), n=3, cutoff=0.6)
+    matches = near_matches(name, known_names(session))
     return {
         "kind": "unknown",
         "name": name,

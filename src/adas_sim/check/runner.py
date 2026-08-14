@@ -45,13 +45,13 @@ from pathlib import Path
 from adas_sim.check.expect import ExpectationResult, evaluate_scenario
 from adas_sim.resolve.component import ComponentManifest, resolve_message_classes
 from adas_sim.graph.build import Pipeline
+from adas_sim.config.paths import superproject_root as _superproject_root
 from adas_sim.config.scenario import load_scenario
 from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.core.resim import resim_pipeline
 from adas_sim.session.tick import Pose2D, PortValue, Tick
 
-#: check/runner.py -> check -> adas_sim -> src -> sim -> modules -> superproject root.
-_SUPERPROJECT_ROOT = Path(__file__).resolve().parents[5]
+_SUPERPROJECT_ROOT = _superproject_root()
 
 _SCENARIOS_DIR_NAME = "carla_scenarios"
 _RECORDINGS_DIR_NAME = "carla_testruns"

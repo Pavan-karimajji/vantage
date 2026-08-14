@@ -1,0 +1,35 @@
+# SI-07 errors -- the source of truth adas_sim/diagnostics/events.py and
+# src/simcore/errors/events.cpp are hand-transcribed from (WP-03,
+# IMP-0127), same mechanism and same parity checker as errors.yaml.
+#
+# Ported verbatim from the Python vocabulary that already existed at
+# adas_sim/diagnostics/logging.py::Event before this WP moved it into its
+# own module (N-10, sim_api_reference.md SS2.5: "event= value added to the
+# closed vocabulary, not free text"). Adding a value is a review, not a
+# runtime extension point.
+
+event:
+  - name: run_start
+    level: info
+  - name: run_end
+    level: info
+  - name: stage_init
+    level: info
+  - name: stage_shutdown
+    level: info
+  - name: exec_ok
+    level: info
+  - name: exec_fail
+    level: error
+  - name: port_missing
+    level: warn
+  - name: port_overridden
+    level: warn
+  - name: degrade
+    level: warn
+  - name: expect_pass
+    level: info
+  - name: expect_fail
+    level: error
+  - name: bundle_mismatch
+    level: error

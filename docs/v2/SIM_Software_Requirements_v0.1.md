@@ -1430,14 +1430,14 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Every error the system raises shall be a member of the closed taxonomy authoring · environment · contract · internal, and shall carry expected, found, where and hint.
 **Accept.** Every error type in the codebase is a member, checked statically. An error carrying fewer than the four fields fails the check.
 **Verify.** T · `UT-ERR-01` · A · `ANL-SW-27`   **Trace.** SYS-0209
-**Built.** ○ not started — `IMP-0121` in `WP-03`
+**Built.** ● done — `IMP-0121` in `WP-03`
 **Now.** `DONE·TWICE` — `core/errors.py` (Python) and `sil_host/src/errors.hpp` (C++) implement the same four kinds. Here the duplication is **legitimate and stays**: two processes in two languages both need to raise, and the shared artifact is the published shape, not an implementation. `SW-0122` is what keeps them from drifting.
 
 **`SW-0122`** · `SI-07` · `P0` · `R1` — The two implementations of the taxonomy are compared, not trusted
 **Shall.** The Python and C++ error taxonomies shall be checked against one published definition on every build.
 **Accept.** Adding a kind to one and not the other fails the build. The message shape is compared field for field, not by eye.
 **Verify.** A · `ANL-SW-28`   **Trace.** SYS-0209, SYS-0270
-**Built.** ○ not started — `IMP-0122` in `WP-03`
+**Built.** ● done — `IMP-0122` in `WP-03`
 **Now.** `NEW`.
 *Note:* this is the one place this document permits a concept in two languages, so it is also the one place that needs an explicit anti-drift check. Without it, `SW-0121` is the exception that becomes the precedent.
 
@@ -1445,21 +1445,21 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** An authoring error shall name what was expected and what was found, with the location of each where a location exists.
 **Accept.** For every entry in the error catalogue the message contains an actionable instruction, verified by test rather than by review.
 **Verify.** T · `UT-ERR-02`   **Trace.** SYS-0264, SYS-0168
-**Built.** ○ not started — `IMP-0123` in `WP-03`
+**Built.** ● done — `IMP-0123` in `WP-03`
 **Now.** `DONE·MOVE` — the discipline is established and consistently applied across `contracts/` and `io/`.
 
 **`SW-0124`** · `SI-07` · `P1` · `R1` — A name that failed to resolve offers near matches
 **Shall.** An error caused by an unresolvable name shall list candidate matches from the set that was searched.
 **Accept.** A misspelled port, layer, style token or module name produces the correct suggestion, and the searched set is named.
 **Verify.** T · `UT-ERR-03`   **Trace.** SYS-0169, SYS-0207
-**Built.** ○ not started — `IMP-0124` in `WP-03`
+**Built.** ● done — `IMP-0124` in `WP-03`
 **Now.** `DONE·MOVE` — implemented widely (`N-8` discipline); `scene/registry.py` and `contracts/pipeline.py` both list what they searched.
 
 **`SW-0125`** · `SI-07` · `P0` · `R1` — Exit codes are a closed published set and are platform-identical
 **Shall.** The taxonomy shall map to a closed, published set of exit codes covering at minimum success, configuration error, coherence violation, module failure, input or integrity error, and infrastructure error, identical on both platforms.
 **Accept.** Each is produced by a crafted case, and the same case yields the same code on both operating systems.
 **Verify.** T · `UT-ERR-04`   **Trace.** SYS-0125, SYS-0248
-**Built.** ○ not started — `IMP-0125` in `WP-03`
+**Built.** ● done — `IMP-0125` in `WP-03`
 **Now.** `PARTIAL` — CLI verbs return distinguishable codes; there is no published closed set and no cross-platform comparison.
 
 **`SW-0126`** · `SI-07` · `P0` · `R1` — No exit code encodes a functional verdict
@@ -1473,7 +1473,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Every emitted log event shall be a member of a published closed vocabulary, emitted in one fixed field order, with a human-readable console option.
 **Accept.** An event not in the vocabulary fails the build. The same run's console output is byte-comparable across platforms after normalising line endings.
 **Verify.** T · `UT-ERR-05` · A · `ANL-SW-30`   **Trace.** SYS-0126
-**Built.** ○ not started — `IMP-0127` in `WP-03`
+**Built.** ● done — `IMP-0127` in `WP-03`
 **Now.** `DONE·MOVE` — `core/logging.py`'s `Event` `StrEnum` plus a fixed-order line, with a unit test.
 
 **`SW-0128`** · `SI-07` · `P1` · `R1` — A headless run may exit at a declared severity threshold
@@ -1487,7 +1487,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Every process entry point shall force console encoding before emitting output.
 **Accept.** Diagnostics containing non-ASCII characters read identically on both platforms in a default shell.
 **Verify.** T · `UT-ERR-07`   **Trace.** SYS-0126; CN-0363
-**Built.** ○ not started — `IMP-0129` in `WP-03`
+**Built.** ◐ started — `IMP-0129` in `WP-03`
 **Now.** `DONE·MOVE` — `core/console.py::reconfigure_console_utf8`, called at each entry point.
 
 **`SW-0130`** · `SI-07` · `P1` · `R1` — Every run ends with a warning summary that reconciles
@@ -3296,14 +3296,14 @@ These bind every software item, so none owns them alone; the item field reads `a
 **Shall.** Path handling, case sensitivity, separators and dynamic library loading shall each be abstracted behind one implementation.
 **Accept.** No user-facing surface exposes a platform difference. A static check finds one implementation of each.
 **Verify.** A · `ANL-SW-61`   **Trace.** SYS-0248
-**Built.** ○ not started — `IMP-0364` in `WP-03`
+**Built.** ◐ started — `IMP-0364` in `WP-03`
 **Now.** `PARTIAL` — path handling is consistent; dynamic loading is abstracted in `sil_host` and duplicated by the ctypes host in Python, which `SW-0018` removes.
 
 **`SW-0365`** · all · `P0` · `R1` — Floating-point expectations are part of the delivery contract
 **Shall.** Compiler flag expectations affecting floating-point behaviour shall be declared, and a module built outside them shall produce a load-time warning naming the flag.
 **Accept.** A library built with a non-conforming flag set warns before its results are used.
 **Verify.** T · `UT-HOST-14`   **Trace.** SYS-0249
-**Built.** ○ not started — `IMP-0365` in `WP-03`
+**Built.** ● done — `IMP-0365` in `WP-03`
 **Now.** `NEW`.
 
 **`SW-0366`** · all · `P0` · `R1` — The suite runs on both platforms and compares

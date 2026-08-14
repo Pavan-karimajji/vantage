@@ -17,12 +17,13 @@ from pathlib import Path
 
 import yaml
 
+from adas_sim.config.paths import modules_root
 from adas_sim.diagnostics.errors import AuthoringError
 
 #: `shared_config` is cross-component calibration, not a "function" (R-MATH-2
 #: reasoning): the one path this framework may hardcode, because every
 #: project's ego geometry genuinely lives only here (docs/shared_config_plan.md).
-MODULES_ROOT = Path(__file__).resolve().parents[4]
+MODULES_ROOT = modules_root()
 SHARED_CONFIG_PROJECTS = MODULES_ROOT / "shared_config" / "projects"
 
 #: field name -> the ego_params.yaml key it comes from (R-NAME-3 ALL_CAPS keys).

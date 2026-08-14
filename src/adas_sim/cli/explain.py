@@ -20,11 +20,11 @@ GUI answers cannot drift apart.
 from __future__ import annotations
 
 import argparse
-import difflib
 from pathlib import Path
 
 from adas_sim.diagnostics.evidence import evidence, format_evidence
 from adas_sim.diagnostics.explain import explain, known_names
+from adas_sim.diagnostics.suggest import near_matches
 from adas_sim.core.runner import build_session_from_recording
 from adas_sim.session.session import Session
 from adas_sim.render.theme import THEMES, all_tokens, resolve as resolve_style_token
@@ -53,7 +53,7 @@ def _explain_with_style_tokens(name: str, session: Session) -> dict[str, object]
         # which can silently drop the actual best match (found by a real
         # test failure, not reasoned in advance).
         candidates = [*known_names(session), *all_tokens()]
-        matches = difflib.get_close_matches(name, candidates, n=3, cutoff=0.6)
+        matches = near_matches(name, candidates)
         facts = {**facts, "did_you_mean": matches}
     return facts
 

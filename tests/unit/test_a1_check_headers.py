@@ -76,13 +76,22 @@ def test_check_python_headers_accepts_the_real_template(tmp_path):
     assert findings == []
 
 
-def test_check_cpp_headers_reports_skipped_when_simcore_does_not_exist_yet():
-    """`src/simcore/` and `src/simengine/` do not exist until WP-03/WP-06 --
-    the current tree must scan zero C++ files, not silently pass a
-    nonexistent tree."""
+def test_check_cpp_headers_passes_on_the_current_skeleton():
+    """`src/simcore/` gained real content at `WP-03` (`errors.hpp`,
+    `events.hpp`, `events.cpp`); `src/simengine/` still has none until
+    `WP-14`."""
     findings, scanned = check_cpp_headers()
     assert findings == []
-    assert scanned == 0
+    assert scanned > 0
+
+
+def test_check_python_headers_exempts_scripts_build_py():
+    """`R-BUILD-2`: `scripts/build.py` is byte-identical across every
+    component and carries no `COMPONENT:` token by design -- must not be
+    flagged."""
+    findings, scanned = check_python_headers()
+    assert not any("scripts\\build.py" in f or "scripts/build.py" in f for f in findings)
+    assert scanned > 0
 
 
 def test_check_cpp_headers_fails_on_a_planted_missing_header(tmp_path):

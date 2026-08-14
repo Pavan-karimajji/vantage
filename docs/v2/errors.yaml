@@ -1,0 +1,73 @@
+# SI-07 errors -- the source of truth include/simcore/errors.hpp and
+# adas_sim/diagnostics/errors.py are hand-transcribed from (WP-03,
+# IMP-0121). scripts/check_error_parity.py verifies the two transcriptions
+# agree with each other; this file is not itself parsed by either.
+#
+# Kind is closed at four values (DG-5's own taxonomy, carried unchanged
+# from docs/v1/sim_naming_and_diagnostics.md): a new class needs a design
+# review, not a runtime extension point.
+#
+# ExitCode is eight values (Design SIM_Implementation_Design_v0.1.md
+# SS10.1) -- more than the four Kinds, because it is a finer-grained,
+# CLI-level concept: several ExitCode values (Coherence, Input, Timeout)
+# are situational codes a specific call site passes directly (WP-19/WP-20
+# and a future timeout path), never derived from a raised error's kind.
+# Only four of the eight are a Kind's *default* -- see default_exit_code
+# below. Renumbered from v1's four-value set (2/3/4/70) on WP-03,
+# 2026-08-13: EnvironmentError_/environment moved 3->6 (Infra), Internal
+# moved 70->8 (Crash), freeing 3/5/7 for Coherence/Input/Timeout.
+# Checked before renumbering: SimError.exit_code is read by exactly one
+# test (tests/unit/test_a1_errors.py) and is not wired into any real
+# sys.exit() yet -- safe to renumber.
+
+kind:
+  - name: authoring
+    means: the YAML/pipeline/scenario is wrong
+    fixed_by: the person who wrote the file
+    default_exit_code: config
+  - name: environment
+    means: a library, bundle or dependency is missing
+    fixed_by: "sim doctor says which"
+    default_exit_code: infra
+  - name: contract
+    means: an ABI/manifest/version mismatch
+    fixed_by: the component's build
+    default_exit_code: module
+  - name: internal
+    means: a framework bug
+    fixed_by: "an issue, with the run_id"
+    default_exit_code: crash
+
+error_fields:
+  # expected/found are separate fields, never one formatted string, so
+  # both ends stay machine-readable (IMP-0123).
+  - expected
+  - found
+  - where
+  - hint
+
+exit_code:
+  - name: ok
+    value: 0
+    means: success
+  - name: config
+    value: 2
+    means: authoring's default -- unchanged from v1
+  - name: coherence
+    value: 3
+    means: "a coherence-graph verdict blocked the run (WP-20) -- situational, never a Kind default"
+  - name: module
+    value: 4
+    means: contract's default -- unchanged from v1
+  - name: input
+    value: 5
+    means: "a damaged/refused recording (WP-19) -- situational, never a Kind default"
+  - name: infra
+    value: 6
+    means: "environment's default -- moved from 3 (v1) to make room for coherence/input"
+  - name: timeout
+    value: 7
+    means: "a per-exec() timeout (R-SIM-19) -- situational, never a Kind default"
+  - name: crash
+    value: 8
+    means: "internal's default -- moved from 70 (v1) into the same small contiguous range"

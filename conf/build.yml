@@ -1,20 +1,31 @@
 # Per-project x per-part toolchain/platform mapping for this component.
 #
-# adas-sim is a pure Python framework (S-A1, docs/sim_implementation_plan.md):
-# no settings, no compiled artifact. package_type "unknown" collapses
-# os/arch/compiler/build_type out of the package_id (conanfile.py's
-# package_id() calls self.info.clear() for this type), same shape as
-# modules/shared_config (docs/shared_config_plan.md). resdirs is empty: unlike
-# shared_config there is no projects/ resource directory to expose here.
+# adas-sim is no longer pure Python (WP-03, SWQ-01/DD-01): src/simcore is a
+# real static-library target, sibling to the Python package (adas_sim,
+# installed via pyproject.toml, unrelated to this file).
 #
-# variants.base must exist even though it carries nothing yet: conanfile.py's
-# requirements()/build_requirements()/build() all resolve
-# variants[<project>] unconditionally for the default "base" project option
-# (R-VAR-2), so an empty base: {} is load-bearing, not a placeholder.
+# package_type "static-library" makes conanfile.py's layout() branch into
+# its output_folder-kind compiled-library path, which assumes the same
+# src/platform/<comp>_sil/ shape df/vdy's SIL DLLs use -- that path is a
+# real mismatch against Design's actual tree (src/simcore/, include/
+# simcore/, no src/platform/ at all) and layout() will describe wrong
+# include/lib directories. Accepted deliberately (WP-03, 2026-08-14):
+# those self.cpp.source/self.cpp.build fields are only read by another
+# component consuming adas-sim as a Conan *editable* dependency, and none
+# does yet -- the mismatch is latent, not currently triggered. Revisit
+# when a real consumer needs simcore's headers/lib through Conan (likely
+# whichever WP first links a component against simcore directly), at
+# which point conanfile.py's shared layout() may need a third branch
+# rather than reusing the SIL-DLL one -- that is a conanfile.py change,
+# so it needs the same cross-submodule pass R-BUILD-6 requires, not a
+# quiet edit here.
 
 recipe:
-  type: unknown
-  resdirs: []
+  type: static-library
+  libs: [simcore]
 
 variants:
-  base: {}
+  base:
+    sil:
+      platforms:
+        - build: vs2026

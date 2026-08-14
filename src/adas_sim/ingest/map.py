@@ -50,11 +50,11 @@ from pathlib import Path
 
 import yaml
 
+from adas_sim.config.paths import superproject_root as _superproject_root
 from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.io.base import Provenance, RecordingReader, RunManifest, TopicInfo
 
-#: `io/ingest.py` -> `io` -> `adas_sim` -> `src` -> `sim` -> `modules` -> superproject root.
-_SUPERPROJECT_ROOT = Path(__file__).resolve().parents[5]
+_SUPERPROJECT_ROOT = _superproject_root()
 
 _ALLOWED_PROVIDES_KEYS = frozenset({"port", "proto_type", "origin"})
 _ALLOWED_ABSENT_KEYS = frozenset({"reason"})

@@ -8,10 +8,11 @@ R-STYLE-1's file header block, mechanised. Every `.cpp`/`.hpp`/`.h`/`.py`
 under this module's own tree carries `Copyright / Proprietary /
 COMPONENT: SIM / @author` (Python, `#`-style) or `Copyright / Proprietary /
 COMPONENT: SIM / @file / @brief / @author` (C++, `//`+`///`-style), per
-`docs/file_header_template.md`. Extended in WP-03 to cover
-`src/simcore/**` and `src/simengine/**` once they exist -- today they do
-not, and this check says so rather than reporting a false PASS (Plan
-WP-01's third Exit gate: a check that scanned zero must report SKIPPED).
+`docs/file_header_template.md`. `src/simcore/**` and `src/simengine/**`
+gained real content at `WP-03`/`WP-14`; a scan that finds none reports
+`SKIPPED` rather than a false PASS (Plan WP-01's third Exit gate).
+`scripts/build.py` is exempt (`R-BUILD-2`): byte-identical across every
+component, so it cannot carry a per-component `COMPONENT:` token.
 """
 
 from __future__ import annotations
@@ -29,6 +30,14 @@ _EXCLUDE_DIR_NAMES = {
     "egg-info",
 }
 
+# R-BUILD-2: scripts/build.py is byte-identical across every component --
+# it cannot carry a COMPONENT: SIM token, because the same file also sits
+# in df/vdy/sil_host/etc. with no per-component token at all. Not this
+# check's exemption to invent: the file's own docstring already states
+# "Physically identical across every component ... no component name or
+# kind may appear in it."
+_EXCLUDE_FILES = {"scripts/build.py"}
+
 _PY_HEADER = re.compile(
     r"^# Copyright \(c\) .+\. All Rights Reserved\.\n"
     r"# Proprietary and Confidential\.\n"
@@ -45,14 +54,18 @@ _CPP_HEADER = re.compile(
 )
 
 
-def _excluded(path: Path) -> bool:
-    return any(part in _EXCLUDE_DIR_NAMES or part.endswith(".egg-info") for part in path.parts)
+def _excluded(path: Path, sim_root: Path) -> bool:
+    if any(part in _EXCLUDE_DIR_NAMES or part.endswith(".egg-info") for part in path.parts):
+        return True
+    return path.relative_to(sim_root).as_posix() in _EXCLUDE_FILES
 
 
-def _iter_files(root: Path, suffixes: tuple[str, ...]) -> list[Path]:
+def _iter_files(root: Path, suffixes: tuple[str, ...], sim_root: Path) -> list[Path]:
     if not root.is_dir():
         return []
-    return sorted(p for p in root.rglob("*") if p.suffix in suffixes and p.is_file() and not _excluded(p))
+    return sorted(
+        p for p in root.rglob("*") if p.suffix in suffixes and p.is_file() and not _excluded(p, sim_root)
+    )
 
 
 def check_python_headers(sim_root: Path = SIM_ROOT) -> tuple[list[str], int]:
@@ -60,7 +73,7 @@ def check_python_headers(sim_root: Path = SIM_ROOT) -> tuple[list[str], int]:
     findings: list[str] = []
     files = [
         p for root in ("src", "scripts", "tests", "docs/v2/py")
-        for p in _iter_files(sim_root / root, (".py",))
+        for p in _iter_files(sim_root / root, (".py",), sim_root)
     ]
     for path in files:
         text = path.read_text(encoding="utf-8")
@@ -76,7 +89,7 @@ def check_cpp_headers(sim_root: Path = SIM_ROOT) -> tuple[list[str], int]:
     findings: list[str] = []
     files = [
         p for root in ("src/simcore", "src/simengine", "include/simcore")
-        for p in _iter_files(sim_root / root, (".cpp", ".hpp", ".h"))
+        for p in _iter_files(sim_root / root, (".cpp", ".hpp", ".h"), sim_root)
     ]
     for path in files:
         text = path.read_text(encoding="utf-8")

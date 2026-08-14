@@ -19,6 +19,11 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 SIM_ROOT = SCRIPT_DIR.parent
 SUPERPROJECT_ROOT = SIM_ROOT.parent.parent
 SRC_ROOT = SIM_ROOT / "src" / "adas_sim"
+#: WP-03: the enforced surface for R-SIM-1-derived checks is all of
+#: `modules/sim/src/**` (adas_sim + simcore + simengine), not just the
+#: Python package -- the rule's own text always said "src/**"; only
+#: adas_sim existed to scan before simcore/simengine gained real content.
+ALL_SRC_ROOT = SIM_ROOT / "src"
 
 # GT-1: R-SIM-1's grep, `\b(aeb|bsd|lca|acc|ldw|lka)\b`, run over modules/sim/src.
 #
@@ -106,14 +111,27 @@ def _iter_py_files(root: Path):
     return sorted(root.rglob("*.py"))
 
 
-def check_gt1(src_root: Path = SRC_ROOT) -> list[str]:
-    """GT-1 -- no function names in the framework (R-SIM-1). `io/legacy.py`'s
-    exemption is gone (`S-C9`): the one thing that needed it -- recognising
-    real legacy topic names -- moved to `modules/df/sim/ingest/carla_legacy.
-    yaml`, declared data outside `src/`, which `GT-1` never scanned in the
-    first place."""
+#: WP-03: simcore/simengine are C++, not Python -- GT-1's own concern (no
+#: banned function-name string in framework code) applies to a .cpp/.hpp/.h
+#: file exactly as much as a .py one.
+_SOURCE_EXTENSIONS = (".py", ".cpp", ".hpp", ".h")
+
+
+def _iter_source_files(root: Path):
+    if not root.is_dir():
+        return []
+    return sorted(p for p in root.rglob("*") if p.is_file() and p.suffix in _SOURCE_EXTENSIONS)
+
+
+def check_gt1(src_root: Path = ALL_SRC_ROOT) -> list[str]:
+    """GT-1 -- no function names in the framework (R-SIM-1), over all of
+    `src/**` (`.py`/`.cpp`/`.hpp`/`.h`) -- `simcore`/`simengine` included
+    since `WP-03`. `io/legacy.py`'s exemption is gone (`S-C9`): the one
+    thing that needed it -- recognising real legacy topic names -- moved to
+    `modules/df/sim/ingest/carla_legacy.yaml`, declared data outside
+    `src/`, which `GT-1` never scanned in the first place."""
     findings = []
-    for path in _iter_py_files(src_root):
+    for path in _iter_source_files(src_root):
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             if _FUNCTION_TOKENS.search(line):
                 findings.append(f"GT-1 {path}:{lineno}: function-name token in framework code: {line.strip()!r}")
@@ -145,8 +163,11 @@ def check_gt3(src_root: Path = SRC_ROOT, superproject_root: Path = SUPERPROJECT_
     return findings
 
 
-def check_gt6(src_root: Path = SRC_ROOT) -> list[str]:
-    """GT-6 -- the framework imports no component (R-SIM-11)."""
+def check_gt6(src_root: Path = ALL_SRC_ROOT) -> list[str]:
+    """GT-6 -- the framework imports no component (R-SIM-11), over all of
+    `src/**` -- Python-only concept (an `import`/`from` statement), so this
+    stays on `_iter_py_files` even though the scanned root now also covers
+    `simcore`/`simengine` (no `.py` lives there today; harmless to widen)."""
     findings = []
     for path in _iter_py_files(src_root):
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
@@ -239,13 +260,15 @@ def check_no_manifest_names_codec(superproject_root: Path = SUPERPROJECT_ROOT) -
     return findings
 
 
-def run_all(src_root: Path = SRC_ROOT, superproject_root: Path = SUPERPROJECT_ROOT) -> list[str]:
-    sim_root = src_root.parent.parent
+def run_all(
+    src_root: Path = SRC_ROOT, superproject_root: Path = SUPERPROJECT_ROOT, all_src_root: Path = ALL_SRC_ROOT,
+) -> list[str]:
+    sim_root = all_src_root.parent
     return [
-        *check_gt1(src_root),
+        *check_gt1(all_src_root),
         *check_gt2(superproject_root),
         *check_gt3(src_root, superproject_root),
-        *check_gt6(src_root),
+        *check_gt6(all_src_root),
         *check_gt11(superproject_root),
         *check_ut_d8_9(src_root),
         *check_no_world_model_client(sim_root),
