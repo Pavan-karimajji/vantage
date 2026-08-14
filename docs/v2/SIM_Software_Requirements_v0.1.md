@@ -748,7 +748,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** A port value shall carry source time, cycle counter, status, capture time, simulation time, producer, mode and a repeat indicator, and each field shall be either a value or an explicit *unknown*.
 **Accept.** No port value on any path has a field that is absent rather than explicitly unknown. Every one of the eight is present in every export and every evidence answer.
 **Verify.** T · `UT-BUS-01`   **Trace.** SYS-0029; CN-0072
-**Built.** ○ not started — `IMP-0043` in `WP-07`
+**Built.** ● done — `IMP-0043` in `WP-07`
 **Now.** `PARTIAL` — `core/tick.py::PortValue` carries payload, `valid`, `updated`, `origin`, a derived `age_s` and a capture stamp; the source-time, cycle-counter and status fields of the signal header do not exist, because today's recordings are framework-produced and carry none.
 *Note:* the contract side is settled (`IFQ-06`, closed 2026-08-12, `docs/interfaces_signal_header_plan.md` §3). `SignalHeader` carries **two** stamps — `source_timestamp_*` always filled and `capture_timestamp_*` `optional` — so all four of the fields this `Now.` line calls missing gain a producer-side home. Capture will be unset for most producers in `R1`, which is an explicit *unknown* and not a gap.
 
@@ -756,7 +756,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** A port value shall carry reception time and validity time as two distinct integer-nanosecond quantities under two distinct names; validity time shall belong to the signal header and shall be explicitly unknown rather than defaulted; reception time shall belong to the recording envelope and shall never appear as a header field.
 **Accept.** A derived data age of exactly zero occurs only where the two genuinely coincide and is distinguishable from unknown at every surface. No constructor, conversion or default takes reception time as validity time. The two names differ at every surface — type, export, evidence answer and log.
 **Verify.** T · `UT-BUS-02`   **Trace.** SYS-0030, SYS-0284; CN-0298, CN-0391
-**Built.** ○ not started — `IMP-0044` in `WP-07`
+**Built.** ● done — `IMP-0044` in `WP-07`
 **Now.** `DONE·MOVE` — `core/tick.py`'s `capture_ns: int | None` with `None` never replaced, plus `io/base.Capabilities.capture_time`; the rule and its tests are directly reusable. What has been missing is not the *place* but a **producer** that could fill it; `IFQ-06`'s `capture_timestamp_*` supplies one, and this requirement's *"belongs to the signal header"* clause is what decided that question.
 *Note:* the separation is by **location**, not only by value. Validity describes the data and travels with it; reception describes the recording and travels with the message. Putting reception in the header is what makes the two look interchangeable, and once they look interchangeable the defaulting this requirement forbids becomes an easy mistake to make rather than an unwritable one.
 *Note (2026-08-13):* *"integer-nanosecond"* here describes the **engine's internal representation** (`SW-0046`), not the wire. `IFQ-01` ratified the header's unit as **microseconds** — agreeing with `CN-0019`, which has required µs on every module output interface since the concept baseline — and `SW-0033`'s single ingest conversion is what joins the two. This is written down because the nanosecond wording in this `Shall` was cited during `IFQ-01` as an argument for a nanosecond wire field, and a reader arriving later would make the same inference. **The two clauses do not conflict: one fixes a unit at the boundary, the other inside it.**
@@ -765,28 +765,28 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Data age shall be computed from validity time where known and from the hold schedule otherwise, and shall not be stored as an independent field.
 **Accept.** No path can set an age inconsistent with the two timestamps it is derived from. Changing a timestamp changes the age.
 **Verify.** T · `UT-BUS-03`   **Trace.** SYS-0030, SYS-0070
-**Built.** ○ not started — `IMP-0045` in `WP-07`
+**Built.** ● done — `IMP-0045` in `WP-07`
 **Now.** `DONE·MOVE` — `core/tick.py`'s derived `age_s`.
 
 **`SW-0046`** · `SI-02` · `P0` · `R1` — All internal time is integer nanoseconds
 **Shall.** No time quantity inside the engine shall be a floating-point type.
 **Accept.** A type scan over the engine's time-carrying structures finds no floating-point member. A period declared in configuration is integer microseconds and a fractional value is refused.
 **Verify.** A · `ANL-SW-14` · T · `UT-BUS-04`   **Trace.** SYS-0060; CN-0139
-**Built.** ○ not started — `IMP-0046` in `WP-07`
+**Built.** ● done — `IMP-0046` in `WP-07`
 **Now.** `PARTIAL` — `sil_host` uses `int64_t` nanoseconds throughout, which is correct; `core/tick.py` exposes `age_s` and `hold_age_s` as floats, which is legitimate only because those are human-facing.
 
 **`SW-0047`** · `SI-02` · `P0` · `R1` — Missing is not zero
 **Shall.** An absent or invalid field shall be represented explicitly and shall never be presented as a zero, an empty string or an empty list.
 **Accept.** A port value with an absent field reports absent through export, player and evidence query alike.
 **Verify.** T · `UT-BUS-05`   **Trace.** SYS-0026; v1 `NR-SIM-4`
-**Built.** ○ not started — `IMP-0047` in `WP-07`
+**Built.** ● done — `IMP-0047` in `WP-07`
 **Now.** `DONE·MOVE` — the discipline is established framework-wide (`core/errors.py`, `core/evidence.py`'s `unknown`) and is one of the codebase's stronger properties.
 
 **`SW-0048`** · `SI-02` · `P0` · `R1` — A value carries its origin from a closed set
 **Shall.** Every port value shall carry an origin tag from the closed set `measured` · `truth` · `mocked` · `simulated` · `overridden` · `unknown`, and no seventh value shall be producible.
 **Accept.** A static check enumerates the set from the published schema and compares it against the code on every build.
 **Verify.** T · `UT-BUS-06` · A · `ANL-SW-15`   **Trace.** SYS-0033
-**Built.** ○ not started — `IMP-0048` in `WP-07`
+**Built.** ● done — `IMP-0048` in `WP-07`
 **Now.** `DONE·MOVE` — `io/base.Provenance` is exactly this closed set.
 
 ### 6.2 Cycle reconstruction — the recovery ladder
@@ -868,7 +868,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Bulk arrays shall be carried as a reference of topic plus time into the recording, and shall not be copied into a tick structure or a scene.
 **Accept.** A tick structure containing a bulk reference is smaller than a declared budget; exceeding it is an error naming the port.
 **Verify.** T · `UT-BUS-17`   **Trace.** SYS-0118; v1 `NR-SIM-43`
-**Built.** ○ not started — `IMP-0059` in `WP-07`
+**Built.** ● done — `IMP-0059` in `WP-07`
 **Now.** `DONE·MOVE` — `scene/types.py`'s `BulkRef` and the budget check in `Layer.__post_init__` implement this for the scene; the bus half does not exist.
 
 ### 6.4 Static and parameter data
@@ -877,7 +877,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Data that is valid for a whole recording rather than per cycle shall be a distinct port class with no cycle structure, no hold semantics and no age.
 **Accept.** A static port is never marked stale, never held, and never contributes to the base grid. Asking for its age returns *not applicable*, not a number.
 **Verify.** T · `UT-BUS-18`   **Trace.** — **gap, see §32.3**; **evidence** §2.5
-**Built.** ○ not started — `IMP-0060` in `WP-07`
+**Built.** ● done — `IMP-0060` in `WP-07`
 **Now.** `NEW`.
 *Note:* without this, static parameter data must masquerade as a cyclic port at some invented rate, which puts an invented period into the base-grid computation — the exact class of fabricated value `SYS-0035` forbids.
 
@@ -892,21 +892,21 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** There shall be a versioned catalogue of named ports carrying typed payloads, and every port referenced in any configuration shall resolve against it at load.
 **Accept.** An unresolvable port fails the load naming the port and listing near matches. The catalogue's version is recorded in the run manifest.
 **Verify.** T · `UT-BUS-20`   **Trace.** SYS-0023
-**Built.** ○ not started — `IMP-0388` in `WP-07`
+**Built.** ● done — `IMP-0388` in `WP-07`
 **Now.** `NEW` — today a port exists because a manifest declares it; there is no catalogue above the manifests. **`OQ-11` closed 2026-08-12, and the answer is a third shape: derive the catalogue, neither author one nor adopt one.** It is the union of the `ModuleManifest`s present in the run, computed at load. *Defining* one would create a second description of a port set we own, free to drift — exactly what `R-SIM-16` forbids (*"hand-mapping a port set we own would create a second description free to drift from the manifest"*); *adopting* an external one as the resolution authority has the same defect and adds a dependency, letting an outside document decide whether a port our compiler emitted is legal. Deriving has neither, because the manifest is already generated from `conf/ports.yaml` (`R-SIM-22`) gated by `ENABLED_FUNCTIONS` (`R-VAR-5`), so it is *by construction* a description of what compiled. Each clause is then already met: the resolution point is `SI-13`'s probe pass (`SW-0411`); the unresolvable-port error is `R-SIM-21`'s `AuthoringError`, which already lists every port the manifest declares; and the catalogue's version is the set of `(module, manifest version, library hash)` triples already in the run manifest. **If an organisation-level catalogue exists, adopt its vocabulary and never its authority** — then a late answer costs a rename, not a redesign. Argued in `SIM_Open_Question_Answers_v0.1.md` §3.1.
 
 **`SW-0389`** · `SI-02` · `P1` · `R1` — Port identity is independent of who produces it
 **Shall.** A port's identity shall be independent of which component produces it, so a component may be split in two without invalidating existing recordings, configurations, plug-ins or ingest maps.
 **Accept.** Splitting a two-function component into two, with port names unchanged, leaves every existing recording readable, every plug-in bound and every ingest map valid.
 **Verify.** T · `UT-BUS-21`   **Trace.** SYS-0036
-**Built.** ○ not started — `IMP-0389` in `WP-07`
+**Built.** ● done — `IMP-0389` in `WP-07`
 **Now.** `DONE` — port identity is already the port name, and plug-ins bind by port-name suffix rather than by producer, which is what makes this hold.
 
 **`SW-0390`** · `SI-02` · `P1` · `R1` — A project extends the catalogue in its own namespace
 **Shall.** A project shall be able to add ports in a project-local namespace without forking the catalogue, and a project-local name shall not be able to collide with a core one.
 **Accept.** A project-local port is usable in configuration, export and visualization, and a name colliding with a core port is refused naming both.
 **Verify.** T · `UT-BUS-22`   **Trace.** SYS-0027
-**Built.** ○ not started — `IMP-0390` in `WP-07`
+**Built.** ● done — `IMP-0390` in `WP-07`
 **Now.** `NEW`.
 
 ---

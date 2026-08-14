@@ -16,14 +16,14 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from check_closed_sets import check_closed_sets  # noqa: E402
+from check_closed_sets import _CLOSED_SETS, check_closed_sets  # noqa: E402
 
 
 def test_check_closed_sets_passes_on_the_current_skeleton():
     findings, checked, not_yet = check_closed_sets()
     assert findings == []
-    assert checked == 2  # OverrideVerb, FaultVerb
-    assert not_yet == 4  # Origin, Rung, MergePolicy, ErrorKind
+    assert checked == 3  # OverrideVerb, FaultVerb, Origin
+    assert not_yet == 3  # Rung, MergePolicy, ErrorKind
 
 
 def test_check_closed_sets_fails_on_a_planted_extra_verb():
@@ -44,7 +44,7 @@ def test_check_closed_sets_fails_on_a_planted_extra_verb():
     globals()["_seven_verbs_holder"] = _SevenVerbs
     findings, checked, not_yet = check_closed_sets(
         closed_sets={
-            "OverrideVerb": (__name__, "_seven_verbs_holder", frozenset(
+            "OverrideVerb": ("py", __name__, "_seven_verbs_holder", frozenset(
                 {"const", "hold", "offset", "scale", "select", "drop"}
             ), "R-SIM-15"),
         }
@@ -67,7 +67,7 @@ def test_check_closed_sets_fails_on_a_planted_missing_verb():
     globals()["_five_verbs_holder"] = _FiveVerbs
     findings, checked, not_yet = check_closed_sets(
         closed_sets={
-            "OverrideVerb": (__name__, "_five_verbs_holder", frozenset(
+            "OverrideVerb": ("py", __name__, "_five_verbs_holder", frozenset(
                 {"const", "hold", "offset", "scale", "select", "drop"}
             ), "R-SIM-15"),
         }
@@ -81,9 +81,49 @@ def test_check_closed_sets_fails_on_a_planted_missing_verb():
 def test_check_closed_sets_reports_unimportable_module():
     findings, checked, not_yet = check_closed_sets(
         closed_sets={
-            "Nonexistent": ("adas_sim.does_not_exist", "Whatever", frozenset(), "N/A"),
+            "Nonexistent": ("py", "adas_sim.does_not_exist", "Whatever", frozenset(), "N/A"),
         }
     )
     assert checked == 1
     assert findings
     assert "cannot import" in findings[0]
+
+
+def test_check_closed_sets_fails_on_a_planted_cpp_origin_extra_value(tmp_path):
+    """ANL-SW-15's own planted-violation case, over the C++ path (R-REQ-9):
+    a seventh Origin value added to bus.hpp without a requirement change."""
+    planted = tmp_path / "bus.hpp"
+    planted.write_text(
+        "enum class Origin { Measured, Truth, Mocked, Simulated, Overridden, Unknown, Sneaky };\n",
+        encoding="utf-8",
+    )
+    findings, checked, not_yet = check_closed_sets(
+        closed_sets={
+            "Origin": ("cpp", planted, "Origin", frozenset(
+                {"measured", "truth", "mocked", "simulated", "overridden", "unknown"}
+            ), "SW-0048"),
+        }
+    )
+    assert checked == 1
+    assert findings
+    assert "unexpected" in findings[0]
+    assert "sneaky" in findings[0]
+
+
+def test_check_closed_sets_passes_on_the_real_cpp_origin_enum():
+    findings, checked, not_yet = check_closed_sets(
+        closed_sets={"Origin": _CLOSED_SETS["Origin"]}
+    )
+    assert findings == []
+    assert checked == 1
+
+
+def test_check_closed_sets_reports_unreadable_cpp_header(tmp_path):
+    findings, checked, not_yet = check_closed_sets(
+        closed_sets={
+            "Origin": ("cpp", tmp_path / "does_not_exist.hpp", "Origin", frozenset(), "SW-0048"),
+        }
+    )
+    assert checked == 1
+    assert findings
+    assert "cannot read" in findings[0]

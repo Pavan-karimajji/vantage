@@ -16,6 +16,13 @@ add_library(simcore STATIC
     io/translate.cpp
     io/meta.cpp
     io/codecs/mcap.cpp
+    # WP-07 (SI-02): the signal header, Origin, bulk-array references, the
+    # PortKind::Static rule and the port catalogue.
+    bus/header.cpp
+    bus/value.cpp
+    bus/static_data.cpp
+    bus/bulk.cpp
+    bus/catalogue.cpp
 )
 target_include_directories(simcore PUBLIC ${PROJECT_SOURCE_DIR}/include)
 # PRIVATE: third_party/ is an implementation detail of simcore's own .cpp

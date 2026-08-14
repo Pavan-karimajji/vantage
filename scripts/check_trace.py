@@ -62,7 +62,13 @@ def check_test_ids_appear_in_tests(tests_root: Path = TESTS_ROOT) -> tuple[list[
         return [f"tests root does not exist: {tests_root}"], 0
 
     haystack = ""
-    for path in sorted(tests_root.rglob("*.py")):
+    # WP-06/WP-07: `tests/unit/test_ut_*.cpp` exists now (simcore's own
+    # gtest suite) -- a `*.py`-only glob made every C++-cited id
+    # (`UT-IO-*`, `UT-BUS-*`) invisible to this check since the day the
+    # first one landed, silently defeating R-REQ-9 for exactly the ids it
+    # exists to police. Discovered and fixed here rather than left as a
+    # second known gap alongside the one this docstring already names.
+    for path in sorted(list(tests_root.rglob("*.py")) + list(tests_root.rglob("*.cpp")) + list(tests_root.rglob("*.hpp"))):
         haystack += path.read_text(encoding="utf-8") + "\n"
 
     findings: list[str] = []

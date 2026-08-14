@@ -398,22 +398,23 @@ flowchart LR
 - **`RunSpec::sources[].ingest`** (`SW-0032`'s "constructed from `RunSpec::sources[].ingest`") **is not wired in this pass.** `emit_run_spec` already emits `"ingest": []` (always empty, `WP-12` not landed) and `load.cpp` does not yet parse it — `Translator` takes a `std::vector<IngestRow>` directly, and something in a later `WP` (once `WP-12`'s resolved table exists) wires `RunSpec` through to it. Same "build the mechanism, do not author the table yet" precedent as `IMP-0388`.
 
 ### WP-07 · `MP-1` · `SI-02` `bus` — the signal header
-- [ ] **Prereq:** `WP-06`. **`O-3`/`O-4`: this precedes the ladder and everything measurable.**
-- [ ] **Lands:** `IMP-0043`…`IMP-0048`, `IMP-0059`, `IMP-0060`, `IMP-0388`…`IMP-0390` — 11.
-  - [ ] `IMP-0043` · `SW-0043` · `EXTEND` — `bus.hpp::Header`
-  - [ ] `IMP-0044` · `SW-0044` · `MOVE` — `header.cpp`
-  - [ ] `IMP-0045` · `SW-0045` · `MOVE` — `value.cpp::PortValue::age_ns()`
-  - [ ] `IMP-0046` · `SW-0046` · `EXTEND` — `header.cpp`
-  - [ ] `IMP-0047` · `SW-0047` · `MOVE` — `header.cpp::Unknown<T>`
-  - [ ] `IMP-0048` · `SW-0048` · `MOVE` — `bus.hpp::Origin`
-  - [ ] `IMP-0059` · `SW-0059` · `MOVE` — `src/simcore/bus/bulk.cpp::BulkRef`
-  - [ ] `IMP-0060` · `SW-0060` · `NEW` — `src/simcore/bus/static_data.cpp`
-  - [ ] `IMP-0388` · `SW-0388` · `NEW` — `src/simcore/bus/catalogue.cpp::PortCatalogue::Resolve`
-  - [ ] `IMP-0389` · `SW-0389` · `KEEP` — `catalogue.cpp::Find`
-  - [ ] `IMP-0390` · `SW-0390` · `NEW` — `catalogue.cpp`
-- [ ] **Files:** `include/simcore/bus.hpp` · `src/simcore/bus/{header,value,bulk,catalogue,static_data}.cpp`.
-- [ ] **Exit:** all eight header fields present on every port value on every path, each value-or-explicitly-unknown (`UT-BUS-01`); `ANL-SW-14` finds no float seconds inside `simcore`; `Unknown<T>` has no implicit conversion, so `IMP-0047` is structural.
-- [ ] **Blocked-but-not-blocking:** `IMP-0388` needs `OQ-11`. Build the catalogue mechanism; do not author a catalogue until the answer is in.
+- [x] **Prereq:** `WP-06`. **`O-3`/`O-4`: this precedes the ladder and everything measurable.**
+- [x] **Lands:** `IMP-0043`…`IMP-0048`, `IMP-0059`, `IMP-0060`, `IMP-0388`…`IMP-0390` — 11/11 done and tested.
+  - [x] `IMP-0043` · `SW-0043` · `EXTEND` — `bus.hpp::Header` — `UT-BUS-01` green
+  - [x] `IMP-0044` · `SW-0044` · `MOVE` — `header.cpp` — `UT-BUS-02` green
+  - [x] `IMP-0045` · `SW-0045` · `MOVE` — `value.cpp::PortValue::age_ns()` — `UT-BUS-03` green
+  - [x] `IMP-0046` · `SW-0046` · `EXTEND` — `header.cpp` — `ANL-SW-14`, `UT-BUS-04` green
+  - [x] `IMP-0047` · `SW-0047` · `MOVE` — `header.cpp::Unknown<T>` — `UT-BUS-05` green
+  - [x] `IMP-0048` · `SW-0048` · `MOVE` — `bus.hpp::Origin` — `UT-BUS-06`, `ANL-SW-15` green
+  - [x] `IMP-0059` · `SW-0059` · `MOVE` — `src/simcore/bus/bulk.cpp::BulkRef` — `UT-BUS-17` green
+  - [x] `IMP-0060` · `SW-0060` · `NEW` — `src/simcore/bus/static_data.cpp` — `UT-BUS-18` green
+  - [x] `IMP-0388` · `SW-0388` · `NEW` — `src/simcore/bus/catalogue.cpp::PortCatalogue::Resolve` — `UT-BUS-20` green
+  - [x] `IMP-0389` · `SW-0389` · `KEEP` — `catalogue.cpp::Find` — `UT-BUS-21` green
+  - [x] `IMP-0390` · `SW-0390` · `NEW` — `catalogue.cpp` — `UT-BUS-22` green
+- [x] **Files:** `include/simcore/bus.hpp` · `src/simcore/bus/{header,value,bulk,catalogue,static_data}.cpp`. Also touched: `src/simcore/runspec/load.cpp` (`SW-0046`'s Accept clause -- `grid.step_ns`/`period_ns` refuse a fractional JSON number, the one door configuration enters through, R-SIM-11), `scripts/check_time_units.py` (new, `ANL-SW-14`), `scripts/check_closed_sets.py` (`Origin` entry, `ANL-SW-15` -- extended to read a C++ enum by regex alongside the existing Python-import path), `scripts/ci_gate.py` (registers `check_time_units.py`).
+- [x] **Exit:** all eight header fields present on every port value on every path, each value-or-explicitly-unknown (`UT-BUS-01`); `ANL-SW-14` finds no float seconds inside `simcore`; `Unknown<T>` has no implicit conversion, so `IMP-0047` is structural. — closed by: `simcore_tests` 41/41 green (includes the pre-existing `UT-IO-*` suite, unaffected); `check_time_units.py`/`check_closed_sets.py` both clean, with planted-violation coverage for each (`R-REQ-9`).
+- [x] **`IMP-0388`'s `OQ-11` blocker:** closed 2026-08-12 (design `A-4`) -- the catalogue is **derived**, never authored or adopted: `PortCatalogue::Resolve` is the union of `RunSpec::stages[].ports[]`, which is already what compiled (R-SIM-22). `SW-0390`'s project namespace is a separate, additive `AddProjectPort` call -- nothing in `RunSpec` carries a project field yet, so this stays a mechanism a future WP wires a real source into, not a design gap.
+- [x] **Scoping note (honest, not silent, 2026-08-14):** `PortValue` carries `port`/`header`/`origin`/`kind`/`updated`/`hold_ns`/`payload`/`bulk`/`age_ns()` -- `quality`/`rung` are deliberately **not** fields yet (design §5.1 assigns them to `IMP-0052`, `WP-08`); adding them now would be an unused, speculative copy of a decision `WP-08`'s `CycleReconstructor` hasn't made. `CycleReconstructor`/`PortBus` themselves are not declared in `bus.hpp` for the same reason. `PortValue::payload` is raw bytes (`std::vector<std::uint8_t>`), not `io::LazyPayload<T>` -- structured/lazy decode wiring has no consumer before `module_host` (`WP-10`).
 
 ### WP-08 · `MP-1` · `SI-02` `bus` — cycle reconstruction, the recovery ladder
 - [ ] **Prereq:** `WP-07` (`O-3`).

@@ -551,7 +551,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The system shall define a port model: a versioned catalogue of named ports carrying typed payloads.
 **Accept.** Every port referenced in any configuration resolves against the catalogue at load, or the load fails naming the port and listing near matches.
 **Verify.** T · `SYT-DAT-01`   **Trace.** CN-0066; v1 `NR-SIM-8`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-07`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0024`** · `P0` · `R1` — Readers and modules do not meet
 **Shall.** Readers shall produce port values and modules shall consume port values; neither shall address the other.
@@ -569,13 +569,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Missing or invalid fields shall be represented explicitly and never silently zero-filled.
 **Accept.** A port value with an absent field reports absent through every surface — export, player, evidence query — and never `0`, `0.0` or an empty list.
 **Verify.** T · `SYT-DAT-03`   **Trace.** CN-0070; v1 `NR-SIM-4`
-**Built.** ○ not started — 0/2 software requirements done, in `WP-07`, `WP-29`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-07`, `WP-29`
 
 **`SYS-0027`** · `P1` · `R1` — Project-local extension
 **Shall.** A project shall be able to extend the port model in a project-local namespace without forking the core.
 **Accept.** A project-local port is usable in configuration, export and visualization, and its name cannot collide with a core port.
 **Verify.** T · `SYT-DAT-04`   **Trace.** CN-0071, CN-0274
-**Built.** ○ not started — 0/1 software requirements done, in `WP-07`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0028`** · `P0` · `R1` — Schemas travel with the component
 **Shall.** Payload schemas shall travel with the component, embedded in its manifest, and the framework shall require no generated bindings and no sibling source checkout to decode any component's ports.
@@ -589,13 +589,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Every port value shall carry: source time, cycle counter, status, capture time, simulation time, producer, mode, and a repeat indicator.
 **Accept.** Every port value in every export and every evidence answer has all eight fields present, each either a value or an explicit *unknown*.
 **Verify.** T · `SYT-DAT-06`   **Trace.** CN-0072; v1 `NR-SIM-7`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-07`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0030`** · `P0` · `R1` — Two clocks, never collapsed
 **Shall.** A recorded message shall carry two distinct timestamps — the instant the data describes, and the instant it was received — and the system shall never default one to the other.
 **Accept.** Where capture time is unknown it reads *unknown*; a derived data age of exactly zero occurs only when capture and reception genuinely coincide, and is distinguishable from unknown in every surface.
 **Verify.** T · `SYT-DAT-07`   **Trace.** CN-0298, CN-0139; v1 `CR-SIM-4`
-**Built.** ○ not started — 0/4 software requirements done, in `WP-07`, `WP-11`, `WP-17`
+**Built.** ◐ started — 2/4 software requirements done, in `WP-07`, `WP-11`, `WP-17`
 
 **`SYS-0031`** · `P1` · `R1` — Source time preferred, and the choice recorded
 **Shall.** Source time shall be preferred over capture time where available, and the system shall record which was used, per port, in the run manifest.
@@ -615,7 +615,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Every port shall carry an origin tag from the closed set: `measured`, `truth`, `mocked`, `simulated`, `overridden`, `unknown`.
 **Accept.** No seventh value can be produced by any code path. A recording with no provenance metadata yields `unknown`, never `measured`.
 **Verify.** T · `SYT-DAT-10` · `ANL-04`   **Trace.** CN-0299, CN-0300, CN-0286; v1 `CR-SIM-20`
-**Built.** ◐ started — 2/4 software requirements done, in `WP-06`, `WP-07`, `WP-11`
+**Built.** ◐ started — 3/4 software requirements done, in `WP-06`, `WP-07`, `WP-11`
 
 **`SYS-0034`** · `P0` · `R1` — Reconstructed values are marked
 **Shall.** A value reconstructed rather than read shall be marked as reconstructed everywhere it is rendered, exported or explained.
@@ -633,7 +633,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A component shall be splittable into two without invalidating existing recordings, pipelines, plugins or ingest maps.
 **Accept.** Splitting a two-function component into two components, with the port names unchanged, leaves every existing recording readable, every plugin bound, and every ingest map valid.
 **Verify.** T · `SYT-DAT-12`   **Trace.** CN-0312; v1 `FR-SIM-71`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-07`
+**Built.** ● done — 1/1 software requirements done
 
 ---
 
@@ -796,7 +796,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** All internal time shall be integer nanoseconds; float seconds shall appear only at human-facing boundaries.
 **Accept.** No time value inside the engine is a floating-point type. A period expressed in configuration is integer microseconds and is refused if fractional.
 **Verify.** A · `ANL-10` · T · `SYT-TIM-02`   **Trace.** CN-0139
-**Built.** ◐ started — 1/3 software requirements done, in `WP-05`, `WP-07`, `WP-25`
+**Built.** ◐ started — 2/3 software requirements done, in `WP-05`, `WP-07`, `WP-25`
 
 **`SYS-0283`** · `P0` · `R1` — Simulation time advances by one grid step, and by nothing else
 **Shall.** Simulation time shall advance by exactly one base-grid step per tick from the declared run start, and no arrival, reconstructed cycle boundary or module output shall move it.
@@ -809,7 +809,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Reception time shall be carried by the recording envelope and not by the signal header, and shall be named distinctly from the instant the data describes.
 **Accept.** No header field is filled from reception time. A value whose describing instant is unknown reports it as unknown, and its age is derived from the hold schedule rather than computed against reception.
 **Verify.** T · `SYT-TIM-22`   **Trace.** CN-0391, CN-0298
-**Built.** ○ not started — 0/1 software requirements done, in `WP-07`
+**Built.** ● done — 1/1 software requirements done
 *Note:* the two are one word apart and mean opposite things. Collapsing them produces an age of exactly zero that cannot be told from a true one, which is the failure `CN-0298` exists to prevent.
 
 ### 8.2 Cycle reconstruction
@@ -884,7 +884,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A module that is not due shall hold its last output, marked not-updated, with the exact elapsed time since it was last due; a consumer shall always receive its full port set.
 **Accept.** A 50 ms consumer of a 10 ms producer sees a value on every tick, with the not-updated flag and elapsed time correct to the nanosecond. No consumer ever observes a gap.
 **Verify.** T · `SYT-TIM-11`   **Trace.** CN-0332, CN-0333
-**Built.** ○ not started — 0/3 software requirements done, in `WP-07`, `WP-09`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-07`, `WP-09`
 
 **`SYS-0071`** · `P0` · `R1` — The module's own update flag wins
 **Shall.** A module's own reported update flag shall be authoritative over the predicted schedule, and any disagreement shall be reported.
@@ -1198,7 +1198,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Bulk arrays — point clouds, images, occupancy grids — shall be referenced into the recording by topic and time, never inlined into a scene or a tick structure.
 **Accept.** A scene containing an image reference is smaller than a declared per-scene budget; exceeding the budget is an error naming the layer.
 **Verify.** T · `SYT-OUT-08`   **Trace.** CN-0318; v1 `NR-SIM-43`
-**Built.** ○ not started — 0/4 software requirements done, in `WP-07`, `WP-09`, `WP-25`, `WP-26`
+**Built.** ◐ started — 1/4 software requirements done, in `WP-07`, `WP-09`, `WP-25`, `WP-26`
 
 **`SYS-0119`** · `P1` · `R1` — A merged output loads alone
 **Shall.** An output consisting of the original recording passed through with simulated ports overwriting their own channels shall be loadable on its own, with no other input.

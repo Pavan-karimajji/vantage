@@ -8,7 +8,8 @@
 One entry point for the checks a stage already owes: pytest,
 scripts/check_invariants.py, scripts/check_headers.py,
 scripts/check_closed_sets.py, scripts/check_no_duplication.py,
-scripts/check_artifact_kinds.py, scripts/check_trace.py. Invoked identically
+scripts/check_artifact_kinds.py, scripts/check_time_units.py,
+scripts/check_trace.py. Invoked identically
 by hand and by .github/workflows/sim-ci.yml, so "the job passes" and "this
 script exits 0" are the same claim -- there is no second, hand-rolled
 version of what the job runs.
@@ -267,6 +268,7 @@ def main(argv: list[str] | None = None) -> int:
             ("scripts/check_closed_sets.py", "check_closed_sets.txt"),
             ("scripts/check_no_duplication.py", "check_no_duplication.txt"),
             ("scripts/check_artifact_kinds.py", "check_artifact_kinds.txt"),
+            ("scripts/check_time_units.py", "check_time_units.txt"),
         ):
             check_ok, check_detail = _run_subprocess_check(
                 [sys.executable, script], SIM_ROOT, artifact_dir, log_name

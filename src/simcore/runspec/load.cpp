@@ -150,12 +150,27 @@ Result<RunSpec> LoadRunSpec(std::string_view json_text) {
     spec.schema = schema;
     spec.run_id = root.at("run_id").get<std::string>();
     spec.spec_sha256 = root.at("spec_sha256").get<std::string>();
-    spec.grid_step_ns = root.at("grid").at("step_ns").get<std::int64_t>();
+    const auto& grid_step = root.at("grid").at("step_ns");
+    if (!grid_step.is_number_integer()) {
+      // SW-0046's Accept clause: a period declared in configuration is
+      // integer microseconds/nanoseconds, and a fractional value is
+      // refused -- never rounded, because a rounded period accumulates
+      // into drift that reads as an algorithm bug (R-SIM-18).
+      return Result<RunSpec>::Fail(
+          MakeError("an integer nanosecond value", grid_step.dump(), "grid.step_ns"));
+    }
+    spec.grid_step_ns = grid_step.get<std::int64_t>();
 
     for (const auto& source : root.at("sources")) {
       spec.sources.push_back(ParseSource(source));
     }
     for (const auto& stage : root.at("stages")) {
+      const auto& period = stage.at("period_ns");
+      if (!period.is_number_integer()) {
+        return Result<RunSpec>::Fail(MakeError(
+            "an integer nanosecond value", period.dump(),
+            "stages[" + stage.value("name", std::string("?")) + "].period_ns"));
+      }
       spec.stages.push_back(ParseStage(stage));
     }
     for (const auto& mutation : root.at("mutations")) {
