@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "adas-sim/source_binding.schema.json",
+  "title": "adas-sim source-binding file (SYS-0117, R-SIM-23, IF-05)",
+  "description": "Which recorded signal, from which data source, satisfies which port -- the ingest map's own declared shape (provides:/absent:).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "provides"],
+  "properties": {
+    "version": {"type": "integer", "minimum": 1},
+    "provides": {"type": "object"},
+    "absent": {"type": "object"}
+  }
+}

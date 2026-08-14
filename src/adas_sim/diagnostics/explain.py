@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import sys
 
+from adas_sim.config import ResolvedConfig
 from adas_sim.diagnostics.errors import AuthoringError, ContractError, EnvironmentError_, InternalError
 from adas_sim.diagnostics.suggest import near_matches
 from adas_sim.session.session import Session
@@ -59,7 +60,7 @@ def _match_error_kind(name: str) -> str | None:
     return None
 
 
-def known_names(session: Session) -> list[str]:
+def known_names(session: Session, *, config: ResolvedConfig | None = None) -> list[str]:
     """Every core-level name `explain` can resolve, for the fuzzy "did you
     mean" when nothing matches exactly. Public: `cli/explain.py` extends
     this with style-token names and re-runs `difflib` over the COMBINED
@@ -69,15 +70,18 @@ def known_names(session: Session) -> list[str]:
     module's own comment)."""
     topics = list(session.ticks[0].ports) if session.ticks else []
     layers = list(registered_providers())
-    return [session.run_id, *topics, *layers, *registered_extensions(), *_ERROR_TAXONOMY]
+    config_leaves = [leaf for leaves in (config.resolved.values() if config else ()) for leaf in leaves]
+    return [session.run_id, *topics, *layers, *registered_extensions(), *_ERROR_TAXONOMY, *config_leaves]
 
 
-def explain(name: str, session: Session) -> dict[str, object]:
+def explain(name: str, session: Session, *, config: ResolvedConfig | None = None) -> dict[str, object]:
     """Everything known about `name` right now: the session's own `run_id`,
     a topic present in its recording, a registered layer id, a registered
-    codec extension (with or without the leading dot), or DG-5's closed
-    error taxonomy. An unresolved name gets a fuzzy "did you mean" (`N-8`)
-    instead of failing bare.
+    codec extension (with or without the leading dot), a resolved
+    configuration leaf (`config`, `IMP-0166` -- `Provenanced`'s payoff:
+    which layer/file/line it came from, printed rather than reconstructed),
+    or DG-5's closed error taxonomy. An unresolved name gets a fuzzy "did
+    you mean" (`N-8`) instead of failing bare.
     """
     if name == session.run_id:
         return {
@@ -134,7 +138,17 @@ def explain(name: str, session: Session) -> dict[str, object]:
     if error_kind is not None:
         return {"kind": "error_code", "name": name, "taxonomy": error_kind, **_ERROR_TAXONOMY[error_kind]}
 
-    matches = near_matches(name, known_names(session))
+    if config is not None:
+        for kind, leaves in config.resolved.items():
+            if name in leaves:
+                prov = leaves[name]
+                return {
+                    "kind": "config_value", "name": name, "file_kind": kind.value,
+                    "value": prov.value, "layer": prov.layer.value,
+                    "file": str(prov.file), "line": prov.line,
+                }
+
+    matches = near_matches(name, known_names(session, config=config))
     return {
         "kind": "unknown",
         "name": name,

@@ -260,6 +260,37 @@ def check_no_manifest_names_codec(superproject_root: Path = SUPERPROJECT_ROOT) -
     return findings
 
 
+# ANL-SW-34 (WP-04, IMP-0164): `config/`, `graph/`, `ingest/`, `runspec/` run
+# once per run and may not open a recording payload or load a module binary
+# (Part C's own boundary) -- a direct `adas_sim.io`/`ctypes` import is the
+# mechanised proxy for that. `resolve/` is deliberately excluded (its
+# obligation is *not executing*, covered by `ANL-SW-07` instead -- a folder
+# check states that wrongly).
+_ANL_SW_34_DIRS = ("config", "graph", "ingest", "runspec")
+_IO_OR_CTYPES_IMPORT = re.compile(r"^\s*(?:from\s+adas_sim\.io(?:\.\w+)*\s+import|import\s+adas_sim\.io\b|import\s+ctypes\b|from\s+ctypes\s+import)")
+
+
+def check_anl_sw34(src_root: Path = SRC_ROOT) -> list[str]:
+    """`ANL-SW-34`: a direct `adas_sim.io`/`ctypes` import in `config/`,
+    `graph/`, `ingest/` or `runspec/`. **Not yet in `run_all()`** -- `graph/
+    build.py` (formerly `contracts/pipeline.py`) already imports `adas_sim.
+    io.base.RecordingReader` for `Pipeline.load`'s `recording:` parameter,
+    predating this `WP`; untangling that is `WP-05`'s own seam work
+    (`IF-09`), not `WP-04`'s (`IMP-0164`'s own design note: "Today
+    `contracts/pipeline.py` reaches into the component loader, which is why
+    this is PARTIAL"). This function is real and tested (`UT-A2-*`
+    planted-violation case) so the day that migration lands, wiring it into
+    `run_all()` is a one-line change with an already-working check behind
+    it -- not a check invented under pressure."""
+    findings = []
+    for subdir in _ANL_SW_34_DIRS:
+        for path in _iter_py_files(src_root / subdir):
+            for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+                if _IO_OR_CTYPES_IMPORT.match(line):
+                    findings.append(f"ANL-SW-34 {path}:{lineno}: io/ctypes import outside the boundary: {line.strip()!r}")
+    return findings
+
+
 def run_all(
     src_root: Path = SRC_ROOT, superproject_root: Path = SUPERPROJECT_ROOT, all_src_root: Path = ALL_SRC_ROOT,
 ) -> list[str]:

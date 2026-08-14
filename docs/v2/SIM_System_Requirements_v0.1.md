@@ -627,7 +627,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The system shall not integrate a time-varying signal, filter, or otherwise produce a history-dependent estimate of information no module published.
 **Accept.** No component of the system holds state across ticks for the purpose of producing a port value that no producer emitted. Reconstruction is limited to deterministic transforms of a fixed constant or of an already-emitted value.
 **Verify.** A · `ANL-05` · `INSP-02`   **Trace.** CN-0301
-**Built.** ○ not started — 0/6 software requirements done, in `WP-04`, `WP-08`, `WP-11`, `WP-12`, `WP-25`, `WP-26`
+**Built.** ◐ started — 1/6 software requirements done, in `WP-04`, `WP-08`, `WP-11`, `WP-12`, `WP-25`, `WP-26`
 
 **`SYS-0036`** · `P1` · `R1` — Port identity is independent of who produces it
 **Shall.** A component shall be splittable into two without invalidating existing recordings, pipelines, plugins or ingest maps.
@@ -702,13 +702,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A module's configuration shall be a self-contained unit exposing named ports, unaware of what it is connected to; a top-level configuration shall compose units by connecting exposed ports.
 **Accept.** A unit's file is reusable in two different top-level compositions with no edit.
 **Verify.** T · `SYT-PRC-10`   **Trace.** CN-0103, CN-0104; **evidence** §2.2
-**Built.** ○ not started — 0/1 software requirements done, in `WP-04`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0047`** · `P1` · `R1` — Variables, resolved at load
 **Shall.** Paths and environment-specific values shall use variables resolved at load time.
 **Accept.** The same configuration set runs unchanged on two machines with different install roots. Every resolution is reported by `explain`.
 **Verify.** T · `SYT-PRC-11`   **Trace.** CN-0106, CN-0242
-**Built.** ○ not started — 0/1 software requirements done, in `WP-04`
+**Built.** ● done — 1/1 software requirements done
 
 ### 7.3 Module host
 
@@ -897,7 +897,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A module shall declare its cycle period as configuration read from its config bundle in integer microseconds, reported through its manifest; the host shall never set it.
 **Accept.** A rate sweep changes only a calibration value; no rebuild occurs and no host file is edited.
 **Verify.** T · `SYT-TIM-13`   **Trace.** CN-0284; v1 `NR-SIM-6`
-**Built.** ○ not started — 0/3 software requirements done, in `WP-04`, `WP-10`
+**Built.** ◐ started — 2/3 software requirements done, in `WP-04`, `WP-10`
 *Note (`OQ-12`, closed 2026-08-12):* *"do any modules change rate at run time?"* is answered by the contract, not by the module teams — **no**, and unrepresentably so. The period is read from the config bundle at manifest-build time (`<COMPONENT>_<FN>_PERIOD_US`, `buildManifest()`'s `periodLookupUs`) and reported through `adasManifest`, which is callable before `adasInit` and returns a snapshot; `adasExec` takes `dtS` and no rate argument. There is no export by which a module could announce a new period mid-run. So the base grid (`SYS-0066`) can be computed once at load and cannot go stale, and a module needing a variable rate would arrive as an ABI change request rather than slipping in quietly.
 
 ### 8.4 Sampling and order
@@ -906,7 +906,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The sampling policy shall be configurable per port from a closed set — latest-at-or-before, nearest, strict-with-tolerance, interpolate, all-since-last — with a sensible default per type.
 **Accept.** Each policy is individually demonstrable on one crafted input; interpolate is refused on a non-continuous type, naming the type.
 **Verify.** T · `SYT-TIM-14`   **Trace.** CN-0148, CN-0286
-**Built.** ○ not started — 0/3 software requirements done, in `WP-04`, `WP-05`, `WP-09`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-04`, `WP-05`, `WP-09`
 
 **`SYS-0074`** · `P1` · `R1` — Missing-data policy per port
 **Shall.** The behaviour on a missing value shall be configurable per port — hold, skip cycle, zero, or error — defaulting to hold with a counted warning.
@@ -1012,7 +1012,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The classification shall be computable without executing anything and shall be available as a standalone check.
 **Accept.** The check runs in a lint job in under one second on a ten-module graph, with no recording opened.
 **Verify.** T · `SYT-STG-09`   **Trace.** CN-0323, CN-0122, CN-0128
-**Built.** ○ not started — 0/3 software requirements done, in `WP-04`, `WP-20`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-04`, `WP-20`
 
 **`SYS-0090`** · `P0` · `R1` — A broken chain blocks
 **Shall.** A broken chain shall block the run by default.
@@ -1498,7 +1498,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Configuration shall merge in four ordered layers — package defaults, project configuration, run configuration, command-line overrides — with later winning.
 **Accept.** For any resolved value, the layer it came from is reported by `explain`.
 **Verify.** T · `SYT-CFG-07`   **Trace.** CN-0178, CN-0180
-**Built.** ○ not started — 0/2 software requirements done, in `WP-04`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0165`** · `P0` · `R1` — The Resolved Run Spec is the artifact and the seam
 **Shall.** The system shall produce a Resolved Run Spec — flat, with every path resolved, every mode decided, every period computed, every validation passed — write it and its hash into the run artifacts, and treat it as the only input the engine takes.
@@ -1523,7 +1523,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The recording index and the module manifest shall be plain data structures, and the graph, coherence, ingest and launcher functions that need them shall receive them as arguments rather than opening any file or library themselves.
 **Accept.** Coherence classification, cut feasibility, ingest-family matching and mode validation all run against in-memory structures with no file open and no library loaded, and are testable with a hand-written index.
 **Verify.** T · `SYT-CFG-25`   **Trace.** CN-0398, CN-0089
-**Built.** ○ not started — 0/4 software requirements done, in `WP-04`, `WP-20`, `WP-21`
+**Built.** ◐ started — 0/4 software requirements done, in `WP-04`, `WP-20`, `WP-21`
 *Note:* this is what lets those functions stay free of any dependency on the reader, which is the property their unit tests rest on.
 
 **`SYS-0167`** · `P0` · `R1` — The engine states what it actually loaded
@@ -1536,43 +1536,43 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Every configuration file shall be validated against a published schema, and errors shall name file, line, the wrong value and the allowed values.
 **Accept.** Each of those four elements is present in every schema error message, checked by test.
 **Verify.** T · `SYT-CFG-11`   **Trace.** CN-0182
-**Built.** ◐ started — 1/2 software requirements done, in `WP-03`, `WP-04`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0169`** · `P0` · `R1` — Unknown keys are errors
 **Shall.** An unknown configuration key shall be an error, not a warning.
 **Accept.** A typo'd key fails the load and the message offers near matches.
 **Verify.** T · `SYT-CFG-12`   **Trace.** CN-0183
-**Built.** ◐ started — 1/2 software requirements done, in `WP-03`, `WP-04`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0170`** · `P0` · `R1` — Every file carries a schema version
 **Shall.** Every configuration file shall carry a schema version, and an unrecognised version shall be refused rather than best-guessed.
 **Accept.** A file with a future version is refused naming both versions. A file with no version is refused naming the omission.
 **Verify.** T · `SYT-CFG-13`   **Trace.** CN-0345; v1 `CR-SIM-23`
-**Built.** ○ not started — 0/4 software requirements done, in `WP-04`, `WP-05`, `WP-12`, `WP-22`
+**Built.** ◐ started — 1/4 software requirements done, in `WP-04`, `WP-05`, `WP-12`, `WP-22`
 
 **`SYS-0171`** · `P0` · `R1` — Validation at load, never at first cycle
 **Shall.** Every reference shall resolve, every mode shall be checked against the recording, and every type shall match, at load; every failure shall name both ends.
 **Accept.** No configuration error is first observable during execution. A crafted invalid configuration fails before the first cycle in every case in the error catalogue.
 **Verify.** T · `SYT-CFG-14`   **Trace.** CN-0346, CN-0039
-**Built.** ○ not started — 0/4 software requirements done, in `WP-04`, `WP-20`
+**Built.** ◐ started — 1/4 software requirements done, in `WP-04`, `WP-20`
 
 **`SYS-0172`** · `P1` · `R1` — Configuration round-trips
 **Shall.** Writing back what was read shall produce a byte-identical file.
 **Accept.** For every file in the test corpus, read-then-write is byte-identical, including comments and ordering where the format preserves them.
 **Verify.** T · `SYT-CFG-15`   **Trace.** CN-0347
-**Built.** ○ not started — 0/2 software requirements done, in `WP-04`, `WP-05`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-04`, `WP-05`
 
 **`SYS-0173`** · `P1` · `R1` — Includes and fragments
 **Shall.** Includes and reusable fragments shall be supported.
 **Accept.** A fragment referenced from two configurations produces identical resolved values in both; `explain` names the fragment as the source layer.
 **Verify.** T · `SYT-CFG-16`   **Trace.** CN-0184
-**Built.** ○ not started — 0/1 software requirements done, in `WP-04`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0174`** · `P0` · `R1` — Four configuration concerns stay four files
 **Shall.** Component composition, connections, source-signal binding and visual layout shall be separately authored file kinds and shall not be merged into one file.
 **Accept.** Each kind is independently replaceable: swapping the layout does not touch composition; swapping the ingest map does not touch connections. Ownership per §13.1 is enforceable per file.
 **Verify.** T · `SYT-CFG-17` · `INSP-07`   **Trace.** CN-0103, CN-0104, CN-0068; **evidence** §2.2
-**Built.** ○ not started — 0/1 software requirements done, in `WP-04`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0175`** · `P0` · `R1` — Configuration is simple enough to change alone
 **Shall.** An algorithm engineer shall be able to make a stated set of common changes — switch a module's mode, change a calibration value, add a recording, change the active layout, add an export — without assistance and without editing framework code.
@@ -1594,32 +1594,32 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Configuration files shall live in the algorithm team's repository, versioned with their code; the system shall require nothing to be added to its own installation to run a project.
 **Accept.** A project runs from a read-only installation of the package.
 **Verify.** T · `SYT-CFG-19`   **Trace.** CN-0014, CN-0013
-**Built.** ○ not started — 0/1 software requirements done, in `WP-04`
+**Built.** ◐ started — 0/1 software requirements done, in `WP-04`
 
 **`SYS-0177`** · `P0` · `R1` — Configuration bundle, packed beside the library
 **Shall.** The build shall pack one atomic configuration bundle per component and build, beside the library, with a content hash; the system shall resolve it relative to the library, an explicit path shall win, and a project mismatch shall be a warning.
 **Accept.** Configuration is never compiled into the library — editing a value and re-running requires no rebuild. The viewer reads the same bundle the module was initialised with, and states which one it read.
 **Verify.** T · `SYT-CFG-20`   **Trace.** CN-0285; v1 `FR-SIM-21`, `FR-SIM-22`
-**Built.** ○ not started — 0/6 software requirements done, in `WP-04`, `WP-10`, `WP-21`
+**Built.** ◐ started — 1/6 software requirements done, in `WP-04`, `WP-10`, `WP-21`
 *Note (`OQ-07`, closed 2026-08-12):* *"should the system inject parameters, or point at the module's existing parameter file?"* — **it passes a path and never a value.** `adasInit` takes `configPath`, and this requirement plus `R-SIM-3a` settle the rest. Injection is not a close call: the bundle is *"a build output, never a second place to edit a value"*, and this requirement's own acceptance — *the viewer reads the same bundle the module was initialised with, and states which one* — is unsatisfiable if a value can arrive from somewhere else, because there would then be two answers to *"what wheelbase did this run use?"*, free to disagree. **A parameter sweep is a bundle variant**: copy, change the one key, re-hash, point `adasInit` at it, record the hash. That meets `SYS-0072`'s acceptance verbatim (*"a rate sweep changes only a calibration value; no rebuild occurs and no host file is edited"*), because producing a variant is neither a rebuild nor a host edit. It implies one small helper beside the run spec — copy · patch one key · re-hash — which is a file, not a mechanism. §4.1 in `SIM_Open_Question_Answers_v0.1.md`.
 
 **`SYS-0178`** · `P0` · `R1` — Cross-component configuration agreement
 **Shall.** At load the system shall check project agreement across module manifests and shared-parameter agreement across bundles; a project disagreement shall be a warning with a declared, recorded escape, and a disagreement in shared physical parameters shall be a hard error with no escape.
 **Accept.** Two modules disagreeing about a shared vehicle parameter refuses to run; two modules from different projects warns and records the escape.
 **Verify.** T · `SYT-CFG-21`   **Trace.** CN-0285; v1 `CR-SIM-10`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-04`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0179`** · `P1` · `R1` — Only real runtime configuration enters the bundle
 **Shall.** A file shall enter the configuration bundle if and only if some module reads it at run time; simulation-only data — world bindings, sensor error models, fault definitions — shall live with the tooling, not in the bundle.
 **Accept.** A crafted bundle containing a simulation-only file is refused, naming it. What a module believes about a sensor and what the tooling feeds it remain separately addressable and are never merged.
 **Verify.** T · `SYT-CFG-22`   **Trace.** CN-0009(scope); v1 `CR-SIM-10`, `CR-SIM-11`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-04`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0180`** · `P1` · `R1` — Geometry comes from configuration, per project
 **Shall.** Body geometry, footprints, sensor poses and camera intrinsics shall come from the project's configuration resolved per run, never from a module constant; a fallback rather than a measurement shall be drawn in a visibly distinct style.
 **Accept.** Switching project changes the picture. A fallback footprint is identifiable on screen without opening a file.
 **Verify.** T · `SYT-CFG-23`   **Trace.** CN-0003(concept §3.1); v1 `FR-SIM-20`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-04`
+**Built.** ● done — 1/1 software requirements done
 
 ---
 
@@ -1768,7 +1768,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The system shall provide a dry run reporting the resolved specification with the source layer of each value, the graph, the schedule, the injection boundary, the coherence result and an estimated duration, executing nothing.
 **Accept.** No module is loaded and no recording message is decoded during explain. Every listed element is present.
 **Verify.** T · `SYT-DIA-01`   **Trace.** CN-0207, CN-0045, CN-0233
-**Built.** ○ not started — 0/5 software requirements done, in `WP-04`, `WP-15`, `WP-23`, `WP-24`
+**Built.** ◐ started — 1/5 software requirements done, in `WP-04`, `WP-15`, `WP-23`, `WP-24`
 
 **`SYS-0203`** · `P1` · `R1` — Tap points
 **Shall.** Any internal port shall be recordable by naming it in configuration, with no code change.
@@ -2125,7 +2125,7 @@ mechanism.
 **Shall.** The same configuration files shall work unchanged on Windows and Linux, and users shall never write platform-specific configuration.
 **Accept.** The reference project's configuration set is byte-identical on both and produces the same results. Manifests declare a binary per platform; no configuration file names a platform.
 **Verify.** T · `SYT-NFR-15`   **Trace.** CN-0242, CN-0243
-**Built.** ○ not started — 0/2 software requirements done, in `WP-04`, `WP-31`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-04`, `WP-31`
 
 **`SYS-0248`** · `P0` · `R1` — Paths and dynamic loading are abstracted
 **Shall.** Path handling, case sensitivity, separators and dynamic library loading shall be abstracted behind the system.

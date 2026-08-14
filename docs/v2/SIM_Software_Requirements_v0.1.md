@@ -990,7 +990,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The interpolate policy shall be permitted only on a declared continuous scalar type, and shall be refused at load on any other, naming the type.
 **Accept.** Interpolate on an enumeration, an identifier, a count or a repeated field is a load error naming the field and its type.
 **Verify.** T · `UT-CFG-01`   **Trace.** SYS-0073, SYS-0035
-**Built.** ○ not started — `IMP-0069` in `WP-04`
+**Built.** ● done — `IMP-0069` in `WP-04`
 **Now.** `NEW`.
 *Note:* interpolating an object identifier or a state enumeration produces a value that never existed, which is `SYS-0035` violated inside the framework rather than by a plug-in.
 
@@ -1650,133 +1650,133 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Configuration shall merge in four ordered layers — package defaults, project configuration, run configuration, command-line overrides — and the layer each resolved value came from shall be retained.
 **Accept.** For any resolved value the originating layer is reported. Removing a layer changes only the values that layer supplied.
 **Verify.** T · `UT-CFG-02`   **Trace.** SYS-0164
-**Built.** ○ not started — `IMP-0149` in `WP-04`
+**Built.** ● done — `IMP-0149` in `WP-04`
 **Now.** `PARTIAL` — `model/project.py::ProjectModel.resolve` implements a four-tier resolution order with the tier reported, for calibration data only; there is no general configuration merge.
 
 **`SW-0150`** · `SI-10` · `P0` · `R1` — Four concerns stay four file kinds
 **Shall.** Component composition, connections, source-signal binding and visual layout shall be separately authored file kinds, independently replaceable, and shall not be merged into one file.
 **Accept.** Swapping the layout touches no composition file; swapping the ingest map touches no connection file. Ownership is enforceable per file kind.
 **Verify.** T · `UT-CFG-03` · I · `INSP-SW-02`   **Trace.** SYS-0174; **evidence** SYS §2.2
-**Built.** ○ not started — `IMP-0150` in `WP-04`
+**Built.** ● done — `IMP-0150` in `WP-04`
 **Now.** `PARTIAL` — the ingest map (`modules/<n>/sim/ingest/`) and the layout (`workspace.yaml`, `viewpoints.yaml`) are separate; composition and connections are one file (`pipelines/*.yaml`), which is the merge this forbids.
 
 **`SW-0151`** · `SI-10` · `P0` · `R1` — Every file is validated against a published schema
 **Shall.** Every configuration file shall be validated against a published schema, and an error shall name the file, the line, the offending value and the allowed values.
 **Accept.** All four elements are present in every schema error, checked by test.
 **Verify.** T · `UT-CFG-04`   **Trace.** SYS-0168
-**Built.** ○ not started — `IMP-0151` in `WP-04`
+**Built.** ● done — `IMP-0151` in `WP-04`
 **Now.** `PARTIAL` — validation is hand-written per loader and messages name file and value; no published schema exists and line numbers are not carried.
 
 **`SW-0152`** · `SI-10` · `P0` · `R1` — An unknown key is an error, with near matches
 **Shall.** An unrecognised configuration key shall fail the load, offering near matches from the accepted key set.
 **Accept.** A typo'd key fails and the message contains the intended key.
 **Verify.** T · `UT-CFG-05`   **Trace.** SYS-0169
-**Built.** ○ not started — `IMP-0152` in `WP-04`
+**Built.** ● done — `IMP-0152` in `WP-04`
 **Now.** `PARTIAL` — implemented in some loaders (`contracts/pipeline.py`), absent in others.
 
 **`SW-0153`** · `SI-10` · `P0` · `R1` — Every file carries a schema version, and an unknown one is refused
 **Shall.** Every configuration file shall carry a schema version; a version above the supported range shall be refused naming both, and an absent version shall be refused naming the omission.
 **Accept.** Neither case is best-guessed. A version below the current one is upgraded by a declared upgrader, and the upgrade is reported.
 **Verify.** T · `UT-CFG-06`   **Trace.** SYS-0170
-**Built.** ○ not started — `IMP-0153` in `WP-04`
+**Built.** ● done — `IMP-0153` in `WP-04`
 **Now.** `DONE·MOVE` — `contracts/pipeline.py` and `contracts/scenario.py` both carry `version:` with an upgrader and refuse unknown versions; the mechanism generalises.
 
 **`SW-0154`** · `SI-10` · `P0` · `R1` — Validation completes at load, never at first cycle
 **Shall.** Every reference shall resolve, every type shall match and every mode shall be checked against the recording at load; no configuration error shall be first observable during execution.
 **Accept.** For every entry in the error catalogue, a crafted invalid configuration fails before the first cycle.
 **Verify.** T · `UT-CFG-07`   **Trace.** SYS-0171; CN-0346
-**Built.** ○ not started — `IMP-0154` in `WP-04`
+**Built.** ◐ started — `IMP-0154` in `WP-04`
 **Now.** `DONE·MOVE` — `contracts/pipeline.py` validates wiring, versions, periods, implementations and recording support at load, naming both ends. One of the codebase's strongest properties.
 
 **`SW-0155`** · `SI-10` · `P1` · `R1` — Configuration round-trips byte-identically
 **Shall.** Writing back what was read shall produce a byte-identical file, including comments and ordering where the format preserves them.
 **Accept.** For every file in the test corpus, read-then-write is byte-identical.
 **Verify.** T · `UT-CFG-08`   **Trace.** SYS-0172
-**Built.** ○ not started — `IMP-0155` in `WP-04`
+**Built.** ● done — `IMP-0155` in `WP-04`
 **Now.** `NEW`.
 
 **`SW-0156`** · `SI-10` · `P1` · `R1` — Includes and fragments resolve to identical values
 **Shall.** Includes and reusable fragments shall be supported, and a fragment referenced from two configurations shall resolve identically in both.
 **Accept.** The resolved values match, and the fragment is named as the source layer.
 **Verify.** T · `UT-CFG-09`   **Trace.** SYS-0173
-**Built.** ○ not started — `IMP-0156` in `WP-04`
+**Built.** ● done — `IMP-0156` in `WP-04`
 **Now.** `NEW`.
 
 **`SW-0157`** · `SI-10` · `P1` · `R1` — Variables resolve at load, and every resolution is reported
 **Shall.** Paths and environment-specific values shall use variables resolved at load, with every resolution reported.
 **Accept.** The same configuration set runs unchanged on two machines with different install roots, and each substitution is visible in the dry run.
 **Verify.** T · `UT-CFG-10`   **Trace.** SYS-0047, SYS-0247
-**Built.** ○ not started — `IMP-0157` in `WP-04`
+**Built.** ● done — `IMP-0157` in `WP-04`
 **Now.** `NEW`.
 
 **`SW-0158`** · `SI-10` · `P0` · `R1` — Configuration lives in the customer's repository
 **Shall.** No file shall need to be added to the package's own installation for a project to run.
 **Accept.** A project runs from a read-only installation of the package.
 **Verify.** T · `IT-12`   **Trace.** SYS-0176
-**Built.** ○ not started — `IMP-0158` in `WP-04`
+**Built.** ◐ started — `IMP-0158` in `WP-04`
 **Now.** `DONE·MOVE` — component plug-in, pipeline and ingest directories all live in `modules/<name>/sim/` today, which is the correct authoring home.
 
 **`SW-0159`** · `SI-10` · `P0` · `R1` — Only real runtime configuration enters the bundle
 **Shall.** A file shall enter a component's configuration bundle if and only if some module reads it at run time; simulation-only data shall not.
 **Accept.** A bundle containing a simulation-only file is refused, naming it. What a module believes about a sensor and what the tooling feeds it remain separately addressable.
 **Verify.** T · `UT-CFG-11`   **Trace.** SYS-0179
-**Built.** ○ not started — `IMP-0159` in `WP-04`
+**Built.** ● done — `IMP-0159` in `WP-04`
 **Now.** `DONE·MOVE` — the split is implemented and enforced by placement: sensor error models live in `modules/<n>/sim/sensor_models/`, real calibration in the bundle.
 
 **`SW-0160`** · `SI-10` · `P0` · `R1` — Cross-component agreement is checked at load, at two severities
 **Shall.** At load the configuration layer shall check project agreement across module manifests — a warning with a declared, recorded escape — and shared physical-parameter agreement across bundles — a hard error with no escape.
 **Accept.** Two modules disagreeing about a shared vehicle parameter refuse to run. Two modules from different projects warn and record the escape.
 **Verify.** T · `UT-CFG-12`   **Trace.** SYS-0178
-**Built.** ○ not started — `IMP-0160` in `WP-04`
+**Built.** ● done — `IMP-0160` in `WP-04`
 **Now.** `DONE·MOVE` — `contracts/pipeline.py::_validate_cross_component_agreement` implements both severities. The C++ twin explicitly omits it, which is `SW-0018`'s point made by the code itself.
 
 **`SW-0161`** · `SI-10` · `P0` · `R1` — Geometry comes from the project's configuration, per run
 **Shall.** Body geometry, footprints, sensor poses and camera intrinsics shall be resolved per run from the project's configuration and never from a module constant.
 **Accept.** Switching project changes the picture. A fallback rather than a measurement is identifiable on screen without opening a file.
 **Verify.** T · `UT-CFG-13`   **Trace.** SYS-0180
-**Built.** ○ not started — `IMP-0161` in `WP-04`
+**Built.** ● done — `IMP-0161` in `WP-04`
 **Now.** `DONE` — `model/{project,ego,objects,sensors,cameras}.py`, with an equivalence test against the code it replaced and an `assumed_geometry` style for fallbacks.
 
 **`SW-0162`** · `SI-10` · `P0` · `R1` — A calibration value changes with no rebuild
 **Shall.** Changing a value in a configuration bundle and re-running shall require no rebuild and no host edit.
 **Accept.** A parameter sweep changes only bundle values; the module binary hash is unchanged across the sweep.
 **Verify.** T · `IT-13`   **Trace.** SYS-0072, SYS-0177
-**Built.** ○ not started — `IMP-0162` in `WP-04`
+**Built.** ● done — `IMP-0162` in `WP-04`
 **Now.** `DONE` — the bundle sits beside the library rather than compiled into it, and `core/manifest.py::resolve_swept_config` already sweeps it.
 
 **`SW-0163`** · `SI-10` · `P1` · `R1` — A period is calibration, read as integer microseconds
 **Shall.** A module's period shall be read from its configuration bundle as an integer number of microseconds and reported through its manifest; a fractional value shall be refused.
 **Accept.** A rate sweep changes only a calibration value. A fractional period is a load error naming the key and the value.
 **Verify.** T · `UT-CFG-14`   **Trace.** SYS-0072; CN-0284
-**Built.** ○ not started — `IMP-0163` in `WP-04`
+**Built.** ● done — `IMP-0163` in `WP-04`
 **Now.** `DONE` — implemented as `<COMPONENT>_<FN>_PERIOD_US` in the bundle, surfaced through the generated manifest.
 
 **`SW-0164`** · `SI-10` · `P1` · `R1` — The configuration layer opens no payload
 **Shall.** `SI-10`, `SI-11`, `SI-12` and `SI-14` shall not decode a message payload, open a recording, load a module binary, or execute anything; what they need about a file or a module shall reach them as the probe pass's data (`SW-0410`, `SW-0411`).
 **Accept.** A static check finds no codec payload access and no library load in any of the four. `SI-13` is the sole exception and is bounded by symbol rather than by folder (`SW-0409`).
 **Verify.** A · `ANL-SW-34`   **Trace.** SYS-0089, SYS-0202, SYS-0288
-**Built.** ○ not started — `IMP-0164` in `WP-04`
+**Built.** ◐ started — `IMP-0164` in `WP-04`
 **Now.** `PARTIAL` — `contracts/pipeline.py` loads component libraries at load time to read their manifests, which is the right operation in the wrong package.
 
 **`SW-0165`** · `SI-10` · `P1` · `R1` — A configuration set is validated with no recording and no binary present
 **Shall.** A fast validation mode shall check everything checkable without opening a recording or loading a module.
 **Accept.** The mode completes on a ten-module configuration in under a second and states explicitly which checks it could not perform.
 **Verify.** T · `UT-CFG-15`   **Trace.** SYS-0089, SYS-0171
-**Built.** ○ not started — `IMP-0165` in `WP-04`
+**Built.** ● done — `IMP-0165` in `WP-04`
 **Now.** `PARTIAL` — `contracts/pipeline.py` supports a `recording=None` load; it does not report which checks it skipped, which is the half that matters.
 
 **`SW-0166`** · `SI-10` · `P1` · `R1` — A resolved value carries its provenance to the dry run
 **Shall.** Every resolved configuration value shall retain the file, the layer and, where the format permits, the line it came from.
 **Accept.** The dry run prints all three for any requested value.
 **Verify.** T · `UT-CFG-16`   **Trace.** SYS-0164, SYS-0202
-**Built.** ○ not started — `IMP-0166` in `WP-04`
+**Built.** ● done — `IMP-0166` in `WP-04`
 **Now.** `PARTIAL` — `model/project.py` reports the tier; file and line are not retained.
 
 **`SW-0398`** · `SI-10` · `P1` · `R1` — A unit does not know what it is wired to
 **Shall.** A module's configuration shall be a self-contained unit exposing named ports and unaware of what it is connected to, and a top-level configuration shall compose units by connecting exposed ports.
 **Accept.** A unit's file is reusable in two different top-level compositions with no edit.
 **Verify.** T · `UT-CFG-18`   **Trace.** SYS-0046; **evidence** SYS §2.2
-**Built.** ○ not started — `IMP-0398` in `WP-04`
+**Built.** ● done — `IMP-0398` in `WP-04`
 **Now.** `NEW` — today composition and connection are one file, which is the merge `SW-0150` forbids and this requirement is the positive half of.
 
 **`SW-0399`** · `SI-10` · `P1` · `R1` — The SIM team owns the format; the algorithm team owns the content

@@ -16,7 +16,10 @@ fixed once, here, and every caller asks by name instead.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
+
+from adas_sim.config.kinds import FileKind
 
 #: modules/sim/src/adas_sim/config/paths.py -> config -> adas_sim -> src -> sim
 _SIM_ROOT = Path(__file__).resolve().parents[3]
@@ -35,3 +38,22 @@ def modules_root() -> Path:
 def superproject_root() -> Path:
     """The superproject root, one level above `modules/`."""
     return _SIM_ROOT.parent.parent
+
+
+@dataclass(frozen=True, slots=True)
+class ConfigPaths:
+    """Where a project's own configuration files live -- `project_root` is
+    ALWAYS a caller-supplied parameter, never derived from `adas_sim`'s own
+    install location (`IMP-0158`, `CN-0014`): a customer's configuration
+    lives in the customer's own repository, and this package must resolve
+    it correctly whether it is a source checkout, a pip install, or a
+    frozen build's read-only site-packages -- none of which have any say in
+    where the CUSTOMER's files are (`IT-12` runs from exactly that: a
+    checkout with the package installed read-only)."""
+
+    project_root: Path
+
+    def dir_for(self, kind: FileKind) -> Path:
+        """One subdirectory per `FileKind`, named after the kind itself --
+        the four-way split (`SW-0150`) carried into the filesystem layout."""
+        return self.project_root / kind.value

@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "adas-sim/layout.schema.json",
+  "title": "adas-sim layout file (SYS-0117, IF-16)",
+  "description": "Tabs, splits, views, per-layer visibility and scoped parameters.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version"],
+  "properties": {
+    "version": {"type": "integer", "minimum": 1},
+    "tabs": {"type": "array"},
+    "layers": {"type": "object"},
+    "params": {"type": "object"}
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "adas-sim/composition.schema.json",
+  "title": "adas-sim composition file (SYS-0117, IF-13)",
+  "description": "Which units load, from which binaries, exposing which ports. Carries nothing about wiring -- see connections.schema.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "units"],
+  "properties": {
+    "version": {"type": "integer", "minimum": 1},
+    "units": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "impl"],
+        "properties": {
+          "name": {"type": "string"},
+          "impl": {"type": "string"},
+          "ports": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}

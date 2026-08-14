@@ -315,30 +315,30 @@ flowchart LR
 - [ ] **Exit:** `modules/sim` builds a C++ target on both platforms with **`conanfile.py` unedited** (`R-BUILD-1`); `check_error_parity.py` green; `check_invariants.py` scope extended to `src/simcore/**` and `src/simengine/**` and still green.
 
 ### WP-04 · `MP-0` · `SI-10` `config`
-- [ ] **Prereq:** `WP-02`.
-- [ ] **Lands:** `IMP-0069`, `IMP-0149`…`IMP-0166`, `IMP-0398` — 20.
-  - [ ] `IMP-0069` · `SW-0069` · `NEW` — `adas_sim/config/policy.py::check_interpolatable`
-  - [ ] `IMP-0149` · `SW-0149` · `EXTEND` — `config/layers.py::merge`
-  - [ ] `IMP-0150` · `SW-0150` · `EXTEND` — `config/kinds.py::FileKind`
-  - [ ] `IMP-0151` · `SW-0151` · `EXTEND` — `config/schema.py`
-  - [ ] `IMP-0152` · `SW-0152` · `EXTEND` — `schema.py`
-  - [ ] `IMP-0153` · `SW-0153` · `MOVE` — `schema.py::check_version`
-  - [ ] `IMP-0154` · `SW-0154` · `MOVE` — `config/__init__.py::load`
-  - [ ] `IMP-0155` · `SW-0155` · `NEW` — `config/roundtrip.py`
-  - [ ] `IMP-0156` · `SW-0156` · `NEW` — `config/include.py::expand`
-  - [ ] `IMP-0157` · `SW-0157` · `NEW` — `include.py::resolve_vars`
-  - [ ] `IMP-0158` · `SW-0158` · `MOVE` — `config/paths.py::ConfigPaths`
-  - [ ] `IMP-0159` · `SW-0159` · `MOVE` — `config/bundle.py::may_enter_bundle`
-  - [ ] `IMP-0160` · `SW-0160` · `MOVE` — `bundle.py`
-  - [ ] `IMP-0161` · `SW-0161` · `KEEP` — `config/vehicle.py`
-  - [ ] `IMP-0162` · `SW-0162` · `KEEP` — The bundle is copied **beside** the library, never compiled into it, so…
-  - [ ] `IMP-0163` · `SW-0163` · `KEEP` — `config/policy.py` reads `<COMPONENT>_<FN>_PERIOD_US` as an integer; `em…
-  - [ ] `IMP-0164` · `SW-0164` · `EXTEND` — `ANL-SW-34`
-  - [ ] `IMP-0165` · `SW-0165` · `EXTEND` — `config/__init__.py::validate_only`
-  - [ ] `IMP-0166` · `SW-0166` · `EXTEND` — `layers.py::Provenanced` is carried through into `explain`'s output, per…
-  - [ ] `IMP-0398` · `SW-0398` · `NEW` — `config/kinds.py`
-- [ ] **Files:** `adas_sim/config/**` (from `contracts/pipeline.py`'s schema half, `contracts/scenario.py`, `model/project.py`, `model/{ego,objects,sensors,cameras}.py`) · `schemas/*.schema.json`.
-- [ ] **Exit:** `sim validate` runs with **no recording and no binary present** (`IMP-0165`); an unknown key is an error with near matches (`IMP-0152`); a round-trip is byte-identical (`IMP-0155`); `ANL-SW-34` confirms the config layer opens no payload.
+- [x] **Prereq:** `WP-02`.
+- [~] **Lands:** `IMP-0069`, `IMP-0149`…`IMP-0166`, `IMP-0398` — 20. — closed by: 16/20 done and tested; the remaining four (`IMP-0154`, `IMP-0158`, `IMP-0162`, `IMP-0164`) are each real and unit-tested, with one honest gap apiece — see their own rows.
+  - [x] `IMP-0069` · `SW-0069` · `NEW` — `adas_sim/config/policy.py::check_interpolatable` — `UT-CFG-01`, `google.protobuf.descriptor_pb2.FieldDescriptorProto` continuous-scalar check (repeated always refused regardless of scalar type)
+  - [x] `IMP-0149` · `SW-0149` · `EXTEND` — `config/layers.py::merge` — `UT-CFG-02`, per-leaf `Provenanced[T]` (value/layer/file/line), line numbers from `yaml.compose` node marks
+  - [x] `IMP-0150` · `SW-0150` · `EXTEND` — `config/kinds.py::FileKind` — `UT-CFG-03`, `KIND_KEYS` disjointness asserted by its own test (`INSP-SW-02`)
+  - [x] `IMP-0151` · `SW-0151` · `EXTEND` — `config/schema.py` — `UT-CFG-04`, one published JSON-Schema per kind under `config/schemas/*.schema.json` (`tool.setuptools.package-data`), errors name file/line/value/allowed
+  - [x] `IMP-0152` · `SW-0152` · `EXTEND` — `schema.py` — `UT-CFG-05`, `additionalProperties: false` + `near_matches` (`IMP-0124`) on an unknown key
+  - [x] `IMP-0153` · `SW-0153` · `MOVE` — `schema.py::check_version` — `UT-CFG-06`, usable by every WP-04 kind; `graph/build.py`'s own pipeline-file version gate is untouched by design (that format dies at `WP-16`, not this `WP`)
+  - [~] `IMP-0154` · `SW-0154` · `MOVE` — `config/__init__.py::load` — closed by: every check config-layer text alone can make (schema/kinds/version per layer, then merge) is real and tested (`UT-CFG-07`, `UT-CFG-15`, `UT-CFG-16`); the recording-index and DLL-type-matching half of "every reference resolves" needs a real manifest/recording, which `ANL-SW-34` forbids `config/**` from opening -- that half is `WP-05`'s own seam (`IF-09`), not deferred out of the same gap `IMP-0164` names below
+  - [x] `IMP-0155` · `SW-0155` · `NEW` — `config/roundtrip.py` — `UT-CFG-08`, `ruamel.yaml` round-trip loader, byte-identical incl. comments/quoting/key order (new dep, `pyproject.toml`)
+  - [x] `IMP-0156` · `SW-0156` · `NEW` — `config/include.py::expand` — `UT-CFG-09`, recursive `!include`, cycle-detected, relative to the including file
+  - [x] `IMP-0157` · `SW-0157` · `NEW` — `include.py::resolve_vars` — `UT-CFG-10`, `${name}` from a declared set only, no environment fallback, every resolution a `Provenanced` entry
+  - [~] `IMP-0158` · `SW-0158` · `MOVE` — `config/paths.py::ConfigPaths` — closed by: unit-level proven (`project_root` is a plain dataclass field, never derived from `sim_root()`); the real `IT-12` (a customer checkout with the package pip-installed read-only) is an integration run this sandboxed session cannot execute, same class of gap as `WP-01`'s `IMP-0366`/`WP-03`'s Linux verification
+  - [x] `IMP-0159` · `SW-0159` · `MOVE` — `config/bundle.py::may_enter_bundle` — `UT-CFG-11`, refuses world-model/sensor-error/fault-injection categories quoting `R-SIM-9`
+  - [x] `IMP-0160` · `SW-0160` · `MOVE` — `bundle.py` — `UT-CFG-12`, the two severities ported from `graph/build.py::_validate_cross_component_agreement` (now a thin delegating wrapper, `test_c1c_pipeline.py`'s 49 tests unchanged and green) -- takes plain project names/paths, never a `SilComponent`, so `config/**` needs no `resolve`/`ctypes` import
+  - [x] `IMP-0161` · `SW-0161` · `KEEP` — `config/vehicle.py` — `UT-CFG-13`; ego/objects/sensors/cameras stay their own files (already true), not literally consolidated into one `vehicle.py`
+  - [x] `IMP-0162` · `SW-0162` · `KEEP` — The bundle is copied **beside** the library, never compiled into it — `IT-13`-shaped unit test (edit `ego_params.yaml` on disk between two `ProjectModel.resolve()` calls, no build step, value changes); a real build+DLL-driven `IT-13` is out of this session's reach
+  - [x] `IMP-0163` · `SW-0163` · `KEEP` — `config/policy.py` reads `<COMPONENT>_<FN>_PERIOD_US` as an integer — `UT-CFG-14`, `microseconds_to_nanoseconds` the one multiplication, no float anywhere
+  - [~] `IMP-0164` · `SW-0164` · `EXTEND` — `ANL-SW-34` — closed by: `scripts/check_invariants.py::check_anl_sw34` implemented and tested (planted-violation + a passing assertion that `config/**` itself is clean); **not yet wired into `run_all()`** because `graph/build.py` already imports `adas_sim.io.base.RecordingReader` (predates this `WP`, untangling it is `WP-05`'s seam work) and `ingest/map.py`/`runspec/manifest.py` have the same shape -- wiring it in is a one-line follow-up once that migration lands
+  - [x] `IMP-0165` · `SW-0165` · `EXTEND` — `config/__init__.py::validate_only` — `UT-CFG-15`, identical to `load` (this module never opens a recording/binary regardless); not yet wired to a `sim validate` CLI verb, which does not exist yet and is outside this `WP`'s own `adas_sim/config/**` file scope
+  - [x] `IMP-0166` · `SW-0166` · `EXTEND` — `layers.py::Provenanced` is carried through into `explain`'s output, per value — `UT-CFG-16`, `explain(name, session, config=...)` returns `kind: "config_value"` with layer/file/line
+  - [x] `IMP-0398` · `SW-0398` · `NEW` — `config/kinds.py` — `UT-CFG-18`, `check_composition_no_cross_unit_reference` scans every string leaf of a unit's own body for another declared unit's name
+- [~] **Files:** `adas_sim/config/**` (from `contracts/pipeline.py`'s schema half, `contracts/scenario.py`, `model/project.py`, `model/{ego,objects,sensors,cameras}.py`) · `schemas/*.schema.json`. — closed by: `adas_sim/config/{kinds,layers,roundtrip,include,schema,bundle,policy,__init__}.py` + `config/schemas/*.schema.json` all landed; `contracts/pipeline.py`/`contracts/scenario.py`/`model/*` were already renamed onto `config/scenario.py`, `config/project.py`, `config/{ego,objects,sensors,cameras}.py` by `WP-02` before this `WP` started, so there was no `contracts/`/`model/` left to move from
+- [~] **Exit:** `sim validate` runs with **no recording and no binary present** (`IMP-0165`); an unknown key is an error with near matches (`IMP-0152`); a round-trip is byte-identical (`IMP-0155`); `ANL-SW-34` confirms the config layer opens no payload. — closed by: all four hold as library-level facts (`validate_only`/`schema.validate`/`round_trip`/`check_anl_sw34`, all tested); `sim validate` itself is not a CLI verb yet (no `cli/validate.py` exists -- outside this `WP`'s file scope) and `ANL-SW-34` is not yet wired into the enforced `run_all()` gate (`IMP-0164`'s own note) -- both are one-line follow-ups once `WP-05` lands, never a design gap
 
 ### WP-05 · `MP-0` · **The seam** — Resolved Run Spec
 - [ ] **Prereq:** `WP-03`, `WP-04`. **This is `O-2`: nothing is deleted before this exists.**

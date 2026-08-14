@@ -13,6 +13,11 @@ dependencies = [
     "mcap>=1.0",
     "mcap-protobuf-support>=0.5",
     "numpy>=1.26",
+    # WP-04: schema.py's published JSON-Schema set (IMP-0151/0152) and
+    # roundtrip.py's comment/key-order/quoting-preserving loader (IMP-0155) --
+    # pyyaml's SafeLoader/safe_dump cannot round-trip either.
+    "jsonschema>=4.20",
+    "ruamel.yaml>=0.18",
 ]
 
 [project.optional-dependencies]
@@ -35,6 +40,11 @@ sim = "adas_sim.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["adas_sim*"]
+
+[tool.setuptools.package-data]
+# WP-04, IF-13: the published JSON-Schema set ships in the package itself,
+# not read from a source checkout (R-SIM-11).
+adas_sim = ["config/schemas/*.schema.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "adas-sim/connections.schema.json",
+  "title": "adas-sim connections file (SYS-0117, IF-13)",
+  "description": "How exposed ports are wired, data-to-data and lifecycle-to-lifecycle. Never declares a unit's own ports -- see composition.schema.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "name", "wiring"],
+  "properties": {
+    "version": {"type": "integer", "minimum": 1},
+    "name": {"type": "string"},
+    "wiring": {"type": "array", "items": {"type": "object"}},
+    "allow_mixed_projects": {"type": "boolean"}
+  }
+}

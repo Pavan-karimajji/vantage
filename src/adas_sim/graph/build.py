@@ -49,6 +49,7 @@ from adas_sim.runspec.address import Address, apply_override, parse_address
 from adas_sim.resolve.component import (
     ComponentManifest, CtypesSilComponent, InputMeta, PortSpec, SilComponent, resolve_message_classes,
 )
+from adas_sim.config.bundle import check_cross_component_agreement
 from adas_sim.config.fault import Fault, FaultVerb, apply_fault
 from adas_sim.resolve.library import resolve_library
 from adas_sim.config.override import Override, OverrideVerb, parse_override_verb
@@ -342,76 +343,18 @@ def _resolve_components(
     return resolved, bundle_dirs, library_paths
 
 
-def _load_ego_params(bundle_dir: Path) -> Mapping[str, object]:
-    """The shared-vehicle-facts half of a bundle (`R-SIM-3a`): `<bundle_dir>/
-    vehicle/ego_params.yaml`, or an empty mapping if this bundle carries
-    none -- a stage whose bundle predates this file, or was packed with no
-    ego copy, contributes nothing to the comparison rather than erroring
-    (there is nothing to disagree about yet)."""
-    ego_path = bundle_dir / "vehicle" / "ego_params.yaml"
-    if not ego_path.is_file():
-        return {}
-    return yaml.safe_load(ego_path.read_text(encoding="utf-8")) or {}
-
-
 def _validate_cross_component_agreement(
     bundle_dirs: Mapping[str, Path | None], components: Mapping[str, SilComponent], *, allow_mixed_projects: bool,
 ) -> bool:
-    """`OD-11` (`sim_sil_contract.md` §9.1): every real bundle resolved into
-    one pipeline must agree on the vehicle facts it carries, or the picture
-    and the SUT disagree about the wheelbase with no legitimate reading.
-
-    **Project-name agreement is a warning, escapable** by the pipeline's own
-    `allow_mixed_projects: true` -- a deliberate cross-project experiment is
-    a real workflow (`R-SIM-3a`).
-
-    **Ego-parameter agreement is a hard load error, with NO escape** --
-    `allow_mixed_projects` widens the project-name warning only; asserting it
-    does not also suppress this is `UT-C5-10`'s own point, since an escape
-    hatch that widens beyond its stated scope is how a hard error becomes a
-    warning.
-
-    Returns whether the resolved projects actually differed, so `Pipeline`
-    can record it (`allow_mixed_projects:` is what was *requested*;
-    `mixed_projects` is what was *found* -- the two are independent facts).
-    Stages with no known bundle directory (`components=`-supplied) are
-    skipped: there is nothing on disk to compare."""
-    known = [(name, bundle_dir) for name, bundle_dir in bundle_dirs.items() if bundle_dir is not None]
-    if len(known) < 2:
-        return False
-
-    projects = {
-        name: components[name].manifest.project for name, _ in known if components[name].manifest.project
-    }
-    distinct_projects = set(projects.values())
-    mixed = len(distinct_projects) > 1
-    if mixed and not allow_mixed_projects:
-        first_name, first_project = next(iter(projects.items()))
-        for name, project in projects.items():
-            if project != first_project:
-                warn(
-                    ProvenanceWarning(
-                        f"stage '{name}' bundle is for project {project!r}, stage '{first_name}' bundle is "
-                        f"for project {first_project!r} -- set allow_mixed_projects: true if this is deliberate"
-                    )
-                )
-                break
-
-    reference_name, reference_dir = known[0]
-    reference_ego = _load_ego_params(reference_dir)
-    for name, bundle_dir in known[1:]:
-        ego = _load_ego_params(bundle_dir)
-        for key, value in reference_ego.items():
-            if key in ego and ego[key] != value:
-                raise AuthoringError(
-                    expected=f"stage '{name}' ego_params.yaml to agree with stage '{reference_name}' on '{key}'",
-                    found=f"'{name}'={ego[key]!r} vs '{reference_name}'={value!r}",
-                    where="pipeline cross-component ego-parameter agreement (OD-11)",
-                    hint="every component's config bundle carries its own copy of shared_config's "
-                         "vehicle/ego_params.yaml -- they must be identical. allow_mixed_projects "
-                         "does not, and must not, suppress this",
-                )
-    return mixed
+    """Thin wrapper -- the real check moved to `config/bundle.py::
+    check_cross_component_agreement` (`WP-04`, `IMP-0160`), which takes
+    plain project names rather than `SilComponent` so `config/**` stays free
+    of any import that itself touches `ctypes` (`ANL-SW-34`). Behaviour is
+    unchanged; this is the call site."""
+    projects = {name: component.manifest.project for name, component in components.items()}
+    return check_cross_component_agreement(
+        projects, bundle_dirs, allow_mixed_projects=allow_mixed_projects,
+    )
 
 
 def _require_multiple(period_ns: int, base_grid_ns: int, *, stage_name: str) -> None:
