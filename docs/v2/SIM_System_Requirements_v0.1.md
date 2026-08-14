@@ -1594,7 +1594,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Configuration files shall live in the algorithm team's repository, versioned with their code; the system shall require nothing to be added to its own installation to run a project.
 **Accept.** A project runs from a read-only installation of the package.
 **Verify.** T · `SYT-CFG-19`   **Trace.** CN-0014, CN-0013
-**Built.** ◐ started — 0/1 software requirements done, in `WP-04`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0177`** · `P0` · `R1` — Configuration bundle, packed beside the library
 **Shall.** The build shall pack one atomic configuration bundle per component and build, beside the library, with a content hash; the system shall resolve it relative to the library, an explicit path shall win, and a project mismatch shall be a warning.

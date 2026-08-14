@@ -1713,7 +1713,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** No file shall need to be added to the package's own installation for a project to run.
 **Accept.** A project runs from a read-only installation of the package.
 **Verify.** T · `IT-12`   **Trace.** SYS-0176
-**Built.** ◐ started — `IMP-0158` in `WP-04`
+**Built.** ● done — `IMP-0158` in `WP-04`
 **Now.** `DONE·MOVE` — component plug-in, pipeline and ingest directories all live in `modules/<name>/sim/` today, which is the correct authoring home.
 
 **`SW-0159`** · `SI-10` · `P0` · `R1` — Only real runtime configuration enters the bundle
