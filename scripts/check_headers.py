@@ -28,6 +28,10 @@ SIM_ROOT = SCRIPT_DIR.parent
 _EXCLUDE_DIR_NAMES = {
     "__pycache__", ".venv", "build", "dist", ".pytest_cache", ".git",
     "egg-info",
+    # WP-05, DD-02: src/simcore/third_party/ -- a vendored single-header
+    # library (nlohmann/json) carries its own upstream copyright/license,
+    # never this project's header block.
+    "third_party",
 }
 
 # R-BUILD-2: scripts/build.py is byte-identical across every component --

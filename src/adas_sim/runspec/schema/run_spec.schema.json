@@ -1,0 +1,138 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "adas-sim/run_spec.schema.json",
+  "title": "adas-sim Resolved Run Spec (IF-09, design doc SS3.1)",
+  "description": "The seam between the Python config layer and simcore. Every reference resolved, every path absolute, every port carrying a concrete record/sampling/on_missing -- if the engine has to decide something the configuration layer could have decided, the spec is missing a field (design SS3.3).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "run_id", "spec_sha256", "grid", "sources", "stages", "mutations", "order", "coherence", "outputs", "limits", "diagnostics"],
+  "properties": {
+    "schema": {"const": "adas.sim.runspec/1.0"},
+    "run_id": {"type": "string"},
+    "spec_sha256": {"type": "string"},
+    "grid": {
+      "type": "object", "additionalProperties": false, "required": ["step_ns"],
+      "properties": {"step_ns": {"type": "integer", "minimum": 0}}
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["path", "sha256", "codec", "ingest", "absent"],
+        "properties": {
+          "path": {"type": "string"},
+          "sha256": {"type": "string"},
+          "codec": {"type": "string"},
+          "ingest": {"type": "array"},
+          "absent": {"type": "array"}
+        }
+      }
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["name", "mode", "impl", "period_ns", "abi_version", "config_bundle_sha256", "ports", "inputs"],
+        "properties": {
+          "name": {"type": "string"},
+          "mode": {"enum": ["simulate", "measured", "off"]},
+          "impl": {
+            "type": "object", "additionalProperties": false,
+            "required": ["kind", "path", "pattern", "search"],
+            "properties": {
+              "kind": {"enum": ["dll", "stubdll"]},
+              "path": {"type": "string"},
+              "pattern": {"type": "string"},
+              "search": {"type": "array", "items": {"type": "string"}}
+            }
+          },
+          "period_ns": {"type": "integer", "minimum": 0},
+          "abi_version": {"type": "integer"},
+          "config_bundle_sha256": {"type": "string"},
+          "ports": {
+            "type": "array",
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["name", "dir", "kind", "proto_type", "record", "sampling", "on_missing", "fixed_slots"],
+              "properties": {
+                "name": {"type": "string"},
+                "dir": {"enum": ["pro", "req"]},
+                "kind": {"enum": ["data"]},
+                "proto_type": {"type": "string"},
+                "record": {"type": "string"},
+                "sampling": {"enum": ["latest_at_or_before", "nearest", "strict", "interpolate", "all_since_last"]},
+                "on_missing": {"type": "string"},
+                "fixed_slots": {"type": ["boolean", "null"]}
+              }
+            }
+          },
+          "inputs": {
+            "type": "array",
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["port", "producer", "producer_port", "delay_steps"],
+              "properties": {
+                "port": {"type": "string"},
+                "producer": {"type": "string"},
+                "producer_port": {"type": "string"},
+                "delay_steps": {"type": "integer", "minimum": 0}
+              }
+            }
+          }
+        }
+      }
+    },
+    "mutations": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["verb", "address", "operands", "window_ns"],
+        "properties": {
+          "verb": {"enum": ["const", "hold", "offset", "scale", "select", "drop"]},
+          "address": {
+            "type": "object", "additionalProperties": false,
+            "required": ["stage", "port", "path", "index"],
+            "properties": {
+              "stage": {"type": "string"},
+              "port": {"type": "string"},
+              "path": {"type": "array", "items": {"type": "string"}},
+              "index": {"type": ["integer", "null"]}
+            }
+          },
+          "operands": {"type": "array", "items": {"type": "number"}},
+          "window_ns": {
+            "type": "array", "minItems": 2, "maxItems": 2,
+            "items": {"type": ["integer", "null"]}
+          }
+        }
+      }
+    },
+    "order": {"type": "array", "items": {"type": "string"}},
+    "coherence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["verdict", "stale", "waiver"],
+      "properties": {
+        "verdict": {"type": "string"},
+        "stale": {"type": "array"},
+        "waiver": {"type": ["string", "null"]}
+      }
+    },
+    "outputs": {"type": "object"},
+    "limits": {
+      "type": "object", "additionalProperties": false,
+      "required": ["exec_timeout_ms", "severity_exit"],
+      "properties": {
+        "exec_timeout_ms": {"type": "integer", "minimum": 0},
+        "severity_exit": {"type": "string"}
+      }
+    },
+    "diagnostics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["cycle_trace", "graph_dump"],
+      "properties": {
+        "cycle_trace": {"type": "boolean"},
+        "graph_dump": {"type": "boolean"}
+      }
+    }
+  }
+}

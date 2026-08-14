@@ -42,9 +42,9 @@ where = ["src"]
 include = ["adas_sim*"]
 
 [tool.setuptools.package-data]
-# WP-04, IF-13: the published JSON-Schema set ships in the package itself,
-# not read from a source checkout (R-SIM-11).
-adas_sim = ["config/schemas/*.schema.json"]
+# WP-04/WP-05, IF-13: the published JSON-Schema set ships in the package
+# itself, not read from a source checkout (R-SIM-11).
+adas_sim = ["config/schemas/*.schema.json", "runspec/schema/*.schema.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

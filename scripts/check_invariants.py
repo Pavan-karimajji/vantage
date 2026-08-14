@@ -24,6 +24,9 @@ SRC_ROOT = SIM_ROOT / "src" / "adas_sim"
 #: Python package -- the rule's own text always said "src/**"; only
 #: adas_sim existed to scan before simcore/simengine gained real content.
 ALL_SRC_ROOT = SIM_ROOT / "src"
+#: WP-05: the engine-only surface `ANL-SW-02`/`ANL-SW-03`/`ANL-SW-04` scan --
+#: design §3.2's own enforcement table, mechanised.
+SIMCORE_ROOT = SIM_ROOT / "src" / "simcore"
 
 # GT-1: R-SIM-1's grep, `\b(aeb|bsd|lca|acc|ldw|lka)\b`, run over modules/sim/src.
 #
@@ -120,7 +123,14 @@ _SOURCE_EXTENSIONS = (".py", ".cpp", ".hpp", ".h")
 def _iter_source_files(root: Path):
     if not root.is_dir():
         return []
-    return sorted(p for p in root.rglob("*") if p.is_file() and p.suffix in _SOURCE_EXTENSIONS)
+    # WP-05, DD-02: src/simcore/third_party/ is vendored (nlohmann/json) --
+    # GT-1's "no banned token" rule is about code THIS framework authored;
+    # a third-party library's own source is not scanned, same reasoning
+    # check_headers.py's own third_party exclusion states.
+    return sorted(
+        p for p in root.rglob("*")
+        if p.is_file() and p.suffix in _SOURCE_EXTENSIONS and "third_party" not in p.parts
+    )
 
 
 def check_gt1(src_root: Path = ALL_SRC_ROOT) -> list[str]:
@@ -291,6 +301,65 @@ def check_anl_sw34(src_root: Path = SRC_ROOT) -> list[str]:
     return findings
 
 
+# WP-05, design §3.2's enforcement table -- three engine-only greps over
+# `src/simcore/**`, excluding the vendored `third_party/` (not our own code,
+# same reasoning `_iter_source_files` already applies to GT-1).
+#: `gcd` is word-bounded (a common-enough substring to false-positive
+#: otherwise); `snap` is a plain substring match -- it names a naming
+#: PATTERN ("SnapToGrid", "snap_grid", "GridSnap"), not a standalone
+#: identifier, so a word boundary would miss the PascalCase/prefix shapes
+#: this token actually takes in practice.
+_GCD_TOKENS = re.compile(r"(?<![A-Za-z0-9_])(gcd)(?![A-Za-z0-9_])", re.IGNORECASE)
+_SNAP_TOKENS = re.compile(r"snap", re.IGNORECASE)
+_ADDRESS_GRAMMAR_TOKENS = re.compile(r'"self\.|"source\.')
+#: A quoted string literal ending `.yaml`, or a YAML library token -- never
+#: a bare comment mention. This codebase's own established comment style
+#: cites `docs/v2/*.yaml` as documentation provenance everywhere (e.g.
+#: `errors.hpp`'s own "Ported from docs/v2/errors.yaml") -- a check that
+#: flagged prose would be permanently red, which is worse than not checking.
+_YAML_TOKENS = re.compile(r'"[^"]*\.yaml"|yaml-cpp|YAML::', re.IGNORECASE)
+
+
+def check_anl_sw02(simcore_root: Path = SIMCORE_ROOT) -> list[str]:
+    """`ANL-SW-02` (`IMP-0006`): no GCD/`snap`/base-grid computation in the
+    engine -- `emit.py::_compute_grid_step_ns` (Python) is the ONE place
+    the grid step is derived; `simcore` only ever reads `grid.step_ns` and
+    `stages[].period_ns` already resolved."""
+    findings = []
+    for path in _iter_source_files(simcore_root):
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if _GCD_TOKENS.search(line) or _SNAP_TOKENS.search(line):
+                findings.append(f"ANL-SW-02 {path}:{lineno}: grid/GCD computation in the engine: {line.strip()!r}")
+    return findings
+
+
+def check_anl_sw03(simcore_root: Path = SIMCORE_ROOT) -> list[str]:
+    """`ANL-SW-03` (`IMP-0007`): no dotted-address splitting or `self.`/
+    `source.` reference prefix in the engine -- `runspec/address.py`
+    (Python) is the one place that grammar lives; `stages[].inputs[]`
+    already carries `{producer, producer_port}` split, never a string to
+    re-parse."""
+    findings = []
+    for path in _iter_source_files(simcore_root):
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if _ADDRESS_GRAMMAR_TOKENS.search(line):
+                findings.append(f"ANL-SW-03 {path}:{lineno}: reference-grammar literal in the engine: {line.strip()!r}")
+    return findings
+
+
+def check_anl_sw04(simcore_root: Path = SIMCORE_ROOT) -> list[str]:
+    """`ANL-SW-04` (`IMP-0011`): `simcore` opens no `.yaml` -- the ingest
+    map (once `WP-12` lands) is parsed in Python and arrives pre-resolved
+    in `sources[].ingest`; no YAML library or `.yaml` path literal may
+    appear in the engine."""
+    findings = []
+    for path in _iter_source_files(simcore_root):
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if _YAML_TOKENS.search(line):
+                findings.append(f"ANL-SW-04 {path}:{lineno}: YAML reference in the engine: {line.strip()!r}")
+    return findings
+
+
 def run_all(
     src_root: Path = SRC_ROOT, superproject_root: Path = SUPERPROJECT_ROOT, all_src_root: Path = ALL_SRC_ROOT,
 ) -> list[str]:
@@ -305,6 +374,9 @@ def run_all(
         *check_no_world_model_client(sim_root),
         *check_codec_scope_no_function_name(sim_root),
         *check_no_manifest_names_codec(superproject_root),
+        *check_anl_sw02(),
+        *check_anl_sw03(),
+        *check_anl_sw04(),
     ]
 
 
@@ -315,7 +387,7 @@ def main(argv: list[str] | None = None) -> int:
     if findings:
         print(f"\n{len(findings)} invariant violation(s)")
         return 1
-    print("GT-1, GT-2, GT-3, GT-6, GT-11, UT-D8-9, WP-02(b): clean")
+    print("GT-1, GT-2, GT-3, GT-6, GT-11, UT-D8-9, WP-02(b), ANL-SW-02/03/04: clean")
     return 0
 
 

@@ -99,6 +99,64 @@ def parse_address(raw: str, *, where: str) -> Address:
     return Address(raw=raw, port=segments[0].name, path=tuple(segments[1:]))
 
 
+@dataclass(frozen=True, slots=True)
+class ResolvedAddress:
+    """`IMP-0008`'s own flat shape (design §3.1's `mutations[].address`):
+    `{stage, port, path[], index, all_elements}` -- field NAMES only in
+    `path` (no embedded index), because in this codebase's actual override
+    grammar only the LAST path segment ever carries one
+    (`_resolve_scalar_target`/`_resolve_repeated_target` both key off
+    `path[-1]` alone). `simcore`'s `mutate/address.cpp` (`IMP-0099`) reads
+    this struct directly and parses nothing."""
+
+    stage: str
+    port: str
+    path: tuple[str, ...] = ()
+    index: int | None = None
+    all_elements: bool = False
+
+
+def resolve_address(raw: str, *, stage: str, where: str) -> ResolvedAddress:
+    """Separates resolution from application (`IMP-0008`) -- `parse_address`
+    (above) turns a string into structure; `apply_override` (below) applies
+    that structure to real bytes; today they are the only two steps, fused
+    at the call site. This is the resolution half, re-exposed in the flat,
+    JSON-ready shape the Resolved Run Spec's `mutations[]` carries (design
+    §3.1: `path` a bare list of field names, one `index`/`all_elements` for
+    the whole address), with the stage folded in (an override is scoped to
+    one stage's own `overrides:` mapping in the pipeline file; the emitted
+    spec is a flat top-level list, so the stage that owned it must travel
+    with the address).
+
+    **A non-final segment carrying its own index is refused, not silently
+    dropped.** `apply_override`'s own grammar (`_descend`) genuinely
+    supports one, e.g. `objects.list[2].speed` -- but the flat
+    `{path[], index}` shape this function emits has room for exactly one
+    index, on the address as a whole, matching every override this
+    codebase's real usage has ever needed (a bare field or a single
+    repeated-element target, never a field nested inside an indexed
+    element). Losing the middle index silently would be `R-SIM-25`'s
+    failure exactly; refusing it, naming the address, is the honest
+    alternative until a real case needs the richer shape."""
+    address = parse_address(raw, where=where)
+    for segment in address.path[:-1]:
+        if segment.index is not None:
+            raise AuthoringError(
+                expected="an index only on the address's own final segment",
+                found=f"{raw!r} indexes {segment.name!r} before the end", where=where,
+                hint="the emitted spec's mutations[].address carries one index for the whole "
+                     "address -- an override targeting a field inside an indexed element "
+                     "(e.g. 'objects.list[2].speed') is not yet representable; address the "
+                     "element itself, or the field on every element, instead",
+            )
+    last_index = address.path[-1].index if address.path else None
+    return ResolvedAddress(
+        stage=stage, port=address.port, path=tuple(seg.name for seg in address.path),
+        index=None if last_index == "*" else last_index,
+        all_elements=last_index == "*",
+    )
+
+
 def _match_component_ref(ref: str, *, known_ports: Iterable[str]) -> list[str] | None:
     """`None` when `ref` carries no `self.` prefix (already concrete, never
     matched against anything); otherwise every qualified name in

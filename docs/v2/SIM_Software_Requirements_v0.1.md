@@ -345,7 +345,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** `SI-14` shall emit a Resolved Run Spec in which every path is absolute, every mode is decided, every period is computed in integer nanoseconds, every port is bound to exactly one producer, and no value requires further inference.
 **Accept.** No field of the spec is a reference to be looked up, a stem to be expanded, a relative path, a default to be applied, or an expression to be evaluated. A checker over the spec schema reports zero unresolved constructs.
 **Verify.** T · `UT-SPC-01` · A · `ANL-SW-01`   **Trace.** SYS-0165, SYS-0166
-**Built.** ○ not started — `IMP-0001` in `WP-05`
+**Built.** ● done — `IMP-0001` in `WP-05`
 **Now.** `PARTIAL` — `core/manifest.py`'s `RunSpec`/`load_run_spec` is a run-configuration reader, not a resolved-spec emitter; resolution today happens inside `contracts/pipeline.py` at load and is never serialised as one artifact.
 
 **`SW-0410`** · `SI-13` · `P0` · `R1` — The probe pass produces a recording index and a module manifest, as data
@@ -367,7 +367,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The spec shall carry a content hash of every recording the probe pass read, and the engine shall refuse a recording whose hash differs from the one emitted against, naming both.
 **Accept.** Replacing a recording between emission and execution is refused before the first tick. Re-emitting against the replaced file succeeds.
 **Verify.** T · `UT-SPC-24`   **Trace.** SYS-0287, SYS-0222; CN-0396
-**Built.** ○ not started — `IMP-0412` in `WP-05`
+**Built.** ◐ started — `IMP-0412` in `WP-05`
 **Now.** `PARTIAL` — `core/ids.py` hashes inputs for the run id; nothing compares a hash at load.
 *Note:* without this, two passes is strictly worse than one — the spec would assert properties of a file nobody re-checked.
 
@@ -375,77 +375,77 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** `SI-14` shall emit a spec sufficient on its own to construct and run the engine, with no other file consulted at run time except the recordings and module binaries the spec names by absolute path.
 **Accept.** Running the engine with the configuration source tree deleted, and only the spec, the named recordings and the named binaries present, produces identical port values.
 **Verify.** T · `IT-01`   **Trace.** SYS-0165, SYS-0216, CN-0293
-**Built.** ○ not started — `IMP-0002` in `WP-05`
+**Built.** ◐ started — `IMP-0002` in `WP-05`
 **Now.** `NEW`.
 
 **`SW-0003`** · `SI-14` · `P0` · `R1` — The spec carries absolute pre-resolved binary paths
 **Shall.** The spec shall carry, per module, the absolute path of the binary chosen, the platform pattern it matched, and the search order that produced it.
 **Accept.** Changing the search path after emission cannot change which binary the engine loads. The manifest records the same path the engine opened.
 **Verify.** T · `UT-SPC-02`   **Trace.** SYS-0166; CN-0384, CN-0385
-**Built.** ○ not started — `IMP-0003` in `WP-05`
+**Built.** ● done — `IMP-0003` in `WP-05`
 **Now.** `DONE·MOVE` — `contracts/loader.py::resolve_library` is the one resolver and is correct; `sil_host/src/library_loader.cpp` duplicates it in C++ and must be deleted (`SW-0018`).
 
 **`SW-0004`** · `SI-14` · `P0` · `R1` — The spec is hashed, and the hash is an identity
 **Shall.** `SI-14` shall compute a content hash over the spec's canonical serialisation and write both spec and hash into the run artifacts.
 **Accept.** Two emissions from identical inputs produce an identical hash. Any semantic change to the spec changes the hash. Reordering keys that carry no meaning does not.
 **Verify.** T · `UT-SPC-03`   **Trace.** SYS-0165, SYS-0123
-**Built.** ○ not started — `IMP-0004` in `WP-05`
+**Built.** ● done — `IMP-0004` in `WP-05`
 **Now.** `PARTIAL` — `core/ids.py::new_run_id` hashes run inputs and is stable, but there is no canonical spec serialisation to hash.
 
 **`SW-0005`** · `SI-14` · `P0` · `R1` — The spec carries a schema version and is refused outside its range
 **Shall.** The spec shall carry a schema version, and `SI-09`/`simcore` shall refuse a version outside its supported range, naming both.
 **Accept.** A spec one major version ahead is refused with both numbers in the message; a spec with no version is refused naming the omission.
 **Verify.** T · `UT-SPC-04`   **Trace.** SYS-0170, SYS-0258
-**Built.** ○ not started — `IMP-0005` in `WP-05`
+**Built.** ● done — `IMP-0005` in `WP-05`
 **Now.** `DONE·MOVE` — the `version:` field plus upgrader semantics exist in `contracts/pipeline.py` and are mirrored in `sil_host/src/pipeline.cpp`; the mechanism is right, the artifact it guards is the pipeline file rather than the spec.
 
 **`SW-0006`** · `SI-14` · `P0` · `R1` — The spec declares the base grid, not the ingredients
 **Shall.** The spec shall carry the computed base grid step and each module's period as integers in nanoseconds, and shall not carry the derivation. The grid shall be the greatest common divisor of the declared periods of **every** module in the graph, whatever triggers each one, and of no port of static kind.
 **Accept.** `simcore` performs no greatest-common-divisor computation, no snapping and no unit conversion. A grep for period arithmetic in the engine returns nothing. Adding a data-driven module with a shorter period changes the emitted grid; adding a static port does not change it at all.
 **Verify.** A · `ANL-SW-02` · T · `UT-SPC-23`   **Trace.** SYS-0066, SYS-0285, SYS-0060; CN-0293, CN-0393
-**Built.** ○ not started — `IMP-0006` in `WP-05`
+**Built.** ● done — `IMP-0006` in `WP-05`
 **Now.** `DONE·TWICE` — computed in `contracts/pipeline.py` and again in `sil_host/src/pipeline.cpp::ComputeBaseGridNs`; the C++ copy is deleted under `SW-0018`. Neither excludes static ports, because neither has a static port kind yet (`SW-0060`).
 
 **`SW-0007`** · `SI-14` · `P0` · `R1` — The spec declares the resolved wiring, not the wiring rules
 **Shall.** The spec shall express wiring as a resolved producer for every consumer port, and shall not carry the reference grammar that produced it.
 **Accept.** `simcore` contains no reference parser — no splitting of a dotted address, no `self`/`source` prefix handling, no fallback lookup.
 **Verify.** A · `ANL-SW-03`   **Trace.** SYS-0165, SYS-0040
-**Built.** ○ not started — `IMP-0007` in `WP-05`
+**Built.** ● done — `IMP-0007` in `WP-05`
 **Now.** `NEW` — the grammar exists in `contracts/pipeline.py` and is mirrored in C++; neither emits a resolved form.
 
 **`SW-0008`** · `SI-14` · `P0` · `R1` — The spec declares overrides and faults as resolved instructions
 **Shall.** Every override and fault shall appear in the spec as a verb, a resolved address, and its operands, with no addressing grammar left to interpret.
 **Accept.** `SI-05` receives a verb and a resolved field path; it parses no address string. Every override in the spec also appears in the run manifest (`SW-0219`).
 **Verify.** T · `UT-SPC-05`   **Trace.** SYS-0097, SYS-0099, SYS-0101, SYS-0103
-**Built.** ○ not started — `IMP-0008` in `WP-05`
+**Built.** ● done — `IMP-0008` in `WP-05`
 **Now.** `PARTIAL` — `contracts/binding.py` resolves an address to structure and applies the verb; the resolution result is not separable from the application, so nothing can be emitted ahead of the run.
 
 **`SW-0009`** · `SI-14` · `P0` · `R1` — The spec declares the record policy per port
 **Shall.** The spec shall carry, for every declared port, its record policy from the closed set full · excluded · decimated-by-N.
 **Accept.** No port in the spec lacks a policy entry. A reader of the resulting recording can answer *was this complete?* for every port from the artifact alone.
 **Verify.** T · `UT-SPC-06`   **Trace.** SYS-0116, SYS-0120
-**Built.** ○ not started — `IMP-0009` in `WP-05`
+**Built.** ● done — `IMP-0009` in `WP-05`
 **Now.** `DONE·MOVE` — `contracts/pipeline.py::RecordVerb` and `core/manifest.py::_record_policy_records` implement the closed set and the per-port record; they belong to `SI-14` and are already Python-side, so this is a re-homing within Python, not a language move.
 
 **`SW-0010`** · `SI-14` · `P1` · `R1` — The spec declares the sampling and missing-data policy per port
 **Shall.** The spec shall carry, per port, the sampling policy and the missing-data behaviour, each from its closed set.
 **Accept.** `SI-03` selects behaviour by enumeration value and holds no default table of its own.
 **Verify.** T · `UT-SPC-07`   **Trace.** SYS-0073, SYS-0074
-**Built.** ○ not started — `IMP-0010` in `WP-05`
+**Built.** ● done — `IMP-0010` in `WP-05`
 **Now.** `NEW`.
 
 **`SW-0011`** · `SI-14` · `P0` · `R1` — The spec declares the ingest binding as a resolved table
 **Shall.** The spec shall carry, per source, the resolved topic-to-port table including payload type, origin tag, unit factor and offset, header field bindings, and declared-absent ports.
 **Accept.** `simcore` opens no ingest map file and contains no parser for one. Every translation it applies came from the spec.
 **Verify.** A · `ANL-SW-04` · T · `IT-02`   **Trace.** SYS-0013, SYS-0014, SYS-0015, SYS-0019
-**Built.** ○ not started — `IMP-0011` in `WP-05`
+**Built.** ◐ started — `IMP-0011` in `WP-05`
 **Now.** `DONE·TWICE` — `io/ingest.py` parses and validates; `sil_host/src/ingest_map.cpp` parses again and more permissively. The C++ parser is deleted; its *application* survives as `SW-0032`.
 
 **`SW-0012`** · `SI-14` · `P1` · `R1` — The spec is human-readable and diffable
 **Shall.** The spec shall be a text document whose canonical serialisation is stable under re-emission and meaningful under a line diff.
 **Accept.** Two specs differing in one mode produce a diff of the lines carrying that mode and no others.
 **Verify.** T · `UT-SPC-08`   **Trace.** SYS-0165, SYS-0172
-**Built.** ○ not started — `IMP-0012` in `WP-05`
+**Built.** ● done — `IMP-0012` in `WP-05`
 **Now.** `NEW`.
 *Note:* this is not decoration. The spec is what a developer attaches a debugger to (`SYS-0216`) and what a bug report contains; a binary seam would make both harder for no measured gain.
 

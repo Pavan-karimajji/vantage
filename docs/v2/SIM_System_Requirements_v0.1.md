@@ -485,19 +485,19 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The bridge from a recording's own signal vocabulary to the port model shall be a declared file, never code.
 **Accept.** A new recording family is onboarded with no compiled artifact rebuilt and no Python module edited.
 **Verify.** T · `SYT-INP-13`   **Trace.** CN-0068, CN-0304; v1 `FR-SIM-66`
-**Built.** ○ not started — 0/3 software requirements done, in `WP-05`, `WP-06`, `WP-12`
+**Built.** ◐ started — 0/3 software requirements done, in `WP-05`, `WP-06`, `WP-12`
 
 **`SYS-0014`** · `P0` · `R1` — What an ingest map declares
 **Shall.** An ingest map shall declare, per source signal: target port, payload type, origin tag, unit, scale and offset, and array shape where applicable.
 **Accept.** A map omitting any mandatory field is refused at load, naming the field and the line.
 **Verify.** T · `SYT-INP-14`   **Trace.** CN-0304
-**Built.** ○ not started — 0/2 software requirements done, in `WP-05`, `WP-12`
+**Built.** ◐ started — 0/2 software requirements done, in `WP-05`, `WP-12`
 
 **`SYS-0015`** · `P0` · `R1` — The signal header is bound explicitly
 **Shall.** An ingest map shall bind the signal header fields explicitly — which source channel provides source time, which provides the cycle counter, which provides status, and, where the source carries it, which provides the cycle identifier.
 **Accept.** A map that binds none of these loads, but every port it feeds is marked *timing approximated* in the run manifest and a warning is emitted naming those ports.
 **Verify.** T · `SYT-INP-15`   **Trace.** CN-0305, CN-0074; **evidence** §2.1
-**Built.** ○ not started — 0/3 software requirements done, in `WP-05`, `WP-08`, `WP-12`
+**Built.** ◐ started — 0/3 software requirements done, in `WP-05`, `WP-08`, `WP-12`
 
 **`SYS-0016`** · `P0` · `R1` — Declared holes
 **Shall.** An ingest map shall declare which ports the recording family never carries, with a reason.
@@ -521,7 +521,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** An ingest map shall permit unit conversion by a declared factor and offset from a closed vocabulary, and shall permit nothing else — no expression, no field arithmetic, no scripting, no user-supplied callable.
 **Accept.** A map containing any construct outside the closed vocabulary is refused at load. The vocabulary's members are enumerable from the published schema.
 **Verify.** T · `SYT-INP-19` · `INSP-01`   **Trace.** CN-0309, CN-0286
-**Built.** ○ not started — 0/5 software requirements done, in `WP-05`, `WP-06`, `WP-12`
+**Built.** ◐ started — 0/5 software requirements done, in `WP-05`, `WP-06`, `WP-12`
 
 **`SYS-0020`** · `P0` · `R1` — Type mismatch means the cut is unsupported
 **Shall.** A source signal whose type does not match the target port's declared type shall mean the recording does not support that cut.
@@ -663,7 +663,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A required input with neither a producer nor a recording source shall be a rejected configuration.
 **Accept.** Refused at load, naming the consumer, the port, and every candidate that was considered and why each failed.
 **Verify.** T · `SYT-PRC-04`   **Trace.** CN-0090, CN-0346
-**Built.** ○ not started — 0/2 software requirements done, in `WP-05`, `WP-20`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-05`, `WP-20`
 
 **`SYS-0041`** · `P1` · `R1` — Manifests may be generated, but the checked-in file is the authority
 **Shall.** A manifest may be auto-generated as a first draft from the build, and the checked-in manifest shall be the authority.
@@ -796,7 +796,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** All internal time shall be integer nanoseconds; float seconds shall appear only at human-facing boundaries.
 **Accept.** No time value inside the engine is a floating-point type. A period expressed in configuration is integer microseconds and is refused if fractional.
 **Verify.** A · `ANL-10` · T · `SYT-TIM-02`   **Trace.** CN-0139
-**Built.** ○ not started — 0/3 software requirements done, in `WP-05`, `WP-07`, `WP-25`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-05`, `WP-07`, `WP-25`
 
 **`SYS-0283`** · `P0` · `R1` — Simulation time advances by one grid step, and by nothing else
 **Shall.** Simulation time shall advance by exactly one base-grid step per tick from the declared run start, and no arrival, reconstructed cycle boundary or module output shall move it.
@@ -851,14 +851,14 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The base grid step shall be the greatest common divisor of all declared periods, derived and never configured; a declared period that is not an integer multiple of it shall be a load error naming both numbers, and shall never be rounded, snapped or matched to a nearest value.
 **Accept.** With 20 ms and 30 ms declared, the grid is 10 ms and both modules fire on their correct ticks. A period of 19.99 ms beside one of 20 ms is refused naming both, and no configured tolerance can make it accepted.
 **Verify.** T · `SYT-TIM-08`   **Trace.** CN-0145, CN-0394
-**Built.** ○ not started — 0/6 software requirements done, in `WP-05`, `WP-09`, `WP-20`
+**Built.** ◐ started — 1/6 software requirements done, in `WP-05`, `WP-09`, `WP-20`
 *Note:* a rounded period does not stay a rounding. It accumulates, and it surfaces as a module producing values at the wrong moments — which reads as a defect in the module rather than in the scheduling that caused it.
 
 **`SYS-0285`** · `P0` · `R1` — Every declared period enters the grid, whatever triggers the module
 **Shall.** A module's declared period shall contribute to the base-grid derivation whether that module is triggered by data or by period.
 **Accept.** Adding a data-driven module with a 5 ms period to a graph of 20 ms modules changes the grid to 5 ms. Its arrivals are each observed on their own tick.
 **Verify.** T · `SYT-TIM-23`   **Trace.** CN-0393
-**Built.** ○ not started — 0/1 software requirements done, in `WP-05`
+**Built.** ● done — 1/1 software requirements done
 *Note:* without this the grid can be coarser than a data-driven module's own data, and `SYS-0064`'s predicate then coalesces arrivals it should have seen separately. The period says how fine the grid must be; the trigger says whether this tick counts.
 
 **`SYS-0067`** · `P1` · `R1` — Pathological grids are reported before they are paid for
@@ -906,13 +906,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The sampling policy shall be configurable per port from a closed set — latest-at-or-before, nearest, strict-with-tolerance, interpolate, all-since-last — with a sensible default per type.
 **Accept.** Each policy is individually demonstrable on one crafted input; interpolate is refused on a non-continuous type, naming the type.
 **Verify.** T · `SYT-TIM-14`   **Trace.** CN-0148, CN-0286
-**Built.** ◐ started — 1/3 software requirements done, in `WP-04`, `WP-05`, `WP-09`
+**Built.** ◐ started — 2/3 software requirements done, in `WP-04`, `WP-05`, `WP-09`
 
 **`SYS-0074`** · `P1` · `R1` — Missing-data policy per port
 **Shall.** The behaviour on a missing value shall be configurable per port — hold, skip cycle, zero, or error — defaulting to hold with a counted warning.
 **Accept.** Each behaviour is demonstrable; the warning count appears in the end-of-run summary.
 **Verify.** T · `SYT-TIM-15`   **Trace.** CN-0149
-**Built.** ○ not started — 0/2 software requirements done, in `WP-05`, `WP-09`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-05`, `WP-09`
 
 **`SYS-0075`** · `P1` · `R1` — A repeat is visible to the consumer
 **Shall.** A reused value shall be flagged as a repeat, and the module shall be able to react to it.
@@ -1062,7 +1062,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Port value overrides shall use a closed verb list — the arithmetic verbs const, hold, offset, scale and the structural verbs select, drop — with no expression language, no scripting hook and no user-supplied callable.
 **Accept.** A configuration using any other verb is refused at load. The verb set is enumerable from the published schema and has not grown between releases without a requirement change.
 **Verify.** T · `SYT-STG-17` · `INSP-04`   **Trace.** CN-0326, CN-0286; v1 `FR-SIM-45`
-**Built.** ○ not started — 0/2 software requirements done, in `WP-05`, `WP-11`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-05`, `WP-11`
 
 **`SYS-0098`** · `P0` · `R1` — An override may destroy, never create
 **Shall.** No override shall create an entity.
@@ -1074,7 +1074,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Override addressing shall use the closed grammar: port, port.field, port.array[i], port.array[\*] — with no predicates.
 **Accept.** A predicate expression is a load error. The grammar is published and testable.
 **Verify.** T · `SYT-STG-19`   **Trace.** CN-0328
-**Built.** ○ not started — 0/2 software requirements done, in `WP-05`, `WP-11`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-05`, `WP-11`
 
 **`SYS-0100`** · `P1` · `R1` — Clearing does not renumber
 **Shall.** A port declared fixed-slot shall have an element cleared in place and shall never be compacted.
@@ -1086,7 +1086,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Every override shall appear in the run manifest, and an overridden port shall be badged in the player and tagged `overridden` on its topic.
 **Accept.** An override invisible in the manifest is not producible by any path.
 **Verify.** T · `SYT-STG-21`   **Trace.** CN-0131, CN-0299
-**Built.** ○ not started — 0/6 software requirements done, in `WP-05`, `WP-11`, `WP-22`, `WP-26`
+**Built.** ◐ started — 1/6 software requirements done, in `WP-05`, `WP-11`, `WP-22`, `WP-26`
 
 **`SYS-0102`** · `P1` · `R1` — An override contradicting coherence is a waiver
 **Shall.** An override that contradicts the coherence classification shall be treated exactly like a waiver.
@@ -1098,7 +1098,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Fault injection shall use a closed verb list derived from the port value's own metadata fields: drop, stale, delay, invalidate, corrupt.
 **Accept.** Each is individually demonstrable and observable in the consumer's header. No sixth verb exists.
 **Verify.** T · `SYT-STG-23`   **Trace.** CN-0329, CN-0286
-**Built.** ○ not started — 0/3 software requirements done, in `WP-05`, `WP-11`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-05`, `WP-11`
 
 ### 9.4 The open-loop limit
 
@@ -1186,7 +1186,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Each port shall declare a record policy from the closed set full, excluded, decimated-by-N; the policy shall be recorded for **every** declared port.
 **Accept.** A reader of the artifact alone can answer "was this complete?" for every port. Excluding or decimating an input a simulated stage consumes is a load error at record time.
 **Verify.** T · `SYT-OUT-06`   **Trace.** CN-0317; v1 `NR-SIM-42`
-**Built.** ○ not started — 0/3 software requirements done, in `WP-05`, `WP-13`, `WP-20`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-05`, `WP-13`, `WP-20`
 
 **`SYS-0117`** · `P0` · `R1` — Volume is estimated before it is produced
 **Shall.** Recording volume shall be estimated before a run or campaign starts, labelled an upper bound, and revised from the measured rate.
@@ -1210,7 +1210,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The recorder shall derive its topic list from the pipeline's port manifests, so that every declared port — every stage's inputs and outputs — is recorded, subject only to the declared per-port record policy.
 **Accept.** No declared port is absent from the recording without an explicit policy entry saying so.
 **Verify.** T · `SYT-OUT-10`   **Trace.** CN-0113, CN-0317
-**Built.** ○ not started — 0/2 software requirements done, in `WP-05`, `WP-13`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-05`, `WP-13`
 
 **`SYS-0121`** · `P0` · `R1` — A recording is a model; a format is a codec
 **Shall.** The recording model shall be `meta` plus typed topics plus two-clock messages, and no consumer of a recording — layer provider, renderer, expectation, analysis — shall be able to learn which format it came from.
@@ -1230,7 +1230,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Every run shall produce a machine-readable run manifest carrying at minimum: tool version, resolved run spec and its hash, module ids/versions/binary hashes, input paths and content hashes, per-module mode and implementation, timing model, reset policy, coherence result, divergence point, override list, per-port record policy, per-port timing-recovery rung, host platform, and start and end time.
 **Accept.** Every listed field is present in every manifest, each either a value or an explicit *unknown*. A field that cannot be filled never carries a plausible default.
 **Verify.** T · `SYT-OUT-13`   **Trace.** CN-0113, CN-0252, CN-0114; v1 `NR-SIM-4`
-**Built.** ○ not started — 0/7 software requirements done, in `WP-05`, `WP-15`, `WP-22`
+**Built.** ◐ started — 1/7 software requirements done, in `WP-05`, `WP-15`, `WP-22`
 
 **`SYS-0124`** · `P0` · `R1` — Reproducible from the manifest alone
 **Shall.** A past run shall be reproducible from its manifest alone.
@@ -1504,19 +1504,19 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The system shall produce a Resolved Run Spec — flat, with every path resolved, every mode decided, every period computed, every validation passed — write it and its hash into the run artifacts, and treat it as the only input the engine takes.
 **Accept.** The engine performs no configuration inference, no schema upgrading, no wiring validation and no library search-path logic; it requires no configuration-language parser. The same spec hash always produces the same results.
 **Verify.** T · `SYT-CFG-08` · `ANL-24`   **Trace.** CN-0292, CN-0293, CN-0294, CN-0296, CN-0179; v1 `FR-SIM-30`
-**Built.** ○ not started — 0/9 software requirements done, in `WP-05`, `WP-09`, `WP-13`, `WP-16`, `WP-22`
+**Built.** ◐ started — 4/9 software requirements done, in `WP-05`, `WP-09`, `WP-13`, `WP-16`, `WP-22`
 
 **`SYS-0166`** · `P0` · `R1` — Absolute, pre-resolved binary paths
 **Shall.** The Resolved Run Spec shall carry absolute, already-resolved paths for every module binary; the engine shall perform no stem expansion and consult no search path.
 **Accept.** Which file was chosen is decided once, recorded in the manifest, and reproducible. Changing the search path after resolution cannot change which binary the engine loads.
 **Verify.** T · `SYT-CFG-09`   **Trace.** CN-0384, CN-0385
-**Built.** ○ not started — 0/6 software requirements done, in `WP-05`, `WP-10`, `WP-21`
+**Built.** ◐ started — 2/6 software requirements done, in `WP-05`, `WP-10`, `WP-21`
 
 **`SYS-0287`** · `P0` · `R1` — Resolution is two passes: probe, then emit
 **Shall.** The system shall obtain, before emitting a Resolved Run Spec, a **recording index** stating what each named recording carries and a **module manifest** stating what each named module declares; and both shall be read through the same interfaces the run itself uses.
 **Accept.** Every spec field that depends on a file's contents — the ports a recording provides, the timing rung each supports, the ports it declares it never carries, and each module's period, ABI version and port set — is filled from the probe pass and from no other source. A configuration approved by the probe pass is never rejected by the run for a reason the probe could have seen.
 **Verify.** T · `SYT-CFG-24`   **Trace.** CN-0396, CN-0397, CN-0165
-**Built.** ○ not started — 0/3 software requirements done, in `WP-05`, `WP-21`
+**Built.** ◐ started — 0/3 software requirements done, in `WP-05`, `WP-21`
 *Note:* stated because the spec's own rule is that the engine decides nothing the configuration layer could have decided — and several of those fields cannot be decided without opening a file. Naming the probe pass is what keeps that rule true instead of quietly reintroducing a second, simpler reader for configuration time.
 
 **`SYS-0288`** · `P0` · `R1` — What the probe returns is data, and it is passed, not fetched
@@ -1548,7 +1548,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Every configuration file shall carry a schema version, and an unrecognised version shall be refused rather than best-guessed.
 **Accept.** A file with a future version is refused naming both versions. A file with no version is refused naming the omission.
 **Verify.** T · `SYT-CFG-13`   **Trace.** CN-0345; v1 `CR-SIM-23`
-**Built.** ◐ started — 1/4 software requirements done, in `WP-04`, `WP-05`, `WP-12`, `WP-22`
+**Built.** ◐ started — 2/4 software requirements done, in `WP-04`, `WP-05`, `WP-12`, `WP-22`
 
 **`SYS-0171`** · `P0` · `R1` — Validation at load, never at first cycle
 **Shall.** Every reference shall resolve, every mode shall be checked against the recording, and every type shall match, at load; every failure shall name both ends.
@@ -1560,7 +1560,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Writing back what was read shall produce a byte-identical file.
 **Accept.** For every file in the test corpus, read-then-write is byte-identical, including comments and ordering where the format preserves them.
 **Verify.** T · `SYT-CFG-15`   **Trace.** CN-0347
-**Built.** ◐ started — 1/2 software requirements done, in `WP-04`, `WP-05`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0173`** · `P1` · `R1` — Includes and fragments
 **Shall.** Includes and reusable fragments shall be supported.
@@ -1854,7 +1854,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The engine shall be launchable from a Resolved Run Spec with no interpreter in the process.
 **Accept.** The debugging session contains no interpreter frames. The engine executable contains no configuration parser, no validation, no path search and no inference.
 **Verify.** D · `SYT-DIA-15` · `ANL-30`   **Trace.** CN-0219, CN-0388, CN-0389
-**Built.** ○ not started — 0/4 software requirements done, in `WP-05`, `WP-14`
+**Built.** ◐ started — 0/4 software requirements done, in `WP-05`, `WP-14`
 
 **`SYS-0217`** · `P1` · `R1` — Symbols and shipped launch configurations
 **Shall.** Symbol resolution shall be documented and configurable for both platforms, and the package shall ship ready-made debugger launch configurations for common development environments on both.
@@ -1894,7 +1894,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Each recording shall carry a content hash used as its identity in the run manifest.
 **Accept.** Two runs over the same file record the same hash; a modified file records a different one and is not silently accepted as the same input.
 **Verify.** T · `SYT-REC-03`   **Trace.** CN-0236
-**Built.** ○ not started — 0/5 software requirements done, in `WP-05`, `WP-12`, `WP-19`
+**Built.** ◐ started — 0/5 software requirements done, in `WP-05`, `WP-12`, `WP-19`
 
 **`SYS-0223`** · `P1` · `R1` — Extract
 **Shall.** The system shall produce a smaller recording by time range and by port or source selection.
@@ -2199,7 +2199,7 @@ mechanism.
 **Shall.** The package version, the port model version and the module ABI version shall be versioned independently under semantic versioning, with a published compatibility matrix.
 **Accept.** The matrix is generated from the enforced constants, not hand-maintained. A combination outside it is refused at load, naming all three versions.
 **Verify.** T · `SYT-CON-06`   **Trace.** CN-0260, CN-0370; v1 `NR-SIM-9`
-**Built.** ○ not started — 0/4 software requirements done, in `WP-05`, `WP-27`, `WP-29`, `WP-31`
+**Built.** ◐ started — 1/4 software requirements done, in `WP-05`, `WP-27`, `WP-29`, `WP-31`
 
 **`SYS-0259`** · `P1` · `R1` — Projects pin a range
 **Shall.** A project shall pin a package version range, and the tool shall refuse to run outside it.
