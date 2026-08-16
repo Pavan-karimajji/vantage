@@ -65,6 +65,15 @@ documentation build kinds all fit this shape). target_blocks() below
 discovers valid targets straight from those keys - nothing to keep in sync
 by hand.
 
+cmake_options: (added for interfaces' own ADAS_GENERATE_PYTHON_PROTO gap,
+generic on purpose - not a per-component branch): a target's own block may
+carry an optional mapping of extra `-D<KEY>=<VALUE>` CMake cache variables,
+appended to the configure step for THAT target only. This is the one
+mechanism a component's conf/build.yml uses to flip a build-time CMake
+option on for a specific target+project, without this file learning the
+option's name or what it does - same "data, not code" discipline
+requires:/enabled_functions:/package_id_extra: already follow one level up.
+
 Usage: python build.py -t <target> -p <platform> [-P <project>] [--clean]
        python build.py config
 """
@@ -283,6 +292,7 @@ def main():
     blocks = target_blocks(project_conf)
     if args.target not in blocks:
         sys.exit(f"ERROR: unknown target '{args.target}' - valid: {sorted(blocks)}")
+    target_conf = project_conf[args.target]
 
     # Platform is validated per TARGET, not per component: a component may well
     # build sil for vs2026+qnx but gtest for vs2026 only, and asking for the
@@ -345,14 +355,14 @@ def main():
     log("")
 
     try:
-        _build(args, layout_kind, build_type, output_base, build_dir)
+        _build(args, layout_kind, build_type, output_base, build_dir, target_conf)
     finally:
         if log_path is not None:
             print(f"\nLog written to {log_path}")
         close_log()
 
 
-def _build(args, layout_kind, build_type, output_base, build_dir):
+def _build(args, layout_kind, build_type, output_base, build_dir, target_conf):
     if args.target == "package":
         # conan create builds and packages through Conan's own flow - no
         # preset/build-folder involved at all, so it shares none of the
@@ -428,6 +438,13 @@ def _build(args, layout_kind, build_type, output_base, build_dir):
         build_cmd = ["cmake", "--build", str(build_dir), "--config", build_type]
         test_cmd = ["ctest", "--test-dir", str(build_dir), "-C", build_type,
                     "--output-on-failure"]
+
+    # cmake_options: (module docstring's own note) - a target's own extra
+    # CMake cache variables, declared in conf/build.yml, never known to this
+    # file by name. Appended once here so both layout_kind branches above
+    # get it identically.
+    for key, value in (target_conf.get("cmake_options") or {}).items():
+        configure_cmd.append(f"-D{key}={value}")
 
     log("Installing Conan dependencies...")
     run(install_cmd, cwd=ROOT)
