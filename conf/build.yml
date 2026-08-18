@@ -23,6 +23,19 @@
 recipe:
   type: static-library
   libs: [simcore]
+  # SM-02 (VIZ_Sync_Plan_v0.1.md, "D-10's only cost"): `io` is separately
+  # linkable as the Conan component `adas-sim::io`, so a consumer (the viz
+  # player) can read a recording without acquiring the engine. Same
+  # `simcore` static library as the top-level package today -- `io/*.cpp`
+  # is not yet split into its own CMake target (src/simcore/CMakeLists.txt
+  # builds one `simcore.a`), so this component is a named subset VIEW over
+  # the one artifact, not a second binary. Safe while `simcore` requires
+  # nothing first-party (checked live, `requires:` below is `mcap` only,
+  # third-party) -- the escape hatch, should that stop being true, is a new
+  # Conan package for `io`, never a bigger component list here.
+  components:
+    io:
+      libs: [simcore]
 
 variants:
   base:

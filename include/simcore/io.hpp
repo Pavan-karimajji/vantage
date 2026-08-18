@@ -307,6 +307,17 @@ class Translator {
   std::map<std::string, IngestRow> by_topic_;
 };
 
+// Forward-declared so `LazyPayload<T>::Get` below can call it unqualified:
+// two-phase name lookup only finds a non-dependent, non-ADL-eligible free
+// function (no arguments, so no ADL) if it is declared before the template
+// DEFINITION, not merely before first instantiation -- MSVC accepts the
+// call either way (a known MSVC lookup laxity), which is why this compiled
+// clean on every `vs2026` build and only broke the first time `simcore`
+// built under GCC's strict two-phase lookup (SM-02's own live verification,
+// 2026-08-18). Full declaration (with `DecodeCount`/`ResetDecodeCount`)
+// stays below, where it always lived.
+void BumpDecodeCount_();
+
 // IMP-0027: `RawMessage::payload` is bytes; decoding into `T` happens at
 // first structured access and is memoised per message -- extends
 // `core/tick.py::PortValue`'s existing lazy-parse idea, moved to C++
@@ -342,6 +353,9 @@ class LazyPayload {
 // decode an image nobody consumed" (SW-0027's Accept) needs the same
 // counter, not a second one. A free function, not a template member, so its
 // one definition (`decode.cpp`) serves every `LazyPayload<T>` instantiation.
+// `BumpDecodeCount_` itself is forward-declared above, ahead of
+// `LazyPayload` (see the note there); redeclared here only to sit beside
+// its two siblings, same signature, no effect on the program.
 std::size_t DecodeCount();
 void ResetDecodeCount();
 void BumpDecodeCount_();

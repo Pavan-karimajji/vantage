@@ -221,3 +221,18 @@ class AdasComponent(ConanFile):
         name = self._cmake_name()
         self.cpp_info.set_property("cmake_target_name", f"{name}::{name}")
         self.cpp_info.set_property("cmake_file_name", name)
+
+        # SM-02 (VIZ_Sync_Plan_v0.1.md): an optional recipe.components: block
+        # in conf/build.yml declares a named subset of this package's own
+        # libs as a separately linkable Conan component - so far exercised
+        # only by adas-sim's `io` component (a consumer links `adas-sim::io`
+        # and acquires none of this package's OTHER components/libs). Empty
+        # dict where no component declares itself, so every other recipe's
+        # package_info() is unaffected (R-BUILD-1: this file stays byte-
+        # identical; the difference lives in conf/build.yml data, same as
+        # every other per-component variation this file reads).
+        for comp_name, comp_meta in meta.get("components", {}).items():
+            comp = self.cpp_info.components[comp_name]
+            comp.libs = comp_meta.get("libs", [])
+            if conf.get("layout_kind") == "cmake_layout":
+                comp.builddirs = ["cmake"]
