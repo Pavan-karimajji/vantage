@@ -1278,7 +1278,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The player shall open a finished run's artifacts with no engine present.
 **Accept.** `E2E-08` completes with no engine executable installed.
 **Verify.** T · `E2E-08`   **Trace.** CN-0157
-**Built.** ○ not started — 0/2 software requirements done, in `WP-23`, `WP-25`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-06a`, `WP-23`, `WP-25`
 
 **`SYS-0131`** · `P0` · `R1` — The player's only input is a session
 **Shall.** The player shall render a session and shall never talk to a library, a world model or a file format.

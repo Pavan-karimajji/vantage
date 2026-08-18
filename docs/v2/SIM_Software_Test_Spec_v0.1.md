@@ -183,6 +183,7 @@ The mechanised checks. These are the highest-leverage tests in the suite: each o
 | `ANL-SW-77` | `SW-0416` | The generated use-constraints statement against the declaration and the recorded limit entries, plus its content hash | A cited kind with no entry, a blank entry, or a hash mismatch showing the generated file was hand-edited |
 | `ANL-SW-79` | `SW-0418` | `docs/v2/py/**` — the rollup against the plan's boxes, and a second regeneration against the first | A hand-edited mark that passes; a second `--write-status` that changes a byte; a `[~]` with no `closed by` that passes; an undecomposed requirement rendered *not started* rather than *unknowable* |
 | `ANL-SW-78` | `SW-0417` | Each cited kind's named detecting check, resolved against the suite by `scripts/check_trace.py`'s resolver | An identifier resolving to no test, or a blank cell. `undetected` passes and is counted |
+| `ANL-SW-80` | `SW-0419` | `adas-sim`'s own resolved Conan graph (`scripts/check_engine_boundary.py`) | Any first-party `adas-*` package beyond `adas-sim` itself |
 
 ---
 

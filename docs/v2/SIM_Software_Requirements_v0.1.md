@@ -736,6 +736,15 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Built.** ○ not started — `IMP-0386` in `WP-18`
 **Now.** `DONE·MOVE` — `cli/export.py` over `io/csv.py`, port-selectable with a declared header.
 
+### 5.7 Cross-repo consumption boundary
+
+**`SW-0419`** · `SI-01` · `P0` · `R1` — `io` is linkable by an external consumer with no engine acquired
+**Shall.** `io` shall be packaged as a separately linkable Conan component, and a consumer linking that component alone shall acquire no first-party package beyond the one it links.
+**Accept.** `adas-sim`'s resolved Conan graph carries no first-party `adas-*` package beyond itself — true today because `simcore` requires nothing first-party (`requires:` is `mcap` only), so any consumer of `adas-sim::io` inherits that same empty first-party set transitively.
+**Verify.** A · `ANL-SW-80`   **Trace.** SYS-0130
+**Built.** ● done — `IMP-0419` in `WP-06a`
+**Now.** `PARTIAL` — `conf/build.yml`'s `recipe.components.io` block and `conanfile.py`'s generic component-population loop are real and byte-identical across every component repo (`R-BUILD-1`); the live throwaway-consumer verification (a scratch `conanfile.txt` requiring `adas-sim/0.1.0` and linking `adas-sim::io` alone) has not yet completed a full `conan create` in this environment — see `WP-06a`'s own note. `ANL-SW-80` (`scripts/check_engine_boundary.py`) is real and green against `adas-sim`'s own resolved graph, which is what makes the transitive argument above checkable rather than asserted.
+
 ---
 
 ## 6. `SI-02` — `bus`: port values, headers, provenance, cycle reconstruction
