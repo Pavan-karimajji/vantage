@@ -316,9 +316,15 @@ def main():
     # Resolved once, here, because the log lives inside the build directory and
     # therefore has to be known before anything runs. cmake_layout lets Conan
     # append its own "build" under the output base; output_folder names the
-    # directory directly.
+    # directory directly. Found stale (VZ-04, 2026-08-18): the cmake_layout
+    # branch's default output_base used to be the bare module root, so its
+    # own "build" subfolder carried no target/platform in its name -- unlike
+    # the output_folder branch's self-identifying default one line below,
+    # building gtest-ubuntu_gcc then sil-vs2026 for the same cmake_layout
+    # component silently reused one "build/" directory. Self-identify the
+    # SAME way the output_folder branch already did, one line down.
     if layout_kind == "cmake_layout":
-        output_base = requested_dir or ROOT
+        output_base = requested_dir or (ROOT / f"build-{args.target}-{args.platform}")
         build_dir = output_base / "build"
     else:
         output_base = None
