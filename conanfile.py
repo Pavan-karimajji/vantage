@@ -124,7 +124,35 @@ class AdasComponent(ConanFile):
         layout_kind = conf.get("layout_kind", "output_folder")
 
         if layout_kind == "cmake_layout":
-            cmake_layout(self)
+            # This component's OWN direct build (scripts/build.py, R-BUILD-2)
+            # already gets a target/platform-prefixed build dir for free:
+            # --output-folder is set to build-<target>-<platform>, and
+            # Conan's cmake_layout() appends its own (default "build")
+            # folders.build UNDERNEATH that base automatically -- giving
+            # build-sil-vs2026/build, which is correct as-is (RECIPE_CONSUMER,
+            # the literal root of that install command).
+            #
+            # But when this package is resolved as an EDITABLE dependency of
+            # ANOTHER component's build (RECIPE_EDITABLE, e.g. df linking
+            # AdasMathlib), Conan re-evaluates THIS layout() fresh with no
+            # such --output-folder base to borrow -- the unpatched default
+            # "build/" was used, and the real compiled library (at
+            # build-sil-<platform>/build/<config>/, "sil" being the
+            # canonical library-producing target, same convention the
+            # output_folder branch below already hardcodes) was never found
+            # there (found live 2026-08-19, DF-01: df's own plain `sil`
+            # build failed resolving AdasMathlib with "Library
+            # 'adas-mathlib' not found in package"). Applying the
+            # sil-prefixed path unconditionally would instead double the
+            # prefix for the RECIPE_CONSUMER case above (verified live:
+            # build-sil-vs2026/build-sil-vs2026/build) -- the two cases need
+            # different build_folder values, distinguished by recipe role.
+            is_root_build = getattr(getattr(self, "_conan_node", None), "recipe", None) == "Consumer"
+            if is_root_build:
+                cmake_layout(self)
+            else:
+                platform = conf["variants"][str(self.options.project)]["sil"]["platforms"][0]["build"]
+                cmake_layout(self, build_folder=f"build-sil-{platform}/build")
             # "include" alongside "cpp": interfaces (the only cmake_layout
             # component today) also ships include/ - the pure-C SIL ABI
             # header meant for any host language (S-C1a). Without this, a
