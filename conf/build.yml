@@ -4,21 +4,18 @@
 # real static-library target, sibling to the Python package (adas_sim,
 # installed via pyproject.toml, unrelated to this file).
 #
-# package_type "static-library" makes conanfile.py's layout() branch into
-# its output_folder-kind compiled-library path, which assumes the same
-# src/platform/<comp>_sil/ shape df/vdy's SIL DLLs use -- that path is a
-# real mismatch against Design's actual tree (src/simcore/, include/
-# simcore/, no src/platform/ at all) and layout() will describe wrong
-# include/lib directories. Accepted deliberately (WP-03, 2026-08-14):
-# those self.cpp.source/self.cpp.build fields are only read by another
-# component consuming adas-sim as a Conan *editable* dependency, and none
-# does yet -- the mismatch is latent, not currently triggered. Revisit
-# when a real consumer needs simcore's headers/lib through Conan (likely
-# whichever WP first links a component against simcore directly), at
-# which point conanfile.py's shared layout() may need a third branch
-# rather than reusing the SIL-DLL one -- that is a conanfile.py change,
-# so it needs the same cross-submodule pass R-BUILD-6 requires, not a
-# quiet edit here.
+# package_type "static-library" puts conanfile.py's layout() into its
+# output_folder-kind compiled-library branch, which defaulted to the
+# src/platform/<comp>_sil/ shape df/vdy's SIL DLLs use -- a real mismatch
+# against this module's actual tree (src/simcore/, include/simcore/, no
+# src/platform/ at all). Closed 2026-08-19 (SM-02's own live throwaway-
+# consumer verification): that branch now reads build_subdir/
+# build_includedir from this file (defaulting to the old df/vdy path when
+# absent, so every other component's build.yml is untouched) rather than
+# hardcoding one tree shape -- the cross-submodule conanfile.py pass
+# R-BUILD-6 requires, done once, byte-identical across all 9 repos.
+build_subdir: src/simcore
+build_includedir: include
 
 recipe:
   type: static-library
@@ -36,6 +33,13 @@ recipe:
   components:
     io:
       libs: [simcore]
+      # SM-02's own live verification (2026-08-19): Conan does not implicitly
+      # propagate a package's requires() to a NAMED component the way it does
+      # to the unnamed root cpp_info -- a consumer linking only `adas-sim::io`
+      # linked no mcap/lz4/zstd symbols at all without this, real
+      # `LZ4F_*`/`ZSTD_*` unresolved externals from mcap.cpp. Same target
+      # `simcore PUBLIC mcap::mcap` already names in CMakeLists.txt.
+      requires: [mcap::mcap]
 
 variants:
   base:

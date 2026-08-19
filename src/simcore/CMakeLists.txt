@@ -41,3 +41,11 @@ target_link_libraries(simcore PUBLIC mcap::mcap)
 
 include(${PROJECT_SOURCE_DIR}/cmake/FloatingPoint.cmake)
 adas_sim_apply_fp_flags(simcore)
+
+# SM-02: a real `conan create` calls CMake.install() (conanfile.py's
+# package()) -- with no install() rule here that step silently produced an
+# empty package ("No files in this package!", live 2026-08-19), even though
+# build.py's own build-sil-<platform>/ tree (conanfile.py's editable-mode
+# layout()) never needed one. Both consumers now get the same two artifacts.
+install(TARGETS simcore ARCHIVE DESTINATION lib)
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/include/ DESTINATION include)
