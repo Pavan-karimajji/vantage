@@ -158,6 +158,7 @@ class AdasComponent(ConanFile):
             build_type = str(self.settings.build_type) if self.settings.get_safe("build_type") else "Release"
             build_subdir = conf.get("build_subdir", f"src/platform/{comp}_sil")
             build_includedir = conf.get("build_includedir", build_subdir)
+            self.folders.build = "."
             self.cpp.source.includedirs = [build_includedir]
             self.cpp.build.libdirs = [f"build-sil-{platform}/{build_subdir}/{build_type}"]
             self.cpp.build.bindirs = [f"build-sil-{platform}/{build_subdir}/{build_type}"]
@@ -215,7 +216,22 @@ class AdasComponent(ConanFile):
             self.cpp_info.includedirs = []
             self.cpp_info.libdirs = []
             self.cpp_info.resdirs = meta.get("resdirs", ["projects"])
-        else:
+        elif not meta.get("components"):
+            self.cpp_info.libs = meta["libs"]
+            # SM-02's own live verification (2026-08-19, VZ-12's real
+            # consumer): a named `recipe.components:` block is the ONLY
+            # place a lib should be declared once one exists -- also
+            # setting the same lib on the unnamed root cpp_info here made
+            # CMakeDeps search for it twice, and in editable mode the root
+            # search silently used the wrong (package-folder) libdirs while
+            # the component's own libdirs resolved correctly, so
+            # `find_package()` failed on the unused root target even though
+            # nothing links it. A component-carrying package's root now
+            # declares no libs of its own (still a real find_package()
+            # target, just an empty aggregate) -- one repo (sim) exercises
+            # this branch today; every other repo's root keeps declaring
+            # its libs exactly as before (R-BUILD-1: still one byte-
+            # identical file, difference lives in conf/build.yml data).
             self.cpp_info.libs = meta["libs"]
         conf = _conf(self.recipe_folder)
         if conf.get("layout_kind") == "cmake_layout":
@@ -256,6 +272,13 @@ class AdasComponent(ConanFile):
         for comp_name, comp_meta in meta.get("components", {}).items():
             comp = self.cpp_info.components[comp_name]
             comp.libs = comp_meta.get("libs", [])
+            # Same PascalCase::component naming the root already declares
+            # above (cmake_target_name) - without this a component defaults
+            # to the raw, lower-kebab package name (adas-sim::io) instead of
+            # AdasSim::io, which is what a consumer's target_link_libraries
+            # actually spells (R-NAME's PascalCase convention, applied here
+            # for the first time by SM-02's own component).
+            comp.set_property("cmake_target_name", f"{name}::{comp_name}")
             # Unlike the unnamed root cpp_info (which auto-links every
             # requires()), a named component gets NOTHING implicitly - a
             # consumer linking only this component needs its own transitive
@@ -263,3 +286,13 @@ class AdasComponent(ConanFile):
             comp.requires = comp_meta.get("requires", [])
             if conf.get("layout_kind") == "cmake_layout":
                 comp.builddirs = ["cmake"]
+            elif self.package_type in ("shared-library", "static-library"):
+                # A named component does not inherit layout()'s self.cpp.build
+                # the way the unnamed root cpp_info does (SM-02's own live
+                # verification, VZ-12's real consumer) -- copied explicitly
+                # rather than left to the same silent package-folder/lib
+                # default this branch's root already had to stop relying on
+                # above.
+                comp.libdirs = self.cpp.build.libdirs
+                comp.bindirs = self.cpp.build.bindirs
+                comp.includedirs = self.cpp.source.includedirs
