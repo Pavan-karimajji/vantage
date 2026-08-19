@@ -19,6 +19,35 @@ def _conf(recipe_folder):
     return yaml.safe_load((Path(recipe_folder) / "conf" / "build.yml").read_text(encoding="utf-8"))
 
 
+def _editable_platform(conf, project, settings_os):
+    # DF-01 (2026-08-19): layout()'s two RECIPE_EDITABLE branches used to
+    # read platforms[0]["build"] unconditionally -- silently correct only
+    # while exactly one platform was declared per component (every real
+    # conf/build.yml, until this session). Adding a second platform
+    # (ubuntu_gcc, alongside vs2026) broke it for any consumer built on
+    # that second platform: editable-mode layout() has no direct signal
+    # for "which platform token is this", only Conan's own auto-detected
+    # settings.os -- so this matches against the token's own naming
+    # convention (every real token today is "vs*" for Windows or contains
+    # "ubuntu"/"linux" for Linux) rather than inventing a second,
+    # independently-maintained token<->os table.
+    platforms = [p["build"] for p in conf["variants"][project]["sil"]["platforms"]]
+    if len(platforms) == 1:
+        return platforms[0]
+    os_ = str(settings_os)
+    if os_ == "Windows":
+        matches = [p for p in platforms if p.startswith("vs")]
+    elif os_ == "Linux":
+        matches = [p for p in platforms if "ubuntu" in p or "linux" in p]
+    else:
+        matches = []
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"cannot resolve which of this component's own declared sil platforms "
+            f"{platforms} matches os={os_} -- extend _editable_platform's naming rule")
+    return matches[0]
+
+
 class AdasComponent(ConanFile):
     # package_type is the one recipe attribute Conan reads before any hook
     # runs, so it can't come from set_name()/init() cleanly - it's read from
@@ -151,7 +180,7 @@ class AdasComponent(ConanFile):
             if is_root_build:
                 cmake_layout(self)
             else:
-                platform = conf["variants"][str(self.options.project)]["sil"]["platforms"][0]["build"]
+                platform = _editable_platform(conf, str(self.options.project), self.settings.os)
                 cmake_layout(self, build_folder=f"build-sil-{platform}/build")
             # "include" alongside "cpp": interfaces (the only cmake_layout
             # component today) also ships include/ - the pure-C SIL ABI
@@ -182,7 +211,7 @@ class AdasComponent(ConanFile):
             # conf/build.yml's build_subdir/build_includedir keys rather than
             # a second branch here.
             comp = self.name.replace("adas-", "")
-            platform = conf["variants"][str(self.options.project)]["sil"]["platforms"][0]["build"]
+            platform = _editable_platform(conf, str(self.options.project), self.settings.os)
             build_type = str(self.settings.build_type) if self.settings.get_safe("build_type") else "Release"
             build_subdir = conf.get("build_subdir", f"src/platform/{comp}_sil")
             build_includedir = conf.get("build_includedir", build_subdir)
