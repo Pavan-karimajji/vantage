@@ -212,7 +212,19 @@ class McapReader final : public Reader {
   void ResetView(mcap::Timestamp start_time) {
     lookahead_.reset();
     mcap::ReadMessageOptions options(start_time, mcap::MaxTime);
-    options.readOrder = mcap::ReadMessageOptions::ReadOrder::LogTimeOrder;
+    // `LogTimeOrder` silently yields ZERO messages against a file written
+    // with `McapWriterOptions::noChunking = true` (SW-0041, McapWriter::Open
+    // above): the mcap library's log-time-ordered iteration merge-sorts
+    // across the Chunk index, and a noChunking file has no Chunk records to
+    // merge -- found live (VZ-12, 2026-08-19) writing a real recording with
+    // this codec and reading it straight back through `ReadRange`, which no
+    // existing UT-IO-* test exercises (every real-mcap test round-trips meta
+    // blocks or diffs raw bytes; UT-IO-01's message-level test uses the
+    // throwaway codec, never this one). `FileOrder` is correct for what this
+    // codec ever reads: SW-0040 already guarantees THIS codec's own writer
+    // emits messages in call order, which is log-time order (WriterBase
+    // forwards messages the moment they arrive, never reordering).
+    options.readOrder = mcap::ReadMessageOptions::ReadOrder::FileOrder;
     view_.emplace(reader_.readMessages(on_problem_, options));
     iterator_.emplace(view_->begin());
   }

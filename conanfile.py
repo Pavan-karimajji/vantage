@@ -228,6 +228,22 @@ class AdasComponent(ConanFile):
         self.cpp_info.set_property("cmake_target_name", f"{name}::{name}")
         self.cpp_info.set_property("cmake_file_name", name)
 
+        # VZ-12 (VIZ_Sync_Plan_v0.1.md, ANL-VZ-05): the unnamed/default
+        # component auto-links every requires() by default (Conan has no
+        # per-component *dependency resolution*, only per-component
+        # *linking*) - fine everywhere a package's components all want the
+        # same deps, wrong the day one dep exists for exactly one named
+        # component (adas-sim, wanted only by viz's own `player` component
+        # below). An explicit `recipe.root_requires:` list in conf/build.yml
+        # restricts what the ROOT component actually links to; omitted
+        # (every other recipe today) leaves the implicit auto-link-all
+        # behaviour untouched, so this is additive, not a behaviour change
+        # for any existing repo (R-BUILD-1: still one byte-identical file,
+        # the difference lives in conf/build.yml data).
+        root_requires = meta.get("root_requires")
+        if root_requires is not None:
+            self.cpp_info.requires = root_requires
+
         # SM-02 (VIZ_Sync_Plan_v0.1.md): an optional recipe.components: block
         # in conf/build.yml declares a named subset of this package's own
         # libs as a separately linkable Conan component - so far exercised

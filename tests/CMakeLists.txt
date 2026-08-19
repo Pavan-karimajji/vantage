@@ -24,6 +24,7 @@ set(SIM_TEST_SOURCES
     unit/test_ut_io_translate.cpp
     unit/test_ut_io_meta.cpp
     unit/test_ut_io_writer.cpp
+    unit/test_ut_io_mcap_roundtrip.cpp
     # WP-07 (SI-02 bus): UT-BUS-01..06, UT-BUS-17, UT-BUS-18, UT-BUS-20..22.
     unit/test_ut_bus_header.cpp
     unit/test_ut_bus_value.cpp
