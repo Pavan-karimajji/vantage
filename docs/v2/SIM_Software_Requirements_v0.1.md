@@ -2732,6 +2732,12 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Verify.** T · `UT-SES-01`   **Trace.** SYS-0133
 **Built.** ○ not started — `IMP-0288` in `WP-25`
 **Now.** `DONE` — the two-pass session is one of the design's strongest and best-tested properties.
+**Superseded 2026-08-19** by `VIZ:SW-0030` (`VIZ_Software_Requirements_v0.1.md`)
+— `modules/viz`'s C++ rewrite (`VZ-12`, `R-REQ-2`) narrows this row's own
+Accept ("zero module invocations") to what the rewrite actually is: a
+Session with no engine link at all (`D-10`), so there is no module to
+invoke in the first place. Not deleted — this row stays the record of the
+Python design's own property; the C++ implementation is `VIZ:SW-0030`'s.
 
 **`SW-0289`** · `SI-18` · `P0` · `R1` — Resuming forward offers two honest choices
 **Shall.** Resuming forward from behind the head shall offer exactly skip-to-head or recompute-from-the-start, and shall never silently continue from a rewound position or interpolate a state no module produced.
@@ -2739,6 +2745,8 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Verify.** T · `UT-SES-02`   **Trace.** SYS-0134
 **Built.** ○ not started — `IMP-0289` in `WP-25`
 **Now.** `DONE` — `view/transport.py` implements the head model with exactly these two choices.
+**Superseded 2026-08-19** by `VIZ:SW-0043` — same `R-REQ-2` disposition as
+`SW-0288` above; the C++ `Resume` enum is `modules/viz`'s own.
 
 **`SW-0290`** · `SI-18` · `P0` · `R1` — A port value is decoded lazily and memoised
 **Shall.** A port value's payload shall be decoded on first access and memoised, and shall not be decoded during session construction.
@@ -2816,6 +2824,9 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Verify.** T · `UT-SES-11`   **Trace.** SYS-0002
 **Built.** ○ not started — `IMP-0300` in `WP-25`
 **Now.** `PARTIAL` — the lazy `PortValue` is correct; `core/runner.py` still materialises every group first, so the bound is not achieved.
+**Superseded 2026-08-19** by `VIZ:SW-0044` — same `R-REQ-2` disposition as
+`SW-0288` above; the C++ rewrite closes this row's own bound
+structurally, where the Python design here stayed `PARTIAL`.
 
 **`SW-0404`** · `SI-18` · `P0` · `R1` — The transport control set is complete and lands exactly
 **Shall.** The transport shall provide play, pause, step forward, step backward, jump to time and jump to marker, and each shall land on the exact target tick.
