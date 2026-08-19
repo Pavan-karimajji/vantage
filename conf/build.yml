@@ -57,3 +57,13 @@ variants:
     # maintained copy (sil_host's own gtest: does this identically).
     gtest:
       platforms: *base_platforms
+    # VZ-11 (v1 freeze): adas-viz/1.0.0's own `player` component now
+    # requires adas-sim/0.1.0 for real (VZ-12/D-10) -- found live
+    # (2026-08-19) attempting `conan create` for adas-viz: `adas-sim/0.1.0`
+    # was never resolvable from any remote because this component had no
+    # `package:` variant to build/upload one with (`adas-interfaces`/
+    # `adas-mathlib`/`adas-shared-config` all have one; this one never
+    # needed it before a consumer outside this checkout existed). Same
+    # `-t package --upload` path every other component uses.
+    package:
+      platforms: *base_platforms
