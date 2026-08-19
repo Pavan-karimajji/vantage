@@ -144,17 +144,23 @@ class AdasComponent(ConanFile):
             # CMAKE_CURRENT_LIST_DIR, not via a second builddirs entry.
             self.cpp.source.builddirs = ["cmake"]
         elif self.package_type in ("shared-library", "static-library"):
-            # output_folder-kind compiled libraries (df/vdy): the real artifact
-            # lives under build.py's own build-sil-<platform>/src/platform/
-            # <comp>_sil/<config>/ - not a package()/install() folder, so that
-            # path is named here, derived from data (component name,
-            # conf/build.yml's platform), not hardcoded per component.
+            # output_folder-kind compiled libraries: the real artifact lives
+            # under build.py's own build-sil-<platform>/<build_subdir>/<config>/
+            # - not a package()/install() folder, so that path is named here,
+            # derived from data (component name, conf/build.yml's platform),
+            # not hardcoded per component. build_subdir defaults to the
+            # df/vdy-style src/platform/<comp>_sil/ tree; a component whose
+            # source tree differs (sim's src/simcore/, SM-02) overrides it via
+            # conf/build.yml's build_subdir/build_includedir keys rather than
+            # a second branch here.
             comp = self.name.replace("adas-", "")
             platform = conf["variants"][str(self.options.project)]["sil"]["platforms"][0]["build"]
             build_type = str(self.settings.build_type) if self.settings.get_safe("build_type") else "Release"
-            self.cpp.source.includedirs = [f"src/platform/{comp}_sil"]
-            self.cpp.build.libdirs = [f"build-sil-{platform}/src/platform/{comp}_sil/{build_type}"]
-            self.cpp.build.bindirs = [f"build-sil-{platform}/src/platform/{comp}_sil/{build_type}"]
+            build_subdir = conf.get("build_subdir", f"src/platform/{comp}_sil")
+            build_includedir = conf.get("build_includedir", build_subdir)
+            self.cpp.source.includedirs = [build_includedir]
+            self.cpp.build.libdirs = [f"build-sil-{platform}/{build_subdir}/{build_type}"]
+            self.cpp.build.bindirs = [f"build-sil-{platform}/{build_subdir}/{build_type}"]
         # package_type application/unknown need no override here - application
         # components are never find_package()'d by another component, and data's
         # real files sit directly in the source tree already.
@@ -234,5 +240,10 @@ class AdasComponent(ConanFile):
         for comp_name, comp_meta in meta.get("components", {}).items():
             comp = self.cpp_info.components[comp_name]
             comp.libs = comp_meta.get("libs", [])
+            # Unlike the unnamed root cpp_info (which auto-links every
+            # requires()), a named component gets NOTHING implicitly - a
+            # consumer linking only this component needs its own transitive
+            # deps spelled out here (SM-02's own live verification).
+            comp.requires = comp_meta.get("requires", [])
             if conf.get("layout_kind") == "cmake_layout":
                 comp.builddirs = ["cmake"]
