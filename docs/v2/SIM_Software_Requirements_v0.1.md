@@ -3011,12 +3011,7 @@ structurally, where the Python design here stayed `PARTIAL`.
 **Built.** ○ not started — `IMP-0323` in `WP-26`
 **Now.** `PARTIAL` — a frame-time measurement exists; **`OQ-14` closed 2026-08-13** with no absolute for this metric, so it is baseline-seeded and failable from the second run.
 
-**`SW-0324`** · `SI-20` · `P1` · `R2` — Display-only data is decoded only for frames shown
-**Shall.** Data displayed but consumed by no module shall be read directly by the player and decoded only for the frames actually rendered.
-**Accept.** Seeking past a thousand frames decodes only the frames rendered. Bytes crossing the engine boundary are unchanged whether context video is active or not.
-**Verify.** T · `UT-RND-06`   **Trace.** SYS-0156, SYS-0157
-**Built.** ○ not started — `IMP-0324` in `WP-30`
-**Now.** `NEW`. *Deferred to R2 with `SYS-0156`.*
+Superseded (`SM-01` trial), `SW-0324` — was *Display-only data is decoded only for frames shown*, `SI-20` · `P1` · `R2`. Its parents `SYS-0156`/`SYS-0157` moved to `viz` (`SIM_System_Requirements_v0.1.md` §11.5); never started (`Built.` read `0/1`), so this is a pointer, not a code move. Replaced by `VIZ:SW-nnnn` — not yet allocated, same `R2` deferral as its parents.
 
 ---
 

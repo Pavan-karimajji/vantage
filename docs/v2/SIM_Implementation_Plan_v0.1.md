@@ -869,6 +869,54 @@ flowchart LR
 
 > **The largest package by count and the smallest by risk.** `SI-19` is 16 of 17 `DONE` and none of it moves; the work is the `viewer.py` split, and the requirement is that the split does not undo what is already enforced.
 
+### WP-26a · `SYNC:SM-01` · The disposition table, trial slice
+
+**Serves:** `SM-01` (`VIZ_Sync_Plan_v0.1.md` §2.2 — "The disposition table,
+applied"). Opened and closed 2026-08-20, the smallest real pair in that
+row's own table: `SYS-0156`/`SYS-0157` (§11.5, display-only) and their
+sole software item (part of this package's own `SI-20` range, never
+started). **Done when:** `SM-01`'s own row is fully `[x]` — it is not;
+this package closes only the trial slice, real end-to-end but a small
+fraction (1 `SW` + 2 `SYS` of ~130 total UIDs the full table names).
+
+- [x] `SIM_System_Requirements_v0.1.md` §11.5 — the two full requirement
+      blocks replaced by a disposition table row (`| SYS-0156 … SYS-0157 |
+      Replaced by | VIZ:SYS-nnnn |`), matching the exact convention
+      `scripts/check_cross_module_trace.py`'s own `DEFINE_RANGE_RE`
+      already expects and the Concept Document's own `§0.4 Superseded
+      UIDs` precedent.
+- [x] `SIM_System_Test_Spec_v0.1.md` — the three rows serving them
+      (`ANL-23`, `SYT-PLR-26`, `SYT-PLR-27`) removed.
+- [x] `SIM_Software_Requirements_v0.1.md` — the software item's own block
+      replaced by a disposition sentence, **written so its UID does not
+      open the line** (`parse_sw`'s block-splitting regex reads a line
+      starting `**\`SW-nnnn\`**` as a live, empty requirement block
+      otherwise — found live, five cascading false failures the first
+      attempt).
+- [x] `SIM_Implementation_Design_v0.1.md` — the design row serving that
+      software item removed.
+- [x] This document's own `WP-30` — re-scoped (its display-only sub-item
+      removed from `Lands`/`Files`/`Exit`, count corrected 5→4).
+- [x] `SIM_Software_Test_Spec_v0.1.md` — the test row serving that
+      software item removed, its own `⊘`-explaining prose reference
+      updated.
+- [x] **Exit — closed by:** `python docs/v2/py/trace_check.py` exits 0
+      with the trial slice applied — **zero new code needed**: the
+      existing lenient plain-text existence scans (`parse_uids`) already
+      resolve a well-formed disposition row. Re-verified: 289/289 `SYS`
+      parented (2 fewer, both retired), 418 `SW` total (1 fewer,
+      retired), same 6 known notes as baseline.
+      **The real, non-obvious lesson for the remaining ~130 UIDs:** any
+      OTHER document that later needs to mention a retired UID for its
+      own reasons (a comment, a cross-reference) must avoid the exact
+      `PREFIX-nnnn` regex form unless it is deliberately meant to satisfy
+      an existence check — found live twice more (an HTML comment in the
+      Software Test Spec, a prose mention in this document's own `WP-30`
+      note), both read as live references and failed "references
+      non-existent X" until reworded. This — not new tooling — is what
+      makes the rest of `SM-01` safe to do carefully rather than needing
+      a redesign first.
+
 ### WP-27 · `MP-4` · `SI-25` `transport`
 - [ ] **Prereq:** `WP-14`.
 - [ ] **Lands:** `IMP-0017`, `IMP-0298`, `IMP-0349`…`IMP-0356` — 10.
@@ -917,16 +965,19 @@ flowchart LR
 
 ## 7. `MP-5` and `MP-6`
 
-### WP-30 · `MP-5` · Images — bulk by reference, lazy decode, display-only bypass
+### WP-30 · `MP-5` · Images — bulk by reference, lazy decode
+**Re-scoped (`SM-01` trial, 2026-08-20):** its own display-only software
+item superseded to `viz` along with `SYS-0156`/`SYS-0157` — see that
+item's own disposition note in `SIM_Software_Requirements_v0.1.md`.
+Never started, so this is a scope removal, not a code move.
 - [ ] **Prereq:** `WP-29`.
-- [ ] **Lands:** `IMP-0071`, `IMP-0324`, `IMP-0382`, `IMP-0396`, `IMP-0401` — 5.
+- [ ] **Lands:** `IMP-0071`, `IMP-0382`, `IMP-0396`, `IMP-0401` — 4.
   - [ ] `IMP-0071` · `SW-0071` · `NEW` — `src/simcore/io/merge.cpp`
-  - [ ] `IMP-0324` · `SW-0324` · `NEW` — `render/image_view.py` + `session/displayonly.py`
   - [ ] `IMP-0382` · `SW-0382` · `NEW` — `src/simcore/io/codecs/{rosbag,imagedir,carmaker}.cpp`
   - [ ] `IMP-0396` · `SW-0396` · `NEW` — `src/simcore/runner/replay_one.cpp`
   - [ ] `IMP-0401` · `SW-0401` · `NEW` — `build.py::instantiate`
-- [ ] **Files:** `render/image_view.py` · `session/displayonly.py` · `src/simcore/io/codecs/{rosbag,imagedir,carmaker}.cpp` · `src/simcore/io/merge.cpp`'s sync buffer · `src/simcore/runner/replay_one.cpp` · `graph/build.py::instantiate`.
-- [ ] **Exit:** a multi-camera recording opens and plays with context video decoded **only for frames shown** and never routed through the engine (`CN-0063`…`CN-0065`).
+- [ ] **Files:** `src/simcore/io/codecs/{rosbag,imagedir,carmaker}.cpp` · `src/simcore/io/merge.cpp`'s sync buffer · `src/simcore/runner/replay_one.cpp` · `graph/build.py::instantiate`.
+- [ ] **Exit:** a multi-camera recording opens and plays via the codecs/merge/replay path above, driven through `build.py::instantiate`.
 
 ### WP-31 · `MP-6` · Package — delivery, self-test, budgets, documentation
 - [ ] **Prereq:** `WP-30`.

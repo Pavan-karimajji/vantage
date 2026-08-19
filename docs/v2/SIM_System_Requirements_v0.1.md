@@ -1436,19 +1436,16 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Verify.** I · `INSP-06`   **Trace.** CN-0343
 **Built.** ○ not started — 0/1 software requirements done, in `WP-24`
 
-### 11.5 Display-only data
+### 11.5 Display-only data — superseded (`SM-01` trial, `D-3`/§11 player move)
 
-**`SYS-0156`** · `P1` · `R2` — Display-only data bypasses the engine
-**Shall.** Signals that are displayed but consumed by no active module shall not be routed through the engine; the player shall read them directly from the recording.
-**Accept.** Bytes crossing the engine boundary for a run with context video active equal those for the same run with it inactive.
-**Verify.** T · `SYT-PLR-26` · `ANL-23`   **Trace.** CN-0063, CN-0064, CN-0230
-**Built.** ○ not started — 0/1 software requirements done, in `WP-30`
+`SYS-0156`/`SYS-0157` moved to `viz` with the rest of §11 (the player). Neither
+had started (`Built.` read `0/1` for both), so this is a pointer, not a code
+move. Recorded per `R-REQ-2` rather than deleted silently — a dangling trace
+link must resolve to an explanation, never to nothing.
 
-**`SYS-0157`** · `P1` · `R2` — Display-only data is lazily decoded and visibly distinct
-**Shall.** Display-only data shall be decoded only for frames actually shown, and shall be visually distinguished from simulation data.
-**Accept.** Seeking past 1,000 frames decodes only the frames rendered. The visual distinction is present without opening a menu.
-**Verify.** T · `SYT-PLR-27`   **Trace.** CN-0065, CN-0173, CN-0225
-**Built.** ○ not started — 0/1 software requirements done, in `WP-30`
+| Retired | Was | Replaced by |
+|---|---|---|
+| `SYS-0156` … `SYS-0157` | Display-only data bypasses the engine; is lazily decoded and visibly distinct | `VIZ:SYS-nnnn` — not yet allocated, `R2` scope on both sides (`viz_concept.md` §4.3 view spaces/reference prims land before v1; this pair is later) |
 
 ---
 

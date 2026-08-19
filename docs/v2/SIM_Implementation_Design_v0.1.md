@@ -1782,7 +1782,9 @@ class Session:
 | `IMP-0321` | `SW-0321` | `WP-26` | `KEEP` | `capture.py::snapshot` — image plus provenance sidecar written atomically, both or neither; two snapshots of one cycle are byte-identical. Unchanged. | `UT-RND-04` |
 | `IMP-0322` | `SW-0322` | `WP-26` | `KEEP` | `render/foxglove.py` translates the **same** `Scene`; entity id is `Layer.id` with no translation table. Unchanged — and this is the *second* surface, so `CN-0091`'s "decide, do not accumulate" means a third needs a requirement first. | `UT-RND-05` |
 | `IMP-0323` | `SW-0323` | `WP-26` | `EXTEND` | `render/bench.py` — a frame-time measurement at a stated tick count and layer count, run in CI, against a budget **seeded from the first measurement** and stored in `conf/budget.yaml` beside its mandatory `why:` and the host it was taken on. **`OQ-14` closed 2026-08-13** with no absolute for this metric, which is why it is seeded rather than supplied. | `ANL-SW-52` |
-| `IMP-0324` | `SW-0324` | `WP-30` | `NEW` | `render/image_view.py` + `session/displayonly.py` — context video read directly from the recording by the player, decoded only for frames shown, and visually distinguished from simulation data (`CN-0063`..`CN-0065`). `R2`. | `UT-RND-06` |
+<!-- The row that served the now-superseded display-only SW item (SM-01
+     trial) is retired along with it -- see the Software Requirements
+     document's own disposition note for that item. -->
 
 ---
 

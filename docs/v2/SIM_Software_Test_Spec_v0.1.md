@@ -63,9 +63,9 @@ rather than given a plausible number.
 **Seeded is not unsupplied.** A seeded row has a number the next run can exceed,
 a written reason and printed headroom; an unsupplied row has none of those. What
 a seeded row does not answer is *"is it fast enough?"* — an absolute, and it
-stays with whoever owns throughput expectations. Two rows elsewhere still carry
-`⊘` for a different reason (`UT-DIA-02`, `UT-RND-06`): those await an
-implementation, not a number.
+stays with whoever owns throughput expectations. One row elsewhere still
+carries `⊘` for a different reason (`UT-DIA-02`): it awaits an implementation,
+not a number.
 
 ---
 
@@ -638,7 +638,7 @@ Expected values are the served requirement's `Accept` clause (§0.1). Each row g
 | `UT-SCN-14` | `SW-0316` | `F-LIBDIR` | Open with a component default layout and no user layout; then with a user layout; then reset. |
 | `UT-SCN-15` | `SW-0405` | `F-CHAIN4` | Render one layer over simulated and over replayed data; search the plug-in for a branch on origin. |
 
-### 5.20 `SI-20` `render` — `UT-RND-01` … `UT-RND-06`
+### 5.20 `SI-20` `render` — `UT-RND-01` … `UT-RND-05`
 
 | ID | Serves | Fixture | Steps |
 |---|---|---|---|
@@ -647,7 +647,9 @@ Expected values are the served requirement's `Accept` clause (§0.1). Each row g
 | `UT-RND-03` | `SW-0320` | `F-CHAIN4` | Regenerate a document figure from a recording; compare against the live rendering within the declared tolerance. |
 | `UT-RND-04` | `SW-0321` | `F-CHAIN4` | Interrupt a snapshot mid-write; inspect the destination. Then snapshot one cycle twice and compare hashes. |
 | `UT-RND-05` | `SW-0322` | `F-CHAIN4` | Render one scene on both surfaces; enumerate which of them produces geometry. |
-| `UT-RND-06` `⊘` | `SW-0324` | `F-BULK` | Seek past a thousand frames; count decodes against frames rendered; compare bytes crossing the engine boundary with context data on and off. |
+<!-- The row that served the now-superseded display-only SW item (SM-01
+     trial, superseded to viz) is retired along with it -- see the
+     Software Requirements document's own disposition note for that item. -->
 
 ### 5.21 `SI-21` `player` — `UT-PLR-01` … `UT-PLR-15`
 

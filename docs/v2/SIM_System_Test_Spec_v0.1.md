@@ -181,7 +181,6 @@ ships its `S-PLANTED` variant** (`TV-3`), stated once as the universal `.c2`:
 | `ANL-20` | `SYS-0146` | Layer-provider imports | no renderer, plotting library or GUI toolkit / any |
 | `ANL-21` | `SYS-0148` | Layer callback registrations; double-render equality | none, and identical output / any callback, or differing output |
 | `ANL-22` | `SYS-0154` | Code paths capable of producing an evidence answer | exactly one / a second exists |
-| `ANL-23` | `SYS-0156` | Engine-boundary bytes with context video active vs inactive | equal / display-only data crosses the engine |
 | `ANL-24` | `SYS-0165` | Engine for a configuration parser, inference, validation, search-path logic | none present / any |
 | `ANL-25` | `SYS-0175` | Each of the five changes made on a reference project, then the resulting diff; plus lines-of-configuration per project | each diff touches exactly the declared file set, with no rebuild and no source edit, and the metric is tracked / any change touches a file outside its set, needs a rebuild, or the metric is untracked |
 | `ANL-26` | `SYS-0194` | Index build cost across a batch of N | once per recording / once per run |
@@ -433,8 +432,6 @@ gives the fixture, the steps and the cases.
 | `SYT-PLR-23` | `SYS-0152` | `S-CHAIN4` | Take two snapshots of one cycle; then interrupt a snapshot write. | `.c1` PASS the two hash equal · FAIL any difference<br>`.c2` PASS the interruption leaves **neither** file · FAIL a partial frame or an orphaned sidecar |
 | `SYT-PLR-24` | `SYS-0153` | `S-CHAIN4` | For a sampled set of prims, layers and plotted samples, ask for evidence in one action. | `.c1` PASS port, topic, tick, origin, source timestamp, bundle, build, and published-vs-reconstructed all present · FAIL any missing<br>`.c2` PASS a field it cannot fill reads *unknown* · FAIL any plausible-looking default — *on the one surface whose whole purpose is being believed* |
 | `SYT-PLR-25` | `SYS-0154` | `S-CHAIN4` | Query a sampled set of addresses through the panel and the command line; then search for a second producer. | `.c1` PASS field-for-field identical · FAIL any difference<br>`.c2` PASS no second code path can produce an evidence answer · FAIL one exists |
-| `SYT-PLR-26` | `SYS-0156` | `S-BULK` | Measure engine-boundary bytes with context video active and inactive. | `.c1` PASS equal · FAIL display-only data is routed through the engine |
-| `SYT-PLR-27` | `SYS-0157` | `S-BULK` | Seek past 1,000 frames; inspect the visual treatment of display-only data. | `.c1` PASS only rendered frames decoded · FAIL all 1,000<br>`.c2` PASS visually distinguished without opening a menu · FAIL indistinguishable from simulation data |
 
 ### 4.8 `CFG` — launcher and configuration
 
