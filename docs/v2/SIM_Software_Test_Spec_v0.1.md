@@ -57,7 +57,7 @@ rather than given a plausible number.
 | Row | Now |
 |---|---|
 | `ANL-SW-63` | **Supplied.** ≥ 10.4 recordings/hour per worker, ≤ 5 min 46 s per recording, ≤ 4 GB peak per worker, on SysReq §18.0's reference configuration — derived from *1000 recordings overnight, 8 cores, 32 GB, lean `df`* |
-| `ANL-SW-52`, `ANL-SW-43` | **Seeded.** No absolute was supplied, so each takes its bound from its first measurement on the reference configuration and is failable from the second run, with the seeding run marked and the consumed headroom printed on pass |
+| `ANL-SW-43` | **Seeded.** No absolute was supplied, so each takes its bound from its first measurement on the reference configuration and is failable from the second run, with the seeding run marked and the consumed headroom printed on pass |
 | `ANL-SW-57` | **Restructured.** The gate is the **diff**, not the stopwatch: each of the five common changes must touch exactly its declared file set. Failable today; the wall clock is recorded as an observation |
 
 **Seeded is not unsupplied.** A seeded row has a number the next run can exceed,
@@ -144,22 +144,12 @@ The mechanised checks. These are the highest-leverage tests in the suite: each o
 | `ANL-SW-38` | `SW-0214` | The three resolvers' return types and shared helper | Any not returning `Resolution[...]` through `order.py` |
 | `ANL-SW-39` | `SW-0229` | Imports of every `cli/` module | Anything beyond `argparse` and `adas_sim.pyapi` |
 | `ANL-SW-40` | `SW-0232` | `VERBS` length vs the published CLI reference | A verb in one and not the other |
-| `ANL-SW-41` | `SW-0238`, `SW-0338` | Engine invocation sites across every face | More than one invocation shape |
+| `ANL-SW-41` | `SW-0238` | Engine invocation sites across every face | More than one invocation shape |
 | `ANL-SW-42` | `SW-0256` | Configuration schemas the batch face accepts | Any batch-only schema |
 | `ANL-SW-43` | `SW-0272` | Estimate vs measured duration over a sample, against the factor declared from the first campaign | Outside the declared factor, or the factor claimed rather than measured |
 | `ANL-SW-44` | `SW-0273` | Producers of an `Evidence` record | More than one |
 | `ANL-SW-45` | `SW-0287` | Imports from `player/**` | Any of `io`, `resolve`, `transport` reached directly |
-| `ANL-SW-46` | `SW-0302` | Provider imports and filesystem calls | A renderer, `cv2`, `matplotlib`, Qt, or disk access |
-| `ANL-SW-47` | `SW-0303` | Imports from `scene/**` | Any of `render`, `player`, `io`, `session`. **`D-3`** |
-| `ANL-SW-48` | `SW-0304` | Provider signatures for event callbacks | Any callback parameter |
-| `ANL-SW-49` | `SW-0305` | Plug-in sources for spelled port addresses | Any literal address other than `self.<port>`/`source.<port>` |
-| `ANL-SW-50` | `SW-0311` | Providers for history-dependent state | Any integration of a time-varying signal |
-| `ANL-SW-51` | `SW-0317` | Colour literals across the tree | Any outside `render/theme.py` |
-| `ANL-SW-52` | `SW-0323` | Frame time at the stated tick and layer count, against the seeded budget | Above the seeded budget, or re-seeded without the seeding run being marked |
-| `ANL-SW-53` | `SW-0325`, `SW-0357` | `src/**` — which is `adas_sim/`, `simcore/` and `simengine/` together — for `aeb`/`bsd`/`lca`/`acc`/`ldw`/`lka` and the world-model client's name | Any hit. `tests/` deliberately out of scope (`R-SIM-1`) |
-| `ANL-SW-54` | `SW-0326` | Toolkit imports under `player/panels/**` | Any Qt import below the shell |
-| `ANL-SW-55` | `SW-0331` | The plot panel's address space | Any second addressing mechanism |
-| `ANL-SW-56` | `SW-0340` | `SURFACE` vs the user documentation | An action in one and not the other |
+| `ANL-SW-53` | `SW-0357` | `src/**` — which is `adas_sim/`, `simcore/` and `simengine/` together — for `aeb`/`bsd`/`lca`/`acc`/`ldw`/`lka` and the world-model client's name | Any hit. `tests/` deliberately out of scope (`R-SIM-1`) |
 | `ANL-SW-57` | `SW-0348` | The diff produced by each of the five declared common changes on a reference project | Any change touching a file outside its declared set, needing a rebuild, or needing a source edit |
 | `ANL-SW-58` | `SW-0350` | Engine pointers and buffer maps outside `transport/` | Any. **The line concept §5.3 says must not be crossed** |
 | `ANL-SW-59` | `SW-0354` | Imports from `transport/**` | Any from `io`, or any format name |
@@ -176,7 +166,6 @@ The mechanised checks. These are the highest-leverage tests in the suite: each o
 | `ANL-SW-70` | `SW-0376` | CI history from the first increment | Any increment with no automated run |
 | `ANL-SW-71` | `SW-0380` | Word count of the maintained document set | Reported per release, trended, not gated |
 | `ANL-SW-72` | `SW-0383` | `io/codecs/**` for module names; manifests for codec names | Any hit either way |
-| `ANL-SW-73` | `SW-0405` | Plug-in access to module memory | Any pointer read instead of a named subscription |
 | `ANL-SW-74` | `SW-0408` | Every `SW` for a non-empty `Accept` and ≥1 test | Any with neither. **SV-1** |
 | `ANL-SW-75` | `SW-0413` | Writers of the scheduler's simulation-time member | More than one, a public setter, or any assignment from a message timestamp |
 | `ANL-SW-76` | `SW-0415` | Every artifact writer across `adas_sim/**`, `src/simcore/**`, against the artifact-kind declaration | A kind written that the declaration does not carry; or a scanned-writer count of zero reported as `PASSED` rather than `SKIPPED` |
@@ -229,7 +218,6 @@ Used only where no execution is possible. Each names its checklist; *"inspected"
 | `INSP-SW-03` | `SW-0193` | The unit table, against the boundary in `SW-0202` — declarative correction versus computation | SIM team + one recording owner |
 | `INSP-SW-04` | `SW-0230` | Each verb's scripted form against `DD-07`'s three statements | SIM team |
 | `INSP-SW-05` | `SW-0276` | The evidence chain's terminus, against *"does any field answer why rather than where?"* | SIM team |
-| `INSP-SW-06` | `SW-0311` | Each layer provider, against *"does this reconstruct, estimate, or integrate?"* | SIM team + the owning component team |
 | `INSP-SW-07` | `SW-0358` | The four extension points and their conformance kits | SIM team |
 | `INSP-SW-08` | `SW-0373` | The document set, against *"is verification status stored anywhere by hand?"* — **including this document** | SIM team |
 | `INSP-SW-09` | `SW-0393` | The module ABI contract text, against *"is the clock prohibition stated where a module author reads it?"* | SIM team + one component team |
@@ -274,7 +262,7 @@ Expected values are the served requirement's `Accept` clause (§0.1). Each row g
 | `UT-IO-26` | `SW-0385` | `F-FOREIGN` | Export; inspect all eight header fields, including the `unknown` ones. |
 | `UT-IO-27` | `SW-0386` | `F-CHAIN4` | Export a named port subset; attempt to load the export as a resim input. |
 
-### 5.2 `SI-02` `bus` — `UT-BUS-01` … `UT-BUS-22`
+### 5.2 `SI-02` `bus` — `UT-BUS-01` … `UT-BUS-23`
 
 | ID | Serves | Fixture | Steps |
 |---|---|---|---|
@@ -300,6 +288,7 @@ Expected values are the served requirement's `Accept` clause (§0.1). Each row g
 | `UT-BUS-20` | `SW-0388` | `F-SPEC` | Resolve a catalogue at load; then one whose version is out of range. |
 | `UT-BUS-21` | `SW-0389` | `F-CHAIN4` | Move a port between two producers; re-open a recording and a plug-in made before the move. |
 | `UT-BUS-22` | `SW-0390` | `F-SPEC` | Declare a project-namespaced port; then one colliding with a core port. |
+| `UT-BUS-23` | `SW-0420` | `F-SPEC` | Add an optional field and re-resolve; read the version bump. Remove/change a field and re-resolve; read the version bump. Pin a major version and resolve against a mismatched catalogue; read the refusal names both. |
 
 ### 5.3 `SI-03` `scheduler` — `UT-SCH-01` … `UT-SCH-14`
 
@@ -618,58 +607,9 @@ Expected values are the served requirement's `Accept` clause (§0.1). Each row g
 | `UT-SES-11` | `SW-0300` | `F-LONG` | Construct a session over recordings of 1×, 5× and 20× duration; sample construction memory. |
 | `UT-SES-12` | `SW-0404` | `F-LONG` | Exercise every transport control; compare the tick landed on against the tick intended. |
 
-### 5.19 `SI-19` `scene` — `UT-SCN-01` … `UT-SCN-15`
+### 5.19–5.21 `SI-19`/`SI-20`/`SI-21` — superseded (`SM-01`, 2026-08-20)
 
-| ID | Serves | Fixture | Steps |
-|---|---|---|---|
-| `UT-SCN-01` | `SW-0301` | `F-CHAIN4` | Build a scene; inspect each prim's units, frame and style; attempt to construct one with a colour. |
-| `UT-SCN-02` | `SW-0302` | — | Import each provider; inspect its imports and its filesystem access. |
-| `UT-SCN-03` | `SW-0304` | `F-CHAIN4` | Inspect every layer for a registered callback; render twice with identical inputs and compare. |
-| `UT-SCN-04` | `SW-0305` | `F-CHAIN4` | Declare a reference resolving against no manifest; read the plug-in, the requested port and every port the manifest declares. |
-| `UT-SCN-05` | `SW-0306` | `F-CHAIN4` | Declare a zero-match `requires=`; read the placeholder's name and primitive count. Then declare an ambiguous match. |
-| `UT-SCN-06` | `SW-0307` | `F-LIBDIR` | Register two plug-ins using one short name; search for a central registry. Then register outside the declared namespace. |
-| `UT-SCN-07` | `SW-0308` | `F-LIBDIR` | Add a provider by import alone; search for a provider roster. |
-| `UT-SCN-08` | `SW-0309` | `F-BULK` | Exceed the per-layer byte budget; read whether the error names the layer or the primitive. |
-| `UT-SCN-09` | `SW-0310` | `F-CHAIN4` | Build a layer containing one reconstructed primitive; read the layer's flag. Then construct a layer whose flags disagree. |
-| `UT-SCN-10` | `SW-0312` | — | Serialise a scene; load it back; load one a minor version ahead; load one a major version ahead. |
-| `UT-SCN-11` | `SW-0313` | `F-CHAIN4` | Resolve every token in every theme; then render an unknown token and read the token and table named. |
-| `UT-SCN-12` | `SW-0314` | `F-CHAIN4` | Emit a prim with no frame, then in a declared frame, then in an undeclared one. |
-| `UT-SCN-13` | `SW-0315` | `F-FOREIGN` | Render a recording from an unknown component; enumerate the default layer set for component names. |
-| `UT-SCN-14` | `SW-0316` | `F-LIBDIR` | Open with a component default layout and no user layout; then with a user layout; then reset. |
-| `UT-SCN-15` | `SW-0405` | `F-CHAIN4` | Render one layer over simulated and over replayed data; search the plug-in for a branch on origin. |
-
-### 5.20 `SI-20` `render` — `UT-RND-01` … `UT-RND-05`
-
-| ID | Serves | Fixture | Steps |
-|---|---|---|---|
-| `UT-RND-01` | `SW-0318` | — | Run the palette validator as a command against a passing and a deliberately failing palette; read the exit code. |
-| `UT-RND-02` | `SW-0319` | `F-CHAIN4` | Produce a raster in a container with no display and no toolkit; inspect which layer imports the toolkit. |
-| `UT-RND-03` | `SW-0320` | `F-CHAIN4` | Regenerate a document figure from a recording; compare against the live rendering within the declared tolerance. |
-| `UT-RND-04` | `SW-0321` | `F-CHAIN4` | Interrupt a snapshot mid-write; inspect the destination. Then snapshot one cycle twice and compare hashes. |
-| `UT-RND-05` | `SW-0322` | `F-CHAIN4` | Render one scene on both surfaces; enumerate which of them produces geometry. |
-<!-- The row that served the now-superseded display-only SW item (SM-01
-     trial, superseded to viz) is retired along with it -- see the
-     Software Requirements document's own disposition note for that item. -->
-
-### 5.21 `SI-21` `player` — `UT-PLR-01` … `UT-PLR-15`
-
-| ID | Serves | Fixture | Steps |
-|---|---|---|---|
-| `UT-PLR-01` | `SW-0325` | — | Grep `src/**` — `adas_sim/`, `simcore/` and `simengine/` — for the six function tokens. |
-| `UT-PLR-02` | `SW-0326` | `F-CHAIN4` | Construct and drive every panel with no window and no toolkit imported. |
-| `UT-PLR-03` | `SW-0327` | `F-CHAIN4` | Toggle a layer; count SUT executions and scene rebuilds. |
-| `UT-PLR-04` | `SW-0328` | `F-CHAIN4` | Change layout interactively; save; diff the file; reload. |
-| `UT-PLR-05` | `SW-0329` | `F-CHAIN4` | Set a parameter globally, then scoped to one view-and-layer pair; read each back per view. |
-| `UT-PLR-06` | `SW-0330` | `F-CHAIN4` | Place two input-listening layers in one view; declare the capability per layer; deliver one click. |
-| `UT-PLR-07` | `SW-0331` | `F-CHAIN4` | Address a plot by port; compare its addressing against the other panels'. |
-| `UT-PLR-08` | `SW-0332` | `F-CHAIN4` | Read one value's evidence from the panel and from `sim explain`; compare field by field. |
-| `UT-PLR-09` | `SW-0333` | `F-CHAIN4` | Select a prim, a layer and a plotted sample; count actions to reach evidence for each. |
-| `UT-PLR-10` | `SW-0334` | `F-FOREIGN` | Open a recording supporting some cuts; enumerate which stages offer `measured`. |
-| `UT-PLR-11` | `SW-0335` | `F-CHAIN4` | Run overridden, incoherent, bundle-missing and restamped; read the badge for each. |
-| `UT-PLR-12` | `SW-0336` | `F-LIBDIR` | Open a recording whose plug-in bundle is absent; read the named layers and expected hashes. |
-| `UT-PLR-13` | `SW-0337` | — | Reach every published action through the command palette by search. |
-| `UT-PLR-14` | `SW-0338` | `F-CHAIN4` | Switch between workspaces; count windows, engines and pipeline schemas involved. |
-| `UT-PLR-15` | `SW-0339` | `F-CHAIN4` | Reach from the console a capability the interface does not expose; count statements and windows left. |
+15 scene tests, 5 render tests and 15 player tests retired along with the software items they served — see the Software Requirements document's own disposition tables for `SI-19`/`SI-20`/`SI-21`. The render item's already-superseded trial-slice test row (`SM-01` trial) is included in this same retirement. Recorded per `R-REQ-2` rather than deleted silently.
 
 ### 5.22 `SI-22` `launcher` — `UT-LNC-01` … `UT-LNC-07`
 

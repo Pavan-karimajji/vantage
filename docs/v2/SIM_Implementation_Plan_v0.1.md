@@ -409,7 +409,7 @@ flowchart LR
 
 ### WP-07 · `MP-1` · `SI-02` `bus` — the signal header
 - [x] **Prereq:** `WP-06`. **`O-3`/`O-4`: this precedes the ladder and everything measurable.**
-- [x] **Lands:** `IMP-0043`…`IMP-0048`, `IMP-0059`, `IMP-0060`, `IMP-0388`…`IMP-0390` — 11/11 done and tested.
+- [ ] **Lands:** `IMP-0043`…`IMP-0048`, `IMP-0059`, `IMP-0060`, `IMP-0388`…`IMP-0390`, `IMP-0420` — 11/12 done and tested; `IMP-0420` added 2026-08-20 (`SM-01` follow-up, `SYS-0025` closed) and not yet started.
   - [x] `IMP-0043` · `SW-0043` · `EXTEND` — `bus.hpp::Header` — `UT-BUS-01` green
   - [x] `IMP-0044` · `SW-0044` · `MOVE` — `header.cpp` — `UT-BUS-02` green
   - [x] `IMP-0045` · `SW-0045` · `MOVE` — `value.cpp::PortValue::age_ns()` — `UT-BUS-03` green
@@ -421,8 +421,9 @@ flowchart LR
   - [x] `IMP-0388` · `SW-0388` · `NEW` — `src/simcore/bus/catalogue.cpp::PortCatalogue::Resolve` — `UT-BUS-20` green
   - [x] `IMP-0389` · `SW-0389` · `KEEP` — `catalogue.cpp::Find` — `UT-BUS-21` green
   - [x] `IMP-0390` · `SW-0390` · `NEW` — `catalogue.cpp` — `UT-BUS-22` green
+  - [ ] `IMP-0420` · `SW-0420` · `EXTEND` — `catalogue.cpp::PortCatalogue::Version()` — semantic classification + major-mismatch refusal — `UT-BUS-23`
 - [x] **Files:** `include/simcore/bus.hpp` · `src/simcore/bus/{header,value,bulk,catalogue,static_data}.cpp`. Also touched: `src/simcore/runspec/load.cpp` (`SW-0046`'s Accept clause -- `grid.step_ns`/`period_ns` refuse a fractional JSON number, the one door configuration enters through, R-SIM-11), `scripts/check_time_units.py` (new, `ANL-SW-14`), `scripts/check_closed_sets.py` (`Origin` entry, `ANL-SW-15` -- extended to read a C++ enum by regex alongside the existing Python-import path), `scripts/ci_gate.py` (registers `check_time_units.py`).
-- [x] **Exit:** all eight header fields present on every port value on every path, each value-or-explicitly-unknown (`UT-BUS-01`); `ANL-SW-14` finds no float seconds inside `simcore`; `Unknown<T>` has no implicit conversion, so `IMP-0047` is structural. — closed by: `simcore_tests` 41/41 green (includes the pre-existing `UT-IO-*` suite, unaffected); `check_time_units.py`/`check_closed_sets.py` both clean, with planted-violation coverage for each (`R-REQ-9`).
+- [x] **Exit:** all eight header fields present on every port value on every path, each value-or-explicitly-unknown (`UT-BUS-01`); `ANL-SW-14` finds no float seconds inside `simcore`; `Unknown<T>` has no implicit conversion, so `IMP-0047` is structural. — closed by: `simcore_tests` 41/41 green (includes the pre-existing `UT-IO-*` suite, unaffected); `check_time_units.py`/`check_closed_sets.py` both clean, with planted-violation coverage for each (`R-REQ-9`). **`IMP-0420` reopens this package's `Lands` count, not this exit** — the header/cycle/catalogue-resolution behaviour this exit describes is unaffected; `IMP-0420` is the catalogue's version *semantics*, added after the fact once `SYS-0025` was found undecomposed.
 - [x] **`IMP-0388`'s `OQ-11` blocker:** closed 2026-08-12 (design `A-4`) -- the catalogue is **derived**, never authored or adopted: `PortCatalogue::Resolve` is the union of `RunSpec::stages[].ports[]`, which is already what compiled (R-SIM-22). `SW-0390`'s project namespace is a separate, additive `AddProjectPort` call -- nothing in `RunSpec` carries a project field yet, so this stays a mechanism a future WP wires a real source into, not a design gap.
 - [x] **Scoping note (honest, not silent, 2026-08-14):** `PortValue` carries `port`/`header`/`origin`/`kind`/`updated`/`hold_ns`/`payload`/`bulk`/`age_ns()` -- `quality`/`rung` are deliberately **not** fields yet (design §5.1 assigns them to `IMP-0052`, `WP-08`); adding them now would be an unused, speculative copy of a decision `WP-08`'s `CycleReconstructor` hasn't made. `CycleReconstructor`/`PortBus` themselves are not declared in `bus.hpp` for the same reason. `PortValue::payload` is raw bytes (`std::vector<std::uint8_t>`), not `io::LazyPayload<T>` -- structured/lazy decode wiring has no consumer before `module_host` (`WP-10`).
 
@@ -821,53 +822,14 @@ flowchart LR
 - [ ] **Files:** `adas_sim/session/**` — from `core/{session,tick,history,signals}.py`.
 - [ ] **Exit:** session construction reads the topic index and the manifest only; a 20-minute recording opens without materialising (`IMP-0300`). Five step granularities, and `NEXT_CYCLE_OF` lands on a coherent input set — which is what `WP-08`'s ladder bought the player.
 
-### WP-26 · `MP-4` · `SI-19`/`SI-20`/`SI-21` — protect the scene, split the viewer
-- [ ] **Prereq:** `WP-25`.
-- [ ] **Lands:** `IMP-0301`…`IMP-0323`, `IMP-0325`…`IMP-0340`, `IMP-0405` — 40.
-  - [ ] `IMP-0301` · `SW-0301` · `KEEP` — `scene/types.py::Prim`
-  - [ ] `IMP-0302` · `SW-0302` · `KEEP` — `scripts/check_invariants.py`
-  - [ ] `IMP-0303` · `SW-0303` · `KEEP` — `ANL-SW-*`
-  - [ ] `IMP-0304` · `SW-0304` · `KEEP` — `registry.py::LayerCtx`
-  - [ ] `IMP-0305` · `SW-0305` · `KEEP` — `registry.py::ctx.port` / `requires=`
-  - [ ] `IMP-0306` · `SW-0306` · `KEEP` — `registry.py`
-  - [ ] `IMP-0307` · `SW-0307` · `EXTEND` — `registry.py`
-  - [ ] `IMP-0308` · `SW-0308` · `KEEP` — `@layer_provider` discovery by import, no central roster. Unchanged, and…
-  - [ ] `IMP-0309` · `SW-0309` · `KEEP` — `types.py::Layer.__post_init__`
-  - [ ] `IMP-0310` · `SW-0310` · `KEEP` — `Prim.derived` per primitive, bound to `Layer.derived` so the two cannot…
-  - [ ] `IMP-0311` · `SW-0311` · `KEEP` — A provider integrating a time-varying signal is an algorithm and belongs…
-  - [ ] `IMP-0312` · `SW-0312` · `KEEP` — `scene/codec.py`
-  - [ ] `IMP-0313` · `SW-0313` · `KEEP` — An unknown style token raises; there is no default colour and no fallbac…
-  - [ ] `IMP-0314` · `SW-0314` · `KEEP` — `scene/frames.py`
-  - [ ] `IMP-0315` · `SW-0315` · `KEEP` — `scene/default_layers.py`
-  - [ ] `IMP-0316` · `SW-0316` · `KEEP` — A component ships a default layout; the user's own layout wins and reset…
-  - [ ] `IMP-0317` · `SW-0317` · `KEEP` — `render/theme.py`
-  - [ ] `IMP-0318` · `SW-0318` · `KEEP` — `render/palette_check.py`
-  - [ ] `IMP-0319` · `SW-0319` · `KEEP` — `render/bev.py` imports no toolkit and runs headless; Qt starts in `play…
-  - [ ] `IMP-0320` · `SW-0320` · `MOVE` — `render/capture.py::figure`
-  - [ ] `IMP-0321` · `SW-0321` · `KEEP` — `capture.py::snapshot`
-  - [ ] `IMP-0322` · `SW-0322` · `KEEP` — `render/foxglove.py` translates the **same** `Scene`; entity id is `Laye…
-  - [ ] `IMP-0323` · `SW-0323` · `EXTEND` — `render/bench.py`
-  - [ ] `IMP-0325` · `SW-0325` · `KEEP` — `ANL-SW-53`
-  - [ ] `IMP-0326` · `SW-0326` · `KEEP` — `player/panels/**`
-  - [ ] `IMP-0327` · `SW-0327` · `KEEP` — Toggling a layer re-renders from the cached `Scene` and never re-execute…
-  - [ ] `IMP-0328` · `SW-0328` · `EXTEND` — `player/layout.py`
-  - [ ] `IMP-0329` · `SW-0329` · `EXTEND` — `player/params.py`
-  - [ ] `IMP-0330` · `SW-0330` · `NEW` — `player/listen.py`
-  - [ ] `IMP-0331` · `SW-0331` · `KEEP` — `panels/plots.py` addresses the same port space as every other panel; a…
-  - [ ] `IMP-0332` · `SW-0332` · `KEEP` — `panels/evidence_panel.py` calls `diagnostics.evidence()` and formats; `…
-  - [ ] `IMP-0333` · `SW-0333` · `EXTEND` — `panels/viewport.py`
-  - [ ] `IMP-0334` · `SW-0334` · `KEEP` — `panels/pipeline_panel.py` offers `measured` only where `IMP-0185` says…
-  - [ ] `IMP-0335` · `SW-0335` · `EXTEND` — `panels/hud.py`
-  - [ ] `IMP-0336` · `SW-0336` · `KEEP` — `panels/layers.py`
-  - [ ] `IMP-0337` · `SW-0337` · `KEEP` — `shell/palette.py`
-  - [ ] `IMP-0338` · `SW-0338` · `KEEP` — `shell/workspace.py`
-  - [ ] `IMP-0339` · `SW-0339` · `KEEP` — `panels/console.py` binds `pyapi` to the live `Session`, so anything scr…
-  - [ ] `IMP-0340` · `SW-0340` · `EXTEND` — `player/surface.py::SURFACE`
-  - [ ] `IMP-0405` · `SW-0405` · `KEEP` — A plug-in subscribes to bus data by name and never reads module memory,…
-- [ ] **Files:** `render/viewer.py` (1,990) **split** into `player/shell/qt_window.py` + `player/panels/**` · `view/**` → `player/panels/` · `app/**` → `player/shell/` · `player/{layout,params,listen,surface}.py`.
-- [ ] **Exit:** every panel unit-tested **with no window** (`IMP-0326`); Qt imported in exactly one module (`IMP-0319`); `check_invariants.py` still green on all sixteen scene rules, with its planted-violation test.
+### WP-26 · `MP-4` · `SI-19`/`SI-20`/`SI-21` — retired, superseded to `viz` (`SYNC:SM-01`, `SYNC:SM-05`, 2026-08-20)
 
-> **The largest package by count and the smallest by risk.** `SI-19` is 16 of 17 `DONE` and none of it moves; the work is the `viewer.py` split, and the requirement is that the split does not undo what is already enforced.
+- [x] **Retired.** All 40 design rows this package landed superseded with
+      pointers to `VIZ:` (not yet allocated) — exact identifier pairs in
+      `SIM_Software_Requirements_v0.1.md`'s `SI-19`/`SI-20`/`SI-21` sections'
+      own disposition tables, not repeated here. None had gone past
+      `KEEP`/`EXTEND` design; no code is deleted by this box (that is
+      `SM-12`). Recorded per `R-REQ-2` rather than deleted silently.
 
 ### WP-26a · `SYNC:SM-01` · The disposition table, trial slice
 
@@ -1070,7 +1032,7 @@ A finding recorded only in a plan is a finding the next reader of the requiremen
 | R-2 | **`WP-16` is started before `prove_equal.py` is clean**, because the deletions look obvious | Very high | The gate is its own package (`WP-15a`) and therefore a ticked prerequisite, not a line inside the package it guards; `ANL-SW-09` fails the build if coverage decreases across a deletion |
 | R-3 | **`DD-04` is reversed after `WP-16`**, requiring a second Python codec to be rebuilt | High | Close it at review, before `WP-06`. It is Assumption A-2 and the cheapest point to overturn it is now |
 | ~~R-4~~ | ~~**`OQ-14`'s numbers never arrive**, so three performance requirements can never be failed~~ | ~~Medium~~ | **Retired 2026-08-13.** One absolute supplied (1000 recordings overnight, 8 cores, 32 GB, lean `df`) and the other two metrics seeded from their first measurement. The harnesses were built regardless, which is why the answer was a configuration change and not a build — the mitigation worked as written |
-| R-5 | **`WP-26`'s viewer split quietly re-couples panels to Qt** under schedule pressure | Medium | `IMP-0326`'s no-window unit tests exist before the split, not after |
+| ~~R-5~~ | ~~**`WP-26`'s viewer split quietly re-couples panels to Qt** under schedule pressure~~ | ~~Medium~~ | **Retired 2026-08-20** (`SM-01`) — `WP-26` and the viewer split it guarded moved to `viz`; the risk is now that module's to carry |
 | R-6 | **The `P0` distortion is inherited and never re-triaged** — 229 of 408 marked `P0` | Medium | SYS §0.6 records it as a customer decision. When SYS is re-triaged both columns re-derive mechanically. Until then, **this plan's order is the real priority signal**, and it is ordered by dependency rather than by label |
 | R-7 | **`contrib/check/` becomes permanent by silence** | Low | `WP-31` forces the decision: claimed or deleted |
 | R-8 | **`MP-1` is declared finished against a fixture the team wrote itself.** `F-FOREIGN` encodes the same assumptions the recovery ladder does, so it validates the guess rather than the data | High | `MP-1`'s exit is **provisional** and `WP-18` carries the re-validation box; a rung that behaves differently against a real sample reopens `WP-08`. Ten seconds of real bench capture retires this entirely, which is why `OQ-09` is worth more than its position in the register suggests. **2026-08-13: a sample is obtainable** — the risk is now scheduled rather than open, and it retires at `WP-18` when the file lands |

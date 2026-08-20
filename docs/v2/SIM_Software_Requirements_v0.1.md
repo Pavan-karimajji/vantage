@@ -215,9 +215,9 @@ flowchart TB
 | `SI-16` | `PRP` | `prep` | Python | offline | Integrity check, content hash, extract, convert, index, inspect, lineage |
 | `SI-17` | `DIA` | `diagnostics` | Python | on demand | Explain, doctor, probe, evidence, name resolution, run comparison |
 | `SI-18` | `SES` | `session` | Python | at display rate | The `Session` data model, tick and port-value views, transport and head semantics |
-| `SI-19` | `SCN` | `scene` | Python | at display rate | The `Scene` intermediate representation, frames, style tokens, provider registry, port binding |
-| `SI-20` | `RND` | `render` | Python | at display rate | Renderers, theme and token tables, image and figure output |
-| `SI-21` | `PLR` | `player` | Python | at interaction rate | Panels, layout, layer tree, plots, snapshots, evidence panel |
+| `SI-19` | `SCN` | `scene` | Python | at display rate | **Leaves — superseded to `viz` (`SM-01`, 2026-08-20).** The `Scene` intermediate representation, frames, style tokens, provider registry, port binding |
+| `SI-20` | `RND` | `render` | Python | at display rate | **Leaves — superseded to `viz` (`SM-01`, 2026-08-20).** Renderers, theme and token tables, image and figure output |
+| `SI-21` | `PLR` | `player` | Python | at interaction rate | **Leaves — superseded to `viz` (`SM-01`, 2026-08-20).** Panels, layout, layer tree, plots, snapshots, evidence panel |
 | `SI-22` | `LNC` | `launcher` | Python | at interaction rate | Mode and implementation selection; writes a run configuration and nothing else |
 | `SI-23` | `API` | `pyapi` | Python | on demand | The scripting surface — every capability, in a few lines, with no CLI and no window |
 | `SI-24` | `PLG` | `plugins` | both | at load | The four extension registries, plugin API version gate, conformance kits |
@@ -229,7 +229,7 @@ flowchart TB
 |---|---|---|
 | D-1 | **No C++ item depends on a Python item.** The engine reads the Resolved Run Spec and nothing else. | `SW-0016` |
 | D-2 | **No Python item on the run-time path depends on a C++ item other than through the spec or the transport.** | `SW-0017` |
-| D-3 | **`SI-19` (`scene`) depends on nothing above it.** No renderer, no player, no codec, no source. | `SW-0303` |
+| D-3 | **`SI-19` (`scene`) depends on nothing above it.** No renderer, no player, no codec, no source. | superseded — `SI-19` itself left with its enforcing item (`SM-01`, 2026-08-20); `viz`'s to restate |
 | D-4 | **`SI-01`..`SI-08` may depend on `SI-07` (`errors`) freely.** Everything raises from one taxonomy. | `SW-0121` |
 | D-5 | **`SI-09` depends on `simcore` and on no other item.** | `SW-0141` |
 | D-6 | **No item names a component or a function.** | `SW-0357` |
@@ -251,8 +251,6 @@ Stated as a set because the failure mode is drift, and drift is cheapest to prev
 | `SI-11` `graph` | Read a message, or open anything. It receives the probe pass's data and classifies over it. |
 | `SI-12` `ingest` | Compute. Renaming, tagging, and a declared factor and offset — nothing else. Match a family by opening the file; it matches against the index it is handed. |
 | `SI-13` `resolve` | Execute a module or advance a run. It may open a binary and a recording, and may call only the manifest, version and describe entry points. |
-| `SI-19` `scene` | Compute a pixel, import a renderer, hold state between ticks, or touch disk. |
-| `SI-21` `player` | Talk to a library, a world model or a file format. Its input is a `Session`. |
 | `SI-22` `launcher` | Hold state that is not in the file it writes. |
 
 ---
@@ -917,6 +915,13 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Verify.** T · `UT-BUS-22`   **Trace.** SYS-0027
 **Built.** ● done — `IMP-0390` in `WP-07`
 **Now.** `NEW`.
+
+**`SW-0420`** · `SI-02` · `P1` · `R1` — The catalogue's version is semantic, and a major mismatch refuses to load
+**Shall.** The port catalogue's version shall follow semantic versioning — adding an optional field is a minor change, removing or changing a field is a major change — and a configuration pinned to a major version shall refuse to load against a catalogue of a different major version, naming both.
+**Accept.** Adding an optional field to a port and re-resolving bumps only the minor number. Removing or changing a field bumps the major number. A run pinned to major version `N` refuses to load against a catalogue reporting major version `M ≠ N`, naming both in the refusal.
+**Verify.** T · `UT-BUS-23`   **Trace.** SYS-0025
+**Built.** ○ not started — `IMP-0420` in `WP-07`
+**Now.** `NEW` — `SW-0388`'s `PortCatalogue::Version()` already exposes an identity (the `(module, manifest version, library hash)` triples in the run manifest); what is missing is the semantic classification rule and the load-time refusal on a major mismatch. Found live 2026-08-20 while executing `SM-01`'s `SI-19` slice: `SYS-0025` (CN-0069/CN-0260's port-model versioning) had been decomposed solely by the now-superseded `SI-19` scene-codec item (`SW-0312`, "the scene serialises and tolerates a minor version forward" — a *consumer* of catalogue versioning, not its definition), which was never this requirement's real home. `SI-02` — where the catalogue itself lives (`SW-0388`) — is.
 
 ---
 
@@ -2837,297 +2842,74 @@ structurally, where the Python design here stayed `PARTIAL`.
 
 ---
 
-## 24. `SI-19` — `scene`: geometry, tokens, layers, binding
+## 24. `SI-19` — `scene`: geometry, tokens, layers, binding — superseded (`SM-01`, 2026-08-20)
 
-**`SW-0301`** · `SI-19` · `P0` · `R1` — Geometry in metres, in a named frame, styled by token
-**Shall.** A drawn primitive shall carry geometry in metres in a named frame and a semantic style token, and shall carry no colour, no pixel coordinate and no viewport reference.
-**Accept.** Constructing a primitive with a colour value fails. Changing the token table changes every rendered surface consistently.
-**Verify.** T · `UT-SCN-01`   **Trace.** SYS-0146
-**Built.** ○ not started — `IMP-0301` in `WP-26`
-**Now.** `DONE` — `scene/types.py` refuses a colour literal outright, and the token table is the only place a colour exists.
+`SI-19` moved to `viz` with the rest of the player/scene toolkit. Every one of these 17 items is cited only by requirements in this same supersede set. Recorded per `R-REQ-2` rather than deleted silently.
 
-**`SW-0302`** · `SI-19` · `P0` · `R1` — A layer provider imports no renderer and touches no disk
-**Shall.** A layer provider shall not import a renderer, a plotting library or a graphical toolkit, shall not read the viewport, shall not touch disk, and shall not hold state between ticks.
-**Accept.** A provider violating any of the five fails a static check, and the check itself is proven by a planted violation.
-**Verify.** A · `ANL-SW-46` · T · `UT-SCN-02`   **Trace.** SYS-0146, SYS-0148
-**Built.** ○ not started — `IMP-0302` in `WP-26`
-**Now.** `DONE` — `scripts/check_invariants.py` enforces this and a companion test proves the check fails on a planted violation.
-
-**`SW-0303`** · `SI-19` · `P0` · `R1` — The scene layer depends on nothing above it
-**Shall.** `SI-19` shall import no renderer, player, codec, source or orchestration module.
-**Accept.** An import-direction check finds no such edge, run on every build.
-**Verify.** A · `ANL-SW-47`   **Trace.** SYS-0146, SYS-0131
-**Built.** ○ not started — `IMP-0303` in `WP-26`
-**Now.** `DONE` — checked by an existing unit test over the import graph.
-
-**`SW-0304`** · `SI-19` · `P0` · `R1` — A layer reacts to interaction through state, never a callback
-**Shall.** A layer shall receive interaction state as an input and shall not register an event callback.
-**Accept.** No layer registers a callback. Rendering twice with identical inputs produces identical output, and layers remain cacheable and unit-testable in isolation.
-**Verify.** A · `ANL-SW-48` · T · `UT-SCN-03`   **Trace.** SYS-0148
-**Built.** ○ not started — `IMP-0304` in `WP-26`
-**Now.** `DONE` — `core/history.py::Interaction` and `LayerCtx` carry it as data.
-
-**`SW-0305`** · `SI-19` · `P0` · `R1` — A plug-in never spells a port address
-**Shall.** A plug-in shall name the ports it needs relative to its own component and shall never spell a raw address; resolution to the run's actual address shall happen once, at load.
-**Accept.** A reference resolving against no manifest is an authoring error naming the plug-in, the requested port and every port the manifest declares.
-**Verify.** T · `UT-SCN-04` · A · `ANL-SW-49`   **Trace.** SYS-0149
-**Built.** ○ not started — `IMP-0305` in `WP-26`
-**Now.** `DONE` — `self.<port>` resolution against `LayerCtx.known_ports`, mechanised by `scripts/check_invariants.py` across every component's plug-in directory.
-
-**`SW-0306`** · `SI-19` · `P0` · `R1` — A zero-match reference is a named placeholder, never an empty layer
-**Shall.** A resolved reference that matches no known port shall yield a named placeholder layer badged unavailable, and shall never yield an empty layer indistinguishable from *the algorithm did not fire*.
-**Accept.** The placeholder is named in the layer list and carries no primitives. An ambiguous match is an authoring error, never a guess.
-**Verify.** T · `UT-SCN-05`   **Trace.** SYS-0149
-**Built.** ○ not started — `IMP-0306` in `WP-26`
-**Now.** `DONE` — implemented deliberately, with the transient case (resolved but not yet present this tick) kept distinct from the unresolvable one.
-
-**`SW-0307`** · `SI-19` · `P1` · `R1` — Layer names are namespaced per plug-in
-**Shall.** A plug-in shall claim a declared namespace for its layers, and layer names shall be fully qualified within it.
-**Accept.** Two plug-ins registering the same short name coexist without collision and without a central registry. A plug-in registering outside its namespace is refused at load, naming both.
-**Verify.** T · `UT-SCN-06`   **Trace.** SYS-0143; **evidence** SYS §2.5
-**Built.** ○ not started — `IMP-0307` in `WP-26`
-**Now.** `PARTIAL` — `scene/registry.py` refuses a duplicate layer identifier naming both providers, which prevents collision by failing; the namespace that would let both coexist does not exist.
-
-**`SW-0308`** · `SI-19` · `P0` · `R1` — Providers are discovered by import, with no central roster
-**Shall.** A layer provider shall be discovered by import alone, and no file shall enumerate the set of providers.
-**Accept.** Adding a provider by import alone makes it available. A static check finds no provider roster.
-**Verify.** T · `UT-SCN-07`   **Trace.** SYS-0142, SYS-0252
-**Built.** ○ not started — `IMP-0308` in `WP-26`
-**Now.** `DONE` — `scene/registry.py`'s `@layer_provider`.
-
-**`SW-0309`** · `SI-19` · `P0` · `R1` — Bulk geometry is referenced, under a per-layer budget
-**Shall.** A primitive shall inline only small geometry; bulk arrays shall be referenced by topic and time, under a declared per-scene byte budget checked when a layer is constructed.
-**Accept.** Exceeding the budget is an error naming the layer, not the primitive, since a primitive does not know its layer.
-**Verify.** T · `UT-SCN-08`   **Trace.** SYS-0118
-**Built.** ○ not started — `IMP-0309` in `WP-26`
-**Now.** `DONE` — `BulkRef` plus the budget check in `Layer.__post_init__`, with the constant stated in the design.
-
-**`SW-0310`** · `SI-19` · `P0` · `R1` — Reconstructed geometry is marked per primitive
-**Shall.** A primitive whose geometry was reconstructed rather than published shall be marked, and a layer's own reconstruction flag shall be bound to its primitives' so the two cannot disagree.
-**Accept.** A layer containing one reconstructed primitive is marked reconstructed. Constructing a layer whose flags disagree fails.
-**Verify.** T · `UT-SCN-09`   **Trace.** SYS-0034
-**Built.** ○ not started — `IMP-0310` in `WP-26`
-**Now.** `DONE` — `Prim.derived` plus the `Layer.derived` consistency rule, both tested.
-
-**`SW-0311`** · `SI-19` · `P0` · `R1` — A layer never estimates what nothing produced
-**Shall.** A layer shall not integrate a time-varying signal, filter, or produce any history-dependent estimate of information no module published.
-**Accept.** Reconstruction is limited to deterministic transforms of a fixed constant or of an already-published value. A static check finds no state retained across ticks in a provider.
-**Verify.** A · `ANL-SW-50` · I · `INSP-SW-06`   **Trace.** SYS-0035
-**Built.** ○ not started — `IMP-0311` in `WP-26`
-**Now.** `DONE` — enforced structurally: a provider receives a `LayerCtx` and returns layers, with no place to keep state.
-
-**`SW-0312`** · `SI-19` · `P0` · `R1` — The scene serialises and tolerates a minor version forward
-**Shall.** A scene shall serialise and deserialise to an equal value, tolerate a higher minor version, and refuse a higher major version.
-**Accept.** All three are exercised. A higher-minor scene reads; a higher-major one is refused naming both versions.
-**Verify.** T · `UT-SCN-10`   **Trace.** SYS-0025, SYS-0254
-**Built.** ○ not started — `IMP-0312` in `WP-26`
-**Now.** `DONE` — `scene/codec.py`, field-numbered for exactly this.
-
-**`SW-0313`** · `SI-19` · `P0` · `R1` — An unknown style token raises; there is no default colour
-**Shall.** An unknown style token shall raise, and no path shall substitute a default colour.
-**Accept.** Every token in the table resolves in every theme; an unknown one raises naming the token and the table.
-**Verify.** T · `UT-SCN-11`   **Trace.** SYS-0146
-**Built.** ○ not started — `IMP-0313` in `WP-26`
-**Now.** `DONE`.
-
-**`SW-0314`** · `SI-19` · `P1` · `R1` — The frame graph is declared, and an unknown frame raises
-**Shall.** A primitive's frame shall be a member of the declared frame graph, defaulting to the ego frame, and an unknown frame shall raise.
-**Accept.** The default is applied when no frame is given; an unknown frame raises naming the declared set.
-**Verify.** T · `UT-SCN-12`   **Trace.** SYS-0146; `R-COORD-1`
-**Built.** ○ not started — `IMP-0314` in `WP-26`
-**Now.** `DONE` — `scene/frames.py`.
-
-**`SW-0315`** · `SI-19` · `P1` · `R1` — A framework-owned default layer set exists
-**Shall.** The framework shall provide the layers every recording needs regardless of which component produced it, and these shall name no component and no function.
-**Accept.** A recording from an unknown component renders the default set. A static check finds no component name in it.
-**Verify.** T · `UT-SCN-13`   **Trace.** SYS-0145, SYS-0274
-**Built.** ○ not started — `IMP-0315` in `WP-26`
-**Now.** `DONE` — `scene/default_layers.py`.
-
-**`SW-0316`** · `SI-19` · `P1` · `R1` — A component ships a default layout, and the user's wins
-**Shall.** A component shall ship a default layout, the user's own layout shall take precedence, and reset shall return to the default.
-**Accept.** Opening a recording with no user layout gives a populated arrangement, not an empty grid.
-**Verify.** T · `UT-SCN-14`   **Trace.** SYS-0145
-**Built.** ○ not started — `IMP-0316` in `WP-26`
-**Now.** `DONE` — `view/workspace.py` over `modules/<n>/sim/workspace.yaml`.
-
-**`SW-0405`** · `SI-19` · `P0` · `R1` — A plug-in reads data by name, never the algorithm's memory
-**Shall.** A visualization plug-in shall subscribe to data by port name and shall not read a module's memory.
-**Accept.** The same visualization renders correctly whether the data was simulated or replayed, with no branch on origin anywhere in the plug-in.
-**Verify.** T · `UT-SCN-15` · A · `ANL-SW-73`   **Trace.** SYS-0150
-**Built.** ○ not started — `IMP-0405` in `WP-26`
-**Now.** `DONE` — structurally guaranteed: a provider receives a `LayerCtx` and resolved port values, and has no path to a module at all.
+| Retired | Was | Replaced by |
+|---|---|---|
+| `SW-0301` | Geometry in metres, in a named frame, styled by token | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0302` | A layer provider imports no renderer and touches no disk | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0303` | The scene layer depends on nothing above it | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0304` | A layer reacts to interaction through state, never a callback | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0305` | A plug-in never spells a port address | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0306` | A zero-match reference is a named placeholder, never an empty layer | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0307` | Layer names are namespaced per plug-in | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0308` | Providers are discovered by import, with no central roster | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0309` | Bulk geometry is referenced, under a per-layer budget | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0310` | Reconstructed geometry is marked per primitive | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0311` | A layer never estimates what nothing produced | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0312` | The scene serialises and tolerates a minor version forward | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0313` | An unknown style token raises; there is no default colour | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0314` | The frame graph is declared, and an unknown frame raises | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0315` | A framework-owned default layer set exists | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0316` | A component ships a default layout, and the user's wins | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0405` | A plug-in reads data by name, never the algorithm's memory | `VIZ:SW-nnnn` — not yet allocated |
 
 ---
 
-## 25. `SI-20` — `render`
+## 25. `SI-20` — `render` — superseded (`SM-01`, 2026-08-20; `SW-0324` already retired in the trial slice)
 
-**`SW-0317`** · `SI-20` · `P0` · `R1` — One token table per medium, and one place a colour exists
-**Shall.** Colour shall exist in exactly one module, the token table, resolved per theme.
-**Accept.** A static check finds no colour literal outside the token table. Every token resolves in every declared theme.
-**Verify.** A · `ANL-SW-51`   **Trace.** SYS-0146
-**Built.** ○ not started — `IMP-0317` in `WP-26`
-**Now.** `DONE` — `render/theme.py` is the single place, enforced by a check.
+`SI-20` moved to `viz` with the rest of the player/scene toolkit. Every one of these 7 items is cited only by requirements in this same supersede set. Recorded per `R-REQ-2` rather than deleted silently.
 
-**`SW-0318`** · `SI-20` · `P1` · `R1` — The palette is validated by computation
-**Shall.** Each categorical palette shall pass a declared set of computed checks — contrast, separation and colour-vision distinguishability — rather than review.
-**Accept.** The validator runs as a command and exits non-zero on a failing palette.
-**Verify.** T · `UT-RND-01`   **Trace.** SYS-0146
-**Built.** ○ not started — `IMP-0318` in `WP-26`
-**Now.** `DONE` — `render/palette_check.py`, runnable and green for the shipped themes.
+| Retired | Was | Replaced by |
+|---|---|---|
+| `SW-0317` | One token table per medium, and one place a colour exists | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0318` | The palette is validated by computation | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0319` | The rendering core is toolkit-independent and headless | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0320` | A figure and a live run are the same picture | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0321` | A snapshot is atomic and reproducible | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0322` | A second rendering surface renders the same scene, never a second scene | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0323` | Frame time has a stated budget at a stated load | `VIZ:SW-nnnn` — not yet allocated |
 
-**`SW-0319`** · `SI-20` · `P0` · `R1` — The rendering core is toolkit-independent and headless
-**Shall.** The scene-to-raster core shall be usable with no graphical toolkit and no display.
-**Accept.** A raster is produced in a container with neither. The toolkit appears only in the window layer above it.
-**Verify.** T · `UT-RND-02`   **Trace.** SYS-0195, SYS-0128
-**Built.** ○ not started — `IMP-0319` in `WP-26`
-**Now.** `DONE` — `render/bev.py` is toolkit-free and the toolkit enters only at `render/viewer.py`.
-
-**`SW-0320`** · `SI-20` · `P1` · `R1` — A figure and a live run are the same picture
-**Shall.** A figure in a document and the live rendering shall be produced from the same geometry and the same token table.
-**Accept.** A document figure regenerated from a recording is comparable to the live rendering within a declared tolerance.
-**Verify.** T · `UT-RND-03`   **Trace.** SYS-0147
-**Built.** ○ not started — `IMP-0320` in `WP-26`
-**Now.** `DONE·MOVE` — `sim render` produces figures from the same scene; the comparison against the live rendering is not automated.
-
-**`SW-0321`** · `SI-20` · `P1` · `R1` — A snapshot is atomic and reproducible
-**Shall.** A snapshot shall be an image plus a provenance sidecar written atomically — both or neither — and two snapshots of one cycle shall be byte-identical.
-**Accept.** Interrupting the write leaves neither file. Two snapshots of one cycle hash equal.
-**Verify.** T · `UT-RND-04`   **Trace.** SYS-0152
-**Built.** ○ not started — `IMP-0321` in `WP-26`
-**Now.** `DONE` — `render/capture.py`, built in memory then moved into place atomically on both platforms.
-
-**`SW-0322`** · `SI-20` · `P1` · `R1` — A second rendering surface renders the same scene, never a second scene
-**Shall.** Where a scene is rendered to a foreign surface, it shall be translated from the same scene the primary renderer draws, never produced by a second rendering path.
-**Accept.** The two surfaces cannot disagree, because only one produces geometry.
-**Verify.** T · `UT-RND-05`   **Trace.** SYS-0147, SYS-0131
-**Built.** ○ not started — `IMP-0322` in `WP-26`
-**Now.** `DONE` — `render/foxglove.py` translates the same scene rather than rendering independently.
-
-**`SW-0323`** · `SI-20` · `P1` · `R1` — Frame time has a stated budget at a stated load
-**Shall.** Player frame time shall carry a declared numeric budget at a stated tick count and layer count, measured on a reference configuration and reported per release.
-**Accept.** The budget is a number a run can exceed, and exceeding it is reported as a regression rather than re-baselined. No absolute was supplied, so the value is seeded from the first measurement on the reference configuration, the seeding run is marked as such in the budget file, and the consumed headroom prints on pass.
-**Verify.** A · `ANL-SW-52`   **Trace.** SYS-0235
-**Built.** ○ not started — `IMP-0323` in `WP-26`
-**Now.** `PARTIAL` — a frame-time measurement exists; **`OQ-14` closed 2026-08-13** with no absolute for this metric, so it is baseline-seeded and failable from the second run.
+---
 
 Superseded (`SM-01` trial), `SW-0324` — was *Display-only data is decoded only for frames shown*, `SI-20` · `P1` · `R2`. Its parents `SYS-0156`/`SYS-0157` moved to `viz` (`SIM_System_Requirements_v0.1.md` §11.5); never started (`Built.` read `0/1`), so this is a pointer, not a code move. Replaced by `VIZ:SW-nnnn` — not yet allocated, same `R2` deferral as its parents.
 
 ---
 
-## 26. `SI-21` — panels, layout, evidence
+## 26. `SI-21` — panels, layout, evidence — superseded (`SM-01`, 2026-08-20)
 
-**`SW-0325`** · `SI-21` · `P0` · `R1` — The player names no component and no function
-**Shall.** The player's source shall contain no component name and no function name.
-**Accept.** An automated check passes on every build, and a companion test proves the check fails on a planted violation.
-**Verify.** A · `ANL-SW-53` · T · `UT-PLR-01`   **Trace.** SYS-0132, SYS-0274
-**Built.** ○ not started — `IMP-0325` in `WP-26`
-**Now.** `DONE` — `scripts/check_invariants.py`, with the planted-violation test.
+`SI-21` moved to `viz` with the rest of the player/scene toolkit. Every one of these 16 items is cited only by requirements in this same supersede set. Recorded per `R-REQ-2` rather than deleted silently.
 
-**`SW-0326`** · `SI-21` · `P0` · `R1` — Panel state is separable from rendering and testable with no window
-**Shall.** Every panel's state shall be a plain data structure with no toolkit dependency, and shall be unit-testable with no window.
-**Accept.** Every panel's state module imports no toolkit. The state test suite runs headless.
-**Verify.** T · `UT-PLR-02` · A · `ANL-SW-54`   **Trace.** SYS-0142, SYS-0195
-**Built.** ○ not started — `IMP-0326` in `WP-26`
-**Now.** `DONE` — every `view/*.py` is pure state and `render/`/`app/` hold the toolkit; this discipline is consistent across eleven panels.
-
-**`SW-0327`** · `SI-21` · `P0` · `R1` — Toggling a layer re-renders without re-executing
-**Shall.** Switching a layer on or off shall re-render from the existing session with no module invocation.
-**Accept.** Toggling produces zero module invocations, measured.
-**Verify.** T · `UT-PLR-03`   **Trace.** SYS-0142, SYS-0133
-**Built.** ○ not started — `IMP-0327` in `WP-26`
-**Now.** `DONE`.
-
-**`SW-0328`** · `SI-21` · `P0` · `R1` — Layout is a file, and interactive changes save back to it
-**Shall.** Tabs, splits, views and per-view layer visibility shall be defined in a file, versioned in the project repository, and interactive changes shall be savable back to it.
-**Accept.** Two engineers get the identical arrangement from the same file.
-**Verify.** T · `UT-PLR-04`   **Trace.** SYS-0141
-**Built.** ○ not started — `IMP-0328` in `WP-26`
-**Now.** `PARTIAL` — the layout file is read; saving back is not implemented.
-
-**`SW-0329`** · `SI-21` · `P1` · `R1` — Per-layer default visibility and view-scoped typed parameters
-**Shall.** The layout file shall carry, per layer, its default visibility, and typed parameters scoped either globally or to one view-and-layer pair.
-**Accept.** A layer's default-off state holds on first open. A parameter set for one view does not affect the same layer in another view.
-**Verify.** T · `UT-PLR-05`   **Trace.** SYS-0144; **evidence** SYS §2.5
-**Built.** ○ not started — `IMP-0329` in `WP-26`
-**Now.** `PARTIAL` — default visibility and per-layer verbosity exist; view-scoped typed parameters do not.
-
-**`SW-0330`** · `SI-21` · `P1` · `R1` — Per-layer input-listening capability is declared, not global
-**Shall.** Whether a layer receives pointer or keyboard interaction shall be declared per layer per view.
-**Accept.** Two views of the same layer differ in which receives interaction, from configuration alone.
-**Verify.** T · `UT-PLR-06`   **Trace.** SYS-0144; **evidence** SYS §2.5
-**Built.** ○ not started — `IMP-0330` in `WP-26`
-**Now.** `NEW`.
-
-**`SW-0331`** · `SI-21` · `P1` · `R1` — Plots address the same port space as everything else
-**Shall.** A plot panel shall address ports through the same resolver as exports, overrides and evidence queries.
-**Accept.** A port plottable in a panel is addressable identically in an export, an override and an evidence query, with one resolver implementation.
-**Verify.** T · `UT-PLR-07` · A · `ANL-SW-55`   **Trace.** SYS-0151
-**Built.** ○ not started — `IMP-0331` in `WP-26`
-**Now.** `DONE` — `core/signals.py` is one resolver with five consumers, deliberately.
-
-**`SW-0332`** · `SI-21` · `P0` · `R1` — The evidence panel and the command line share one producer
-**Shall.** The evidence panel shall render the output of `SW-0273`'s single producer and shall contain no evidence derivation of its own.
-**Accept.** The panel's fields and the command line's are identical field for field.
-**Verify.** T · `UT-PLR-08`   **Trace.** SYS-0154
-**Built.** ○ not started — `IMP-0332` in `WP-26`
-**Now.** `DONE` — `view/evidence_panel.py` calls the same function and formatter.
-
-**`SW-0333`** · `SI-21` · `P1` · `R1` — Selecting anything on screen reaches its evidence in one action
-**Shall.** Selecting a primitive, a layer or a plotted sample shall produce its evidence record in one action.
-**Accept.** The action count is one from any of the three surfaces, demonstrated and recorded.
-**Verify.** D · `UT-PLR-09`   **Trace.** SYS-0153
-**Built.** ○ not started — `IMP-0333` in `WP-26`
-**Now.** `PARTIAL` — the inspector resolves a pick identifier to declared fields and the evidence panel exists; the two are not joined into one action from every surface.
-
-**`SW-0334`** · `SI-21` · `P1` · `R1` — The pipeline panel offers `measured` only where the recording supports it
-**Shall.** The pipeline panel shall present each stage's mode and implementation against the run's actual known ports, offering `measured` only where the recording carries that stage's declared outputs.
-**Accept.** A stage whose outputs are absent cannot be set to `measured` from the panel. The set offered equals what the headless feasible-cut computation reports.
-**Verify.** T · `UT-PLR-10`   **Trace.** SYS-0163, SYS-0022
-**Built.** ○ not started — `IMP-0334` in `WP-26`
-**Now.** `DONE` — `view/pipeline_panel.py`.
-
-**`SW-0335`** · `SI-21` · `P1` · `R1` — An overridden or incoherent run is badged in the window
-**Shall.** An overridden port, an orphaned stage and an incoherent run shall each be visibly badged in the window.
-**Accept.** Each badge appears without opening a menu and each names what it refers to.
-**Verify.** T · `UT-PLR-11`   **Trace.** SYS-0092, SYS-0094, SYS-0101
-**Built.** ○ not started — `IMP-0335` in `WP-26`
-**Now.** `PARTIAL` — the override badge and the severed-chain widget exist; the incoherent-run banner does not, pending `SW-0180`.
-
-**`SW-0336`** · `SI-21` · `P1` · `R1` — A missing plug-in degrades, naming what was expected
-**Shall.** A plug-in absent or incompatible at open shall degrade to *these layers unavailable*, naming the bundle and the hash expected.
-**Accept.** Opening an artifact whose plug-in bundle is absent renders every other layer and names the missing one.
-**Verify.** T · `UT-PLR-12`   **Trace.** SYS-0253, SYS-0254
-**Built.** ○ not started — `IMP-0336` in `WP-26`
-**Now.** `DONE` — implemented and tested.
-
-**`SW-0337`** · `SI-21` · `P1` · `R1` — Every action is reachable without knowing where it lives
-**Shall.** Every action, including those of closed panels, shall be reachable from one searchable list.
-**Accept.** Each action in the published action set is reachable from the list, checked automatically against the set.
-**Verify.** T · `UT-PLR-13`   **Trace.** SYS-0268, SYS-0265
-**Built.** ○ not started — `IMP-0337` in `WP-26`
-**Now.** `DONE` — `app/shell/palette.py`.
-
-**`SW-0338`** · `SI-21` · `P1` · `R1` — A workspace is a mode of one window, not a second application
-**Shall.** Interactive and project-scale use shall be workspaces of one window over one engine and one configuration schema.
-**Accept.** No capability exists in one workspace that is unreachable in the other except by declared permission. Both drive the same engine entry point.
-**Verify.** T · `UT-PLR-14` · A · `ANL-SW-41`   **Trace.** SYS-0181, SYS-0196
-**Built.** ○ not started — `IMP-0338` in `WP-26`
-**Now.** `DONE` — `app/shell/workspace.py` with a declared permission set per workspace.
-
-**`SW-0339`** · `SI-21` · `P1` · `R1` — A scripting console is bound to the live session
-**Shall.** The window shall provide a scripting console with the session, the configuration and the current scene bound.
-**Accept.** A capability not exposed by the interface is reachable from the console in a few lines, without leaving the window.
-**Verify.** T · `UT-PLR-15`   **Trace.** SYS-0200
-**Built.** ○ not started — `IMP-0339` in `WP-26`
-**Now.** `DONE` — `app/panels/console.py`, and it is the mechanism that removes the incentive to fork the tool for one experiment.
-
-**`SW-0340`** · `SI-21` · `P1` · `R1` — The interface surface is closed, published and counted
-**Shall.** Panel types, workspace kinds and action kinds shall each be a closed published set whose size is reported per release.
-**Accept.** Each set's membership is enumerable and a member added without a requirement fails a static check.
-**Verify.** A · `ANL-SW-56`   **Trace.** SYS-0268
-**Built.** ○ not started — `IMP-0340` in `WP-26`
-**Now.** `PARTIAL` — the sets exist and are enumerable; nothing counts or gates them.
+| Retired | Was | Replaced by |
+|---|---|---|
+| `SW-0325` | The player names no component and no function | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0326` | Panel state is separable from rendering and testable with no window | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0327` | Toggling a layer re-renders without re-executing | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0328` | Layout is a file, and interactive changes save back to it | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0329` | Per-layer default visibility and view-scoped typed parameters | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0330` | Per-layer input-listening capability is declared, not global | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0331` | Plots address the same port space as everything else | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0332` | The evidence panel and the command line share one producer | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0333` | Selecting anything on screen reaches its evidence in one action | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0334` | The pipeline panel offers `measured` only where the recording supports it | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0335` | An overridden or incoherent run is badged in the window | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0336` | A missing plug-in degrades, naming what was expected | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0337` | Every action is reachable without knowing where it lives | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0338` | A workspace is a mode of one window, not a second application | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0339` | A scripting console is bound to the live session | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0340` | The interface surface is closed, published and counted | `VIZ:SW-nnnn` — not yet allocated |
 
 ---
 

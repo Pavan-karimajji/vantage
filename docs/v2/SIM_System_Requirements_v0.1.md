@@ -539,7 +539,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Given a recording and the manifests present, the system shall compute the set of feasible cuts before any run.
 **Accept.** `probe` reports the feasible set; every cut it reports runs, and every cut it excludes is refused at load with a reason.
 **Verify.** T · `SYT-INP-22`   **Trace.** CN-0344; v1 `CR-SIM-21`
-**Built.** ○ not started — 0/3 software requirements done, in `WP-20`, `WP-24`, `WP-26`
+**Built.** ○ not started — 0/2 software requirements done, in `WP-20`, `WP-24`
 
 ---
 
@@ -563,7 +563,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The port model shall be versioned, with adding an optional field a minor change and removing or changing one a major change.
 **Accept.** A configuration pinned to a major version refuses to load against a different major version, naming both.
 **Verify.** T · `SYT-DAT-02`   **Trace.** CN-0069, CN-0260
-**Built.** ○ not started — 0/1 software requirements done, in `WP-26`
+**Built.** ○ not started — 0/1 software requirements done, in `WP-07`
 
 **`SYS-0026`** · `P0` · `R1` — Missing is not zero
 **Shall.** Missing or invalid fields shall be represented explicitly and never silently zero-filled.
@@ -621,13 +621,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A value reconstructed rather than read shall be marked as reconstructed everywhere it is rendered, exported or explained.
 **Accept.** A reconstructed value and a published value of the same port are visually and textually distinguishable without opening the configuration.
 **Verify.** T · `SYT-DAT-11`   **Trace.** CN-0301; v1 `FR-SIM-67`
-**Built.** ○ not started — 0/3 software requirements done, in `WP-17`, `WP-24`, `WP-26`
+**Built.** ○ not started — 0/2 software requirements done, in `WP-17`, `WP-24`
 
 **`SYS-0035`** · `P0` · `R1` — Never estimate what nothing produced
 **Shall.** The system shall not integrate a time-varying signal, filter, or otherwise produce a history-dependent estimate of information no module published.
 **Accept.** No component of the system holds state across ticks for the purpose of producing a port value that no producer emitted. Reconstruction is limited to deterministic transforms of a fixed constant or of an already-emitted value.
 **Verify.** A · `ANL-05` · `INSP-02`   **Trace.** CN-0301
-**Built.** ◐ started — 1/6 software requirements done, in `WP-04`, `WP-08`, `WP-11`, `WP-12`, `WP-25`, `WP-26`
+**Built.** ◐ started — 1/5 software requirements done, in `WP-04`, `WP-08`, `WP-11`, `WP-12`, `WP-25`
 
 **`SYS-0036`** · `P1` · `R1` — Port identity is independent of who produces it
 **Shall.** A component shall be splittable into two without invalidating existing recordings, pipelines, plugins or ingest maps.
@@ -1030,7 +1030,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A broken chain shall be waivable only with an explicit flag *and* a written reason, and a waived run shall be permanently marked incoherent in the run manifest, in every export, and visibly in the player.
 **Accept.** No code path waives without both. The mark survives export, conversion and re-import.
 **Verify.** T · `SYT-STG-12`   **Trace.** CN-0125, CN-0126
-**Built.** ○ not started — 0/3 software requirements done, in `WP-20`, `WP-22`, `WP-26`
+**Built.** ○ not started — 0/2 software requirements done, in `WP-20`, `WP-22`
 
 **`SYS-0093`** · `P1` · `R1` — Waivers can be forbidden by policy
 **Shall.** A policy setting shall be able to forbid waivers entirely.
@@ -1042,7 +1042,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** An orphan simulation shall warn exactly once, naming every affected module, and those modules shall be badged *computed, not consumed* wherever rendered. It shall never block.
 **Accept.** A ten-tick run with an orphan produces one warning, not ten, and the badge appears in the player and in the headless summary.
 **Verify.** T · `SYT-STG-14`   **Trace.** CN-0324
-**Built.** ○ not started — 0/2 software requirements done, in `WP-20`, `WP-26`
+**Built.** ○ not started — 0/1 software requirements done, in `WP-20`
 
 **`SYS-0095`** · `P1` · `R1` — Closing the gap is the default, forcing it open is allowed
 **Shall.** Setting a stage to `simulate` shall by default flip intervening stages to `simulate`, undoably; forcing the gap open shall remain possible and shall badge the orphaned stage.
@@ -1086,7 +1086,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Every override shall appear in the run manifest, and an overridden port shall be badged in the player and tagged `overridden` on its topic.
 **Accept.** An override invisible in the manifest is not producible by any path.
 **Verify.** T · `SYT-STG-21`   **Trace.** CN-0131, CN-0299
-**Built.** ◐ started — 1/6 software requirements done, in `WP-05`, `WP-11`, `WP-22`, `WP-26`
+**Built.** ◐ started — 1/5 software requirements done, in `WP-05`, `WP-11`, `WP-22`
 
 **`SYS-0102`** · `P1` · `R1` — An override contradicting coherence is a waiver
 **Shall.** An override that contradicts the coherence classification shall be treated exactly like a waiver.
@@ -1198,7 +1198,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Bulk arrays — point clouds, images, occupancy grids — shall be referenced into the recording by topic and time, never inlined into a scene or a tick structure.
 **Accept.** A scene containing an image reference is smaller than a declared per-scene budget; exceeding the budget is an error naming the layer.
 **Verify.** T · `SYT-OUT-08`   **Trace.** CN-0318; v1 `NR-SIM-43`
-**Built.** ◐ started — 1/4 software requirements done, in `WP-07`, `WP-09`, `WP-25`, `WP-26`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-07`, `WP-09`, `WP-25`
 
 **`SYS-0119`** · `P1` · `R1` — A merged output loads alone
 **Shall.** An output consisting of the original recording passed through with simulated ports overwriting their own channels shall be loadable on its own, with no other input.
@@ -1266,7 +1266,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The player shall be a separate process and shall never read engine memory directly.
 **Accept.** No view holds a pointer into engine memory. The engine builds and runs with no GUI toolkit present.
 **Verify.** A · `ANL-17` · T · `SYT-PLR-01`   **Trace.** CN-0049, CN-0296(boundary)
-**Built.** ○ not started — 0/2 software requirements done, in `WP-26`, `WP-27`
+**Built.** ○ not started — 0/1 software requirements done, in `WP-27`
 
 **`SYS-0129`** · `P1` · `R1` — Attach and detach without stopping
 **Shall.** The player shall attach to, detach from and re-attach to a running engine without stopping the run.
@@ -1284,27 +1284,25 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The player shall render a session and shall never talk to a library, a world model or a file format.
 **Accept.** No player source file names a codec, a world model or a component library. Visualization is identical across every source of data.
 **Verify.** A · `ANL-18`   **Trace.** CN-0336, CN-0033; v1 `NR-SIM-1`
-**Built.** ○ not started — 0/4 software requirements done, in `WP-25`, `WP-26`, `WP-27`
+**Built.** ○ not started — 0/2 software requirements done, in `WP-25`, `WP-27`
 
-**`SYS-0132`** · `P0` · `R1` — The player knows no module
-**Shall.** The player shall have no knowledge of any specific module; all module-specific rendering shall come from visualization plugins.
-**Accept.** The player's source contains no component name and no function name. A grep is the enforcement, re-run every build, together with a test proving the grep fails on a planted violation.
-**Verify.** A · `ANL-19` · T · `SYT-PLR-03`   **Trace.** CN-0158, CN-0283; v1 `CR-SIM-1`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-26`
+Superseded (`SM-01`, 2026-08-20 — clean subset of §11.1: cited only by
+`SI-18`/`21` items that already themselves supersede, so retiring these
+three orphans nothing): `SYS-0132`, `SYS-0133`, `SYS-0134`. Recorded per
+`R-REQ-2` rather than deleted silently — a dangling trace link must resolve
+to an explanation, never to nothing.
 
-**`SYS-0133`** · `P0` · `R1` — Executing and viewing are separated
-**Shall.** Behind the furthest computed tick, the session shall be immutable data: seek, scrub, step back and re-render shall never re-execute a module.
-**Accept.** Stepping backwards produces zero module invocations, measured by the cycle trace.
-**Verify.** T · `SYT-PLR-04`   **Trace.** CN-0335, CN-0169(retired→CN-0335)
-**Built.** ○ not started — 0/2 software requirements done, in `WP-25`, `WP-26`
+| Retired | Was | Replaced by |
+|---|---|---|
+| `SYS-0132` | The player knows no module | `VIZ:SYS-nnnn` — not yet allocated |
+| `SYS-0133` | Executing and viewing are separated | `VIZ:SYS-nnnn` — not yet allocated |
+| `SYS-0134` | Stepping backwards never fabricates state | `VIZ:SYS-nnnn` — not yet allocated |
 
-**`SYS-0134`** · `P0` · `R1` — Stepping backwards never fabricates state
-**Shall.** Resuming forward from behind the furthest computed tick shall offer exactly two named choices — skip to the head, or recompute from the start — and shall never silently continue from a rewound position or interpolate a state no module produced.
-**Accept.** Neither silent continuation nor interpolation is reachable by any input sequence.
-**Verify.** T · `SYT-PLR-05`   **Trace.** CN-0335; v1 `FR-SIM-17`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-25`
+**`SYS-0128`..`SYS-0131` — design call resolved 2026-08-20: kept, not superseded, not amended.** Read carefully, none of the four ever decomposed into a Python-player-specific `SW` in the first place — every current citer is `SI-25` (`SW-0350`, `SW-0352`, `SW-0353`, `SW-0354`) or `SI-01` (`SW-0419`), both of which stay (`SI-25` splits by end under `SM-06`, `SI-01` is core `io`). Re-reading each Accept clause confirms why: `SYS-0128`'s own Accept is *"the engine builds and runs with no GUI toolkit present"* — an **engine**-side obligation, not a player one; `SYS-0129`/`SYS-0131` are transport-boundary claims (non-perturbing attach, no format knowledge crossing the wire) that hold regardless of what language renders the pixels on the other end of that boundary; `SYS-0130` is `io`'s Conan-linkability claim, already the parent `SW-0419` cites. Their placement under "§11 Player and visualization" was **organisational, not architectural** — these four describe the engine/transport isolation boundary the player sits behind, which is exactly as true once the player is C++ as it was when it was Python. Nothing here moves to `viz`.
 
 ### 11.2 Transport
+
+**Amended 2026-08-20 — `SYS-0135`..`SYS-0140` (playback transport: play/pause/step/speed/sections/markers) kept, not superseded, per `SM-01`'s design call.** Unlike §11.1/§11.4's clusters, these six are not entangled in a way that needed resolving *now* — every current decomposer is either `SI-18` (`session`, `UT-SES-06`..`09`/`12`) or a staying item (`SI-03`'s `SW-0078`, `SI-15`'s `SW-0235`). `SI-18` is `D-3`'s Route B: it moves to `viz` as C++, but that move is `SM-04`'s own unstarted work package (prereq `VZ-12`), not this one's — superseding these six now, ahead of `SI-18`'s own supersession, would orphan `SW-0078`/`SW-0235` exactly the way §11.1/§11.4's premature supersession would have orphaned their `SI-25`/`SI-14`/`SI-17` citers. **The correct sequencing is: `SM-04` supersedes `SI-18`'s `SW` first; these six `SYS` are revisited in that same pass**, since only then will it be visible whether they split the way §11.4's did (headless-mechanism-stays / GUI-half-moves) or move wholesale. Recorded here rather than left silent so a future session does not re-derive it.
 
 **`SYS-0135`** · `P0` · `R1` — Transport controls
 **Shall.** The player shall provide play, pause, step forward, step backward, jump to time, and jump to marker.
@@ -1342,93 +1340,59 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Verify.** D · `SYT-PLR-11`   **Trace.** CN-0167, CN-0168
 **Built.** ○ not started — 0/1 software requirements done, in `WP-25`
 
-### 11.3 Layers, layout and drawing
+### 11.3 Layers, layout and drawing — superseded (`SM-01`, 2026-08-20, checked clean in full)
 
-**`SYS-0141`** · `P0` · `R1` — Layout is a file
-**Shall.** Layout — tabs, splits, views, and which draw layers are visible in each — shall be defined in a file, versioned in the project repository.
-**Accept.** Two engineers get the identical arrangement from the same file. Interactive changes are savable back to a layout file.
-**Verify.** T · `SYT-PLR-12`   **Trace.** CN-0159, CN-0162, CN-0163
-**Built.** ○ not started — 0/1 software requirements done, in `WP-26`
+`SYS-0141`..`SYS-0150` moved to `viz` with the rest of §11 (the player).
+Every citer traces back to `SI-19`/`20`/`21`, all already in the supersede
+set — no cross-reference problem. Recorded per `R-REQ-2` rather than
+deleted silently.
 
-**`SYS-0142`** · `P0` · `R1` — Layers are registered and switched by name
-**Shall.** A visualization plugin shall register named draw layers, and the player shall switch them on and off without knowing what they draw.
-**Accept.** Toggling a layer requires no player code and re-renders without re-executing any module.
-**Verify.** T · `SYT-PLR-13`   **Trace.** CN-0160, CN-0161
-**Built.** ○ not started — 0/3 software requirements done, in `WP-26`
-
-**`SYS-0143`** · `P1` · `R1` — Layer names are namespaced per plugin
-**Shall.** A visualization plugin shall claim a declared namespace for its draw layers, and layer names shall be fully qualified within it.
-**Accept.** Two plugins registering the same short layer name coexist without collision and without a central registry. A plugin registering outside its declared namespace is refused at load, naming both.
-**Verify.** T · `SYT-PLR-14`   **Trace.** CN-0160, CN-0256; **evidence** §2.5
-**Built.** ○ not started — 0/1 software requirements done, in `WP-26`
-
-**`SYS-0144`** · `P1` · `R1` — Per-layer default visibility, and per-view parameters
-**Shall.** The layout file shall carry, per layer, its default visibility, and shall carry typed parameters scoped either globally or to one view-and-layer pair.
-**Accept.** A layer's default-off state holds on first open; a parameter set for one view does not affect the same layer in another view.
-**Verify.** T · `SYT-PLR-15`   **Trace.** CN-0161; **evidence** §2.5
-**Built.** ○ not started — 0/2 software requirements done, in `WP-26`
-
-**`SYS-0145`** · `P1` · `R1` — A component ships a default layout
-**Shall.** A component shall ship a default layout, and the user's own layout shall win, with reset returning to the default.
-**Accept.** Opening a recording with no user layout gives a populated arrangement, not an empty grid.
-**Verify.** T · `SYT-PLR-16`   **Trace.** CN-0337; v1 `FR-SIM-15`
-**Built.** ○ not started — 0/2 software requirements done, in `WP-26`
-
-**`SYS-0146`** · `P0` · `R1` — Geometry in metres, style by token
-**Shall.** A drawn primitive shall carry geometry in metres in a named frame and a semantic style token, never a colour and never a pixel.
-**Accept.** A layer provider importing a renderer, a plotting library or a GUI toolkit fails a static check. Changing the token table changes every rendered surface consistently.
-**Verify.** A · `ANL-20` · T · `SYT-PLR-17`   **Trace.** CN-0338; v1 `NR-SIM-2`
-**Built.** ○ not started — 0/7 software requirements done, in `WP-26`
-
-**`SYS-0147`** · `P1` · `R1` — One picture, many media
-**Shall.** A figure in a specification and a live run shall be the same picture, produced from the same geometry and the same token table.
-**Accept.** A document figure regenerated from a recording is pixel-comparable to the live rendering within a declared tolerance.
-**Verify.** T · `SYT-PLR-18`   **Trace.** CN-0339; v1 `NR-SIM-2`
-**Built.** ○ not started — 0/2 software requirements done, in `WP-26`
-
-**`SYS-0148`** · `P1` · `R1` — Layers stay pure functions
-**Shall.** A layer shall react to interaction through state passed into it, never through an event callback.
-**Accept.** No layer registers a callback. Rendering a layer twice with the same inputs produces identical output, and layers remain cacheable and unit-testable in isolation.
-**Verify.** A · `ANL-21` · T · `SYT-PLR-19`   **Trace.** CN-0340; v1 `FR-SIM-16`
-**Built.** ○ not started — 0/2 software requirements done, in `WP-26`
-
-**`SYS-0149`** · `P0` · `R1` — A plugin binds ports through the manifest
-**Shall.** A visualization plugin shall name the ports it needs relative to its own component and shall never spell a raw port address; resolution to the run's actual address shall happen once, at load.
-**Accept.** A reference resolving against no manifest is an authoring error naming the plugin, the requested port and every port the manifest declares — never an empty layer, because an empty layer on screen is indistinguishable from "the algorithm did not fire".
-**Verify.** T · `SYT-PLR-20`   **Trace.** CN-0369, CN-0033; v1 `CR-SIM-2`
-**Built.** ○ not started — 0/2 software requirements done, in `WP-26`
-
-**`SYS-0150`** · `P0` · `R1` — The plugin never reads the algorithm's memory
-**Shall.** A visualization plugin shall subscribe to data by name and shall not read the algorithm library's memory.
-**Accept.** The same visualization renders correctly whether the data was simulated or replayed, with no branch on origin.
-**Verify.** T · `SYT-PLR-21`   **Trace.** CN-0032, CN-0033
-**Built.** ○ not started — 0/1 software requirements done, in `WP-26`
+| Retired | Was | Replaced by |
+|---|---|---|
+| `SYS-0141` | Layout is a file | `VIZ:SYS-nnnn` — not yet allocated |
+| `SYS-0142` | Layers are registered and switched by name | `VIZ:SYS-nnnn` — not yet allocated |
+| `SYS-0143` | Layer names are namespaced per plugin | `VIZ:SYS-nnnn` — not yet allocated |
+| `SYS-0144` | Per-layer default visibility, and per-view parameters | `VIZ:SYS-nnnn` — not yet allocated |
+| `SYS-0145` | A component ships a default layout | `VIZ:SYS-nnnn` — not yet allocated |
+| `SYS-0146` | Geometry in metres, style by token | `VIZ:SYS-nnnn` — not yet allocated |
+| `SYS-0147` | One picture, many media | `VIZ:SYS-nnnn` — not yet allocated |
+| `SYS-0148` | Layers stay pure functions | `VIZ:SYS-nnnn` — not yet allocated |
+| `SYS-0149` | A plugin binds ports through the manifest | `VIZ:SYS-nnnn` — not yet allocated |
+| `SYS-0150` | The plugin never reads the algorithm's memory | `VIZ:SYS-nnnn` — not yet allocated |
 
 ### 11.4 Panels, snapshots and evidence
 
-**`SYS-0151`** · `P1` · `R1` — Plots are panels over the same address space
-**Shall.** Plots shall be first-class panels addressing the same port address space as every other surface, not a separate mechanism.
-**Accept.** A port plottable in a panel is addressable identically in an export, an override and an evidence query.
-**Verify.** T · `SYT-PLR-22`   **Trace.** CN-0342; v1 `FR-SIM-14`, `NR-SIM-8`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-26`
+Superseded (`SM-01`, 2026-08-20 — clean subset of §11.4: `SYS-0151` is
+cited only by `SI-21`, already in the supersede set): `SYS-0151`. Recorded
+per `R-REQ-2` rather than deleted silently.
+
+| Retired | Was | Replaced by |
+|---|---|---|
+| `SYS-0151` | Plots are panels over the same address space | `VIZ:SYS-nnnn` — not yet allocated |
+
+**`SYS-0152`..`SYS-0154` — design call resolved 2026-08-20: `AMEND`, not `supersede`.** Unlike §11.1's four, these three genuinely **do** decompose in part into what just moved — but each also has a live, staying `SI-14`/`SI-17` decomposer that is not the whole requirement, which is what superseding-as-written would have orphaned. Each is a shared principle spanning both modules, not a player-only claim:
+- **`SYS-0152`** — the atomic-write-both-or-neither pattern. The frame-plus-sidecar instance (`SW-0321`) moved to `viz` (`VIZ:SW-nnnn`, this session's `SI-20` disposition). `SW-0227` (`SI-14`, stays) generalises the same pattern to the run manifest and remains this `SYS`'s live decomposer — `SW-0227`'s own `Now.` note already says as much ("the atomic both-or-neither pattern exists in `render/capture.py` and generalises directly").
+- **`SYS-0153`**/**`SYS-0154`** — one evidence producer (`SI-17`'s `core/evidence.py`, stays), reached today by the command line and the script (`SW-0273`/`0274`/`0275`/`0276`/`0403`, all `SI-17`, all stay — `SYT-DIA-09` already exercises the CLI-and-script half headlessly) and, until this session, also by a graphical panel and on-screen picking (`SW-0332`, `SW-0333`, `SI-21` → `VIZ:SW-nnnn`, this session's disposition). The producer and its headless formatters are sim's and are unaffected; the *graphical* formatter and the *on-screen* half of "anything on screen … in one action" are `viz`'s.
+
+None of the three is superseded — their `Shall`/`Accept` text is unchanged and stays falsifiable exactly as written, verified sim-side by `ANL-22`/`SYT-DIA-09` today and cross-repo by `SYT-PLR-23`..`25` once `viz`'s player exists to complete the other formatter. `SYT-PLR-23`..`25` are **not** removed for the same reason `SM-01`'s own supersessions never touch a still-applicable cross-repo claim — see the System Test Spec, which carries the identical note beside those three rows.
 
 **`SYS-0152`** · `P1` · `R1` — Snapshots are atomic and reproducible
 **Shall.** A snapshot shall be a single frame plus a provenance sidecar, written atomically — both or neither — and two snapshots of the same cycle shall be byte-identical.
 **Accept.** Interrupting a snapshot write leaves neither file. Two snapshots of one cycle hash equal.
 **Verify.** T · `SYT-PLR-23`   **Trace.** CN-0341; v1 `FR-SIM-13`
-**Built.** ○ not started — 0/2 software requirements done, in `WP-22`, `WP-26`
+**Built.** ○ not started — 0/1 software requirements done, in `WP-22`
 
 **`SYS-0153`** · `P0` · `R1` — From anything on screen to the bytes that produced it
 **Shall.** For any primitive, layer or plotted sample, the system shall answer in one action: which port, topic, tick, origin tag, source timestamp, configuration bundle and module build produced it, and whether the value was published by a module or reconstructed by a layer.
 **Accept.** Every field is present or reads *unknown*; no field carries a plausible-looking default.
 **Verify.** T · `SYT-PLR-24`   **Trace.** CN-0343, CN-0301; v1 `FR-SIM-67`
-**Built.** ○ not started — 0/4 software requirements done, in `WP-24`, `WP-26`
+**Built.** ○ not started — 0/3 software requirements done, in `WP-24`
 
 **`SYS-0154`** · `P0` · `R1` — One producer, two formatters
 **Shall.** The graphical evidence panel and the command-line evidence query shall be rendered from one producer, so the two cannot disagree.
 **Accept.** For a sampled set of addresses, the two outputs are field-for-field identical. There is no second code path capable of producing an evidence answer.
 **Verify.** T · `SYT-PLR-25` · `ANL-22`   **Trace.** CN-0343; v1 `FR-SIM-67`
-**Built.** ○ not started — 0/3 software requirements done, in `WP-24`, `WP-26`
+**Built.** ○ not started — 0/2 software requirements done, in `WP-24`
 
 **`SYS-0155`** · `P1` · `R1` — The chain stops at the module boundary
 **Shall.** The evidence chain shall state where a value came from and shall not attempt to state why an algorithm produced it.
@@ -1485,7 +1449,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The launcher shall show, per recording, which modules could be set to `measured` given what that file actually carries.
 **Accept.** The set shown equals the set `probe` computes headlessly.
 **Verify.** T · `SYT-CFG-06`   **Trace.** CN-0344; v1 `CR-SIM-21`
-**Built.** ○ not started — 0/3 software requirements done, in `WP-20`, `WP-26`, `WP-28`
+**Built.** ○ not started — 0/2 software requirements done, in `WP-20`, `WP-28`
 
 ---
 
@@ -1626,7 +1590,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** A batch shall be a set of runs from one run configuration plus a list of recordings, and optionally parameter sets.
 **Accept.** The developer's own run configuration is the batch's input unchanged, with only a scenario list wrapped around it — there is no second configuration format for batch.
 **Verify.** T · `SYT-BAT-01`   **Trace.** CN-0185; v1 `FR-SIM-46`, `NR-SIM-21`
-**Built.** ○ not started — 0/4 software requirements done, in `WP-23`, `WP-26`, `WP-28`
+**Built.** ○ not started — 0/3 software requirements done, in `WP-23`, `WP-28`
 
 **`SYS-0182`** · `P0` · `R1` — One process per run
 **Shall.** Runs shall execute in parallel as separate processes, never as threads.
@@ -1716,13 +1680,13 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The engine shall run with no display, no GUI libraries and no interactive prompts.
 **Accept.** A run completes in a container with no GUI toolkit installed and no display variable set.
 **Verify.** T · `SYT-BAT-15`   **Trace.** CN-0200, CN-0041
-**Built.** ○ not started — 0/4 software requirements done, in `WP-14`, `WP-26`
+**Built.** ○ not started — 0/2 software requirements done, in `WP-14`
 
 **`SYS-0196`** · `P0` · `R1` — One binary for CI and desktop
 **Shall.** The CI path shall use the same engine binary as the desktop path; no separate CI build shall exist.
 **Accept.** The binary hash is identical in both paths.
 **Verify.** A · `ANL-27`   **Trace.** CN-0201
-**Built.** ○ not started — 0/3 software requirements done, in `WP-14`, `WP-23`, `WP-26`
+**Built.** ○ not started — 0/2 software requirements done, in `WP-14`, `WP-23`
 
 **`SYS-0197`** · `P0` · `R1` — Artifacts are self-contained
 **Shall.** A downloaded artifact directory shall open in the player with no access to the originating machine.
@@ -1746,7 +1710,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** Every capability shall be reachable from a plain script in a few lines, with no command line and no window.
 **Accept.** For a stated list of capabilities, each is exercised from a script of no more than a declared line count. No capability exists that is reachable only through the GUI.
 **Verify.** T · `SYT-BAT-18` · `INSP-08`   **Trace.** CN-0350, CN-0213; v1 `FR-SIM-46`
-**Built.** ○ not started — 0/4 software requirements done, in `WP-23`, `WP-26`, `WP-29`
+**Built.** ○ not started — 0/3 software requirements done, in `WP-23`, `WP-29`
 
 **`SYS-0201`** · `P0` · `R1` — CI exists from the start of the build order
 **Shall.** Automated execution of the test suite shall be established at the start of the build order, not at the end.
@@ -2041,7 +2005,7 @@ mechanism.
 **Shall.** Player frame time shall have a stated budget at a stated tick count and layer count.
 **Accept.** Measured on §18.0's reference configuration and reported; exceeding it is a regression. No absolute was supplied, so the budget is **seeded from the first measurement** and the requirement is failable from the second run onward; the seeding run is marked as such in the budget file and its consumed headroom prints on pass.
 **Verify.** A · `ANL-35`   **Trace.** CN-0357; v1 `NR-SIM-5`
-**Built.** ○ not started — 0/2 software requirements done, in `WP-25`, `WP-26`
+**Built.** ○ not started — 0/1 software requirements done, in `WP-25`
 
 **`SYS-0236`** · `P1` · `R1` — Parallelism across runs only
 **Shall.** Parallelism shall be across independent runs, never inside a run.
@@ -2156,19 +2120,19 @@ mechanism.
 **Shall.** The system shall expose exactly four public extension points — Reader, Exporter, Visualization, Module — each with a versioned interface and a conformance test kit, discovered by registration and never by editing the core.
 **Accept.** A fifth extension point cannot be added without a requirement change. Each of the four is exercised by a template plugin shipped with the package that passes its own conformance kit.
 **Verify.** T · `SYT-CON-01` · `INSP-09`   **Trace.** CN-0255, CN-0256, CN-0257, CN-0258, CN-0044
-**Built.** ○ not started — 0/3 software requirements done, in `WP-26`, `WP-29`
+**Built.** ○ not started — 0/2 software requirements done, in `WP-29`
 
 **`SYS-0253`** · `P0` · `R1` — A recording never executes code
 **Shall.** A recording shall carry a plugin's identity and hash, never its implementation.
 **Accept.** Opening a recording produced elsewhere executes no code from that recording. A missing plugin degrades to *these layers unavailable*, naming the hashes expected.
 **Verify.** T · `SYT-CON-02`   **Trace.** CN-0367; v1 `NR-SIM-44`
-**Built.** ◐ started — 1/3 software requirements done, in `WP-06`, `WP-21`, `WP-26`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-06`, `WP-21`
 
 **`SYS-0254`** · `P0` · `R1` — The plugin API carries its own version, in a file
 **Shall.** The plugin API shall carry its own version range, independent of the recording format and the module ABI, declared in a file the player reads *before* importing the plugin.
 **Accept.** An incompatible plugin is refused, not half-loaded. The decision is made without importing the plugin's code.
 **Verify.** T · `SYT-CON-03`   **Trace.** CN-0368; v1 `NR-SIM-44`
-**Built.** ○ not started — 0/5 software requirements done, in `WP-21`, `WP-26`, `WP-29`, `WP-31`
+**Built.** ○ not started — 0/3 software requirements done, in `WP-21`, `WP-29`, `WP-31`
 
 **`SYS-0255`** · `P0` · `R1` — Authoring home and deployed form are different questions
 **Shall.** A component's plugins shall be authored in the component's own repository and *deployed* beside its library by the build, with the same hash discipline as the configuration bundle; the player shall discover plugins from a path of library directories.
@@ -2242,7 +2206,7 @@ mechanism.
 **Shall.** The documentation set shall be sized so a new maintainer becomes productive without reading all of it, and the set's own size shall be tracked.
 **Accept.** A named onboarding path exists and is completed by an engineer who did not build the tool, unaided, within a declared budget, in a recorded demonstration. Documentation size per release is measured and reported.
 **Verify.** D · `SYT-NFR-22` · `ANL-40`   **Trace.** CN-0371, CN-0375; v1 `NR-SIM-45`
-**Built.** ○ not started — 0/2 software requirements done, in `WP-26`, `WP-31`
+**Built.** ○ not started — 0/1 software requirements done, in `WP-31`
 
 **`SYS-0266`** · `P0` · `R1` — What a component owes is a checklist, proven by a second component
 **Shall.** What a component must provide to the framework shall be a published checklist, and a second component shall prove the checklist sufficient by completing it unaided.
@@ -2260,7 +2224,7 @@ mechanism.
 **Shall.** The user-facing surface — CLI verbs, configuration file kinds, panel types, extension points — shall be a closed, published, countable set, and growth shall require a requirement.
 **Accept.** Each set's membership is enumerable and its size is reported per release. A new member added without a requirement fails a static check.
 **Verify.** A · `ANL-42`   **Trace.** CN-0286, CN-0275; v1 `FR-SIM-47`
-**Built.** ○ not started — 0/3 software requirements done, in `WP-23`, `WP-26`
+**Built.** ○ not started — 0/1 software requirements done, in `WP-23`
 
 ---
 
@@ -2297,12 +2261,13 @@ Constraints are obligations on *how* the system is built, imposed because a corr
 **Accept.** Two transports are implemented against one unchanged interface. No view is permitted to read an engine pointer directly under any circumstance.
 **Verify.** T · `SYT-CON-10` · `ANL-47`   **Trace.** CN-0050, CN-0051, CN-0052
 **Built.** ○ not started — 0/4 software requirements done, in `WP-27`
+**Amended 2026-08-20** — kept, not superseded (`SM-01`). The `Shall`/`Accept` text is unaffected by `D-5`: it states the interface property, not who implements which side. What `D-5` settles is where each side's *code* lives once split — contract → `modules/interfaces` (`R-IFACE-1`), engine-side implementation → this module's own `simcore/transport`, client-side implementation → `modules/viz` — which is `SM-06`'s execution, prereq `SM-01`, not yet run. `SW-0349`..`SW-0356` (`SI-25`) stay `amend`, matching `SM-01`'s own table.
 
 **`SYS-0274`** · `P0` · `R1` — The framework names no function and no component
 **Shall.** The framework's own shipped source shall contain no function name and no component name.
 **Accept.** An automated check over the framework's source directories passes on every build, and a companion test proves the check itself fails on a planted violation. The check's scope is the shipped framework source; test fixtures that legitimately name a component to prove parity are outside it, by written exception.
 **Verify.** A · `ANL-48` · T · `SYT-CON-11`   **Trace.** CN-0283, CN-0028; v1 `CR-SIM-1`
-**Built.** ◐ started — 2/4 software requirements done, in `WP-01`, `WP-26`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0275`** · `P0` · `R1` — Closed vocabularies stay closed
 **Shall.** Every closed set in this specification — override verbs, fault verbs, address grammar, origin tags, sampling policies, record policies, error classes, log events, primitive kinds, exit codes, extension points, missing-data policies, reset modes, reset timings, read-error policies, step granularities, codec capabilities, determinism axes — shall be enumerable from a published schema and shall not grow without a requirement change.

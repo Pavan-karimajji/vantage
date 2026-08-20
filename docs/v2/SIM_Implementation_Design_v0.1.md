@@ -297,9 +297,9 @@ modules/sim/
       prep/                     [N]  SI-16
       diagnostics/              [N]  SI-17
       session/                  [N]  SI-18
-      scene/                         SI-19  (stays, strongest area — 16 of 17 DONE)
-      render/                        SI-20
-      player/                   [N]  SI-21  (absorbs view/ and app/)
+                                     NOTE: scene/, render/, player/ (SI-19/20/21)
+                                     leave the tree entirely -- superseded to
+                                     modules/viz (SM-01, 2026-08-20)
       launcher/                 [N]  SI-22
       pyapi/                    [N]  SI-23
       plugins/                  [N]  SI-24
@@ -374,11 +374,11 @@ One mechanical pass, one commit, no behaviour change. Listed in full because a r
 | `model/project.py` (337) | `config/project.py` | `SI-10` |
 | `model/plugins.py` (176) | `resolve/plugins.py` | `SI-13` |
 | `model/ego.py`, `model/objects.py`, `model/sensors.py`, `model/cameras.py` | `config/vehicle.py` — configuration-derived geometry, not a model layer | `SI-10` |
-| `view/**` (11 modules, 1471) | `player/panels/` | `SI-21` |
-| `app/**` (10 modules, 1140) | `player/shell/` | `SI-21` |
-| `render/viewer.py` (1990) | `player/shell/qt_window.py` — the toolkit stays in one module | `SI-21` |
-| `render/{bev,theme,clip,plots,timeline,capture,image_view,palette_check,foxglove}.py` | `render/` unchanged | `SI-20` |
-| `scene/**` | `scene/` unchanged | `SI-19` |
+| `view/**` (11 modules, 1471) | superseded — `modules/viz` (`SM-01`, 2026-08-20) | `SI-21` |
+| `app/**` (10 modules, 1140) | superseded — `modules/viz` (`SM-01`, 2026-08-20) | `SI-21` |
+| `render/viewer.py` (1990) | superseded — `modules/viz` (`SM-01`, 2026-08-20) | `SI-21` |
+| `render/{bev,theme,clip,plots,timeline,capture,image_view,palette_check,foxglove}.py` | superseded — `modules/viz` (`SM-01`, 2026-08-20) | `SI-20` |
+| `scene/**` | superseded — `modules/viz` (`SM-01`, 2026-08-20) | `SI-19` |
 | `check/**` (1040) | `contrib/check/` — out of the package (`DD-08`) | — |
 | `sources/carla/**` (1080) | **deleted** (`DD-12`) | — |
 | `sources/base.py` (70) | **deleted** — no live source remains to abstract (`DD-12`) | — |
@@ -386,7 +386,7 @@ One mechanical pass, one commit, no behaviour change. Listed in full because a r
 | `sources/synthetic.py` (93) | `tests/fixtures/make_synthetic_mcap.py` — a fixture, not a source (`DD-12`) | — |
 | `cli/**` | `cli/` unchanged — argument parsing only | `SI-15` |
 
-**`render/viewer.py` is 1990 lines and is the one file this rename does not fix.** It is moved, not split, in the rename pass; `WP-26` splits it, and the split is a requirement (`SW-0326`: panel state separable from rendering, testable with no window) rather than a tidying exercise.
+**`render/viewer.py` is 1990 lines and is the one file this rename does not fix.** It is moved, not split, in the rename pass; the split it needed (panel state separable from rendering, testable with no window) was `WP-26`'s job and moved with it — superseded to `viz` (`SM-01`, 2026-08-20).
 
 ---
 
@@ -794,6 +794,7 @@ src/bus/
 | `IMP-0388` | `SW-0388` | `WP-07` | `NEW` | `src/simcore/bus/catalogue.cpp::PortCatalogue::Resolve` — reads the catalogue named by the spec, version-gated at load. **`OQ-11` must be answered before this is authored** — adopting an existing signal catalogue beats defining one. | `UT-BUS-20` |
 | `IMP-0389` | `SW-0389` | `WP-07` | `KEEP` | `catalogue.cpp::Find` — a `PortDecl` carries no producer field, so splitting a component in two invalidates no recording, pipeline, plug-in or ingest map. Already true in the Python manifest model; recorded so the move does not lose it. | `UT-BUS-21` |
 | `IMP-0390` | `SW-0390` | `WP-07` | `NEW` | `catalogue.cpp` — a project namespace prefix (`<project>::<port>`) resolved after the core catalogue; a project name colliding with a core port is an `Authoring` error naming both. | `UT-BUS-22` |
+| `IMP-0420` | `SW-0420` | `WP-07` | `EXTEND` | `catalogue.cpp::PortCatalogue::Version()` — classifies a catalogue diff against its predecessor (added optional field → minor bump, removed/changed field → major bump) and `Resolve()` refuses a spec pinned to a different major version, naming both. Extends `IMP-0388`'s existing version *identity* with the semantic *rule* `SW-0420` states. | `UT-BUS-23` |
 
 ---
 
@@ -1719,116 +1720,36 @@ class Session:
 
 ---
 
-## 22. `SI-19` — `scene`
+## 22. `SI-19` — `scene` — superseded (`SM-01`, 2026-08-20)
 
-> **Nothing in this item moves and nothing is rewritten.** It is 16 of 17 `DONE`, enforced by `scripts/check_invariants.py` with a planted-violation test. The design requirement for almost every row is *protect it through the migration*.
-
-### 22.1 Skeleton (unchanged, restated so the protection is checkable)
-
-```python
-# adas_sim/scene/          — unchanged paths
-#   types.py         Scene, Layer, Prim; metres, named frames, style tokens
-#   registry.py      @layer_provider discovery by import; self.<port> resolution
-#   frames.py        the declared frame graph
-#   codec.py         Scene (de)serialisation, minor-version-forward tolerant
-#   default_layers.py the framework-owned default set
-```
-
-### 22.2 Design requirements
-
-| `IMP` | Serves | `WP` | Change | Artifact · Design | Test |
-|---|---|---|---|---|---|
-| `IMP-0301` | `SW-0301` | `WP-26` | `KEEP` | `scene/types.py::Prim` — metres, a named frame, a semantic token; no colour is constructible. Unchanged. | `UT-SCN-01` |
-| `IMP-0302` | `SW-0302` | `WP-26` | `KEEP` | `scripts/check_invariants.py` — a provider importing a renderer, `cv2`, `matplotlib` or Qt, or touching disk, fails the build. Unchanged. | `ANL-SW-46`, `UT-SCN-02` |
-| `IMP-0303` | `SW-0303` | `WP-26` | `KEEP` | `ANL-SW-*` — `adas_sim/scene/**` imports nothing from `render`, `player`, `io` or `session`. `D-3` made mechanical by `DD-10`'s rename. | `ANL-SW-47` |
-| `IMP-0304` | `SW-0304` | `WP-26` | `KEEP` | `registry.py::LayerCtx` — cursor, selection and toggles arrive as state, never as a callback, so a layer stays a pure function and remains cacheable. Unchanged. | `ANL-SW-48`, `UT-SCN-03` |
-| `IMP-0305` | `SW-0305` | `WP-26` | `KEEP` | `registry.py::ctx.port` / `requires=` — `self.<port>` resolved against `known_ports`; `source.<port>` exempt as a reserved keyword (`R-SIM-21`, `AR-54`). Unchanged, including the deferred `source.<port>` limitation. | `UT-SCN-04`, `ANL-SW-49` |
-| `IMP-0306` | `SW-0306` | `WP-26` | `KEEP` | `registry.py` — a zero-match `requires=` yields a named placeholder layer badged `unavailable`, never an empty tuple. Unchanged (`AR-53`). | `UT-SCN-05` |
-| `IMP-0307` | `SW-0307` | `WP-26` | `EXTEND` | `registry.py` — a plug-in claims a namespace by declaration and its layers are fully qualified `<plugin>.<layer>`; a collision is an `Authoring` error. Extends today's flat id space (SYS §2.5's finding). | `UT-SCN-06` |
-| `IMP-0308` | `SW-0308` | `WP-26` | `KEEP` | `@layer_provider` discovery by import, no central roster. Unchanged, and it is the same no-roster property `R-VAR-2` gives the build. | `UT-SCN-07` |
-| `IMP-0309` | `SW-0309` | `WP-26` | `KEEP` | `types.py::Layer.__post_init__` — bulk arrays referenced by topic and `log_time_ns` under a per-Scene byte budget, and the error names the layer. Unchanged. | `UT-SCN-08` |
-| `IMP-0310` | `SW-0310` | `WP-26` | `KEEP` | `Prim.derived` per primitive, bound to `Layer.derived` so the two cannot disagree. Unchanged. | `UT-SCN-09` |
-| `IMP-0311` | `SW-0311` | `WP-26` | `KEEP` | A provider integrating a time-varying signal is an algorithm and belongs in a component. `check_invariants.py` covers the import surface; the rule itself is a review line (`R-SIM-7`). Unchanged. | `ANL-SW-50`, `INSP-SW-06` |
-| `IMP-0312` | `SW-0312` | `WP-26` | `KEEP` | `scene/codec.py` — a Scene one minor version ahead loads with unknown fields ignored; one major ahead is refused. Unchanged. | `UT-SCN-10` |
-| `IMP-0313` | `SW-0313` | `WP-26` | `KEEP` | An unknown style token raises; there is no default colour and no fallback. Unchanged, and it is what keeps `SW-0317`'s single colour site true. | `UT-SCN-11` |
-| `IMP-0314` | `SW-0314` | `WP-26` | `KEEP` | `scene/frames.py` — the frame graph is declared and an unknown frame raises. Unchanged. | `UT-SCN-12` |
-| `IMP-0315` | `SW-0315` | `WP-26` | `KEEP` | `scene/default_layers.py` — the framework's own layer set, naming no component (`UT-SCN-13`); `SW-0325`'s `ANL-SW-53` is the grep that keeps it that way. Unchanged. | `UT-SCN-13` |
-| `IMP-0316` | `SW-0316` | `WP-26` | `KEEP` | A component ships a default layout; the user's own layout wins and reset returns to the default. Unchanged. | `UT-SCN-14` |
-| `IMP-0405` | `SW-0405` | `WP-26` | `KEEP` | A plug-in subscribes to bus data by name and never reads module memory, which is why one layer renders both simulated and replayed data. Unchanged, and after `DD-04` the name resolves through `pyapi`, still never through a pointer. | `UT-SCN-15`, `ANL-SW-73` |
+`SI-19` moved to `viz` with the rest of the player/scene toolkit
+(`adas_sim/scene/**`). All 17 design rows this item landed are retired with
+pointers to `VIZ:` (not yet allocated) — the exact identifier pairs are the
+Software Requirements document's own disposition table for this item, not
+repeated here per `R-REQ-1` (a fact stated once). None had gone past
+`KEEP`/`EXTEND` design; no code is deleted by this box (that is `SM-12`).
+Recorded per `R-REQ-2` rather than deleted silently.
 
 ---
 
-## 23. `SI-20` — `render`
+## 23. `SI-20` — `render` — superseded (`SM-01`, 2026-08-20; the trial slice's own row already retired one item here)
 
-### 23.1 Skeleton
-
-```python
-# adas_sim/render/         — paths unchanged
-#   theme.py        the ONE place a colour exists; one token table per medium
-#   palette_check.py contrast/ΔE validation by computation, not by eye
-#   bev.py          the raster surface — toolkit-independent, headless
-#   foxglove.py     the second surface: same Scene, never a second Scene
-#   plots.py timeline.py clip.py capture.py image_view.py
-```
-
-### 23.2 Design requirements
-
-| `IMP` | Serves | `WP` | Change | Artifact · Design | Test |
-|---|---|---|---|---|---|
-| `IMP-0317` | `SW-0317` | `WP-26` | `KEEP` | `render/theme.py` — one token→colour table per medium; `ANL-SW-*` greps every other module for a colour literal. Unchanged. | `ANL-SW-51` |
-| `IMP-0318` | `SW-0318` | `WP-26` | `KEEP` | `render/palette_check.py` — contrast computed, not judged. Unchanged. Concept §21.1's *"keep two themes"* is a scope note; the validator stays because `SW-0318` keeps it. | `UT-RND-01` |
-| `IMP-0319` | `SW-0319` | `WP-26` | `KEEP` | `render/bev.py` imports no toolkit and runs headless; Qt starts in `player/shell/qt_window.py` and never below it. Unchanged, and `WP-26`'s split is what keeps it true once `viewer.py` is broken up. | `UT-RND-02` |
-| `IMP-0320` | `SW-0320` | `WP-26` | `MOVE` | `render/capture.py::figure` — the same `Scene` renders a document figure and a live frame, so a specification picture and a run are the same picture. Ports today's figure path into the documented API. | `UT-RND-03` |
-| `IMP-0321` | `SW-0321` | `WP-26` | `KEEP` | `capture.py::snapshot` — image plus provenance sidecar written atomically, both or neither; two snapshots of one cycle are byte-identical. Unchanged. | `UT-RND-04` |
-| `IMP-0322` | `SW-0322` | `WP-26` | `KEEP` | `render/foxglove.py` translates the **same** `Scene`; entity id is `Layer.id` with no translation table. Unchanged — and this is the *second* surface, so `CN-0091`'s "decide, do not accumulate" means a third needs a requirement first. | `UT-RND-05` |
-| `IMP-0323` | `SW-0323` | `WP-26` | `EXTEND` | `render/bench.py` — a frame-time measurement at a stated tick count and layer count, run in CI, against a budget **seeded from the first measurement** and stored in `conf/budget.yaml` beside its mandatory `why:` and the host it was taken on. **`OQ-14` closed 2026-08-13** with no absolute for this metric, which is why it is seeded rather than supplied. | `ANL-SW-52` |
-<!-- The row that served the now-superseded display-only SW item (SM-01
-     trial) is retired along with it -- see the Software Requirements
-     document's own disposition note for that item. -->
+`SI-20` moved to `viz` with the rest of the player/scene toolkit
+(`adas_sim/render/**`). The 7 remaining design rows this item landed are
+retired with pointers to `VIZ:` (not yet allocated) — the exact identifier
+pairs are the Software Requirements document's own disposition table for
+this item. Recorded per `R-REQ-2` rather than deleted silently.
 
 ---
 
-## 24. `SI-21` — `player`
+## 24. `SI-21` — `player` — superseded (`SM-01`, 2026-08-20)
 
-### 24.1 Skeleton — and the split that is a requirement
-
-```python
-# adas_sim/player/
-#   shell/
-#     qt_window.py     THE only Qt import  (from render/viewer.py, 1990 lines, split)
-#     workspace.py startpage.py palette.py campaign.py version.py
-#   panels/            from view/** — pure state, no toolkit, testable with no window
-#     layers.py timeline.py transport.py inspector.py plots.py viewport.py
-#     hud.py measure.py evidence_panel.py pipeline_panel.py workspace.py
-#     console.py probe.py
-#   layout.py          the layout file: tabs, splits, views, visibility, parameters
-#   params.py          view-scoped typed parameters                     (SW-0329)
-#   listen.py          per-layer input-listening capability             (SW-0330)
-#   surface.py         the published interface surface, closed and counted
-```
-
-**`render/viewer.py` is split, not moved.** `SW-0326` requires panel state separable from rendering and testable with no window; a 1,990-line module that owns the window, the layer tree, the inspector and the draw loop cannot satisfy it. The split is: Qt window and docking stay in `qt_window.py`; every panel's state is already in `view/**` and moves to `panels/`; the draw loop calls `render/bev.py` unchanged.
-
-### 24.2 Design requirements
-
-| `IMP` | Serves | `WP` | Change | Artifact · Design | Test |
-|---|---|---|---|---|---|
-| `IMP-0325` | `SW-0325` | `WP-26` | `KEEP` | `ANL-SW-53` — the `aeb`/`bsd`/`lca`/`acc`/`ldw`/`lka` grep over `src/**`, scoped as `R-SIM-1` fixes it and deliberately excluding `tests/`. Unchanged, and it ships with a planted-violation test (`SW-0370`). | `ANL-SW-53`, `UT-PLR-01` |
-| `IMP-0326` | `SW-0326` | `WP-26` | `KEEP` | `player/panels/**` — pure state, no toolkit import, each unit-tested with no window. Already true of `view/**`; the requirement is that the `viewer.py` split does not undo it. | `UT-PLR-02`, `ANL-SW-54` |
-| `IMP-0327` | `SW-0327` | `WP-26` | `KEEP` | Toggling a layer re-renders from the cached `Scene` and never re-executes the SUT. Already true, and it is what the two-pass session bought. | `UT-PLR-03` |
-| `IMP-0328` | `SW-0328` | `WP-26` | `EXTEND` | `player/layout.py` — read and written through `IMP-0155`'s round-trip, so saving an interactive change produces a minimal diff. Extends today's layout, which is read-only. | `UT-PLR-04` |
-| `IMP-0329` | `SW-0329` | `WP-26` | `EXTEND` | `player/params.py` — typed parameters scoped globally or to one (view, layer) pair, plus per-layer default visibility. Extends today's global-only view state (SYS §2.5's finding). | `UT-PLR-05` |
-| `IMP-0330` | `SW-0330` | `WP-26` | `NEW` | `player/listen.py` — input-listening declared per layer per view, so two layers in one view do not both consume a click. Global input capture is the failure this prevents. | `UT-PLR-06` |
-| `IMP-0331` | `SW-0331` | `WP-26` | `KEEP` | `panels/plots.py` addresses the same port space as every other panel; a plot is a panel, not a second mechanism. Already true. | `UT-PLR-07`, `ANL-SW-55` |
-| `IMP-0332` | `SW-0332` | `WP-26` | `KEEP` | `panels/evidence_panel.py` calls `diagnostics.evidence()` and formats; `sim explain` calls the same function. Structural, not disciplined. Already true. | `UT-PLR-08` |
-| `IMP-0333` | `SW-0333` | `WP-26` | `EXTEND` | `panels/viewport.py` — `Prim.pick_id` → `evidence()` in one action from any prim, layer or plotted sample. Extends today's picking, which reaches the prim but not the evidence record. | `UT-PLR-09` |
-| `IMP-0334` | `SW-0334` | `WP-26` | `KEEP` | `panels/pipeline_panel.py` offers `measured` only where `IMP-0185` says the recording supports it, so an impossible cut is not selectable. Already true. | `UT-PLR-10` |
-| `IMP-0335` | `SW-0335` | `WP-26` | `EXTEND` | `panels/hud.py` — badges for overridden ports, an incoherent run, a missing config bundle and a restamped source. Extends today's HUD, which badges overrides only. | `UT-PLR-11` |
-| `IMP-0336` | `SW-0336` | `WP-26` | `KEEP` | `panels/layers.py` — a missing plug-in bundle degrades to *"these layers unavailable"*, naming the hashes expected. Already true (`R-SIM-20`). | `UT-PLR-12` |
-| `IMP-0337` | `SW-0337` | `WP-26` | `KEEP` | `shell/palette.py` — every action reachable by search without knowing which menu owns it. Already true. | `UT-PLR-13` |
-| `IMP-0338` | `SW-0338` | `WP-26` | `KEEP` | `shell/workspace.py` — Bench and Campaign are modes of one window over one engine and one pipeline schema, never two applications (`R-SIM-16`). Already true; `ANL-SW-41` ties it to `IMP-0238`. | `UT-PLR-14`, `ANL-SW-41` |
-| `IMP-0339` | `SW-0339` | `WP-26` | `KEEP` | `panels/console.py` binds `pyapi` to the live `Session`, so anything scriptable is reachable in the window. Already true. | `UT-PLR-15` |
-| `IMP-0340` | `SW-0340` | `WP-26` | `EXTEND` | `player/surface.py::SURFACE` — the published action/panel/parameter set, counted and compared against the user documentation. Extends today's implicit surface. | `ANL-SW-56` |
+`SI-21` moved to `viz` with the rest of the player/scene toolkit
+(`adas_sim/player/**`, formerly `render/viewer.py` + `view/**` + `app/**`).
+All 16 design rows this item landed are retired with pointers to `VIZ:`
+(not yet allocated) — the exact identifier pairs are the Software
+Requirements document's own disposition table for this item. Recorded per
+`R-REQ-2` rather than deleted silently.
 
 ---
 
@@ -2037,7 +1958,6 @@ Only changes forced by a requirement. A file not listed here is renamed by `DD-1
 | `contracts/binding.py` (332) | resolution separated from application | `IMP-0008` |
 | `core/tick.py::PortValue` | five fields → eight, each value-or-unknown | `IMP-0043` |
 | `core/manifest.py` (491) | gains spec emission and canonical hashing | `IMP-0001`, `IMP-0004` |
-| `render/viewer.py` (1,990) | **split**: Qt shell vs panel state | `IMP-0326` |
 | `io/ingest.py` (260) | gains units, array shape, header binding, family matching, description resolution | `IMP-0188`…`IMP-0198` |
 | `core/batch*.py` (409) | gains the second watchdog, reset policy, read-error policy, shared index | `IMP-0247`, `IMP-0251`…`IMP-0254` |
 
@@ -2094,7 +2014,7 @@ Not open questions of this document's making — five inherited from SwReq §34.
 |---|---|---|---|
 | `IMP-0050` rung 1 | `SW-0050` | `OQ-01` — do the recordings carry cycle marking? | Rung 1 becomes inert rather than wrong. **The ladder's shape is correct either way**, which is why it was built as a ladder |
 | `IMP-0388` | `SW-0388` | `OQ-11` — does a signal catalogue already exist? | A catalogue is authored that may have to be replaced |
-| ~~`IMP-0272`, `IMP-0323`, `IMP-0369`~~ | `SW-0272`, `SW-0323`, `SW-0369` | ~~`OQ-14` — the numbers for per-cycle cost, throughput, frame time~~ | **Closed 2026-08-13.** `IMP-0369` takes supplied numbers (≥ 10.4 recordings/hour per worker, ≤ 5 min 46 s per recording, ≤ 4 GB peak) derived from *1000 recordings overnight on 8 cores and 32 GB*; `IMP-0323` and `IMP-0272` are **seeded** from their first measurement, since no absolute exists for those. All three are failable |
+| ~~`IMP-0272`, `IMP-0369`~~ (a third row, the frame-time budget, retired with `SI-20` — `SM-01`, 2026-08-20) | `SW-0272`, `SW-0369` | ~~`OQ-14` — the numbers for per-cycle cost, throughput, frame time~~ | **Closed 2026-08-13.** `IMP-0369` takes supplied numbers (≥ 10.4 recordings/hour per worker, ≤ 5 min 46 s per recording, ≤ 4 GB peak) derived from *1000 recordings overnight on 8 cores and 32 GB*; `IMP-0272` is **seeded** from its first measurement, since no absolute exists for it. Both remaining rows are failable |
 | ~~`IMP-0348`~~ | `SW-0348` | ~~`OQ-16` — the common configuration changes and their budgets~~ | **Closed 2026-08-13.** The change list was never open — it is in `SW-0348`'s own `Shall`. The gate is now **structural** (the diff touches exactly its declared file set), failable in CI today; the wall clock is recorded as an observation and put to the customer team |
 | ~~requirement style, evidence, document set~~ | all | ~~`OQ-17` — tool qualification or functional-safety constraints~~ | **Closed 2026-08-13: yes**, tool outputs will be cited in a safety argument. The fallback was never exercised — the cost is **addition, not re-styling**: three concept statements (§2.4), three system requirements (SysReq §23a) and `IMP-0415`…`IMP-0417`. Two of the four obligations any confidence scheme asks for were already discharged by `SYS-0114`/`SYS-0123` and are deliberately not restated |
 | `IMP-0381`'s second and third readers, **and `MP-1`'s exit** | `SW-0381`, `SW-0049`, `SW-0050` | **A sample file.** There is no MDF4 and no TDMS in hand (`DD-13`) | MCAP ships; the other two are written the week a sample arrives. **The cost is larger than one requirement:** `F-FOREIGN` is crafted, so it encodes the same assumptions the recovery ladder does and validates the guess rather than the data. `MP-1`'s exit is therefore provisional until `WP-18` re-runs the ladder tests against a real sample. **`OQ-09` answered 2026-08-13: a bench sample is obtainable**, which converts this from an open input to a scheduled one — `R-8` retires when it lands |

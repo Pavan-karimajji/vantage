@@ -96,6 +96,14 @@ KNOWN_UNPARENTED = {"SW-0060", "SW-0196", "SW-0199"}
 # in both directions, so a requirement cannot leave it silently and one that
 # gains a decomposition cannot stay.
 KNOWN_UNDECOMPOSED = {"SYS-0109", "SYS-0257"}
+# SYS-0025 was here 2026-08-20..2026-08-20: SW-0312 (SI-19, superseded to
+# `viz`) was its sole decomposer, found live while executing SM-01's SI-19
+# slice. Closed same day by SW-0420 (SI-02 -- the port catalogue's own item,
+# not the scene's), which states the semantic-versioning rule SYS-0025 asks
+# for and traces to it directly. Left out of the set rather than re-added
+# with a strikethrough, matching KNOWN_UNPARENTED's own convention of no
+# historical entries -- the finding is recorded in SW-0420's own `Now.` note
+# and in VIZ_Sync_Plan_v0.1.md instead.
 
 TEST_ID = re.compile(r"\b(UT-[A-Z]+-\d+|IT-\d+|ANL-SW-\d+|INSP-SW-\d+)\b")
 

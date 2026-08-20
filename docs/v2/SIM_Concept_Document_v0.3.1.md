@@ -350,6 +350,8 @@ flowchart TB
 
 **The one line that must not be crossed:** if any view is allowed to read an engine pointer directly "because it is faster", the split becomes impossible later.
 
+**Amended 2026-08-20 — `CN-0049`..`CN-0053` hold; ownership of the transport now spans three repos (`VIZ_Sync_Plan_v0.1.md` `D-5`, `SM-01`).** Nothing in this section's statements changed — the player is still a separate process, the interface is still fixed with replaceable transports behind it, bulk data still crosses over shared memory. What `D-5` adds is *where each half lives* now that the player itself is `modules/viz`'s: the interface contract moves to `modules/interfaces` (`R-IFACE-1`), the engine-side implementation stays `simcore/transport` here, and the client-side implementation is `modules/viz`'s. `SI-25`'s own software requirements (`SIM_Software_Requirements_v0.1.md` §28) are unaffected by this note — they are `amend`, not `supersede`, in `SM-01`'s own disposition table, and the actual repo split is `SM-06`'s execution, not yet done.
+
 ## 5.4 Data that bypasses the engine
 
 | # | UID | Statement |
@@ -369,7 +371,7 @@ This section exists because the boundary must be unambiguous. A rule that requir
 > **If it runs once per tick or more often, it is C++.**
 > **If it runs once per run, or at human/display speed, it is Python.**
 
-Display rate is not tick rate. A viewer redraws about 30 times a second; the engine ticks 100 times a second and reads thousands of messages in between. That is why the player stays in Python and the loop does not.
+Display rate is not tick rate. A viewer redraws about 30 times a second; the engine ticks 100 times a second and reads thousands of messages in between. That distinction is why the rule below needs a display-rate clause at all, not a reason display-rate code has to be Python — see the amendment note beneath the table.
 
 | # | UID | Statement |
 |---|---|---|
@@ -377,6 +379,8 @@ Display rate is not tick rate. A viewer redraws about 30 times a second; the eng
 | 6.1.2 | CN-0289 | Any code executing once per run, or at user-interaction or display rate, shall be Python. |
 | 6.1.3 | CN-0290 | **Python shall never touch a message payload.** Bulk data crossing into Python is exposed as array views onto engine-owned buffers, never as per-element Python objects. |
 | 6.1.4 | CN-0291 | **No concept shall be implemented in both languages.** Where a rule exists on both sides today, one side is deleted, not maintained. |
+
+**Amended 2026-08-20 — `CN-0288`/`CN-0290` now hold without exception (`VIZ_Sync_Plan_v0.1.md` `D-3`, `SM-01`).** `CN-0289` permits display-rate code to be Python; it does not require it. Until this migration the player was the one long-lived instance of that permission being exercised, and `SI-18` (`session`) sat closest to the tick boundary of anything on the Python side — close enough that keeping it there (`D-3`'s "Route A") would have been a permanent, named exception written into this document. Route B was chosen instead: the player, its scene layer and its session data model all move to `modules/viz` as C++ (`adas-viz-player`), extracted as a component-agnostic toolkit reusable by `df` and later `perception`, not merely to satisfy this rule. The practical effect is the one this section exists to guarantee — **nothing today straddles the language boundary** — and it is a consequence of `viz`'s own reuse argument landing on the same side `CN-0288` would have required anyway, not a case the rule had to be bent to fit. `CN-0289`'s permission remains generally true (the launcher, CLI, orchestration and diagnostics are still Python, all well below tick rate) — only the specific "the player stays in Python" reading is retired, and §6.3's responsibility map below is amended to match.
 
 ## 6.2 The interface between them
 
@@ -405,8 +409,8 @@ Display rate is not tick rate. A viewer redraws about 30 times a second; the eng
 | Run manifest, run id, hashing | **Python** |
 | CLI, batch orchestration, subprocess pool | **Python** |
 | Launcher GUI | **Python** |
-| Player state — viewport, transport, layer tree | **Python** |
-| Scene build and render at display rate | **Python** |
+| Player state — viewport, transport, layer tree | **C++, `modules/viz`** *(amended 2026-08-20 — was Python; `SM-01`/`D-3`)* |
+| Scene build and render at display rate | **C++, `modules/viz`** *(amended 2026-08-20 — was Python; `SM-01`/`D-3`)* |
 | Diagnostics — explain, doctor, probe | **Python** |
 | **— probe pass: called once by Python, executed by C++ (6.2.6) —** | |
 | Recording index — topics, types, bounds, per-port timing rung | **C++, called once** |

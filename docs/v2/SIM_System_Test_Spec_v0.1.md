@@ -99,7 +99,6 @@ number.
 | ~~`ANL-35`~~, ~~`ANL-37`~~, ~~`ANL-40`~~ | **Resolved 2026-08-13** (`OQ-14`): no absolute was supplied for these, so each is **seeded from its first measurement** on the reference configuration and is failable from the second run. A seeded row is not an unsupplied row — it has a number, a reason and printed headroom |
 | ~~`SYT-CFG-18`, `ANL-25`~~ | **Resolved 2026-08-13** (`OQ-16`): the gate is **structural** — each change touches exactly its declared file set — and is failable today. The wall clock is recorded as an observation, not a bound |
 | ~~`SYT-NFR-22`~~ | **Resolved 2026-08-13** with `ANL-40`, same mechanism |
-| `SYT-PLR-18` | The figure/live pixel tolerance |
 | `SYT-OUT-07` | The volume-estimate factor and the campaign budget |
 
 **On seeding, so `⊘` keeps meaning something.** A baseline-seeded budget is
@@ -177,9 +176,6 @@ ships its `S-PLANTED` variant** (`TV-3`), stated once as the universal `.c2`:
 | `ANL-16` | `SYS-0127` | Artifact schemas and the exit-code table | no verdict field, no code encoding a functional verdict / any |
 | `ANL-17` | `SYS-0128` | View sources for engine pointers; engine link map | no view holds one, no GUI toolkit linked / either |
 | `ANL-18` | `SYS-0131` | Player sources for codec, world-model and library names | none / any |
-| `ANL-19` | `SYS-0132` | Player sources for component and function tokens | none / any — **this is `GT-1` at system level** |
-| `ANL-20` | `SYS-0146` | Layer-provider imports | no renderer, plotting library or GUI toolkit / any |
-| `ANL-21` | `SYS-0148` | Layer callback registrations; double-render equality | none, and identical output / any callback, or differing output |
 | `ANL-22` | `SYS-0154` | Code paths capable of producing an evidence answer | exactly one / a second exists |
 | `ANL-24` | `SYS-0165` | Engine for a configuration parser, inference, validation, search-path logic | none present / any |
 | `ANL-25` | `SYS-0175` | Each of the five changes made on a reference project, then the resulting diff; plus lines-of-configuration per project | each diff touches exactly the declared file set, with no rebuild and no source edit, and the metric is tracked / any change touches a file outside its set, needs a rebuild, or the metric is untracked |
@@ -405,30 +401,18 @@ gives the fixture, the steps and the cases.
 
 ### 4.7 `PLR` — player and visualization
 
+`SYT-PLR-01`..`11` (`SYS-0128`..`0140`) and `SYT-PLR-23`..`25` (`SYS-0152`..`0154`) survive `SM-01`'s `SI-19`/`20`/`21` supersession unchanged — their `SYS` are kept/amended, not superseded (design call, 2026-08-20; see `SIM_System_Requirements_v0.1.md` §11.1/§11.4). `SYT-PLR-12`..`22`, which served the superseded `SYS-0141`..`0151`, are gone with them.
+
 | ID | Serves | Fixture | Steps | Cases |
 |---|---|---|---|---|
 | `SYT-PLR-01` | `SYS-0128` | `S-LIBDIR` | Inspect views for engine pointers; build and run the engine with no GUI toolkit present. | `.c1` PASS no view holds one · FAIL any<br>`.c2` PASS the engine builds and runs · FAIL it requires a toolkit |
 | `SYT-PLR-02` | `SYS-0129` | `S-CHAIN4` | Attach, detach and re-attach mid-run; compare against a control run with no player. | `.c1` PASS the run never stops · FAIL it does<br>`.c2` PASS port values unchanged from the control · FAIL the player perturbs the run |
-| `SYT-PLR-03` | `SYS-0132` | `S-PLANTED` | Grep the player's source for component and function tokens. | `.c1` PASS clean, re-run every build · FAIL any hit<br>`.c2` PASS the grep fails on the planted violation · FAIL it passes |
-| `SYT-PLR-04` | `SYS-0133` | `S-CHAIN4` | Behind the head: seek, scrub, step back, re-render. Count module invocations in the cycle trace. | `.c1` PASS zero · FAIL any re-execution |
-| `SYT-PLR-05` | `SYS-0134` | `S-CHAIN4` | Rewind, then attempt to resume forward by every available input sequence. | `.c1` PASS exactly two named choices offered — skip to head, or recompute from the start · FAIL a third path<br>`.c2` PASS neither silent continuation nor interpolation is reachable · FAIL either is |
 | `SYT-PLR-06` | `SYS-0135` | `S-CHAIN4` | Exercise play, pause, step forward, step backward, jump to time, jump to marker. | `.c1` PASS each lands on the exact target tick · FAIL any off-by-one |
 | `SYT-PLR-07` | `SYS-0136` | `S-FOREIGN` | Exercise each of the five step granularities. | `.c1` PASS each lands on its stated boundary · FAIL any<br>`.c2` PASS the cycle granularity lands on a tick whose input set is complete · FAIL a partial cycle |
 | `SYT-PLR-08` | `SYS-0137` | `S-CHAIN4` | Start advance-N; cancel mid-way. | `.c1` PASS the session sits at a well-defined tick, never mid-tick · FAIL a partial tick<br>`.c2` PASS progress and cancel are both available · FAIL either missing |
 | `SYT-PLR-09` | `SYS-0138` | `S-LONG` | Request a speed the machine cannot sustain. | `.c1` PASS the **achieved** speed is displayed · FAIL the requested one is shown |
 | `SYT-PLR-10` | `SYS-0139` | `S-CHAIN4` | Mark a section; replay it; then reproduce headlessly from the saved configuration. | `.c1` PASS boundaries are exact ticks · FAIL approximate<br>`.c2` PASS reproducible headlessly · FAIL GUI-only |
 | `SYT-PLR-11` | `SYS-0140` | `S-DIVERGE` | Open a run carrying markers, a divergence point and a coherence violation. | `.c1` PASS all three appear on the timeline · FAIL any missing<br>`.c2` PASS each is clickable and lands on its tick · FAIL any inert |
-| `SYT-PLR-12` | `SYS-0141` | `S-CFGSET` | Two engineers open the same layout file; then save an interactive change back. | `.c1` PASS identical arrangement · FAIL any difference<br>`.c2` PASS the change saves back to a layout file · FAIL it is lost |
-| `SYT-PLR-13` | `SYS-0142` | `S-CHAIN4` | Toggle a registered layer. | `.c1` PASS no player code required · FAIL the player must know the layer<br>`.c2` PASS re-renders without re-executing any module · FAIL it re-executes |
-| `SYT-PLR-14` | `SYS-0143` | `S-LIBDIR` | Register the same short layer name from two plugins; then register outside a declared namespace. | `.c1` PASS both coexist with no central registry · FAIL a collision<br>`.c2` PASS the out-of-namespace registration is refused, naming both · FAIL accepted |
-| `SYT-PLR-15` | `SYS-0144` | `S-CFGSET` | Set a layer default-off; set a parameter scoped to one view. | `.c1` PASS default-off holds on first open · FAIL it opens visible<br>`.c2` PASS the parameter does not affect the same layer in another view · FAIL it leaks |
-| `SYT-PLR-16` | `SYS-0145` | `S-LIBDIR` | Open a recording with no user layout; then reset after customising. | `.c1` PASS a populated arrangement, not an empty grid · FAIL empty<br>`.c2` PASS the user's layout wins, and reset returns to the default · FAIL either |
-| `SYT-PLR-17` | `SYS-0146` | `S-PLANTED` | Static-check layer-provider imports; change the token table. | `.c1` PASS a provider importing a renderer, plotting library or GUI toolkit fails the check · FAIL it passes<br>`.c2` PASS the token change propagates to every rendered surface consistently · FAIL any surface diverges |
-| `SYT-PLR-18` | `SYS-0147` | `S-CHAIN4` | ⊘ Regenerate a specification figure from a recording; compare against the live rendering. | `.c1` PASS pixel-comparable within the declared tolerance · FAIL outside — **tolerance not supplied** |
-| `SYT-PLR-19` | `SYS-0148` | `S-CHAIN4` | Inspect layers for callbacks; render one twice with identical inputs. | `.c1` PASS no layer registers a callback · FAIL any<br>`.c2` PASS identical output, and the layer is unit-testable in isolation · FAIL differing output |
-| `SYT-PLR-20` | `SYS-0149` | `S-LIBDIR` | Author a plugin naming a port relative to its own component; then one whose reference resolves against no manifest. | `.c1` PASS resolution happens once, at load · FAIL per-tick resolution, or a spelled raw address<br>`.c2` PASS an unresolvable reference is an authoring error naming the plugin, the requested port and every port the manifest declares · FAIL **an empty layer — which on screen is indistinguishable from "the algorithm did not fire"** |
-| `SYT-PLR-21` | `SYS-0150` | `S-CHAIN4` | Render one visualization over simulated data, then over replayed data. | `.c1` PASS identical rendering with no branch on origin · FAIL any branch<br>`.c2` PASS the plugin reads no algorithm-library memory · FAIL it does |
-| `SYT-PLR-22` | `SYS-0151` | `S-CHAIN4` | Address one port in a plot panel, an export, an override and an evidence query. | `.c1` PASS identical addressing in all four · FAIL plots use a separate mechanism |
 | `SYT-PLR-23` | `SYS-0152` | `S-CHAIN4` | Take two snapshots of one cycle; then interrupt a snapshot write. | `.c1` PASS the two hash equal · FAIL any difference<br>`.c2` PASS the interruption leaves **neither** file · FAIL a partial frame or an orphaned sidecar |
 | `SYT-PLR-24` | `SYS-0153` | `S-CHAIN4` | For a sampled set of prims, layers and plotted samples, ask for evidence in one action. | `.c1` PASS port, topic, tick, origin, source timestamp, bundle, build, and published-vs-reconstructed all present · FAIL any missing<br>`.c2` PASS a field it cannot fill reads *unknown* · FAIL any plausible-looking default — *on the one surface whose whole purpose is being believed* |
 | `SYT-PLR-25` | `SYS-0154` | `S-CHAIN4` | Query a sampled set of addresses through the panel and the command line; then search for a second producer. | `.c1` PASS field-for-field identical · FAIL any difference<br>`.c2` PASS no second code path can produce an evidence answer · FAIL one exists |
