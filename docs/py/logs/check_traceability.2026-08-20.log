@@ -1,0 +1,8 @@
+# check_traceability
+# platform  linux
+# python    3.10.12
+
+Checking: requirements <-> tests <-> stages
+FAIL  missing document: sim_requirements.md
+
+RESULT  1 failure(s)

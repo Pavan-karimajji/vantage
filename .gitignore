@@ -101,4 +101,11 @@ Thumbs.db
 # Machine-local pointer to a comparable tool installation (DC-2: no absolute
 # paths in the repo). See docs/py/_common.py:comparable_tool_root().
 docs/py/comparable_tool_path.txt
+
+# Machine-local comparable-tool schema/concept-map overrides -- these would
+# carry the vendor's own real tag names / component inventory, so they are
+# never committed (see docs/py/_common.py:comparable_tool_schema() and
+# comparable_tool_concept_map()).
+docs/py/comparable_tool_schema.json
+docs/py/comparable_tool_concept_map.json
 scripts/gui_config.json

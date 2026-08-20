@@ -224,7 +224,7 @@ That is a four-way split arrived at independently, and it maps almost exactly on
 
 ### 2.3 Finding 3 — lifecycle wiring is data, and it is richer than the concept states
 
-In `[REF-TC]`, lifecycle is wired in the same file and with the same syntax as data flow: a batch-player init signal reaches a component's `Init`, a batch-player reset reaches its `Reset`, and a source's cycle-end event reaches a visualization component's `DoStore`. Concept §9.2 has the *concept* of control ports; the evidence shows it is not an edge case but the ordinary mechanism by which "who runs when" becomes configuration instead of code. §9.3 requires it accordingly.
+In `[REF-TC]`, lifecycle is wired in the same file and with the same syntax as data flow: a batch-player init signal reaches a component's `Init`, a batch-player reset reaches its `Reset`, and a source's cycle-end event reaches a visualization component's store-on-cycle-end callback. Concept §9.2 has the *concept* of control ports; the evidence shows it is not an edge case but the ordinary mechanism by which "who runs when" becomes configuration instead of code. §9.3 requires it accordingly.
 
 ### 2.4 Finding 4 — player stepping granularity is a requirement, not a preference
 
@@ -2654,9 +2654,9 @@ Coverage is not asserted here as a number, because a hand-counted coverage figur
 
 ---
 
-## Appendix A — Requirements added purely from the reference-toolchain study
+## Appendix A — Requirements added purely from the `[REF-TC]` study
 
-Recorded separately so their origin is visible and their value assessable. Each exists because the study showed a gap the concept did not have, not because the reference does it that way.
+Recorded separately so their origin is visible and their value assessable. Each exists because the study showed a gap the concept did not have, not because `[REF-TC]` does it that way.
 
 | `SYS` | What it adds | Finding |
 |---|---|---|

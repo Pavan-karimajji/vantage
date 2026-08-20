@@ -984,7 +984,7 @@ player — porting/ingest, resim at any cut point, visualization, plotting —
 deliverable as a Windows executable.
 **Origin.** 2026-07-28: *"arent you trying to create some player which could be
 an executable (in win …) that has all of these feature of porting, resim,
-visualization and all like a reference project-scale tool."* **Not covered before this** — the design
+visualization and all like a comparable project-scale tool."* **Not covered before this** — the design
 described a library for developers with a repo and a Python environment, and
 never named the application or its users.
 **Answered by.** Arch §5.15. The architecture already makes it possible:

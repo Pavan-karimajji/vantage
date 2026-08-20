@@ -38,15 +38,7 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 
-from _common import Report, read_text, comparable_tool_root
-
-#: Element tags that represent one authored decision in the binding config.
-AUTHORED_TAGS = (
-    "ArgHandlerConfig",   # one per DLL function argument
-    "ValueHandleRule",    # one per struct-field mapping rule
-    "StringReplacementRule",  # one per URI rewrite
-    "TriggerConfig",      # when the call fires
-)
+from _common import Report, read_text, comparable_tool_root, comparable_tool_schema
 
 
 def main() -> int:
@@ -60,8 +52,15 @@ def main() -> int:
                  "(set ADAS_SIM_COMPARABLE_TOOL to a directory)")
         return rep.finish()
 
-    projects = sorted((root / "Examples").rglob("*.mbprj")) if (root / "Examples").is_dir() else []
-    wrapper_projects = [p for p in projects if "FunctionCallConfig" in read_text(p)]
+    schema = comparable_tool_schema()
+    call_tag = schema["call_config_tag"]
+    gui_tag = schema["gui_state_tag"]
+    #: Element tags that represent one authored decision in the binding config.
+    authored_tags = tuple(schema["authored_tags"])
+
+    projects = (sorted((root / "Examples").rglob(f"*{schema['project_ext']}"))
+                if (root / "Examples").is_dir() else [])
+    wrapper_projects = [p for p in projects if call_tag in read_text(p)]
     if not wrapper_projects:
         rep.skip("no example project wires a DLL wrapper -- nothing to measure")
         return rep.finish()
@@ -74,7 +73,7 @@ def main() -> int:
         rep.heading(f"{proj.name}")
 
         # Total file size vs. the part that is actually pipeline wiring.
-        gui_state = re.search(r"<MBGUIState>.*?</MBGUIState>", text, re.S)
+        gui_state = re.search(rf"<{gui_tag}>.*?</{gui_tag}>", text, re.S)
         gui_chars = len(gui_state.group(0)) if gui_state else 0
         rep.line(f"file size            {len(text):>6} chars")
         rep.line(f"window/dock state    {gui_chars:>6} chars "
@@ -88,20 +87,13 @@ def main() -> int:
             continue
 
         rows = []
-        for call in tree.iter("FunctionCallConfig"):
+        for call in tree.iter(call_tag):
             fn = (call.findtext("FunctionName") or "?").strip()
-            counts = {tag: sum(1 for _ in call.iter(tag)) for tag in AUTHORED_TAGS}
+            counts = {tag: sum(1 for _ in call.iter(tag)) for tag in authored_tags}
             authored = sum(counts.values())
             grand_total += authored
             grand_calls += 1
-            rows.append([
-                fn,
-                counts["ArgHandlerConfig"],
-                counts["ValueHandleRule"],
-                counts["StringReplacementRule"],
-                counts["TriggerConfig"],
-                authored,
-            ])
+            rows.append([fn, *(counts[tag] for tag in authored_tags), authored])
 
         if rows:
             rep.line("")

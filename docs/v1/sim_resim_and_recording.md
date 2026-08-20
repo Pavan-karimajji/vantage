@@ -483,8 +483,8 @@ So there are two grades of recording, and the distinction is worth naming:
 | **stimulus recording** | source ports + truth + camera | resim of the whole pipeline, nothing else |
 | **session recording** (`--save session.mcap`) | the above **+ every stage's outputs + events + manifest + config bundle** | any cut point; simulated-vs-recorded comparison; `sim view` with no DLL present |
 
-A session recording is this project's equivalent of a measurement in a
-reference resim toolchain. **A sim run should write one by default** — it has
+A session recording is this project's equivalent of a measurement in
+`[REF-TC]`. **A sim run should write one by default** — it has
 already computed every output, and a stimulus-only recording silently forecloses
 every future cut point.
 
@@ -492,7 +492,7 @@ every future cut point.
 
 - **Padding slots.** `build_gen_object_list()` always emits exactly
   `num_object_slots` objects, padding with all-zero `DfObj`s — a deliberate
-  choice matching the reference fixed-array shape. Padding detection
+  choice matching `[REF-TC]`'s fixed-array shape. Padding detection
   (`dist_x == 0 and dist_y == 0`) is currently reimplemented in the viewer
   as `_is_padding_slot()`. It moves into the framework once, next to the sensor
   model that creates the padding, so the two definitions cannot drift.
@@ -747,8 +747,8 @@ whose purpose is sharing rather than working around a missing feature.
 `R-SIM-14` makes a format a codec of ~4 methods. That symmetry is the whole
 feature: **a format registered to be read is registered to be written** wherever
 its declared capabilities allow, so `sim convert` falls out of the codec table
-rather than being built. The reference toolchain's separate exporter components
-(one per destination format) are a consequence of not having this symmetry.
+rather than being built. `[REF-TC]`'s separate exporter components (one per
+destination format) are a consequence of not having this symmetry.
 
 ```
 sim convert  run.mcap  run.mf4               # recording → recording, lossless

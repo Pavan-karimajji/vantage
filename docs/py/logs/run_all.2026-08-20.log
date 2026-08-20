@@ -1,0 +1,16 @@
+# run_all
+# platform  linux
+# python    3.10.12
+
+Design-set checks and surveys
+kind    script                                result
+------  ------------------------------------  ----------------------------------------------------------------------------------------------  ----
+check   check_doc_invariants.py               5 failure(s)                                                                                    FAIL
+check   check_traceability.py                 1 failure(s)                                                                                    FAIL
+check   check_rules_coverage.py               ?                                                                                               FAIL
+check   check_requirement_coverage.py         ?                                                                                               FAIL
+check   check_verifier_discoverability.py     ?                                                                                               FAIL
+survey  FR_SIM_46_comparable_tool_survey.py   skipped -- no comparable tool installation found (set ADAS_SIM_COMPARABLE_TOOL to a directory)  ok
+survey  FR_SIM_45_argument_binding_survey.py  skipped -- no comparable tool installation found (set ADAS_SIM_COMPARABLE_TOOL to a directory)  ok
+
+5 script(s) failed. Individual logs are in docs/py/logs/ -- read those, not this summary.

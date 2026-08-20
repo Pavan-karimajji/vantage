@@ -13,6 +13,7 @@ machine with no virtualenv, on Windows or Ubuntu alike
 from __future__ import annotations
 
 import datetime as _dt
+import json
 import os
 import pathlib
 import sys
@@ -196,3 +197,79 @@ def comparable_tool_root() -> pathlib.Path | None:
 def read_text(path: pathlib.Path) -> str:
     """Read a file that may carry a UTF-8 BOM, as reference XML does."""
     return path.read_text(encoding="utf-8-sig", errors="replace")
+
+
+# --------------------------------------------------------------------------
+# Comparable-tool schema tokens (project-file extension, XML element names).
+# These are the vendor's own naming choices, so -- exactly like
+# comparable_tool_root() above -- this file never hard-codes them. The
+# built-in defaults below are generic placeholders with no real-vendor
+# fingerprint; a developer surveying an actual installation supplies its
+# real schema through one of the overrides, same two-step order as
+# comparable_tool_root(): an env var, then an untracked local file.
+# --------------------------------------------------------------------------
+
+_DEFAULT_SCHEMA = {
+    # Extension of one project/pipeline file.
+    "project_ext": ".ctproj",
+    # Element wrapping one bound function call within a project file.
+    "call_config_tag": "CallConfig",
+    # Element wrapping the tool's own window/dock layout state -- incidental
+    # to the survey's finding, measured only to show it does not belong in
+    # the pipeline file (arch 5.16.4).
+    "gui_state_tag": "GuiLayoutState",
+    # One element per authored binding decision inside a CallConfig.
+    "authored_tags": [
+        "ArgBinding",        # one per DLL function argument
+        "FieldMappingRule",  # one per struct-field mapping rule
+        "UriRewriteRule",    # one per URI rewrite
+        "TriggerBinding",    # when the call fires
+    ],
+}
+
+
+def comparable_tool_schema() -> dict:
+    """Resolve the comparable tool's own schema tokens.
+
+    Same override order as ``comparable_tool_root()``: ``ADAS_SIM_COMPARABLE_
+    TOOL_SCHEMA`` (a JSON file) first, then the untracked
+    ``docs/py/comparable_tool_schema.json``, else the generic default above.
+    No real vendor tag name is ever checked into this file.
+    """
+    env = os.environ.get("ADAS_SIM_COMPARABLE_TOOL_SCHEMA")
+    candidates = [pathlib.Path(env).expanduser()] if env else []
+    candidates.append(PY_DIR / "comparable_tool_schema.json")
+    for cand in candidates:
+        if cand.is_file():
+            try:
+                data = json.loads(cand.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            merged = dict(_DEFAULT_SCHEMA)
+            merged.update(data)
+            return merged
+    return dict(_DEFAULT_SCHEMA)
+
+
+def comparable_tool_concept_map() -> dict[str, str] | None:
+    """Resolve the comparable tool's component/machine name -> concept map.
+
+    Unlike ``comparable_tool_schema()`` there is no meaningful generic
+    default here: the map's keys *are* the vendor's own component and
+    machine inventory (FR-SIM-46's finding), so no such inventory is
+    checked into this repo. A developer re-running the survey against a
+    real installation supplies it via ``ADAS_SIM_COMPARABLE_TOOL_CONCEPT_MAP``
+    (a JSON file of ``{discovered-name: concept-mapping-text}``) or the
+    untracked ``docs/py/comparable_tool_concept_map.json``. Returns ``None``
+    when neither is present; callers must then ``skip``.
+    """
+    env = os.environ.get("ADAS_SIM_COMPARABLE_TOOL_CONCEPT_MAP")
+    candidates = [pathlib.Path(env).expanduser()] if env else []
+    candidates.append(PY_DIR / "comparable_tool_concept_map.json")
+    for cand in candidates:
+        if cand.is_file():
+            try:
+                return json.loads(cand.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+    return None

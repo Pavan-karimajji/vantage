@@ -1,0 +1,45 @@
+# check_doc_invariants
+# platform  linux
+# python    3.10.12
+
+Checking DC-1..DC-9 over the design set
+1 documents, 9 scripts
+
+DC-1  internal markdown links resolve
+-------------------------------------
+FAIL  README.md: broken link -> ../sim_architecture.md
+FAIL  README.md: broken link -> ../sim_portability.md
+
+DC-2  no absolute machine path in a design document
+---------------------------------------------------
+ok    no absolute machine paths -- every instruction is portable
+
+DC-3  no organisation name
+--------------------------
+ok    no organisation names
+
+DC-4  every visualization feature-checklist row names a stage
+-------------------------------------------------------------
+FAIL  sim_visualization_spec.md missing
+
+DC-5  placement-map paths exist or are marked NEW
+-------------------------------------------------
+FAIL  sim_architecture.md missing
+
+DC-6  work is on a feature branch
+---------------------------------
+ok    on feature branch 'feat/sim-platform'
+
+DC-7  no driving-function name in a framework-owned script
+----------------------------------------------------------
+ok    framework-owned scripts name no driving function
+
+DC-8  requirement ids are unique
+--------------------------------
+FAIL  sim_requirements.md missing
+
+DC-9  the CLI surface table matches cli/__init__.py, both ways
+--------------------------------------------------------------
+  skipped -- sim_api_reference.md or cli/__init__.py not present
+
+RESULT  5 failure(s)

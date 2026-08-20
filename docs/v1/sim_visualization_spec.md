@@ -289,16 +289,16 @@ the run continues, because "show me the next 200 ticks" means exactly that.
 
 ## 6. Layers panel
 
-Directly the reference measurement stack's proven model — its draw API's entry
-point is literally `DrawStartNewGroup(group, subgroup, active_on_startup)`.
+Directly `[REF-TC]`'s proven model — its draw API's entry point is a
+group/subgroup registration call carrying an initial-visibility flag.
 
 - A tree, grouped by `Layer.group`: `ego`, `world`, `ground_truth`, `aeb`,
   `bsd`, `perception`, `measure`.
 - Per-layer checkbox; per-group checkbox tri-states.
 - `Layer.default_on` decides the initial state; the user's overrides persist per
   project + pipeline, so opening a BSD recording restores the BSD layers.
-- **Verbosity levels.** A group may declare layers at level 1/2/3 (the reference
-  stack's own `VISU_LEVEL1..3` idea): level 1 is what you always want, level 3
+- **Verbosity levels.** A group may declare layers at level 1/2/3 (`[REF-TC]`'s
+  own three-level verbosity idea): level 1 is what you always want, level 3
   is internal debug. One control raises the level for a whole group instead of
   ticking fifteen boxes.
 - **Solo / mute** on a group (`Alt`+click), for isolating one function's view.
@@ -681,9 +681,9 @@ the truth, and both facts stay useful.
 ## 13. Pipeline panel — measured vs simulated, per stage
 
 The one UI surface that is not a *view* of a run but a *definition* of one, and
-the one the reference measurement/resim toolchain gets right: **the component
-chain, with a per-stage toggle for take-from-measurement versus simulate**. The
-operator moves the boundary; they do not switch tools.
+the one `[REF-TC]` gets right: **the component chain, with a per-stage toggle
+for take-from-measurement versus simulate**. The operator moves the boundary;
+they do not switch tools.
 
 It is a direct rendering of the pipeline's `mode:` / `impl:` fields
 (`sim_architecture.md` §5.10) — the panel edits data, it does not hold state of
@@ -750,10 +750,9 @@ component appears without a GUI change — the same rule
 > function names, applied to workspaces (`UT-D8-9`).
 
 §11.1 makes panels dockable and layouts saveable *per user*. That is only half
-of it, and the reference measurement console shows the missing half: **the
-component ships a default arrangement as data**, so opening a recording for the
-first time gives a sensible workspace instead of an empty grid the user has to
-assemble.
+of it, and `[REF-TC]` shows the missing half: **the component ships a default
+arrangement as data**, so opening a recording for the first time gives a
+sensible workspace instead of an empty grid the user has to assemble.
 
 Its layout file is a tree of tabs, splitters and named views with ratios. Ours
 is the same idea in the schema language we already use:

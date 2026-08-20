@@ -3503,9 +3503,9 @@ Stated so its absence is not read as an omission.
 
 ---
 
-## Appendix A — Software-level findings from the reference-toolchain study
+## Appendix A — Software-level findings from the `[REF-TC]` study
 
-Recorded separately so their origin is visible and their value assessable. Each exists because the study showed a gap at software-item granularity, not because the reference does it that way. Findings the System Requirements already absorbed (its own Appendix A) are not repeated.
+Recorded separately so their origin is visible and their value assessable. Each exists because the study showed a gap at software-item granularity, not because `[REF-TC]` does it that way. Findings the System Requirements already absorbed (its own Appendix A) are not repeated.
 
 | `SW` | What it adds | Finding |
 |---|---|---|
