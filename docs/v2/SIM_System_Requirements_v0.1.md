@@ -415,7 +415,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A reader shall stream, and the system shall never require a whole recording to be resident in memory.
 **Accept.** Peak resident memory for a run over a 20-minute recording is bounded by the declared working set and does not scale with recording length; measured across three recordings of 1×, 5× and 20× duration, peak memory varies by less than 20%.
 **Verify.** T · `SYT-INP-02` · `ANL-01`   **Trace.** CN-0302, CN-0355
-**Built.** ◐ started — 3/6 software requirements done, in `WP-06`, `WP-09`, `WP-25`
+**Built.** ◐ started — 3/4 software requirements done, in `WP-06`, `WP-09`
 
 **`SYS-0003`** · `P0` · `R1` — Random access by time
 **Shall.** A reader shall support random access by time, or provide an index that makes it possible.
@@ -627,7 +627,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The system shall not integrate a time-varying signal, filter, or otherwise produce a history-dependent estimate of information no module published.
 **Accept.** No component of the system holds state across ticks for the purpose of producing a port value that no producer emitted. Reconstruction is limited to deterministic transforms of a fixed constant or of an already-emitted value.
 **Verify.** A · `ANL-05` · `INSP-02`   **Trace.** CN-0301
-**Built.** ◐ started — 1/5 software requirements done, in `WP-04`, `WP-08`, `WP-11`, `WP-12`, `WP-25`
+**Built.** ◐ started — 1/4 software requirements done, in `WP-04`, `WP-08`, `WP-11`, `WP-12`
 
 **`SYS-0036`** · `P1` · `R1` — Port identity is independent of who produces it
 **Shall.** A component shall be splittable into two without invalidating existing recordings, pipelines, plugins or ingest maps.
@@ -790,13 +790,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The system shall maintain three clocks — the data's own source time, the engine's simulation time, and wall-clock execution time — and wall-clock time shall never influence results.
 **Accept.** Running the same spec on a machine 10× slower produces identical port values; only the performance report differs.
 **Verify.** T · `SYT-TIM-01`   **Trace.** CN-0137, CN-0138
-**Built.** ○ not started — 0/4 software requirements done, in `WP-09`, `WP-15`, `WP-25`, `WP-27`
+**Built.** ○ not started — 0/4 software requirements done, in `WP-09`, `WP-15`, `WP-27`
 
 **`SYS-0060`** · `P0` · `R1` — Integer nanoseconds internally
 **Shall.** All internal time shall be integer nanoseconds; float seconds shall appear only at human-facing boundaries.
 **Accept.** No time value inside the engine is a floating-point type. A period expressed in configuration is integer microseconds and is refused if fractional.
 **Verify.** A · `ANL-10` · T · `SYT-TIM-02`   **Trace.** CN-0139
-**Built.** ◐ started — 2/3 software requirements done, in `WP-05`, `WP-07`, `WP-25`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0283`** · `P0` · `R1` — Simulation time advances by one grid step, and by nothing else
 **Shall.** Simulation time shall advance by exactly one base-grid step per tick from the declared run start, and no arrival, reconstructed cycle boundary or module output shall move it.
@@ -1198,7 +1198,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Bulk arrays — point clouds, images, occupancy grids — shall be referenced into the recording by topic and time, never inlined into a scene or a tick structure.
 **Accept.** A scene containing an image reference is smaller than a declared per-scene budget; exceeding the budget is an error naming the layer.
 **Verify.** T · `SYT-OUT-08`   **Trace.** CN-0318; v1 `NR-SIM-43`
-**Built.** ◐ started — 1/3 software requirements done, in `WP-07`, `WP-09`, `WP-25`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-07`, `WP-09`
 
 **`SYS-0119`** · `P1` · `R1` — A merged output loads alone
 **Shall.** An output consisting of the original recording passed through with simulated ports overwriting their own channels shall be loadable on its own, with no other input.
@@ -1278,13 +1278,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The player shall open a finished run's artifacts with no engine present.
 **Accept.** `E2E-08` completes with no engine executable installed.
 **Verify.** T · `E2E-08`   **Trace.** CN-0157
-**Built.** ◐ started — 1/3 software requirements done, in `WP-06a`, `WP-23`, `WP-25`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-06a`, `WP-23`
 
 **`SYS-0131`** · `P0` · `R1` — The player's only input is a session
 **Shall.** The player shall render a session and shall never talk to a library, a world model or a file format.
 **Accept.** No player source file names a codec, a world model or a component library. Visualization is identical across every source of data.
 **Verify.** A · `ANL-18`   **Trace.** CN-0336, CN-0033; v1 `NR-SIM-1`
-**Built.** ○ not started — 0/2 software requirements done, in `WP-25`, `WP-27`
+**Built.** ○ not started — 0/1 software requirements done, in `WP-27`
 
 Superseded (`SM-01`, 2026-08-20 — clean subset of §11.1: cited only by
 `SI-18`/`21` items that already themselves supersede, so retiring these
@@ -1302,43 +1302,35 @@ to an explanation, never to nothing.
 
 ### 11.2 Transport
 
-**Amended 2026-08-20 — `SYS-0135`..`SYS-0140` (playback transport: play/pause/step/speed/sections/markers) kept, not superseded, per `SM-01`'s design call.** Unlike §11.1/§11.4's clusters, these six are not entangled in a way that needed resolving *now* — every current decomposer is either `SI-18` (`session`, `UT-SES-06`..`09`/`12`) or a staying item (`SI-03`'s `SW-0078`, `SI-15`'s `SW-0235`). `SI-18` is `D-3`'s Route B: it moves to `viz` as C++, but that move is `SM-04`'s own unstarted work package (prereq `VZ-12`), not this one's — superseding these six now, ahead of `SI-18`'s own supersession, would orphan `SW-0078`/`SW-0235` exactly the way §11.1/§11.4's premature supersession would have orphaned their `SI-25`/`SI-14`/`SI-17` citers. **The correct sequencing is: `SM-04` supersedes `SI-18`'s `SW` first; these six `SYS` are revisited in that same pass**, since only then will it be visible whether they split the way §11.4's did (headless-mechanism-stays / GUI-half-moves) or move wholesale. Recorded here rather than left silent so a future session does not re-derive it.
+**Resolved 2026-08-20 (`SM-04`) — of the six, four superseded, two kept.** `SM-01`'s deferral note (below, historical) said these six would be revisited once `SI-18` (`session`) was superseded, since four of them (`SYS-0135`, `SYS-0136`, `SYS-0139`, `SYS-0140`) were decomposed *solely* by `SI-18` items and would have been orphaned by a premature move; `SYS-0137`/`SYS-0138` had a second, staying decomposer (`SI-15`'s advance-cancellation item and `SI-03`'s play-rate-pacing item respectively) and were never at risk. `SM-04` has now superseded `SI-18`'s software requirements, so the four orphan-risk `SYS` are superseded below with the rest of §11.2; `SYS-0137`/`SYS-0138` stay, unchanged, kept for the same reason §11.1's clean subset stayed kept — a live non-`SI-18` decomposer.
 
-**`SYS-0135`** · `P0` · `R1` — Transport controls
-**Shall.** The player shall provide play, pause, step forward, step backward, jump to time, and jump to marker.
-**Accept.** Each is exercisable and lands on the exact target tick.
-**Verify.** D · `SYT-PLR-06`   **Trace.** CN-0164; v1 `FR-SIM-12`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-25`
+*(Historical, `SM-01`, 2026-08-20):* these six were not resolvable at that
+time — every decomposer was either `SI-18` (`session`, not yet superseded)
+or a staying item (`SI-03`'s pacing requirement, `SI-15`'s cancellation
+requirement) — and superseding ahead of `SI-18`'s own move would have
+orphaned the staying items' `SYS` parent. Recorded then so a later session
+would not re-derive the sequencing; resolved now, above.
 
-**`SYS-0136`** · `P1` · `R1` — Step granularity is selectable
-**Shall.** The step granularity shall be selectable from a closed set: one message · N messages · a fixed time interval · the next message of a named source · the next complete run of a named cycle.
-**Accept.** Each granularity is individually demonstrable and lands on the stated boundary; the cycle granularity lands on a tick whose input set is complete.
-**Verify.** D · `SYT-PLR-07`   **Trace.** CN-0164; **evidence** §2.4
-**Built.** ○ not started — 0/1 software requirements done, in `WP-25`
+Superseded (`SM-04`, 2026-08-20 — sole decomposer was `SI-18`, now retired): `SYS-0135`, `SYS-0136`, `SYS-0139`, `SYS-0140`. Recorded per `R-REQ-2` rather than deleted silently.
+
+| Retired | Was | Replaced by |
+|---|---|---|
+| `SYS-0135` | Transport controls | `VIZ:SYS-nnnn` — not yet allocated |
+| `SYS-0136` | Step granularity is selectable | `VIZ:SYS-nnnn` — not yet allocated |
+| `SYS-0139` | Sections | `VIZ:SYS-nnnn` — not yet allocated |
+| `SYS-0140` | Markers, divergence and coherence on the timeline | `VIZ:SYS-nnnn` — not yet allocated |
 
 **`SYS-0137`** · `P1` · `R1` — Advance-N is one cancellable job
 **Shall.** Advancing by a chosen number of ticks shall be one uninterruptible job with progress and cancel.
 **Accept.** Cancelling leaves the session at a well-defined tick, never mid-tick.
 **Verify.** D · `SYT-PLR-08`   **Trace.** CN-0164; v1 `FR-SIM-17`
-**Built.** ○ not started — 0/2 software requirements done, in `WP-23`, `WP-25`
+**Built.** ○ not started — 0/1 software requirements done, in `WP-23`
 
 **`SYS-0138`** · `P1` · `R1` — Play speed, including unbounded
 **Shall.** Play speed shall be adjustable, including as fast as the machine allows, and the achieved speed shall be displayed.
 **Accept.** A requested speed the machine cannot sustain shows the achieved speed, not the requested one.
 **Verify.** D · `SYT-PLR-09`   **Trace.** CN-0165
-**Built.** ○ not started — 0/1 software requirements done, in `WP-25`
-
-**`SYS-0139`** · `P1` · `R1` — Sections
-**Shall.** The user shall be able to mark a start and end and replay only that slice.
-**Accept.** The slice boundaries are exact ticks and are reproducible headlessly from the saved configuration.
-**Verify.** D · `SYT-PLR-10`   **Trace.** CN-0166
-**Built.** ○ not started — 0/1 software requirements done, in `WP-25`
-
-**`SYS-0140`** · `P1` · `R1` — Markers, divergence and coherence on the timeline
-**Shall.** Markers carried by the recording shall be shown on the timeline and be navigable, and the timeline shall show the divergence point and the coherence banner.
-**Accept.** All three appear; each is clickable and lands on its tick.
-**Verify.** D · `SYT-PLR-11`   **Trace.** CN-0167, CN-0168
-**Built.** ○ not started — 0/1 software requirements done, in `WP-25`
+**Built.** ○ not started — 0/1 software requirements done, in `WP-09`
 
 ### 11.3 Layers, layout and drawing — superseded (`SM-01`, 2026-08-20, checked clean in full)
 
@@ -1974,13 +1966,13 @@ mechanism.
 **Shall.** The system shall read and decode only the ports the active graph requires.
 **Accept.** A run of a function alone over a recording containing camera data decodes zero image bytes. Bytes-read is reported per run and is compared against the theoretical minimum for the port set.
 **Verify.** T · `SYT-NFR-01` · `ANL-31`   **Trace.** CN-0224, CN-0042
-**Built.** ◐ started — 1/5 software requirements done, in `WP-06`, `WP-09`, `WP-15`, `WP-17`, `WP-25`
+**Built.** ◐ started — 1/4 software requirements done, in `WP-06`, `WP-09`, `WP-15`, `WP-17`
 
 **`SYS-0231`** · `P1` · `R1` — Lazy decode
 **Shall.** Data shall be decoded only when a simulating module consumes it or the player displays it.
 **Accept.** A signal-only run over a multi-camera recording performs no image decode.
 **Verify.** T · `SYT-NFR-02`   **Trace.** CN-0225
-**Built.** ◐ started — 1/2 software requirements done, in `WP-06`, `WP-25`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0232`** · `P1` · `R1` — Time-sliced runs
 **Shall.** The system shall simulate only a requested time range.
@@ -2001,11 +1993,11 @@ mechanism.
 **Built.** ○ not started — 0/1 software requirements done, in `WP-31`
 *Note:* the numbers derive from the supplied absolute — 1000 recordings overnight on 8 cores and 32 GB with a lean `df` — via §18.0, whose 12-hour reading of *overnight* is the one declared interpretation. Budgeting **per worker** is what makes *"on a server it goes higher"* a derived figure rather than a second requirement.
 
-**`SYS-0235`** · `P1` · `R1` — Player responsiveness has a stated budget
-**Shall.** Player frame time shall have a stated budget at a stated tick count and layer count.
-**Accept.** Measured on §18.0's reference configuration and reported; exceeding it is a regression. No absolute was supplied, so the budget is **seeded from the first measurement** and the requirement is failable from the second run onward; the seeding run is marked as such in the budget file and its consumed headroom prints on pass.
-**Verify.** A · `ANL-35`   **Trace.** CN-0357; v1 `NR-SIM-5`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-25`
+Superseded (`SM-04`, 2026-08-20 — sole decomposer was `SI-18`'s scene-cache-budget item, now retired; `SI-20`'s own frame-time-budget item, `SW-0323`, was superseded earlier the same day by `SM-01`'s `SI-19`/`20`/`21` pass and was never a second decomposer once that landed): `SYS-0235`. Recorded per `R-REQ-2` rather than deleted silently.
+
+| Retired | Was | Replaced by |
+|---|---|---|
+| `SYS-0235` | Player responsiveness has a stated budget | `VIZ:SYS-nnnn` — not yet allocated |
 
 **`SYS-0236`** · `P1` · `R1` — Parallelism across runs only
 **Shall.** Parallelism shall be across independent runs, never inside a run.

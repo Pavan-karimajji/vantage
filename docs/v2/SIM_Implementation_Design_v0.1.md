@@ -150,7 +150,7 @@ but now names the other two instead of describing them.
 
 **`DD-04`** · new, not in `SWQ` · **`ADOPTED`** — **There is exactly one codec implementation, in `simcore/io` (C++). The player reads recordings through the `simcore` C ABI, not through a second Python codec.**
 
-This decision is forced and is stated because leaving it implicit is how the fifth duplication would be created after the first four were removed. Three requirements pull in apparently opposite directions: `SW-0013` forbids Python on a per-message path; `SW-0299` requires a finished run to open with **no engine present**; `SW-0290` has the player decoding a port value lazily, in Python, at display rate.
+This decision is forced and is stated because leaving it implicit is how the fifth duplication would be created after the first four were removed. Three requirements pulled in apparently opposite directions: `SW-0013` forbids Python on a per-message path; the `SI-18` requirement for a finished run to open with **no engine present** (superseded to `viz` — `SM-04`, this document's §21); and `SI-18`'s player-decodes-lazily-in-Python requirement (superseded the same round — `viz`'s `PortValue` diverged from it entirely, decode-free by design).
 
 They are only in tension if "no engine present" is read as "no engine *library* present". It means **no engine *run*** — `E2E-08` opens an artifact directory on a machine with no build, and the player is part of the delivered package (`SYS-0257`), so `simcore` is on that machine whenever the player is. The player therefore opens a recording through `simcore`'s reader and receives array views onto engine-owned buffers (`SW-0014`), which is `CN-0290` exactly.
 
@@ -296,10 +296,15 @@ modules/sim/
       orchestrate/              [N]  SI-15
       prep/                     [N]  SI-16
       diagnostics/              [N]  SI-17
-      session/                  [N]  SI-18
+      session/                  [N]  SI-18, 14/15 leaving
                                      NOTE: scene/, render/, player/ (SI-19/20/21)
                                      leave the tree entirely -- superseded to
-                                     modules/viz (SM-01, 2026-08-20)
+                                     modules/viz (SM-01, 2026-08-20). session/
+                                     itself leaves too (SM-04, 2026-08-20) except
+                                     attach.py (SW-0298, SI-25-adjacent) -- whether
+                                     that one file relocates into transport/ or
+                                     keeps its own directory for one module is
+                                     SM-06's call (SI-25 split), not decided here
       launcher/                 [N]  SI-22
       pyapi/                    [N]  SI-23
       plugins/                  [N]  SI-24
@@ -364,8 +369,8 @@ One mechanical pass, one commit, no behaviour change. Listed in full because a r
 | `core/batch.py` (219), `core/batch_worker.py` (190) | `orchestrate/batch.py`, `orchestrate/worker.py` | `SI-15` |
 | `core/diagnostics.py` (400), `core/explain.py` (145), `core/evidence.py` (195) | `diagnostics/` | `SI-17` |
 | `core/determinism.py` (223), `core/tolerance.py` (87) | `diagnostics/determinism.py`, `diagnostics/tolerance.py` | `SI-17` |
-| `core/session.py` (192), `core/tick.py` (220), `core/history.py` (159) | `session/` | `SI-18` |
-| `core/signals.py` (168) | `session/signals.py` | `SI-18` |
+| `core/session.py` (192), `core/tick.py` (220), `core/history.py` (159) | superseded — `modules/viz` (`SM-04`, 2026-08-20) | `SI-18` |
+| `core/signals.py` (168) | superseded — `modules/viz` (`SM-04`, 2026-08-20) | `SI-18` |
 | `core/errors.py` (72), `core/logging.py` (80), `core/console.py` (30) | `diagnostics/errors.py` — the Python half of the one permitted duplication (`SW-0121`) | `SI-17` |
 | `core/runner.py` (351), `core/resim.py` (257) | **deleted** — execution moves to `simcore/runner` | — |
 | `io/base.py` (433), `io/mcap.py`, `io/csv.py`, `io/jsonl.py` | codecs → `simcore/io`; Python remnant is `io/binding.py` | `SI-01` |
@@ -870,11 +875,11 @@ one grid step yield one execution with the later value and one counted
 | `IMP-0075` | `SW-0075` | `WP-09` | `KEEP` | `scheduler.hpp` — no member takes or returns a payload; `ANL-SW-19` asserts the scheduler translation unit does not include `decode.hpp`. Already true; recorded so the move does not lose it. | `ANL-SW-19` |
 | `IMP-0076` | `SW-0076` | `WP-15` | `EXTEND` | `src/simcore/scheduler/dump.cpp::ScheduleDump` — emitted before tick 0 and compared against the configuration layer's prediction by `IMP-0131`. Extends `graph_dump.cpp`, which dumps the graph but not the schedule. | `UT-SCH-11` |
 | `IMP-0077` | `SW-0077` | `WP-09` | `KEEP` | `IT-05` runs one spec on a loaded and an idle machine and diffs port values; no `std::chrono` call appears in `src/simcore/scheduler/**` outside `dump.cpp`'s reporting. Already true of `pipeline.cpp::Step`. | `IT-05` |
-| `IMP-0078` | `SW-0078` | `WP-25` | `EXTEND` | `adas_sim/session/pacing.py` — play-rate lives in the player, reads `t_exec` and never writes `t_sim`. Extends `view/transport.py`; the separation is asserted by running a paced and an unpaced session and diffing port values. | `UT-SCH-12` |
+| `IMP-0078` | `SW-0078` | `WP-09` | `EXTEND` | `src/simcore/runner/pacing.cpp` — pacing delays execution only, reads a requested rate and never writes `t_sim_ns_`. **Relocated 2026-08-20** (`SM-04`) from `adas_sim/session/pacing.py`: `session/` moves to `viz` in full, and this property is genuinely engine-side (the C++ run loop's own non-influence obligation), not the player's — the requested rate crosses the transport, but what must not be perturbed is `simcore`'s own execution. The separation is asserted by running a paced and an unpaced spec and diffing port values. | `UT-SCH-12` |
 | `IMP-0413` | `SW-0413` | `WP-09` | `NEW` | `src/simcore/scheduler/due.cpp::Scheduler::Advance` — `t_sim_ns_ += spec.grid.step_ns` and nothing else writes that member; it is `private` with no setter, so an arrival cannot move it even by mistake. `ANL-SW-75` asserts no assignment to it from a message timestamp. This is `IMP-0049`'s change seen from the scheduler: today the tick index advances per grouped message set, so the recording's own density decides the tick sequence. | `UT-SCH-13`, `ANL-SW-75` |
 | `IMP-0414` | `SW-0414` | `WP-09` | `NEW` | `reconcile.cpp::ReconcileMeasuredRate` — a `measured` stage's outputs are delivered on the ticks `IMP-0050`'s reconstruction places them on; where that cadence differs from `stages[].period_ns` beyond `IMP-0055`'s band, one finding names both rates and the recording's cadence is used. The same mechanism `IMP-0066` uses for a live module's own `updated` flag, applied to the recording — in both cases the observed fact outranks the declared one. | `UT-SCH-14` |
 
-> **Two rows in this table are not `SI-03`'s**, and are placed here because they read with the sampling and pacing they constrain rather than with their owning item: `IMP-0069` belongs to `SI-10` (§13) and `IMP-0078` to `SI-18` (§21). Ownership is the `SW`'s, never the section's — `docs/v2/py/trace_check.py` reads it from the Software Requirements, so a section heading can never re-assign an item.
+> **One row in this table is not `SI-03`'s**, and is placed here because it reads with the sampling it constrains rather than with its owning item: `IMP-0069` belongs to `SI-10` (§13). Ownership is the `SW`'s, never the section's — `docs/v2/py/trace_check.py` reads it from the Software Requirements, so a section heading can never re-assign an item. **`IMP-0078` no longer needs this caveat** — `SW-0078` is `SI-03`'s own (Software Requirements §7), and as of `SM-04` (2026-08-20) its design row's `WP` matches, having moved off the now-superseded `SI-18`'s package. The note previously read "and `IMP-0078` to `SI-18`", which was stale even before this session — `SW-0078`'s item field has read `SI-03` throughout, and this table was already the right place for it.
 
 ---
 
@@ -1671,54 +1676,22 @@ def render_text (e: Evidence) -> str: ...         # `sim explain <signal> --at <
 
 > `SI-19` is 16 of 17 `DONE` and **none of it moves**. `SI-21` is 10 of 16 `DONE` but carries a 1,990-line file that must be split. `SI-22` and `SI-25` are effectively unbuilt. The design work in this part is concentrated in three places, and the rest is protection.
 
-## 21. `SI-18` — `session`
+## 21. `SI-18` — `session` — 14 of 15 superseded (`SM-04`, 2026-08-20)
 
-### 21.1 Skeleton
+`SI-18` moves to `viz` in full (`D-3`'s Route B). 14 design rows this
+item landed are retired with pointers to `VIZ:` (not yet allocated, three
+already real per `VZ-12`) — exact identifier pairs are the Software
+Requirements document's own disposition table for this item, not repeated
+here per `R-REQ-1`. **`IMP-0078` (`SW-0078`, pacing) was never this item's**
+— relocated to `SI-03`'s own design section (§6), where its `SW` has
+always belonged. No code is deleted by this box (that is `SM-12`).
+Recorded per `R-REQ-2` rather than deleted silently.
 
-```python
-# adas_sim/session/
-#   session.py   the two-pass Session: head, immutable history, lazy decode
-#   tick.py      from core/tick.py — PortValue view over the engine's header
-#   history.py   from core/history.py — a read-only window, never a growing buffer
-#   step.py      the closed step-granularity set                       (SW-0293)
-#   section.py   exact tick ranges, reproducible headlessly
-#   markers.py   markers, divergence point, coherence banner on the timeline
-#   timefmt.py   the closed display-time format set                    (SW-0297)
-#   attach.py    attach/detach against a live engine via SI-25
-#   pacing.py    play rate — reads t_exec, never writes t_sim          (SW-0078)
-
-class Step(StrEnum):                       # SW-0293 — five granularities, closed
-    ONE_PACKET; N_PACKETS; TIME_INTERVAL; NEXT_OF_SOURCE; NEXT_CYCLE_OF
-
-class Resume(StrEnum): SKIP_TO_HEAD; RECOMPUTE_FROM_ZERO   # SW-0289 — exactly two
-
-class Session:
-    head: int                              # furthest tick computed
-    def at(self, tick: int) -> TickView    # behind the head: immutable, free
-    def advance(self, n: int) -> Job       # at the head: one cancellable job
-```
-
-### 21.2 Design requirements
+### 21.2 The one row that stays
 
 | `IMP` | Serves | `WP` | Change | Artifact · Design | Test |
 |---|---|---|---|---|---|
-| `IMP-0287` | `SW-0287` | `WP-25` | `KEEP` | `session/session.py::Session` is the player's only input; `ANL-SW-*` asserts no `player/**` module imports `io`, `resolve` or `transport` directly. Already true (`R-SIM-13`). | `ANL-SW-45` |
-| `IMP-0288` | `SW-0288` | `WP-25` | `KEEP` | `Session.at(tick)` for `tick < head` returns memoised data and never re-executes; seek, scrub and step-back are free. Already true and is what `CN-0335` bought. | `UT-SES-01` |
-| `IMP-0289` | `SW-0289` | `WP-25` | `KEEP` | `session.py::Resume` — two values, both named in the UI. Silently continuing from a rewound position would fabricate state the DLL never produced. Already true. | `UT-SES-02` |
-| `IMP-0290` | `SW-0290` | `WP-25` | `KEEP` | `session/tick.py::PortValue.payload` decodes on first access and memoises. After `DD-04` the decode is `IMP-0027`'s, reached through `pyapi`; the laziness and the memoisation stay Python-side. | `UT-SES-03` |
-| `IMP-0291` | `SW-0291` | `WP-25` | `KEEP` | `SceneCache` bounds by **bytes**, not entry count, because one point-cloud scene is not one label scene. Already true (`R-SIM-2`). | `UT-SES-04` |
-| `IMP-0292` | `SW-0292` | `WP-25` | `KEEP` | `session/history.py` — a window with a declared span; nothing accumulates for the length of the run. Already true. | `UT-SES-05` |
-| `IMP-0293` | `SW-0293` | `WP-25` | `EXTEND` | `session/step.py::Step` — five granularities (SYS §2.4's finding). `NEXT_CYCLE_OF` is the only one that lands on a coherent input set and is why `IMP-0050`'s ladder is its prerequisite. Extends today's single-tick step. | `UT-SES-06` |
-| `IMP-0294` | `SW-0294` | `WP-25` | `MOVE` | `session.py::advance(n) -> Job` — one uninterruptible job with progress and cancel, for 50/100/200/custom. Ports today's advance-N. | `UT-SES-07` |
-| `IMP-0295` | `SW-0295` | `WP-25` | `EXTEND` | `session/section.py::Section` — an exact `[from_tick, to_tick)`, written into the run configuration so the same slice replays headlessly. Extends today's marker pair, which is display-only. | `UT-SES-08` |
-| `IMP-0296` | `SW-0296` | `WP-25` | `EXTEND` | `session/markers.py` — recording markers, `IMP-0116`'s divergence point and `IMP-0180`'s coherence banner, all navigable. Extends today's timeline, which shows markers only. | `UT-SES-09` |
-| `IMP-0297` | `SW-0297` | `WP-25` | `NEW` | `session/timefmt.py` — a closed set (`ns`, `s.mmm`, `hh:mm:ss.mmm`, `tick`, `source-relative`); the internal `int64` ns is never displayed raw and never parsed back from a display string. | `UT-SES-10` |
-| `IMP-0298` | `SW-0298` | `WP-27` | `NEW` | `session/attach.py` — attach and detach through `SI-25`; the engine's tick rate is unchanged across both, which `IT-19` measures rather than assumes. | `IT-19` |
-| `IMP-0299` | `SW-0299` | `WP-25` | `KEEP` | `Session.from_artifacts(dir)` — opens a finished run with no engine **run**; `simcore`'s reader is present because the player ships with it (`DD-04`). Already true in spirit; `DD-04` is what keeps it true after the codec move. | `IT-20` |
-| `IMP-0300` | `SW-0300` | `WP-25` | `EXTEND` | `session.py` — construction reads the topic index and the manifest only; ticks are materialised on demand. Extends today's construction, which reads every message (concept §22.3). | `UT-SES-11` |
-| `IMP-0404` | `SW-0404` | `WP-25` | `EXTEND` | `session/transport_ctl.py` — play, pause, step ±, jump-to-time, jump-to-marker, speed, section; each lands on an exact tick, never an interpolated position. Extends `view/transport.py`, which has no jump-to-marker and no exact landing guarantee. | `UT-SES-12` |
-
----
+| `IMP-0298` | `SW-0298` | `WP-27` | `NEW` | `session/attach.py` — attach and detach through `SI-25`; the engine's tick rate is unchanged across both, which `IT-19` measures rather than assumes. **Not superseded** — it already lands in `WP-27` (`SI-25` transport), not this item's now-retired `WP-25`, and needed no textual change. | `IT-19` |
 
 ## 22. `SI-19` — `scene` — superseded (`SM-01`, 2026-08-20)
 
@@ -2000,7 +1973,7 @@ Each is a place where the design proceeded rather than blocked. If one is wrong,
 |---|---|---|
 | A-1 | `DD-01` — the C++ subtree belongs in `modules/sim`. SwReq §32.1 argues it; this treats it as settled | `WP-03`. Cheap now, expensive after `WP-16` |
 | A-2 | `DD-04` — one codec, in C++, reached from Python through the C ABI. The alternative is two readers and a seventh drift | `WP-06`. Expensive after `WP-16` |
-| A-3 | The player ships with `simcore`, so "no engine present" (`SW-0299`) means no engine **run** | `WP-25`. Would force a second Python codec and reopen A-2 |
+| A-3 | The player ships with `simcore`, so "no engine present" (the `SI-18` requirement now superseded to `viz`, `SM-04`) means no engine **run** | `WP-25`, now retired to `viz`. Would force a second Python codec and reopen A-2 |
 | A-4 | **Restated 2026-08-12, `OQ-11` closed.** No catalogue is authored *or* adopted: `IMP-0388`'s catalogue is **derived** as the union of the run's `ModuleManifest`s, so it cannot drift from what compiled. What remains assumed is narrower — that if an organisation-level catalogue exists we may have to adopt its **vocabulary**. That costs a rename, never a redesign, so the waste this assumption guarded against is gone | `WP-07` |
 | A-5 | `df` and `vdy` remain the two components proving `IMP-0379`'s checklist | `WP-31` |
 | A-6 | `DD-12` — no live stimulus of any kind is ever needed, because `SYS-0109` covers a foreign simulator by codec plus ingest map | `WP-02`. Reversing after the deletion means rebuilding a client, so this is the assumption to challenge now if it is going to be challenged |

@@ -445,7 +445,8 @@ flowchart LR
 
 ### WP-09 · `MP-1` · `SI-03` `scheduler`
 - [ ] **Prereq:** `WP-08`.
-- [ ] **Lands:** `IMP-0056`…`IMP-0058`, `IMP-0061`, `IMP-0062`, `IMP-0064`…`IMP-0068`, `IMP-0070`, `IMP-0072`, `IMP-0073`, `IMP-0075`, `IMP-0077`, `IMP-0413`, `IMP-0414` — 17.
+- [ ] **Lands:** `IMP-0056`…`IMP-0058`, `IMP-0061`, `IMP-0062`, `IMP-0064`…`IMP-0068`, `IMP-0070`, `IMP-0072`, `IMP-0073`, `IMP-0075`, `IMP-0077`, `IMP-0078`, `IMP-0413`, `IMP-0414` — 18. `IMP-0078` added 2026-08-20 (`SM-04`), relocated from the now-retired `WP-25`.
+  - [ ] `IMP-0078` · `SW-0078` · `EXTEND` — `simcore/runner/pacing.cpp`
   - [ ] `IMP-0056` · `SW-0056` · `DEDUPE` — `src/simcore/bus/port_bus.cpp::Get`
   - [ ] `IMP-0057` · `SW-0057` · `MOVE` — `port_bus.cpp::SetFor`
   - [ ] `IMP-0058` · `SW-0058` · `NEW` — `port_bus.cpp::BufferStats`
@@ -801,26 +802,9 @@ flowchart LR
 
 ## 6. `MP-4` — Split the process
 
-### WP-25 · `MP-4` · `SI-18` `session`
-- [ ] **Prereq:** `WP-24`.
-- [ ] **Lands:** `IMP-0078`, `IMP-0287`…`IMP-0297`, `IMP-0299`, `IMP-0300`, `IMP-0404` — 15.
-  - [ ] `IMP-0078` · `SW-0078` · `EXTEND` — `adas_sim/session/pacing.py`
-  - [ ] `IMP-0287` · `SW-0287` · `KEEP` — `session/session.py::Session` is the player's only input; `ANL-SW-*` ass…
-  - [ ] `IMP-0288` · `SW-0288` · `KEEP` — `Session.at(tick)` for `tick < head` returns memoised data and never re-…
-  - [ ] `IMP-0289` · `SW-0289` · `KEEP` — `session.py::Resume`
-  - [ ] `IMP-0290` · `SW-0290` · `KEEP` — `session/tick.py::PortValue.payload` decodes on first access and memoise…
-  - [ ] `IMP-0291` · `SW-0291` · `KEEP` — `SceneCache` bounds by **bytes**, not entry count, because one point-clo…
-  - [ ] `IMP-0292` · `SW-0292` · `KEEP` — `session/history.py`
-  - [ ] `IMP-0293` · `SW-0293` · `EXTEND` — `session/step.py::Step`
-  - [ ] `IMP-0294` · `SW-0294` · `MOVE` — `session.py::advance(n) -> Job`
-  - [ ] `IMP-0295` · `SW-0295` · `EXTEND` — `session/section.py::Section`
-  - [ ] `IMP-0296` · `SW-0296` · `EXTEND` — `session/markers.py`
-  - [ ] `IMP-0297` · `SW-0297` · `NEW` — `session/timefmt.py`
-  - [ ] `IMP-0299` · `SW-0299` · `KEEP` — `Session.from_artifacts(dir)`
-  - [ ] `IMP-0300` · `SW-0300` · `EXTEND` — `session.py`
-  - [ ] `IMP-0404` · `SW-0404` · `EXTEND` — `session/transport_ctl.py`
-- [ ] **Files:** `adas_sim/session/**` — from `core/{session,tick,history,signals}.py`.
-- [ ] **Exit:** session construction reads the topic index and the manifest only; a 20-minute recording opens without materialising (`IMP-0300`). Five step granularities, and `NEXT_CYCLE_OF` lands on a coherent input set — which is what `WP-08`'s ladder bought the player.
+### WP-25 · `MP-4` · `SI-18` `session` — retired, superseded to `viz` (`SYNC:SM-04`, 2026-08-20)
+
+- [x] **Retired.** 14 of its 15 design rows superseded with pointers to `VIZ:` (three of them already pointed to real `viz` UIDs by `VZ-12`, 2026-08-19). `IMP-0078` relocated to `WP-09` (`SW-0078` is `SI-03`'s own; see that package). `IMP-0298` was never here — it has always landed in `WP-27`. Exact identifier pairs are `SIM_Software_Requirements_v0.1.md`'s own `SI-18` disposition table. No code is deleted by this box (that is `SM-12`). Recorded per `R-REQ-2` rather than deleted silently.
 
 ### WP-26 · `MP-4` · `SI-19`/`SI-20`/`SI-21` — retired, superseded to `viz` (`SYNC:SM-01`, `SYNC:SM-05`, 2026-08-20)
 

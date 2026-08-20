@@ -214,7 +214,7 @@ flowchart TB
 | `SI-15` | `ORC` | `orchestrate` | Python | once per run / per batch | CLI verbs, batch scheduling, subprocess pool, resume, aggregation |
 | `SI-16` | `PRP` | `prep` | Python | offline | Integrity check, content hash, extract, convert, index, inspect, lineage |
 | `SI-17` | `DIA` | `diagnostics` | Python | on demand | Explain, doctor, probe, evidence, name resolution, run comparison |
-| `SI-18` | `SES` | `session` | Python | at display rate | The `Session` data model, tick and port-value views, transport and head semantics |
+| `SI-18` | `SES` | `session` | Python | at display rate | **Leaves — superseded to `viz` (`SM-04`, 2026-08-20), except `SW-0298` (attach/detach, `SI-25`-adjacent, stays).** The `Session` data model, tick and port-value views, transport and head semantics |
 | `SI-19` | `SCN` | `scene` | Python | at display rate | **Leaves — superseded to `viz` (`SM-01`, 2026-08-20).** The `Scene` intermediate representation, frames, style tokens, provider registry, port binding |
 | `SI-20` | `RND` | `render` | Python | at display rate | **Leaves — superseded to `viz` (`SM-01`, 2026-08-20).** Renderers, theme and token tables, image and figure output |
 | `SI-21` | `PLR` | `player` | Python | at interaction rate | **Leaves — superseded to `viz` (`SM-01`, 2026-08-20).** Panels, layout, layer tree, plots, snapshots, evidence panel |
@@ -1070,7 +1070,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Where execution is paced to a requested play rate, the pacing shall delay execution only and shall not alter which modules run, in what order, or with what values; the achieved rate shall be reported separately from the requested rate.
 **Accept.** A run paced at half rate and the same run unpaced produce identical port values. A requested rate the machine cannot sustain reports the achieved rate, not the requested one.
 **Verify.** T · `UT-SCH-12`   **Trace.** SYS-0138, SYS-0059
-**Built.** ○ not started — `IMP-0078` in `WP-25`
+**Built.** ○ not started — `IMP-0078` in `WP-09`
 **Now.** `PARTIAL` — `view/transport.py` carries a speed setting on the player side; the engine has no pacing concept, which is the correct side for it to be absent from.
 
 ---
@@ -2722,92 +2722,44 @@ Everything in this part exists to make one sentence true in code rather than in 
 
 # PART E — THE PLAYER
 
-## 23. `SI-18` — `session`: the data model and the head
+## 23. `SI-18` — `session`: the data model and the head — 14 of 15 superseded (`SM-04`, 2026-08-20; `SW-0288`/`SW-0289`/`SW-0300` already pointed to real `viz` UIDs by `VZ-12`, 2026-08-19)
 
-**`SW-0287`** · `SI-18` · `P0` · `R1` — The player's only input is a session
-**Shall.** The player shall render a session and shall never open a library, a world model or a file format.
-**Accept.** No player source file names a codec, a world model or a component library. Visualization is identical across every source of data.
-**Verify.** A · `ANL-SW-45`   **Trace.** SYS-0131
-**Built.** ○ not started — `IMP-0287` in `WP-25`
-**Now.** `DONE` — `core/session.py` is the sole input and the property is checked by an invariant script.
+`SI-18` moves to `viz` in full (`D-3`'s Route B), as C++ (`viz_concept.md`,
+`VZ-12`/`VZ-13`). 14 of its 15 items are retired with pointers below.
+Recorded per `R-REQ-2` rather than deleted silently. `SW-0290`'s row is the
+one genuine non-match: `viz`'s `Session::PortValue` is decode-free by
+design, not lazily-decoded-and-memoised, so there is no successor claim to
+point at — a design divergence, not a delay.
 
-**`SW-0288`** · `SI-18` · `P0` · `R1` — Behind the head, a session is immutable data
-**Shall.** Behind the furthest computed tick, seek, scrub, step back and re-render shall never re-execute a module.
-**Accept.** Stepping backwards produces zero module invocations, measured by the cycle trace.
-**Verify.** T · `UT-SES-01`   **Trace.** SYS-0133
-**Built.** ○ not started — `IMP-0288` in `WP-25`
-**Now.** `DONE` — the two-pass session is one of the design's strongest and best-tested properties.
-**Superseded 2026-08-19** by `VIZ:SW-0030` (`VIZ_Software_Requirements_v0.1.md`)
-— `modules/viz`'s C++ rewrite (`VZ-12`, `R-REQ-2`) narrows this row's own
-Accept ("zero module invocations") to what the rewrite actually is: a
-Session with no engine link at all (`D-10`), so there is no module to
-invoke in the first place. Not deleted — this row stays the record of the
-Python design's own property; the C++ implementation is `VIZ:SW-0030`'s.
+**`SW-0298` (below, "Attach and detach do not disturb the run") is the one
+item this table does not retire.** It is `D-5`'s split, not `SI-18`'s move:
+it already lands in `WP-27` (`SI-25` transport, not `WP-25`), traces to
+`SYS-0129` (kept, §11.1's clean cluster A), and needed no textual change —
+correctly excluded from `SM-04`'s own sweep rather than swept up by the
+`SW-0287`..`SW-0300` range, per that package's own note.
 
-**`SW-0289`** · `SI-18` · `P0` · `R1` — Resuming forward offers two honest choices
-**Shall.** Resuming forward from behind the head shall offer exactly skip-to-head or recompute-from-the-start, and shall never silently continue from a rewound position or interpolate a state no module produced.
-**Accept.** Neither silent continuation nor interpolation is reachable by any input sequence.
-**Verify.** T · `UT-SES-02`   **Trace.** SYS-0134
-**Built.** ○ not started — `IMP-0289` in `WP-25`
-**Now.** `DONE` — `view/transport.py` implements the head model with exactly these two choices.
-**Superseded 2026-08-19** by `VIZ:SW-0043` — same `R-REQ-2` disposition as
-`SW-0288` above; the C++ `Resume` enum is `modules/viz`'s own.
+**`SW-0078`'s pacing item is also not in this table** — it was never
+`SI-18`'s. Its item field has always read `SI-03`; only its *code home*
+(`session/pacing.py`) moved with `session/`, and this session relocates
+its design row to `WP-09` (`SI-03`'s own package) accordingly — see
+`SIM_Implementation_Design_v0.1.md` §6's own note.
 
-**`SW-0290`** · `SI-18` · `P0` · `R1` — A port value is decoded lazily and memoised
-**Shall.** A port value's payload shall be decoded on first access and memoised, and shall not be decoded during session construction.
-**Accept.** Constructing a session over a thousand-tick recording performs no decode. Reading one port at one tick performs one.
-**Verify.** T · `UT-SES-03`   **Trace.** SYS-0231, SYS-0230
-**Built.** ○ not started — `IMP-0290` in `WP-25`
-**Now.** `DONE` — `core/tick.py`'s lazily-parsed memoised `PortValue.message`.
-
-**`SW-0291`** · `SI-18` · `P1` · `R1` — The scene cache is bounded by bytes
-**Shall.** The rendered-scene cache shall be bounded by total bytes, with entry count as a secondary bound only.
-**Accept.** The cache respects the byte bound with scenes of widely differing sizes. Bounding by count alone is not reachable.
-**Verify.** T · `UT-SES-04`   **Trace.** SYS-0235, SYS-0118
-**Built.** ○ not started — `IMP-0291` in `WP-25`
-**Now.** `DONE` — implemented with a stated budget.
-
-**`SW-0292`** · `SI-18` · `P1` · `R1` — History is a read-only window, never a growing buffer
-**Shall.** Where a consumer needs earlier ticks it shall receive a read-only bounded window, and no consumer shall accumulate history of its own.
-**Accept.** Memory does not grow with tick count. A consumer attempting to retain a window beyond its bound raises.
-**Verify.** T · `UT-SES-05`   **Trace.** SYS-0002, SYS-0035
-**Built.** ○ not started — `IMP-0292` in `WP-25`
-**Now.** `DONE` — `core/history.py::HistoryView`.
-
-**`SW-0293`** · `SI-18` · `P1` · `R1` — Step granularity is selectable from a closed set
-**Shall.** Step granularity shall be selectable from one message · N messages · a fixed time interval · the next message of a named source · the next complete run of a named cycle.
-**Accept.** Each is individually demonstrable and lands on its stated boundary; the cycle granularity lands on a tick whose input set is complete.
-**Verify.** D · `UT-SES-06`   **Trace.** SYS-0136; **evidence** SYS §2.4
-**Built.** ○ not started — `IMP-0293` in `WP-25`
-**Now.** `PARTIAL` — step ±1 and ±10 exist; the source and cycle granularities, which are the two that land on a coherent input set, do not.
-
-**`SW-0294`** · `SI-18` · `P1` · `R1` — Advance-N is one cancellable job
-**Shall.** Advancing by a chosen number of ticks shall be one job with progress and cancellation, leaving the session at a tick boundary.
-**Accept.** Cancelling leaves the session at a well-defined tick, never mid-tick.
-**Verify.** D · `UT-SES-07`   **Trace.** SYS-0137
-**Built.** ○ not started — `IMP-0294` in `WP-25`
-**Now.** `DONE·MOVE` — `view/transport.py`.
-
-**`SW-0295`** · `SI-18` · `P1` · `R1` — A section is an exact tick range, reproducible headlessly
-**Shall.** A marked section shall be an exact tick range, replayable alone and reproducible headlessly from the saved configuration.
-**Accept.** The boundaries are exact ticks and the headless replay covers the identical range.
-**Verify.** D · `UT-SES-08`   **Trace.** SYS-0139
-**Built.** ○ not started — `IMP-0295` in `WP-25`
-**Now.** `PARTIAL` — loop marks exist in `view/transport.py`; they are not persisted to the run configuration.
-
-**`SW-0296`** · `SI-18` · `P1` · `R1` — Markers, divergence and coherence are navigable on the timeline
-**Shall.** Markers carried by the recording shall appear on the timeline and be navigable, and the timeline shall show the divergence point and the coherence banner.
-**Accept.** All three appear, each is clickable and lands on its tick.
-**Verify.** D · `UT-SES-09`   **Trace.** SYS-0140
-**Built.** ○ not started — `IMP-0296` in `WP-25`
-**Now.** `PARTIAL` — the timeline strip and markers exist; divergence and the coherence banner do not, pending `SW-0116` and `SW-0180`.
-
-**`SW-0297`** · `SI-18` · `P1` · `R1` — Display time formatting is a closed set and never the internal representation
-**Shall.** Time shall be displayable in a closed set of formats — absolute, relative to the recording start in human units, relative to the recording start in integer units, relative to the system start — and the internal representation shall remain integer nanoseconds regardless.
-**Accept.** Switching format changes no stored value. The internal value is recoverable exactly from any format.
-**Verify.** T · `UT-SES-10`   **Trace.** SYS-0060; **evidence** §2.6
-**Built.** ○ not started — `IMP-0297` in `WP-25`
-**Now.** `NEW`.
+| Retired | Was | Replaced by |
+|---|---|---|
+| `SW-0287` | The player's only input is a session | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0288` | Behind the head, a session is immutable data | `VIZ:SW-0030` — real, `VZ-12`, 2026-08-19 |
+| `SW-0289` | Resuming forward offers two honest choices | `VIZ:SW-0043` — real, `VZ-12`, 2026-08-19 |
+| `SW-0290` | A port value is decoded lazily and memoised | **no successor** — `viz`'s `PortValue` is deliberately decode-free (`VZ-12`); this property was not carried over, not merely relocated |
+| `SW-0291` | The scene cache is bounded by bytes | `VIZ:SW-nnnn` — not yet formally allocated; the property is real and built (`viz/history/scene_history.{hpp,cpp}`'s `max_bytes` bound, `VZ-12`, 2026-08-19) |
+| `SW-0292` | History is a read-only window, never a growing buffer | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0293` | Step granularity is selectable from a closed set | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0294` | Advance-N is one cancellable job | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0295` | A section is an exact tick range, reproducible headlessly | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0296` | Markers, divergence and coherence are navigable on the timeline | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0297` | Display time formatting is a closed set and never the internal representation | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0299` | A finished run opens with no engine present | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0300` | Session construction is bounded, and a long recording is not materialised | `VIZ:SW-0044` — real, `VZ-12`, 2026-08-19 |
+| `SW-0404` | The transport control set is complete and lands exactly | `VIZ:SW-nnnn` — not yet allocated |
 
 **`SW-0298`** · `SI-18` · `P1` · `R1` — Attach and detach do not disturb the run
 **Shall.** The player shall attach to, detach from and re-attach to a running engine without stopping or perturbing it.
@@ -2815,30 +2767,6 @@ Python design's own property; the C++ implementation is `VIZ:SW-0030`'s.
 **Verify.** T · `IT-19`   **Trace.** SYS-0129
 **Built.** ○ not started — `IMP-0298` in `WP-27`
 **Now.** `NEW`.
-
-**`SW-0299`** · `SI-18` · `P0` · `R1` — A finished run opens with no engine present
-**Shall.** The player shall open a finished run's artifacts with no engine installed.
-**Accept.** The full artifact set opens on a machine with no engine executable and no compiler.
-**Verify.** T · `IT-20`   **Trace.** SYS-0130
-**Built.** ○ not started — `IMP-0299` in `WP-25`
-**Now.** `DONE` — `sim view` over a recording needs neither.
-
-**`SW-0300`** · `SI-18` · `P1` · `R1` — Session construction is bounded, and a long recording is not materialised
-**Shall.** Constructing a session over a recording shall not require the recording to be resident.
-**Accept.** Session construction memory does not scale with recording length.
-**Verify.** T · `UT-SES-11`   **Trace.** SYS-0002
-**Built.** ○ not started — `IMP-0300` in `WP-25`
-**Now.** `PARTIAL` — the lazy `PortValue` is correct; `core/runner.py` still materialises every group first, so the bound is not achieved.
-**Superseded 2026-08-19** by `VIZ:SW-0044` — same `R-REQ-2` disposition as
-`SW-0288` above; the C++ rewrite closes this row's own bound
-structurally, where the Python design here stayed `PARTIAL`.
-
-**`SW-0404`** · `SI-18` · `P0` · `R1` — The transport control set is complete and lands exactly
-**Shall.** The transport shall provide play, pause, step forward, step backward, jump to time and jump to marker, and each shall land on the exact target tick.
-**Accept.** Each control is exercisable and lands on the intended tick, never one either side of it.
-**Verify.** D · `UT-SES-12`   **Trace.** SYS-0135
-**Built.** ○ not started — `IMP-0404` in `WP-25`
-**Now.** `PARTIAL` — play, pause, step and goto exist in `view/transport.py`; jump-to-marker depends on `SW-0296`.
 
 ---
 

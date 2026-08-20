@@ -148,7 +148,6 @@ The mechanised checks. These are the highest-leverage tests in the suite: each o
 | `ANL-SW-42` | `SW-0256` | Configuration schemas the batch face accepts | Any batch-only schema |
 | `ANL-SW-43` | `SW-0272` | Estimate vs measured duration over a sample, against the factor declared from the first campaign | Outside the declared factor, or the factor claimed rather than measured |
 | `ANL-SW-44` | `SW-0273` | Producers of an `Evidence` record | More than one |
-| `ANL-SW-45` | `SW-0287` | Imports from `player/**` | Any of `io`, `resolve`, `transport` reached directly |
 | `ANL-SW-53` | `SW-0357` | `src/**` — which is `adas_sim/`, `simcore/` and `simengine/` together — for `aeb`/`bsd`/`lca`/`acc`/`ldw`/`lka` and the world-model client's name | Any hit. `tests/` deliberately out of scope (`R-SIM-1`) |
 | `ANL-SW-57` | `SW-0348` | The diff produced by each of the five declared common changes on a reference project | Any change touching a file outside its declared set, needing a rebuild, or needing a source edit |
 | `ANL-SW-58` | `SW-0350` | Engine pointers and buffer maps outside `transport/` | Any. **The line concept §5.3 says must not be crossed** |
@@ -201,7 +200,6 @@ Each crosses one named interface. The seam (`IF-09`) and the module ABI (`IF-01`
 | `IT-17` | `SW-0237` | `IF-10` | `F-LIBDIR` | Copy an artifact directory to a machine with no build and no compiler; open it. |
 | `IT-18` | `SW-0240` | `IF-04` | `F-STUB` | Delete every generated binding; decode every port from the manifest's `FileDescriptorSet`. |
 | `IT-19` | `SW-0298`, `SW-0352` | `IF-11` | `F-STUB`, `F-LONG` | Measure engine tick rate with no player, with one attaching mid-run, and after detach. |
-| `IT-20` | `SW-0299` | `IF-11` | `F-LIBDIR` | Open a finished run with **no engine run**; every panel populates. |
 | `IT-21` | `SW-0343` | `IF-16` | `F-CHAIN4` | Make a selection in the launcher, save, launch; confirm `launch()` was reached only through the written path, and the headless re-run is identical. |
 | `IT-22` | `SW-0379` | — | `df` and `vdy` | A **second** component completes the published checklist unaided, with no SIM-team edit and no framework file changed. |
 
@@ -590,22 +588,9 @@ Expected values are the served requirement's `Accept` clause (§0.1). Each row g
 | `UT-DIA-14` | `SW-0286` | `F-CHAIN4` | Call each diagnostic from a script; consume its structured result without parsing text. |
 | `UT-DIA-15` | `SW-0403` | `F-CHAIN4` | Ask the provenance question from a script and from the command line; compare field for field; search for a third derivation. |
 
-### 5.18 `SI-18` `session` — `UT-SES-01` … `UT-SES-12`
+### 5.18 `SI-18` `session` — superseded (`SM-04`, 2026-08-20)
 
-| ID | Serves | Fixture | Steps |
-|---|---|---|---|
-| `UT-SES-01` | `SW-0288` | `F-LONG` | Advance the head; step backwards repeatedly; count module invocations from the cycle trace. |
-| `UT-SES-02` | `SW-0289` | `F-LONG` | From behind the head, attempt every input sequence that could resume forward; enumerate the outcomes reachable. |
-| `UT-SES-03` | `SW-0290` | `F-BULK` | Construct a session over a thousand-tick recording; count decodes. Read one port at one tick; count again. |
-| `UT-SES-04` | `SW-0291` | `F-BULK` | Fill the cache with scenes of widely differing sizes; read the eviction basis; attempt to bound by count alone. |
-| `UT-SES-05` | `SW-0292` | `F-LONG` | Run to the end sampling memory against tick count. Then retain a window beyond its bound. |
-| `UT-SES-06` | `SW-0293` | `F-FOREIGN`, `F-MULTI` | Exercise each of the five granularities; confirm each lands on its stated boundary and that the cycle granularity lands on a complete input set. |
-| `UT-SES-07` | `SW-0294` | `F-LONG` | Advance 200; cancel mid-job; read the resulting tick and confirm it is not mid-tick. |
-| `UT-SES-08` | `SW-0295` | `F-LONG` | Mark a section; read its exact boundary ticks; replay headlessly from the written configuration and compare the range covered. |
-| `UT-SES-09` | `SW-0296` | `F-CHAIN4` | Load a run with markers, a divergence and a waiver; click each and read the tick landed on. |
-| `UT-SES-10` | `SW-0297` | `F-LONG` | Switch between formats; compare the stored value; recover the internal value from each format. |
-| `UT-SES-11` | `SW-0300` | `F-LONG` | Construct a session over recordings of 1×, 5× and 20× duration; sample construction memory. |
-| `UT-SES-12` | `SW-0404` | `F-LONG` | Exercise every transport control; compare the tick landed on against the tick intended. |
+Twelve session tests retired along with the software items they served (12 of `SI-18`'s 15 — the other 3, already superseded by `VZ-12`, carried no test row of their own beyond these same twelve) — see the Software Requirements document's own disposition table for this item. Recorded per `R-REQ-2` rather than deleted silently.
 
 ### 5.19–5.21 `SI-19`/`SI-20`/`SI-21` — superseded (`SM-01`, 2026-08-20)
 
