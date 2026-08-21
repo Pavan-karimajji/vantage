@@ -953,18 +953,27 @@ fraction (1 `SW` + 2 `SYS` of ~130 total UIDs the full table names).
       refusal and a segment-never-created refusal specific to the
       cross-process case. Verified live: `simcore_tests` **65/65 green on
       both `vs2026`/MSVC and a `ubuntu_gcc` dev build** (55 prior + 10
-      new), the real cross-process `fork()` smoke test (POSIX) passes,
-      `/dev/shm` left clean after every test run (no leaked segment),
-      `check_invariants.py` clean. **Not yet done, explicitly deferred,
+      new), the real cross-process `fork()`+`_exit()` smoke test (POSIX)
+      passes, `/dev/shm` left clean after every test run (no leaked
+      segment), `check_invariants.py` clean. **The Windows
+      `CreateFileMapping`/`OpenProcess`+`WaitForSingleObject` branch got
+      its own real cross-process kill test too, same pass** (a scratch
+      `.cpp`, not committed — compiled+run via `cl.exe`/MSVC through WSL2
+      interop into the native Windows toolchain already installed on this
+      machine): a genuine separate child `.exe` publishes real frames
+      over the mapped segment, the parent reads them, then hard-kills the
+      child with `TerminateProcess` (skips its own destructor, same "real
+      crash, not an orderly shutdown" shape the POSIX test uses) and
+      blocks on `WaitForSingleObject` until the OS has actually reaped
+      it — `engineAlive()` correctly flips `false` only then. Both
+      backends now have parity: not just compiled on both platforms, but
+      each independently proven against a real killed process, not a
+      same-process simulation. **Not yet done, explicitly deferred,
       matching this plan's own incremental-slice precedent (`SM-01`):**
       the IT-level `UT-TRN-01`..`05` fixtures (`F-STUB`/`F-BULK`/`F-LONG`/
-      `F-STUB-CRASH`, a real component wired through the scheduler) and a
-      real cross-process (two actual `.exe`/kill) smoke test on the
-      `CreateFileMapping` branch (today's Windows evidence is a
-      same-process `ctest` run, not a forked-process crash test the way
-      the POSIX side got) — this pass proves both transport classes
-      themselves, not yet anything wired to a real scheduler or a real
-      player process.
+      `F-STUB-CRASH`, a real component wired through the scheduler) — this
+      pass proves both transport classes themselves, not yet anything
+      wired to a real scheduler or a real player process.
 - [ ] **Lands:** `IMP-0017`, `IMP-0298`, `IMP-0349`…`IMP-0356` — 10.
   - [ ] `IMP-0017` · `SW-0017` · `NEW` — `ANL-SW-07`
   - [ ] `IMP-0298` · `SW-0298` · `NEW` — `session/attach.py`
