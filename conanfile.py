@@ -349,7 +349,20 @@ class AdasComponent(ConanFile):
                 # verification, VZ-12's real consumer) -- copied explicitly
                 # rather than left to the same silent package-folder/lib
                 # default this branch's root already had to stop relying on
-                # above.
-                comp.libdirs = self.cpp.build.libdirs
-                comp.bindirs = self.cpp.build.bindirs
-                comp.includedirs = self.cpp.source.includedirs
+                # above. But layout()'s self.cpp.build/.source paths are the
+                # EDITABLE-mode-relative ones (build-sil-<platform>/...); a
+                # real (non-editable) package's artifacts sit under
+                # package_folder's plain install() layout instead (lib/bin/
+                # include, from this component's own CMakeLists.txt install()
+                # rules) -- copying the editable path there points at a
+                # directory that never exists in a real package (found live,
+                # VZ-18's own `test_erg_pull_integration.cpp` build). Same
+                # node.recipe check layout() already uses for its own
+                # editable-vs-consumer branch above.
+                is_editable = getattr(getattr(self, "_conan_node", None), "recipe", None) == "Editable"
+                if is_editable:
+                    comp.libdirs = self.cpp.build.libdirs
+                    comp.bindirs = self.cpp.build.bindirs
+                    comp.includedirs = self.cpp.source.includedirs
+                # else: leave cpp_info's own defaults (lib/bin/include under
+                # package_folder), which is exactly where install() put them.
