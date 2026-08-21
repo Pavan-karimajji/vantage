@@ -2967,6 +2967,21 @@ Superseded (`SM-01` trial), `SW-0324` — was *Display-only data is decoded only
 **Built.** ○ not started — `IMP-0356` in `WP-27`
 **Now.** `NEW`.
 
+**Ownership split (`SYNC:SM-06`, `D-5`, 2026-08-21), amended not superseded —
+none of `SW-0349`..`SW-0356`'s text above moved; only *where each half is
+implemented* did.** The abstract `Transport` wire/ABI contract these eight
+items describe now lives in `modules/interfaces` (`cpp/transport/ITransport.hpp`,
+`R-IFACE-1`) rather than as a same-repo Python module — both the engine and
+the player depend on it, neither on the other (`R-ARCH-1`). The **engine-side
+implementation** (in-process pass-through, local shared memory) lands in
+`modules/sim`'s own `src/simcore/transport/`, still this WP's (`WP-27`)
+scope. The **player-side client** lands in `modules/viz` (`VIZ:SI-16`,
+`VIZ_Software_Requirements_v0.1.md` §140) — not this module's scope from
+here on. `IT-19`/`UT-TRN-01`..`05` stay named on the `SW` rows above and are
+satisfied once both halves exist; a stub client on sim's own side (this
+row's own `WP-27` exit clause) is what lets sim verify `SW-0349` without
+waiting on `modules/viz`'s own client landing.
+
 ---
 
 # PART F — CROSS-CUTTING SOFTWARE CONSTRAINTS

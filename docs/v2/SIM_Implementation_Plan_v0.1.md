@@ -878,18 +878,40 @@ fraction (1 `SW` + 2 `SYS` of ~130 total UIDs the full table names).
 
 ### WP-27 · `MP-4` · `SI-25` `transport`
 - [ ] **Prereq:** `WP-14`.
+- [x] **Retargeted (`SYNC:SM-06`, `D-5`, 2026-08-21) — the `SI-25` split by
+      end, engine-side half.** This package predates `D-3`'s C++ decision;
+      its file targets below named a Python `adas_sim/transport/` tree that
+      no longer matches where the code actually lands. No `IMP` box below is
+      superseded — the requirements survive unchanged (`SW-0349`..`SW-0356`'s
+      own "amended not superseded" ownership-split note, same doc §28) —
+      only the target paths move, from Python to the split D-5 states:
+      contract in `modules/interfaces` (landed this pass, see below),
+      engine-side implementation staying here in `src/simcore/transport/`,
+      player-side client in `modules/viz` (`VIZ:SI-16`, out of this WP's
+      scope from here on).
+- [x] **The contract itself landed this pass:** `modules/interfaces/cpp/transport/ITransport.hpp`
+      (`R-IFACE-1`) — the abstract `Transport` interface `SW-0349` names,
+      `PortFrame`/`AttachResult` carrying ports+ticks+bytes only, no codec/
+      world-model/component name (`SW-0354`). Pure declaration, no
+      implementation (`workflows/add_interface.md`'s own "pure abstract
+      only" rule) — compiles standalone against `adas-interfaces`'s own
+      include root. **Not yet done, explicitly deferred, matching this
+      plan's own incremental-slice precedent (`SM-01`):** the two required
+      implementations (in-process pass-through, local shared memory) behind
+      it, and the version-negotiation/liveness-detection logic `SW-0355`/
+      `SW-0356` describe — real engine-side work, not attempted this pass.
 - [ ] **Lands:** `IMP-0017`, `IMP-0298`, `IMP-0349`…`IMP-0356` — 10.
   - [ ] `IMP-0017` · `SW-0017` · `NEW` — `ANL-SW-07`
   - [ ] `IMP-0298` · `SW-0298` · `NEW` — `session/attach.py`
-  - [ ] `IMP-0349` · `SW-0349` · `NEW` — `transport/iface.py::Transport` plus `inproc.py` and `shm.py`. Two imple…
+  - [ ] `IMP-0349` · `SW-0349` · `NEW` — contract: `modules/interfaces/cpp/transport/ITransport.hpp` (landed). Engine-side `src/simcore/transport/{inproc,shm}.cpp`, two implementations against it (not started).
   - [ ] `IMP-0350` · `SW-0350` · `KEEP` — `ANL-SW-58`
-  - [ ] `IMP-0351` · `SW-0351` · `NEW` — `transport/shm.py`
-  - [ ] `IMP-0352` · `SW-0352` · `NEW` — `shm.py::attach/detach`
-  - [ ] `IMP-0353` · `SW-0353` · `NEW` — `shm.py`
-  - [ ] `IMP-0354` · `SW-0354` · `NEW` — `transport/iface.py` carries ports, ticks and bytes; it has no codec, no…
-  - [ ] `IMP-0355` · `SW-0355` · `NEW` — `transport/negotiate.py`
-  - [ ] `IMP-0356` · `SW-0356` · `NEW` — `transport/liveness.py`
-- [ ] **Files:** `adas_sim/transport/{iface,inproc,shm,negotiate,liveness}.py`.
+  - [ ] `IMP-0351` · `SW-0351` · `NEW` — `src/simcore/transport/shm.cpp`
+  - [ ] `IMP-0352` · `SW-0352` · `NEW` — `shm.cpp::attach/detach`
+  - [ ] `IMP-0353` · `SW-0353` · `NEW` — `shm.cpp`
+  - [ ] `IMP-0354` · `SW-0354` · `NEW` — contract shape landed (`ITransport.hpp`'s `PortFrame` carries ports, ticks and bytes only, no codec/world-model/component name); `ANL-SW-59`'s static check still needs a real engine-side implementation to check against, not started
+  - [ ] `IMP-0355` · `SW-0355` · `NEW` — `src/simcore/transport/negotiate.cpp`
+  - [ ] `IMP-0356` · `SW-0356` · `NEW` — `src/simcore/transport/liveness.cpp`
+- [ ] **Files:** contract `modules/interfaces/cpp/transport/ITransport.hpp` (landed); engine-side `src/simcore/transport/{inproc,shm,negotiate,liveness}.cpp` (not started); player-side client is `modules/viz`'s own scope (`VIZ:SI-16`), not this file list.
 - [ ] **Exit:** **two** transports against one interface, because one implementation behind an interface is an interface nobody has tested. `IT-19` measures engine tick rate with and without a player attached. A slow player drops frames; it never slows the engine.
 
 ### WP-28 · `MP-4` · `SI-22` `launcher`
