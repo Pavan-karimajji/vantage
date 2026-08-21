@@ -459,29 +459,30 @@ flowchart LR
 > **This is the highest-value change in the migration.** Concept §22.1 and SwReq §2.4 both identify it, and it is the reason `MP-1` exists as its own phase rather than as part of the reader work.
 
 ### WP-09 · `MP-1` · `SI-03` `scheduler`
-- [ ] **Prereq:** `WP-08`.
-- [ ] **Lands:** `IMP-0056`…`IMP-0058`, `IMP-0061`, `IMP-0062`, `IMP-0064`…`IMP-0068`, `IMP-0070`, `IMP-0072`, `IMP-0073`, `IMP-0075`, `IMP-0077`, `IMP-0078`, `IMP-0413`, `IMP-0414` — 18. `IMP-0078` added 2026-08-20 (`SM-04`), relocated from the now-retired `WP-25`.
-  - [ ] `IMP-0078` · `SW-0078` · `EXTEND` — `simcore/runner/pacing.cpp`
-  - [ ] `IMP-0056` · `SW-0056` · `DEDUPE` — `src/simcore/bus/port_bus.cpp::Get`
-  - [ ] `IMP-0057` · `SW-0057` · `MOVE` — `port_bus.cpp::SetFor`
-  - [ ] `IMP-0058` · `SW-0058` · `NEW` — `port_bus.cpp::BufferStats`
-  - [ ] `IMP-0061` · `SW-0061` · `DEDUPE` — `src/simcore/scheduler/due.cpp` is the **only** execution gate. `Pipelin…
-  - [ ] `IMP-0062` · `SW-0062` · `DEDUPE` — `Scheduler::Scheduler(const RunSpec&)`
-  - [ ] `IMP-0064` · `SW-0064` · `DEDUPE` — `due.cpp::IsDue`
-  - [ ] `IMP-0065` · `SW-0065` · `EXTEND` — `due.cpp`
-  - [ ] `IMP-0066` · `SW-0066` · `MOVE` — `src/simcore/scheduler/reconcile.cpp`
-  - [ ] `IMP-0067` · `SW-0067` · `NEW` — `Scheduler::Scheduler`
-  - [ ] `IMP-0068` · `SW-0068` · `NEW` — `src/simcore/scheduler/sample.cpp`
-  - [ ] `IMP-0070` · `SW-0070` · `EXTEND` — `sample.cpp::OnMissing`
-  - [ ] `IMP-0072` · `SW-0072` · `MOVE` — `src/simcore/scheduler/order.cpp::Order`
-  - [ ] `IMP-0073` · `SW-0073` · `NEW` — `order.cpp::DelaySteps`
-  - [ ] `IMP-0075` · `SW-0075` · `KEEP` — `scheduler.hpp`
-  - [ ] `IMP-0077` · `SW-0077` · `KEEP` — `IT-05` runs one spec on a loaded and an idle machine and diffs port val…
-  - [ ] `IMP-0413` · `SW-0413` · `NEW` — `src/simcore/scheduler/due.cpp::Scheduler::Advance`
-  - [ ] `IMP-0414` · `SW-0414` · `NEW` — `reconcile.cpp::ReconcileMeasuredRate`
-- [ ] **Files:** `include/simcore/scheduler.hpp` · `src/simcore/scheduler/{due,sample,order,reconcile}.cpp` · `src/simcore/bus/port_bus.cpp` · `sil_host/src/pipeline.cpp`'s **`Step()` moved**.
-- [ ] **Exit:** `ANL-SW-17` — exactly one stepping entry point. `ANL-SW-02` — no GCD, snap or unit conversion anywhere in `simcore`. **The multi-rate path is the only path**, closing concept §22.2's *implemented twice, never on the path that matters*.
-- [ ] **Exit:** `ANL-SW-75` — `Advance()` is the only writer of simulation time, and no message timestamp is ever assigned to it. One clock; a fresh key input and a due period are both `const` predicates over it, and a `measured` stage's recorded cadence is reconciled against its declared period rather than either overwriting the other silently.
+- [ ] **Prereq:** `WP-08`. **`WP-08` itself has its own two remaining sub-items** (wire-level decode, run-manifest reporting) but nothing that blocks this row's own start — its Rung/Quality/PortValue foundation is landed and tested.
+- [x] **Core landed and verified live, 2026-08-21 (this row's own first slice, explicitly scoped):** `include/simcore/scheduler.hpp` + `src/simcore/scheduler/{due,reconcile}.cpp` (`Scheduler`) and `include/simcore/bus.hpp` + `src/simcore/bus/port_bus.cpp` (`PortBus`) — both ported from `sil_host/src/pipeline.cpp::Pipeline::Step`'s own real algorithm (confirmed by reading it directly: `elapsedNs_ % periodNs == 0` due-ness, `lastOutput_`/`lastDueNs_` hold-value cache, declaration-order stage iteration), not reinvented. `Scheduler::Advance()` is the sole writer of simulation time (`now_ns_ = tick_index_ * grid_step_ns_`, `SW-0413`); `IsDue` is integer-only (`SW-0064`); `Order()` reads `RunSpec::order` once, consumed never recomputed (`SW-0072` — the emitter's own topological sort, same "derived, never authored twice" discipline `PortCatalogue::Resolve` already uses); `ReconcileModuleFlag` reports a stage-level schedule/reported-flag disagreement, silent on agreement (`SW-0066`); the scheduler touches no payload byte and no wall clock anywhere in its source (`SW-0075`/`SW-0077`, true by construction — no `<chrono>`, no `PortValue::payload` access in `scheduler/`). `PortBus::Publish`/`Get`/`SetFor` give `SW-0056`/`0057` a real, testable shape — a held port returns the last real value with exact-nanosecond `hold_ns`, and `SetFor` returns the identical declared port set regardless of which producers actually ran this tick; `BufferStats` tracks reuse count and high-water bytes against an optional declared budget (`SW-0058`). `tests/unit/test_ut_sch_core.cpp` (6 cases, `UT-SCH-01/02/04/09/13`) + `tests/unit/test_ut_bus_port_bus.cpp` (5 cases, `UT-BUS-14/15/16`). Verified live: `simcore_tests` **90/90 green on both `vs2026`/MSVC and `ubuntu_gcc`** (78 prior + 12 new), `check_invariants.py` clean.
+- [ ] **Explicit scope boundary, not yet done (this row's own decision, made in writing rather than discovered by failing):** (1) **the data-driven trigger** (`SW-0065`) — freshness-key-based triggering needs `bus::CycleReconstructor` wired into the scheduler, a real integration this slice does not attempt; today's `Scheduler` is periodic-only, matching `pipeline.cpp`'s own `Now.` note ("the data-driven trigger does not exist in either" language). (2) **the five sampling policies** (`SW-0068`) and **missing-data behaviour beyond hold** (`SW-0070`) — `sample.cpp` not started. (3) **per-edge transport delay** (`SW-0073`) — `order.cpp::DelaySteps` not started (`Order()` itself, the stable-sequence half of that file, is done). (4) **play-rate pacing** (`SW-0078`, `IMP-0078`, relocated from the retired `WP-25`) — a real-time concern independent of the scheduling core, not attempted. (5) **the pathological-grid warning** (`SW-0067`). (6) **measured-rate reconciliation against a real recording** (`SW-0414`) — needs `CycleReconstructor::MeasuredRate` wired into `Scheduler`, the same integration gap as (1).
+  - [ ] `IMP-0078` · `SW-0078` · `EXTEND` — `simcore/runner/pacing.cpp` — not started, see scope boundary above
+  - [x] `IMP-0056` · `SW-0056` · `DEDUPE` — `src/simcore/bus/port_bus.cpp::Get` — `UtBusPortBus14` green
+  - [x] `IMP-0057` · `SW-0057` · `MOVE` — `port_bus.cpp::SetFor` — `UtBusPortBus15` green
+  - [x] `IMP-0058` · `SW-0058` · `NEW` — `port_bus.cpp::BufferStats` — `UtBusPortBus16` green
+  - [x] `IMP-0061` · `SW-0061` · `DEDUPE` — `src/simcore/scheduler/due.cpp` is the only execution gate — `UtSch01OneExecutionPath` green
+  - [x] `IMP-0062` · `SW-0062` · `DEDUPE` — `Scheduler::Scheduler(const RunSpec&)` — consumes `grid_step_ns` directly, no GCD anywhere in this file
+  - [x] `IMP-0064` · `SW-0064` · `DEDUPE` — `due.cpp::IsDue` — `UtSch02IntegerDueNess` (2 cases) green
+  - [ ] `IMP-0065` · `SW-0065` · `EXTEND` — `due.cpp` — not started, see scope boundary above
+  - [x] `IMP-0066` · `SW-0066` · `MOVE` — `src/simcore/scheduler/reconcile.cpp` — `UtSch04ModuleFlagAuthoritative` (2 cases) green
+  - [ ] `IMP-0067` · `SW-0067` · `NEW` — `Scheduler::Scheduler` — not started (pathological-grid warning), see scope boundary above
+  - [ ] `IMP-0068` · `SW-0068` · `NEW` — `src/simcore/scheduler/sample.cpp` — not started
+  - [ ] `IMP-0070` · `SW-0070` · `EXTEND` — `sample.cpp::OnMissing` — not started
+  - [x] `IMP-0072` · `SW-0072` · `MOVE` — `src/simcore/scheduler/order.cpp::Order` — landed in `due.cpp` (no separate file needed for a plain field read); `UtSch09StableOrder` green
+  - [ ] `IMP-0073` · `SW-0073` · `NEW` — `order.cpp::DelaySteps` — not started
+  - [x] `IMP-0075` · `SW-0075` · `KEEP` — `scheduler.hpp` — true by construction, no payload access anywhere in `scheduler/`
+  - [x] `IMP-0077` · `SW-0077` · `KEEP` — true by construction, no wall-clock read anywhere in `scheduler/`; `IT-05`'s own loaded-vs-idle-machine run not attempted (needs a real component wired through the scheduler, `WP-14`'s own prereq chain)
+  - [x] `IMP-0413` · `SW-0413` · `NEW` — `src/simcore/scheduler/due.cpp::Scheduler::Advance` — `UtSch13SimTimeIsArithmeticSequence` green
+  - [ ] `IMP-0414` · `SW-0414` · `NEW` — `reconcile.cpp::ReconcileMeasuredRate` — not started, see scope boundary above
+- [ ] **Files:** `include/simcore/scheduler.hpp` + `src/simcore/scheduler/{due,reconcile}.cpp` (landed) + `sample.cpp`/`order.cpp`'s own `DelaySteps` (not started) · `src/simcore/bus/port_bus.cpp` (landed) · `sil_host/src/pipeline.cpp`'s **`Step()` ported, not yet deleted** (`WP-16`'s own scope, `SW-0019`'s "no half of a split removed until the surviving half passes the retiring half's own tests" — those tests are `IT`-level and need `WP-14`).
+- [ ] **Exit:** `ANL-SW-17` — exactly one stepping entry point (**structurally true**, not yet mechanised as a static check). `ANL-SW-02` — no GCD, snap or unit conversion anywhere in `simcore` (**true in `scheduler/`**, not yet a repo-wide static check). **The multi-rate path is the only path** — **not fully met**: the data-driven trigger (`SW-0065`) that makes it genuinely multi-rate (vs. today's periodic-only core) is still open.
+- [ ] **Exit:** `ANL-SW-75` — `Advance()` is the only writer of simulation time, and no message timestamp is ever assigned to it (**done**, `UT-SCH-13`). A fresh key input and a due period are both `const` predicates over it (**due period done; fresh key input is `SW-0065`, open**), and a `measured` stage's recorded cadence is reconciled against its declared period rather than either overwriting the other silently (**`SW-0414`, open**).
 
 ### WP-10 · `MP-1` · `SI-04` `module_host`
 - [ ] **Prereq:** `WP-03` (needs the taxonomy and the build, not the scheduler).

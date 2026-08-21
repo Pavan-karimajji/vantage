@@ -308,6 +308,57 @@ class CycleReconstructor {
   const LadderFloor* FindFloor(const PortId& port) const;
 };
 
+// SW-0056/0057/0058 (`WP-09`): the bus buffers, held-value cache and
+// buffer-budget accounting. `Publish` marks a port's fresh value for THIS
+// tick; `Get` always answers -- the last real value, marked not-updated
+// with the exact elapsed nanoseconds since it was produced, when nothing
+// was published at `now_ns` (`SW-0056`, ported from
+// `sil_host/src/pipeline.cpp::Step`'s own `lastOutput_`/`lastDueNs_`
+// pair). `SetFor` is what makes `SW-0057`'s own invariant real: called
+// with a stage's FULL declared port set regardless of any producer's
+// due-ness or mode, so a consumer cannot tell `simulate` from `measured`
+// (R-SIM-10).
+class PortBus {
+ public:
+  struct BufferStats {
+    std::size_t reuse_count = 0;      // a Publish that fit inside the existing buffer's capacity
+    std::size_t high_water_bytes = 0;
+    std::size_t total_bytes = 0;      // current
+  };
+
+  // byte_budget: 0 means "no declared budget" (SW-0058's own wording --
+  // a bus a caller never bounds is not a defect, it is a caller that
+  // declared no limit).
+  explicit PortBus(std::size_t byte_budget = 0);
+
+  // SW-0058: refuses (naming the port and the budget) once total buffer
+  // bytes across every port would exceed a declared budget -- the value
+  // is still stored (an over-budget Publish is a reported condition, not
+  // a dropped one; the scheduler decides what to do with the refusal).
+  Result<bool> Publish(const PortId& port, PortValue value, std::int64_t now_ns);
+
+  // SW-0056: never absent -- a port never published returns an
+  // `Origin::Unknown`, `updated=false` value naming the port, not a
+  // missing-key lookup a caller could forget to guard.
+  PortValue Get(const PortId& port, std::int64_t now_ns) const;
+
+  // SW-0057.
+  std::vector<PortValue> SetFor(const std::vector<PortId>& declared_ports, std::int64_t now_ns) const;
+
+  BufferStats Stats() const { return stats_; }
+
+ private:
+  struct Slot {
+    PortValue value;
+    std::int64_t last_produced_ns = 0;
+    bool has_value = false;
+  };
+
+  std::map<PortId, Slot> slots_;
+  std::size_t byte_budget_ = 0;
+  BufferStats stats_;
+};
+
 // SW-0388/SW-0389/SW-0390: a port's identity is its own declared name --
 // never a producer/stage prefix (SW-0389) -- optionally namespaced by a
 // project (`"<project>::<port>"`, SW-0390). No producer field: splitting

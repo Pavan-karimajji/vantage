@@ -37,10 +37,14 @@ add_library(simcore STATIC
     bus/bulk.cpp
     bus/catalogue.cpp
     bus/cycle.cpp
+    bus/port_bus.cpp
     # SM-06 (SI-25, D-5): the engine-side implementations behind
     # modules/interfaces' ITransport contract.
     transport/inproc.cpp
     transport/shm.cpp
+    # WP-09 (SI-03): the multi-rate scheduler core.
+    scheduler/due.cpp
+    scheduler/reconcile.cpp
 )
 target_include_directories(simcore PUBLIC ${PROJECT_SOURCE_DIR}/include)
 # PRIVATE: third_party/ is an implementation detail of simcore's own .cpp

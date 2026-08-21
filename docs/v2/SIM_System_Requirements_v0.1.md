@@ -415,7 +415,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A reader shall stream, and the system shall never require a whole recording to be resident in memory.
 **Accept.** Peak resident memory for a run over a 20-minute recording is bounded by the declared working set and does not scale with recording length; measured across three recordings of 1×, 5× and 20× duration, peak memory varies by less than 20%.
 **Verify.** T · `SYT-INP-02` · `ANL-01`   **Trace.** CN-0302, CN-0355
-**Built.** ◐ started — 3/4 software requirements done, in `WP-06`, `WP-09`
+**Built.** ● done — 4/4 software requirements done
 
 **`SYS-0003`** · `P0` · `R1` — Random access by time
 **Shall.** A reader shall support random access by time, or provide an index that makes it possible.
@@ -790,7 +790,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The system shall maintain three clocks — the data's own source time, the engine's simulation time, and wall-clock execution time — and wall-clock time shall never influence results.
 **Accept.** Running the same spec on a machine 10× slower produces identical port values; only the performance report differs.
 **Verify.** T · `SYT-TIM-01`   **Trace.** CN-0137, CN-0138
-**Built.** ○ not started — 0/4 software requirements done, in `WP-09`, `WP-15`, `WP-27`
+**Built.** ◐ started — 1/4 software requirements done, in `WP-09`, `WP-15`, `WP-27`
 
 **`SYS-0060`** · `P0` · `R1` — Integer nanoseconds internally
 **Shall.** All internal time shall be integer nanoseconds; float seconds shall appear only at human-facing boundaries.
@@ -802,7 +802,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Simulation time shall advance by exactly one base-grid step per tick from the declared run start, and no arrival, reconstructed cycle boundary or module output shall move it.
 **Accept.** Over a run, the sequence of simulation-time values is the arithmetic sequence the grid step defines, independent of the recording's own timestamps and of which modules executed. A recording whose data is dense in one interval and sparse in another produces the same tick sequence as one that is uniform.
 **Verify.** T · `SYT-TIM-21`   **Trace.** CN-0392, CN-0137
-**Built.** ○ not started — 0/2 software requirements done, in `WP-09`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-09`
 *Note:* stated because three things in the concept decide that a module runs — data arrival, a declared period, and a recorded rate. They agree on a self-produced recording and cannot agree on a foreign one. Fixing one clock and making both kinds of due-ness predicates on its ticks is what removes the ambiguity rather than deferring it to whichever implementation lands first.
 
 **`SYS-0284`** · `P0` · `R1` — Reception time is not a header field
@@ -845,13 +845,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A periodic trigger with a period and an offset shall be available for modules with no data-driven trigger.
 **Accept.** A periodic module fires on exactly the expected ticks over a 60-second run, with zero drift.
 **Verify.** T · `SYT-TIM-07`   **Trace.** CN-0144
-**Built.** ○ not started — 0/2 software requirements done, in `WP-09`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-09`
 
 **`SYS-0066`** · `P0` · `R1` — The base grid is the GCD, and a period is never rounded to fit it
 **Shall.** The base grid step shall be the greatest common divisor of all declared periods, derived and never configured; a declared period that is not an integer multiple of it shall be a load error naming both numbers, and shall never be rounded, snapped or matched to a nearest value.
 **Accept.** With 20 ms and 30 ms declared, the grid is 10 ms and both modules fire on their correct ticks. A period of 19.99 ms beside one of 20 ms is refused naming both, and no configured tolerance can make it accepted.
 **Verify.** T · `SYT-TIM-08`   **Trace.** CN-0145, CN-0394
-**Built.** ◐ started — 1/6 software requirements done, in `WP-05`, `WP-09`, `WP-20`
+**Built.** ◐ started — 3/6 software requirements done, in `WP-05`, `WP-09`, `WP-20`
 *Note:* a rounded period does not stay a rounding. It accumulates, and it surfaces as a module producing values at the wrong moments — which reads as a defect in the module rather than in the scheduling that caused it.
 
 **`SYS-0285`** · `P0` · `R1` — Every declared period enters the grid, whatever triggers the module
@@ -878,19 +878,19 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The multi-rate scheduler shall be the only execution path; no single-rate path shall exist.
 **Accept.** The codebase contains no alternative per-cycle execution route. Every test in the suite exercises the multi-rate scheduler.
 **Verify.** A · `ANL-11`   **Trace.** CN-0331, CN-0359; **defect** concept §22.2
-**Built.** ○ not started — 0/3 software requirements done, in `WP-09`, `WP-13`
+**Built.** ◐ started — 2/3 software requirements done, in `WP-09`, `WP-13`
 
 **`SYS-0070`** · `P0` · `R1` — Not due means held, never absent
 **Shall.** A module that is not due shall hold its last output, marked not-updated, with the exact elapsed time since it was last due; a consumer shall always receive its full port set.
 **Accept.** A 50 ms consumer of a 10 ms producer sees a value on every tick, with the not-updated flag and elapsed time correct to the nanosecond. No consumer ever observes a gap.
 **Verify.** T · `SYT-TIM-11`   **Trace.** CN-0332, CN-0333
-**Built.** ◐ started — 1/3 software requirements done, in `WP-07`, `WP-09`
+**Built.** ● done — 3/3 software requirements done
 
 **`SYS-0071`** · `P0` · `R1` — The module's own update flag wins
 **Shall.** A module's own reported update flag shall be authoritative over the predicted schedule, and any disagreement shall be reported.
 **Accept.** A module whose internal rate gating disagrees with its declared period produces a named finding in the run manifest, never a silent value.
 **Verify.** T · `SYT-TIM-12`   **Trace.** CN-0334
-**Built.** ○ not started — 0/1 software requirements done, in `WP-09`
+**Built.** ● done — 1/1 software requirements done
 *Note:* this is what remains of `OQ-12` once the ABI has answered it (`SYS-0072`). A module cannot *declare* a new rate mid-run, but it may still **behave** at one — internal sub-gating, a cycle skipped under load, a stale calibration key. This requirement covers exactly that, and it is a **stronger** guarantee than an answer from a module team would have been, because it also holds for the modules that would have answered the survey wrongly.
 
 **`SYS-0072`** · `P0` · `R1` — Period is declared by the module, calibrated in configuration
@@ -924,7 +924,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Within a step, modules shall execute in a deterministic topological order, printed by the explain command.
 **Accept.** Two runs of one spec produce the identical order; `explain` prints it before executing anything.
 **Verify.** T · `SYT-TIM-17`   **Trace.** CN-0151
-**Built.** ○ not started — 0/1 software requirements done, in `WP-09`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0077`** · `P1` · `R1` — Transport delay per edge
 **Shall.** Each edge may declare a transport delay in steps, where zero means same-step and one models a consumer seeing the previous cycle's data.
@@ -961,7 +961,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A stage's port set shall be identical whether the stage executed or its outputs were injected from a recording.
 **Accept.** A downstream module's configuration entry is byte-identical across the change, and it cannot determine its producer's mode from its inputs alone.
 **Verify.** T · `SYT-STG-02`   **Trace.** CN-0118, CN-0120; v1 `FR-SIM-41`
-**Built.** ○ not started — 0/2 software requirements done, in `WP-09`, `WP-13`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-09`, `WP-13`
 
 **`SYS-0082`** · `P1` · `R1` — Per-port mode override
 **Shall.** Mode shall be overridable per output port for expert cases.
@@ -1198,7 +1198,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Bulk arrays — point clouds, images, occupancy grids — shall be referenced into the recording by topic and time, never inlined into a scene or a tick structure.
 **Accept.** A scene containing an image reference is smaller than a declared per-scene budget; exceeding the budget is an error naming the layer.
 **Verify.** T · `SYT-OUT-08`   **Trace.** CN-0318; v1 `NR-SIM-43`
-**Built.** ◐ started — 1/2 software requirements done, in `WP-07`, `WP-09`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0119`** · `P1` · `R1` — A merged output loads alone
 **Shall.** An output consisting of the original recording passed through with simulated ports overwriting their own channels shall be loadable on its own, with no other input.
@@ -1457,7 +1457,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The system shall produce a Resolved Run Spec — flat, with every path resolved, every mode decided, every period computed, every validation passed — write it and its hash into the run artifacts, and treat it as the only input the engine takes.
 **Accept.** The engine performs no configuration inference, no schema upgrading, no wiring validation and no library search-path logic; it requires no configuration-language parser. The same spec hash always produces the same results.
 **Verify.** T · `SYT-CFG-08` · `ANL-24`   **Trace.** CN-0292, CN-0293, CN-0294, CN-0296, CN-0179; v1 `FR-SIM-30`
-**Built.** ◐ started — 4/9 software requirements done, in `WP-05`, `WP-09`, `WP-13`, `WP-16`, `WP-22`
+**Built.** ◐ started — 5/9 software requirements done, in `WP-05`, `WP-09`, `WP-13`, `WP-16`, `WP-22`
 
 **`SYS-0166`** · `P0` · `R1` — Absolute, pre-resolved binary paths
 **Shall.** The Resolved Run Spec shall carry absolute, already-resolved paths for every module binary; the engine shall perform no stem expansion and consult no search path.
@@ -1966,7 +1966,7 @@ mechanism.
 **Shall.** The system shall read and decode only the ports the active graph requires.
 **Accept.** A run of a function alone over a recording containing camera data decodes zero image bytes. Bytes-read is reported per run and is compared against the theoretical minimum for the port set.
 **Verify.** T · `SYT-NFR-01` · `ANL-31`   **Trace.** CN-0224, CN-0042
-**Built.** ◐ started — 1/4 software requirements done, in `WP-06`, `WP-09`, `WP-15`, `WP-17`
+**Built.** ◐ started — 2/4 software requirements done, in `WP-06`, `WP-09`, `WP-15`, `WP-17`
 
 **`SYS-0231`** · `P1` · `R1` — Lazy decode
 **Shall.** Data shall be decoded only when a simulating module consumes it or the player displays it.
@@ -2026,7 +2026,7 @@ Superseded (`SM-04`, 2026-08-20 — sole decomposer was `SI-18`'s scene-cache-bu
 **Shall.** The same inputs, the same Resolved Run Spec and the same binaries shall produce identical outputs.
 **Accept.** Byte-identical port values across repeated runs, on both platforms, with no wall-clock dependency, no unseeded randomness and no dependence on thread scheduling in the default mode.
 **Verify.** T · `SYT-NFR-07`   **Trace.** CN-0249, CN-0250, CN-0038
-**Built.** ◐ started — 1/7 software requirements done, in `WP-06`, `WP-09`, `WP-11`, `WP-15`, `WP-23`
+**Built.** ◐ started — 3/7 software requirements done, in `WP-06`, `WP-09`, `WP-11`, `WP-15`, `WP-23`
 
 **`SYS-0240`** · `P0` · `R1` — Four axes, two gates and two measurements
 **Shall.** Reproducibility shall be reported separately for four axes — same process, fresh process, rebuilt binary, different machine — with the first two exact and blocking, and the last two measured, declared and tracked against a bound.

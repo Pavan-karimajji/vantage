@@ -854,21 +854,21 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Where a producer is not due, the bus shall present its last produced value marked not-updated with the exact elapsed nanoseconds since it was last produced.
 **Accept.** A consumer never observes a gap. Elapsed time is exact to the nanosecond and is derived from integers.
 **Verify.** T · `UT-BUS-14`   **Trace.** SYS-0070; CN-0332, CN-0333
-**Built.** ○ not started — `IMP-0056` in `WP-09`
+**Built.** ● done — `IMP-0056` in `WP-09`
 **Now.** `DONE·TWICE` — implemented in `contracts/pipeline.py::Pipeline.step` and in `sil_host/src/pipeline.cpp::Step`. **Neither resim driver calls it**: both take the single-rate path, each citing the other's choice. The Python one is reached only from the recording path (`cli/run.py`, `sources/recorder.py`) and its unit tests, so the hold semantics are exercised but the loop that matters is not.
 
 **`SW-0057`** · `SI-02` · `P0` · `R1` — A consumer always receives its full port set
 **Shall.** A module shall receive a value for every port it declares, on every tick it executes, regardless of any producer's due-ness or mode.
 **Accept.** No module entry point is ever called with a port absent from its declared set. The port set is byte-identical whether a producer executed or its value was injected.
 **Verify.** T · `UT-BUS-15`   **Trace.** SYS-0081, SYS-0070
-**Built.** ○ not started — `IMP-0057` in `WP-09`
+**Built.** ● done — `IMP-0057` in `WP-09`
 **Now.** `DONE·MOVE` — `contracts/pipeline.py` guarantees this and it is one of the design's central proven properties.
 
 **`SW-0058`** · `SI-02` · `P1` · `R1` — Buffer reuse is explicit and bounded
 **Shall.** The bus shall own its buffers, reuse them across ticks, and bound total buffer bytes by a declared budget.
 **Accept.** Steady-state allocation per tick is zero after warm-up, measured by an allocation counter. Exceeding the budget is an error naming the port that exceeded it.
 **Verify.** T · `UT-BUS-16`   **Trace.** SYS-0002, SYS-0118
-**Built.** ○ not started — `IMP-0058` in `WP-09`
+**Built.** ● done — `IMP-0058` in `WP-09`
 **Now.** `NEW`.
 
 **`SW-0059`** · `SI-02` · `P0` · `R1` — Bulk arrays are referenced, never inlined
@@ -938,14 +938,14 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The multi-rate scheduler shall be the only path by which a module is executed; no single-rate path shall exist.
 **Accept.** The engine contains one function that decides a module executes. Every test in the suite reaches it. A grep finds no alternative per-cycle execution route.
 **Verify.** A · `ANL-SW-17` · T · `UT-SCH-01`   **Trace.** SYS-0069; CN-0331; **defect** concept §22.2
-**Built.** ○ not started — `IMP-0061` in `WP-09`
+**Built.** ● done — `IMP-0061` in `WP-09`
 **Now.** `DONE·TWICE` — both `Pipeline.exec`/`Pipeline.step` in Python and `Exec()`/`Step()` in C++ exist as a pair, and in both languages the resim driver takes the *single-rate* half. The Python multi-rate half survives only on the recording path, which two of the adopted scope decisions remove; deleting the single-rate half in both, and keeping the multi-rate half exercised while that happens, is the whole of this requirement.
 
 **`SW-0062`** · `SI-03` · `P0` · `R1` — The base grid is consumed, not computed
 **Shall.** The scheduler shall take the base grid step from the spec and shall not derive it.
 **Accept.** The engine contains no greatest-common-divisor computation. Changing the spec's grid changes behaviour; changing a period without re-emitting the spec cannot.
 **Verify.** A · `ANL-SW-02`   **Trace.** SYS-0066, SYS-0165
-**Built.** ○ not started — `IMP-0062` in `WP-09`
+**Built.** ● done — `IMP-0062` in `WP-09`
 **Now.** `DONE·TWICE` — computed in both languages today; the C++ copy is deleted under `SW-0018`.
 
 **`SW-0063`** · `SI-11` · `P0` · `R1` — A period that is not a multiple of the grid is refused before the run
@@ -959,7 +959,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Whether a module is due on a tick shall be decided by integer arithmetic over the base grid, the module's period and its declared offset.
 **Accept.** Over a 60-second run at a 10 ms grid, a 30 ms module fires on exactly the expected ticks with zero drift.
 **Verify.** T · `UT-SCH-02`   **Trace.** SYS-0065, SYS-0066
-**Built.** ○ not started — `IMP-0064` in `WP-09`
+**Built.** ● done — `IMP-0064` in `WP-09`
 **Now.** `DONE·TWICE` — implemented in both `Pipeline.step` and `Pipeline::Step`.
 
 **`SW-0065`** · `SI-03` · `P0` · `R1` — The data-driven trigger is the default, and it is a predicate on a tick
@@ -973,7 +973,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The scheduler shall advance simulation time by exactly the spec's grid step per tick from the declared run start, and no arrival, reconstructed cycle boundary or module output shall move it.
 **Accept.** The tick sequence is the arithmetic sequence the grid step defines. A recording whose data is dense in one interval and sparse in another yields the same tick sequence as a uniform one. There is no code path that writes simulation time from a message timestamp.
 **Verify.** T · `UT-SCH-13` · A · `ANL-SW-75`   **Trace.** SYS-0283; CN-0392
-**Built.** ○ not started — `IMP-0413` in `WP-09`
+**Built.** ● done — `IMP-0413` in `WP-09`
 **Now.** `NEW` — today's tick index advances per grouped message set, so the recording's own density decides the tick sequence. That is the same defect as `SW-0049` seen from the scheduler's side.
 
 **`SW-0414`** · `SI-03` · `P0` · `R1` — A recorded rate that contradicts a declared period is reported, and the recording wins
@@ -988,7 +988,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Where a module's reported update flag disagrees with the predicted schedule, the module's flag shall be taken and the disagreement reported.
 **Accept.** A module whose internal gating has drifted from its declared period produces a named finding in the run manifest, never a silent value.
 **Verify.** T · `UT-SCH-04`   **Trace.** SYS-0071; CN-0334
-**Built.** ○ not started — `IMP-0066` in `WP-09`
+**Built.** ● done — `IMP-0066` in `WP-09`
 **Now.** `DONE·MOVE` — implemented in `contracts/pipeline.py` with a `ProvenanceWarning` naming stage, port, declared period, predicted due-ness and reported flag. Directly portable.
 
 **`SW-0067`** · `SI-03` · `P1` · `R1` — A pathological grid is reported before it is paid for
@@ -1035,7 +1035,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Within a tick, modules shall execute in a topological order that is fully determined by the spec and identical across runs, processes and machines.
 **Accept.** Two runs of one spec produce the identical order. The order does not depend on container iteration, pointer values, thread scheduling or file-system enumeration order.
 **Verify.** T · `UT-SCH-09` · A · `ANL-SW-18`   **Trace.** SYS-0076, SYS-0239
-**Built.** ○ not started — `IMP-0072` in `WP-09`
+**Built.** ● done — `IMP-0072` in `WP-09`
 **Now.** `DONE·MOVE` — stage order is declaration order in `contracts/pipeline.py` and is stable; a real topological sort over a resolved graph does not exist yet.
 
 **`SW-0073`** · `SI-03` · `P1` · `R1` — A per-edge transport delay is applied in whole grid steps
@@ -1056,7 +1056,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The scheduler shall decide due-ness, sampling and order from headers, periods and the spec alone, and shall not read a message payload.
 **Accept.** A static check finds no payload access from any scheduler entry point.
 **Verify.** A · `ANL-SW-19`   **Trace.** SYS-0069, SYS-0230
-**Built.** ○ not started — `IMP-0075` in `WP-09`
+**Built.** ● done — `IMP-0075` in `WP-09`
 **Now.** `DONE` — true of both existing `step` implementations; recorded so the property is not lost.
 
 **`SW-0076`** · `SI-03` · `P1` · `R1` — The schedule is emitted before it is executed
@@ -1070,7 +1070,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** No scheduling decision shall depend on wall-clock time, elapsed real time or host load.
 **Accept.** Running the same spec on a machine an order of magnitude slower produces identical port values; only the performance report differs.
 **Verify.** T · `IT-05`   **Trace.** SYS-0059, SYS-0239
-**Built.** ○ not started — `IMP-0077` in `WP-09`
+**Built.** ● done — `IMP-0077` in `WP-09`
 **Now.** `DONE` — true today in both hosts.
 
 **`SW-0078`** · `SI-03` · `P1` · `R1` — Play-rate pacing is a separate, non-influencing concern
