@@ -27,6 +27,9 @@ set(SIM_TEST_SOURCES
     unit/test_ut_io_mcap_roundtrip.cpp
     # SM-05a: the real .erg codec, against real fixtures (tests/fixtures/erg/).
     unit/test_ut_io_erg_reconstruct.cpp
+    # Regression coverage for three real defects found in code review,
+    # 2026-08-21 -- see this file's own top note.
+    unit/test_ut_io_erg_negative.cpp
     # WP-07 (SI-02 bus): UT-BUS-01..06, UT-BUS-17, UT-BUS-18, UT-BUS-20..22.
     unit/test_ut_bus_header.cpp
     unit/test_ut_bus_value.cpp

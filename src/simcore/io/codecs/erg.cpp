@@ -72,10 +72,10 @@ struct ErgColumn {
   std::size_t byte_offset = 0;
 };
 
-// `File.At.N.Type` is `Double` | `Int` | `"<N> Bytes"` (the real
-// `bsd_tos_left_straight*.erg.info` fixtures' own literal spelling, column
-// 27's `$none$` field). No other type has ever been observed; an unknown
-// spelling is a hard parse error naming it, never guessed at a width.
+// `File.At.N.Type` is `Double` | `Int` | `"<N> Bytes"` (the real fixtures'
+// own literal spelling for a padding/unused column, e.g. `$none$`). No
+// other type has ever been observed; an unknown spelling is a hard parse
+// error naming it, never guessed at a width.
 bool ParseErgType(const std::string& text, ErgType* type, std::size_t* width) {
   if (text == "Double") {
     *type = ErgType::kDouble;
@@ -263,11 +263,11 @@ struct PortGroup {
   std::vector<ColumnBinding> bindings;
 };
 
-// Longest-prefix-match `column_name` against every known port name
-// (`bsd.outputs`, `bsd.compState`, ...). A match at `name` means either
-// `column_name == name` (a bare-scalar port -- rejected below, no real
-// port in this repo is scalar-typed) or `column_name` starts with
-// `name + "."`, in which case the remainder is the field path.
+// Longest-prefix-match `column_name` against every known port name (the
+// manifest's own `PortSpec.name`, e.g. `"<function>.outputs"`). A match at
+// `name` means either `column_name == name` (a bare-scalar port -- rejected
+// below, no real port in this repo is scalar-typed) or `column_name` starts
+// with `name + "."`, in which case the remainder is the field path.
 std::optional<std::string> LongestPortMatch(
     const std::string& column_name, const std::vector<std::string>& port_names_by_length_desc) {
   for (const std::string& name : port_names_by_length_desc) {
@@ -388,9 +388,9 @@ class ErgReader final : public Reader {
     if (!columns_result.ok()) return Result<bool>::Fail(columns_result.error());
     columns_ = std::move(columns_result.value());
 
-    if (columns_.empty() || columns_.front().name != "Time") {
+    if (columns_.empty() || columns_.front().name != "Time" || columns_.front().type != ErgType::kDouble) {
       return Result<bool>::Fail(MakeError(
-          Kind::Environment, "column 1 named \"Time\" (the row's own clock)",
+          Kind::Environment, "column 1 named \"Time\", typed Double (the row's own clock)",
           columns_.empty() ? "no columns" : "column 1 = '" + columns_.front().name + "'", info_path.string()));
     }
     const std::size_t computed_row_size = columns_.back().byte_offset + columns_.back().byte_width;
@@ -418,6 +418,7 @@ class ErgReader final : public Reader {
     const ManifestLite manifest = std::move(manifest_result.value());
 
     // ---- descriptor pool, from the manifest's own real FileDescriptorSet ----
+    descriptor_set_bytes_ = manifest.descriptor_set_bytes;
     pb::FileDescriptorSet file_descriptor_set;
     if (!file_descriptor_set.ParseFromString(manifest.descriptor_set_bytes)) {
       return Result<bool>::Fail(MakeError(
@@ -453,12 +454,16 @@ class ErgReader final : public Reader {
             Kind::Environment, "every non-\"" + host_prefix + "*\" column to match a real manifest port name",
             "'" + column.name + "' matches none", path.string()));
       }
-      const std::string field_path_str = column.name.substr(matched->size() + 1);
-      if (field_path_str.empty()) {
+      // A bare-scalar match (column.name == *matched, no trailing ".<field>")
+      // is checked BEFORE substr -- matched->size()+1 would exceed
+      // column.name.size() in that case and substr() throws std::out_of_range
+      // rather than returning early the way this code originally assumed.
+      if (column.name.size() == matched->size()) {
         return Result<bool>::Fail(MakeError(
             Kind::Internal, "a field path after the matched port name", "empty (bare-scalar port match)",
             "column '" + column.name + "'"));
       }
+      const std::string field_path_str = column.name.substr(matched->size() + 1);
 
       if (groups.find(*matched) == groups.end()) {
         const auto port_it = std::find_if(
@@ -489,6 +494,20 @@ class ErgReader final : public Reader {
     // fabricate a value, per `R-SIM-25`).
     for (const ResolvedPort& port : resolved_ports_) {
       for (const ColumnBinding& binding : port.group.bindings) {
+        // A "N Bytes" column is an opaque blob (this file's real column 27,
+        // "$none$", is the only one seen in practice, and is filtered out
+        // before grouping) -- ReadColumnAsDouble only knows how to widen
+        // Double/Int into a double, and binding a kBytes column to a real
+        // scalar leaf would silently read the wrong byte count (over- or
+        // under-reading adjacent row memory) rather than fail. Refused here,
+        // at load time, rather than left to corrupt a value at Pull() time.
+        if (binding.column->type == ErgType::kBytes) {
+          return Result<bool>::Fail(MakeError(
+              Kind::Environment, "a Double/Int column bound to a scalar leaf field",
+              "column '" + binding.column->name + "' is a \"" + std::to_string(binding.column->byte_width) +
+                  " Bytes\" opaque blob, not a scalar",
+              path.string()));
+        }
         const pb::Descriptor* current_descriptor = port.descriptor;
         for (std::size_t seg = 0; seg + 1 < binding.field_path.size(); ++seg) {
           const pb::FieldDescriptor* field = current_descriptor->FindFieldByName(binding.field_path[seg]);
@@ -528,10 +547,17 @@ class ErgReader final : public Reader {
       TopicInfo info;
       info.schema_name = port.group.proto_type;
       info.provenance = Provenance::kMeasured;
-      pb::FileDescriptorProto file_proto;
-      port.descriptor->file()->CopyTo(&file_proto);
-      info.schema_bytes.resize(file_proto.ByteSizeLong());
-      file_proto.SerializeToArray(info.schema_bytes.data(), static_cast<int>(info.schema_bytes.size()));
+      // The manifest's OWN descriptor_set, verbatim -- not just
+      // port.descriptor->file() (that message's single .proto file alone).
+      // A leaf field's own type can live in a transitively-imported file
+      // (BsdOutputs/CompState both import common/signal_header.proto for
+      // sig_header) that a single-file serialization would silently drop,
+      // leaving a consumer building its own DescriptorPool from schema_bytes
+      // alone unable to resolve it. ComponentManifest.proto's own contract
+      // ("plus their transitive dependencies", R-SIM-11) is exactly this
+      // closure, already computed once at Open() -- reused here, not
+      // re-derived narrower.
+      info.schema_bytes.assign(descriptor_set_bytes_.begin(), descriptor_set_bytes_.end());
       result[port.group.port_name] = std::move(info);
     }
     return result;
@@ -581,7 +607,13 @@ class ErgReader final : public Reader {
   }
 
   std::optional<RawMessage> Pull() {
-    if (!opened_ || row_index_ >= row_count_) return std::nullopt;
+    // resolved_ports_ can legitimately be empty -- every real column was
+    // "$none$" or a <component>.host.* diagnostic, both skipped during
+    // grouping, and Open() does not itself reject that (a file with real
+    // rows but no reconstructable port is closer to "an empty recording"
+    // than an error). Guarded here, not just by the row-count check below,
+    // which alone would let port_index_ 0 index an empty vector.
+    if (!opened_ || row_index_ >= row_count_ || resolved_ports_.empty()) return std::nullopt;
 
     const ResolvedPort& port = resolved_ports_[port_index_];
     std::unique_ptr<pb::Message> message(port.prototype->New());
@@ -628,6 +660,7 @@ class ErgReader final : public Reader {
   std::size_t row_size_ = 0;
   std::size_t row_count_ = 0;
   std::vector<ErgColumn> columns_;
+  std::string descriptor_set_bytes_;  // the manifest's own full closure, reused verbatim by Describe()
   pb::SimpleDescriptorDatabase descriptor_db_;
   std::unique_ptr<pb::DescriptorPool> descriptor_pool_;
   std::unique_ptr<pb::DynamicMessageFactory> message_factory_;
