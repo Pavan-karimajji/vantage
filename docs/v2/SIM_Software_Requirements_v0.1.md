@@ -824,7 +824,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Where a port's cycle structure was derived from rung 4, that port's values shall be marked *timing approximated*.
 **Accept.** The mark appears in the run manifest, in every export carrying that port, and in the player, and it survives export and re-import.
 **Verify.** T · `UT-BUS-10`   **Trace.** SYS-0032, SYS-0015
-**Built.** ◐ started — `IMP-0052` in `WP-08`
+**Built.** ● done — `IMP-0052` in `WP-08`
 **Now.** `NEW`.
 
 **`SW-0053`** · `SI-02` · `P1` · `R1` — A cycle counter gap is detected and reported, never interpolated

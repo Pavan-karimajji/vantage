@@ -238,5 +238,41 @@ TEST(UtBusCycle19, SourceTimePreferredOverCaptureWhenBothPresent) {
   EXPECT_EQ(cycle->ports.at("p").t_capture_ns.value(), 222);
 }
 
+// IMP-0052 (SW-0052): Quality/Rung travel ON THE VALUE, not a side report
+// -- ToPortValue carries them (plus is_repeat, header stamps and payload)
+// with no separate query back to the reconstructor.
+TEST(UtBusCycle52, QualityAndRungTravelOnThePortValue) {
+  CycleReconstructor rc({"p"});
+  PortMessage msg = MakeMsg("p", 500);
+  msg.counter = 3u;
+  msg.payload = {1, 2, 3};
+  ASSERT_TRUE(rc.Ingest(msg).ok());
+
+  auto cycle = rc.TakeCompleteCycle();
+  ASSERT_TRUE(cycle.has_value());
+  PortValue value = ToPortValue(cycle->ports.at("p"));
+  EXPECT_EQ(value.port, "p");
+  EXPECT_EQ(value.rung, Rung::HeaderCounter);
+  EXPECT_EQ(value.quality, Quality::Exact);
+  EXPECT_EQ(value.header.counter.value(), 3u);
+  EXPECT_FALSE(value.header.is_repeat);
+  EXPECT_EQ(value.payload, (std::vector<std::uint8_t>{1, 2, 3}));
+}
+
+TEST(UtBusCycle52, IsRepeatTravelsOnTheValueToo) {
+  CycleReconstructor rc({"p"});
+  PortMessage m1 = MakeMsg("p", 100);
+  m1.counter = 6u;
+  PortMessage m2 = MakeMsg("p", 200);
+  m2.counter = 6u;  // unchanged
+  ASSERT_TRUE(rc.Ingest(m1).ok());
+  rc.TakeCompleteCycle();
+  ASSERT_TRUE(rc.Ingest(m2).ok());
+  auto cycle = rc.TakeCompleteCycle();
+  ASSERT_TRUE(cycle.has_value());
+  PortValue value = ToPortValue(cycle->ports.at("p"));
+  EXPECT_TRUE(value.header.is_repeat);
+}
+
 }  // namespace
 }  // namespace simcore::bus

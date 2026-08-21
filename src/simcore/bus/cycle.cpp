@@ -197,10 +197,31 @@ Result<bool> CycleReconstructor::Ingest(const PortMessage& msg) {
   }
   state.last_rate_ns = rate_now;
 
+  // SW-0052: stamped onto the stored message itself -- ToPortValue reads
+  // these back directly, so the value a module receives carries them with
+  // no side lookup against this class's own state.
+  PortMessage stamped = msg;
+  stamped.rung = final_rung;
+  stamped.quality = state.last_quality;
+  stamped.is_repeat = state.is_repeat;
+
   const std::int64_t key = CycleKeyFor(msg, final_rung);
-  pending_[key].ports[msg.port] = msg;
+  pending_[key].ports[msg.port] = std::move(stamped);
 
   return Result<bool>::Ok(true);
+}
+
+PortValue ToPortValue(const PortMessage& msg) {
+  PortValue value;
+  value.port = msg.port;
+  value.header.t_source_ns = msg.t_source_ns;
+  value.header.counter = msg.counter;
+  value.header.t_capture_ns = msg.t_capture_ns;
+  value.header.is_repeat = msg.is_repeat;
+  value.payload = msg.payload;
+  value.rung = msg.rung;
+  value.quality = msg.quality;
+  return value;
 }
 
 std::optional<Cycle> CycleReconstructor::TakeCompleteCycle() {

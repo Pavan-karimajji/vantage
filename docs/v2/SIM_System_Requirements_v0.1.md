@@ -497,7 +497,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** An ingest map shall bind the signal header fields explicitly — which source channel provides source time, which provides the cycle counter, which provides status, and, where the source carries it, which provides the cycle identifier.
 **Accept.** A map that binds none of these loads, but every port it feeds is marked *timing approximated* in the run manifest and a warning is emitted naming those ports.
 **Verify.** T · `SYT-INP-15`   **Trace.** CN-0305, CN-0074; **evidence** §2.1
-**Built.** ◐ started — 0/3 software requirements done, in `WP-05`, `WP-08`, `WP-12`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-05`, `WP-08`, `WP-12`
 
 **`SYS-0016`** · `P0` · `R1` — Declared holes
 **Shall.** An ingest map shall declare which ports the recording family never carries, with a reason.
@@ -607,7 +607,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Where neither source time nor a cycle counter is available for a port, the system shall warn and mark that port's timing as approximated.
 **Accept.** The mark appears in the run manifest, in every export carrying that port, and in the player.
 **Verify.** T · `SYT-DAT-09`   **Trace.** CN-0074
-**Built.** ◐ started — 0/1 software requirements done, in `WP-08`
+**Built.** ● done — 1/1 software requirements done
 
 ### 6.3 Provenance
 

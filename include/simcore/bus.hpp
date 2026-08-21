@@ -140,27 +140,6 @@ Result<bool> CheckBulkBudget(const PortId& port, std::size_t actual_bytes);
 // (`value.cpp`) already computed; this only overrides it for `Static`.
 Unknown<std::int64_t> AgeForKind(PortKind kind, Unknown<std::int64_t> derived);
 
-// The port value every module entry point receives. Quality/rung
-// (`WP-08`, `IMP-0052`) are not fields yet -- cycle reconstruction has not
-// landed, and adding them speculatively here would be a second, unused
-// copy of a decision that WP hasn't made.
-struct PortValue {
-  PortId port;
-  Header header;
-  Origin origin = Origin::Unknown;
-  PortKind kind = PortKind::Data;
-  bool updated = true;                     // false when held
-  Unknown<std::int64_t> hold_ns;           // set by the bus when held (WP-09's own hold schedule)
-  std::vector<std::uint8_t> payload;       // raw bytes; structured/lazy decode wiring lands with module_host (WP-10)
-  BulkRef bulk;                            // never inlined (SW-0059)
-
-  // SW-0045: derived, never stored. Capture time when known; else the
-  // hold schedule; else a genuine, known zero (just produced this tick,
-  // nothing to hold against) -- except for a `Static` port, where the
-  // question itself does not apply (SW-0060).
-  Unknown<std::int64_t> age_ns() const;
-};
-
 // SW-0050: the recovery ladder's own order, ascending strength -- the
 // enum's declaration order IS the ladder (design skeleton's own words).
 // `SourceCycleId` is currently always demoted to a weaker rung in
@@ -168,6 +147,9 @@ struct PortValue {
 // cycle identifier yet (`OQ-01`'s own "changing the answer makes rung 1
 // inert, not wrong") -- the mechanism exists and is tested (a synthetic
 // rung-1 fixture), even though no real recording exercises it today.
+// Declared here, ahead of `PortValue`, because `SW-0052` puts it and
+// `Quality` directly on that value (`IMP-0052`, `WP-08`) -- not a side
+// report a consumer must separately query.
 enum class Rung : std::uint8_t { SourceCycleId, HeaderCounter, SourceTime, ReceptionTime };
 std::string ToString(Rung rung);
 
@@ -177,6 +159,26 @@ std::string ToString(Rung rung);
 // (Approximated).
 enum class Quality : std::uint8_t { Exact, Derived, Approximated };
 std::string ToString(Quality quality);
+
+// The port value every module entry point receives.
+struct PortValue {
+  PortId port;
+  Header header;
+  Origin origin = Origin::Unknown;
+  PortKind kind = PortKind::Data;
+  bool updated = true;                     // false when held
+  Unknown<std::int64_t> hold_ns;           // set by the bus when held (WP-09's own hold schedule)
+  std::vector<std::uint8_t> payload;       // raw bytes; structured/lazy decode wiring lands with module_host (WP-10)
+  BulkRef bulk;                            // never inlined (SW-0059)
+  Rung rung = Rung::ReceptionTime;         // SW-0052/WP-08 -- travels on the value itself
+  Quality quality = Quality::Approximated; // ditto
+
+  // SW-0045: derived, never stored. Capture time when known; else the
+  // hold schedule; else a genuine, known zero (just produced this tick,
+  // nothing to hold against) -- except for a `Static` port, where the
+  // question itself does not apply (SW-0060).
+  Unknown<std::int64_t> age_ns() const;
+};
 
 // One port's message, decoded far enough to carry the ladder's own
 // candidate fields. **Scope note (WP-08's own explicit first-slice
@@ -194,7 +196,19 @@ struct PortMessage {
   Unknown<std::int64_t> t_capture_ns;      // carried through, not itself a rung
   std::int64_t t_recv_ns = 0;              // rung 4 -- always known (the recording envelope's own stamp)
   std::vector<std::uint8_t> payload;
+
+  // SW-0052/IMP-0052: set by `CycleReconstructor::Ingest` for THIS message
+  // (never a later side lookup, which could drift from what actually
+  // produced it) -- `ToPortValue` below copies these straight across.
+  Rung rung = Rung::ReceptionTime;
+  Quality quality = Quality::Approximated;
+  bool is_repeat = false;
 };
+
+// SW-0052's own Accept, made concrete: the completed message's rung/
+// quality/repeat state travels onto the `PortValue` a module actually
+// receives, with no separate join back to `CycleReconstructor`.
+PortValue ToPortValue(const PortMessage& msg);
 
 // SW-0051: a port may be forced to a WORSE rung than the ladder would
 // pick naturally; never a better one than the data can support (that is
