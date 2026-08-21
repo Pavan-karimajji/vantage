@@ -259,6 +259,13 @@ namespace codecs {
 // discipline exists to avoid.
 Result<bool> RegisterMcap(CodecRegistry& registry);
 
+// `SM-05a`: registers the `.erg` codec (a real CarMaker result file,
+// reconstructed into full port messages via a manifest sidecar -- see
+// `io/codecs/erg.cpp`'s own header for the design). Read-only: no
+// `WriterFactory`, since `.erg` is a CarMaker-native format this framework
+// only ever reads.
+Result<bool> RegisterErg(CodecRegistry& registry);
+
 }  // namespace codecs
 
 // SW-0032/0033/0034: one resolved ingest-table row, exactly the shape the

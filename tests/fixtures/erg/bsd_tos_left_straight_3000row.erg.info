@@ -1,0 +1,246 @@
+#INFOFILE1.1 (UTF-8) - Do not remove this line!
+
+File.Format = erg
+File.ByteOrder = LittleEndian
+File.DateInSeconds = 1787224307
+File.DateLocal = 2026-08-20 16:41:47 India Standard Time
+
+File.At.1.Name = Time
+File.At.1.Type = Double
+Quantity.Time.Unit = s
+
+File.At.2.Name = bsd.outputs.left.observable_fraction
+File.At.2.Type = Double
+
+File.At.3.Name = bsd.outputs.right.observable_fraction
+File.At.3.Type = Double
+
+File.At.4.Name = df.host.egoDyn.ageS
+File.At.4.Type = Double
+Quantity.df.host.egoDyn.ageS.Unit = s
+
+File.At.5.Name = df.host.execUs
+File.At.5.Type = Double
+Quantity.df.host.execUs.Unit = us
+
+File.At.6.Name = df.host.objects.ageS
+File.At.6.Type = Double
+Quantity.df.host.objects.ageS.Unit = s
+
+File.At.7.Name = df.host.vehSig.ageS
+File.At.7.Type = Double
+Quantity.df.host.vehSig.ageS.Unit = s
+
+File.At.8.Name = bsd.compState.state
+File.At.8.Type = Int
+
+File.At.9.Name = bsd.outputs.left.availability
+File.At.9.Type = Int
+
+File.At.10.Name = bsd.outputs.left.causal_obj_id
+File.At.10.Type = Int
+
+File.At.11.Name = bsd.outputs.left.scenario
+File.At.11.Type = Int
+
+File.At.12.Name = bsd.outputs.left.warning
+File.At.12.Type = Int
+
+File.At.13.Name = bsd.outputs.right.availability
+File.At.13.Type = Int
+
+File.At.14.Name = bsd.outputs.right.causal_obj_id
+File.At.14.Type = Int
+
+File.At.15.Name = bsd.outputs.right.scenario
+File.At.15.Type = Int
+
+File.At.16.Name = bsd.outputs.right.warning
+File.At.16.Type = Int
+
+File.At.17.Name = bsd.outputs.version_number
+File.At.17.Type = Int
+
+File.At.18.Name = df.host.abiVersion
+File.At.18.Type = Int
+
+File.At.19.Name = df.host.aeb.compState.updated
+File.At.19.Type = Int
+
+File.At.20.Name = df.host.aeb.outputs.updated
+File.At.20.Type = Int
+
+File.At.21.Name = df.host.bsd.compState.updated
+File.At.21.Type = Int
+
+File.At.22.Name = df.host.bsd.outputs.updated
+File.At.22.Type = Int
+
+File.At.23.Name = df.host.execCount
+File.At.23.Type = Int
+
+File.At.24.Name = df.host.execOk
+File.At.24.Type = Int
+
+File.At.25.Name = df.host.faultCode
+File.At.25.Type = Int
+
+File.At.26.Name = df.host.objectsDropped
+File.At.26.Type = Int
+
+File.At.27.Name = $none$
+File.At.27.Type = 4 Bytes
+
+Anim.Msg.0.Time = 0
+Anim.Msg.0.Class = Anim
+Anim.Msg.0.Id = 60
+Anim.Msg.0.Data:
+	evGym7CxjcOB40EcuUqXzD8QvjB68bKPAAAAAgAAAAIAAAAAADwK
+
+Anim.Msg.1.Time = 0
+Anim.Msg.1.Class = Anim
+Anim.Msg.1.Id = 18
+Anim.Msg.1.Data:
+	PvmXKB6fUrN3gWCawxM63b6A5Ko++ZfsAAAAhQAAAIUAAAAAABJ3aW42NABPZmZs
+	aW5lADE1LjEuMQBDOi93cy9yZXBvLzF2LXN1cGVycHJvamVjdC9tb2R1bGVzL2Rm
+	L3NyYy9wbGF0Zm9ybS9jbQBic2QvYnNkX3Rvc19sZWZ0X3N0cmFpZ2h0AGJzZC9i
+	c2RfdG9zX2xlZnRfc3RyYWlnaHQAAAJKVQoK
+
+Anim.Msg.2.Time = 0
+Anim.Msg.2.Class = Anim
+Anim.Msg.2.Id = 50
+Anim.Msg.2.Data:
+	4ROQPOCeij7BhwiyvprdHWPz3Y7hE5AoAAAAAwAAAAMAAAAAADIA
+
+Anim.Msg.3.Time = 0
+Anim.Msg.3.Class = Anim
+Anim.Msg.3.Id = 51
+Anim.Msg.3.Data:
+	pRt2kqqvrqzj9/D0O0bqo5dHdBWlG3aGAAAAAwAAAAMAAAAAADMA
+
+Anim.Msg.4.Time = 0
+Anim.Msg.4.Class = Anim
+Anim.Msg.4.Id = 52
+Anim.Msg.4.Data:
+	RzVu1mB9TwlzuMpFXa6/yjjHXxhHNW7CAAAAAwAAAAMAAAAAADQA
+
+Anim.Msg.5.Time = 0
+Anim.Msg.5.Class = Anim
+Anim.Msg.5.Id = 21
+Anim.Msg.5.Data:
+	Cz1UvHBm04dEWyGkq/o35YnNJiILPVQgAAAAaAAAAGgAAAAAABUAAAAAAAAAAAAA
+	AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+	AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//kAAAAAAAAK
+
+Anim.VehicleClass = Car
+Anim.Vehicle.MovieSkin = 3D/Vehicles/BMW_5_2017_LaneTracking.obj
+
+Anim.Msg.6.Time = 0
+Anim.Msg.6.Class = Anim
+Anim.Msg.6.Id = 11
+Anim.Msg.6.Data:
+	rVdNbPf3LO8BlcRYArgOp23PbMetV0xcAAAA2AAAANgAAAAAAAsEAAACAAC/ZmZm
+	P2ZmZj6eNT9AZmZmv2ZmZj+9T98AAAAAAAAAAAAAAABAJ41QAAAAAD8YPkJEmOma
+	RQhIAL3MzM0AAAAAPszMzUAszM0/SPXDPp41P0AszM2/SPXDPp41PwAAAAA/Q9cK
+	Pp41PwAAAAC/Q9cKPp41PwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+	AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+	vczMzQAAAAA+zMzN
+
+Anim.Msg.7.Time = 0
+Anim.Msg.7.Class = Anim
+Anim.Msg.7.Id = 15
+Anim.Msg.7.Data:
+	cV8yctCEGJh+76FtYUfSU/8ApxtxXzK6AAAAiAAAAIgAAAAAAA8EAAAAAAAAAQAA
+	Pq3S8j5c7ZEAAAAAPmZmZoAAAAAAAAAARc+AAAH/AAA+rdLyPlztkYAAAAA+ZmZm
+	AAAAAAAAAABFz4AAAgEAAD6t0vI+XO2RAAAAAD5mZmaAAAAAAAAAAEXPgAAD/wAA
+	Pq3S8j5c7ZGAAAAAPmZmZgAAAAAAAAAARc+AAAoK
+
+Anim.Msg.8.Time = 0
+Anim.Msg.8.Class = Anim
+Anim.Msg.8.Id = 23
+Anim.Msg.8.Data:
+	E3kqLgsvG/ECyGJiHzI1Qv/ClsoTeSr2AAAAlAAAAJQAAAAAABcAAAAAAAAAAAAA
+	AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+	AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+	AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAoK
+
+Anim.Msg.9.Time = 0
+Anim.Msg.9.Class = Instr
+Anim.Msg.9.Id = 0
+Anim.Msg.9.Data:
+	14AQeKF09pijNYo7qFUQnoAO16PXgBBUAAAAFAAAABQAAAAAAAAAAQAIAAFFuhf/
+	Q4iAAAAAAAIK
+
+Anim.Msg.10.Time = 0
+Anim.Msg.10.Class = Anim
+Anim.Msg.10.Id = 22
+Anim.Msg.10.Data:
+	eZsJvLCaaGD5tmSW1xti235m8nR5mwmQAAAAFAAAABQAAAAAABYAAQAIAAFFuhf/
+	Q4iAAAAAAAIK
+
+Anim.Msg.11.Time = 0
+Anim.Msg.11.Class = Anim
+Anim.Msg.11.Id = 17
+Anim.Msg.11.Data:
+	PaLuYeV+SNs98SG4fdOFlg8Lsk89ou7tAAAAXAAAAFwAAAAAABEAAAEAAABDFgAA
+	Po76NT4O+jVAnMzNAAAAAD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8BAAAA
+	iOLkAAAAAAAAAAAAAAAAAAAAAABWaGNsLlJhZGFyTAAK
+
+Anim.Msg.12.Time = 0
+Anim.Msg.12.Class = Anim
+Anim.Msg.12.Id = 55
+Anim.Msg.12.Data:
+	4Lzn6aihOcC4IjNXNlELwZh9bxfgvOYpAAABRAAAAUQAAAAAADcAAAEAAAABAAAA
+	mpkZP5qZGT9mZmY/ZmZmP2ZmZj+amZk+zcxMP5qZGT/NzEw+ZmZmP83MTD7NzEw+
+	AACAPzMzMz8zMzM/zczMPpqZGT+amRk/AACAPwAAAAAAAAAAAAAAAAAAgD8AAAAA
+	AAAAAAAAgD8AAIA/AACAPwAAgD8AAAAAAACAPwAAAAAAAIA/zcycQAAAAAAAAAA/
+	AAAAAAAAAAAAAAAAAAAAAAAAFkM1+o4+NfoOPgAAAACI4uQAVmhjbC5HVF8wMAAA
+	AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+	AAAAAAAAAAAAAAAAAACAPwAAgD4BAAAACgAAAAAAAAAKAAAAAAAAAAoAAAAAAAAA
+	CgAAAAAAAAAKAAAACgAAAAEAAAAAAAAA
+
+Anim.Msg.13.Time = 0
+Anim.Msg.13.Class = Anim
+Anim.Msg.13.Id = 61
+Anim.Msg.13.Data:
+	pMXMpgGEewfyJHzdH8NokFTqRZWkxcyGAAAADAAAAAwAAAAAAD0AAAwAAAAAAAAA
+
+Anim.Msg.14.Time = 0
+Anim.Msg.14.Class = Anim
+Anim.Msg.14.Id = 24
+Anim.Msg.14.Data:
+	R9/DnqORRZUGa7cgM6+DBaZBgrpH38PCAAAAOAAAADgAAAAAABgBKAAAAAAAAAAA
+	AAAAAGJzZF90b3MAAAAAAAEAAAA/4AAAxHGwQj81wo8AAAAAgAAAAD/JD9sK
+
+Anim.Msg.15.Time = 0
+Anim.Msg.15.Class = Anim
+Anim.Msg.15.Id = 58
+Anim.Msg.15.Data:
+	C+ipj6rfKpx6vfNk4mGstZwRm4AL6KkfAAAAXgAAAF4AAAAAADoBMAAAAAFAjwo9
+	P/wo9j+PXCk/gAAAAAAAAAAAAAA+GZmaQA1wpAAAAAAAAAAAAAAAADNEL1ZlaGlj
+	bGVzL0lQR19Db21wYW55Q2FyXzIwMThfQmx1ZS5tb2JqAAoK
+
+Testrun = bsd/bsd_tos_left_straight
+
+SimParam.DeltaT = 0.001
+
+RandomSeed = 1787224299
+
+NamedValues.Count = 0
+
+KeyValues.Count = 0
+
+GPUSensors.Count = 0
+
+Comment:
+	For more details see session logfile
+
+CarMaker.NumVersion = 150101
+CarMaker.Version = 15.1.1
+CarMaker.Version.MatSupp = 15.1.0.1
+CarMaker.Version.Apo = 2.4.1
+CarMaker.Version.Info = 2.1.1
+CarMaker.Version.Driver = 15.1.1.1
+CarMaker.Version.Road = 15.1.1
+CarMaker.Version.Tire = 9.1.2
+

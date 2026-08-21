@@ -95,6 +95,7 @@ Named once, reused everywhere. A test that needs a fixture not listed here needs
 | **`F-RUNPAIR`** | Two completed runs of one spec, differing in exactly one manifest dimension, one pair per determinism axis. | `UT-DIA-08`…`UT-DIA-12` |
 | **`F-INDEX`** | A hand-written `RecordingIndex` and `ModuleManifest` set — no file on disk, no library present. What lets the graph, coherence and ingest suites run with nothing to open. | `UT-GRF-*`, `UT-ING-*`, `UT-CFG-*` |
 | **`F-PLANTED`** | Per `ANL-*` check, a copy of the tree with exactly one deliberate violation. **`TV-3`.** | every `ANL-*` |
+| **`F-ERG-REAL`** | `tests/fixtures/erg/` — a real CarMaker `.erg`+`.erg.info` pair (a single-tick 152-byte capture, and the same TestRun's full 3000-tick/60s run) plus a real `adas.sil.ComponentManifest` sidecar (`adasManifest()`'s own bytes off a real built `df_sil.so`), provenance recorded in `make_erg_fixture.py`. **Not synthesized** — `SM-05a`'s own blocking condition ("a reader written against a specification and no file is a reader that fails on the first real file") required a genuine sample. | `UT-IO-28`, `UT-IO-29` |
 
 ---
 
@@ -259,6 +260,8 @@ Expected values are the served requirement's `Accept` clause (§0.1). Each row g
 | `UT-IO-25` | `SW-0384` | `F-TINY` | Export to each of the three R1 targets; re-open each. |
 | `UT-IO-26` | `SW-0385` | `F-FOREIGN` | Export; inspect all eight header fields, including the `unknown` ones. |
 | `UT-IO-27` | `SW-0386` | `F-CHAIN4` | Export a named port subset; attempt to load the export as a resim input. |
+| `UT-IO-28` | `SW-0421` | `F-ERG-REAL` | Open the real single-row `.erg`; `Describe()`; read every message; cross-check every reconstructed field against the row's own raw bytes two independent ways (direct byte offsets, and a second DescriptorPool this test builds itself). |
+| `UT-IO-29` | `SW-0421` | `F-ERG-REAL` | Open the real 3000-row `.erg`; drain to exhaustion; check total message count, first/last `log_time_ns`. |
 
 ### 5.2 `SI-02` `bus` — `UT-BUS-01` … `UT-BUS-23`
 

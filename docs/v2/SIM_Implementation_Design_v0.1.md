@@ -800,6 +800,7 @@ src/bus/
 | `IMP-0389` | `SW-0389` | `WP-07` | `KEEP` | `catalogue.cpp::Find` — a `PortDecl` carries no producer field, so splitting a component in two invalidates no recording, pipeline, plug-in or ingest map. Already true in the Python manifest model; recorded so the move does not lose it. | `UT-BUS-21` |
 | `IMP-0390` | `SW-0390` | `WP-07` | `NEW` | `catalogue.cpp` — a project namespace prefix (`<project>::<port>`) resolved after the core catalogue; a project name colliding with a core port is an `Authoring` error naming both. | `UT-BUS-22` |
 | `IMP-0420` | `SW-0420` | `WP-07` | `EXTEND` | `catalogue.cpp::PortCatalogue::Version()` — classifies a catalogue diff against its predecessor (added optional field → minor bump, removed/changed field → major bump) and `Resolve()` refuses a spec pinned to a different major version, naming both. Extends `IMP-0388`'s existing version *identity* with the semantic *rule* `SW-0420` states. | `UT-BUS-23` |
+| `IMP-0421` | `SW-0421` | `WP-06b` | `NEW` | `src/simcore/io/codecs/erg.cpp` — the `.erg` codec: binary header + `.erg.info` sidecar parsing, `<stem>.manifest.pb`-sidecar-driven column-to-port grouping (longest-prefix match against the manifest's own `PortSpec` names, `<component>.host.*` diagnostics recognized and dropped), and `DescriptorPool`/`DynamicMessageFactory` reflection reconstructing real messages field-by-field. `erg_wire.{hpp,cpp}` — the generic field-number/wire-type walker reading `ComponentManifest`/`PortSpec` without a first-party dependency. | `UT-IO-28`, `UT-IO-29` |
 
 ---
 

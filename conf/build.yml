@@ -39,7 +39,12 @@ recipe:
       # linked no mcap/lz4/zstd symbols at all without this, real
       # `LZ4F_*`/`ZSTD_*` unresolved externals from mcap.cpp. Same target
       # `simcore PUBLIC mcap::mcap` already names in CMakeLists.txt.
-      requires: [mcap::mcap]
+      # `protobuf::libprotobuf` added for `SM-05a` (the `.erg` codec):
+      # DescriptorPool/DynamicMessageFactory reflection to reconstruct real
+      # port messages from a manifest's own descriptor_set bytes (R-SIM-11)
+      # -- third-party, like mcap, so `io` still requires nothing
+      # first-party (this component's own comment above, unchanged).
+      requires: [mcap::mcap, protobuf::libprotobuf]
 
 variants:
   base:
@@ -48,6 +53,10 @@ variants:
       # conancenter mcap/1.2.0 sil_host already vendors for its own
       # RecordingReader (reused, not a second pinned version).
       - mcap/1.2.0
+      # SM-05a: the `.erg` codec's reflection engine -- same conancenter
+      # protobuf/3.21.12 pin every other component in this repo already
+      # uses (never a second pinned version).
+      - protobuf/3.21.12
     sil:
       platforms: &base_platforms
         - build: vs2026

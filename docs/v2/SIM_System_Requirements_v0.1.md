@@ -409,7 +409,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The system shall read source data exclusively through Reader plugins that open a source, build a time index, seek by time, and return port values.
 **Accept.** Adding support for a new format requires no change to any file in `simcore` outside the new reader and its registration.
 **Verify.** T · `SYT-INP-01`   **Trace.** CN-0078, CN-0085; v1 `NR-SIM-20`
-**Built.** ● done — 2/2 software requirements done
+**Built.** ● done — 3/3 software requirements done
 
 **`SYS-0002`** · `P0` · `R1` — Readers stream
 **Shall.** A reader shall stream, and the system shall never require a whole recording to be resident in memory.
@@ -1216,7 +1216,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The recording model shall be `meta` plus typed topics plus two-clock messages, and no consumer of a recording — layer provider, renderer, expectation, analysis — shall be able to learn which format it came from.
 **Accept.** A new format is added as one reader and one writer of a small fixed method set; no consumer file changes.
 **Verify.** T · `SYT-OUT-11` · `ANL-15`   **Trace.** CN-0303; v1 `NR-SIM-20`
-**Built.** ● done — 1/1 software requirements done
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0122`** · `P1` · `R1` — Recording and export are different artifacts
 **Shall.** A recording shall round-trip and be re-executable; an export shall be lossy and terminal, selecting an explicit port subset by manifest name, and shall never be accepted as a re-execution input.

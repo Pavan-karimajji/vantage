@@ -25,6 +25,8 @@ set(SIM_TEST_SOURCES
     unit/test_ut_io_meta.cpp
     unit/test_ut_io_writer.cpp
     unit/test_ut_io_mcap_roundtrip.cpp
+    # SM-05a: the real .erg codec, against real fixtures (tests/fixtures/erg/).
+    unit/test_ut_io_erg_reconstruct.cpp
     # WP-07 (SI-02 bus): UT-BUS-01..06, UT-BUS-17, UT-BUS-18, UT-BUS-20..22.
     unit/test_ut_bus_header.cpp
     unit/test_ut_bus_value.cpp
@@ -39,6 +41,11 @@ target_link_libraries(simcore_tests PRIVATE
     simcore
     GTest::gtest_main
 )
+# SM-05a: test_ut_io_erg_reconstruct.cpp reaches erg_wire.hpp -- an
+# internal io/codecs/ helper, deliberately not part of simcore's own
+# public include/ surface -- to build its OWN independent DescriptorPool
+# from the fixture's manifest sidecar (never reusing ErgReader's state).
+target_include_directories(simcore_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/simcore)
 
 include(GoogleTest)
 gtest_discover_tests(simcore_tests)

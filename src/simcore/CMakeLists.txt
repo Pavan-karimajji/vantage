@@ -5,6 +5,12 @@
 # WP-06 (SI-01): the io contract + the one codec DD-13 registers now --
 # mcap/1.2.0 (conancenter), the same library sil_host already vendors.
 find_package(mcap REQUIRED)
+# SM-05a: the `.erg` codec's DescriptorPool/DynamicMessageFactory
+# reflection engine -- third-party (conancenter), same pin every other
+# component in this repo uses, never linked against a compiled
+# AdasInterfaces (this module's own "no first-party requires" invariant,
+# conf/build.yml's own comment, stays true).
+find_package(protobuf REQUIRED)
 
 add_library(simcore STATIC
     errors/events.cpp
@@ -16,6 +22,8 @@ add_library(simcore STATIC
     io/translate.cpp
     io/meta.cpp
     io/codecs/mcap.cpp
+    io/codecs/erg.cpp
+    io/codecs/erg_wire.cpp
     # WP-07 (SI-02): the signal header, Origin, bulk-array references, the
     # PortKind::Static rule and the port catalogue.
     bus/header.cpp
@@ -37,7 +45,7 @@ target_compile_features(simcore PUBLIC cxx_std_17)
 # `mcap::mcap` is a compiled library a consumer of `simcore.lib` must also
 # link against at the final executable, same reasoning `sil_host`'s own
 # `sil_core` target already applies to this identical dependency.
-target_link_libraries(simcore PUBLIC mcap::mcap)
+target_link_libraries(simcore PUBLIC mcap::mcap protobuf::libprotobuf)
 
 include(${PROJECT_SOURCE_DIR}/cmake/FloatingPoint.cmake)
 adas_sim_apply_fp_flags(simcore)
