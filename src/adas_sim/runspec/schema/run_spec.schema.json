@@ -96,7 +96,7 @@
               "stage": {"type": "string"},
               "port": {"type": "string"},
               "path": {"type": "array", "items": {"type": "string"}},
-              "index": {"type": ["integer", "null"]}
+              "index": {"anyOf": [{"type": "integer"}, {"const": "*"}, {"type": "null"}]}
             }
           },
           "operands": {"type": "array", "items": {"type": "number"}},

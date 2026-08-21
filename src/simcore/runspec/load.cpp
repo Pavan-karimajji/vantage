@@ -38,9 +38,26 @@ std::optional<std::int64_t> OptionalInt64(const Json& node) {
   return node.get<std::int64_t>();
 }
 
-std::optional<int> OptionalInt(const Json& node) {
-  if (node.is_null()) return std::nullopt;
-  return node.get<int>();
+// WP-11: `index` is `null` | an integer | the literal string `"*"` --
+// `resolve_address`'s own closed index grammar (`[i]`/`[*]`, never a
+// predicate), reaching the wire format now that `MutationAddress` has
+// somewhere to put it (`runspec.hpp`'s own note on this addition).
+struct ParsedIndex {
+  std::optional<int> index;
+  bool all_elements = false;
+};
+
+ParsedIndex ParseMutationIndex(const Json& node) {
+  if (node.is_null()) return {};
+  if (node.is_string()) {
+    if (node.get<std::string>() != "*") {
+      // Same exception family LoadRunSpec's own top-level try/catch
+      // already handles (Json::exception) -- no new catch clause needed.
+      throw Json::type_error::create(302, "mutations[].address.index string must be '*'", &node);
+    }
+    return {std::nullopt, true};
+  }
+  return {node.get<int>(), false};
 }
 
 ImplRef ParseImpl(const Json& node) {
@@ -105,7 +122,9 @@ SpecMutation ParseMutation(const Json& node) {
   for (const auto& segment : address.at("path")) {
     mutation.address.path.push_back(segment.get<std::string>());
   }
-  mutation.address.index = OptionalInt(address.at("index"));
+  const ParsedIndex parsed_index = ParseMutationIndex(address.at("index"));
+  mutation.address.index = parsed_index.index;
+  mutation.address.all_elements = parsed_index.all_elements;
   for (const auto& operand : node.at("operands")) {
     mutation.operands.push_back(operand.get<double>());
   }

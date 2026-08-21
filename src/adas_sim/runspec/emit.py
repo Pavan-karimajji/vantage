@@ -295,7 +295,13 @@ def emit_run_spec(
                 "verb": override.verb.value,
                 "address": {
                     "stage": resolved_address.stage, "port": resolved_address.port,
-                    "path": list(resolved_address.path), "index": resolved_address.index,
+                    "path": list(resolved_address.path),
+                    # `resolve_address` has carried `all_elements` in its own
+                    # `ResolvedAddress` since IMP-0008 (WP-05) -- this dict
+                    # never spelled it out to the wire until now (WP-11's own
+                    # found gap, closed here rather than left a second time,
+                    # `simcore::MutationAddress`'s twin field).
+                    "index": "*" if resolved_address.all_elements else resolved_address.index,
                 },
                 "operands": [override.value] if override.value is not None else [],
                 "window_ns": [0, None],

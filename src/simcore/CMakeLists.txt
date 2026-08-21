@@ -58,6 +58,14 @@ add_library(simcore STATIC
     module_host/exec_timeout.cpp
     module_host/convert.cpp
     module_host/component.cpp
+    # WP-11 (SI-05): mutate -- the six closed override verbs, the five
+    # closed fault verbs, resolved-address application and time-window
+    # scoping. Ported from adas_sim/config/{override,fault}.py and
+    # adas_sim/runspec/address.py's byte-level half.
+    mutate/verbs.cpp
+    mutate/window.cpp
+    mutate/address.cpp
+    mutate/faults.cpp
 )
 target_include_directories(simcore PUBLIC ${PROJECT_SOURCE_DIR}/include)
 # PRIVATE: third_party/ is an implementation detail of simcore's own .cpp

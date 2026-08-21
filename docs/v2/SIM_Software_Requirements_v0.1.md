@@ -1260,28 +1260,28 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Override application shall implement exactly the arithmetic verbs const · hold · offset · scale and the structural verbs select · drop, and no expression evaluator, scripting hook or user-supplied callable shall exist on the path.
 **Accept.** The verb set is enumerable from the published schema and compared against the code on every build. A configuration naming any other verb is refused at load.
 **Verify.** T · `UT-MUT-01` · A · `ANL-SW-23`   **Trace.** SYS-0097
-**Built.** ○ not started — `IMP-0097` in `WP-11`
+**Built.** ● done — `IMP-0097` in `WP-11`
 **Now.** `DONE·MOVE` — `contracts/override.py::OverrideVerb` is exactly this closed set, and `contracts/binding.py` applies all six against real bytes.
 
 **`SW-0098`** · `SI-05` · `P0` · `R1` — An override may destroy or attenuate, never create
 **Shall.** No verb shall insert, move or duplicate a repeated element, or bring an entity into existence.
 **Accept.** Attempting to express such an operation is a load error. No composition of the six verbs produces an element that was not present in the input.
 **Verify.** T · `UT-MUT-02`   **Trace.** SYS-0098; CN-0327
-**Built.** ○ not started — `IMP-0098` in `WP-11`
+**Built.** ● done — `IMP-0098` in `WP-11`
 **Now.** `DONE·MOVE` — the property holds by construction in `contracts/binding.py`.
 
 **`SW-0099`** · `SI-05` · `P0` · `R1` — A closed address grammar, with no predicates
 **Shall.** An address shall be one of port · port.field · port.array[i] · port.array[\*], and no predicate, wildcard field, slice or comparison shall be expressible.
 **Accept.** A predicate is a load error naming the construct. The grammar is published and its acceptance set is testable.
 **Verify.** T · `UT-MUT-03`   **Trace.** SYS-0099
-**Built.** ○ not started — `IMP-0099` in `WP-11`
+**Built.** ● done — `IMP-0099` in `WP-11`
 **Now.** `DONE·MOVE` — `contracts/binding.py` implements exactly this grammar.
 
 **`SW-0100`** · `SI-05` · `P1` · `R1` — Clearing a fixed-slot port never renumbers
 **Shall.** Clearing an element of a port declared fixed-slot shall empty it in place and shall never compact the container.
 **Accept.** Clearing index 3 of a ten-slot list leaves indices 0–2 and 4–9 unchanged and index 3 explicitly empty.
 **Verify.** T · `UT-MUT-04`   **Trace.** SYS-0100
-**Built.** ○ not started — `IMP-0100` in `WP-11`
+**Built.** ● done — `IMP-0100` in `WP-11`
 **Now.** `DONE·MOVE` — implemented in `contracts/binding.py`.
 *Note:* compaction renumbers indices, and renumbering breaks entity association silently — which is exactly the class of silent wrong answer this specification spends most of its length preventing.
 
@@ -1289,56 +1289,56 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Fault injection shall implement exactly drop · stale · delay · invalidate · corrupt, each acting on a field the port value already carries.
 **Accept.** Each is individually demonstrable and observable in the consumer's header. No sixth verb exists, and no verb invents a field.
 **Verify.** T · `UT-MUT-05`   **Trace.** SYS-0103
-**Built.** ○ not started — `IMP-0101` in `WP-11`
+**Built.** ● done — `IMP-0101` in `WP-11`
 **Now.** `DONE·MOVE` — `contracts/fault.py::FaultVerb` is this exact set, derived from `PortValue`'s own shape.
 
 **`SW-0102`** · `SI-05` · `P0` · `R1` — Application is on the decoded value, and encoding happens once
 **Shall.** A verb shall be applied to a decoded field and the payload re-encoded once per tick per overridden port, never decoded and re-encoded per verb.
 **Accept.** Applying three overrides to one port performs one decode and one encode. The count is measured, not asserted.
 **Verify.** T · `UT-MUT-06`   **Trace.** SYS-0233; **defect** concept §22.5
-**Built.** ○ not started — `IMP-0102` in `WP-11`
+**Built.** ● done — `IMP-0102` in `WP-11`
 **Now.** `PARTIAL` — `contracts/binding.py` applies verbs correctly but decodes, mutates and re-encodes per override, which is a per-message Python path and is the specific cost concept §22.5 names.
 
 **`SW-0103`** · `SI-05` · `P0` · `R1` — An overridden value is tagged at the value, not only in the manifest
 **Shall.** A value any verb touched shall carry the origin tag `overridden` from the moment of application.
 **Accept.** The tag reaches the export, the player badge and the evidence answer. An overridden value is never presented as `measured` or `simulated`.
 **Verify.** T · `UT-MUT-07`   **Trace.** SYS-0101, SYS-0033
-**Built.** ○ not started — `IMP-0103` in `WP-11`
+**Built.** ● done — `IMP-0103` in `WP-11`
 **Now.** `DONE·MOVE` — implemented; the tag is in the closed provenance set and is carried through to the HUD badge.
 
 **`SW-0104`** · `SI-05` · `P1` · `R1` — A delay fault uses the capture stamp, never a fabricated one
 **Shall.** The delay fault shall alter the delivery schedule and the derived age, and shall not write a validity timestamp the source never produced.
 **Accept.** A delayed value's validity time equals its original validity time; only its delivery tick and derived age change.
 **Verify.** T · `UT-MUT-08`   **Trace.** SYS-0035, SYS-0030
-**Built.** ○ not started — `IMP-0104` in `WP-11`
+**Built.** ● done — `IMP-0104` in `WP-11`
 **Now.** `DONE·MOVE` — `contracts/fault.py`'s `delay` is built on the capture stamp for this reason.
 
 **`SW-0105`** · `SI-05` · `P0` · `R1` — Mutation is bounded to declared ports
 **Shall.** `SI-05` shall touch only ports the spec names, and shall be a no-op for every other port.
 **Accept.** A run with no overrides and no faults produces byte-identical port values to the same run with `SI-05` absent.
 **Verify.** T · `UT-MUT-09`   **Trace.** SYS-0239, SYS-0101
-**Built.** ○ not started — `IMP-0105` in `WP-11`
+**Built.** ● done — `IMP-0105` in `WP-11`
 **Now.** `DONE` — true today.
 
 **`SW-0106`** · `SI-05` · `P0` · `R1` — Every closed vocabulary is machine-comparable against its schema
 **Shall.** Every closed set this document names shall be enumerable at run time and compared against the published schema on every build.
 **Accept.** A member added in code but absent from the schema fails the build, and the failure names the set and the member.
 **Verify.** A · `ANL-SW-24`   **Trace.** SYS-0275
-**Built.** ○ not started — `IMP-0106` in `WP-11`
+**Built.** ● done — `IMP-0106` in `WP-11`
 **Now.** `PARTIAL` — the sets are `StrEnum`s and are therefore enumerable; nothing compares them against a published schema, so "closed" is currently a convention rather than a check.
 
 **`SW-0107`** · `SI-05` · `P1` · `R1` — An override contradicting the coherence classification is a waiver
 **Shall.** An override that contradicts the coherence classification shall be treated exactly as a waiver, requiring the explicit flag and a written reason.
 **Accept.** Such a run is marked incoherent in the manifest and in every export. No path permits it silently.
 **Verify.** T · `IT-08`   **Trace.** SYS-0102
-**Built.** ○ not started — `IMP-0107` in `WP-11`
+**Built.** ◐ started — `IMP-0107` in `WP-11`
 **Now.** `NEW` — the coherence classification and the override engine both exist and do not yet meet.
 
 **`SW-0108`** · `SI-05` · `P1` · `R1` — A fault is scoped in time and the scope is recorded
 **Shall.** A fault shall carry a declared activation window in ticks or time, and the window shall appear in the run manifest.
 **Accept.** A fault active for ten ticks affects exactly those ten. The window is recoverable from the manifest alone.
 **Verify.** T · `UT-MUT-10`   **Trace.** SYS-0101, SYS-0103
-**Built.** ○ not started — `IMP-0108` in `WP-11`
+**Built.** ● done — `IMP-0108` in `WP-11`
 **Now.** `DONE·MOVE` — scenario-level fault windows exist in `contracts/scenario.py` and are recorded by `core/manifest.py::_fault_records`.
 
 ---

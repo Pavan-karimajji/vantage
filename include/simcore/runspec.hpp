@@ -76,11 +76,20 @@ struct SpecStage {
 // index (if any) applies to the address as a whole (IMP-0008's own
 // documented limit -- `resolve_address`'s Python twin refuses the shape
 // this cannot represent rather than losing it silently).
+//
+// `all_elements` (WP-11's own small, targeted addition): `resolve_address`
+// (`runspec/address.py`) has produced this bit in its `ResolvedAddress`
+// since `IMP-0008` landed (`WP-05`) -- `index == "*"` -- but `emit.py`'s
+// own mutation dict never carried it through, and this mirror struct had
+// nowhere to put it if it had. `select`/`drop[*]` (`IMP-0100`) has no real
+// shape to build against without it, so it is added here and parsed in
+// `load.cpp` (JSON `index: "*"`) rather than deferred a second time.
 struct MutationAddress {
   std::string stage;
   std::string port;
   std::vector<std::string> path;
   std::optional<int> index;
+  bool all_elements = false;
 };
 
 struct SpecMutation {

@@ -67,6 +67,9 @@ set(SIM_TEST_SOURCES
     # the real echo_stub fixture.
     unit/test_mh_exec_timeout.cpp
     unit/test_mh_component.cpp
+    # WP-11 (SI-05): mutate -- UT-MUT-01..10, against a self-contained
+    # synthetic message type (no fixture file, no AdasInterfaces dep).
+    unit/test_mut_core.cpp
 )
 
 add_executable(simcore_tests ${SIM_TEST_SOURCES})

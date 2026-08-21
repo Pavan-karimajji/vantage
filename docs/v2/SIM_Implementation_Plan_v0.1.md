@@ -513,22 +513,24 @@ flowchart LR
 - [x] **Exit:** `sil_host`'s own component and timeout tests pass against the moved code unchanged — `sil_host/tests/unit/test_exec_timeout.cpp`'s 5 cases ported verbatim into `test_mh_exec_timeout.cpp` and green; `sil_host`'s own `SilComponent` had no dedicated unit test file to port (its coverage lived inside `test_pipeline_step.cpp`/`test_pipeline_load_errors.cpp`, which are `Pipeline`-level, not `WP-10`'s scope) — `test_mh_component.cpp` is new coverage at the `Component` level itself, against the same real `echo_stub` ABI fixture `sil_host` already used for that indirect coverage. `SW-0019`'s corpus for duplication #4 banked early.
 
 ### WP-11 · `MP-1` · `SI-05` `mutate`
-- [ ] **Prereq:** `WP-09`.
+- [x] **Prereq:** `WP-09`.
+- [x] **Core landed and verified live, 2026-08-21:** `include/simcore/mutate.hpp` + `src/simcore/mutate/{verbs,window,address,faults}.cpp` -- ported from `adas_sim/config/{override,fault}.py` and `adas_sim/runspec/address.py`'s byte-level half (`_descend`/`_resolve_scalar_target`/`_resolve_repeated_target`/`_clear_element_in_place`/`_apply_structural`/`apply_override`/`apply_fault`), read directly rather than reinvented -- same discipline `WP-09`/`WP-10` used. Byte-level reflection reuses `io/codecs/erg.cpp`'s own established `DescriptorPool`/`DynamicMessageFactory`/`google::protobuf::Reflection` technique (`NR-SIM-8`: a third addressing scheme for the same objects is how a tool becomes inconsistent, one level down from where that rule was written). `Mutator` (decode-once/apply-every-mutation/encode-once, `Touches` gate) is new composition around the ported pieces, living in `address.cpp` since the design skeleton names no fifth file for it. **A found, small, targeted gap closed in passing:** `runspec/address.py::resolve_address` has carried `all_elements` in its own `ResolvedAddress` since `IMP-0008` landed (`WP-05`), but `emit.py`'s mutation dict never wrote it to the wire and `simcore::MutationAddress` (`runspec.hpp`) had nowhere to put it -- `select`/`drop[*]` (`IMP-0100`) had no real shape to build against without it. Added `MutationAddress::all_elements`, `load.cpp`'s `index: "*"` parsing, `emit.py`'s own one-line fix, and the schema's `index` type widened to `integer | "*" | null` -- not a new work package, a completion of `IMP-0008`'s own already-declared intent (`tests/unit/test_a5_emit.py`/`test_a5_address_resolve.py` still 17/17 green after the change). `tests/unit/test_mut_core.cpp` (`UT-MUT-01`..`UT-MUT-10`, 22 cases) against a small self-contained synthetic message type (`FileDescriptorProto` built programmatically -- no fixture file, no `AdasInterfaces` dependency). Verified live: `simcore_tests` **126/126 green on both `vs2026`/MSVC (the platform `conf/build.yml` declares) and `ubuntu_gcc`** (104 prior + 22 new), no regressions.
+- [~] **Explicit scope boundary, not yet done (this row's own decision, made in writing rather than discovered by failing):** `IMP-0107`'s `crosses_boundary`/waiver refusal needs a flag `SpecMutation` does not yet carry -- `crosses_boundary` is `SI-11`'s coherence classifier's own output (`graph/waiver.py`, `WP-20`, not started; `emit.py` itself still writes `"coherence": {"verdict": "unknown", "stale": [], "waiver": None}` for every run today). There is no real flag `Mutator::ApplyTo` could read yet; wiring one now would be a guess about a shape `WP-20` has not designed. — closed by: `WP-20` landing `graph/waiver.py` and `SpecMutation` gaining a real `crosses_boundary` field from it.
 - [ ] **Lands:** `IMP-0097`…`IMP-0108` — 12.
-  - [ ] `IMP-0097` · `SW-0097` · `MOVE` — `src/simcore/mutate/verbs.cpp`
-  - [ ] `IMP-0098` · `SW-0098` · `MOVE` — `verbs.cpp`
-  - [ ] `IMP-0099` · `SW-0099` · `MOVE` — `src/simcore/mutate/address.cpp`
-  - [ ] `IMP-0100` · `SW-0100` · `MOVE` — `address.cpp`
-  - [ ] `IMP-0101` · `SW-0101` · `MOVE` — `src/simcore/mutate/faults.cpp`
-  - [ ] `IMP-0102` · `SW-0102` · `EXTEND` — `Mutator::ApplyTo`
-  - [ ] `IMP-0103` · `SW-0103` · `MOVE` — `verbs.cpp`
-  - [ ] `IMP-0104` · `SW-0104` · `MOVE` — `faults.cpp::Delay`
-  - [ ] `IMP-0105` · `SW-0105` · `KEEP` — `Mutator::Touches`
-  - [ ] `IMP-0106` · `SW-0106` · `EXTEND` — `scripts/check_closed_sets.py`
-  - [ ] `IMP-0107` · `SW-0107` · `NEW` — `Mutator::ApplyTo`
-  - [ ] `IMP-0108` · `SW-0108` · `MOVE` — `src/simcore/mutate/window.cpp`
-- [ ] **Files:** `include/simcore/mutate.hpp` · `src/simcore/mutate/{verbs,faults,address,window}.cpp`.
-- [ ] **Exit:** `ANL-SW-23` — no repeated-field allocation anywhere in `src/simcore/mutate/**`, which is *"may destroy or attenuate, never create"* made mechanical. `ANL-SW-24` — all six closed vocabularies compared against the published schema (SV-8).
+  - [x] `IMP-0097` · `SW-0097` · `MOVE` — `src/simcore/mutate/verbs.cpp` — `UtMut01ClosedVerbs.*` green; `Verb`'s switch in `ApplyArithmetic` carries no `default:`
+  - [x] `IMP-0098` · `SW-0098` · `MOVE` — `verbs.cpp` — `UtMut02*` green; `ANL-SW-23` (`scripts/check_no_repeated_field_allocation.py`) mechanised and self-test-verified (plants a real `Add*` call, confirms the check catches it)
+  - [x] `IMP-0099` · `SW-0099` · `MOVE` — `src/simcore/mutate/address.cpp` — `UtMut03*` green; takes the spec's `{path[], index, all_elements}` struct directly, no address string in `simcore`
+  - [x] `IMP-0100` · `SW-0100` · `MOVE` — `address.cpp` — `UtMut04*` green; `fixed_slots=true` clears in place (`ClearElementInPlace`), `false` compacts via `EraseRepeatedElement`'s swap-to-end (highest index first)
+  - [x] `IMP-0101` · `SW-0101` · `MOVE` — `src/simcore/mutate/faults.cpp` — `UtMut05*` green (all five faults)
+  - [x] `IMP-0102` · `SW-0102` · `EXTEND` — `Mutator::ApplyTo` — `UtMut06ThreeMutationsOnOneValueAllApplyInASingleDecodeEncodePass` green; one `ParseFromArray`/`SerializeToArray` pair per `ApplyTo` call regardless of mutation count
+  - [x] `IMP-0103` · `SW-0103` · `MOVE` — `verbs.cpp` (`Mutator::ApplyTo`, address.cpp) — `UtMut07OverriddenPortCarriesOverriddenOriginOnTheValue` green
+  - [x] `IMP-0104` · `SW-0104` · `MOVE` — `faults.cpp::Fault::Delay` (`ApplyFault`) — `UtMut05DelayShiftsAKnownCaptureStampAndRefusesAnUnknownOne` green
+  - [x] `IMP-0105` · `SW-0105` · `KEEP` — `Mutator::Touches` — `UtMut09*` green; built at construction, `ApplyTo` itself gates on it before any decode
+  - [x] `IMP-0106` · `SW-0106` · `EXTEND` — `scripts/check_closed_sets.py` — widened `Verb`/`Fault` to `"py_cpp"`, comparing `OverrideVerb`/`FaultVerb` (Python) against `simcore::mutate::Verb`/`Fault` (C++, `mutate.hpp`) against the published set AND against each other; live-verified catching a planted mismatch
+  - [~] `IMP-0107` · `SW-0107` · `NEW` — `Mutator::ApplyTo` — closed by: see this row's own scope-boundary note above (`WP-20` dependency, no data to act on yet)
+  - [x] `IMP-0108` · `SW-0108` · `MOVE` — `src/simcore/mutate/window.cpp` — `UtMut10*` green; `[from_ns, to_ns)`, `null` on either side meaning open, shared by `Mutator` and `FaultSpec`
+- [x] **Files:** `include/simcore/mutate.hpp` · `src/simcore/mutate/{verbs,faults,address,window}.cpp`.
+- [x] **Exit:** `ANL-SW-23` — no repeated-field allocation anywhere in `src/simcore/mutate/**`, which is *"may destroy or attenuate, never create"* made mechanical (`scripts/check_no_repeated_field_allocation.py`, clean, self-test proves it can fail). `ANL-SW-24` — `Verb`/`Fault`/`Origin` (3 of the six vocabularies real today) compared against the published schema (SV-8) and, for `Verb`/`Fault`, against their own C++ mirror (`scripts/check_closed_sets.py`, clean); `Rung`/`MergePolicy`/`ErrorKind` remain `NOT_YET`, reported not silently skipped.
 
 ### WP-12 · `MP-1` · `SI-12` `ingest`
 - [ ] **Prereq:** `WP-04`.

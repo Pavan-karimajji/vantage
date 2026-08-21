@@ -595,7 +595,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A recorded message shall carry two distinct timestamps — the instant the data describes, and the instant it was received — and the system shall never default one to the other.
 **Accept.** Where capture time is unknown it reads *unknown*; a derived data age of exactly zero occurs only when capture and reception genuinely coincide, and is distinguishable from unknown in every surface.
 **Verify.** T · `SYT-DAT-07`   **Trace.** CN-0298, CN-0139; v1 `CR-SIM-4`
-**Built.** ◐ started — 2/4 software requirements done, in `WP-07`, `WP-11`, `WP-17`
+**Built.** ◐ started — 3/4 software requirements done, in `WP-07`, `WP-11`, `WP-17`
 
 **`SYS-0031`** · `P1` · `R1` — Source time preferred, and the choice recorded
 **Shall.** Source time shall be preferred over capture time where available, and the system shall record which was used, per port, in the run manifest.
@@ -615,7 +615,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Every port shall carry an origin tag from the closed set: `measured`, `truth`, `mocked`, `simulated`, `overridden`, `unknown`.
 **Accept.** No seventh value can be produced by any code path. A recording with no provenance metadata yields `unknown`, never `measured`.
 **Verify.** T · `SYT-DAT-10` · `ANL-04`   **Trace.** CN-0299, CN-0300, CN-0286; v1 `CR-SIM-20`
-**Built.** ◐ started — 3/4 software requirements done, in `WP-06`, `WP-07`, `WP-11`
+**Built.** ● done — 4/4 software requirements done
 
 **`SYS-0034`** · `P0` · `R1` — Reconstructed values are marked
 **Shall.** A value reconstructed rather than read shall be marked as reconstructed everywhere it is rendered, exported or explained.
@@ -627,7 +627,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The system shall not integrate a time-varying signal, filter, or otherwise produce a history-dependent estimate of information no module published.
 **Accept.** No component of the system holds state across ticks for the purpose of producing a port value that no producer emitted. Reconstruction is limited to deterministic transforms of a fixed constant or of an already-emitted value.
 **Verify.** A · `ANL-05` · `INSP-02`   **Trace.** CN-0301
-**Built.** ◐ started — 2/4 software requirements done, in `WP-04`, `WP-08`, `WP-11`, `WP-12`
+**Built.** ◐ started — 3/4 software requirements done, in `WP-04`, `WP-08`, `WP-11`, `WP-12`
 
 **`SYS-0036`** · `P1` · `R1` — Port identity is independent of who produces it
 **Shall.** A component shall be splittable into two without invalidating existing recordings, pipelines, plugins or ingest maps.
@@ -1062,43 +1062,43 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Port value overrides shall use a closed verb list — the arithmetic verbs const, hold, offset, scale and the structural verbs select, drop — with no expression language, no scripting hook and no user-supplied callable.
 **Accept.** A configuration using any other verb is refused at load. The verb set is enumerable from the published schema and has not grown between releases without a requirement change.
 **Verify.** T · `SYT-STG-17` · `INSP-04`   **Trace.** CN-0326, CN-0286; v1 `FR-SIM-45`
-**Built.** ◐ started — 1/2 software requirements done, in `WP-05`, `WP-11`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0098`** · `P0` · `R1` — An override may destroy, never create
 **Shall.** No override shall create an entity.
 **Accept.** No verb inserts, moves or duplicates a repeated element. Attempting to express such an operation is a load error.
 **Verify.** T · `SYT-STG-18`   **Trace.** CN-0327
-**Built.** ○ not started — 0/1 software requirements done, in `WP-11`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0099`** · `P0` · `R1` — A closed address grammar
 **Shall.** Override addressing shall use the closed grammar: port, port.field, port.array[i], port.array[\*] — with no predicates.
 **Accept.** A predicate expression is a load error. The grammar is published and testable.
 **Verify.** T · `SYT-STG-19`   **Trace.** CN-0328
-**Built.** ◐ started — 1/2 software requirements done, in `WP-05`, `WP-11`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0100`** · `P1` · `R1` — Clearing does not renumber
 **Shall.** A port declared fixed-slot shall have an element cleared in place and shall never be compacted.
 **Accept.** Clearing index 3 of a 10-slot list leaves indices 0–2 and 4–9 unchanged and index 3 explicitly empty.
 **Verify.** T · `SYT-STG-20`   **Trace.** CN-0327, CN-0328
-**Built.** ○ not started — 0/1 software requirements done, in `WP-11`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0101`** · `P0` · `R1` — Overrides are declared, never smuggled
 **Shall.** Every override shall appear in the run manifest, and an overridden port shall be badged in the player and tagged `overridden` on its topic.
 **Accept.** An override invisible in the manifest is not producible by any path.
 **Verify.** T · `SYT-STG-21`   **Trace.** CN-0131, CN-0299
-**Built.** ◐ started — 1/5 software requirements done, in `WP-05`, `WP-11`, `WP-22`
+**Built.** ◐ started — 4/5 software requirements done, in `WP-05`, `WP-11`, `WP-22`
 
 **`SYS-0102`** · `P1` · `R1` — An override contradicting coherence is a waiver
 **Shall.** An override that contradicts the coherence classification shall be treated exactly like a waiver.
 **Accept.** Such a run is marked incoherent and requires a written reason.
 **Verify.** T · `SYT-STG-22`   **Trace.** CN-0130
-**Built.** ○ not started — 0/1 software requirements done, in `WP-11`
+**Built.** ◐ started — 0/1 software requirements done, in `WP-11`
 
 **`SYS-0103`** · `P1` · `R1` — A closed fault verb list
 **Shall.** Fault injection shall use a closed verb list derived from the port value's own metadata fields: drop, stale, delay, invalidate, corrupt.
 **Accept.** Each is individually demonstrable and observable in the consumer's header. No sixth verb exists.
 **Verify.** T · `SYT-STG-23`   **Trace.** CN-0329, CN-0286
-**Built.** ◐ started — 1/3 software requirements done, in `WP-05`, `WP-11`
+**Built.** ● done — 3/3 software requirements done
 
 ### 9.4 The open-loop limit
 
@@ -1984,7 +1984,7 @@ mechanism.
 **Shall.** Bulk data crossing into the scripting layer shall be exposed as array views onto engine-owned buffers, never as per-element scripting objects; the scripting layer shall never touch a message payload.
 **Accept.** No per-element conversion occurs on any per-message path. A profile of a representative run shows no scripting-layer frames inside the per-message path.
 **Verify.** A · `ANL-33` · T · `SYT-NFR-04`   **Trace.** CN-0290, CN-0229, CN-0288; **defect** concept §22.5
-**Built.** ○ not started — 0/4 software requirements done, in `WP-11`, `WP-16`, `WP-29`
+**Built.** ◐ started — 1/4 software requirements done, in `WP-11`, `WP-16`, `WP-29`
 
 **`SYS-0234`** · `P0` · `R1` — Per-cycle cost is budgeted with a number and measured
 **Shall.** Per-cycle cost and per-worker campaign throughput shall each carry a declared numeric budget, measured on §18.0's reference configuration, and reported per release.
@@ -2026,7 +2026,7 @@ Superseded (`SM-04`, 2026-08-20 — sole decomposer was `SI-18`'s scene-cache-bu
 **Shall.** The same inputs, the same Resolved Run Spec and the same binaries shall produce identical outputs.
 **Accept.** Byte-identical port values across repeated runs, on both platforms, with no wall-clock dependency, no unseeded randomness and no dependence on thread scheduling in the default mode.
 **Verify.** T · `SYT-NFR-07`   **Trace.** CN-0249, CN-0250, CN-0038
-**Built.** ◐ started — 3/7 software requirements done, in `WP-06`, `WP-09`, `WP-11`, `WP-15`, `WP-23`
+**Built.** ◐ started — 4/7 software requirements done, in `WP-06`, `WP-09`, `WP-11`, `WP-15`, `WP-23`
 
 **`SYS-0240`** · `P0` · `R1` — Four axes, two gates and two measurements
 **Shall.** Reproducibility shall be reported separately for four axes — same process, fresh process, rebuilt binary, different machine — with the first two exact and blocking, and the last two measured, declared and tracked against a bound.
@@ -2265,7 +2265,7 @@ Constraints are obligations on *how* the system is built, imposed because a corr
 **Shall.** Every closed set in this specification — override verbs, fault verbs, address grammar, origin tags, sampling policies, record policies, error classes, log events, primitive kinds, exit codes, extension points, missing-data policies, reset modes, reset timings, read-error policies, step granularities, codec capabilities, determinism axes — shall be enumerable from a published schema and shall not grow without a requirement change.
 **Accept.** Each set's membership is machine-readable and compared against the published schema on every build. A member added in code but absent from the schema fails the build.
 **Verify.** A · `ANL-49`   **Trace.** CN-0286, CN-0044
-**Built.** ◐ started — 1/2 software requirements done, in `WP-01`, `WP-11`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0276`** · `P0` · `R1` — Every requirement is falsifiable
 **Shall.** Every requirement in this specification shall carry an acceptance criterion that an observation could contradict.
