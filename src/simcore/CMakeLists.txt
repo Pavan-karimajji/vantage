@@ -7,10 +7,15 @@
 find_package(mcap REQUIRED)
 # SM-05a: the `.erg` codec's DescriptorPool/DynamicMessageFactory
 # reflection engine -- third-party (conancenter), same pin every other
-# component in this repo uses, never linked against a compiled
-# AdasInterfaces (this module's own "no first-party requires" invariant,
-# conf/build.yml's own comment, stays true).
+# component in this repo uses.
 find_package(protobuf REQUIRED)
+# SM-06 (SI-25, D-5): the player<->engine Transport contract lives in
+# modules/interfaces (R-IFACE-1) -- this is the one first-party dependency
+# simcore's own conf/build.yml comment (above WP-06) used to say it never
+# needed. `io`'s own named Conan component keeps its separate, narrower
+# `requires:` list (conf/build.yml), so `io` alone still requires nothing
+# first-party; only the whole-engine root target gains this edge.
+find_package(AdasInterfaces REQUIRED)
 
 add_library(simcore STATIC
     errors/events.cpp
@@ -31,6 +36,9 @@ add_library(simcore STATIC
     bus/static_data.cpp
     bus/bulk.cpp
     bus/catalogue.cpp
+    # SM-06 (SI-25, D-5): the engine-side implementations behind
+    # modules/interfaces' ITransport contract.
+    transport/inproc.cpp
 )
 target_include_directories(simcore PUBLIC ${PROJECT_SOURCE_DIR}/include)
 # PRIVATE: third_party/ is an implementation detail of simcore's own .cpp
@@ -45,7 +53,7 @@ target_compile_features(simcore PUBLIC cxx_std_17)
 # `mcap::mcap` is a compiled library a consumer of `simcore.lib` must also
 # link against at the final executable, same reasoning `sil_host`'s own
 # `sil_core` target already applies to this identical dependency.
-target_link_libraries(simcore PUBLIC mcap::mcap protobuf::libprotobuf)
+target_link_libraries(simcore PUBLIC mcap::mcap protobuf::libprotobuf AdasInterfaces::AdasInterfaces)
 
 include(${PROJECT_SOURCE_DIR}/cmake/FloatingPoint.cmake)
 adas_sim_apply_fp_flags(simcore)

@@ -20,16 +20,33 @@ build_includedir: include
 recipe:
   type: static-library
   libs: [simcore]
+  # SM-06, found live publishing this pass: once `components:` exists,
+  # Conan's package_info() validates every direct requires() is referenced
+  # by SOME cpp_info/component's own `.requires` -- `io`'s below covers
+  # mcap/protobuf, but the unnamed root (which owns everything else, i.e.
+  # transport) declares no `.requires` at all unless told to (`root_requires`
+  # unset previously relied on CMakeDeps' own separate auto-link-all
+  # generation, which is not what this validator checks). Made explicit
+  # here rather than adding `adas-interfaces` to `io`'s own list (which
+  # would be architecturally wrong -- D-5 is explicit that `io` alone stays
+  # linkable without the engine, transport is not). Same VIZ_Sync_Plan.md
+  # `ANL-VZ-05` shape mcap already hit for `adas-viz`'s own `player`
+  # component (2026-08-20), one level up (unnamed root here, not a
+  # component) because this recipe's root, unlike viz's, has no libs of its
+  # own component list to attach it to instead.
+  root_requires: [mcap::mcap, protobuf::libprotobuf, adas-interfaces::adas-interfaces]
   # SM-02 (VIZ_Sync_Plan_v0.1.md, "D-10's only cost"): `io` is separately
   # linkable as the Conan component `adas-sim::io`, so a consumer (the viz
   # player) can read a recording without acquiring the engine. Same
   # `simcore` static library as the top-level package today -- `io/*.cpp`
   # is not yet split into its own CMake target (src/simcore/CMakeLists.txt
   # builds one `simcore.a`), so this component is a named subset VIEW over
-  # the one artifact, not a second binary. Safe while `simcore` requires
-  # nothing first-party (checked live, `requires:` below is `mcap` only,
-  # third-party) -- the escape hatch, should that stop being true, is a new
-  # Conan package for `io`, never a bigger component list here.
+  # the one artifact, not a second binary. `io`'s own component below keeps
+  # requiring nothing first-party -- unaffected by SM-06's new
+  # `adas-interfaces` requires: below (a named component gets NOTHING
+  # implicitly from a package's requires(), SM-02's own live verification).
+  # The escape hatch, should `io` itself ever need a first-party dep, is
+  # still a new Conan package for `io`, never a bigger component list here.
   components:
     io:
       libs: [simcore]
@@ -57,6 +74,13 @@ variants:
       # protobuf/3.21.12 pin every other component in this repo already
       # uses (never a second pinned version).
       - protobuf/3.21.12
+      # SM-06 (SI-25, D-5): the player<->engine `Transport` wire/ABI
+      # contract -- both ends require it (R-IFACE-1), this is the engine
+      # end. First-party, unlike every other entry above -- covered by the
+      # explicit `root_requires:` above (recipe.root_requires), not `io`'s
+      # own named component's `requires:`, so `io` still requires nothing
+      # first-party (this file's own comment on that component, unchanged).
+      - adas-interfaces/1.0.0
     sil:
       platforms: &base_platforms
         - build: vs2026

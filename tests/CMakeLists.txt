@@ -37,6 +37,8 @@ set(SIM_TEST_SOURCES
     unit/test_ut_bus_bulk.cpp
     unit/test_ut_bus_static.cpp
     unit/test_ut_bus_catalogue.cpp
+    # SM-06 (SI-25, D-5): InProcessTransport's own class-level contract.
+    unit/test_transport_inproc.cpp
 )
 
 add_executable(simcore_tests ${SIM_TEST_SOURCES})

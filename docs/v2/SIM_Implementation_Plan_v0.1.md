@@ -895,23 +895,46 @@ fraction (1 `SW` + 2 `SYS` of ~130 total UIDs the full table names).
       world-model/component name (`SW-0354`). Pure declaration, no
       implementation (`workflows/add_interface.md`'s own "pure abstract
       only" rule) — compiles standalone against `adas-interfaces`'s own
-      include root. **Not yet done, explicitly deferred, matching this
-      plan's own incremental-slice precedent (`SM-01`):** the two required
-      implementations (in-process pass-through, local shared memory) behind
-      it, and the version-negotiation/liveness-detection logic `SW-0355`/
-      `SW-0356` describe — real engine-side work, not attempted this pass.
+      include root.
+- [x] **`InProcessTransport`, the first of the two required implementations,
+      landed and verified live this pass (`SYNC:SM-06`, 2026-08-21):**
+      `include/simcore/transport.hpp` + `src/simcore/transport/inproc.cpp` —
+      a bounded ring buffer, `Publish()` (engine-only, not part of the ABI)
+      never blocking and overwriting the oldest unread frame once full
+      (`SW-0353`); `attach()`/`detach()` never touch the ring so `Publish()`
+      behaves identically attached or not (`SW-0352`); version mismatch
+      refused before any data crosses, naming the engine's own version
+      (`SW-0355`); `MarkEngineDead()`/`engineAlive()`/`lastTickReceived()`
+      give `SW-0356` a real, testable shape. `tests/unit/test_transport_inproc.cpp`
+      (`TransportInproc.*`, 7 cases) exercises each clause directly against
+      the class. **A real Conan defect found and fixed on the way:**
+      `simcore` gained its first first-party dependency, and a real `conan
+      create` failed package_info() validation the same shape `ANL-VZ-05`
+      already found for `adas-viz`'s `player` component — fixed with an
+      explicit `recipe.root_requires:` in `conf/build.yml`, not by adding it
+      to `io`'s own component (which would wrongly imply `io` needs the
+      engine's transport dependency). Verified live: `conan create` succeeds,
+      `io`'s own resolved `.requires`/`libdirs` unaffected, `simcore_tests`
+      **55/55 green** including all 7 new cases, `viz`'s own suite re-run
+      against the rebuilt package **39/39 green**, `check_invariants.py`
+      clean. **Not yet done, explicitly deferred, matching this plan's own
+      incremental-slice precedent (`SM-01`):** the local-shared-memory
+      implementation (the cross-process case `SW-0351` names), and the
+      IT-level `UT-TRN-01`..`05` fixtures (`F-STUB`/`F-BULK`/`F-LONG`/
+      `F-STUB-CRASH`, a real component wired through the scheduler) — this
+      pass proves the transport class itself, not yet anything wired to it.
 - [ ] **Lands:** `IMP-0017`, `IMP-0298`, `IMP-0349`…`IMP-0356` — 10.
   - [ ] `IMP-0017` · `SW-0017` · `NEW` — `ANL-SW-07`
   - [ ] `IMP-0298` · `SW-0298` · `NEW` — `session/attach.py`
-  - [ ] `IMP-0349` · `SW-0349` · `NEW` — contract: `modules/interfaces/cpp/transport/ITransport.hpp` (landed). Engine-side `src/simcore/transport/{inproc,shm}.cpp`, two implementations against it (not started).
+  - [ ] `IMP-0349` · `SW-0349` · `NEW` — contract (landed) + `InProcessTransport` (landed, unit-tested). `shm.cpp`, the second implementation, not started.
   - [ ] `IMP-0350` · `SW-0350` · `KEEP` — `ANL-SW-58`
-  - [ ] `IMP-0351` · `SW-0351` · `NEW` — `src/simcore/transport/shm.cpp`
-  - [ ] `IMP-0352` · `SW-0352` · `NEW` — `shm.cpp::attach/detach`
-  - [ ] `IMP-0353` · `SW-0353` · `NEW` — `shm.cpp`
-  - [ ] `IMP-0354` · `SW-0354` · `NEW` — contract shape landed (`ITransport.hpp`'s `PortFrame` carries ports, ticks and bytes only, no codec/world-model/component name); `ANL-SW-59`'s static check still needs a real engine-side implementation to check against, not started
-  - [ ] `IMP-0355` · `SW-0355` · `NEW` — `src/simcore/transport/negotiate.cpp`
-  - [ ] `IMP-0356` · `SW-0356` · `NEW` — `src/simcore/transport/liveness.cpp`
-- [ ] **Files:** contract `modules/interfaces/cpp/transport/ITransport.hpp` (landed); engine-side `src/simcore/transport/{inproc,shm,negotiate,liveness}.cpp` (not started); player-side client is `modules/viz`'s own scope (`VIZ:SI-16`), not this file list.
+  - [ ] `IMP-0351` · `SW-0351` · `NEW` — `src/simcore/transport/shm.cpp`, the cross-process bulk-over-shared-memory case; not started (`InProcessTransport`'s own "bulk" is a plain in-process copy, not shared memory — this SW item is specifically about the second transport)
+  - [ ] `IMP-0352` · `SW-0352` · `NEW` — `inproc.cpp::attach/detach` proven non-perturbing against `InProcessTransport` (`TransportInproc.AttachDetachDoesNotPerturbPublish`, landed); `shm.cpp`'s own attach/detach not started — `SW-0349`'s "unchanged interface" claim needs both
+  - [ ] `IMP-0353` · `SW-0353` · `NEW` — `inproc.cpp`'s ring-buffer drop proven unit-level (`TransportInproc.SlowConsumerDropsFramesNeverBlocksProducer`, landed); the IT-level `UT-TRN-03` (`F-LONG`, measured engine tick rate) not started
+  - [ ] `IMP-0354` · `SW-0354` · `NEW` — contract shape landed (`ITransport.hpp`'s `PortFrame` carries ports, ticks and bytes only, no codec/world-model/component name); `ANL-SW-59`'s static check against a real implementation not started
+  - [ ] `IMP-0355` · `SW-0355` · `NEW` — `inproc.cpp::attach()` version negotiation landed and unit-tested (`TransportInproc.VersionMismatchRefusedBeforeAnyDataCrosses`); `shm.cpp`'s own not started — no separate `negotiate.cpp` file, folded into each transport's own `attach()`
+  - [ ] `IMP-0356` · `SW-0356` · `NEW` — `inproc.cpp`'s `MarkEngineDead()`/`engineAlive()`/`lastTickReceived()` landed and unit-tested (`TransportInproc.DeadEngineReportedNotWaitedOn`); real cross-process death detection (`shm.cpp`) not started — no separate `liveness.cpp` file, folded into each transport's own state
+- [ ] **Files:** contract `modules/interfaces/cpp/transport/ITransport.hpp` (landed); engine-side `src/simcore/transport/inproc.cpp` (landed) + `shm.cpp` (not started, cross-process, folds in its own attach/detach/negotiation/liveness rather than the four separate files this row originally named); player-side client is `modules/viz`'s own scope (`VIZ:SI-16`), not this file list.
 - [ ] **Exit:** **two** transports against one interface, because one implementation behind an interface is an interface nobody has tested. `IT-19` measures engine tick rate with and without a player attached. A slow player drops frames; it never slows the engine.
 
 ### WP-28 · `MP-4` · `SI-22` `launcher`
