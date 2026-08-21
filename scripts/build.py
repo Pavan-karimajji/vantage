@@ -163,6 +163,37 @@ def run(cmd, cwd):
         sys.exit(proc.returncode)
 
 
+def resolve_conan_preset_name(kind, cwd):
+    """Discovers the ONE Conan-generated preset name of the given `kind`
+    ("configure"/"build"/"test") by asking CMake, rather than re-deriving
+    Conan's own naming rule here as a second, driftable copy of it (found
+    live, 2026-08-21: this file used to hardcode "conan-default" as the
+    configure preset unconditionally, which conan.tools.cmake.presets only
+    ever generates for a MULTI-config generator - vs2026's Visual Studio.
+    For a single-config generator (ubuntu_gcc's Unix Makefiles), Conan
+    names the configure preset after the build type instead ("conan-
+    release"), so "conan-default" never existed there and every cmake_layout
+    module's ubuntu_gcc build has silently gone through this file's own
+    hand-configured-tree bypass instead of this documented path).
+    CMakeUserPresets.json must already exist at `cwd` (i.e. conan install
+    has already run) - this only reads what Conan wrote, it never guesses
+    the name from build_type/generator itself, so it stays correct even if
+    Conan's own naming rule changes again."""
+    proc = subprocess.run(
+        ["cmake", f"--list-presets={kind}"], cwd=str(cwd),
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    if proc.returncode != 0:
+        sys.exit(f"ERROR: cmake --list-presets={kind} failed in {cwd}:\n{proc.stdout}{proc.stderr}")
+    names = re.findall(r'"([^"]+)"', proc.stdout)
+    if not names:
+        sys.exit(f"ERROR: cmake --list-presets={kind} in {cwd} found no {kind} preset:\n{proc.stdout}")
+    if len(names) > 1:
+        sys.exit(f"ERROR: cmake --list-presets={kind} in {cwd} found more than one "
+                 f"{kind} preset ({names}) - this dispatcher assumes exactly one Conan-generated preset per kind.")
+    return names[0]
+
+
 def rmtree_if_exists(path):
     if path.exists():
         print(f"Cleaning {path} ...")
@@ -415,18 +446,30 @@ def _build(args, layout_kind, build_type, output_base, build_dir, target_conf):
         install_cmd = ["conan", "install", ".", "--output-folder", str(output_base),
                         "--update", "--build=missing",
                         "-s", f"build_type={build_type}"]
-        configure_cmd = ["cmake", "--preset", "conan-default",
+        # Run NOW, ahead of the shared install/configure/build/test block
+        # below (which is then told install is already done) - the preset
+        # names below can only be discovered from what Conan actually wrote,
+        # not guessed ahead of time (resolve_conan_preset_name's own note:
+        # found live, 2026-08-21 - the old hardcoded "conan-default" was
+        # only ever correct for vs2026's multi-config generator).
+        log("Installing Conan dependencies...")
+        run(install_cmd, cwd=ROOT)
+        install_cmd = None
+        configure_preset = resolve_conan_preset_name("configure", ROOT)
+        build_preset = resolve_conan_preset_name("build", ROOT)
+        test_preset = resolve_conan_preset_name("test", ROOT)
+        configure_cmd = ["cmake", "--preset", configure_preset,
                          f"-DADAS_PROJECT={args.project}"]
         if args.target in TEST_TARGETS:
             # Unlike output_folder's hand-authored CMakePresets.json (which bakes
             # BUILD_TESTING: "ON" into its own gtest-<platform> preset), Conan's
-            # generated conan-default preset knows nothing about per-target test
+            # generated configure preset knows nothing about per-target test
             # flags - without this, a cmake_layout component's "gtest" target
             # configures with BUILD_TESTING unset, so CMakeLists.txt's own
             # if(BUILD_TESTING) never adds tests/ and ctest silently finds nothing.
             configure_cmd.append("-DBUILD_TESTING=ON")
-        build_cmd = ["cmake", "--build", "--preset", "conan-release"]
-        test_cmd = ["ctest", "--preset", "conan-release"]
+        build_cmd = ["cmake", "--build", "--preset", build_preset]
+        test_cmd = ["ctest", "--preset", test_preset]
     else:  # output_folder
         # The hand-written CMakePresets.json hardcodes
         # binaryDir/CMAKE_TOOLCHAIN_FILE under ${sourceDir}, so relocating the
@@ -452,8 +495,9 @@ def _build(args, layout_kind, build_type, output_base, build_dir, target_conf):
     for key, value in (target_conf.get("cmake_options") or {}).items():
         configure_cmd.append(f"-D{key}={value}")
 
-    log("Installing Conan dependencies...")
-    run(install_cmd, cwd=ROOT)
+    if install_cmd is not None:
+        log("Installing Conan dependencies...")
+        run(install_cmd, cwd=ROOT)
 
     log(f"Configuring {args.target}-{args.platform} into {build_dir} (project={args.project}) ...")
     run(configure_cmd, cwd=ROOT)
