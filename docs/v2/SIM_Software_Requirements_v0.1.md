@@ -1978,49 +1978,49 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The bridge from a recording's own signal vocabulary to the port model shall be a declared file, parsed and validated exactly once per run, in Python.
 **Accept.** Onboarding a recording family rebuilds no compiled artifact and edits no source module. Exactly one parser for the file kind exists in the codebase.
 **Verify.** T · `UT-ING-01` · A · `ANL-SW-08`   **Trace.** SYS-0013, SYS-0270
-**Built.** ○ not started — `IMP-0187` in `WP-12`
+**Built.** ● done — `IMP-0187` in `WP-12`
 **Now.** `DONE·TWICE` — `io/ingest.py` and `sil_host/src/ingest_map.cpp`; the C++ parser is deleted and its application survives as `SW-0032`.
 
 **`SW-0188`** · `SI-12` · `P0` · `R1` — What a map declares per signal
 **Shall.** A map shall declare, per source signal: target port, payload type, origin tag, unit, scale, offset, and array shape where applicable.
 **Accept.** A map omitting any mandatory field is refused at load naming the field and the line.
 **Verify.** T · `UT-ING-02`   **Trace.** SYS-0014
-**Built.** ○ not started — `IMP-0188` in `WP-12`
+**Built.** ● done — `IMP-0188` in `WP-12`
 **Now.** `PARTIAL` — `io/ingest.py` declares topic, port, `proto_type` and origin; unit, scale, offset and array shape are absent.
 
 **`SW-0189`** · `SI-12` · `P0` · `R1` — The signal header is bound explicitly
 **Shall.** A map shall bind the header fields explicitly — which source channel provides source time, which provides the cycle counter, which provides status, and which provides the cycle identifier where the source carries one.
 **Accept.** A map binding none of these loads, but every port it feeds is marked *timing approximated* and a warning names those ports.
 **Verify.** T · `UT-ING-03`   **Trace.** SYS-0015; **evidence** SYS §2.1
-**Built.** ○ not started — `IMP-0189` in `WP-12`
+**Built.** ● done — `IMP-0189` in `WP-12`
 **Now.** `NEW`.
 
 **`SW-0190`** · `SI-12` · `P0` · `R1` — Declared holes are named at load
 **Shall.** A map shall declare which ports the recording family never carries, with a reason, and a cut requiring a declared-absent port shall be refused at load with the reason quoted.
 **Accept.** The refusal occurs at load, not at the first cycle, and quotes the declared reason verbatim.
 **Verify.** T · `UT-ING-04`   **Trace.** SYS-0016
-**Built.** ○ not started — `IMP-0190` in `WP-12`
+**Built.** ● done — `IMP-0190` in `WP-12`
 **Now.** `DONE·MOVE` — `io/ingest.py`'s `absent:` block with its reason is implemented and used by `sim probe`.
 
 **`SW-0191`** · `SI-12` · `P1` · `R1` — A family is recognised by declared match rules
 **Shall.** A recording family shall be recognised by declared match rules, so two teams' vocabularies coexist without a shared namespace.
 **Accept.** Two maps with disjoint rules coexist. A recording matching neither is reported as unmapped, naming every map considered.
 **Verify.** T · `UT-ING-05`   **Trace.** SYS-0017
-**Built.** ○ not started — `IMP-0191` in `WP-12`
+**Built.** ● done — `IMP-0191` in `WP-12`
 **Now.** `PARTIAL` — maps are discovered per component directory; match rules against a recording's own identity do not exist.
 
 **`SW-0192`** · `SI-12` · `P0` · `R1` — A port claimed twice is an authoring error naming both
 **Shall.** A port claimed by two applicable maps shall be an authoring error naming both maps, the port and both source signals.
 **Accept.** No precedence rule resolves it silently.
 **Verify.** T · `UT-ING-06`   **Trace.** SYS-0018
-**Built.** ○ not started — `IMP-0192` in `WP-12`
+**Built.** ● done — `IMP-0192` in `WP-12`
 **Now.** `DONE·MOVE` — implemented in `io/ingest.py` and mirrored in the C++ parser.
 
 **`SW-0193`** · `SI-12` · `P0` · `R1` — Unit correction is declarative and the vocabulary is closed
 **Shall.** A map shall permit unit conversion by a declared factor and offset from a closed vocabulary and nothing else — no expression, no field arithmetic, no scripting, no user-supplied callable.
 **Accept.** A construct outside the vocabulary is refused at load, and the vocabulary's members are enumerable from the published schema.
 **Verify.** T · `UT-ING-07` · I · `INSP-SW-03`   **Trace.** SYS-0019; CN-0309
-**Built.** ○ not started — `IMP-0193` in `WP-12`
+**Built.** ● done — `IMP-0193` in `WP-12`
 **Now.** `PARTIAL` — the ban is honoured (rename and tag only); the permitted widening to factor and offset is not implemented, so no real measurement format can currently be ingested.
 
 **`SW-0194`** · `SI-12` · `P1` · `R1` — A map is deployed beside the library, not read from a checkout
@@ -2034,7 +2034,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** No map construct shall create a port value, an array element or an entity that the source did not carry.
 **Accept.** Every port a map produces is traceable to a source signal it named. A map producing an unmapped port is an authoring error.
 **Verify.** T · `UT-ING-08`   **Trace.** SYS-0035, SYS-0086
-**Built.** ○ not started — `IMP-0195` in `WP-12`
+**Built.** ● done — `IMP-0195` in `WP-12`
 **Now.** `DONE` — true of `io/ingest.py` by construction.
 
 ### 16.2 Description resolution
@@ -2045,49 +2045,49 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The system shall identify each data source in a recording by its declared identity tuple — family, model, name and instance number — before selecting any interpretation for it.
 **Accept.** Two sources of the same family and model with different instance numbers are interpreted independently. A source whose identity is incomplete is reported, not guessed.
 **Verify.** T · `UT-ING-09`   **Trace.** — **gap, see §32.3**; **evidence** §2.5
-**Built.** ○ not started — `IMP-0196` in `WP-12`
+**Built.** ● done — `IMP-0196` in `WP-12`
 **Now.** `NEW`.
 
 **`SW-0197`** · `SI-12` · `P0` · `R1` — Description resolution is declared, ordered and reported
 **Shall.** The description artifact used to interpret a source shall be resolved in a declared order — embedded in the recording, then an explicit mapping, then a configured directory by naming convention — and the tier used shall be reported per source.
 **Accept.** Each tier is individually exercised. The tier used appears in the run manifest. A source with no resolvable description is named at load, not at the first message.
 **Verify.** T · `UT-ING-10`   **Trace.** SYS-0009; **evidence** §2.5
-**Built.** ○ not started — `IMP-0197` in `WP-12`
+**Built.** ● done — `IMP-0197` in `WP-12`
 **Now.** `PARTIAL` — the *pattern* is proven: `model/project.py` and `model/plugins.py` both implement exactly this ordered-tier-with-reported-tier resolution. Nothing applies it to descriptions.
 
 **`SW-0198`** · `SI-12` · `P1` · `R1` — A description type declares its accepted versions
 **Shall.** Each description artifact type shall declare the versions it accepts, and a version outside that set shall be refused naming the type, the version found and the versions accepted.
 **Accept.** A description one version outside the set is refused with all three named.
 **Verify.** T · `UT-ING-11`   **Trace.** SYS-0009, SYS-0170; **evidence** §2.5
-**Built.** ○ not started — `IMP-0198` in `WP-12`
+**Built.** ● done — `IMP-0198` in `WP-12`
 **Now.** `NEW`.
 
 **`SW-0199`** · `SI-12` · `P1` · `R1` — Static parameter data resolves from the recording first
 **Shall.** Static parameter data shall be taken from the recording where present, and otherwise from a configured directory by declared naming convention, with the choice reported.
 **Accept.** Both paths are exercised. The run manifest states which was used and the identity of the artifact chosen.
 **Verify.** T · `UT-ING-12`   **Trace.** — **gap, see §32.3**; **evidence** §2.5
-**Built.** ○ not started — `IMP-0199` in `WP-12`
+**Built.** ● done — `IMP-0199` in `WP-12`
 **Now.** `NEW`.
 
 **`SW-0200`** · `SI-12` · `P1` · `R1` — A recording is never modified to record a decision about it
 **Shall.** Overrides to a recording's own attributes — markers, descriptions, annotations — shall be written to a sidecar and the recording shall be left byte-identical.
 **Accept.** After any attribute edit the recording's content hash is unchanged. The sidecar is a separate artifact with its own identity.
 **Verify.** T · `UT-ING-13`   **Trace.** SYS-0222, SYS-0226; **evidence** §2.6
-**Built.** ○ not started — `IMP-0200` in `WP-12`
+**Built.** ● done — `IMP-0200` in `WP-12`
 **Now.** `NEW`.
 
 **`SW-0201`** · `SI-12` · `P1` · `R1` — Sidecar precedence is declared, not discovered
 **Shall.** Where more than one sidecar applies to a recording, the application order shall be declared and every applied sidecar shall be reported.
 **Accept.** With a directory-scoped and a file-scoped sidecar both present, the resulting attribute set is the declared composition and both sources are named.
 **Verify.** T · `UT-ING-14`   **Trace.** SYS-0009; **evidence** §2.6
-**Built.** ○ not started — `IMP-0201` in `WP-12`
+**Built.** ● done — `IMP-0201` in `WP-12`
 **Now.** `NEW`.
 
 **`SW-0202`** · `SI-12` · `P0` · `R1` — An ingest map is not a place to compute
 **Shall.** The map schema shall admit no construct capable of arithmetic beyond the declared factor and offset, no conditional, and no reference to another signal's value.
 **Accept.** The schema's accepted construct set is enumerable and is compared against the parser on every build.
 **Verify.** A · `ANL-SW-36`   **Trace.** SYS-0019; CN-0309
-**Built.** ○ not started — `IMP-0202` in `WP-12`
+**Built.** ● done — `IMP-0202` in `WP-12`
 **Now.** `PARTIAL` — true today, but true by omission rather than by a check, and `SW-0193` is about to widen the schema.
 
 ---

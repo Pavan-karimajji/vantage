@@ -52,18 +52,31 @@ import yaml
 
 from adas_sim.config.paths import superproject_root as _superproject_root
 from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.ingest import family as _family
+from adas_sim.ingest.header import HeaderBinding
+from adas_sim.ingest.units import factor_offset as _factor_offset
 from adas_sim.io.base import Provenance, RecordingReader, RunManifest, TopicInfo
 
 _SUPERPROJECT_ROOT = _superproject_root()
 
-_ALLOWED_PROVIDES_KEYS = frozenset({"port", "proto_type", "origin"})
+#: `IMP-0188`: `unit:`/`shape:`/`header:` extend the closed `provides:`
+#: vocabulary -- still renames and tags only (`unit:` resolves through
+#: `units.py`'s closed table, never a raw factor/offset typed in the map).
+_ALLOWED_PROVIDES_KEYS = frozenset({"port", "proto_type", "origin", "unit", "shape", "header"})
+_ALLOWED_HEADER_KEYS = frozenset({"t_source", "counter", "status"})
 _ALLOWED_ABSENT_KEYS = frozenset({"reason"})
 _VALID_ORIGINS = frozenset(p.value for p in Provenance)
 
 
 @dataclass(frozen=True, slots=True)
 class ProvidedPort:
-    """One `provides:` entry, resolved."""
+    """One `provides:` entry, resolved -- `IMP-0188`'s nine-field
+    `SignalBinding` (topic, port, proto_type, origin, factor, offset,
+    shape, and the three header bindings, the last three carried as one
+    `HeaderBinding` rather than three flat fields to avoid a second copy
+    of `header.py`'s own shape). `factor`/`offset` default to the identity
+    conversion (`1.0`/`0.0`) for a map declaring no `unit:` -- unchanged
+    behaviour for every map written before `WP-12`."""
 
     topic: str
     port: str  # this run's Tick.ports / known_ports key (self.<port> resolution target)
@@ -71,6 +84,10 @@ class ProvidedPort:
     proto_type: str
     origin: Provenance
     family: str
+    factor: float = 1.0
+    offset: float = 0.0
+    shape: tuple[int, ...] | None = None
+    header: HeaderBinding | None = None
 
     def __repr__(self) -> str:
         return f"<ProvidedPort {self.topic!r} -> {self.port!r} ({self.family!r})>"
@@ -105,6 +122,10 @@ class IngestMap:
     provides: tuple[ProvidedPort, ...]
     absent: tuple[AbsentPort, ...]
     path: Path
+    #: `IMP-0191`'s declared-rule axis (`family.match_family`) -- optional;
+    #: a map with no `matches: path_glob:` participates only in the
+    #: existing topic-based axis below.
+    path_glob: str | None = None
 
     def matches(self, topics: Collection[str]) -> bool:
         return bool(self.match_any_topic & frozenset(topics))
@@ -132,10 +153,12 @@ def _parse_ingest_map(path: Path) -> IngestMap:
             where=str(path), hint="add family: <owning-component>.<name>",
         )
 
-    any_topic = frozenset((raw.get("matches") or {}).get("any_topic", ()))
-    if not any_topic:
+    matches_block = raw.get("matches") or {}
+    any_topic = frozenset(matches_block.get("any_topic", ()))
+    path_glob = matches_block.get("path_glob")
+    if not any_topic and not path_glob:
         raise AuthoringError(
-            expected="matches: any_topic: [<real topic>, ...] naming at least one topic",
+            expected="matches: any_topic: [<real topic>, ...] and/or matches: path_glob: '<pattern>'",
             found=repr(raw.get("matches")), where=str(path),
             hint="an ingest map with nothing to recognise a recording by can never apply",
         )
@@ -152,9 +175,23 @@ def _parse_ingest_map(path: Path) -> IngestMap:
             raise AuthoringError(
                 expected=f"origin: one of {sorted(_VALID_ORIGINS)}", found=repr(origin_raw), where=where, hint="",
             )
+        factor, offset = (1.0, 0.0)
+        if "unit" in entry:
+            factor, offset = _factor_offset(entry["unit"], where=where)
+        shape_raw = entry.get("shape")
+        shape = tuple(int(n) for n in shape_raw) if shape_raw is not None else None
+        header_entry = entry.get("header")
+        header = None
+        if header_entry is not None:
+            _require_reason_keys(header_entry, allowed=_ALLOWED_HEADER_KEYS, where=f"{where} header")
+            header = HeaderBinding(
+                t_source=header_entry.get("t_source"), counter=header_entry.get("counter"),
+                status=header_entry.get("status"),
+            )
         provides.append(ProvidedPort(
             topic=topic, port=port, manifest_port=_manifest_port(port),
             proto_type=entry.get("proto_type", ""), origin=Provenance(origin_raw), family=family,
+            factor=factor, offset=offset, shape=shape, header=header,
         ))
 
     absent = []
@@ -166,7 +203,10 @@ def _parse_ingest_map(path: Path) -> IngestMap:
             raise AuthoringError(expected="a 'reason:' explaining the hole", found=repr(reason), where=where, hint="")
         absent.append(AbsentPort(port=port, reason=reason, family=family))
 
-    return IngestMap(family=family, match_any_topic=any_topic, provides=tuple(provides), absent=tuple(absent), path=path)
+    return IngestMap(
+        family=family, match_any_topic=any_topic, provides=tuple(provides), absent=tuple(absent), path=path,
+        path_glob=path_glob,
+    )
 
 
 def discover_ingest_maps(superproject_root: Path = _SUPERPROJECT_ROOT) -> tuple[IngestMap, ...]:
@@ -202,17 +242,8 @@ class IngestRecordingReader:
             for provided in ingest_map.provides:
                 claims.setdefault(provided.topic, []).append(provided)
 
-        by_raw_topic: dict[str, ProvidedPort] = {}
-        for topic, claimers in claims.items():
-            if len(claimers) > 1:
-                families = sorted({c.family for c in claimers})
-                raise AuthoringError(
-                    expected="at most one ingest map to claim a given topic",
-                    found=f"topic {topic!r} claimed by {families}",
-                    where="adas_sim.ingest.map.IngestRecordingReader",
-                    hint="narrow one map's matches: any_topic:, or fold the two families",
-                )
-            by_raw_topic[topic] = claimers[0]
+        _family.check_no_double_claim(claims, where="adas_sim.ingest.map.IngestRecordingReader")
+        by_raw_topic: dict[str, ProvidedPort] = {topic: claimers[0] for topic, claimers in claims.items()}
 
         self._by_raw_topic = by_raw_topic
         #: This recording's declared provides/absent, file-level and
@@ -231,8 +262,11 @@ class IngestRecordingReader:
         """Forwards to the wrapped reader's own extra (`io/mcap.py`'s own
         docstring: "beyond the `RecordingReader` Protocol's minimum") --
         `b""` for a codec that never implemented it (`io/csv.py`), same as
-        calling it directly would report."""
-        return getattr(self._inner, "config_bundle_bytes", lambda: b"")()
+        calling it directly would report. No `lambda` default (`ANL-SW-36`,
+        `IMP-0195`): a plain `hasattr` branch reads the same and keeps
+        `adas_sim/ingest/**` free of any callable-construction syntax."""
+        inner_method = getattr(self._inner, "config_bundle_bytes", None)
+        return inner_method() if inner_method is not None else b""
 
     def topics(self) -> Mapping[str, TopicInfo]:
         remapped: dict[str, TopicInfo] = {}

@@ -457,7 +457,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Where a source format carries its own data description, the reader shall use it, and shall accept an external override.
 **Accept.** A recording carrying an embedded description loads with no external description file; supplying one overrides the embedded description and the manifest records which was used.
 **Verify.** T · `SYT-INP-09`   **Trace.** CN-0086
-**Built.** ◐ started — 1/4 software requirements done, in `WP-06`, `WP-12`
+**Built.** ● done — 4/4 software requirements done
 
 **`SYS-0010`** · `P0` · `R1` — Codecs declare capabilities
 **Shall.** Every codec shall declare its capabilities explicitly — at minimum: embedded schemas, random access, round-trip, capture time, arbitrary topics, meta blocks.
@@ -485,43 +485,43 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The bridge from a recording's own signal vocabulary to the port model shall be a declared file, never code.
 **Accept.** A new recording family is onboarded with no compiled artifact rebuilt and no Python module edited.
 **Verify.** T · `SYT-INP-13`   **Trace.** CN-0068, CN-0304; v1 `FR-SIM-66`
-**Built.** ◐ started — 1/3 software requirements done, in `WP-05`, `WP-06`, `WP-12`
+**Built.** ◐ started — 2/3 software requirements done, in `WP-05`, `WP-06`, `WP-12`
 
 **`SYS-0014`** · `P0` · `R1` — What an ingest map declares
 **Shall.** An ingest map shall declare, per source signal: target port, payload type, origin tag, unit, scale and offset, and array shape where applicable.
 **Accept.** A map omitting any mandatory field is refused at load, naming the field and the line.
 **Verify.** T · `SYT-INP-14`   **Trace.** CN-0304
-**Built.** ◐ started — 0/2 software requirements done, in `WP-05`, `WP-12`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-05`, `WP-12`
 
 **`SYS-0015`** · `P0` · `R1` — The signal header is bound explicitly
 **Shall.** An ingest map shall bind the signal header fields explicitly — which source channel provides source time, which provides the cycle counter, which provides status, and, where the source carries it, which provides the cycle identifier.
 **Accept.** A map that binds none of these loads, but every port it feeds is marked *timing approximated* in the run manifest and a warning is emitted naming those ports.
 **Verify.** T · `SYT-INP-15`   **Trace.** CN-0305, CN-0074; **evidence** §2.1
-**Built.** ◐ started — 1/3 software requirements done, in `WP-05`, `WP-08`, `WP-12`
+**Built.** ◐ started — 2/3 software requirements done, in `WP-05`, `WP-08`, `WP-12`
 
 **`SYS-0016`** · `P0` · `R1` — Declared holes
 **Shall.** An ingest map shall declare which ports the recording family never carries, with a reason.
 **Accept.** A cut requiring a declared-absent port is refused at load with the declared reason quoted, not at the first cycle.
 **Verify.** T · `SYT-INP-16`   **Trace.** CN-0306
-**Built.** ○ not started — 0/1 software requirements done, in `WP-12`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0017`** · `P1` · `R1` — Family recognition
 **Shall.** A recording family shall be recognised by declared match rules, so two teams' vocabularies coexist without a shared namespace.
 **Accept.** Two maps with disjoint match rules coexist; a recording matching neither is reported as unmapped, naming the maps considered.
 **Verify.** T · `SYT-INP-17`   **Trace.** CN-0307
-**Built.** ○ not started — 0/1 software requirements done, in `WP-12`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0018`** · `P0` · `R1` — Two maps claiming one port is an error
 **Shall.** A port claimed by two applicable ingest maps shall be an authoring error naming both.
 **Accept.** The error names both maps, the port, and both source signals. No precedence rule resolves it silently.
 **Verify.** T · `SYT-INP-18`   **Trace.** CN-0308
-**Built.** ○ not started — 0/1 software requirements done, in `WP-12`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0019`** · `P0` · `R1` — Declarative unit correction, and nothing more
 **Shall.** An ingest map shall permit unit conversion by a declared factor and offset from a closed vocabulary, and shall permit nothing else — no expression, no field arithmetic, no scripting, no user-supplied callable.
 **Accept.** A map containing any construct outside the closed vocabulary is refused at load. The vocabulary's members are enumerable from the published schema.
 **Verify.** T · `SYT-INP-19` · `INSP-01`   **Trace.** CN-0309, CN-0286
-**Built.** ◐ started — 2/5 software requirements done, in `WP-05`, `WP-06`, `WP-12`
+**Built.** ◐ started — 4/5 software requirements done, in `WP-05`, `WP-06`, `WP-12`
 
 **`SYS-0020`** · `P0` · `R1` — Type mismatch means the cut is unsupported
 **Shall.** A source signal whose type does not match the target port's declared type shall mean the recording does not support that cut.
@@ -627,7 +627,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The system shall not integrate a time-varying signal, filter, or otherwise produce a history-dependent estimate of information no module published.
 **Accept.** No component of the system holds state across ticks for the purpose of producing a port value that no producer emitted. Reconstruction is limited to deterministic transforms of a fixed constant or of an already-emitted value.
 **Verify.** A · `ANL-05` · `INSP-02`   **Trace.** CN-0301
-**Built.** ◐ started — 3/4 software requirements done, in `WP-04`, `WP-08`, `WP-11`, `WP-12`
+**Built.** ● done — 4/4 software requirements done
 
 **`SYS-0036`** · `P1` · `R1` — Port identity is independent of who produces it
 **Shall.** A component shall be splittable into two without invalidating existing recordings, pipelines, plugins or ingest maps.
@@ -992,7 +992,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A stand-in for a module that does not yet exist shall be expressed as a stage, and the reader layer shall never grow the ability to manufacture module output.
 **Accept.** No reader emits a value not present in its source. A stand-in that must run without the scripting layer is promoted to a compiled implementation on the same ABI, not reimplemented in the host.
 **Verify.** A · `ANL-12`   **Trace.** CN-0321, CN-0120; v1 `FR-SIM-43`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-12`
+**Built.** ● done — 1/1 software requirements done
 
 ### 9.2 Coherence
 
@@ -1501,7 +1501,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** Every configuration file shall carry a schema version, and an unrecognised version shall be refused rather than best-guessed.
 **Accept.** A file with a future version is refused naming both versions. A file with no version is refused naming the omission.
 **Verify.** T · `SYT-CFG-13`   **Trace.** CN-0345; v1 `CR-SIM-23`
-**Built.** ◐ started — 2/4 software requirements done, in `WP-04`, `WP-05`, `WP-12`, `WP-22`
+**Built.** ◐ started — 3/4 software requirements done, in `WP-04`, `WP-05`, `WP-12`, `WP-22`
 
 **`SYS-0171`** · `P0` · `R1` — Validation at load, never at first cycle
 **Shall.** Every reference shall resolve, every mode shall be checked against the recording, and every type shall match, at load; every failure shall name both ends.
@@ -1847,7 +1847,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** Each recording shall carry a content hash used as its identity in the run manifest.
 **Accept.** Two runs over the same file record the same hash; a modified file records a different one and is not silently accepted as the same input.
 **Verify.** T · `SYT-REC-03`   **Trace.** CN-0236
-**Built.** ◐ started — 0/5 software requirements done, in `WP-05`, `WP-12`, `WP-19`
+**Built.** ◐ started — 1/5 software requirements done, in `WP-05`, `WP-12`, `WP-19`
 
 **`SYS-0223`** · `P1` · `R1` — Extract
 **Shall.** The system shall produce a smaller recording by time range and by port or source selection.
@@ -1871,7 +1871,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** A derived recording shall record what it came from, when, and how.
 **Accept.** Lineage survives two chained derivations, and the original is identifiable from the third artifact.
 **Verify.** T · `SYT-REC-07`   **Trace.** CN-0240
-**Built.** ○ not started — 0/3 software requirements done, in `WP-12`, `WP-19`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-12`, `WP-19`
 
 **`SYS-0227`** · `P1` · `R1` — Usable without the engine
 **Shall.** Recording preparation shall be usable independently of the engine, and its output directly usable as engine input.
@@ -2234,7 +2234,7 @@ Constraints are obligations on *how* the system is built, imposed because a corr
 **Shall.** No concept shall be implemented in both languages; where one exists on both sides today, one side shall be deleted rather than maintained in step.
 **Accept.** A named check enumerates the four historically duplicated subsystems — configuration load and validation, ingest-map parsing, module hosting, recording read and grouping — and confirms exactly one implementation of each. Any concept found in both languages is a defect.
 **Verify.** A · `ANL-44`   **Trace.** CN-0291, CN-0358, CN-0287; **defect** concept §21.3, §22.2
-**Built.** ◐ started — 2/5 software requirements done, in `WP-01`, `WP-03`, `WP-12`, `WP-16`, `WP-21`
+**Built.** ◐ started — 3/5 software requirements done, in `WP-01`, `WP-03`, `WP-12`, `WP-16`, `WP-21`
 
 **`SYS-0271`** · `P0` · `R1` — The engine never calls back into the scripting layer
 **Shall.** The engine shall never call back into Python during a run.

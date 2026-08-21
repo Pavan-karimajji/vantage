@@ -533,26 +533,27 @@ flowchart LR
 - [x] **Exit:** `ANL-SW-23` — no repeated-field allocation anywhere in `src/simcore/mutate/**`, which is *"may destroy or attenuate, never create"* made mechanical (`scripts/check_no_repeated_field_allocation.py`, clean, self-test proves it can fail). `ANL-SW-24` — `Verb`/`Fault`/`Origin` (3 of the six vocabularies real today) compared against the published schema (SV-8) and, for `Verb`/`Fault`, against their own C++ mirror (`scripts/check_closed_sets.py`, clean); `Rung`/`MergePolicy`/`ErrorKind` remain `NOT_YET`, reported not silently skipped.
 
 ### WP-12 · `MP-1` · `SI-12` `ingest`
-- [ ] **Prereq:** `WP-04`.
-- [ ] **Lands:** `IMP-0187`…`IMP-0193`, `IMP-0195`…`IMP-0202` — 15.
-  - [ ] `IMP-0187` · `SW-0187` · `DEDUPE` — `ingest/map.py`
-  - [ ] `IMP-0188` · `SW-0188` · `EXTEND` — `map.py::SignalBinding`
-  - [ ] `IMP-0189` · `SW-0189` · `NEW` — `ingest/header.py`
-  - [ ] `IMP-0190` · `SW-0190` · `MOVE` — `map.py`
-  - [ ] `IMP-0191` · `SW-0191` · `EXTEND` — `ingest/family.py::match_family`
-  - [ ] `IMP-0192` · `SW-0192` · `MOVE` — `family.py::check_no_double_claim`
-  - [ ] `IMP-0193` · `SW-0193` · `EXTEND` — `ingest/units.py`
-  - [ ] `IMP-0195` · `SW-0195` · `KEEP` — `map.py` produces `IngestRow` data only; application is `IMP-0032`'s, in…
-  - [ ] `IMP-0196` · `SW-0196` · `NEW` — `ingest/identity.py::SourceIdentity`
-  - [ ] `IMP-0197` · `SW-0197` · `EXTEND` — `ingest/description.py::resolve_descriptions`
-  - [ ] `IMP-0198` · `SW-0198` · `NEW` — `description.py::Description` is typed (`DD-06`), and each type carries…
-  - [ ] `IMP-0199` · `SW-0199` · `NEW` — `ingest/static.py`
-  - [ ] `IMP-0200` · `SW-0200` · `NEW` — `static.py` and `map.py` open recordings read-only and write decisions t…
-  - [ ] `IMP-0201` · `SW-0201` · `NEW` — `description.py::TIER_ORDER`
-  - [ ] `IMP-0202` · `SW-0202` · `EXTEND` — `ANL-SW-36`
-- [ ] **Files:** `adas_sim/ingest/{map,family,header,identity,description,static,units}.py`.
-- [ ] **Exit:** `ANL-SW-36` — no `eval`/`exec`/`lambda`/`compile` and no operator token outside `units.py`'s factor and offset. An ingest map is not a place to compute, and this is the check that keeps `IMP-0193`'s deliberate widening from becoming an expression language.
-- [ ] **Note:** `IMP-0196`, `IMP-0199` are **unparented in `SYS`** (SwReq §32.3). Build them; `trace_check.py` reports them as known gaps rather than passing them.
+- [x] **Prereq:** `WP-04`.
+- [x] **Lands:** `IMP-0187`…`IMP-0193`, `IMP-0195`…`IMP-0202` — 15.
+  - [x] `IMP-0187` · `SW-0187` · `DEDUPE` — `ingest/map.py` — `UT-ING-01`; the one parser, already consolidated (no second `io/ingest.py` existed to dedupe from at `WP-12` time — `map.py` was already the sole home)
+  - [x] `IMP-0188` · `SW-0188` · `EXTEND` — `map.py::SignalBinding` — `UT-ING-02`; `ProvidedPort` gains `factor`/`offset`/`shape`/`header` (nine fields total, `header` composing `header.py`'s own `HeaderBinding` rather than three flat fields to avoid a second copy of its shape)
+  - [x] `IMP-0189` · `SW-0189` · `NEW` — `ingest/header.py` — `UT-ING-03`; `HeaderBinding` + `rung_for`, a no-binding signal reports `RECEPTION_TIME` (ladder rung 4)
+  - [x] `IMP-0190` · `SW-0190` · `MOVE` — `map.py` — `UT-ING-04`; `absent:` block unchanged, already real pre-`WP-12`
+  - [x] `IMP-0191` · `SW-0191` · `EXTEND` — `ingest/family.py::match_family` — `UT-ING-05`; declared `path_glob` and embedded-identity match, alongside the existing topic-based axis
+  - [x] `IMP-0192` · `SW-0192` · `MOVE` — `family.py::check_no_double_claim` — `UT-ING-06`; moved out of `map.py`'s `IngestRecordingReader.__init__` (behaviour unchanged, `test_c9_ingest.py`'s `UT-C9-5` still green)
+  - [x] `IMP-0193` · `SW-0193` · `EXTEND` — `ingest/units.py` — `UT-ING-07`, `INSP-SW-03`; closed table, factor+offset only, the sole file `ANL-SW-36` exempts
+  - [x] `IMP-0195` · `SW-0195` · `KEEP` — `UT-ING-08`; no callable/lambda/`eval` in the module (one pre-existing `lambda` default in `map.py::config_bundle_bytes`, predating `WP-12`, replaced with a plain conditional under this same bar)
+  - [x] `IMP-0196` · `SW-0196` · `NEW` — `ingest/identity.py::SourceIdentity` — `UT-ING-09`; incomplete identity refused naming the missing field. **Unparented in `SYS`** (SwReq §32.3)
+  - [x] `IMP-0197` · `SW-0197` · `EXTEND` — `ingest/description.py::resolve_descriptions` — `UT-ING-10`; `TIER_ORDER` precedence over `embedded`/`configured`/`convention`
+  - [x] `IMP-0198` · `SW-0198` · `NEW` — `description.py::Description` is typed (`DD-06`), and each type carries its own accepted-version set — `UT-ING-11`
+  - [x] `IMP-0199` · `SW-0199` · `NEW` — `ingest/static.py` — `UT-ING-12`; recording first, then a sidecar by naming convention, choice returned as `(payload, origin)`. **Unparented in `SYS`**
+  - [x] `IMP-0200` · `SW-0200` · `NEW` — `static.py` and `map.py` open recordings read-only — `UT-ING-13`; sidecar/map bytes and mtime asserted unchanged before/after. Writing the decision to the run manifest is the caller's job (`runspec/emit.py`), out of this `WP`'s own file scope — `resolve_static`/`_parse_ingest_map` return the decision as data precisely so that write happens exactly once, there
+  - [x] `IMP-0201` · `SW-0201` · `NEW` — `description.py::TIER_ORDER` — `UT-ING-14`; a module constant, not filesystem-discovered
+  - [x] `IMP-0202` · `SW-0202` · `EXTEND` — `ANL-SW-36` — `scripts/check_anl_sw36.py`, real `tokenize`-based scan (not a character grep, which would be red on this codebase's own comment style), self-test proves it fails on a planted `eval()` and a planted arithmetic operator, clean on the real tree
+- [x] **Files:** `adas_sim/ingest/{map,family,header,identity,description,static,units}.py`.
+- [x] **Exit:** `ANL-SW-36` — no `eval`/`exec`/`lambda`/`compile` and no operator token outside `units.py`'s factor and offset. An ingest map is not a place to compute, and this is the check that keeps `IMP-0193`'s deliberate widening from becoming an expression language. — closed by: `scripts/check_anl_sw36.py`, clean on `adas_sim/ingest/**`, self-test (`--self-test`) proves it can fail.
+- [x] **Note:** `IMP-0196`, `IMP-0199` are **unparented in `SYS`** (SwReq §32.3). Built anyway; `trace_check.py` reports them as known gaps rather than passing them.
+- [~] **Honestly out of scope this pass:** `ANL-SW-08` (`SW-0018`/`SW-0079`/`SW-0187`/`SW-0203` — config, module_host, ingest, resolve's library search) spans four work packages; `WP-21`'s `resolve/` half does not exist yet, so the check cannot be completed by `WP-12` alone — closed by: revisit once `WP-21` lands. `emit.py`'s own `IMP-0011` (`sources[].ingest` wired from this parser) is `WP-05`'s row, not one of `WP-12`'s 15 -- `emit.py` still emits `ingest: []` -- one-line follow-up once touched, deliberately left to whichever pass next edits `runspec/emit.py`.
 
 ---
 
