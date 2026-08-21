@@ -53,8 +53,15 @@ class Result {
 
   bool ok() const { return std::holds_alternative<T>(value_); }
 
-  const T& value() const { return std::get<T>(value_); }
+  const T& value() const& { return std::get<T>(value_); }
   const Error& error() const { return std::get<Error>(value_); }
+
+  // WP-10 (`module_host::Dso` is move-only): lets a caller extract the
+  // success value out of a temporary/moved-from `Result` without a copy --
+  // `std::move(result).value()` -- while the `const&` overload above still
+  // protects every existing call site that reads `.value()` off a named,
+  // still-live `Result`.
+  T&& value() && { return std::get<T>(std::move(value_)); }
 
  private:
   explicit Result(T value) : value_(std::move(value)) {}

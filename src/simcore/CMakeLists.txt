@@ -16,6 +16,10 @@ find_package(protobuf REQUIRED)
 # `requires:` list (conf/build.yml), so `io` alone still requires nothing
 # first-party; only the whole-engine root target gains this edge.
 find_package(AdasInterfaces REQUIRED)
+# WP-10 (SI-04): module_host's exec_timeout.cpp watchdog (std::thread/
+# std::future) -- same dependency sil_host's own sil_core target already
+# requires for the identical file.
+find_package(Threads REQUIRED)
 
 add_library(simcore STATIC
     errors/events.cpp
@@ -45,6 +49,15 @@ add_library(simcore STATIC
     # WP-09 (SI-03): the multi-rate scheduler core.
     scheduler/due.cpp
     scheduler/reconcile.cpp
+    # WP-10 (SI-04): module_host -- component load/lifecycle/exec, ported
+    # from sil_host/src/{sil_component,exec_timeout}.cpp and
+    # library_loader.cpp's open half.
+    module_host/dso.cpp
+    module_host/lifecycle.cpp
+    module_host/quarantine.cpp
+    module_host/exec_timeout.cpp
+    module_host/convert.cpp
+    module_host/component.cpp
 )
 target_include_directories(simcore PUBLIC ${PROJECT_SOURCE_DIR}/include)
 # PRIVATE: third_party/ is an implementation detail of simcore's own .cpp
@@ -59,7 +72,11 @@ target_compile_features(simcore PUBLIC cxx_std_17)
 # `mcap::mcap` is a compiled library a consumer of `simcore.lib` must also
 # link against at the final executable, same reasoning `sil_host`'s own
 # `sil_core` target already applies to this identical dependency.
-target_link_libraries(simcore PUBLIC mcap::mcap protobuf::libprotobuf AdasInterfaces::AdasInterfaces)
+target_link_libraries(simcore PUBLIC mcap::mcap protobuf::libprotobuf AdasInterfaces::AdasInterfaces Threads::Threads)
+if(NOT WIN32)
+    # WP-10: module_host/dso.cpp's dlopen/dlsym/dlclose.
+    target_link_libraries(simcore PUBLIC dl)
+endif()
 if(UNIX AND NOT APPLE)
     # SM-06: SharedMemoryTransport's shm_open/shm_unlink -- glibc < 2.34
     # ships these in librt, not libc; linking it unconditionally on Linux

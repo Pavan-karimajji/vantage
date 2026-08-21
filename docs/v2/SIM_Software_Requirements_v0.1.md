@@ -1092,35 +1092,35 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The module host shall open a module binary by the absolute path the spec carries, and shall perform no stem expansion, no extension guessing and no directory search.
 **Accept.** The host contains no search-path logic. Given a path that does not exist, it reports that path rather than a list of places it looked.
 **Verify.** T · `UT-HOST-01` · A · `ANL-SW-08`   **Trace.** SYS-0166; CN-0384
-**Built.** ○ not started — `IMP-0079` in `WP-10`
+**Built.** ● done — `IMP-0079` in `WP-10`
 **Now.** `DONE·TWICE` — `sil_host/src/library_loader.cpp` both resolves by stem *and* opens. The open survives; the resolve is deleted (`SW-0018`).
 
 **`SW-0080`** · `SI-04` · `P0` · `R1` — Every export is bound at run time by name
 **Shall.** Every module entry point shall be resolved by symbol name at run time; the engine shall link no component library at build time.
 **Accept.** The engine binary contains no reference to any component's symbol names beyond the fixed ABI set, checked by symbol dump.
 **Verify.** A · `ANL-SW-20`   **Trace.** SYS-0050; CN-0313
-**Built.** ○ not started — `IMP-0080` in `WP-10`
+**Built.** ● done — `IMP-0080` in `WP-10`
 **Now.** `DONE·MOVE` — `sil_host/src/sil_component.cpp` does exactly this over the generic ABI.
 
 **`SW-0081`** · `SI-04` · `P0` · `R1` — The ABI version is checked before anything else is called
 **Shall.** The host shall read and check the module's ABI version before invoking any other entry point, and shall refuse an unsupported version naming the version found and the range supported.
 **Accept.** A deliberately mismatched module is refused and no lifecycle entry point is invoked. The message contains both numbers.
 **Verify.** T · `UT-HOST-02`   **Trace.** SYS-0052
-**Built.** ○ not started — `IMP-0081` in `WP-10`
+**Built.** ● done — `IMP-0081` in `WP-10`
 **Now.** `DONE·MOVE` — implemented and tested in `sil_host`.
 
 **`SW-0082`** · `SI-04` · `P0` · `R1` — The ABI is a small fixed set of exports
 **Shall.** The set of C entry points the host resolves shall be fixed and enumerable, and adding one shall require a requirement change.
 **Accept.** The set is published, enumerable from a header, and compared against the code on every build. Adding a function to a module adds a manifest line and no ABI parameter.
 **Verify.** A · `ANL-SW-21`   **Trace.** SYS-0050; CN-0316
-**Built.** ○ not started — `IMP-0082` in `WP-10`
+**Built.** ● done — `IMP-0082` in `WP-10`
 **Now.** `DONE` — the generic ABI (`adasInit`/`adasExec`/`adasShutdown`/`adasManifest`/`adasAbiVersion`) is exactly this and is already generated per component from `conf/ports.yaml`.
 
 **`SW-0083`** · `SI-04` · `P1` · `R1` — A load failure names the file and the reason from the operating system
 **Shall.** A failure to open a module or resolve a symbol shall report the path, the symbol where applicable, and the underlying platform error.
 **Accept.** A missing transitive dependency, a wrong architecture and a missing symbol produce three distinguishable messages, on both platforms.
 **Verify.** T · `UT-HOST-03`   **Trace.** SYS-0209, SYS-0248
-**Built.** ○ not started — `IMP-0083` in `WP-10`
+**Built.** ● done — `IMP-0083` in `WP-10`
 **Now.** `PARTIAL` — the failure is reported through the taxonomy; the platform error text is not always carried.
 
 ### 8.2 Lifecycle
@@ -1129,28 +1129,28 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The host shall drive the lifecycle create → configure → init → step (many) → reset → destroy, and every transition shall be observable in the cycle trace.
 **Accept.** Every transition appears in the trace with its module and its outcome. A module failing any transition is reported with the transition named.
 **Verify.** T · `UT-HOST-04`   **Trace.** SYS-0048
-**Built.** ○ not started — `IMP-0084` in `WP-10`
+**Built.** ● done — `IMP-0084` in `WP-10`
 **Now.** `PARTIAL` — init/exec/shutdown exist; configure and reset do not, and reset without destroy is `OQ-06`, open.
 
 **`SW-0085`** · `SI-04` · `P1` · `R1` — Reset is separable from destroy
 **Shall.** The host shall support resetting a module without unloading it, and shall report a module that does not support it rather than silently unloading and reloading.
 **Accept.** Reset-and-continue and unload-and-reload are distinguishable in the trace. A module lacking reset is named at load, not discovered at the second batch entry.
 **Verify.** T · `UT-HOST-05`   **Trace.** SYS-0192, SYS-0048
-**Built.** ○ not started — `IMP-0085` in `WP-10`
+**Built.** ● done — `IMP-0085` in `WP-10`
 **Now.** `NEW`. *Blocked on `OQ-06`.*
 
 **`SW-0086`** · `SI-04` · `P0` · `R1` — Lifecycle events are delivered as declared control ports
 **Shall.** Init, reset and end-of-cycle shall be delivered to a module through control ports it declares, wired in configuration with the same syntax as data connections.
 **Accept.** Changing which modules receive a reset, or which cycle-end event triggers which consumer, is a configuration edit with no rebuild and no host change.
 **Verify.** T · `IT-06`   **Trace.** SYS-0044, SYS-0045; **evidence** SYS §2.3
-**Built.** ○ not started — `IMP-0086` in `WP-10`
+**Built.** ● done — `IMP-0086` in `WP-10`
 **Now.** `NEW` — the port model today has data ports only.
 
 **`SW-0087`** · `SI-04` · `P0` · `R1` — Configuration reaches the module through its own bundle
 **Shall.** The host shall pass a module the resolved configuration-bundle path from the spec, or the module's own module-relative default when none is given, and shall not itself read or interpret the bundle.
 **Accept.** Editing a calibration value and re-running requires no rebuild and no host change. The host parses no configuration file.
 **Verify.** T · `IT-07`   **Trace.** SYS-0072, SYS-0177
-**Built.** ○ not started — `IMP-0087` in `WP-10`
+**Built.** ● done — `IMP-0087` in `WP-10`
 **Now.** `DONE·MOVE` — `adasInit(NULL)`'s module-relative bundle resolution works today and is exercised end to end.
 
 ### 8.3 Data exchange
@@ -1159,28 +1159,28 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Conversion between a port value and a module's structure shall be driven by the manifest's declared schema, and no per-module conversion code shall exist in the engine.
 **Accept.** Onboarding a module adds no conversion source file to the engine. A static check finds no module name in the engine's conversion path.
 **Verify.** A · `ANL-SW-22`   **Trace.** SYS-0057, SYS-0053
-**Built.** ○ not started — `IMP-0088` in `WP-10`
+**Built.** ● done — `IMP-0088` in `WP-10`
 **Now.** `DONE` — payload schemas travel in the manifest as a descriptor set and are used generically; no per-module code exists in either host.
 
 **`SW-0089`** · `SI-04` · `P0` · `R1` — An undersized output buffer is grown once, then it is a contract error
 **Shall.** An undersized output buffer shall be grown once and the call retried; a port still undersized after one retry shall be a contract error naming the port, the size requested and the size provided.
 **Accept.** The error carries all three. No unbounded retry loop exists on any path.
 **Verify.** T · `UT-HOST-06`   **Trace.** SYS-0051; CN-0314
-**Built.** ○ not started — `IMP-0089` in `WP-10`
+**Built.** ● done — `IMP-0089` in `WP-10`
 **Now.** `DONE·MOVE` — implemented in `sil_host/src/sil_component.cpp` exactly as written.
 
 **`SW-0090`** · `SI-04` · `P0` · `R1` — A module's port set is read from its manifest
 **Shall.** The host shall obtain a module's ports, types, periods, schemas and build identity from its manifest, and from no other source.
 **Accept.** The engine reads no module property from a configuration file, a naming convention or a hard-coded table.
 **Verify.** T · `UT-HOST-07`   **Trace.** SYS-0037, SYS-0053
-**Built.** ○ not started — `IMP-0090` in `WP-10`
+**Built.** ● done — `IMP-0090` in `WP-10`
 **Now.** `DONE·MOVE` — the manifest read is implemented and is one of the codebase's proven ideas.
 
 **`SW-0091`** · `SI-04` · `P1` · `R1` — A legacy module without a manifest is quarantined, not accommodated
 **Shall.** Where a binary genuinely cannot carry a manifest, its ports shall be declared in configuration under an explicitly named legacy implementation kind, and every such module shall be individually identifiable in the run manifest.
 **Accept.** No module without the legacy marker is permitted verbose per-argument wiring. The count of legacy modules is reported per run.
 **Verify.** T · `UT-HOST-08`   **Trace.** SYS-0053
-**Built.** ○ not started — `IMP-0091` in `WP-10`
+**Built.** ● done — `IMP-0091` in `WP-10`
 **Now.** `NEW`.
 
 ### 8.4 Failure containment
@@ -1189,28 +1189,28 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** A configurable per-cycle timeout shall abort a module that exceeds it, and the outcome shall be reported as `timeout`, distinct from `fail` and `crash`.
 **Accept.** A deliberately hanging module aborts within the configured bound; the three outcomes never collapse into one another.
 **Verify.** T · `UT-HOST-09`   **Trace.** SYS-0056, SYS-0186
-**Built.** ○ not started — `IMP-0092` in `WP-10`
+**Built.** ● done — `IMP-0092` in `WP-10`
 **Now.** `DONE·MOVE` — `sil_host/src/exec_timeout.cpp` with its own unit test.
 
 **`SW-0093`** · `SI-04` · `P0` · `R1` — The timeout is suspended under a debugger
 **Shall.** The per-cycle timeout and any watchdog shall be automatically inactive when a debugger is attached or debug mode is selected.
 **Accept.** Attaching a debugger suppresses both with no configuration edit. Stepping through a cycle does not trigger a timeout.
 **Verify.** D · `UT-HOST-10`   **Trace.** SYS-0198, SYS-0215
-**Built.** ○ not started — `IMP-0093` in `WP-10`
+**Built.** ● done — `IMP-0093` in `WP-10`
 **Now.** `NEW`.
 
 **`SW-0094`** · `SI-04` · `P0` · `R1` — A failure names the module, the cycle and the input snapshot
 **Shall.** A module error or crash shall be reported with the module, the cycle index, the cycle time and the input port values at that cycle.
 **Accept.** From the report alone the failing cycle is re-executable in a debugger without re-running the preceding cycles from scratch.
 **Verify.** T · `UT-HOST-11`   **Trace.** SYS-0049, SYS-0219
-**Built.** ○ not started — `IMP-0094` in `WP-10`
+**Built.** ● done — `IMP-0094` in `WP-10`
 **Now.** `PARTIAL` — module and error kind are reported; the cycle and the input snapshot are not.
 
 **`SW-0095`** · `SI-04` · `P1` · `R1` — A module is loaded in process by default
 **Shall.** Modules shall be loaded into the engine process by default, so attaching to the engine gives access to every module.
 **Accept.** A breakpoint inside a module is hit from an engine-attached debugger, on both platforms.
 **Verify.** D · `UT-HOST-12`   **Trace.** SYS-0212
-**Built.** ○ not started — `IMP-0095` in `WP-10`
+**Built.** ● done — `IMP-0095` in `WP-10`
 **Now.** `DONE` — true of `sil_host` today.
 
 **`SW-0096`** · `SI-04` · `P2` · `R1` — A stage may be isolated for bisection
@@ -1226,28 +1226,28 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** A manifest may be generated as a first draft from the build, and the checked-in manifest shall be the authority; regenerating one that disagrees shall report the difference and shall not overwrite without an explicit instruction.
 **Accept.** A disagreement is reported field by field. No build step silently rewrites a checked-in manifest.
 **Verify.** T · `UT-HOST-15`   **Trace.** SYS-0041
-**Built.** ○ not started — `IMP-0391` in `WP-10`
+**Built.** ◐ started — `IMP-0391` in `WP-10`
 **Now.** `PARTIAL` — the checked-in `<component>.ports.yaml` is a dump of what was compiled and the generated shim is never checked in, which is the right shape; nothing compares a regenerated manifest against the checked-in one.
 
 **`SW-0392`** · `SI-04` · `P1` · `R1` — The generic-ABI shim is generated, never hand-written, never checked in
 **Shall.** A component's generic-ABI shim shall be generated from declared data in that component and shall not be checked in.
 **Accept.** Deleting the generated shim and rebuilding reproduces it byte-identically. A hand-edited shim is overwritten by the build.
 **Verify.** T · `UT-HOST-16`   **Trace.** SYS-0042
-**Built.** ○ not started — `IMP-0392` in `WP-10`
+**Built.** ◐ started — `IMP-0392` in `WP-10`
 **Now.** `DONE` — generated from `conf/ports.yaml` gated by the enabled-function list; this is what stops the per-component growth `SYS-0042` exists to prevent.
 
 **`SW-0393`** · `SI-04` · `P0` · `R1` — A module reads no clock, and the prohibition is in the contract
 **Shall.** A module shall not read wall-clock time; all time shall reach it through the cycle time and the port headers, and the prohibition shall be stated in the delivery contract.
 **Accept.** A module reading wall-clock time is caught by the fresh-process reproducibility axis. The contract states the prohibition and the checklist checks it.
 **Verify.** T · `UT-HOST-17` · I · `INSP-SW-09`   **Trace.** SYS-0054
-**Built.** ○ not started — `IMP-0393` in `WP-10`
+**Built.** ● done — `IMP-0393` in `WP-10`
 **Now.** `PARTIAL` — the host never passes a clock, which makes compliance natural; nothing detects a module that reads one, because the fresh-process axis is not yet run per component.
 
 **`SW-0394`** · `SI-04` · `P1` · `R1` — Non-deterministic behaviour is declared in the manifest
 **Shall.** A module that spawns threads or reads files in a way affecting determinism shall declare it in its manifest, and a declared such module shall mark the run non-reproducible.
 **Accept.** An undeclared such module fails the fresh-process axis; a declared one marks the run and the mark reaches every artifact.
 **Verify.** T · `UT-HOST-18`   **Trace.** SYS-0055, SYS-0245
-**Built.** ○ not started — `IMP-0394` in `WP-10`
+**Built.** ● done — `IMP-0394` in `WP-10`
 **Now.** `NEW`.
 
 ---

@@ -16,6 +16,22 @@ if(NOT GTest_FOUND)
     FetchContent_MakeAvailable(googletest)
 endif()
 
+# WP-10 (SI-04): echo_stub, a minimal generic-ABI component (see
+# fixtures/echo_stub/echo_stub.cpp's own header) -- ported from sil_host's
+# identical fixture, same reasoning: Component::Load's tests need a real,
+# resolvable library implementing adas_sil_abi.h, not a mock inside the
+# test binary. find_package here (not only in src/simcore/CMakeLists.txt,
+# which is a sibling directory scope, not a parent of tests/) -- an
+# imported target from find_package is directory-scoped, so this fixture's
+# own direct `target_link_libraries(... AdasInterfaces::AdasInterfaces)`
+# needs its own resolution, idempotent against Conan's already-generated
+# find module.
+find_package(AdasInterfaces REQUIRED)
+add_library(sim_test_fixture_echo_stub SHARED fixtures/echo_stub/echo_stub.cpp)
+target_link_libraries(sim_test_fixture_echo_stub PRIVATE AdasInterfaces::AdasInterfaces)
+target_compile_definitions(sim_test_fixture_echo_stub PRIVATE ADAS_SIL_ABI_EXPORTS)
+set_target_properties(sim_test_fixture_echo_stub PROPERTIES OUTPUT_NAME "echo_stub")
+
 # WP-06: modules/sim's first C++ test binary (WP-03's own scoping note: "no
 # gtest target, no C++ tests exist yet"). UT-IO-01..21 (io codec contract).
 set(SIM_TEST_SOURCES
@@ -46,6 +62,11 @@ set(SIM_TEST_SOURCES
     unit/test_transport_inproc.cpp
     # SM-06 (SI-25, D-5): SharedMemoryTransport's own class-level contract.
     unit/test_transport_shm.cpp
+    # WP-10 (SI-04): module_host -- exec_timeout ported unchanged (WP-10's
+    # own exit criterion) plus Component/Lifecycle/Quarantine/Dso against
+    # the real echo_stub fixture.
+    unit/test_mh_exec_timeout.cpp
+    unit/test_mh_component.cpp
 )
 
 add_executable(simcore_tests ${SIM_TEST_SOURCES})
@@ -58,6 +79,14 @@ target_link_libraries(simcore_tests PRIVATE
 # public include/ surface -- to build its OWN independent DescriptorPool
 # from the fixture's manifest sidecar (never reusing ErgReader's state).
 target_include_directories(simcore_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/simcore)
+# WP-10: a stage's own build directory, known at configure time -- lets a
+# test resolve echo_stub's real path without a copy-next-to-exe step
+# (sil_host/tests/CMakeLists.txt's identical ADAS_SIL_TEST_FIXTURE_DIR
+# pattern, applied here).
+target_compile_definitions(simcore_tests PRIVATE
+    ADAS_SIM_TEST_FIXTURE_DIR="$<TARGET_FILE_DIR:sim_test_fixture_echo_stub>"
+)
+add_dependencies(simcore_tests sim_test_fixture_echo_stub)
 
 include(GoogleTest)
 gtest_discover_tests(simcore_tests)

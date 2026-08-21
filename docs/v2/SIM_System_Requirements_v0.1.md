@@ -645,7 +645,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Every simulatable module shall provide a manifest at a fixed location, declaring at minimum: component id, version, ABI version, build id, per-port name and type, per-port period, config bundle hash, and the embedded payload schema set.
 **Accept.** A manifest missing any of these is refused at load naming the field. The engine reads no module property from any other source.
 **Verify.** T · `SYT-PRC-01`   **Trace.** CN-0087, CN-0311
-**Built.** ○ not started — 0/1 software requirements done, in `WP-10`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0038`** · `P0` · `R1` — The graph is built from manifests
 **Shall.** The system shall build the module graph from manifests plus the project's active module list, and shall hardcode no chain.
@@ -669,13 +669,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A manifest may be auto-generated as a first draft from the build, and the checked-in manifest shall be the authority.
 **Accept.** Regenerating a manifest that disagrees with the checked-in one reports the difference and does not overwrite it without an explicit instruction.
 **Verify.** T · `SYT-PRC-05`   **Trace.** CN-0091
-**Built.** ○ not started — 0/1 software requirements done, in `WP-10`
+**Built.** ◐ started — 0/1 software requirements done, in `WP-10`
 
 **`SYS-0042`** · `P1` · `R1` — The shim is generated from declared data
 **Shall.** A component's generic-ABI shim shall be generated from declared data in the component, never hand-written, and shall not be checked in.
 **Accept.** Deleting the generated shim and rebuilding reproduces it byte-identically. A hand-edited shim is overwritten by the build.
 **Verify.** T · `SYT-PRC-06`   **Trace.** CN-0091; v1 `NR-SIM-11`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-10`
+**Built.** ◐ started — 0/1 software requirements done, in `WP-10`
 
 **`SYS-0043`** · `P2` · `R2` — Multiple instances
 **Shall.** A module shall be instantiable more than once in a run, with instance renaming.
@@ -690,13 +690,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The port model shall distinguish data ports, which carry values, from control ports, which carry execution triggers and lifecycle events.
 **Accept.** A configuration connecting a data port to a control port is refused, naming both kinds.
 **Verify.** T · `SYT-PRC-08`   **Trace.** CN-0093, CN-0094; **evidence** §2.3
-**Built.** ○ not started — 0/2 software requirements done, in `WP-10`, `WP-20`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-10`, `WP-20`
 
 **`SYS-0045`** · `P0` · `R1` — Lifecycle is wired, not coded
 **Shall.** Lifecycle events — at minimum init, reset, and end-of-cycle — shall be connectable to any module that declares the corresponding control port, in the same configuration file kind and with the same syntax as data connections.
 **Accept.** Changing which modules receive a reset, or which cycle-end event triggers which consumer, is a configuration edit with no rebuild.
 **Verify.** T · `SYT-PRC-09`   **Trace.** CN-0095; **evidence** §2.3
-**Built.** ○ not started — 0/1 software requirements done, in `WP-10`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0046`** · `P1` · `R1` — A unit does not know what it is wired to
 **Shall.** A module's configuration shall be a self-contained unit exposing named ports, unaware of what it is connected to; a top-level configuration shall compose units by connecting exposed ports.
@@ -716,62 +716,62 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The module host shall load the library, resolve ABI entry points, and drive the lifecycle `create → configure → init → step (many) → reset → destroy`.
 **Accept.** Every transition is observable in the cycle trace. A module that fails any transition is reported with the transition named.
 **Verify.** T · `SYT-PRC-12`   **Trace.** CN-0096
-**Built.** ○ not started — 0/2 software requirements done, in `WP-10`
+**Built.** ● done — 2/2 software requirements done
 *Note (`OQ-06`, closed 2026-08-12):* the ABI has **five** exports — `adasAbiVersion`, `adasManifest`, `adasInit`, `adasExec`, `adasShutdown` — and **no reset entry point**, so *"do modules support reset without destroy?"* is a question about the contract rather than about eleven module teams. The lifecycle maps onto it today with no module change: create/configure/init is `adasInit(configPath)`, step is `adasExec`, **reset is `adasShutdown` then `adasInit`**, destroy is `adasShutdown`. That is exact for all handle-scoped state; its cost is one config-bundle re-parse per reset. Reset-without-destroy is therefore an **optimisation, never a semantic requirement** — see `SYS-0192` for the hazard it does not cover and `SIM_Open_Question_Answers_v0.1.md` §2.2 for the optional-export shape it would take if a measurement ever justified one.
 
 **`SYS-0049`** · `P0` · `R1` — Failures name the module and the cycle
 **Shall.** Module errors and crashes shall be reported as the module, the cycle, and the input snapshot at that cycle.
 **Accept.** From the report alone, the failing cycle is re-executable in a debugger without re-running the preceding cycles from scratch.
 **Verify.** T · `SYT-PRC-13`   **Trace.** CN-0097, CN-0223
-**Built.** ○ not started — 0/2 software requirements done, in `WP-10`, `WP-15`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-10`, `WP-15`
 
 **`SYS-0050`** · `P0` · `R1` — Symbols bound at run time, by name
 **Shall.** Every module export shall be bound at run time by name; the system shall link no component library at compile time.
 **Accept.** The engine binary contains no reference to any component's symbol names other than the fixed ABI set.
 **Verify.** A · `ANL-07`   **Trace.** CN-0313, CN-0316
-**Built.** ○ not started — 0/2 software requirements done, in `WP-10`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0051`** · `P1` · `R1` — Buffers grow once, then it is a contract error
 **Shall.** An undersized output buffer shall be grown once and the call retried; a port still undersized after one retry shall be a contract error naming the port.
 **Accept.** The error names the port, the size requested and the size provided. No unbounded retry loop exists.
 **Verify.** T · `SYT-PRC-14`   **Trace.** CN-0314
-**Built.** ○ not started — 0/1 software requirements done, in `WP-10`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0052`** · `P0` · `R1` — ABI version is checked, not assumed
 **Shall.** The host shall refuse to load a module with an unsupported ABI version, naming the version found and the range supported.
 **Accept.** A deliberately mismatched module is refused; the message contains both numbers.
 **Verify.** T · `SYT-PRC-15`   **Trace.** CN-0100, CN-0260
-**Built.** ○ not started — 0/1 software requirements done, in `WP-10`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0053`** · `P0` · `R1` — Modules are discovered, never hand-mapped
 **Shall.** A module's port set shall be read from its manifest at probe time, with no port-mapping step and no per-module code in the framework.
 **Accept.** Onboarding a module requires no edit to any framework file. The single permitted exception is a declared legacy implementation kind for binaries that genuinely cannot carry a manifest, and such stages are individually identifiable in the run manifest.
 **Verify.** T · `SYT-PRC-16` · `ANL-08`   **Trace.** CN-0037, CN-0088; v1 `FR-SIM-2`
-**Built.** ○ not started — 0/5 software requirements done, in `WP-10`, `WP-20`, `WP-24`
+**Built.** ◐ started — 3/5 software requirements done, in `WP-10`, `WP-20`, `WP-24`
 
 **`SYS-0054`** · `P0` · `R1` — Modules do not read the clock
 **Shall.** Modules shall not read wall-clock time; all time shall arrive through the cycle time and the port headers.
 **Accept.** A module reading wall-clock time is detectable by the determinism axes of `SYS-0163`, and the delivery contract states the prohibition.
 **Verify.** T · `SYT-PRC-17` · `INSP-03`   **Trace.** CN-0101, CN-0138
-**Built.** ○ not started — 0/1 software requirements done, in `WP-10`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0055`** · `P1` · `R1` — Non-deterministic behaviour is declared
 **Shall.** A module that spawns threads or reads files in a way affecting determinism shall declare it in its manifest.
 **Accept.** An undeclared such module fails the fresh-process determinism axis; a declared one marks the run non-reproducible in the manifest.
 **Verify.** T · `SYT-PRC-18`   **Trace.** CN-0102, CN-0254
-**Built.** ○ not started — 0/1 software requirements done, in `WP-10`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0056`** · `P0` · `R1` — Per-cycle execution timeout
 **Shall.** A per-cycle execution timeout shall be configurable, and a module exceeding it shall abort the run with the cycle named.
 **Accept.** A deliberately hanging module aborts within the configured bound; the outcome is reported as `timeout`, distinct from `fail` and `crash`.
 **Verify.** T · `SYT-PRC-19`   **Trace.** CN-0315, CN-0348; v1 `NR-SIM-22`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-10`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0057`** · `P0` · `R1` — Conversion is manifest-driven
 **Shall.** Conversion between port values and module structures shall be driven by the manifest, not hand-written per module.
 **Accept.** No per-module conversion code exists in the framework. Adding a module adds no conversion source file.
 **Verify.** A · `ANL-09`   **Trace.** CN-0098
-**Built.** ○ not started — 0/1 software requirements done, in `WP-10`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0058`** · `P2` · `DEF` — Out-of-process module hosting
 **Shall.** The system shall support hosting a module in a separate process.
@@ -897,7 +897,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A module shall declare its cycle period as configuration read from its config bundle in integer microseconds, reported through its manifest; the host shall never set it.
 **Accept.** A rate sweep changes only a calibration value; no rebuild occurs and no host file is edited.
 **Verify.** T · `SYT-TIM-13`   **Trace.** CN-0284; v1 `NR-SIM-6`
-**Built.** ◐ started — 2/3 software requirements done, in `WP-04`, `WP-10`
+**Built.** ● done — 3/3 software requirements done
 *Note (`OQ-12`, closed 2026-08-12):* *"do any modules change rate at run time?"* is answered by the contract, not by the module teams — **no**, and unrepresentably so. The period is read from the config bundle at manifest-build time (`<COMPONENT>_<FN>_PERIOD_US`, `buildManifest()`'s `periodLookupUs`) and reported through `adasManifest`, which is callable before `adasInit` and returns a snapshot; `adasExec` takes `dtS` and no rate argument. There is no export by which a module could announce a new period mid-run. So the base grid (`SYS-0066`) can be computed once at load and cannot go stale, and a module needing a variable rate would arrive as an ABI change request rather than slipping in quietly.
 
 ### 8.4 Sampling and order
@@ -1463,7 +1463,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The Resolved Run Spec shall carry absolute, already-resolved paths for every module binary; the engine shall perform no stem expansion and consult no search path.
 **Accept.** Which file was chosen is decided once, recorded in the manifest, and reproducible. Changing the search path after resolution cannot change which binary the engine loads.
 **Verify.** T · `SYT-CFG-09`   **Trace.** CN-0384, CN-0385
-**Built.** ◐ started — 2/6 software requirements done, in `WP-05`, `WP-10`, `WP-21`
+**Built.** ◐ started — 3/6 software requirements done, in `WP-05`, `WP-10`, `WP-21`
 
 **`SYS-0287`** · `P0` · `R1` — Resolution is two passes: probe, then emit
 **Shall.** The system shall obtain, before emitting a Resolved Run Spec, a **recording index** stating what each named recording carries and a **module manifest** stating what each named module declares; and both shall be read through the same interfaces the run itself uses.
@@ -1553,7 +1553,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The build shall pack one atomic configuration bundle per component and build, beside the library, with a content hash; the system shall resolve it relative to the library, an explicit path shall win, and a project mismatch shall be a warning.
 **Accept.** Configuration is never compiled into the library — editing a value and re-running requires no rebuild. The viewer reads the same bundle the module was initialised with, and states which one it read.
 **Verify.** T · `SYT-CFG-20`   **Trace.** CN-0285; v1 `FR-SIM-21`, `FR-SIM-22`
-**Built.** ◐ started — 1/6 software requirements done, in `WP-04`, `WP-10`, `WP-21`
+**Built.** ◐ started — 2/6 software requirements done, in `WP-04`, `WP-10`, `WP-21`
 *Note (`OQ-07`, closed 2026-08-12):* *"should the system inject parameters, or point at the module's existing parameter file?"* — **it passes a path and never a value.** `adasInit` takes `configPath`, and this requirement plus `R-SIM-3a` settle the rest. Injection is not a close call: the bundle is *"a build output, never a second place to edit a value"*, and this requirement's own acceptance — *the viewer reads the same bundle the module was initialised with, and states which one* — is unsatisfiable if a value can arrive from somewhere else, because there would then be two answers to *"what wheelbase did this run use?"*, free to disagree. **A parameter sweep is a bundle variant**: copy, change the one key, re-hash, point `adasInit` at it, record the hash. That meets `SYS-0072`'s acceptance verbatim (*"a rate sweep changes only a calibration value; no rebuild occurs and no host file is edited"*), because producing a variant is neither a rebuild nor a host edit. It implies one small helper beside the run spec — copy · patch one key · re-hash — which is a file, not a mechanism. §4.1 in `SIM_Open_Question_Answers_v0.1.md`.
 
 **`SYS-0178`** · `P0` · `R1` — Cross-component configuration agreement
@@ -1613,7 +1613,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The batch shall report per-run outcome as exactly one of ok, fail, crash, timeout, and shall judge crash and hang from outside the worker.
 **Accept.** The four are individually producible and never collapse into one another; a segfaulting process is reported as `crash` even though it cannot report its own death.
 **Verify.** T · `SYT-BAT-06`   **Trace.** CN-0348; v1 `NR-SIM-22`
-**Built.** ○ not started — 0/6 software requirements done, in `WP-10`, `WP-13`, `WP-14`, `WP-22`, `WP-23`, `WP-27`
+**Built.** ◐ started — 1/6 software requirements done, in `WP-10`, `WP-13`, `WP-14`, `WP-22`, `WP-23`, `WP-27`
 
 **`SYS-0187`** · `P1` · `R1` — Aggregated status
 **Shall.** The batch shall produce an aggregated status list with per-run result, failure reason and duration.
@@ -1649,7 +1649,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** Reset mode shall be configurable as none / reset / reset-and-init, and reset timing as before the whole batch / before each entry / before each section, defaulting to reset-and-init before each entry; the chosen policy shall be recorded in the run manifest.
 **Accept.** With the default, run order does not affect results — shuffling the list produces identical per-run outputs. With `none`, order dependence is demonstrable, proving the test has power.
 **Verify.** T · `SYT-BAT-12`   **Trace.** CN-0194, CN-0195, CN-0196, CN-0197; **evidence** §2.2
-**Built.** ○ not started — 0/2 software requirements done, in `WP-10`, `WP-23`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-10`, `WP-23`
 *Note:* the default is implementable today as `adasShutdown` + `adasInit` (`SYS-0048`). That clears everything reachable from the handle but **not** process-level state — a file-scope global or a function-local `static` survives, because the library stays loaded. **This requirement's own acceptance criterion is the detector:** a surviving static makes a shuffled batch differ, which is exactly what *"shuffling the list produces identical per-run outputs"* fails on. So the hazard needs no new mechanism to find. Where exactness must be *guaranteed* rather than tested, `DD-09`'s one-subprocess-per-recording resets process state by construction.
 
 **`SYS-0193`** · `P1` · `R1` — Read-error policy
@@ -1690,7 +1690,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** An optional watchdog shall abort a run whose module exceeds a configured processing time, and shall be automatically disabled when a debugger is attached or in debug mode.
 **Accept.** The watchdog fires on a hang; attaching a debugger suppresses it without a configuration edit.
 **Verify.** T · `SYT-BAT-16`   **Trace.** CN-0204, CN-0205, CN-0218
-**Built.** ○ not started — 0/3 software requirements done, in `WP-10`, `WP-23`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-10`, `WP-23`
 
 **`SYS-0199`** · `P1` · `R1` — Per-module timing statistics
 **Shall.** Per-module timing statistics shall be reported.
@@ -1763,7 +1763,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** Errors shall come from a closed taxonomy — authoring, environment, contract, internal — each carrying expected, found, where and hint, in one fixed shape.
 **Accept.** Every error the system can emit is a member of the taxonomy and carries all four fields. An error outside the taxonomy fails a static check.
 **Verify.** T · `SYT-DIA-08` · `ANL-29`   **Trace.** CN-0354, CN-0286
-**Built.** ◐ started — 2/4 software requirements done, in `WP-03`, `WP-10`, `WP-21`
+**Built.** ◐ started — 3/4 software requirements done, in `WP-03`, `WP-10`, `WP-21`
 
 **`SYS-0210`** · `P0` · `R1` — Provenance query
 **Shall.** For any value, the system shall answer where it came from.
@@ -1783,7 +1783,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** Algorithm modules shall be loaded in process by the engine, so attaching to the engine gives access to every module.
 **Accept.** A breakpoint inside a module is hit from an engine-attached debugger, on both platforms.
 **Verify.** D · `SYT-DIA-11`   **Trace.** CN-0214, CN-0046
-**Built.** ○ not started — 0/1 software requirements done, in `WP-10`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0213`** · `P0` · `R1` — Wait for debugger
 **Shall.** The engine shall support printing its process id and pausing before the first cycle.
@@ -1801,7 +1801,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The cycle loop shall be single-threaded and deterministic in the default mode, so breakpoints are usable.
 **Accept.** Stepping through a cycle in a debugger does not change results.
 **Verify.** D · `SYT-DIA-14`   **Trace.** CN-0217, CN-0250
-**Built.** ○ not started — 0/1 software requirements done, in `WP-10`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0216`** · `P0` · `R1` — The engine launches without the scripting layer
 **Shall.** The engine shall be launchable from a Resolved Run Spec with no interpreter in the process.
@@ -1825,7 +1825,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** On a module crash the engine shall write a minimal reproducer package.
 **Accept.** The package reproduces the crash on another machine with nothing else from the original environment.
 **Verify.** T · `SYT-DIA-18`   **Trace.** CN-0223
-**Built.** ○ not started — 0/2 software requirements done, in `WP-10`, `WP-15`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-10`, `WP-15`
 
 ---
 
@@ -2062,7 +2062,7 @@ Superseded (`SM-04`, 2026-08-20 — sole decomposer was `SI-18`'s scene-cache-bu
 **Shall.** Anything breaking reproducibility shall be declared and shall mark the run non-reproducible in the manifest.
 **Accept.** An undeclared source of non-determinism is caught by the fresh-process axis rather than surviving to a campaign.
 **Verify.** T · `SYT-NFR-13`   **Trace.** CN-0254
-**Built.** ○ not started — 0/2 software requirements done, in `WP-10`, `WP-14`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-10`, `WP-14`
 
 **`SYS-0246`** · `P1` · `R1` — A re-execution may be pinned to a build
 **Shall.** A re-execution shall be pinnable to a specific module build, verified against the library hash the recording carries; a locally built library shall be reported as unpinnable.
@@ -2084,7 +2084,7 @@ Superseded (`SM-04`, 2026-08-20 — sole decomposer was `SI-18`'s scene-cache-bu
 **Shall.** Path handling, case sensitivity, separators and dynamic library loading shall be abstracted behind the system.
 **Accept.** No user-facing surface exposes a platform difference. A configuration written on one platform loads on the other with no edit.
 **Verify.** T · `SYT-NFR-16`   **Trace.** CN-0244, CN-0245
-**Built.** ◐ started — 1/3 software requirements done, in `WP-03`, `WP-10`
+**Built.** ◐ started — 2/3 software requirements done, in `WP-03`, `WP-10`
 
 **`SYS-0249`** · `P0` · `R1` — Floating-point expectations are part of the contract
 **Shall.** Compiler flag expectations affecting floating-point behaviour shall be part of the delivery contract, and deviations shall be warned about at load.

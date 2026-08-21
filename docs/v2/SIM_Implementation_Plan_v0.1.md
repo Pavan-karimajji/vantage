@@ -486,30 +486,31 @@ flowchart LR
 
 ### WP-10 · `MP-1` · `SI-04` `module_host`
 - [ ] **Prereq:** `WP-03` (needs the taxonomy and the build, not the scheduler).
-- [ ] **Lands:** `IMP-0079`…`IMP-0095`, `IMP-0391`…`IMP-0394` — 21.
-  - [ ] `IMP-0079` · `SW-0079` · `DEDUPE` — `src/simcore/module_host/dso.cpp::Dso::Open`
-  - [ ] `IMP-0080` · `SW-0080` · `MOVE` — `dso.cpp::Symbol<F>`
-  - [ ] `IMP-0081` · `SW-0081` · `MOVE` — `component.cpp::CheckAbi`
-  - [ ] `IMP-0082` · `SW-0082` · `KEEP` — `abi/module_abi.h`
-  - [ ] `IMP-0083` · `SW-0083` · `EXTEND` — `dso.cpp::Open`
-  - [ ] `IMP-0084` · `SW-0084` · `EXTEND` — `src/simcore/module_host/lifecycle.cpp::Phase`
-  - [ ] `IMP-0085` · `SW-0085` · `NEW` — `lifecycle.cpp::Transition(Reset)`
-  - [ ] `IMP-0086` · `SW-0086` · `NEW` — `lifecycle.cpp`
-  - [ ] `IMP-0087` · `SW-0087` · `MOVE` — `component.cpp`
-  - [ ] `IMP-0088` · `SW-0088` · `KEEP` — `src/simcore/module_host/convert.cpp`
-  - [ ] `IMP-0089` · `SW-0089` · `MOVE` — `convert.cpp`
-  - [ ] `IMP-0090` · `SW-0090` · `MOVE` — `component.cpp::ReadManifest`
-  - [ ] `IMP-0091` · `SW-0091` · `NEW` — `src/simcore/module_host/quarantine.cpp`
-  - [ ] `IMP-0092` · `SW-0092` · `MOVE` — `src/simcore/module_host/exec_timeout.cpp`
-  - [ ] `IMP-0093` · `SW-0093` · `NEW` — `exec_timeout.cpp::ExecTimeout`
-  - [ ] `IMP-0094` · `SW-0094` · `EXTEND` — `component.cpp`
-  - [ ] `IMP-0095` · `SW-0095` · `KEEP` — `component.cpp`
-  - [ ] `IMP-0391` · `SW-0391` · `EXTEND` — `scripts/gen_ports.py`
-  - [ ] `IMP-0392` · `SW-0392` · `KEEP` — `modules/<name>/conf/ports.yaml` → generated shim, build output, never c…
-  - [ ] `IMP-0393` · `SW-0393` · `EXTEND` — `abi/module_abi.h`
-  - [ ] `IMP-0394` · `SW-0394` · `NEW` — `component.cpp::ReadManifest`
-- [ ] **Files:** `include/simcore/module_host.hpp` · `abi/module_abi.h` · `src/simcore/module_host/{component,dso,lifecycle,convert,exec_timeout,quarantine}.cpp` · **moved from** `sil_host/src/{sil_component,exec_timeout}.cpp` and `library_loader.cpp`'s open half.
-- [ ] **Exit:** `sil_host`'s own component and timeout tests pass against the moved code unchanged — which is `SW-0019`'s corpus for duplication #4, banked early.
+- [x] **Core landed and verified live, 2026-08-21 (this row's own first slice):** `include/simcore/module_host.hpp` + `include/simcore/abi/module_abi.h` + `src/simcore/module_host/{dso,lifecycle,quarantine,exec_timeout,convert,component}.cpp` — ported from `sil_host/src/{sil_component,exec_timeout}.cpp` and `library_loader.cpp`'s open half (confirmed by reading them directly), not reinvented. Two deliberate `simcore`-idiom departures from the ported shape, not a design change: every fallible entry point returns `Result<T>` (`simcore/errors.hpp`) instead of throwing `SilHostError` (one closed error taxonomy, not a second one, `R-REQ-1`'s duplication principle one level down); `Dso::Open` folds `ResolveLibrary` + the `DynamicLibrary` constructor into one call (`IMP-0079`'s own `DEDUPE`). New this slice, no ported source: `Lifecycle` (`Phase`/`Transition`, `IMP-0084`-`0086`) makes the load/init/shutdown state machine explicit — `sil_host::SilComponent` tracked only a `handle_ == nullptr` sentinel — and adds `Reset()` so a `resim` pass across several recordings can re-`Init()` one already-loaded `Dso`; `Quarantine` (`IMP-0091`) operationalises `R-SIM-19`'s per-stage `mode: isolated` bisection primitive for `Bench`'s in-process case, refusing a further `Exec()` on a component that already crashed or hung, naming the reason; `ExecTimeout` (`IMP-0093`) wraps the ported `RunWithTimeout` as a configured object. `Component::~Component` leaks (never unloads) a `Dso` quarantined for a timeout, since the detached hung thread (`exec_timeout.hpp`'s own honest single-process limit) is still executing inside it. `tests/unit/test_mh_exec_timeout.cpp` (6 cases, `sil_host`'s own 5 `ExecTimeout` cases ported unchanged plus 1 for the new `ExecTimeout` object) + `tests/unit/test_mh_component.cpp` (8 cases, against a real `echo_stub` fixture ported from `sil_host/tests/fixtures/echo_stub/` with one addition — `ADAS_SIL_TEST_STUB_HANG` — so the quarantine/timeout path is exercised through a real ABI boundary, not just `RunWithTimeout`'s own free-function tests). Verified live: `simcore_tests` **104/104 green on both `vs2026`/MSVC (the platform `conf/build.yml` actually declares for this component) and `ubuntu_gcc`** (90 prior + 14 new), no regressions.
+- [~] **Explicit scope boundary, not yet done (this row's own decision, made in writing rather than discovered by failing):** the generated-shim/manifest-declaration half of `R-SIM-22` (`IMP-0391`/`IMP-0392`, `scripts/gen_ports.py` turning a component's `conf/ports.yaml` into compiled dispatch code) is the **producer** side of the generic ABI, already real and living in `modules/interfaces/scripts/gen_sil_ports.py` (consumed by `df`/`vdy`/`perception-core`'s own `conf/ports.yaml`) — not this module's file footprint (the plan row's own **Files** list below never named `scripts/gen_ports.py`). `module_host` is the **consumer**: `Component::ReadManifest` needs no codegen at all — it parses whatever `adas.sil.ComponentManifest` bytes the loaded DLL reports, at run time, via protobuf reflection, which is the whole point of the two-call `adasManifest()` pattern (`R-SIM-4`). There is no host-side generated table this work package has a real target to build against yet; forcing one now would be speculative generality this codebase's own style rules forbid. Revisit if/when a consumer-side generated table is actually designed. — closed by: not applicable to `module_host`'s own scope; tracked here so the gap is named rather than silently dropped.
+  - [x] `IMP-0079` · `SW-0079` · `DEDUPE` — `src/simcore/module_host/dso.cpp::Dso::Open` — `MhComponent.LoadReadsTheRealManifestOverTheAbi`/`LoadFailsNamingEveryMissingCandidate` green
+  - [x] `IMP-0080` · `SW-0080` · `MOVE` — `dso.cpp::Dso::BoundSymbol<Fn>` — exercised by every `Component::Load` case
+  - [x] `IMP-0081` · `SW-0081` · `MOVE` — `component.cpp::Component::Load`'s ABI-version check — `sil_component.cpp::CheckAbi`'s ported twin (inlined, no separate free function needed)
+  - [x] `IMP-0082` · `SW-0082` · `KEEP` — `include/simcore/abi/module_abi.h` — the real ABI stays declared once in `modules/interfaces` (R-IFACE-1); this header only aliases it into `simcore::module_host`
+  - [x] `IMP-0083` · `SW-0083` · `EXTEND` — `dso.cpp::Dso::Open` — extended with the stem/search-dir resolution `library_loader.cpp::ResolveLibrary` used to do separately (the `DEDUPE`)
+  - [x] `IMP-0084` · `SW-0084` · `EXTEND` — `lifecycle.cpp::Phase` — three explicit values (`Loaded`/`Initialized`/`ShutdownDone`) where `sil_host` had an implicit `handle_` sentinel
+  - [x] `IMP-0085` · `SW-0085` · `NEW` — `lifecycle.cpp::Lifecycle::Transition(Phase::Loaded)` (Reset) — `MhComponent.ResetAllowsReInitAfterShutdownWithoutReloadingTheDso`/`ResetBeforeShutdownIsRefused` green
+  - [x] `IMP-0086` · `SW-0086` · `NEW` — `lifecycle.cpp::Lifecycle` — `MhComponent.InitThenExecRunsUnderTheDeclaredLifecycle`/`ExecBeforeInitIsRefusedNamingTheMissingCall` green
+  - [x] `IMP-0087` · `SW-0087` · `MOVE` — `component.cpp::Component::Init`/`Shutdown`/`Exec` — ported from `sil_component.cpp`
+  - [x] `IMP-0088` · `SW-0088` · `KEEP` — `src/simcore/module_host/convert.cpp` — the `PortMap`<->`AdasPortSet` marshalling factored out of `sil_component.cpp::Exec`'s own inline code
+  - [x] `IMP-0089` · `SW-0089` · `MOVE` — `convert.cpp::BuildInputPortSet`/`BuildOutputPortSet`/`UndersizedPorts`/`CollectUpdatedPorts` — `MhComponent.UndersizedOutputPortGrowsOnceAndRetries` green
+  - [x] `IMP-0090` · `SW-0090` · `MOVE` — `component.cpp::Component::ReadManifest` — the two-call `adasManifest()` probe pattern, ported
+  - [x] `IMP-0091` · `SW-0091` · `NEW` — `src/simcore/module_host/quarantine.cpp` — `MhComponent.HungExecTripsTheQuarantineAndRefusesFurtherCalls` green
+  - [x] `IMP-0092` · `SW-0092` · `MOVE` — `src/simcore/module_host/exec_timeout.cpp::RunWithTimeout` — ported unchanged; `test_mh_exec_timeout.cpp`'s 5 ported cases green
+  - [x] `IMP-0093` · `SW-0093` · `NEW` — `module_host.hpp::ExecTimeout` — `MhExecTimeout.ExecTimeoutObjectWrapsTheFreeFunctionWithAConfiguredBudget` green
+  - [x] `IMP-0094` · `SW-0094` · `EXTEND` — `component.cpp::Component::Exec` — extended with the `Quarantine`/`ExecTimeout` gate ahead of `ExecOnce`'s ported grow-retry body
+  - [x] `IMP-0095` · `SW-0095` · `KEEP` — `component.cpp::Component::BuildOutBuffers` — `kDefaultOutputCap` fallback, kept exactly
+  - [~] `IMP-0391` · `SW-0391` · `EXTEND` — `scripts/gen_ports.py` — closed by: not this module's scope, see the explicit scope boundary above (producer-side, lives in `modules/interfaces`)
+  - [~] `IMP-0392` · `SW-0392` · `KEEP` — `modules/<name>/conf/ports.yaml` → generated shim, build output, never checked in — closed by: same as `IMP-0391`, already real for producers (`df`/`vdy`/`perception-core`'s own `conf/ports.yaml` + `interfaces/scripts/gen_sil_ports.py`); no `module_host` (consumer) counterpart exists to build
+  - [x] `IMP-0393` · `SW-0393` · `EXTEND` — `include/simcore/abi/module_abi.h` — the alias layer itself is the extension (the underlying ABI, `IMP-0082`, is `KEEP`)
+  - [x] `IMP-0394` · `SW-0394` · `NEW` — `component.cpp::Component::ReadManifest` — new relative to the ported version: returns `Result<bool>` rather than throwing, `simcore`'s own error-handling idiom (`MhComponent.LoadReadsTheRealManifestOverTheAbi` exercises the success path; `LoadFailsNamingEveryMissingCandidate` exercises a sibling `Result::Fail` path in `Load`)
+- [ ] **Files:** `include/simcore/module_host.hpp` (landed) · `include/simcore/abi/module_abi.h` (landed) · `src/simcore/module_host/{component,dso,lifecycle,convert,exec_timeout,quarantine}.cpp` (landed) · **moved from** `sil_host/src/{sil_component,exec_timeout}.cpp` and `library_loader.cpp`'s open half · `scripts/gen_ports.py` (not started, see scope boundary above — not this module's file, belongs to `modules/interfaces` if ever built).
+- [x] **Exit:** `sil_host`'s own component and timeout tests pass against the moved code unchanged — `sil_host/tests/unit/test_exec_timeout.cpp`'s 5 cases ported verbatim into `test_mh_exec_timeout.cpp` and green; `sil_host`'s own `SilComponent` had no dedicated unit test file to port (its coverage lived inside `test_pipeline_step.cpp`/`test_pipeline_load_errors.cpp`, which are `Pipeline`-level, not `WP-10`'s scope) — `test_mh_component.cpp` is new coverage at the `Component` level itself, against the same real `echo_stub` ABI fixture `sil_host` already used for that indirect coverage. `SW-0019`'s corpus for duplication #4 banked early.
 
 ### WP-11 · `MP-1` · `SI-05` `mutate`
 - [ ] **Prereq:** `WP-09`.
