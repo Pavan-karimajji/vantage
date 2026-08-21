@@ -441,18 +441,19 @@ flowchart LR
 - [x] **Scoping note (honest, not silent, 2026-08-14):** `PortValue` carries `port`/`header`/`origin`/`kind`/`updated`/`hold_ns`/`payload`/`bulk`/`age_ns()` -- `quality`/`rung` are deliberately **not** fields yet (design §5.1 assigns them to `IMP-0052`, `WP-08`); adding them now would be an unused, speculative copy of a decision `WP-08`'s `CycleReconstructor` hasn't made. `CycleReconstructor`/`PortBus` themselves are not declared in `bus.hpp` for the same reason. `PortValue::payload` is raw bytes (`std::vector<std::uint8_t>`), not `io::LazyPayload<T>` -- structured/lazy decode wiring has no consumer before `module_host` (`WP-10`).
 
 ### WP-08 · `MP-1` · `SI-02` `bus` — cycle reconstruction, the recovery ladder
-- [ ] **Prereq:** `WP-07` (`O-3`).
-- [ ] **Lands:** `IMP-0049`…`IMP-0055`, `IMP-0387` — 8.
-  - [ ] `IMP-0049` · `SW-0049` · `DEDUPE` — `src/simcore/bus/cycle.cpp`
-  - [ ] `IMP-0050` · `SW-0050` · `NEW` — `cycle.cpp::CycleReconstructor`
-  - [ ] `IMP-0051` · `SW-0051` · `NEW` — `cycle.cpp`
-  - [ ] `IMP-0052` · `SW-0052` · `NEW` — `value.cpp`
-  - [ ] `IMP-0053` · `SW-0053` · `NEW` — `cycle.cpp::Gaps()`
-  - [ ] `IMP-0054` · `SW-0054` · `EXTEND` — `cycle.cpp`
-  - [ ] `IMP-0055` · `SW-0055` · `NEW` — `cycle.cpp::MeasuredRate`
-  - [ ] `IMP-0387` · `SW-0387` · `NEW` — `cycle.cpp`
-- [ ] **Files:** `src/simcore/bus/cycle.cpp`.
-- [ ] **Exit:** each of the four rungs individually exercised on a crafted recording, and the rung used **reported per port in the run manifest** (`UT-BUS-08`). A recording in which no two messages share a timestamp reconstructs into correct cycles — which is the single change that makes the tool work on data it did not create.
+- [ ] **Prereq:** `WP-07` (`O-3`). **`WP-07` itself is 11/12 done** (only `IMP-0420`, an unrelated catalogue-version item, remains) — not a blocker for this row.
+- [x] **`CycleReconstructor`'s ladder/gap/repeat/rate logic landed and verified live, 2026-08-21 (this row's own first slice, explicitly scoped):** `include/simcore/bus.hpp` (`Rung`, `Quality`, `PortMessage`, `LadderFloor`, `Gap`, `Demotion`, `RateReport`, `Cycle`, `CycleReconstructor`) + `src/simcore/bus/cycle.cpp`. Descends the four-rung ladder per message (`SourceCycleId` → `HeaderCounter` → `SourceTime`, demoted to `ReceptionTime` on a non-monotonic source stamp, per port never across ports) — never by log-time/reception-time equality, the exact defect `io/base.py::group_by_log_time` and `sil_host/src/recording_reader.cpp` both share (confirmed by reading `recording_reader.cpp` directly: it groups by `mcap::Message::logTime`, nothing else). Cross-port grouping joins messages sharing the same rung-selected key into one `Cycle` — multi-port input sets, not "one port each" (`SW-0049`'s own Accept). A forced floor may only demand a rung the message's own data actually supports; asking for more is an `Authoring` error naming the port (`SW-0051`). Counter gaps reported once, never synthesised (`SW-0053`); repeat detection via the counter-else-source-time freshness key (`SW-0054`); a running mean/jitter compared against a declared period (`SW-0055`). **`tests/unit/test_ut_bus_cycle.cpp`, 11 cases covering `UT-BUS-07`/`08`/`09`/`11`/`12`/`13`/`19`.** Verified live: `simcore_tests` **76/76 green on both `vs2026`/MSVC and `ubuntu_gcc`** (65 prior + 11 new), `check_invariants.py` clean.
+- [ ] **Explicit scope boundary, not yet done (this row's own decision, made in writing rather than discovered by failing):** (1) **wire-level decode** — `PortMessage`'s fields are taken as already-decoded; extracting `t_source_ns`/`counter` out of raw `io::RawMessage::payload` bytes via protobuf reflection against a manifest's `FileDescriptorSet` (the same technique the `.erg` codec already uses, `R-SIM-11`) is a named follow-on. (2) **`IMP-0052` is only partial** — `Quality`/`Rung` exist and are queryable per port off `CycleReconstructor` itself, but `SW-0052`'s own Accept ("`Quality` travels on the value, not in a side report") means they belong as stored fields on `PortValue`/`Header` so an evidence answer or export carries them with no join; `PortValue`/`Header` (still `WP-07`'s own shape) are untouched by this pass. (3) **the run-manifest reporting half of this row's own `Exit`** — `RungUsed`/`Demotions`/`Gaps`/`MeasuredRate` are queryable in-process but nothing writes a run manifest yet (no manifest writer exists before `WP-13`/`WP-14`), so "reported per port in the run manifest" is proven as a mechanism, not yet as an artifact.
+  - [x] `IMP-0049` · `SW-0049` · `DEDUPE` — `src/simcore/bus/cycle.cpp::TakeCompleteCycle` — `UT-BUS-07` green
+  - [x] `IMP-0050` · `SW-0050` · `NEW` — `cycle.cpp::CycleReconstructor` — `UT-BUS-08` green (all four rungs + the non-monotonic demotion case)
+  - [x] `IMP-0051` · `SW-0051` · `NEW` — `cycle.cpp` — `UT-BUS-09` green
+  - [~] `IMP-0052` · `SW-0052` · `NEW` — `value.cpp` — closed by: wiring `Quality`/`Rung` onto `PortValue`/`Header` as stored fields (not yet attempted; see scope boundary above)
+  - [x] `IMP-0053` · `SW-0053` · `NEW` — `cycle.cpp::Gaps()` — `UT-BUS-11` green
+  - [x] `IMP-0054` · `SW-0054` · `EXTEND` — `cycle.cpp` — `UT-BUS-12` green
+  - [x] `IMP-0055` · `SW-0055` · `NEW` — `cycle.cpp::MeasuredRate` — `UT-BUS-13` green
+  - [x] `IMP-0387` · `SW-0387` · `NEW` — `cycle.cpp` — `UT-BUS-19` green (a port carrying both stamps selects `Rung::SourceTime`, proving `t_source_ns` is what drove selection, `t_capture_ns` carried through unused)
+- [ ] **Files:** `src/simcore/bus/cycle.cpp` (landed) + `include/simcore/bus.hpp`'s new types (landed). `value.cpp`'s own `Quality`/`Rung` wiring (`IMP-0052`) not yet touched.
+- [ ] **Exit:** each of the four rungs individually exercised on a crafted recording (**done**, `UT-BUS-08`) and the rung used **reported per port in the run manifest** (**not done** — no manifest writer exists yet, see scope boundary above). A recording in which no two messages share a timestamp reconstructs into correct cycles (**done**, `UT-BUS-07`) — which is the single change that makes the tool work on data it did not create.
 
 > **This is the highest-value change in the migration.** Concept §22.1 and SwReq §2.4 both identify it, and it is the reason `MP-1` exists as its own phase rather than as part of the reader work.
 

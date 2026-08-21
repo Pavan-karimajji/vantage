@@ -802,14 +802,14 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Cycle membership shall be determined from the signal header, and no code path shall group messages into a cycle by equality of their file timestamps.
 **Accept.** On a recording in which no two messages share a timestamp, cycles contain their correct multi-port input sets rather than one port each. A grep for timestamp-equality grouping returns nothing.
 **Verify.** T · `UT-BUS-07` · A · `ANL-SW-16`   **Trace.** SYS-0062; CN-0330; **defect** concept §22.1
-**Built.** ○ not started — `IMP-0049` in `WP-08`
+**Built.** ● done — `IMP-0049` in `WP-08`
 **Now.** `DONE·TWICE`, both wrong — `io/base.group_by_log_time` and `sil_host/src/recording_reader.cpp` both do exactly what this forbids. This is the single most consequential replacement in the migration.
 
 **`SW-0050`** · `SI-02` · `P0` · `R1` — The recovery ladder is ordered and declared
 **Shall.** Cycle structure shall be derived per port using the ordered ladder: (1) a source-provided cycle identifier; (2) the header cycle counter; (3) source time; (4) reception time from the recording envelope — descending to the next rung only when the one above is unavailable **or demonstrably unsound** for that port.
 **Accept.** Each rung is individually exercised on a crafted recording. The rung used is reported per port in the run manifest. A port whose source time is not monotonic is demoted from rung 3 to rung 4, and the demotion is reported with the offending pair of stamps — never silently used, and never clamped into order. Monotonic here means **non-decreasing, not strictly increasing** — two messages legitimately share a stamp, and a check that fails correct data is a check that gets disabled. It is evaluated **per port, never across ports**: two producers share no clock discipline and owe each other no ordering. And it binds **source** time; an out-of-order *capture* time is reported but does **not** demote, because its failure mode is a negative `age_s`, which must surface as a finding rather than be clamped into the `0.0` that `SW-0044` exists to keep distinguishable from a true one.
 **Verify.** T · `UT-BUS-08`   **Trace.** SYS-0061; **evidence** SYS §2.1
-**Built.** ○ not started — `IMP-0050` in `WP-08`
+**Built.** ● done — `IMP-0050` in `WP-08`
 **Now.** `NEW`.
 *Note:* "unavailable" is not the only way a rung fails. A present but non-monotonic source time is worse than an absent one, because the ladder would otherwise claim rung 3's quality for data that cannot support it.
 
@@ -817,35 +817,35 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** A configuration may force a port to a lower rung than the recording supports; it shall not be able to claim a higher rung than the data provides.
 **Accept.** Forcing a lower rung succeeds, warns, and is recorded. Declaring a rung the data cannot support is a load error naming the port and the rung.
 **Verify.** T · `UT-BUS-09`   **Trace.** SYS-0061
-**Built.** ○ not started — `IMP-0051` in `WP-08`
+**Built.** ● done — `IMP-0051` in `WP-08`
 **Now.** `NEW`.
 
 **`SW-0052`** · `SI-02` · `P0` · `R1` — Timing quality is carried with the value
 **Shall.** Where a port's cycle structure was derived from rung 4, that port's values shall be marked *timing approximated*.
 **Accept.** The mark appears in the run manifest, in every export carrying that port, and in the player, and it survives export and re-import.
 **Verify.** T · `UT-BUS-10`   **Trace.** SYS-0032, SYS-0015
-**Built.** ○ not started — `IMP-0052` in `WP-08`
+**Built.** ◐ started — `IMP-0052` in `WP-08`
 **Now.** `NEW`.
 
 **`SW-0053`** · `SI-02` · `P1` · `R1` — A cycle counter gap is detected and reported, never interpolated
 **Shall.** A discontinuity in a port's cycle counter shall be reported as a gap with its size, and no value shall be synthesised across it.
 **Accept.** A recording with a dropped cycle produces a named gap finding; the consumer sees a hold, not an invented value.
 **Verify.** T · `UT-BUS-11`   **Trace.** SYS-0220, SYS-0035
-**Built.** ○ not started — `IMP-0053` in `WP-08`
+**Built.** ● done — `IMP-0053` in `WP-08`
 **Now.** `NEW`.
 
 **`SW-0054`** · `SI-02` · `P1` · `R1` — A repeated value is detected by the freshness key
 **Shall.** A value whose freshness key is unchanged from the previous delivery shall be flagged a repeat, and the flag shall reach the consuming module.
 **Accept.** The repeat flag reaches the module and appears in the export. A module that reacts to it observes a different sequence than one that does not.
 **Verify.** T · `UT-BUS-12`   **Trace.** SYS-0075, SYS-0064
-**Built.** ○ not started — `IMP-0054` in `WP-08`
+**Built.** ● done — `IMP-0054` in `WP-08`
 **Now.** `PARTIAL` — `updated` exists on `PortValue` and is honoured; it is derived from the hold schedule, not from a freshness key on the data.
 
 **`SW-0055`** · `SI-02` · `P1` · `R1` — Measured rate is computed and compared to the declared rate
 **Shall.** The engine shall compute each port's observed interval statistics and compare them with the declared period.
 **Accept.** A port recorded at 22 ms against a declared 20 ms produces a warning quoting both numbers and the sample count measured over.
 **Verify.** T · `UT-BUS-13`   **Trace.** SYS-0063
-**Built.** ○ not started — `IMP-0055` in `WP-08`
+**Built.** ● done — `IMP-0055` in `WP-08`
 **Now.** `NEW`.
 
 ### 6.3 Buffers and hold
@@ -892,7 +892,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Where both are available, source time shall be preferred over reception time as a port's timing basis, and the basis used shall be recorded per port in the run manifest.
 **Accept.** The manifest names, for every port, which basis was used. Forcing the other basis is possible, recorded and warned about.
 **Verify.** T · `UT-BUS-19`   **Trace.** SYS-0031
-**Built.** ○ not started — `IMP-0387` in `WP-08`
+**Built.** ● done — `IMP-0387` in `WP-08`
 **Now.** `NEW`.
 
 **`SW-0388`** · `SI-02` · `P0` · `R1` — A versioned port catalogue, resolved at load

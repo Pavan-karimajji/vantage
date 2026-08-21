@@ -37,6 +37,8 @@ set(SIM_TEST_SOURCES
     unit/test_ut_bus_bulk.cpp
     unit/test_ut_bus_static.cpp
     unit/test_ut_bus_catalogue.cpp
+    # WP-08 (SI-02 bus): UT-BUS-07..13, UT-BUS-19 (CycleReconstructor).
+    unit/test_ut_bus_cycle.cpp
     # SM-06 (SI-25, D-5): InProcessTransport's own class-level contract.
     unit/test_transport_inproc.cpp
     # SM-06 (SI-25, D-5): SharedMemoryTransport's own class-level contract.

@@ -601,13 +601,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Source time shall be preferred over capture time where available, and the system shall record which was used, per port, in the run manifest.
 **Accept.** The manifest names, for every port, which timestamp basis was used.
 **Verify.** T · `SYT-DAT-08`   **Trace.** CN-0073
-**Built.** ○ not started — 0/1 software requirements done, in `WP-08`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0032`** · `P0` · `R1` — Timing quality is declared, not assumed
 **Shall.** Where neither source time nor a cycle counter is available for a port, the system shall warn and mark that port's timing as approximated.
 **Accept.** The mark appears in the run manifest, in every export carrying that port, and in the player.
 **Verify.** T · `SYT-DAT-09`   **Trace.** CN-0074
-**Built.** ○ not started — 0/1 software requirements done, in `WP-08`
+**Built.** ◐ started — 0/1 software requirements done, in `WP-08`
 
 ### 6.3 Provenance
 
@@ -627,7 +627,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The system shall not integrate a time-varying signal, filter, or otherwise produce a history-dependent estimate of information no module published.
 **Accept.** No component of the system holds state across ticks for the purpose of producing a port value that no producer emitted. Reconstruction is limited to deterministic transforms of a fixed constant or of an already-emitted value.
 **Verify.** A · `ANL-05` · `INSP-02`   **Trace.** CN-0301
-**Built.** ◐ started — 1/4 software requirements done, in `WP-04`, `WP-08`, `WP-11`, `WP-12`
+**Built.** ◐ started — 2/4 software requirements done, in `WP-04`, `WP-08`, `WP-11`, `WP-12`
 
 **`SYS-0036`** · `P1` · `R1` — Port identity is independent of who produces it
 **Shall.** A component shall be splittable into two without invalidating existing recordings, pipelines, plugins or ingest maps.
@@ -818,20 +818,20 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The system shall derive per-port cycle structure using a declared ordered ladder: (1) a source-provided cycle identifier where the recording carries one; (2) the header cycle counter; (3) source time; (4) reception time from the recording envelope.
 **Accept.** For each port, the rung actually used is reported in the run manifest. Forcing a lower rung on a recording that supports a higher one is possible, is recorded, and is warned about.
 **Verify.** T · `SYT-TIM-03`   **Trace.** CN-0140, CN-0141; **evidence** §2.1
-**Built.** ○ not started — 0/2 software requirements done, in `WP-08`
+**Built.** ● done — 2/2 software requirements done
 *Note:* rung (1) exists because of the finding in §2.1. If `OQ-01` closes as "no recording in scope carries cycle marking", rung (1) becomes inert rather than wrong.
 
 **`SYS-0062`** · `P0` · `R1` — A cycle is never a shared file timestamp
 **Shall.** A cycle boundary shall never be defined as messages sharing an identical file timestamp.
 **Accept.** On a recording in which no two messages share a timestamp, cycles contain the correct multi-port input sets, not one port each.
 **Verify.** T · `SYT-TIM-04`   **Trace.** CN-0330; **defect** concept §22.1
-**Built.** ○ not started — 0/1 software requirements done, in `WP-08`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0063`** · `P1` · `R1` — Measured rate against configured rate
 **Shall.** The system shall report each port's measured rate against its configured rate and warn on mismatch.
 **Accept.** A port recorded at 22 ms against a declared 20 ms produces a warning quoting both numbers and the sample count it measured over.
 **Verify.** T · `SYT-TIM-05`   **Trace.** CN-0142
-**Built.** ○ not started — 0/1 software requirements done, in `WP-08`
+**Built.** ● done — 1/1 software requirements done
 
 ### 8.3 Triggering and the base grid
 
@@ -839,7 +839,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The default trigger for a module shall be the arrival of new data on its key input, detected by the freshness key, and shall be evaluated as a predicate on a simulation tick rather than as an independent clock.
 **Accept.** A module with a 20 ms input runs once per new input value and not on repeats. It never executes between ticks, and two arrivals inside one grid step produce one execution with the later value, reported as a coalesced arrival rather than dropped silently.
 **Verify.** T · `SYT-TIM-06`   **Trace.** CN-0143, CN-0392
-**Built.** ○ not started — 0/2 software requirements done, in `WP-08`, `WP-09`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-08`, `WP-09`
 
 **`SYS-0065`** · `P1` · `R1` — Periodic trigger available
 **Shall.** A periodic trigger with a period and an offset shall be available for modules with no data-driven trigger.
@@ -918,7 +918,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A reused value shall be flagged as a repeat, and the module shall be able to react to it.
 **Accept.** The repeat flag reaches the module and appears in the export.
 **Verify.** T · `SYT-TIM-16`   **Trace.** CN-0150
-**Built.** ○ not started — 0/1 software requirements done, in `WP-08`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0076`** · `P0` · `R1` — Topological order, printed
 **Shall.** Within a step, modules shall execute in a deterministic topological order, printed by the explain command.
@@ -1835,7 +1835,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The system shall check, before simulation: timestamp monotonicity and gaps, per-port counter continuity, checksums where available, and rate stability.
 **Accept.** Each defect class is detected on a crafted damaged recording, and each is individually reported.
 **Verify.** T · `SYT-REC-01`   **Trace.** CN-0234
-**Built.** ○ not started — 0/3 software requirements done, in `WP-08`, `WP-19`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-08`, `WP-19`
 
 **`SYS-0221`** · `P0` · `R1` — Integrity results are usable as a gate
 **Shall.** Integrity results shall be available as a gate.

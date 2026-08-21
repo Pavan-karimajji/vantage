@@ -36,6 +36,7 @@ add_library(simcore STATIC
     bus/static_data.cpp
     bus/bulk.cpp
     bus/catalogue.cpp
+    bus/cycle.cpp
     # SM-06 (SI-25, D-5): the engine-side implementations behind
     # modules/interfaces' ITransport contract.
     transport/inproc.cpp
