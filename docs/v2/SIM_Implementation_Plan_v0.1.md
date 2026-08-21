@@ -922,11 +922,18 @@ fraction (1 `SW` + 2 `SYS` of ~130 total UIDs the full table names).
       and verified live this pass (`SYNC:SM-06`, 2026-08-21):**
       `include/simcore/transport_shm.hpp` + `src/simcore/transport/shm.cpp`
       — same ring-buffer discipline as `InProcessTransport`, backed by one
-      named POSIX `shm_open`/`mmap` segment (Windows: `CreateFileMapping`/
-      `MapViewOfFile`, compiles for `vs2026`, unverified — this repo's real
-      dev/CI surface is `ubuntu_gcc`, same "compiles both, verified live
-      only where testable" posture `docs/v2` already applies to windowed
-      GL work). Fixed-size POD slots (`std::atomic` indices, no STL
+      named shared-memory segment: POSIX `shm_open`/`mmap` on the platform
+      this module's own `conf/build.yml` declares for its `gtest` target
+      (`vs2026`, decided closed — `sim`/`sil_host` are `vs2026`-only, not a
+      left-open `ubuntu_gcc` gap), `CreateFileMapping`/`MapViewOfFile` on
+      Windows. **Both branches verified live this pass**, not just
+      compiled: `simcore_tests` run clean on real `vs2026`/MSVC (via WSL2
+      interop into the native Windows toolchain already installed on this
+      machine — `cmd.exe`/`powershell.exe` reachable directly from the
+      build session) *and* on a local `ubuntu_gcc` dev build of the same
+      sources exercising the POSIX path (the latter outside this module's
+      declared platform matrix, so evidence, not the Exit criterion).
+      Fixed-size POD slots (`std::atomic` indices, no STL
       container — heap-owning types are meaningless shared across a
       process boundary) hold both the ring header and the frame bytes in
       one segment, so `SW-0351`'s optional second "control channel" is not
@@ -944,16 +951,20 @@ fraction (1 `SW` + 2 `SYS` of ~130 total UIDs the full table names).
       mapping the same segment, not one dual-role object) exercises every
       clause `test_transport_inproc.cpp` does, plus a depth-mismatch
       refusal and a segment-never-created refusal specific to the
-      cross-process case. Verified live: `simcore_tests` **65/65 green**
-      (55 prior + 10 new), the real cross-process `fork()` smoke test
-      passes, `/dev/shm` left clean after every test run (no leaked
-      segment), `check_invariants.py` clean. **Not yet done, explicitly
-      deferred, matching this plan's own incremental-slice precedent
-      (`SM-01`):** the IT-level `UT-TRN-01`..`05` fixtures (`F-STUB`/
-      `F-BULK`/`F-LONG`/`F-STUB-CRASH`, a real component wired through the
-      scheduler) and native-Windows verification of the `_WIN32` branch —
-      this pass proves both transport classes themselves, not yet
-      anything wired to a real scheduler or a real player process.
+      cross-process case. Verified live: `simcore_tests` **65/65 green on
+      both `vs2026`/MSVC and a `ubuntu_gcc` dev build** (55 prior + 10
+      new), the real cross-process `fork()` smoke test (POSIX) passes,
+      `/dev/shm` left clean after every test run (no leaked segment),
+      `check_invariants.py` clean. **Not yet done, explicitly deferred,
+      matching this plan's own incremental-slice precedent (`SM-01`):**
+      the IT-level `UT-TRN-01`..`05` fixtures (`F-STUB`/`F-BULK`/`F-LONG`/
+      `F-STUB-CRASH`, a real component wired through the scheduler) and a
+      real cross-process (two actual `.exe`/kill) smoke test on the
+      `CreateFileMapping` branch (today's Windows evidence is a
+      same-process `ctest` run, not a forked-process crash test the way
+      the POSIX side got) — this pass proves both transport classes
+      themselves, not yet anything wired to a real scheduler or a real
+      player process.
 - [ ] **Lands:** `IMP-0017`, `IMP-0298`, `IMP-0349`…`IMP-0356` — 10.
   - [ ] `IMP-0017` · `SW-0017` · `NEW` — `ANL-SW-07`
   - [ ] `IMP-0298` · `SW-0298` · `NEW` — `session/attach.py`
