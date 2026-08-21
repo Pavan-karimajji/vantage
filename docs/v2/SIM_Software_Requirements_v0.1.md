@@ -1349,14 +1349,14 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The runner shall construct the whole run from the Resolved Run Spec and shall expose exactly one entry point that advances the run.
 **Accept.** There is one function that advances a tick. No alternative entry point, fast path or mode flag reaches a second one.
 **Verify.** A · `ANL-SW-17` · T · `UT-RUN-01`   **Trace.** SYS-0069, SYS-0165
-**Built.** ○ not started — `IMP-0109` in `WP-13`
+**Built.** ● done — `IMP-0109` in `WP-13`
 **Now.** `DONE·TWICE` — `core/resim.py::resim_pipeline` and `sil_host/src/resim_runner.cpp` are two loops with the same shape. The C++ one survives, streaming (`SW-0025`, `SW-0041`).
 
 **`SW-0110`** · `SI-06` · `P0` · `R1` — A `measured` stage is a pure source
 **Shall.** A stage in `measured` mode shall emit its declared outputs from the recording at the recorded rate and shall not be executed.
 **Accept.** No module entry point is invoked for a `measured` stage. Its implementation is retained in the spec so the toggle is reversible.
 **Verify.** T · `UT-RUN-02`   **Trace.** SYS-0080, SYS-0081
-**Built.** ○ not started — `IMP-0110` in `WP-13`
+**Built.** ● done — `IMP-0110` in `WP-13`
 **Now.** `DONE·MOVE` — implemented in both hosts and directly reusable.
 
 **`SW-0111`** · `SI-11` · `P0` · `R1` — `mode: measured` against a recording lacking those outputs is a startup error
@@ -1370,21 +1370,21 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** An `off` stage shall contribute no ports, using the same absent-port convention a missing input already uses.
 **Accept.** No code path distinguishes absent-because-off from absent-because-unmapped at the consumer.
 **Verify.** T · `UT-RUN-03`   **Trace.** SYS-0084
-**Built.** ○ not started — `IMP-0112` in `WP-13`
+**Built.** ● done — `IMP-0112` in `WP-13`
 **Now.** `DONE·MOVE` — implemented in `contracts/pipeline.py`.
 
 **`SW-0113`** · `SI-06` · `P0` · `R1` — The injection boundary is computed and logged before the first tick
 **Shall.** The runner shall compute the set of ports crossing from `measured` into `simulate` and log every one by name with its source before executing.
 **Accept.** The set appears in the log and in the run manifest before the first tick, and equals the set the configuration layer predicted.
 **Verify.** T · `UT-RUN-04`   **Trace.** SYS-0083, SYS-0167
-**Built.** ○ not started — `IMP-0113` in `WP-13`
+**Built.** ● done — `IMP-0113` in `WP-13`
 **Now.** `NEW` — the information exists in the loaded pipeline; nothing computes or logs the boundary as a set.
 
 **`SW-0114`** · `SI-06` · `P0` · `R1` — Every declared port is recorded, subject only to its policy
 **Shall.** The runner shall offer every declared port — every stage's inputs and outputs — to the writer, filtered only by the declared per-port record policy.
 **Accept.** No declared port is absent from the recording without an explicit policy entry saying so.
 **Verify.** T · `IT-09`   **Trace.** SYS-0120, SYS-0116
-**Built.** ○ not started — `IMP-0114` in `WP-13`
+**Built.** ◐ started — `IMP-0114` in `WP-13`
 **Now.** `DONE·MOVE` — `sources/recorder.py` derives its topic list from the port manifests exactly as required.
 
 **`SW-0115`** · `SI-11` · `P0` · `R1` — Excluding or decimating a consumed input is a record-time load error
@@ -1398,35 +1398,35 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The runner shall detect the first tick at which simulated actuation differs from the recorded actuation, and shall record the tick, the port and the magnitude.
 **Accept.** On a crafted recording the divergence tick is reported and is identical across re-runs. It appears in the run manifest and on the player timeline.
 **Verify.** T · `UT-RUN-05`   **Trace.** SYS-0105, SYS-0107
-**Built.** ○ not started — `IMP-0116` in `WP-13`
+**Built.** ● done — `IMP-0116` in `WP-13`
 **Now.** `NEW`.
 
 **`SW-0117`** · `SI-06` · `P1` · `R1` — Post-divergence data is flagged per message
 **Shall.** Data produced after the divergence point plus a configured grace window shall carry an informational-only flag on each message, not only in a header.
 **Accept.** A consumer reading an arbitrary slice of the export cannot miss the flag.
 **Verify.** T · `UT-RUN-06`   **Trace.** SYS-0106
-**Built.** ○ not started — `IMP-0117` in `WP-13`
+**Built.** ◐ started — `IMP-0117` in `WP-13`
 **Now.** `NEW`.
 
 **`SW-0118`** · `SI-06` · `P0` · `R1` — Simulated output never reaches a reader
 **Shall.** No module output shall alter what a reader returns.
 **Accept.** No configuration causes a reader's output to depend on a module's output. A static check confirms no write path from the runner into `SI-01`'s read side.
 **Verify.** A · `ANL-SW-25`   **Trace.** SYS-0104
-**Built.** ○ not started — `IMP-0118` in `WP-13`
+**Built.** ● done — `IMP-0118` in `WP-13`
 **Now.** `DONE` — true today by construction in both hosts.
 
 **`SW-0119`** · `SI-06` · `P1` · `R1` — Progress is checkpointed as the run proceeds
 **Shall.** The runner shall record its last completed cycle to durable storage as it proceeds, so a crashing run's last completed cycle is known from outside the process.
 **Accept.** Killing the process mid-run leaves a checkpoint naming the last completed cycle, and it agrees with the last cycle present in the output.
 **Verify.** T · `UT-RUN-07`   **Trace.** SYS-0188, SYS-0186
-**Built.** ○ not started — `IMP-0119` in `WP-13`
+**Built.** ● done — `IMP-0119` in `WP-13`
 **Now.** `PARTIAL` — `core/batch_worker.py` checkpoints at run granularity; per-cycle checkpointing does not exist.
 
 **`SW-0120`** · `SI-06` · `P1` · `R1` — A time-sliced run costs the slice
 **Shall.** The runner shall execute only a requested time range, seeking to its start rather than reading from the beginning.
 **Accept.** Wall time for a six-second slice of a twenty-minute recording scales with the slice within a declared factor.
 **Verify.** T · `UT-RUN-08` · A · `ANL-SW-26`   **Trace.** SYS-0232
-**Built.** ○ not started — `IMP-0120` in `WP-13`
+**Built.** ◐ started — `IMP-0120` in `WP-13`
 **Now.** `NEW`.
 
 **`SW-0395`** · `SI-06` · `P2` · `DEF` — Ego re-integration

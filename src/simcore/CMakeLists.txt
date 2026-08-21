@@ -66,6 +66,16 @@ add_library(simcore STATIC
     mutate/window.cpp
     mutate/address.cpp
     mutate/faults.cpp
+    # WP-13 (SI-06): runner -- the ONE cycle loop, the injection boundary,
+    # first-divergence latching, per-cycle checkpointing and the time
+    # slice. Ported from sil_host/src/resim_runner.cpp and
+    # adas_sim/core/resim.py, rewritten to stream (SW-0025/SW-0041) rather
+    # than to materialise the recording and the result.
+    runner/injection.cpp
+    runner/divergence.cpp
+    runner/checkpoint.cpp
+    runner/slice.cpp
+    runner/cycle_loop.cpp
 )
 target_include_directories(simcore PUBLIC ${PROJECT_SOURCE_DIR}/include)
 # PRIVATE: third_party/ is an implementation detail of simcore's own .cpp

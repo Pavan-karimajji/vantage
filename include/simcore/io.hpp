@@ -89,6 +89,21 @@ struct RawMessage {
   // applied to this message, so a second `Apply` on the same message is
   // detectable and refused rather than silently double-converting.
   bool translated = false;
+  // SW-0117 (`WP-13`, `runner/divergence.cpp`): this message was produced
+  // after the run's first divergence plus its configured grace window, so
+  // it describes a run that has already left the recorded trajectory. **Per
+  // message, not per file** -- a consumer reading an arbitrary slice of an
+  // export must not be able to miss it, which a run-level header cannot
+  // achieve. It sits here beside `translated` for the same reason
+  // `translated` does: a per-message bool a producer sets and every layer
+  // above `io` reads off the model (`R-SIM-14` -- the model is the
+  // authority; a format is a codec of it).
+  //
+  // **Named gap, `WP-13`'s own:** no codec persists this yet. `.mcap` has
+  // no per-message metadata slot, so carrying it on the wire is a codec
+  // design decision (a sibling channel, or a schema field) belonging to
+  // `SI-01`, not to the runner.
+  bool informational_only = false;
 };
 
 // SW-0026: three independent axes, whichever is reached first, each

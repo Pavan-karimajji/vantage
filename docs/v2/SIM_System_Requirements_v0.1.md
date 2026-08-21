@@ -878,7 +878,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The multi-rate scheduler shall be the only execution path; no single-rate path shall exist.
 **Accept.** The codebase contains no alternative per-cycle execution route. Every test in the suite exercises the multi-rate scheduler.
 **Verify.** A · `ANL-11`   **Trace.** CN-0331, CN-0359; **defect** concept §22.2
-**Built.** ◐ started — 2/3 software requirements done, in `WP-09`, `WP-13`
+**Built.** ● done — 3/3 software requirements done
 
 **`SYS-0070`** · `P0` · `R1` — Not due means held, never absent
 **Shall.** A module that is not due shall hold its last output, marked not-updated, with the exact elapsed time since it was last due; a consumer shall always receive its full port set.
@@ -955,13 +955,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Every module in the graph shall carry a mode — `simulate`, `measured` or `off` — and, when simulating, an implementation, and the two shall be independently settable.
 **Accept.** All valid combinations are expressible; setting mode does not change implementation and vice versa. Implementation is retained on a `measured` module so the toggle is reversible.
 **Verify.** T · `SYT-STG-01`   **Trace.** CN-0118; v1 `FR-SIM-41`, `FR-SIM-42`
-**Built.** ○ not started — 0/2 software requirements done, in `WP-13`, `WP-28`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-13`, `WP-28`
 
 **`SYS-0081`** · `P0` · `R1` — Executed and injected are indistinguishable to a consumer
 **Shall.** A stage's port set shall be identical whether the stage executed or its outputs were injected from a recording.
 **Accept.** A downstream module's configuration entry is byte-identical across the change, and it cannot determine its producer's mode from its inputs alone.
 **Verify.** T · `SYT-STG-02`   **Trace.** CN-0118, CN-0120; v1 `FR-SIM-41`
-**Built.** ◐ started — 1/2 software requirements done, in `WP-09`, `WP-13`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0082`** · `P1` · `R1` — Per-port mode override
 **Shall.** Mode shall be overridable per output port for expert cases.
@@ -974,13 +974,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The set of ports crossing from `measured` into `simulate` shall be logged explicitly at the start of every run.
 **Accept.** Every such port is listed by name, with its source, before the first cycle executes.
 **Verify.** T · `SYT-STG-04`   **Trace.** CN-0121
-**Built.** ○ not started — 0/1 software requirements done, in `WP-13`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0084`** · `P1` · `R1` — `off` needs no special case
 **Shall.** An `off` module's ports shall simply be absent, using the same absent-port convention a missing input already uses.
 **Accept.** No code path distinguishes "absent because off" from "absent because unmapped" at the consumer.
 **Verify.** T · `SYT-STG-05`   **Trace.** CN-0320
-**Built.** ○ not started — 0/1 software requirements done, in `WP-13`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0085`** · `P0` · `R1` — A stub implementation exists
 **Shall.** A stub implementation shall exist so framework tests run with no compiled component present.
@@ -1106,25 +1106,25 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The system shall be an open-loop replay engine; simulated actuation shall not change the recorded sensor stream.
 **Accept.** No configuration causes a module output to alter what a reader returns.
 **Verify.** A · `ANL-13`   **Trace.** CN-0132
-**Built.** ○ not started — 0/1 software requirements done, in `WP-13`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0105`** · `P0` · `R1` — First divergence is detected
 **Shall.** The system shall detect the first divergence point between simulated actuation and the recording, and record it in the run manifest and on the player timeline.
 **Accept.** On a crafted recording where the function commands a brake the recorded vehicle did not apply, the divergence tick is reported and is stable across re-runs.
 **Verify.** T · `SYT-STG-24`   **Trace.** CN-0133
-**Built.** ○ not started — 0/1 software requirements done, in `WP-13`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0106`** · `P1` · `R1` — Post-divergence data is flagged
 **Shall.** Data after the divergence point plus a configurable grace window shall be flagged informational-only in exports.
 **Accept.** The flag is present per row/message, not only in a header, so a downstream consumer reading a slice cannot miss it.
 **Verify.** T · `SYT-STG-25`   **Trace.** CN-0134
-**Built.** ○ not started — 0/1 software requirements done, in `WP-13`
+**Built.** ◐ started — 0/1 software requirements done, in `WP-13`
 
 **`SYS-0107`** · `P1` · `R1` — The divergence point reaches the external framework
 **Shall.** The run manifest shall carry both the coherence classification and the divergence point.
 **Accept.** A downstream KPI consumer reading only the manifest can determine whether the run was physically valid and up to which time.
 **Verify.** T · `SYT-STG-26`   **Trace.** CN-0114
-**Built.** ○ not started — 0/2 software requirements done, in `WP-13`, `WP-22`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-13`, `WP-22`
 
 **`SYS-0108`** · `P2` · `DEF` — Ego re-integration
 **Shall.** The system shall optionally propagate ego pose from simulated actuation and transform recorded object data into the new ego frame, labelled as an approximation.
@@ -1457,7 +1457,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The system shall produce a Resolved Run Spec — flat, with every path resolved, every mode decided, every period computed, every validation passed — write it and its hash into the run artifacts, and treat it as the only input the engine takes.
 **Accept.** The engine performs no configuration inference, no schema upgrading, no wiring validation and no library search-path logic; it requires no configuration-language parser. The same spec hash always produces the same results.
 **Verify.** T · `SYT-CFG-08` · `ANL-24`   **Trace.** CN-0292, CN-0293, CN-0294, CN-0296, CN-0179; v1 `FR-SIM-30`
-**Built.** ◐ started — 5/9 software requirements done, in `WP-05`, `WP-09`, `WP-13`, `WP-16`, `WP-22`
+**Built.** ◐ started — 6/9 software requirements done, in `WP-05`, `WP-09`, `WP-13`, `WP-16`, `WP-22`
 
 **`SYS-0166`** · `P0` · `R1` — Absolute, pre-resolved binary paths
 **Shall.** The Resolved Run Spec shall carry absolute, already-resolved paths for every module binary; the engine shall perform no stem expansion and consult no search path.
@@ -1483,7 +1483,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The engine shall independently print the graph and schedule it loaded, so it can be compared against what the configuration layer predicted.
 **Accept.** A deliberately introduced disagreement between the two is detected by an automated comparison, not by a reader.
 **Verify.** T · `SYT-CFG-10`   **Trace.** CN-0386
-**Built.** ○ not started — 0/3 software requirements done, in `WP-13`, `WP-15`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-13`, `WP-15`
 
 **`SYS-0168`** · `P0` · `R1` — Schema validation, with locating errors
 **Shall.** Every configuration file shall be validated against a published schema, and errors shall name file, line, the wrong value and the allowed values.
@@ -1613,7 +1613,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The batch shall report per-run outcome as exactly one of ok, fail, crash, timeout, and shall judge crash and hang from outside the worker.
 **Accept.** The four are individually producible and never collapse into one another; a segfaulting process is reported as `crash` even though it cannot report its own death.
 **Verify.** T · `SYT-BAT-06`   **Trace.** CN-0348; v1 `NR-SIM-22`
-**Built.** ◐ started — 1/6 software requirements done, in `WP-10`, `WP-13`, `WP-14`, `WP-22`, `WP-23`, `WP-27`
+**Built.** ◐ started — 2/6 software requirements done, in `WP-10`, `WP-13`, `WP-14`, `WP-22`, `WP-23`, `WP-27`
 
 **`SYS-0187`** · `P1` · `R1` — Aggregated status
 **Shall.** The batch shall produce an aggregated status list with per-run result, failure reason and duration.
@@ -1625,7 +1625,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** Every crash shall record recording, configuration, last completed cycle, captured standard error and run id; a worker shall checkpoint progress so a crashing run's last completed cycle is known.
 **Accept.** From the crash record alone, the failure is reopened in process on a developer machine.
 **Verify.** T · `SYT-BAT-08`   **Trace.** CN-0348, CN-0349, CN-0223; v1 `NR-SIM-22`
-**Built.** ◐ started — 1/6 software requirements done, in `WP-06`, `WP-13`, `WP-22`, `WP-23`, `WP-27`
+**Built.** ◐ started — 2/6 software requirements done, in `WP-06`, `WP-13`, `WP-22`, `WP-23`, `WP-27`
 
 **`SYS-0189`** · `P1` · `R1` — Parameter sweeps
 **Shall.** Parameter sweeps shall be supported.
@@ -1978,7 +1978,7 @@ mechanism.
 **Shall.** The system shall simulate only a requested time range.
 **Accept.** A six-second slice of a twenty-minute recording costs approximately the slice, not the file: wall time scales with slice length within a declared factor.
 **Verify.** T · `SYT-NFR-03` · `ANL-32`   **Trace.** CN-0231
-**Built.** ○ not started — 0/1 software requirements done, in `WP-13`
+**Built.** ◐ started — 0/1 software requirements done, in `WP-13`
 
 **`SYS-0233`** · `P0` · `R1` — Zero-copy across the language boundary
 **Shall.** Bulk data crossing into the scripting layer shall be exposed as array views onto engine-owned buffers, never as per-element scripting objects; the scripting layer shall never touch a message payload.

@@ -70,6 +70,11 @@ set(SIM_TEST_SOURCES
     # WP-11 (SI-05): mutate -- UT-MUT-01..10, against a self-contained
     # synthetic message type (no fixture file, no AdasInterfaces dep).
     unit/test_mut_core.cpp
+    # WP-13 (SI-06): runner -- UT-RUN-01..08, against a self-contained
+    # synthetic in-test codec (a Reader/Writer pair over a message vector,
+    # no fixture file) plus the real echo_stub for anything needing a
+    # loadable Component.
+    unit/test_ut_run_core.cpp
 )
 
 add_executable(simcore_tests ${SIM_TEST_SOURCES})
