@@ -917,25 +917,56 @@ fraction (1 `SW` + 2 `SYS` of ~130 total UIDs the full table names).
       `io`'s own resolved `.requires`/`libdirs` unaffected, `simcore_tests`
       **55/55 green** including all 7 new cases, `viz`'s own suite re-run
       against the rebuilt package **39/39 green**, `check_invariants.py`
-      clean. **Not yet done, explicitly deferred, matching this plan's own
-      incremental-slice precedent (`SM-01`):** the local-shared-memory
-      implementation (the cross-process case `SW-0351` names), and the
-      IT-level `UT-TRN-01`..`05` fixtures (`F-STUB`/`F-BULK`/`F-LONG`/
-      `F-STUB-CRASH`, a real component wired through the scheduler) — this
-      pass proves the transport class itself, not yet anything wired to it.
+      clean.
+- [x] **`SharedMemoryTransport`, the second required implementation, landed
+      and verified live this pass (`SYNC:SM-06`, 2026-08-21):**
+      `include/simcore/transport_shm.hpp` + `src/simcore/transport/shm.cpp`
+      — same ring-buffer discipline as `InProcessTransport`, backed by one
+      named POSIX `shm_open`/`mmap` segment (Windows: `CreateFileMapping`/
+      `MapViewOfFile`, compiles for `vs2026`, unverified — this repo's real
+      dev/CI surface is `ubuntu_gcc`, same "compiles both, verified live
+      only where testable" posture `docs/v2` already applies to windowed
+      GL work). Fixed-size POD slots (`std::atomic` indices, no STL
+      container — heap-owning types are meaningless shared across a
+      process boundary) hold both the ring header and the frame bytes in
+      one segment, so `SW-0351`'s optional second "control channel" is not
+      needed here. `tryReceive()`'s `PortFrame::data` points directly into
+      the mapped segment — genuinely zero-copy, not a same-process
+      convenience. Liveness (`SW-0356`) is a real OS-level check
+      (`kill(pid, 0)` / `OpenProcess`+`WaitForSingleObject`) against the
+      engine's own recorded process id, not a same-process flag — proven
+      with a real `fork()` smoke test: a genuine child process as the
+      engine, `_exit()` (skipping its own destructor, i.e. a real crash
+      shape, not an orderly shutdown), parent (client) correctly reports
+      `engineAlive() == false` only after the OS has actually reaped the
+      child. `tests/unit/test_transport_shm.cpp` (`TransportShm.*`, 10
+      cases, run against two objects — `Role::kEngine`/`Role::kClient` —
+      mapping the same segment, not one dual-role object) exercises every
+      clause `test_transport_inproc.cpp` does, plus a depth-mismatch
+      refusal and a segment-never-created refusal specific to the
+      cross-process case. Verified live: `simcore_tests` **65/65 green**
+      (55 prior + 10 new), the real cross-process `fork()` smoke test
+      passes, `/dev/shm` left clean after every test run (no leaked
+      segment), `check_invariants.py` clean. **Not yet done, explicitly
+      deferred, matching this plan's own incremental-slice precedent
+      (`SM-01`):** the IT-level `UT-TRN-01`..`05` fixtures (`F-STUB`/
+      `F-BULK`/`F-LONG`/`F-STUB-CRASH`, a real component wired through the
+      scheduler) and native-Windows verification of the `_WIN32` branch —
+      this pass proves both transport classes themselves, not yet
+      anything wired to a real scheduler or a real player process.
 - [ ] **Lands:** `IMP-0017`, `IMP-0298`, `IMP-0349`…`IMP-0356` — 10.
   - [ ] `IMP-0017` · `SW-0017` · `NEW` — `ANL-SW-07`
   - [ ] `IMP-0298` · `SW-0298` · `NEW` — `session/attach.py`
-  - [ ] `IMP-0349` · `SW-0349` · `NEW` — contract (landed) + `InProcessTransport` (landed, unit-tested). `shm.cpp`, the second implementation, not started.
+  - [ ] `IMP-0349` · `SW-0349` · `NEW` — contract + both `InProcessTransport` and `SharedMemoryTransport` landed, unit-tested. IT-level `UT-TRN-01` (a real consumer diffed across both transports, wired through the scheduler) not started.
   - [ ] `IMP-0350` · `SW-0350` · `KEEP` — `ANL-SW-58`
-  - [ ] `IMP-0351` · `SW-0351` · `NEW` — `src/simcore/transport/shm.cpp`, the cross-process bulk-over-shared-memory case; not started (`InProcessTransport`'s own "bulk" is a plain in-process copy, not shared memory — this SW item is specifically about the second transport)
-  - [ ] `IMP-0352` · `SW-0352` · `NEW` — `inproc.cpp::attach/detach` proven non-perturbing against `InProcessTransport` (`TransportInproc.AttachDetachDoesNotPerturbPublish`, landed); `shm.cpp`'s own attach/detach not started — `SW-0349`'s "unchanged interface" claim needs both
-  - [ ] `IMP-0353` · `SW-0353` · `NEW` — `inproc.cpp`'s ring-buffer drop proven unit-level (`TransportInproc.SlowConsumerDropsFramesNeverBlocksProducer`, landed); the IT-level `UT-TRN-03` (`F-LONG`, measured engine tick rate) not started
+  - [ ] `IMP-0351` · `SW-0351` · `NEW` — `src/simcore/transport/shm.cpp` landed and unit-tested (zero-copy bulk read proven directly, `TransportShm.DataCrossesThroughTheMappedSegmentNotACopyOnTheStack`); IT-level `UT-TRN-02` (`F-BULK`, a real consumer observing which channel a control message used) not started
+  - [ ] `IMP-0352` · `SW-0352` · `NEW` — both `inproc.cpp` and `shm.cpp`'s `attach`/`detach` proven non-perturbing at unit level (`TransportInproc.AttachDetachDoesNotPerturbPublish`, `TransportShm.AttachDetachDoesNotPerturbPublish`); IT-level `IT-19` (measured engine tick rate with/without a player) not started
+  - [ ] `IMP-0353` · `SW-0353` · `NEW` — both transports' ring-buffer drop proven unit-level (`TransportInproc.SlowConsumerDropsFramesNeverBlocksProducer`, `TransportShm.SlowConsumerDropsFramesNeverBlocksProducer`); the IT-level `UT-TRN-03` (`F-LONG`, measured engine tick rate) not started
   - [ ] `IMP-0354` · `SW-0354` · `NEW` — contract shape landed (`ITransport.hpp`'s `PortFrame` carries ports, ticks and bytes only, no codec/world-model/component name); `ANL-SW-59`'s static check against a real implementation not started
-  - [ ] `IMP-0355` · `SW-0355` · `NEW` — `inproc.cpp::attach()` version negotiation landed and unit-tested (`TransportInproc.VersionMismatchRefusedBeforeAnyDataCrosses`); `shm.cpp`'s own not started — no separate `negotiate.cpp` file, folded into each transport's own `attach()`
-  - [ ] `IMP-0356` · `SW-0356` · `NEW` — `inproc.cpp`'s `MarkEngineDead()`/`engineAlive()`/`lastTickReceived()` landed and unit-tested (`TransportInproc.DeadEngineReportedNotWaitedOn`); real cross-process death detection (`shm.cpp`) not started — no separate `liveness.cpp` file, folded into each transport's own state
-- [ ] **Files:** contract `modules/interfaces/cpp/transport/ITransport.hpp` (landed); engine-side `src/simcore/transport/inproc.cpp` (landed) + `shm.cpp` (not started, cross-process, folds in its own attach/detach/negotiation/liveness rather than the four separate files this row originally named); player-side client is `modules/viz`'s own scope (`VIZ:SI-16`), not this file list.
-- [ ] **Exit:** **two** transports against one interface, because one implementation behind an interface is an interface nobody has tested. `IT-19` measures engine tick rate with and without a player attached. A slow player drops frames; it never slows the engine.
+  - [ ] `IMP-0355` · `SW-0355` · `NEW` — both transports' version negotiation landed and unit-tested (`TransportInproc.VersionMismatchRefusedBeforeAnyDataCrosses`, `TransportShm.VersionMismatchRefusedBeforeAnyDataCrosses` + `shm.cpp`'s own depth-mismatch refusal); no separate `negotiate.cpp` file, folded into each transport's own `attach()`
+  - [ ] `IMP-0356` · `SW-0356` · `NEW` — `inproc.cpp`'s `MarkEngineDead()`/`engineAlive()`/`lastTickReceived()` landed and unit-tested; `shm.cpp`'s own `SimulateEngineDeath()`/`engineAlive()`/`lastTickReceived()` landed, unit-tested (`TransportShm.DeadEngineReportedNotWaitedOn`) **and** verified against a real OS-level crash (`fork()` smoke test, child process `_exit()`s without running its destructor, parent's `engineAlive()` correctly flips false only once the OS has reaped it) — no separate `liveness.cpp` file, folded into each transport's own state
+- [ ] **Files:** contract `modules/interfaces/cpp/transport/ITransport.hpp` (landed); engine-side `src/simcore/transport/inproc.cpp` + `shm.cpp` (both landed, cross-process folds in its own attach/detach/negotiation/liveness rather than the four separate files this row originally named); player-side client is `modules/viz`'s own scope (`VIZ:SI-16`), not this file list.
+- [ ] **Exit:** **two** transports against one interface, because one implementation behind an interface is an interface nobody has tested. Both landed (`InProcessTransport`, `SharedMemoryTransport`). `IT-19` measures engine tick rate with and without a player attached — not started. A slow player drops frames; it never slows the engine (proven at unit level for both transports; not yet at IT level against a real scheduler).
 
 ### WP-28 · `MP-4` · `SI-22` `launcher`
 - [ ] **Prereq:** `WP-26`.

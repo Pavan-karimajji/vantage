@@ -39,6 +39,7 @@ add_library(simcore STATIC
     # SM-06 (SI-25, D-5): the engine-side implementations behind
     # modules/interfaces' ITransport contract.
     transport/inproc.cpp
+    transport/shm.cpp
 )
 target_include_directories(simcore PUBLIC ${PROJECT_SOURCE_DIR}/include)
 # PRIVATE: third_party/ is an implementation detail of simcore's own .cpp
@@ -54,6 +55,14 @@ target_compile_features(simcore PUBLIC cxx_std_17)
 # link against at the final executable, same reasoning `sil_host`'s own
 # `sil_core` target already applies to this identical dependency.
 target_link_libraries(simcore PUBLIC mcap::mcap protobuf::libprotobuf AdasInterfaces::AdasInterfaces)
+if(UNIX AND NOT APPLE)
+    # SM-06: SharedMemoryTransport's shm_open/shm_unlink -- glibc < 2.34
+    # ships these in librt, not libc; linking it unconditionally on Linux
+    # costs nothing on newer glibc (the symbols are already satisfied) and
+    # is what makes ubuntu_gcc a portable target rather than "whatever
+    # glibc the dev box happens to have".
+    target_link_libraries(simcore PUBLIC rt)
+endif()
 
 include(${PROJECT_SOURCE_DIR}/cmake/FloatingPoint.cmake)
 adas_sim_apply_fp_flags(simcore)
