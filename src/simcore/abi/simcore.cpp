@@ -11,15 +11,19 @@
 ///   else (`SW-0141`), and `IT-11` calls them from a second, non-`simengine`
 ///   host to prove `SW-0144`.
 ///
-///   **Deliberately out of scope this slice, named rather than silently
-///   dropped:** a spec carrying `mutations` is refused (`Authoring`) --
-///   `mutate::Mutator`'s `PortResolver` needs a live protobuf field
-///   catalogue (reflection over each port's declared `proto_type`), which
-///   nothing in `simcore` builds yet outside test fixtures. Wiring a real
-///   resolver is additive here, not a reversal, the moment that catalogue
-///   exists. No writer is opened either -- this slice drives a read-only
-///   resim, the same shape `sil_host/main.cpp` shipped (it never opened an
-///   `mcap` writer of its own).
+///   **`WP-14a` (`IMP-0426`/`IMP-0427`), closing the two gaps `WP-14` named
+///   above:** a real writer is now opened from the resolved Run Spec's own
+///   declared `outputs.path`/`outputs.codec` (`runspec.hpp`'s `SpecOutputs`,
+///   `R-SIM-6`) -- absent when the spec declares none, exactly as before
+///   this package. And a real `PortResolver` is wired: a `DescriptorPool`
+///   built from every loaded component's own `manifest().descriptor_set()`
+///   bytes (`R-SIM-11` -- the catalogue was always on the wire, nothing
+///   built a pool from it before this pass) resolves a mutation's port to
+///   its message `Descriptor` by the spec's own declared `proto_type`. A
+///   spec with zero `mutations` is unaffected: `mutate::Mutator::Touches`
+///   is built from `mutations` alone and gates `ApplyTo` before the
+///   resolver is ever called, so an empty `mutations` list makes this
+///   resolver behave as a no-op by construction (`SW-0423`'s own Accept).
 /// @author Pavan Karimajji
 
 #include "simcore/abi/simcore.h"
@@ -34,10 +38,15 @@
 #include <string>
 #include <vector>
 
+#include <google/protobuf/descriptor.h>
+#include <google/protobuf/descriptor.pb.h>
+#include <google/protobuf/dynamic_message.h>
+
 #include "simcore/bus.hpp"
 #include "simcore/errors.hpp"
 #include "simcore/io.hpp"
 #include "simcore/module_host.hpp"
+#include "simcore/mutate.hpp"
 #include "simcore/runner.hpp"
 #include "simcore/runspec.hpp"
 #include "simcore/scheduler.hpp"
@@ -83,13 +92,85 @@ Result<std::string> ReadFile(const std::filesystem::path& path) {
   return Result<std::string>::Ok(buf.str());
 }
 
+// IMP-0426: the topics `Writer::Open` declares up front -- one per
+// declared port of every non-`off` stage, the same "stage.port" universe
+// `runner::Runner::Construct` derives its own `recorded_topics_` from
+// (`cycle_loop.cpp`). Computed here rather than reused from that accessor
+// because it is only available AFTER `Runner::Construct`, which itself
+// needs an already-open `WriterBase` -- `Writer::Open` must run first. A
+// port this map omits is not lost: `.mcap`'s `arbitrary_topics`
+// capability (`R-SIM-14`) registers an unknown topic schema-less on first
+// `Write`, so this is a completeness/labelling improvement, not a
+// correctness dependency.
+std::map<std::string, simcore::io::TopicInfo> BuildOutputTopics(const simcore::RunSpec& spec) {
+  std::map<std::string, simcore::io::TopicInfo> topics;
+  for (const simcore::SpecStage& stage : spec.stages) {
+    if (stage.mode == "off") continue;
+    for (const simcore::SpecPort& port : stage.ports) {
+      const std::string qualified = stage.name + "." + port.name;
+      simcore::io::TopicInfo info;
+      info.schema_name = port.proto_type;
+      // A `pro` port of a `simulate` stage is this run's own computed
+      // output; everything else (a `measured` stage's own ports, and any
+      // `req` port -- fed from a producer, never computed by the stage
+      // that consumes it) is fed data (`R-SIM-12`'s provenance tags).
+      info.provenance = (port.dir == "pro" && stage.mode == "simulate") ? simcore::io::Provenance::kSimulated
+                                                                        : simcore::io::Provenance::kMeasured;
+      topics[simcore::runner::PortNameToTopic(qualified)] = info;
+    }
+  }
+  return topics;
+}
+
+// IMP-0427: builds a real `DescriptorPool` from every loaded component's
+// own `manifest().descriptor_set()` bytes (`R-SIM-11` -- the catalogue is
+// already on the wire; this is the first caller to turn it into a pool
+// rather than leaving it opaque). Best-effort file-by-file: a component
+// that declares no schema, or a file this pass cannot yet place (its own
+// dependency not seen first), simply contributes nothing -- `resolve_port`
+// then reports that port unresolvable, the same `Result::Fail` path
+// `Mutator::ApplyTo` already takes for any unresolvable port, rather than
+// this construction step failing the whole engine over one component's
+// catalogue. Multiple passes handle shared dependency files (two
+// components' `FileDescriptorSet`s both listing a common `.proto`) without
+// requiring either set to already be topologically sorted.
+void PopulateDescriptorPool(
+    const std::vector<std::unique_ptr<simcore::module_host::Component>>& components,
+    google::protobuf::DescriptorPool& pool) {
+  std::vector<google::protobuf::FileDescriptorProto> pending;
+  for (const auto& component : components) {
+    const std::string& raw = component->manifest().descriptor_set();
+    if (raw.empty()) continue;
+    google::protobuf::FileDescriptorSet file_set;
+    if (!file_set.ParseFromString(raw)) continue;  // malformed catalogue: named via an unresolved port later
+    for (const auto& file_proto : file_set.file()) {
+      pending.push_back(file_proto);
+    }
+  }
+  for (std::size_t remaining = pending.size(); remaining > 0;) {
+    std::vector<google::protobuf::FileDescriptorProto> next;
+    std::size_t built_this_pass = 0;
+    for (const auto& file_proto : pending) {
+      if (pool.FindFileByName(file_proto.name()) != nullptr) continue;  // already built (shared dependency)
+      if (pool.BuildFile(file_proto) != nullptr) {
+        ++built_this_pass;
+      } else {
+        next.push_back(file_proto);  // a dependency not yet built -- retry next pass
+      }
+    }
+    pending = std::move(next);
+    if (built_this_pass == 0) break;  // no progress: the rest have an unmet or broken dependency
+    remaining = pending.size();
+  }
+}
+
 }  // namespace
 
 // One constructed engine: the spec plus every live object the cycle loop
 // (`runner::Runner`) needs a non-owning pointer/reference to. Declaration
 // order is destruction order, reversed -- `runner_` is declared LAST so it
-// is destroyed FIRST, before the reader and the components it only
-// borrows.
+// is destroyed FIRST, before the reader, the components, the writer, the
+// descriptor pool and the mutator it only borrows.
 struct SimEngine {
   simcore::RunSpec spec;
   simcore::scheduler::Scheduler scheduler;
@@ -97,6 +178,18 @@ struct SimEngine {
   std::unique_ptr<simcore::io::Reader> reader;
   std::vector<std::unique_ptr<simcore::module_host::Component>> owned_components;
   std::map<std::string, simcore::module_host::Component*> component_ptrs;
+  // IMP-0426: the underlying codec `Writer`, and the `WriterBase` wrapping
+  // it that `Runner` actually writes through -- both absent (no writer
+  // opened, matching pre-`WP-14a` behaviour) when the spec declares no
+  // `outputs.path`.
+  std::unique_ptr<simcore::io::Writer> writer_impl;
+  std::optional<simcore::io::WriterBase> writer_base;
+  // IMP-0427: the real per-run schema catalogue and the `Mutator` resolving
+  // against it -- always constructed, even for zero `mutations` (see this
+  // file's own top note on why that is still a no-op).
+  google::protobuf::DescriptorPool descriptor_pool;
+  std::unique_ptr<google::protobuf::DynamicMessageFactory> message_factory;
+  std::optional<simcore::mutate::Mutator> mutator;
   std::optional<simcore::runner::Runner> runner;
 
   explicit SimEngine(simcore::RunSpec s) : spec(std::move(s)), scheduler(spec), bus(0) {}
@@ -127,12 +220,6 @@ SimEngine* simEngineCreate(const char* run_spec_json_path, const char* config_pa
     return nullptr;
   }
 
-  if (!spec_result.value().mutations.empty()) {
-    WriteErr(err_buf, err_buf_cap,
-             "this host does not yet wire a PortResolver for mutations (WP-14's own named scope limit)");
-    if (out_exit_code != nullptr) *out_exit_code = kSimExitConfig;
-    return nullptr;
-  }
   if (spec_result.value().sources.empty()) {
     WriteErr(err_buf, err_buf_cap, "run spec declares no sources[] to read");
     if (out_exit_code != nullptr) *out_exit_code = kSimExitConfig;
@@ -179,13 +266,56 @@ SimEngine* simEngineCreate(const char* run_spec_json_path, const char* config_pa
     engine->owned_components.push_back(std::move(component));
   }
 
+  // IMP-0426: open a real writer iff the resolved spec declares one.
+  // Absent `outputs.path` leaves `writer_base` unset, matching this
+  // function's own pre-`WP-14a` read-only behaviour exactly.
+  if (!engine->spec.outputs.path.empty()) {
+    Result<std::unique_ptr<simcore::io::Writer>> writer_result =
+        simcore::io::CodecRegistry::Instance().OpenWrite(engine->spec.outputs.path);
+    if (!writer_result.ok()) {
+      WriteErr(err_buf, err_buf_cap, writer_result.error().Format());
+      if (out_exit_code != nullptr) *out_exit_code = ToC(simcore::DefaultExitCode(writer_result.error().kind));
+      return nullptr;
+    }
+    engine->writer_impl = std::move(writer_result).value();
+    const Result<bool> writer_open_result =
+        engine->writer_impl->Open(engine->spec.outputs.path, BuildOutputTopics(engine->spec));
+    if (!writer_open_result.ok()) {
+      WriteErr(err_buf, err_buf_cap, writer_open_result.error().Format());
+      if (out_exit_code != nullptr) *out_exit_code = ToC(simcore::DefaultExitCode(writer_open_result.error().kind));
+      return nullptr;
+    }
+    engine->writer_base.emplace(*engine->writer_impl);
+  }
+
+  // IMP-0427: a real per-run catalogue and resolver, always wired -- a
+  // spec with zero `mutations` still gets one, and it is a no-op by
+  // construction (this file's own top note).
+  PopulateDescriptorPool(engine->owned_components, engine->descriptor_pool);
+  engine->message_factory = std::make_unique<google::protobuf::DynamicMessageFactory>(&engine->descriptor_pool);
+  simcore::mutate::Mutator::PortResolver resolve_port =
+      [&spec = engine->spec, &pool = engine->descriptor_pool](
+          const std::string& stage, const std::string& port) -> std::optional<simcore::mutate::PortInfo> {
+    for (const simcore::SpecStage& candidate : spec.stages) {
+      if (candidate.name != stage) continue;
+      for (const simcore::SpecPort& candidate_port : candidate.ports) {
+        if (candidate_port.name != port) continue;
+        const google::protobuf::Descriptor* descriptor = pool.FindMessageTypeByName(candidate_port.proto_type);
+        if (descriptor == nullptr) return std::nullopt;
+        return simcore::mutate::PortInfo{descriptor, candidate_port.fixed_slots};
+      }
+    }
+    return std::nullopt;
+  };
+  engine->mutator.emplace(engine->spec.mutations, std::move(resolve_port));
+
   simcore::runner::RunnerOptions options;
   if (exec_timeout_ms > 0) {
     options.exec_timeout = std::chrono::milliseconds(exec_timeout_ms);
   }
   Result<simcore::runner::Runner> runner_result = simcore::runner::Runner::Construct(
       engine->spec, engine->scheduler, engine->bus, *engine->reader, engine->component_ptrs,
-      /*writer=*/nullptr, /*mutator=*/nullptr, options);
+      engine->writer_base.has_value() ? &*engine->writer_base : nullptr, &*engine->mutator, options);
   if (!runner_result.ok()) {
     WriteErr(err_buf, err_buf_cap, runner_result.error().Format());
     if (out_exit_code != nullptr) *out_exit_code = ToC(simcore::DefaultExitCode(runner_result.error().kind));
@@ -218,5 +348,11 @@ void simEngineDestroy(SimEngine* engine) {
   for (auto& component : engine->owned_components) {
     component->Shutdown();
   }
+  // IMP-0426: finalise the recording (mcap's footer/index is written on
+  // `Close()`, not on `Runner::Run()`'s own end-of-run `Flush()`) -- always,
+  // regardless of whether `simEngineRun` was ever called or how it ended,
+  // so a partial run still leaves a readable file up to its last completed
+  // message.
+  if (engine->writer_impl) engine->writer_impl->Close();
   delete engine;
 }

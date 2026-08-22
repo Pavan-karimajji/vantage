@@ -288,9 +288,9 @@ bool Mutator::Touches(const std::string& stage, const std::string& port) const {
   return false;
 }
 
-Result<bool> Mutator::ApplyTo(bus::PortValue& value, std::int64_t t_sim_ns) const {
+Result<bool> Mutator::ApplyTo(bus::PortValue& value, const std::string& bare_port, std::int64_t t_sim_ns) const {
   const std::string& stage = value.header.producer;
-  const std::string& port = value.port;
+  const std::string& port = bare_port;
   if (!Touches(stage, port)) return Result<bool>::Ok(true);
 
   std::optional<PortInfo> info = resolve_port_(stage, port);

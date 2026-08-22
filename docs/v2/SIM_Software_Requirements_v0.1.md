@@ -453,8 +453,9 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** No Python code shall execute once per message, once per port per tick, or once per sample.
 **Accept.** A profile of a representative run shows no interpreter frame inside the per-message path. A static check enumerates every function reachable from a per-tick entry point and reports any that is Python.
 **Verify.** A · `ANL-SW-05` · T · `IT-03`   **Trace.** SYS-0233, SYS-0269; **defect** concept §22.5
-**Built.** ○ not started — `IMP-0013` in `WP-16`
-**Now.** `PARTIAL` — the rule is stated nowhere in code and is violated today by `core/runner.py`, `core/resim.py` and `contracts/component.py`, which construct per-port dictionaries and marshal payloads per tick.
+**Built.** ○ not started — `IMP-0013` in `WP-16`, `IMP-0422` in `WP-15b`
+**Now.** `PARTIAL` — the rule is stated nowhere in code and is violated today by `core/resim.py` and `contracts/component.py`'s execution path, both confirmed still on the live per-tick exec path (`cli/resim.py`, `orchestrate/worker.py`, `check/runner.py`, `player/shell/qt_window.py`'s Run button all call into them directly, with no wiring yet onto `simengine`'s C ABI — see `WP-15b`, added 2026-08-22).
+**Correction 2026-08-22:** `core/runner.py` was also named here (and in `WP-16`'s delete list / Design §28.1 / `IMP-0061`); that was wrong. It is the replay/viewer session-builder (`R-SIM-13` — no DLL, no live exec; its own docstring: *"Phase B has no C++ and no DLL"*), with 12 live call sites (`cli/explain.py`, `cli/list_cmd.py`, `cli/render.py`, `player/shell/qt_window.py`, `diagnostics/evidence.py`, `render/capture.py`, `render/clip.py`, `session/session.py`, …) that break if it is deleted. Its per-tick `Tick`/`PortValue` construction groups an **already-recorded** session for rendering, not per-message execution — whether that replay-side grouping should itself migrate to a C++-backed path is a real, separately-scoped question this correction does not resolve, and it is explicitly **not** part of `WP-16`.
 
 **`SW-0014`** · `SI-23` · `P0` · `R1` — Bulk data crosses as a view, never as objects
 **Shall.** Bulk data exposed to Python shall be an array view onto an engine-owned buffer, and the scripting layer shall never construct a per-element object from a payload.
@@ -1320,6 +1321,13 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Built.** ● done — `IMP-0105` in `WP-11`
 **Now.** `DONE` — true today.
 
+**`SW-0424`** · `SI-05` · `P0` · `R1` — A declared override's address is what actually gets touched
+**Shall.** `Mutator::ApplyTo`'s own internal touch re-check shall use the same port-name convention every other consumer of a published `PortValue.port` uses, so a declared override's address and the value it is checked against always agree.
+**Accept.** A value published through the real `PortBus` and addressed by a declared override is observed changed on read-back — not silently unchanged because the override's check and the bus's own stored form disagree on qualified-vs-bare.
+**Verify.** T · `UT-MUT-11`   **Trace.** SYS-0097, SYS-0098; defect found 2026-08-22 attempting `WP-14a`/`WP-15b`
+**Built.** ● done — `IMP-0428` in `WP-11a`
+**Now.** `NEW` — `mutate::Mutator::ApplyTo` (`src/simcore/mutate/address.cpp:291-294`) re-derives its own `Touches` gate from `value.port`; `bus::PortBus::Publish` (`src/simcore/bus/port_bus.cpp:24`) always stores `value.port` fully-qualified (`"<stage>.<port>"`), never bare, while `cycle_loop.cpp`'s own caller-side pre-check uses the bare name. No single override address can satisfy both, so a declared override never applies through a real run. Never previously caught: `WP-13`'s `test_ut_run_core.cpp` never passes a non-null mutator into `Runner::Construct`; `WP-11`'s own `test_mut_core.cpp` only calls `ApplyTo` on a hand-built `PortValue` whose `.port` is deliberately bare, never through the real bus.
+
 **`SW-0106`** · `SI-05` · `P0` · `R1` — Every closed vocabulary is machine-comparable against its schema
 **Shall.** Every closed set this document names shall be enumerable at run time and compared against the published schema on every build.
 **Accept.** A member added in code but absent from the schema fails the build, and the failure names the set and the member.
@@ -1624,6 +1632,20 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Verify.** T · `IT-11`   **Trace.** SYS-0272; CN-0390
 **Built.** ● done — `IMP-0144` in `WP-14`
 **Now.** `DONE·MOVE` — the library-plus-thin-executable split already exists in `sil_host`'s CMake structure; concept §21.2 is right that this is a rename, not a restructure.
+
+**`SW-0422`** · `SI-09` · `P0` · `R1` — The embeddable ABI writes a real recording
+**Shall.** `simEngineCreate` shall construct its `Runner` with a real writer when the resolved Run Spec declares recording output, never `nullptr`.
+**Accept.** A run driven through the C ABI (or `simengine`'s own CLI) produces a recording on disk containing every declared, non-excluded port (`SYS-0120`); a caller reading it back observes real per-tick values, not an empty or absent file.
+**Verify.** T · `UT-ABI-01`   **Trace.** SYS-0120; defect found 2026-08-22 attempting `WP-15b`
+**Built.** ● done — `IMP-0426` in `WP-14a`
+**Now.** `NEW` — `src/simcore/abi/simcore.cpp::simEngineCreate` hardcodes `Runner::Construct(..., /*writer=*/nullptr, /*mutator=*/nullptr, ...)`; the file's own comment reads *"No writer is opened either — this slice drives a read-only resim."* Confirmed the only call site of `Runner::Construct` in the tree — nothing downstream of the C ABI can currently retrieve a run's results at all.
+
+**`SW-0423`** · `SI-09` · `P0` · `R1` — The embeddable ABI applies declared overrides
+**Shall.** `simEngineCreate` shall wire a `PortResolver` so a resolved Run Spec's declared overrides (`R-SIM-15`) are applied during a C-ABI-driven run, never silently ignored.
+**Accept.** A run through the C ABI with at least one declared override in its Run Spec produces output reflecting that override; a Run Spec with zero overrides behaves identically to today (a no-op resolver satisfies this — not a partial implementation).
+**Verify.** T · `UT-ABI-02`   **Trace.** SYS-0097; defect found 2026-08-22 attempting `WP-15b`
+**Built.** ● done — `IMP-0427` in `WP-14a`
+**Now.** `NEW` — same function, same comment: *"this host does not yet wire a `PortResolver` for mutations"* (`WP-14`'s own named scope limit). Blocks `check/runner.py`'s fault/override tests specifically (`R-SIM-15`, `SI-05`'s existing verb application is real but unreachable through this ABI).
 
 **`SW-0145`** · `SI-09` · `P0` · `R1` — One binary serves interactive, batch and continuous-integration use
 **Shall.** There shall be one engine executable, used unchanged by the desktop, batch and continuous-integration paths.

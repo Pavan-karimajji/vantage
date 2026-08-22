@@ -347,6 +347,7 @@ Expected values are the served requirement's `Accept` clause (§0.1). Each row g
 | `UT-MUT-08` | `SW-0104` | `F-FOREIGN` | Apply `delay` to a value with a capture stamp, then to one whose capture stamp is unknown. |
 | `UT-MUT-09` | `SW-0105` | `F-SPEC` | Enumerate `Touches`; confirm no port outside it reaches `ApplyTo`. |
 | `UT-MUT-10` | `SW-0108` | `F-SPEC` | Scope a fault to a window; observe the port inside, outside, and read the window from the manifest. |
+| `UT-MUT-11` | `SW-0424` | `F-SPEC` | Through a real `Runner` cycle with a real `PortBus`, publish a value then apply a declared override addressed at the same port; confirm the override is observed on read-back, not silently no-op'd by a port-name-convention mismatch between `Publish` and `ApplyTo`'s own `Touches` re-check. Added 2026-08-22, found attempting `WP-15b`/`WP-14a` (`WP-11a`): `UtAbi02Resolver.ADeclaredOverrideIsApplied` is this same case exercised end-to-end through the C ABI and is the row that un-skips once this closes. |
 
 ### 5.6 `SI-06` `runner` — `UT-RUN-01` … `UT-RUN-10`
 
@@ -400,6 +401,15 @@ Expected values are the served requirement's `Accept` clause (§0.1). Each row g
 | `UT-EXE-04` | `SW-0147` | `F-STUB-CRASH` | Run with `--restart` unset, then set; read the outcome recorded in each manifest. |
 | `UT-EXE-05` | `SW-0148` | `F-SPEC` | Trigger each taxonomy kind; compare the process exit code on both platforms. |
 | `UT-EXE-06` | `SW-0397` | — | Load the shipped launch configurations on both platforms; resolve a symbol in a loaded module. |
+
+### 5.9a `SI-09` (`WP-14a`) — `UT-ABI-01` … `UT-ABI-02`
+
+Added 2026-08-22 alongside `SW-0422`/`SW-0423`, found while attempting `WP-15b`: `simEngineCreate` was a deliberately read-only, override-free slice (`WP-14`'s own scope cut), so nothing driven through the C ABI could retrieve results or honor a declared override.
+
+| ID | Serves | Fixture | Steps |
+|---|---|---|---|
+| `UT-ABI-01` | `SW-0422` | `F-SPEC` | Construct via `simEngineCreate` with a spec declaring recording output; run to completion; read the written recording back and assert every declared, non-excluded port is present with real per-tick values, not an empty or absent file. |
+| `UT-ABI-02` | `SW-0423` | `F-SPEC` | Two runs through `simEngineCreate`: one spec carrying a declared override, one without. Assert the override is applied in the first; assert the second is unchanged from the pre-`WP-14a` no-resolver behaviour. |
 
 ### 5.10 `SI-10` `config` — `UT-CFG-01` … `UT-CFG-18`
 

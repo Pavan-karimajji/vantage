@@ -166,7 +166,14 @@ class Mutator {
   // encode once. A `value` this Mutator does not `Touches()` returns
   // unchanged, undecoded -- `Touches` is the gate `ApplyTo` itself uses,
   // not just a caller convenience (IMP-0105).
-  Result<bool> ApplyTo(bus::PortValue& value, std::int64_t t_sim_ns) const;
+  //
+  // IMP-0428: `bare_port` is the port name BARE (matching
+  // `SpecMutation::address.port`'s own convention and `cycle_loop.cpp`'s
+  // own caller-side pre-check) -- `value.port` itself is always
+  // fully-qualified `"<stage>.<port>"` (`bus::PortBus::Publish`'s own
+  // convention) and is never re-derived from here for the `Touches` gate,
+  // which is what let the two disagree before this fix.
+  Result<bool> ApplyTo(bus::PortValue& value, const std::string& bare_port, std::int64_t t_sim_ns) const;
 
   // IMP-0105: built at construction from the spec; `stage` is the
   // producing module (`bus::PortValue::header.producer`), `port` is

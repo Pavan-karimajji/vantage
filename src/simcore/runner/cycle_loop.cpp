@@ -372,7 +372,7 @@ Result<bool> Runner::StepOnce() {
         const std::string producer = dot == std::string::npos ? std::string() : qualified.substr(0, dot);
         const std::string bare = dot == std::string::npos ? qualified : qualified.substr(dot + 1);
         if (mutator_->Touches(producer, bare)) {
-          Result<bool> applied = mutator_->ApplyTo(value, now_ns);
+          Result<bool> applied = mutator_->ApplyTo(value, bare, now_ns);
           if (!applied.ok()) return applied;
         }
       }

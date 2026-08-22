@@ -1062,13 +1062,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Port value overrides shall use a closed verb list — the arithmetic verbs const, hold, offset, scale and the structural verbs select, drop — with no expression language, no scripting hook and no user-supplied callable.
 **Accept.** A configuration using any other verb is refused at load. The verb set is enumerable from the published schema and has not grown between releases without a requirement change.
 **Verify.** T · `SYT-STG-17` · `INSP-04`   **Trace.** CN-0326, CN-0286; v1 `FR-SIM-45`
-**Built.** ● done — 2/2 software requirements done
+**Built.** ● done — 4/4 software requirements done
 
 **`SYS-0098`** · `P0` · `R1` — An override may destroy, never create
 **Shall.** No override shall create an entity.
 **Accept.** No verb inserts, moves or duplicates a repeated element. Attempting to express such an operation is a load error.
 **Verify.** T · `SYT-STG-18`   **Trace.** CN-0327
-**Built.** ● done — 1/1 software requirements done
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0099`** · `P0` · `R1` — A closed address grammar
 **Shall.** Override addressing shall use the closed grammar: port, port.field, port.array[i], port.array[\*] — with no predicates.
@@ -1210,7 +1210,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The recorder shall derive its topic list from the pipeline's port manifests, so that every declared port — every stage's inputs and outputs — is recorded, subject only to the declared per-port record policy.
 **Accept.** No declared port is absent from the recording without an explicit policy entry saying so.
 **Verify.** T · `SYT-OUT-10`   **Trace.** CN-0113, CN-0317
-**Built.** ◐ started — 1/2 software requirements done, in `WP-05`, `WP-13`
+**Built.** ◐ started — 2/3 software requirements done, in `WP-05`, `WP-13`, `WP-14a`
 
 **`SYS-0121`** · `P0` · `R1` — A recording is a model; a format is a codec
 **Shall.** The recording model shall be `meta` plus typed topics plus two-clock messages, and no consumer of a recording — layer provider, renderer, expectation, analysis — shall be able to learn which format it came from.
@@ -1984,7 +1984,7 @@ mechanism.
 **Shall.** Bulk data crossing into the scripting layer shall be exposed as array views onto engine-owned buffers, never as per-element scripting objects; the scripting layer shall never touch a message payload.
 **Accept.** No per-element conversion occurs on any per-message path. A profile of a representative run shows no scripting-layer frames inside the per-message path.
 **Verify.** A · `ANL-33` · T · `SYT-NFR-04`   **Trace.** CN-0290, CN-0229, CN-0288; **defect** concept §22.5
-**Built.** ◐ started — 1/4 software requirements done, in `WP-11`, `WP-16`, `WP-29`
+**Built.** ◐ started — 1/4 software requirements done, in `WP-11`, `WP-15b`, `WP-16`, `WP-29`
 
 **`SYS-0234`** · `P0` · `R1` — Per-cycle cost is budgeted with a number and measured
 **Shall.** Per-cycle cost and per-worker campaign throughput shall each carry a declared numeric budget, measured on §18.0's reference configuration, and reported per release.
@@ -2228,7 +2228,7 @@ Constraints are obligations on *how* the system is built, imposed because a corr
 **Shall.** Code executing per tick, per message or per sample shall be C++; code executing once per run, or at user-interaction or display rate, shall be Python.
 **Accept.** Every module of the system is classifiable by the rule with no case requiring judgement. A per-message code path in the scripting layer fails a static check.
 **Verify.** A · `ANL-43` · `INSP-11`   **Trace.** CN-0288, CN-0289; v1 `FR-SIM-30`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-16`
+**Built.** ○ not started — 0/1 software requirements done, in `WP-15b`, `WP-16`
 
 **`SYS-0270`** · `P0` · `R1` — One implementation per concept
 **Shall.** No concept shall be implemented in both languages; where one exists on both sides today, one side shall be deleted rather than maintained in step.

@@ -15,17 +15,33 @@
 ///   this file reads/writes it the same way `mutate/address.cpp` itself
 ///   does -- through `google::protobuf::Reflection` -- rather than
 ///   generated accessors, via a handful of small helpers below.
+///
+///   `UT-MUT-11` (`WP-11a`, `SW-0424`): added 2026-08-22, closing the
+///   `IMP-0428` defect (`ApplyTo`'s own internal `Touches` re-check
+///   comparing a bare `SpecMutation::address.port` against
+///   `bus::PortBus::Publish`'s always-fully-qualified `value.port`). Unlike
+///   `UT-MUT-01`..`UT-MUT-10` above, this one routes a real
+///   `runner::Runner` cycle over a real `bus::PortBus` and the real
+///   `echo_stub` component (`F-STUB`) -- a hand-built `PortValue` with a
+///   deliberately bare `.port` (this file's own `MakeValue` helper, used by
+///   every other test here) is exactly the shape that let the defect hide.
 /// @author Pavan Karimajji
 
 #include <gtest/gtest.h>
 
+#include <cstdlib>
+#include <filesystem>
 #include <memory>
+#include <optional>
+#include <string>
+#include <vector>
 
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/descriptor.pb.h>
 #include <google/protobuf/dynamic_message.h>
 
 #include "simcore/mutate.hpp"
+#include "simcore/runner.hpp"
 
 namespace simcore::mutate {
 namespace {
@@ -404,7 +420,7 @@ TEST_F(MutateFixture, UtMut06ThreeMutationsOnOneValueAllApplyInASingleDecodeEnco
   // all three mutations really did land on the one message this call
   // decoded, not three independent partial re-encodes.
   Mutator mutator(mutations, Resolver());
-  Result<bool> applied = mutator.ApplyTo(value, /*t_sim_ns=*/0);
+  Result<bool> applied = mutator.ApplyTo(value, value.port, /*t_sim_ns=*/0);
   ASSERT_TRUE(applied.ok());
 
   auto decoded = Decode(value.payload);
@@ -421,7 +437,7 @@ TEST_F(MutateFixture, UtMut07OverriddenPortCarriesOverriddenOriginOnTheValue) {
   value.origin = bus::Origin::Measured;
   std::vector<SpecMutation> mutations{MakeMutation("const", AddressAt("df", "outputs", {"x"}), {1.0})};
   Mutator mutator(mutations, Resolver());
-  ASSERT_TRUE(mutator.ApplyTo(value, 0).ok());
+  ASSERT_TRUE(mutator.ApplyTo(value, value.port, 0).ok());
   EXPECT_EQ(value.origin, bus::Origin::Overridden);
 }
 
@@ -450,7 +466,7 @@ TEST_F(MutateFixture, UtMut09APortOutsideTouchesIsReturnedUndecodedUnchanged) {
     return std::nullopt;
   };
   Mutator mutator(mutations, failing_resolver);
-  Result<bool> applied = mutator.ApplyTo(value, 0);
+  Result<bool> applied = mutator.ApplyTo(value, value.port, 0);
   ASSERT_TRUE(applied.ok());
   EXPECT_EQ(value.payload, original_payload);
 }
@@ -482,6 +498,171 @@ TEST_F(MutateFixture, UtMut10FaultOutsideItsWindowLeavesTheValueUnchanged) {
   ASSERT_TRUE(inside_window.ok());
   EXPECT_TRUE(inside_window.value().payload.empty());
   ASSERT_TRUE(active_since.has_value());
+}
+
+// ---- UT-MUT-11: a declared override applies through a real Runner cycle --
+// with a real PortBus (WP-11a, SW-0424, IMP-0428). See this file's own top
+// note: unlike every test above, this one never hand-builds a PortValue --
+// the override must survive bus::PortBus::Publish's own fully-qualified
+// `value.port` convention, which is exactly what hid IMP-0428 before now.
+
+class EnvGuard {
+ public:
+  EnvGuard(const char* name, const std::string& value) : name_(name) {
+#if defined(_WIN32)
+    _putenv_s(name, value.c_str());
+#else
+    setenv(name, value.c_str(), 1);
+#endif
+  }
+  ~EnvGuard() {
+#if defined(_WIN32)
+    _putenv_s(name_, "");
+#else
+    unsetenv(name_);
+#endif
+  }
+
+ private:
+  const char* name_;
+};
+
+std::filesystem::path EchoStubPath() {
+#if defined(_WIN32)
+  return std::filesystem::path(ADAS_SIM_TEST_FIXTURE_DIR) / "echo_stub.dll";
+#else
+  return std::filesystem::path(ADAS_SIM_TEST_FIXTURE_DIR) / "libecho_stub.so";
+#endif
+}
+
+// A minimal in-test `io::Reader`, one recorded message on `/meas/objects` --
+// mirrors `test_ut_run_core.cpp::VectorReader`, kept local rather than
+// shared since neither file treats its own fixture scaffolding as reusable
+// infrastructure (that file's own top note).
+class Ut11Reader final : public io::Reader {
+ public:
+  Ut11Reader(std::vector<io::RawMessage> messages, std::map<std::string, io::TopicInfo> topics)
+      : messages_(std::move(messages)), topics_(std::move(topics)) {}
+
+  Result<bool> Open(const std::filesystem::path&) override { return Result<bool>::Ok(true); }
+  std::map<std::string, io::TopicInfo> Describe() const override { return topics_; }
+  void Seek(std::int64_t) override {}
+
+  io::Batch ReadRange(const io::ReadBounds& bounds) override {
+    return io::detail::AccumulateBatch(bounds, lookahead_, [this]() -> std::optional<io::RawMessage> {
+      if (index_ >= messages_.size()) return std::nullopt;
+      return messages_[index_++];
+    });
+  }
+
+  void Close() override {}
+  std::optional<std::vector<std::uint8_t>> GetMeta(const std::string&) const override { return std::nullopt; }
+
+ private:
+  std::vector<io::RawMessage> messages_;
+  std::map<std::string, io::TopicInfo> topics_;
+  std::optional<io::RawMessage> lookahead_;
+  std::size_t index_ = 0;
+};
+
+class CapturingWriter final : public io::Writer {
+ public:
+  Result<bool> Open(const std::filesystem::path&, const std::map<std::string, io::TopicInfo>&) override {
+    return Result<bool>::Ok(true);
+  }
+  void Write(const io::RawMessage& message) override { written.push_back(message); }
+  void WriteMeta(const std::string&, const std::vector<std::uint8_t>&) override {}
+  void Close() override {}
+
+  std::vector<io::RawMessage> written;
+};
+
+TEST_F(MutateFixture, UtMut11ADeclaredOverrideAppliesThroughARealRunnerCycleWithARealPortBus) {
+  EnvGuard name_guard("ADAS_SIL_TEST_STUB_NAME", "run_stub_ut_mut_11");
+  EnvGuard port_guard("ADAS_SIL_TEST_STUB_OUTPUT_PORT", "");  // sut produces no output -- irrelevant to this case
+
+  auto loaded = module_host::Component::Load(EchoStubPath());
+  ASSERT_TRUE(loaded.ok()) << loaded.error().Format();
+  module_host::Component component = std::move(loaded).value();
+  ASSERT_TRUE(component.Init().ok());
+
+  // The recording's own bytes -- x=7.0 -- which the declared override below
+  // must NOT be the value observed on read-back.
+  auto recorded_port = NewPort();
+  SetDouble(*recorded_port, "x", 7.0);
+
+  SpecPort objects_port;
+  objects_port.name = "objects";
+  objects_port.kind = "data";
+  objects_port.proto_type = "mutate_test.TestPort";
+  objects_port.record = "full";
+  objects_port.sampling = "latest";
+  objects_port.on_missing = "hold";
+
+  SpecPort meas_port = objects_port;
+  meas_port.dir = "pro";
+  SpecStage meas;
+  meas.name = "meas";
+  meas.mode = "measured";
+  meas.ports = {meas_port};
+
+  SpecPort sut_port = objects_port;
+  sut_port.dir = "req";
+  SpecInput from_meas;
+  from_meas.port = "objects";
+  from_meas.producer = "meas";
+  from_meas.producer_port = "objects";
+  SpecStage sut;
+  sut.name = "sut";
+  sut.mode = "simulate";
+  sut.ports = {sut_port};
+  sut.inputs = {from_meas};
+
+  RunSpec spec;
+  spec.run_id = "ut-mut-11";
+  spec.grid_step_ns = 10'000'000;
+  spec.stages = {meas, sut};
+  spec.order = {"meas", "sut"};
+
+  // The declared override: `meas.objects.x := 42.0` -- the same address
+  // shape a real Resolved Run Spec's `mutations[]` carries.
+  std::vector<SpecMutation> mutations{MakeMutation("const", AddressAt("meas", "objects", {"x"}), {42.0})};
+  Mutator mutator(mutations, Resolver());
+
+  const std::string topic = runner::PortNameToTopic("meas.objects");
+  io::TopicInfo topic_info;
+  topic_info.schema_name = "mutate_test.TestPort";
+  topic_info.provenance = io::Provenance::kMeasured;
+
+  io::RawMessage recorded_message;
+  recorded_message.topic = topic;
+  recorded_message.log_time_ns = 0;
+  recorded_message.payload = Encode(*recorded_port);
+
+  Ut11Reader reader({recorded_message}, {{topic, topic_info}});
+  scheduler::Scheduler sched(spec);
+  bus::PortBus bus;
+  CapturingWriter sink;
+  io::WriterBase writer_base(sink);
+
+  auto constructed = runner::Runner::Construct(spec, sched, bus, reader, {{"sut", &component}}, &writer_base, &mutator);
+  ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
+  runner::Runner run = std::move(constructed).value();
+  Result<bool> step = run.StepOnce();
+  ASSERT_TRUE(step.ok()) << step.error().Format();
+
+  // The exact bytes delivered to `sut`'s own `objects` req port this cycle,
+  // post-mutation -- read back from what the writer actually received, the
+  // same technique `UtAbi02Resolver.ADeclaredOverrideIsApplied` uses through
+  // the C ABI.
+  const std::string delivered_topic = runner::PortNameToTopic("sut.objects");
+  const io::RawMessage* delivered = nullptr;
+  for (const auto& message : sink.written) {
+    if (message.topic == delivered_topic) delivered = &message;
+  }
+  ASSERT_NE(delivered, nullptr) << "no delivered req message written for sut.objects";
+  auto decoded = Decode(delivered->payload);
+  EXPECT_DOUBLE_EQ(GetDouble(*decoded, "x"), 42.0);
 }
 
 }  // namespace

@@ -97,6 +97,9 @@ set(SIM_TEST_SOURCES
     unit/test_diag_breakpoints.cpp
     unit/test_diag_reproducer.cpp
     integration/test_it10_graph_diff.cpp
+    # WP-14a (SI-09): the embeddable ABI's real writer and real resolver
+    # (IMP-0426/IMP-0427) -- UT-ABI-01/UT-ABI-02.
+    integration/test_ut_abi_writer_and_resolver.cpp
 )
 
 add_executable(simcore_tests ${SIM_TEST_SOURCES})

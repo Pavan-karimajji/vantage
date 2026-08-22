@@ -199,6 +199,16 @@ Result<RunSpec> LoadRunSpec(std::string_view json_text) {
       spec.order.push_back(name.get<std::string>());
     }
     spec.coherence_verdict = root.at("coherence").at("verdict").get<std::string>();
+    // WP-14a: optional on read -- every pre-WP-14a spec (including every
+    // existing test fixture) omits this key entirely, and that must keep
+    // parsing exactly as it did before (no declared output, `outputs.path`
+    // stays empty). `.value(..., default)` reads a present sub-key without
+    // requiring the other; an absent "outputs" object skips both.
+    if (root.contains("outputs") && root.at("outputs").is_object()) {
+      const auto& outputs_node = root.at("outputs");
+      spec.outputs.path = outputs_node.value("path", std::string());
+      spec.outputs.codec = outputs_node.value("codec", std::string());
+    }
     spec.limits_exec_timeout_ms = root.at("limits").at("exec_timeout_ms").get<int>();
     spec.limits_severity_exit = root.at("limits").at("severity_exit").get<std::string>();
 

@@ -531,7 +531,8 @@ class ArrayView:                         # SW-0014, SW-0015
 
 | `IMP` | Serves | `WP` | Change | Artifact · Design | Test |
 |---|---|---|---|---|---|
-| `IMP-0013` | `SW-0013` | `WP-16` | `EXTEND` | Satisfied by deletion: `core/runner.py`, `core/resim.py` and `contracts/component.py`'s execution path go at `WP-16`. `ANL-SW-05` walks the call graph from every per-tick entry point and reports any Python frame; the profile in `IT-03` is the confirming measurement, not the check. | `ANL-SW-05`, `IT-03` |
+| `IMP-0013` | `SW-0013` | `WP-16` | `EXTEND` | Satisfied by deletion: `core/resim.py` and `contracts/component.py`'s execution path go at `WP-16`, once `IMP-0422` (`WP-15b`) has moved every live caller off them. `ANL-SW-05` walks the call graph from every per-tick entry point and reports any Python frame; the profile in `IT-03` is the confirming measurement, not the check. **Correction 2026-08-22:** this row named `core/runner.py`; wrong — see Design §28.1's correction note and `SW-0013`'s corrected `Now.` note. | `ANL-SW-05`, `IT-03` |
+| `IMP-0422` | `SW-0013` | `WP-15b` | `EXTEND` | Every remaining live caller of `core/resim.py`/`resolve/component.py`'s execution path — `cli/resim.py` (`sim resim`), `orchestrate/worker.py` (the `sim batch` per-recording subprocess worker, `R-SIM-19`), `check/runner.py` (scenario `expect:` evaluation — independent of its later, unrelated `MP-6` move to `contrib/check/`, `DD-08`/`SYS-0127`/Design §28.2: it is still packaged and still calls the Python resim loop until then) and `player/shell/qt_window.py`'s GUI "Run" button — rewired onto `simcore`/`simengine`'s C ABI (`IMP-0144`, `R-SIM-4`/`R-SIM-11`) instead. Integration shape (subprocess vs. in-process `ctypes` binding, per call site) is an open call for whoever executes this row, not prescribed here. | `ANL-SW-05`, `IT-03` |
 | `IMP-0014` | `SW-0014` | `WP-29` | `NEW` | `pyapi/views.py::ArrayView` — `__array_interface__` pointing at the buffer `simcoreReadPort` returned. `UT-API-01` asserts the numpy array's `.base` pointer lies inside the engine's arena, which is a stronger check than counting allocations. | `UT-API-01` |
 | `IMP-0015` | `SW-0015` | `WP-29` | `NEW` | `views.py` — every access compares `_generation` against the engine's current one and raises `StaleViewError` naming the tick the view was taken at. Without it `IMP-0014` trades an honest cost for a silent wrong answer. | `UT-API-02` |
 | `IMP-0016` | `SW-0016` | `WP-14` | `KEEP` | `simcore` registers no callback into the scripting layer; the C ABI is one-directional by shape — every function takes plain data and returns an `int`. `ANL-SW-06` is the symbol scan. | `ANL-SW-06` |
@@ -861,7 +862,7 @@ one grid step yield one execution with the later value and one counted
 
 | `IMP` | Serves | `WP` | Change | Artifact · Design | Test |
 |---|---|---|---|---|---|
-| `IMP-0061` | `SW-0061` | `WP-09` | `DEDUPE` | `src/simcore/scheduler/due.cpp` is the **only** execution gate. `Pipeline::Exec` and `core/runner.py`'s every-tick loop are deleted at `WP-16`; `ANL-SW-17` greps for a second stepping entry point. This closes concept §22.2 — implemented twice, used never. | `ANL-SW-17`, `UT-SCH-01` |
+| `IMP-0061` | `SW-0061` | `WP-09` | `DEDUPE` | `src/simcore/scheduler/due.cpp` is the **only** execution gate. `Pipeline::Exec` and `contracts/pipeline.py::Pipeline.step`'s every-tick loop are deleted at `WP-16`; `ANL-SW-17` greps for a second stepping entry point. This closes concept §22.2 — implemented twice, used never. **Correction 2026-08-22:** this row named `core/runner.py`, which was wrong — see Design §28.1's correction note; the Python twin was `contracts/pipeline.py`, already removed at `WP-02` (commit `cee3081`), ahead of `WP-16`'s own gate. | `ANL-SW-17`, `UT-SCH-01` |
 | `IMP-0062` | `SW-0062` | `WP-09` | `DEDUPE` | `Scheduler::Scheduler(const RunSpec&)` — reads `grid.step_ns` and `stages[].period_ns`. `ComputeBaseGridNs` is deleted from C++; `ANL-SW-02` fails on any GCD, snap or unit conversion in `simcore`. | `ANL-SW-02` |
 | `IMP-0064` | `SW-0064` | `WP-09` | `DEDUPE` | `due.cpp::IsDue` — integer modulo on `int64_t` only; no float, no epsilon, no tolerance. Survives from `pipeline.cpp::Step`; the Python twin dies at `WP-16`. | `UT-SCH-02` |
 | `IMP-0065` | `SW-0065` | `WP-09` | `EXTEND` | `due.cpp` — `on_new(<port>)` is the default trigger, evaluated against the freshness key `IMP-0054` sets; `periodic(period, offset)` is the declared alternative. Today only the periodic form exists. | `UT-SCH-03` |
@@ -1004,6 +1005,7 @@ src/mutate/
 | `IMP-0103` | `SW-0103` | `WP-11` | `MOVE` | `verbs.cpp` — sets `PortValue::origin = Overridden` on the value itself, so an export and an evidence answer agree without consulting the manifest. | `UT-MUT-07` |
 | `IMP-0104` | `SW-0104` | `WP-11` | `MOVE` | `faults.cpp::Delay` — shifts `t_capture_ns` and refuses when it is `unknown`, rather than fabricating one. This is `IMP-0044`'s two-clock rule paying off. | `UT-MUT-08` |
 | `IMP-0105` | `SW-0105` | `WP-11` | `KEEP` | `Mutator::Touches` — built at construction from the spec; a port outside the set is never passed to `ApplyTo`. Already true in Python. | `UT-MUT-09` |
+| `IMP-0428` | `SW-0424` | `WP-11a` | `EXTEND` | `src/simcore/mutate/address.cpp::ApplyTo`'s internal `Touches` re-check made to agree with `bus::PortBus::Publish`'s fully-qualified `"<stage>.<port>"` storage convention (`src/simcore/bus/port_bus.cpp:24`), instead of comparing against a bare name nothing publishes. Found `2026-08-22` attempting `WP-14a`; fix shape (qualify inside `ApplyTo`, vs. changing `Publish`'s own convention and everything that already reads it) is decided by whoever executes this row, from the real blast radius of each option — not prescribed here. | `UT-MUT-11` |
 | `IMP-0106` | `SW-0106` | `WP-11` | `EXTEND` | `scripts/check_closed_sets.py` — compares six enums (`Verb`, `Fault`, `Origin`, `Rung`, `MergePolicy`, error kinds) against the published schema's enumerations and fails on a difference either way. This is SV-8, and it is the check that makes "closed" true rather than conventional. | `ANL-SW-24` |
 | `IMP-0107` | `SW-0107` | `WP-11` | `NEW` | `Mutator::ApplyTo` — a `MutationSpec` whose `crosses_boundary` flag is set (computed at emit by `IMP-0008`) is refused unless the spec also carries a waiver. `SI-11` classifies; `SI-05` **refuses**, which is why the obligation is observable at `mutate`'s own interface. | `IT-08` |
 | `IMP-0108` | `SW-0108` | `WP-11` | `MOVE` | `src/simcore/mutate/window.cpp` — `[from_ns, to_ns)` per mutation, `null` meaning open; the window is copied into the run manifest by `IMP-0219`. | `UT-MUT-10` |
@@ -1199,6 +1201,8 @@ void simcoreDestroy(SimcoreRunner*);
 | `IMP-0147` | `SW-0147` | `WP-14` | `NEW` | `main.cpp` — `--restart <n>` defaults to zero. A restart is written to the run manifest as a distinct outcome; a crash that became `ok` through a silent retry is the failure this forbids. | `UT-EXE-04` |
 | `IMP-0148` | `SW-0148` | `WP-14` | `EXTEND` | `main.cpp` returns `ExitCode` and nothing else; `UT-EXE-05` asserts each taxonomy kind maps to its published code on both platforms. Extends `sil_host/main.cpp`, which returns 1 for everything that is not success. | `UT-EXE-05` |
 | `IMP-0397` | `SW-0397` | `WP-31` | `NEW` | `docs/v2/debugging.md` plus shipped `.vscode/launch.json` and a Visual Studio `.natvis`; `INSP-SW-*` checks the file set exists for both platforms. Part of the delivery (`CN-0221`), not a wiki page. | `UT-EXE-06` |
+| `IMP-0426` | `SW-0422` | `WP-14a` | `EXTEND` | `src/simcore/abi/simcore.cpp::simEngineCreate` constructs its `Runner` with a real writer, opened from the resolved Run Spec's own declared output path/policy (`R-SIM-6`), instead of `nullptr`. Found 2026-08-22: `WP-14` landed this function as a deliberately read-only slice (its own comment says so), which blocks every downstream host — `WP-15b`'s four Python callers among them — from getting results back through the ABI at all. | `UT-ABI-01` |
+| `IMP-0427` | `SW-0423` | `WP-14a` | `EXTEND` | `simEngineCreate` wires a `PortResolver` — a no-op one when the spec declares zero overrides, `simcore/mutate`'s existing verb application (`SI-05`, already real) otherwise — instead of leaving mutations unreachable. | `UT-ABI-02` |
 
 ---
 
@@ -1875,7 +1879,6 @@ scripts/                       the ANL-SW harness — every check is a script, r
 
 | File | Lines | Why it goes | Replaced by | Gate |
 |---|---:|---|---|---|
-| `src/adas_sim/core/runner.py` | 351 | Python execution on the per-tick path (`SW-0013`) | `simcore/runner` (`IMP-0109`) | `WP-16` |
 | `src/adas_sim/core/resim.py` | 257 | The Python resim tick loop; the second of the two engines (`CN-0362`) | `simcore/runner` (`IMP-0109`) | `WP-16` |
 | `src/adas_sim/contracts/component.py` — execution path | ~300 of 519 | ctypes `exec` per tick (`SW-0013`). **The probe path survives** as `resolve/component.py`, because probing is once per run | `simcore/module_host` (`IMP-0090`) | `WP-16` |
 | `src/adas_sim/io/base.py::group_by_log_time` | ~60 of 433 | Cycle boundary by identical timestamp — structurally wrong for foreign recordings (`SW-0049`) | `simcore/bus/cycle.cpp` (`IMP-0049`) | `WP-16` |
@@ -1888,7 +1891,9 @@ scripts/                       the ANL-SW harness — every check is a script, r
 | `modules/sil_host/src/library_loader.cpp` — resolve half | ~102 of 162 | One resolver (`SW-0203`) | `resolve/library.py` (`IMP-0203`) | `WP-16` |
 | `modules/sil_host/` — the module | — | Nothing remains after six moves and three deletions. It is **retired, not emptied** (SwReq §32.1) | `modules/sim/cpp/` | `WP-16` |
 
-**Subtotal: ~2,500 lines deleted**, every one of them a second implementation of something that survives elsewhere.
+**Subtotal: ~2,150 lines deleted**, every one of them a second implementation of something that survives elsewhere.
+
+**Correction 2026-08-22.** This table previously carried a `src/adas_sim/core/runner.py` (351 lines) row, deleted whole at `WP-16`. That was wrong: the file is the replay/viewer session-builder (`R-SIM-13`), not a `simcore/runner` duplicate, and has 12 live call sites that would break — see `SW-0013`'s corrected `Now.` note in the Software Requirements document. The row is struck, not replaced, and the subtotal above is reduced by 351 lines accordingly. Separately: `IMP-0061`/`IMP-0064`/`IMP-0066` below describe a genuine Python "every-tick loop" duplicate of `due.cpp` — that one lived in `contracts/pipeline.py::Pipeline.step()`, not `core/runner.py`, and was already removed in the `WP-02` rename (commit `cee3081`), ahead of this ledger's own `WP-16` gate. Flagged for verification; not re-opened here.
 
 ### 28.2 Removed from the product, not from the world
 

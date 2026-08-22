@@ -30,14 +30,32 @@
 ///       `Quarantine` wiring against a genuinely hung call, the one path
 ///       `RunWithTimeout`'s own ported unit tests cannot reach through a
 ///       real ABI boundary.
+///     ADAS_SIL_TEST_STUB_OUTPUT_REAL_SCHEMA (default "0"): "1" makes
+///       `adasManifest()` also populate `descriptor_set` with a real,
+///       serialized `FileDescriptorSet` (one message, `abi_test.AbiPort {
+///       double value = 1; }`) and makes `adasExec()` emit a genuinely
+///       encoded `AbiPort` instead of the single raw byte below --
+///       `WP-14a`'s own `UT-ABI-02` needs a component whose manifest
+///       carries a real catalogue (`R-SIM-11`) to prove
+///       `simcore::abi`'s `PortResolver` against, and no existing fixture
+///       did. Overrides `ADAS_SIL_TEST_STUB_OUTPUT_PROTO_TYPE` to
+///       "abi_test.AbiPort" while active, since the two must agree.
+///       ADAS_SIL_TEST_STUB_OUTPUT_VALUE (default "42"): the `double`
+///       encoded into that message.
 /// @author Pavan Karimajji
 
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <thread>
+#include <vector>
+
+#include <google/protobuf/descriptor.h>
+#include <google/protobuf/descriptor.pb.h>
+#include <google/protobuf/dynamic_message.h>
 
 #include "Adas__Sil/component_manifest.pb.h"
 #include "adas/adas_sil_abi.h"
@@ -65,6 +83,56 @@ bool EnvOrBool(const char* name, bool fallback) {
   return std::string(value) != "0";
 }
 
+double EnvOrDouble(const char* name, double fallback) {
+  const char* value = std::getenv(name);
+  if (value == nullptr) return fallback;
+  try {
+    return std::stod(value);
+  } catch (...) {
+    return fallback;
+  }
+}
+
+// `ADAS_SIL_TEST_STUB_OUTPUT_REAL_SCHEMA`'s own catalogue: one file, one
+// message, one scalar field -- just enough for `WP-14a`'s `UT-ABI-02` to
+// resolve a real `Descriptor` through `simcore::abi`'s `PortResolver` and
+// apply a real override, mirroring the synthetic-schema technique
+// `tests/unit/test_mut_core.cpp` already uses for `mutate`'s own tests
+// (built programmatically, no `.proto` file, no `AdasInterfaces` schema
+// dependency).
+google::protobuf::FileDescriptorProto BuildAbiTestFileDescriptorProto() {
+  google::protobuf::FileDescriptorProto fd;
+  fd.set_name("abi_test.proto");
+  fd.set_package("abi_test");
+  fd.set_syntax("proto3");
+  google::protobuf::DescriptorProto* port = fd.add_message_type();
+  port->set_name("AbiPort");
+  google::protobuf::FieldDescriptorProto* value_field = port->add_field();
+  value_field->set_name("value");
+  value_field->set_number(1);
+  value_field->set_type(google::protobuf::FieldDescriptorProto::TYPE_DOUBLE);
+  value_field->set_label(google::protobuf::FieldDescriptorProto::LABEL_OPTIONAL);
+  return fd;
+}
+
+// A real, reflection-encoded `abi_test.AbiPort{value}` -- its own pool and
+// factory are local and thrown away once the bytes are copied out, so this
+// never shares state with `adasManifest()`'s own (separately built, same
+// shape) `FileDescriptorProto`.
+std::vector<uint8_t> EncodeAbiTestPort(double value) {
+  google::protobuf::DescriptorPool pool;
+  const google::protobuf::FileDescriptorProto fd = BuildAbiTestFileDescriptorProto();
+  const google::protobuf::FileDescriptor* file = pool.BuildFile(fd);
+  const google::protobuf::Descriptor* descriptor = file->FindMessageTypeByName("AbiPort");
+  google::protobuf::DynamicMessageFactory factory(&pool);
+  std::unique_ptr<google::protobuf::Message> message(factory.GetPrototype(descriptor)->New());
+  const google::protobuf::FieldDescriptor* field = descriptor->FindFieldByName("value");
+  message->GetReflection()->SetDouble(message.get(), field, value);
+  std::vector<uint8_t> bytes(message->ByteSizeLong());
+  message->SerializeToArray(bytes.data(), static_cast<int>(bytes.size()));
+  return bytes;
+}
+
 }  // namespace
 
 extern "C" {
@@ -81,12 +149,19 @@ ADAS_SIL_API size_t adasManifest(uint8_t* data, size_t cap) {
   manifest.set_build_id("test");
   manifest.set_period_ns(EnvOrU64("ADAS_SIL_TEST_STUB_PERIOD_NS", 0));
   const std::string outputPort = EnvOr("ADAS_SIL_TEST_STUB_OUTPUT_PORT", "");
+  const bool realSchema = EnvOrBool("ADAS_SIL_TEST_STUB_OUTPUT_REAL_SCHEMA", false);
   if (!outputPort.empty()) {
     ::adas::sil::PortSpec* spec = manifest.add_outputs();
     spec->set_name(outputPort);
-    spec->set_proto_type(EnvOr("ADAS_SIL_TEST_STUB_OUTPUT_PROTO_TYPE", "test.Echo"));
+    spec->set_proto_type(realSchema ? "abi_test.AbiPort"
+                                     : EnvOr("ADAS_SIL_TEST_STUB_OUTPUT_PROTO_TYPE", "test.Echo"));
     spec->set_max_bytes(static_cast<uint32_t>(EnvOrU64("ADAS_SIL_TEST_STUB_OUTPUT_MAX_BYTES", 64)));
     spec->set_period_us(EnvOrU64("ADAS_SIL_TEST_STUB_OUTPUT_PERIOD_US", 0));
+  }
+  if (realSchema) {
+    google::protobuf::FileDescriptorSet file_set;
+    *file_set.add_file() = BuildAbiTestFileDescriptorProto();
+    manifest.set_descriptor_set(file_set.SerializeAsString());
   }
 
   const size_t needed = static_cast<size_t>(manifest.ByteSizeLong());
@@ -122,14 +197,17 @@ ADAS_SIL_API int32_t adasExec(void* handle, double dtS, const AdasPortSet* in, A
   if (outputPort.empty() || !EnvOrBool("ADAS_SIL_TEST_STUB_OUTPUT_DUE", true)) {
     return 1;
   }
+  const bool realSchema = EnvOrBool("ADAS_SIL_TEST_STUB_OUTPUT_REAL_SCHEMA", false);
+  const std::vector<uint8_t> payload = realSchema
+                                            ? EncodeAbiTestPort(EnvOrDouble("ADAS_SIL_TEST_STUB_OUTPUT_VALUE", 42.0))
+                                            : std::vector<uint8_t>{0xAB};
   for (size_t i = 0; i < out->count; ++i) {
     if (out->ports[i].name == nullptr || outputPort != out->ports[i].name) continue;
-    static constexpr uint8_t kPayload[] = {0xAB};
-    if (out->ports[i].cap >= sizeof(kPayload)) {
-      std::memcpy(out->ports[i].data, kPayload, sizeof(kPayload));
-      out->ports[i].len = sizeof(kPayload);
+    if (out->ports[i].cap >= payload.size()) {
+      std::memcpy(out->ports[i].data, payload.data(), payload.size());
+      out->ports[i].len = payload.size();
     } else {
-      out->ports[i].len = sizeof(kPayload);  // undersize -- Component::Exec's own grow-once path
+      out->ports[i].len = payload.size();  // undersize -- Component::Exec's own grow-once path
     }
     out->ports[i].updated = 1;
     break;

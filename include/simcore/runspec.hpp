@@ -110,6 +110,22 @@ struct SpecSource {
   std::string codec;
 };
 
+// design §3.1 -- the top-level `outputs` key. `emit.py::emit_run_spec`
+// already carries an `outputs` parameter and the JSON schema already
+// declares the key (`{"type": "object"}`, no sub-schema), but until now
+// nothing read it back out -- the same "emitted, not yet parsed" gap
+// `sources[].ingest`/`absent` were in before this struct's own note on
+// them (WP-14a, found attempting WP-15b). `path` empty means "no
+// recording output declared", which is also what every existing spec
+// that omits the `outputs` key entirely parses to (this key is optional
+// on read, matching every pre-WP-14a fixture). `codec` empty means
+// "derive from `path`'s own extension", the same convention
+// `CodecRegistry::OpenWrite` already applies by construction.
+struct SpecOutputs {
+  std::string path;
+  std::string codec;
+};
+
 struct RunSpec {
   std::string schema;
   std::string run_id;
@@ -120,6 +136,7 @@ struct RunSpec {
   std::vector<SpecMutation> mutations;
   std::vector<std::string> order;
   std::string coherence_verdict;
+  SpecOutputs outputs;
   int limits_exec_timeout_ms = 0;
   std::string limits_severity_exit;
 };
