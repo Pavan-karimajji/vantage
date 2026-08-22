@@ -153,22 +153,38 @@ class RowResult:
 # Row 1 -- recording read and cycle grouping. Design Sec.28.3: survivor
 # "neither -- both replaced". `WP-08` landed CycleReconstructor
 # (src/simcore/bus/cycle.cpp) and `WP-06` landed the io read contract
-# (src/simcore/io/{registry,reader_base}.cpp) -- both real and unit-tested
-# individually -- but no single component yet reads a recording end-to-end
-# and groups it into cycles the way sil_host's recording_reader.cpp did;
-# that assembly is a later WP (WP-17's seek/selection, or a dedicated
-# integration slice). Forcing a pass here would compare two things that do
-# not yet occupy the same seam.
+# (src/simcore/io/{registry,reader_base}.cpp) -- individually real and
+# unit-tested, and now wired together into one assembled capability by
+# `tests/integration/test_wp15a_row1_recording_read.cpp`: a full linear
+# `Reader::ReadRange` loop feeding `CycleReconstructor::Ingest`, exactly the
+# shape `recording_reader.cpp` itself uses (a single `readMessages()` pass,
+# no seeking) -- the "dedicated integration slice" Design's own row-1 note
+# names as the alternative to pulling WP-17's index/seek/selection forward.
+# Two boundaries stated in that file's own header and never hidden here:
+# (1) cycle-key equivalence holds only while no header field is decoded
+# (WP-08's own first-slice scope -- every message lands on
+# Rung::ReceptionTime, whose key is `t_recv_ns`, exactly what
+# `recording_reader.cpp` groups by); (2) completeness is a REAL, permanent
+# divergence -- CycleReconstructor withholds an under-populated cycle,
+# recording_reader.cpp does not -- scoped to well-formed recordings
+# (R-SIM-6: every declared port present every tick), which is what the C++
+# corpus below and every real `measured`-stage recording already are.
 def _eval_row1(row: Row) -> RowResult:
+    cpp_status, cpp_detail = run_gtest(SIMCORE_TESTS_CANDIDATES, "Wp15aRow1RecordingRead.*")
+    sil_status, sil_detail = run_gtest(SIL_TESTS_CANDIDATES, "ResimMeasured.*")
+    if cpp_status == "fail" or sil_status == "fail":
+        return RowResult(row, "FAIL", f"{cpp_detail} | {sil_detail}")
+    if cpp_status == "not_built" or sil_status == "not_built":
+        return RowResult(row, "PENDING", f"{cpp_detail} | {sil_detail}")
     return RowResult(
-        row, "PENDING",
-        "no assembled survivor yet -- simcore/bus/cycle.cpp (WP-08, landed, "
-        "78/78 green) and simcore/io's read path (WP-06, landed) exist as "
-        "separate, individually-tested pieces, but nothing wires them into "
-        "one recording-read-and-group capability comparable to "
-        "sil_host/recording_reader.cpp end to end -- closed by: the WP that "
-        "assembles them (WP-17 seek/selection, or a dedicated integration "
-        "slice named when scheduled)",
+        row, "PASS",
+        f"{cpp_detail} | {sil_detail} | assembled capability: simcore/io's "
+        "ReadRange + simcore::bus::CycleReconstructor, proven against a "
+        "real .mcap file and against sil_host's own ResimMeasured fixture "
+        "shape -- scope: cycle-key equivalence holds while no header field "
+        "is decoded (WP-08's first-slice scope); completeness is a stated, "
+        "permanent divergence for well-formed (R-SIM-6) recordings only, "
+        "see the test file's own header",
     )
 
 
@@ -324,9 +340,10 @@ def _eval_row7(row: Row) -> RowResult:
 
 
 ROWS: tuple[Row, ...] = (
-    Row(1, "Recording read and cycle grouping", "neither -- both replaced (not yet assembled)",
-        "io/base.group_by_log_time and recording_reader.cpp's grouping",
-        ("tests/unit/test_a4_mcap.py", "sil_host/tests/unit/test_resim_measured.cpp"), _eval_row1),
+    Row(1, "Recording read and cycle grouping",
+        "simcore/io ReadRange + simcore::bus::CycleReconstructor (C++, WP-06+WP-08, assembled WP-15a)",
+        "sil_host/src/recording_reader.cpp's grouping",
+        ("tests/integration/test_wp15a_row1_recording_read.cpp", "sil_host/tests/unit/test_resim_measured.cpp"), _eval_row1),
     Row(2, "Pipeline load and validation", "adas_sim/graph/build.py",
         "sil_host/src/pipeline.cpp's load half",
         ("tests/unit/test_c1c_pipeline.py", "sil_host/tests/unit/test_pipeline_load_errors.cpp"), _eval_row2),

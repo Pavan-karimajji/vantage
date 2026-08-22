@@ -84,6 +84,10 @@ set(SIM_TEST_SOURCES
     integration/test_it11_embed_host.cpp
     integration/test_ut_exe_04_restart.cpp
     integration/test_ut_exe_05_exit_codes.cpp
+    # WP-15a row 1: simcore/io (WP-06) + CycleReconstructor (WP-08) wired
+    # into one recording-read-and-group capability, compared to
+    # sil_host/recording_reader.cpp -- closes scripts/prove_equal.py's row 1.
+    integration/test_wp15a_row1_recording_read.cpp
     # WP-15 (SI-08): engine diagnostics -- IMP-0076/0131..0140.
     unit/test_sch_dump.cpp
     unit/test_diag_graph_dump.cpp
