@@ -1,0 +1,60 @@
+{
+  "provenance": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "shell": "powershell",
+    "cpu": "Intel64 Family 6 Model 198 Stepping 2, GenuineIntel",
+    "build_type": "unknown",
+    "python": "3.12.10"
+  },
+  "rows": [
+    {
+      "row": 1,
+      "capability": "Recording read and cycle grouping",
+      "metric": "test_case_count",
+      "retiring_count": 10,
+      "survivor_count": 10
+    },
+    {
+      "row": 2,
+      "capability": "Pipeline load and validation",
+      "metric": "test_case_count",
+      "retiring_count": 51,
+      "survivor_count": 49
+    },
+    {
+      "row": 3,
+      "capability": "Ingest map parsing",
+      "metric": "test_case_count",
+      "retiring_count": 9,
+      "survivor_count": 6
+    },
+    {
+      "row": 4,
+      "capability": "Component host",
+      "metric": "test_case_count",
+      "retiring_count": 1,
+      "survivor_count": 14
+    },
+    {
+      "row": 5,
+      "capability": "Base-grid computation",
+      "metric": "test_case_count",
+      "retiring_count": 51,
+      "survivor_count": 49
+    },
+    {
+      "row": 6,
+      "capability": "Library resolution",
+      "metric": "test_case_count",
+      "retiring_count": 8,
+      "survivor_count": 7
+    },
+    {
+      "row": 7,
+      "capability": "Codec implementation",
+      "metric": "test_case_count",
+      "retiring_count": 16,
+      "survivor_count": 10
+    }
+  ]
+}

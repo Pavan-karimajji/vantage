@@ -2176,7 +2176,7 @@ Superseded (`SM-04`, 2026-08-20 — sole decomposer was `SI-18`'s scene-cache-bu
 **Shall.** No existing capability shall be removed before its replacement is proven, and no two implementations of one concept shall survive a phase boundary.
 **Accept.** At each phase boundary, an automated check confirms that the retired implementation is gone and the replacement carries the retired one's tests.
 **Verify.** A · `ANL-39`   **Trace.** CN-0360, CN-0361, CN-0362; v1 `NR-SIM-30`, `NR-SIM-31`
-**Built.** ◐ started — 1/2 software requirements done, in `WP-01`, `WP-15a`
+**Built.** ● done — 2/2 software requirements done
 
 ---
 

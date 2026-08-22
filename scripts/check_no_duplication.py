@@ -24,10 +24,16 @@ second-implementation resolution (only one home left) must be removed, and
 a capability that develops a *second* real duplication beyond its one known
 pair is still a failure.
 
-The seventh, the codec (`DD-04`), has **no known-pending entry**: today
-only the Python codecs exist, so this is the one capability this check
-already polices with full teeth from day one, per `WP-01`'s own "green
-today, red the moment it breaks" charter.
+**Updated 2026-08-22 (`WP-15a`):** the seventh, the codec (`DD-04`), no
+longer has zero known-pending entries -- `WP-06` landed
+`src/simcore/io/codecs/mcap.cpp` (real, 270 lines, `UT-IO-*` green) while
+`adas_sim/io/mcap.py` is still real too, so this is now a live duplication
+by this check's own definition. `scripts/prove_equal.py`'s row 7 proves the
+two produce identical results on the same corpus (`tests/unit/test_a4_mcap.py`
++ `test_ut_io_mcap_roundtrip.cpp`/`test_ut_io_codec_contract.cpp`), which is
+exactly the evidence `SW-0019` requires before a pending duplication is
+allowed to sit here rather than fail the build -- so "codec" moves into
+`KNOWN_PENDING_DUPLICATION`, closed by `WP-16` the same as the other six.
 """
 
 from __future__ import annotations
@@ -65,6 +71,7 @@ KNOWN_PENDING_DUPLICATION: dict[str, str] = {
     "recording_read_group": "closed by WP-16 -- sil_host/recording_reader.cpp deleted (survivor split across simcore/io + simcore/bus/cycle.cpp at WP-06/WP-08)",
     "library_resolve": "closed by WP-16 -- sil_host/library_loader.cpp's resolve half deleted",
     "multi_rate_scheduler": "closed by WP-16 -- sil_host/pipeline.cpp's Step() deleted (survivor is simcore/scheduler/due.cpp from WP-09)",
+    "codec": "closed by WP-16 -- adas_sim/io/{base,mcap,csv,jsonl}.py's read paths deleted (survivor is simcore/io + simcore/io/codecs/mcap.cpp from WP-06, proven equal by scripts/prove_equal.py row 7, WP-15a)",
 }
 
 

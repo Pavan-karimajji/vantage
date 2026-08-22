@@ -504,7 +504,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Before either implementation of a duplicated capability is removed, the surviving one shall be shown to produce identical results on a corpus that includes every case the retiring one had a test for.
 **Accept.** The retiring implementation's tests run against the survivor and pass, or each failure is recorded as a deliberate behaviour change with a reason. Coverage does not decrease across the deletion.
 **Verify.** T · `IT-04` · A · `ANL-SW-09`   **Trace.** SYS-0262; CN-0360, CN-0362
-**Built.** ○ not started — `IMP-0019` in `WP-15a`
+**Built.** ● done — `IMP-0019` in `WP-15a`
 **Now.** `NEW` — and this is the requirement that makes §32's replanning executable rather than risky.
 
 **`SW-0020`** · `SI-15` · `P0` · `R1` — Two implementations do not survive a phase boundary
