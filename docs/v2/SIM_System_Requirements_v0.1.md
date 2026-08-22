@@ -433,7 +433,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The index shall be keyed by port, so a run reads only the ports its active graph requires.
 **Accept.** A run whose graph needs no image port decodes no image; bytes-read is lower than for the same run with an image consumer active, by at least the image channels' share of the file.
 **Verify.** T · `SYT-INP-05` · `ANL-02`   **Trace.** CN-0081, CN-0224
-**Built.** ○ not started — 0/3 software requirements done, in `WP-15`, `WP-17`
+**Built.** ◐ started — 0/3 software requirements done, in `WP-15`, `WP-17`
 
 **`SYS-0006`** · `P1` · `R1` — Multiple sources merged on one time base
 **Shall.** The system shall permit multiple readers active in one run, merged onto a common time base.
@@ -777,7 +777,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The system shall support hosting a module in a separate process.
 **Accept.** A module hosted out of process produces the same port values as in process.
 **Verify.** T · `SYT-PRC-20`   **Trace.** CN-0099
-**Built.** ○ not started — 0/1 software requirements done, in `WP-14`
+**Built.** ● done — 1/1 software requirements done
 *Deferred:* explicitly not release one (`CN-0099`). In-process hosting is what makes `SYS-0147`'s debugger workflow work, and per-stage isolation (`SYS-0129`) covers the crash-bisection case at lower cost.
 
 ---
@@ -790,7 +790,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The system shall maintain three clocks — the data's own source time, the engine's simulation time, and wall-clock execution time — and wall-clock time shall never influence results.
 **Accept.** Running the same spec on a machine 10× slower produces identical port values; only the performance report differs.
 **Verify.** T · `SYT-TIM-01`   **Trace.** CN-0137, CN-0138
-**Built.** ◐ started — 1/4 software requirements done, in `WP-09`, `WP-15`, `WP-27`
+**Built.** ◐ started — 2/4 software requirements done, in `WP-09`, `WP-15`, `WP-27`
 
 **`SYS-0060`** · `P0` · `R1` — Integer nanoseconds internally
 **Shall.** All internal time shall be integer nanoseconds; float seconds shall appear only at human-facing boundaries.
@@ -1230,7 +1230,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Every run shall produce a machine-readable run manifest carrying at minimum: tool version, resolved run spec and its hash, module ids/versions/binary hashes, input paths and content hashes, per-module mode and implementation, timing model, reset policy, coherence result, divergence point, override list, per-port record policy, per-port timing-recovery rung, host platform, and start and end time.
 **Accept.** Every listed field is present in every manifest, each either a value or an explicit *unknown*. A field that cannot be filled never carries a plausible default.
 **Verify.** T · `SYT-OUT-13`   **Trace.** CN-0113, CN-0252, CN-0114; v1 `NR-SIM-4`
-**Built.** ◐ started — 1/7 software requirements done, in `WP-05`, `WP-15`, `WP-22`
+**Built.** ◐ started — 2/7 software requirements done, in `WP-05`, `WP-15`, `WP-22`
 
 **`SYS-0124`** · `P0` · `R1` — Reproducible from the manifest alone
 **Shall.** A past run shall be reproducible from its manifest alone.
@@ -1483,7 +1483,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The engine shall independently print the graph and schedule it loaded, so it can be compared against what the configuration layer predicted.
 **Accept.** A deliberately introduced disagreement between the two is detected by an automated comparison, not by a reader.
 **Verify.** T · `SYT-CFG-10`   **Trace.** CN-0386
-**Built.** ◐ started — 1/3 software requirements done, in `WP-13`, `WP-15`
+**Built.** ● done — 3/3 software requirements done
 
 **`SYS-0168`** · `P0` · `R1` — Schema validation, with locating errors
 **Shall.** Every configuration file shall be validated against a published schema, and errors shall name file, line, the wrong value and the allowed values.
@@ -1594,7 +1594,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** Interactive runs shall execute in process, batch runs shall execute one subprocess per recording, and a per-stage isolated mode shall exist for bisecting which stage crashes.
 **Accept.** All three are selectable; the interactive path yields an attachable debugger and a stack, and per-tick cost of batch isolation is zero.
 **Verify.** T · `SYT-BAT-03`   **Trace.** CN-0186, CN-0214; v1 `NR-SIM-22`
-**Built.** ○ not started — 0/2 software requirements done, in `WP-14`, `WP-23`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-14`, `WP-23`
 
 **`SYS-0184`** · `P1` · `R1` — Per-run artifact directories
 **Shall.** Each run shall write to its own artifact directory.
@@ -1613,7 +1613,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The batch shall report per-run outcome as exactly one of ok, fail, crash, timeout, and shall judge crash and hang from outside the worker.
 **Accept.** The four are individually producible and never collapse into one another; a segfaulting process is reported as `crash` even though it cannot report its own death.
 **Verify.** T · `SYT-BAT-06`   **Trace.** CN-0348; v1 `NR-SIM-22`
-**Built.** ◐ started — 2/6 software requirements done, in `WP-10`, `WP-13`, `WP-14`, `WP-22`, `WP-23`, `WP-27`
+**Built.** ◐ started — 3/6 software requirements done, in `WP-10`, `WP-13`, `WP-14`, `WP-22`, `WP-23`, `WP-27`
 
 **`SYS-0187`** · `P1` · `R1` — Aggregated status
 **Shall.** The batch shall produce an aggregated status list with per-run result, failure reason and duration.
@@ -1672,13 +1672,13 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The engine shall run with no display, no GUI libraries and no interactive prompts.
 **Accept.** A run completes in a container with no GUI toolkit installed and no display variable set.
 **Verify.** T · `SYT-BAT-15`   **Trace.** CN-0200, CN-0041
-**Built.** ○ not started — 0/2 software requirements done, in `WP-14`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0196`** · `P0` · `R1` — One binary for CI and desktop
 **Shall.** The CI path shall use the same engine binary as the desktop path; no separate CI build shall exist.
 **Accept.** The binary hash is identical in both paths.
 **Verify.** A · `ANL-27`   **Trace.** CN-0201
-**Built.** ○ not started — 0/2 software requirements done, in `WP-14`, `WP-23`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-14`, `WP-23`
 
 **`SYS-0197`** · `P0` · `R1` — Artifacts are self-contained
 **Shall.** A downloaded artifact directory shall open in the player with no access to the originating machine.
@@ -1696,7 +1696,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** Per-module timing statistics shall be reported.
 **Accept.** The report attributes wall time per module and reconciles with total run time.
 **Verify.** T · `SYT-BAT-17`   **Trace.** CN-0206, CN-0232
-**Built.** ○ not started — 0/2 software requirements done, in `WP-15`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0200`** · `P0` · `R1` — Every capability reachable from a plain script
 **Shall.** Every capability shall be reachable from a plain script in a few lines, with no command line and no window.
@@ -1721,7 +1721,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The system shall provide a dry run reporting the resolved specification with the source layer of each value, the graph, the schedule, the injection boundary, the coherence result and an estimated duration, executing nothing.
 **Accept.** No module is loaded and no recording message is decoded during explain. Every listed element is present.
 **Verify.** T · `SYT-DIA-01`   **Trace.** CN-0207, CN-0045, CN-0233
-**Built.** ◐ started — 1/5 software requirements done, in `WP-04`, `WP-15`, `WP-23`, `WP-24`
+**Built.** ◐ started — 2/5 software requirements done, in `WP-04`, `WP-15`, `WP-23`, `WP-24`
 
 **`SYS-0203`** · `P1` · `R1` — Tap points
 **Shall.** Any internal port shall be recordable by naming it in configuration, with no code change.
@@ -1733,7 +1733,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** An optional per-cycle log shall record which modules ran, which inputs they received, and how long each took.
 **Accept.** The trace accounts for every module on every tick, including held ones, and its timing reconciles with `SYS-0199`.
 **Verify.** T · `SYT-DIA-03`   **Trace.** CN-0210
-**Built.** ○ not started — 0/1 software requirements done, in `WP-15`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0205`** · `P0` · `R1` — Run comparison with first divergence
 **Shall.** The system shall produce a port-level difference between two runs, or between a run and a recording, reporting the first divergence.
@@ -1757,7 +1757,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** A single command shall report library resolution, configuration agreement, recording cut support and plugin inspection, and shall never raise an exception.
 **Accept.** Run against a deliberately broken environment — missing library, corrupt bundle, unreadable recording, incompatible plugin — it reports each fault and exits normally in every case.
 **Verify.** T · `SYT-DIA-07`   **Trace.** CN-0353; v1 `NR-SIM-4`
-**Built.** ○ not started — 0/3 software requirements done, in `WP-15`, `WP-21`, `WP-24`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-15`, `WP-21`, `WP-24`
 
 **`SYS-0209`** · `P0` · `R1` — A closed error taxonomy in one shape
 **Shall.** Errors shall come from a closed taxonomy — authoring, environment, contract, internal — each carrying expected, found, where and hint, in one fixed shape.
@@ -1789,13 +1789,13 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The engine shall support printing its process id and pausing before the first cycle.
 **Accept.** The printed id is attachable; execution does not begin until attach.
 **Verify.** D · `SYT-DIA-12`   **Trace.** CN-0215
-**Built.** ○ not started — 0/1 software requirements done, in `WP-14`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0214`** · `P1` · `R1` — Break conditions
 **Shall.** Break conditions shall be expressible at a cycle, at a time, on entry to a named module, or when a port satisfies a condition.
 **Accept.** Each of the four halts at the correct point.
 **Verify.** D · `SYT-DIA-13`   **Trace.** CN-0216
-**Built.** ○ not started — 0/1 software requirements done, in `WP-15`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0215`** · `P0` · `R1` — Single-threaded and deterministic by default
 **Shall.** The cycle loop shall be single-threaded and deterministic in the default mode, so breakpoints are usable.
@@ -1807,7 +1807,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The engine shall be launchable from a Resolved Run Spec with no interpreter in the process.
 **Accept.** The debugging session contains no interpreter frames. The engine executable contains no configuration parser, no validation, no path search and no inference.
 **Verify.** D · `SYT-DIA-15` · `ANL-30`   **Trace.** CN-0219, CN-0388, CN-0389
-**Built.** ◐ started — 0/4 software requirements done, in `WP-05`, `WP-14`
+**Built.** ◐ started — 3/4 software requirements done, in `WP-05`, `WP-14`
 
 **`SYS-0217`** · `P1` · `R1` — Symbols and shipped launch configurations
 **Shall.** Symbol resolution shall be documented and configurable for both platforms, and the package shall ship ready-made debugger launch configurations for common development environments on both.
@@ -2009,7 +2009,7 @@ Superseded (`SM-04`, 2026-08-20 — sole decomposer was `SI-18`'s scene-cache-bu
 **Shall.** The system shall report per run: wall time, cycles executed, time per module, time reading, and bytes read.
 **Accept.** All five are present; they reconcile with each other and with the cycle trace.
 **Verify.** T · `SYT-NFR-06`   **Trace.** CN-0232
-**Built.** ○ not started — 0/1 software requirements done, in `WP-15`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0238`** · `P1` · `R1` — Duration is estimated before execution
 **Shall.** The dry run shall estimate run duration before execution.
@@ -2026,7 +2026,7 @@ Superseded (`SM-04`, 2026-08-20 — sole decomposer was `SI-18`'s scene-cache-bu
 **Shall.** The same inputs, the same Resolved Run Spec and the same binaries shall produce identical outputs.
 **Accept.** Byte-identical port values across repeated runs, on both platforms, with no wall-clock dependency, no unseeded randomness and no dependence on thread scheduling in the default mode.
 **Verify.** T · `SYT-NFR-07`   **Trace.** CN-0249, CN-0250, CN-0038
-**Built.** ◐ started — 4/7 software requirements done, in `WP-06`, `WP-09`, `WP-11`, `WP-15`, `WP-23`
+**Built.** ◐ started — 6/7 software requirements done, in `WP-06`, `WP-09`, `WP-11`, `WP-15`, `WP-23`
 
 **`SYS-0240`** · `P0` · `R1` — Four axes, two gates and two measurements
 **Shall.** Reproducibility shall be reported separately for four axes — same process, fresh process, rebuilt binary, different machine — with the first two exact and blocking, and the last two measured, declared and tracked against a bound.
@@ -2062,13 +2062,13 @@ Superseded (`SM-04`, 2026-08-20 — sole decomposer was `SI-18`'s scene-cache-bu
 **Shall.** Anything breaking reproducibility shall be declared and shall mark the run non-reproducible in the manifest.
 **Accept.** An undeclared source of non-determinism is caught by the fresh-process axis rather than surviving to a campaign.
 **Verify.** T · `SYT-NFR-13`   **Trace.** CN-0254
-**Built.** ◐ started — 1/2 software requirements done, in `WP-10`, `WP-14`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0246`** · `P1` · `R1` — A re-execution may be pinned to a build
 **Shall.** A re-execution shall be pinnable to a specific module build, verified against the library hash the recording carries; a locally built library shall be reported as unpinnable.
 **Accept.** A pinned re-execution against a different build refuses, naming both hashes. A local build is honestly reported rather than silently accepted as pinned.
 **Verify.** T · `SYT-NFR-14`   **Trace.** CN-0366; v1 `NR-SIM-24`
-**Built.** ○ not started — 0/2 software requirements done, in `WP-15`, `WP-21`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-15`, `WP-21`
 
 ---
 
@@ -2240,13 +2240,13 @@ Constraints are obligations on *how* the system is built, imposed because a corr
 **Shall.** The engine shall never call back into Python during a run.
 **Accept.** No callback registration crosses the boundary. The engine runs to completion with no interpreter present.
 **Verify.** A · `ANL-45`   **Trace.** CN-0295, CN-0219
-**Built.** ○ not started — 0/3 software requirements done, in `WP-14`, `WP-27`
+**Built.** ◐ started — 2/3 software requirements done, in `WP-14`, `WP-27`
 
 **`SYS-0272`** · `P0` · `R1` — The engine is a library; the executable is thin
 **Shall.** The engine shall be built as a library with a stable C ABI and shall be usable without the executable; the executable shall contain argument handling and lifecycle only.
 **Accept.** The player or any host embeds the library directly. The executable contains no configuration parser, no validation, no path search and no inference; its growth beyond a stated size is a review trigger.
 **Verify.** A · `ANL-46`   **Trace.** CN-0047, CN-0048, CN-0388, CN-0389, CN-0390
-**Built.** ○ not started — 0/2 software requirements done, in `WP-14`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0273`** · `P0` · `R1` — Transport is replaceable behind a fixed interface
 **Shall.** The transport between player and engine shall be replaceable — in-process pass-through, local shared memory, or network — without changing the interface, with bulk data over shared memory and control and metadata over a channel of the transport's choosing.

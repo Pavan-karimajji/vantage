@@ -475,7 +475,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** No `simcore` item shall register, hold or invoke a callback into the scripting layer during a run.
 **Accept.** The engine links no interpreter and runs to completion with none present. A symbol scan of the engine binary finds no interpreter symbol.
 **Verify.** A · `ANL-SW-06`   **Trace.** SYS-0271, SYS-0216; CN-0295
-**Built.** ○ not started — `IMP-0016` in `WP-14`
+**Built.** ● done — `IMP-0016` in `WP-14`
 **Now.** `DONE` — `sil_host` links no interpreter today. The property survives the move; it is recorded so it is not lost during it.
 
 **`SW-0017`** · `SI-15` · `P0` · `R1` — Python drives the engine through the spec or the transport, never through shared memory of its own
@@ -1063,7 +1063,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The scheduler shall be able to produce the full tick-by-tick execution plan for a bounded horizon without executing anything.
 **Accept.** The plan the scheduler emits and the order the run actually takes agree exactly, checked automatically rather than by reading.
 **Verify.** T · `UT-SCH-11`   **Trace.** SYS-0202, SYS-0167
-**Built.** ○ not started — `IMP-0076` in `WP-15`
+**Built.** ● done — `IMP-0076` in `WP-15`
 **Now.** `PARTIAL` — `sil_host/src/graph_dump.cpp` dumps a graph and schedule; it is a print, not a comparable artifact.
 
 **`SW-0077`** · `SI-03` · `P0` · `R1` — Wall-clock time never influences scheduling
@@ -1217,7 +1217,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** A named stage shall be runnable in a separate process for the purpose of identifying which stage crashes, selected per stage and off by default.
 **Accept.** With one stage isolated, that stage's crash is reported as that stage's crash and the run reports which stage was isolated.
 **Verify.** T · `UT-HOST-13`   **Trace.** SYS-0183, SYS-0058
-**Built.** ○ not started — `IMP-0096` in `WP-14`
+**Built.** ● done — `IMP-0096` in `WP-14`
 **Now.** `NEW`.
 
 ### 8.5 Manifest provenance and declared behaviour
@@ -1526,35 +1526,35 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The engine shall emit, independently of the configuration layer, the graph and the schedule it constructed.
 **Accept.** A deliberately introduced disagreement between the engine's emission and the configuration layer's prediction is detected by an automated comparison, not by a reader.
 **Verify.** T · `IT-10`   **Trace.** SYS-0167; CN-0386
-**Built.** ○ not started — `IMP-0131` in `WP-15`
+**Built.** ● done — `IMP-0131` in `WP-15`
 **Now.** `DONE·MOVE` — `sil_host/src/graph_dump.cpp` emits it and has a unit test; nothing compares it against the Python side, which is the half that makes it worth having.
 
 **`SW-0132`** · `SI-08` · `P1` · `R1` — An optional cycle trace accounts for every module on every tick
 **Shall.** An optional per-cycle trace shall record which modules ran, which were held, which inputs each received, and how long each took.
 **Accept.** The trace accounts for every module on every tick including held ones, and its timing reconciles with the per-module statistics.
 **Verify.** T · `UT-EDG-01`   **Trace.** SYS-0204, SYS-0199
-**Built.** ○ not started — `IMP-0132` in `WP-15`
+**Built.** ● done — `IMP-0132` in `WP-15`
 **Now.** `NEW`.
 
 **`SW-0133`** · `SI-08` · `P1` · `R1` — The trace is off by default and does not alter results
 **Shall.** Enabling the cycle trace shall not change any port value.
 **Accept.** A run with the trace on and the same run with it off produce byte-identical port values.
 **Verify.** T · `UT-EDG-02`   **Trace.** SYS-0239
-**Built.** ○ not started — `IMP-0133` in `WP-15`
+**Built.** ● done — `IMP-0133` in `WP-15`
 **Now.** `NEW`.
 
 **`SW-0134`** · `SI-08` · `P1` · `R1` — Per-run cost is measured and reported
 **Shall.** The engine shall report wall time, cycles executed, time per module, time reading and bytes read.
 **Accept.** All five are present and reconcile with each other and with the cycle trace.
 **Verify.** T · `UT-EDG-03`   **Trace.** SYS-0237, SYS-0199
-**Built.** ○ not started — `IMP-0134` in `WP-15`
+**Built.** ● done — `IMP-0134` in `WP-15`
 **Now.** `NEW`.
 
 **`SW-0135`** · `SI-08` · `P0` · `R1` — Bytes read is counted, not estimated
 **Shall.** Bytes read shall be counted at the codec boundary and attributed per topic.
 **Accept.** The per-topic total equals the run total. A run that decodes no image reports zero image bytes, and the number is a count, not a derivation from timing.
 **Verify.** T · `UT-EDG-04`   **Trace.** SYS-0230, SYS-0005
-**Built.** ○ not started — `IMP-0135` in `WP-15`
+**Built.** ◐ started — `IMP-0135` in `WP-15`
 **Now.** `NEW`.
 *Note:* `SYS-0005`, `SYS-0230` and `SYS-0231` are all verified by comparing bytes read. Without a real counter each is verified by inference, and an inferred measurement is what `CN-0356` says will be declared satisfied.
 
@@ -1562,35 +1562,35 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** No measured duration shall enter a scheduling decision, a value or an output.
 **Accept.** Two runs whose measured durations differ produce identical port values.
 **Verify.** T · `UT-EDG-05`   **Trace.** SYS-0059, SYS-0239
-**Built.** ○ not started — `IMP-0136` in `WP-15`
+**Built.** ● done — `IMP-0136` in `WP-15`
 **Now.** `DONE` — true today.
 
 **`SW-0137`** · `SI-08` · `P1` · `R1` — The engine reports the modules and versions it loaded
 **Shall.** The engine shall report, per module, the path opened, the ABI version, the component version, the build identity and the configuration bundle hash it initialised with.
 **Accept.** Every field is present or explicitly unknown, and matches what the run manifest records.
 **Verify.** T · `UT-EDG-06`   **Trace.** SYS-0123, SYS-0246
-**Built.** ○ not started — `IMP-0137` in `WP-15`
+**Built.** ● done — `IMP-0137` in `WP-15`
 **Now.** `PARTIAL` — the manifest read exposes these; the engine does not report them as a set.
 
 **`SW-0138`** · `SI-08` · `P2` · `R1` — Break conditions are expressible at the engine
 **Shall.** The engine shall support halting at a cycle index, at a time, on entry to a named module, or when a named port satisfies a declared condition from the closed comparison set.
 **Accept.** Each of the four halts at the correct point, on both platforms.
 **Verify.** D · `UT-EDG-07`   **Trace.** SYS-0214
-**Built.** ○ not started — `IMP-0138` in `WP-15`
+**Built.** ● done — `IMP-0138` in `WP-15`
 **Now.** `NEW`.
 
 **`SW-0139`** · `SI-08` · `P1` · `R1` — A crash writes a minimal reproducer
 **Shall.** On a module crash the engine shall write a package containing the spec, the input snapshot at the failing cycle, the module identity and the captured standard error.
 **Accept.** The package reproduces the crash on another machine with nothing else from the original environment.
 **Verify.** T · `UT-EDG-08`   **Trace.** SYS-0219, SYS-0049
-**Built.** ○ not started — `IMP-0139` in `WP-15`
+**Built.** ◐ started — `IMP-0139` in `WP-15`
 **Now.** `NEW`.
 
 **`SW-0140`** · `SI-08` · `P1` · `R1` — Diagnostics never raise
 **Shall.** No diagnostic emission shall raise or abort a run.
 **Accept.** With the output directory unwritable, the disk full, and the trace target invalid, the run completes and reports the diagnostic failure as a warning.
 **Verify.** T · `UT-EDG-09`   **Trace.** SYS-0208
-**Built.** ○ not started — `IMP-0140` in `WP-15`
+**Built.** ● done — `IMP-0140` in `WP-15`
 **Now.** `DONE·MOVE` — the discipline exists in `core/diagnostics.py` for `sim doctor` and is directly applicable.
 
 ---
@@ -1601,49 +1601,49 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The executable shall contain argument handling, debugger hooks, spec load, engine construction, run and exit-code return, and nothing else.
 **Accept.** It contains no configuration parser, no validation, no path search and no inference. Growth beyond a stated size is a review trigger, checked automatically and reported, not enforced as a hard limit.
 **Verify.** A · `ANL-SW-31`   **Trace.** SYS-0272, SYS-0216; CN-0388, CN-0389
-**Built.** ○ not started — `IMP-0141` in `WP-14`
+**Built.** ● done — `IMP-0141` in `WP-14`
 **Now.** `DONE·MOVE` — `sil_host/main.cpp` is 179 lines and close to this shape already; what must leave it is the configuration-side work it currently triggers.
 
 **`SW-0142`** · `SI-09` · `P0` · `R1` — The executable runs with no interpreter in the process
 **Shall.** The executable shall run a complete simulation from a Resolved Run Spec with no scripting interpreter loaded.
 **Accept.** A debugging session against it contains no interpreter frame. A module-loading dependency scan finds no interpreter.
 **Verify.** D · `UT-EXE-01` · A · `ANL-SW-06`   **Trace.** SYS-0216, SYS-0271
-**Built.** ○ not started — `IMP-0142` in `WP-14`
+**Built.** ● done — `IMP-0142` in `WP-14`
 **Now.** `DONE` — true of `sil_host` today, and one of the properties most worth protecting during the move.
 
 **`SW-0143`** · `SI-09` · `P0` · `R1` — Wait-for-debugger prints a process id and pauses
 **Shall.** The executable shall support printing its process id and pausing before the first cycle.
 **Accept.** The printed id is attachable and execution does not begin until attach, on both platforms.
 **Verify.** D · `UT-EXE-02`   **Trace.** SYS-0213
-**Built.** ○ not started — `IMP-0143` in `WP-14`
+**Built.** ● done — `IMP-0143` in `WP-14`
 **Now.** `NEW`.
 
 **`SW-0144`** · `SI-09` · `P0` · `R1` — The engine library is usable without the executable
 **Shall.** `simcore` shall be linkable and drivable by any host, and the executable shall be one such host with no privileged access.
 **Accept.** A second host — the test harness — constructs and runs the engine using only the public library interface.
 **Verify.** T · `IT-11`   **Trace.** SYS-0272; CN-0390
-**Built.** ○ not started — `IMP-0144` in `WP-14`
+**Built.** ● done — `IMP-0144` in `WP-14`
 **Now.** `DONE·MOVE` — the library-plus-thin-executable split already exists in `sil_host`'s CMake structure; concept §21.2 is right that this is a rename, not a restructure.
 
 **`SW-0145`** · `SI-09` · `P0` · `R1` — One binary serves interactive, batch and continuous-integration use
 **Shall.** There shall be one engine executable, used unchanged by the desktop, batch and continuous-integration paths.
 **Accept.** The binary hash is identical in all three paths. No build option produces a variant with different behaviour.
 **Verify.** A · `ANL-SW-32`   **Trace.** SYS-0196, SYS-0195
-**Built.** ○ not started — `IMP-0145` in `WP-14`
+**Built.** ● done — `IMP-0145` in `WP-14`
 **Now.** `DONE` — true today.
 
 **`SW-0146`** · `SI-09` · `P0` · `R1` — No display, no toolkit, no prompt
 **Shall.** The executable shall build and run with no graphical toolkit present and shall never prompt.
 **Accept.** It completes a run in a container with no toolkit installed and no display variable set. A dependency scan finds no toolkit.
 **Verify.** T · `UT-EXE-03` · A · `ANL-SW-33`   **Trace.** SYS-0195
-**Built.** ○ not started — `IMP-0146` in `WP-14`
+**Built.** ● done — `IMP-0146` in `WP-14`
 **Now.** `DONE` — true today.
 
 **`SW-0147`** · `SI-09` · `P1` · `R1` — Automatic restart behaviour is explicit, and off by default
 **Shall.** Where the executable is configured to restart after an abnormal termination, the restart shall be explicitly enabled, bounded in count, and recorded in the run manifest.
 **Accept.** Default behaviour is no restart. A restarted run is identifiable as one from its artifacts alone.
 **Verify.** T · `UT-EXE-04`   **Trace.** SYS-0186, SYS-0245; **evidence** §2.6
-**Built.** ○ not started — `IMP-0147` in `WP-14`
+**Built.** ● done — `IMP-0147` in `WP-14`
 **Now.** `NEW`.
 *Note:* `[REF-TC]` offers automatic restart with the same arguments. Unrecorded, that turns a `crash` outcome into an `ok` one on the second attempt — merging two of the four outcomes `SYS-0186` requires never to merge.
 
@@ -1651,7 +1651,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The executable's exit code shall be the mapped value from `SW-0125` and shall never be a raw platform or library code.
 **Accept.** Every terminating path returns a member of the published set, checked by exercising each.
 **Verify.** T · `UT-EXE-05`   **Trace.** SYS-0125
-**Built.** ○ not started — `IMP-0148` in `WP-14`
+**Built.** ◐ started — `IMP-0148` in `WP-14`
 **Now.** `PARTIAL`.
 
 **`SW-0397`** · `SI-09` · `P1` · `R1` — Symbol resolution is documented, and launch configurations ship

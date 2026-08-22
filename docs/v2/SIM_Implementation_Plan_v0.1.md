@@ -580,37 +580,37 @@ flowchart LR
 - [~] **Exit:** one loop, `Run` calling `StepOnce` (**done**, `UT-RUN-01`; `ANL-SW-17` structurally true, not mechanised); output written as produced, never accumulated (**done** — `WriterBase::WriteMessage` per cycle, nothing accumulated anywhere in `runner/`; `UT-IO-21` is `io`'s own already-green coverage of that entry point); the injection boundary logged before tick 0 (**done**, `UT-RUN-04`); first divergence latched and flagged per message past the grace window (**done**, `UT-RUN-05`/`UT-RUN-06`, on the model — no codec persists the flag yet). — closed by: the three sub-item conditions above (`IT-09`, a codec-level `informational_only` carrier, `IMP-0135`).
 
 ### WP-14 · `MP-2` · `SI-09` `simengine` and the C ABI
-- [ ] **Prereq:** `WP-13`.
-- [ ] **Lands:** `IMP-0016`, `IMP-0096`, `IMP-0141`…`IMP-0148` — 10.
-  - [ ] `IMP-0016` · `SW-0016` · `KEEP` — `simcore` registers no callback into the scripting layer; the C ABI is o…
-  - [ ] `IMP-0096` · `SW-0096` · `NEW` — `src/simcore/module_host/isolate.cpp`
-  - [ ] `IMP-0141` · `SW-0141` · `MOVE` — `src/simengine/main.cpp`
-  - [ ] `IMP-0142` · `SW-0142` · `KEEP` — `src/simengine/CMakeLists.txt` links `simcore` only. `ANL-SW-06` runs a…
-  - [ ] `IMP-0143` · `SW-0143` · `NEW` — `main.cpp::PrintPid/WaitForAttach`
-  - [ ] `IMP-0144` · `SW-0144` · `MOVE` — `abi/simcore.h`
-  - [ ] `IMP-0145` · `SW-0145` · `KEEP` — One target, no `-DCI` variant, no headless build flag. `ANL-SW-32` asser…
-  - [ ] `IMP-0146` · `SW-0146` · `KEEP` — `ANL-SW-33` scans the link line for a GUI toolkit and the source for `st…
-  - [ ] `IMP-0147` · `SW-0147` · `NEW` — `main.cpp`
-  - [ ] `IMP-0148` · `SW-0148` · `EXTEND` — `main.cpp` returns `ExitCode` and nothing else; `UT-EXE-05` asserts each…
-- [ ] **Files:** `src/simengine/main.cpp` (**from** `sil_host/main.cpp`, trimmed) · `include/simcore/abi/simcore.h` · `src/simcore/module_host/isolate.cpp` (`DD-09` — the isolated stage is a second `simengine`, so it belongs with the executable, not with images).
-- [ ] **Exit:** `ANL-SW-06` — no interpreter symbol in either binary. `IT-11` — `simcore` embedded from a host that is **not** `simengine`, which proves `SW-0144` rather than asserting it. `ANL-SW-31` — `main.cpp` under 100 non-comment lines.
+- [x] **Prereq:** `WP-13`.
+- [x] **Landed and verified live, 2026-08-22:** `IMP-0016`, `IMP-0096`, `IMP-0141`…`IMP-0148` — 10; 9 done clean, 1 partial (`IMP-0148`, see below). `src/simengine/main.cpp` moved/trimmed from `sil_host/main.cpp`. `include/simcore/abi/simcore.h` + `src/simcore/abi/simcore.cpp` is `simcore`'s own embeddable C ABI — distinct from `module_abi.h` (the component-DLL-facing ABI) — proven host-agnostic by `IT-11`. `src/simcore/module_host/isolate.cpp` gives real subprocess-level stage isolation, reused by `main.cpp`'s own crash-restart supervisor: off by default; when `--restart-on-crash N` is set, `main.cpp` self-respawns as a child and classifies its exit via `RunIsolatedStage`, restarting only on a real `IsolatedOutcome::kCrashed` (never on a clean failure, so `crash` can never be silently promoted to `ok`), bounded at N, every attempt recorded to `<run_spec>.manifest.json`. `simcore_tests` **159/159 green on `ubuntu_gcc`** (143 prior + 16 new; no `vs2026` toolchain available in this session, not attempted).
+  - [x] `IMP-0016` · `SW-0016` · `KEEP` — verified true: no interpreter/scripting symbol in `simengine` (`nm -D`/`ldd`); `ANL-SW-06` clean.
+  - [x] `IMP-0096` · `SW-0096` · `NEW` — `src/simcore/module_host/isolate.cpp::RunIsolatedStage` — real subprocess spawn + exit-status classification (fail vs. crash), `MhIsolate` (5 cases) green live on the POSIX path; the Windows `CreateProcess` path is written to the same pattern but untested (no Windows toolchain here).
+  - [x] `IMP-0141` · `SW-0141` · `MOVE` — `src/simengine/main.cpp`, moved/trimmed from `sil_host/main.cpp`.
+  - [x] `IMP-0142` · `SW-0142` · `KEEP` — verified: `simengine` links `simcore` only; `ANL-SW-06` clean.
+  - [x] `IMP-0143` · `SW-0143` · `NEW` — `main.cpp::PrintPid/WaitForAttach`, landed.
+  - [x] `IMP-0144` · `SW-0144` · `MOVE` — `include/simcore/abi/simcore.h` + `src/simcore/abi/simcore.cpp`; `IT-11` (`It11EmbedHost`, 2 cases) proves it live — `simcore` embedded from a host that is not `simengine`.
+  - [x] `IMP-0145` · `SW-0145` · `KEEP` — verified: one target, no `-DCI`/headless variant; `ANL-SW-32` clean.
+  - [x] `IMP-0146` · `SW-0146` · `KEEP` — verified: `ldd`/`strings` show no GUI toolkit link; `ANL-SW-33` clean.
+  - [x] `IMP-0147` · `SW-0147` · `NEW` — `main.cpp`'s restart supervisor (described above). `UT-EXE-04` (`UtExe04Restart`, 3 cases) exercises a real `SIGABRT` via a test-only hook (`ADAS_SIM_TEST_FORCE_ABORT`, checked only inside `RunOnce`, never in the supervisor itself — a first pass had this backwards and killed the supervisor before it ever spawned a child, fixed).
+  - [~] `IMP-0148` · `SW-0148` · `EXTEND` — `main.cpp` returns `ExitCode` and nothing else. `UT-EXE-05` (`UtExe05ExitCodes`, 6 cases) exercises **5 of 8** codes live through real terminating paths: `Ok`, `Config`, `Infra`, `Crash` (both unsupervised and supervised-exhausted), `Timeout` (a real OS-observed process-level deadline via `--attempt-timeout-ms`). `Module`/`Coherence`/`Input` are not reachable today: `Module`'s only real call site (`Component::Load`'s ABI-version/manifest-decode check) needs a fixture library reporting a wrong ABI version, outside this row's file scope; `Coherence`/`Input`'s only call sites live in `WP-19`/`WP-20`, neither landed (confirmed live: zero references to `coherence_verdict` outside `runspec/`). — closed by: a malformed-manifest fixture library for `Module`; `WP-19`/`WP-20` landing for `Coherence`/`Input`.
+- [x] **Files:** `src/simengine/main.cpp` (**from** `sil_host/main.cpp`, trimmed) · `include/simcore/abi/simcore.h` · `src/simcore/module_host/isolate.cpp` (`DD-09` — the isolated stage is a second `simengine`, so it belongs with the executable, not with images).
+- [~] **Exit:** `ANL-SW-06` — done, no interpreter symbol in either binary. `IT-11` — done, `simcore` embedded from a host that is **not** `simengine`, which proves `SW-0144` rather than asserting it. `ANL-SW-31` — `main.cpp` is **164 non-comment lines**, over the 100-line trigger; per `SW-0148`'s own text this is a review trigger, not a hard gate, and the growth is the real crash-restart supervisor (`SW-0147`) prioritized over the soft budget — flagged rather than hidden. — closed by: `IMP-0148`'s 3 remaining exit codes (see above).
 
 ### WP-15 · `MP-2` · `SI-08` engine diagnostics
-- [ ] **Prereq:** `WP-13`.
-- [ ] **Lands:** `IMP-0076`, `IMP-0131`…`IMP-0140` — 11.
-  - [ ] `IMP-0076` · `SW-0076` · `EXTEND` — `src/simcore/scheduler/dump.cpp::ScheduleDump`
-  - [ ] `IMP-0131` · `SW-0131` · `MOVE` — `src/simcore/diagnostics/graph_dump.cpp`
-  - [ ] `IMP-0132` · `SW-0132` · `NEW` — `src/simcore/diagnostics/trace.cpp::CycleTrace::Record`
-  - [ ] `IMP-0133` · `SW-0133` · `NEW` — `trace.cpp`
-  - [ ] `IMP-0134` · `SW-0134` · `NEW` — `src/simcore/diagnostics/cost.cpp::CostReport`
-  - [ ] `IMP-0135` · `SW-0135` · `NEW` — `cost.cpp`
-  - [ ] `IMP-0136` · `SW-0136` · `KEEP` — `cost.cpp`
-  - [ ] `IMP-0137` · `SW-0137` · `EXTEND` — `src/simcore/diagnostics/modules.cpp`
-  - [ ] `IMP-0138` · `SW-0138` · `NEW` — `src/simcore/diagnostics/breakpoints.cpp::BreakCondition`
-  - [ ] `IMP-0139` · `SW-0139` · `NEW` — `src/simcore/diagnostics/reproducer.cpp::WriteReproducer`
-  - [ ] `IMP-0140` · `SW-0140` · `MOVE` — Every symbol in `diagnostics.hpp` is `noexcept` and returns a value; a p…
-- [ ] **Files:** `include/simcore/diagnostics.hpp` · `src/simcore/diagnostics/{graph_dump,trace,cost,modules,breakpoints,reproducer}.cpp` · **from** `sil_host/src/graph_dump.cpp`.
-- [ ] **Exit:** `IT-10` — the engine's own graph-and-schedule dump diffs clean against the configuration layer's prediction. **A disagreement is a defect in the seam, and this is how it is caught** (`CN-0386`). Bytes read is counted, not estimated, so `WP-17` and `WP-30` have something to assert against.
+- [x] **Prereq:** `WP-13`.
+- [x] **Landed and verified live, 2026-08-22:** `IMP-0076`, `IMP-0131`…`IMP-0140` — 11; 9 done clean, 2 partial (`IMP-0135`, `IMP-0139`, see below). `include/simcore/diagnostics.hpp` + `src/simcore/diagnostics/{graph_dump,trace,cost,modules,breakpoints,reproducer}.cpp`, `src/simcore/scheduler/dump.cpp`. `graph_dump.cpp` is adapted from `sil_host/src/graph_dump.cpp` (the `MOVE`) but now genuinely provable: `IT-10` independently re-predicts the graph/schedule from the run-spec JSON in a separate Python script with no `adas_sim` import (`tests/fixtures/graph_dump/predict_graph.py`) and diffs it against the engine's own emission — both the happy path and a deliberately introduced disagreement are asserted. `simcore_tests` **194/194 green on `ubuntu_gcc`** (159 prior + 35 new).
+  - [x] `IMP-0076` · `SW-0076` · `EXTEND` — `src/simcore/scheduler/dump.cpp::ScheduleDump` — `UT-SCH-11` green: a predicted schedule (built on a throwaway `Scheduler`, nothing executed) diffs clean tick-by-tick against a second, independently-stepped `Scheduler`.
+  - [x] `IMP-0131` · `SW-0131` · `MOVE` — `src/simcore/diagnostics/graph_dump.cpp` — `IT-10` (`It10GraphDiff`, 2 cases) real: independent Python re-prediction vs. the engine's own emission, agreement and a deliberate disagreement both asserted.
+  - [x] `IMP-0132` · `SW-0132` · `NEW` — `diagnostics/trace.cpp::CycleTrace::Record` — `UT-EDG-01` green: every module accounted for on every tick including held ones, timing reconciles with per-module totals.
+  - [x] `IMP-0133` · `SW-0133` · `NEW` — `trace.cpp` — `UT-EDG-02` green: recording does not mutate what is passed in; a never-constructed trace costs and affects nothing.
+  - [x] `IMP-0134` · `SW-0134` · `NEW` — `diagnostics/cost.cpp::CostReport` — `UT-EDG-03` green (4 cases): all five fields present and reconcile with each other and the cycle trace; a per-topic/per-module mismatch is a reported finding.
+  - [~] `IMP-0135` · `SW-0135` · `NEW` — `cost.cpp::ByteCounter` — `UT-EDG-04` green: the counter itself is real (per-topic total equals run total, an unpulled topic reports exactly zero, never derived from timing). **Not yet wired into `Runner`'s live cycle loop** — `Runner::PullCycle` is private and `WP-13`'s own header already named this counter as "not started"; wiring it into the live read path is additive. — closed by: a follow-on hooking `ByteCounter::Observe` into `PullCycle`.
+  - [x] `IMP-0136` · `SW-0136` · `KEEP` — `cost.cpp::ScopedTimer` — `UT-EDG-05` green: accumulates real elapsed time and nothing else; stays true as built (no measured duration feeds scheduling or values).
+  - [x] `IMP-0137` · `SW-0137` · `EXTEND` — `diagnostics/modules.cpp` (+ `Component::library_path()` accessor) — `UT-EDG-06` green (2 cases): every field present or explicitly `unknown`, matches the real manifest, covers every component keyed by stage name.
+  - [x] `IMP-0138` · `SW-0138` · `NEW` — `diagnostics/breakpoints.cpp::BreakCondition` — `UT-EDG-07` green (5 cases): halts at cycle index, at time, on entry to a named module, and on a declared port comparison, from a closed 6-comparator set (no open expression grammar, `R-SIM-15`'s spirit).
+  - [~] `IMP-0139` · `SW-0139` · `NEW` — `diagnostics/reproducer.cpp::WriteReproducer` — `UT-EDG-08` green: on a real crash (hooked into `WP-14`'s own crash path, `RunIsolatedStage`'s `kCrashed` outcome) writes a real package — spec copy, module identity, captured stderr. **Per-port input snapshot at the failing cycle is not yet populated** — a black-box supervised child can't see inside the crashed `Runner`; needs a hook one level down, inside `Runner::StepOnce`. — closed by: that hook landing.
+  - [x] `IMP-0140` · `SW-0140` · `MOVE` — every `diagnostics.hpp` I/O symbol uses `std::error_code` overloads only, `noexcept`; `UT-EDG-09` green (2 cases): an unwritable output directory and a missing run-spec path both report a warning, never raise.
+- [x] **Files:** `include/simcore/diagnostics.hpp` · `src/simcore/diagnostics/{graph_dump,trace,cost,modules,breakpoints,reproducer}.cpp` · **from** `sil_host/src/graph_dump.cpp`.
+- [~] **Exit:** `IT-10` — done, the engine's own graph-and-schedule dump diffs clean against the independent prediction, and a deliberately introduced disagreement is caught. **A disagreement is a defect in the seam, and this is how it is caught** (`CN-0386`). Bytes read — the counter (`ByteCounter`) is real but not yet wired into the live cycle loop (`IMP-0135`), so `WP-17`/`WP-30` have a real primitive to assert against but not yet a populated one from a real run. — closed by: `IMP-0135`'s wiring into `Runner::PullCycle`.
 
 ### WP-15a · `MP-2` · The equivalence gate
 - [ ] **Prereq:** `WP-10` (the module host is the last capability whose corpus must pass before anything is removed).
