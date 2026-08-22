@@ -75,6 +75,24 @@ set(SIM_TEST_SOURCES
     # no fixture file) plus the real echo_stub for anything needing a
     # loadable Component.
     unit/test_ut_run_core.cpp
+    # WP-14 (SI-09): UT-HOST-13 -- RunIsolatedStage's fail/crash/timeout
+    # classification (IMP-0096). IT-11 -- simcore embedded from a host
+    # that is NOT simengine, over abi/simcore.h alone (SW-0144). UT-EXE-04
+    # -- the restart supervisor. UT-EXE-05 -- ExitCode coverage through
+    # the real simengine binary.
+    unit/test_mh_isolate.cpp
+    integration/test_it11_embed_host.cpp
+    integration/test_ut_exe_04_restart.cpp
+    integration/test_ut_exe_05_exit_codes.cpp
+    # WP-15 (SI-08): engine diagnostics -- IMP-0076/0131..0140.
+    unit/test_sch_dump.cpp
+    unit/test_diag_graph_dump.cpp
+    unit/test_diag_trace.cpp
+    unit/test_diag_cost.cpp
+    unit/test_diag_modules.cpp
+    unit/test_diag_breakpoints.cpp
+    unit/test_diag_reproducer.cpp
+    integration/test_it10_graph_diff.cpp
 )
 
 add_executable(simcore_tests ${SIM_TEST_SOURCES})
@@ -93,8 +111,18 @@ target_include_directories(simcore_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/simcore
 # pattern, applied here).
 target_compile_definitions(simcore_tests PRIVATE
     ADAS_SIM_TEST_FIXTURE_DIR="$<TARGET_FILE_DIR:sim_test_fixture_echo_stub>"
+    # WP-14: UT-EXE-04/UT-EXE-05 spawn the REAL simengine binary rather
+    # than asserting against its source -- the built executable's own
+    # path, known at configure time, same pattern as the fixture dir above.
+    SIMENGINE_EXECUTABLE="$<TARGET_FILE:simengine>"
+    # WP-15: IT-10's own Python-side prediction script
+    # (tests/fixtures/graph_dump/predict_graph.py) -- a source-tree path,
+    # not a build output, but named as a compile definition for the same
+    # reason ADAS_SIM_TEST_FIXTURE_DIR is: one place, known at configure
+    # time, never a relative path a test has to guess at from its own cwd.
+    IT10_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/graph_dump"
 )
-add_dependencies(simcore_tests sim_test_fixture_echo_stub)
+add_dependencies(simcore_tests sim_test_fixture_echo_stub simengine)
 
 include(GoogleTest)
 gtest_discover_tests(simcore_tests)

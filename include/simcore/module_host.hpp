@@ -277,6 +277,11 @@ class Component {
   Phase phase() const { return lifecycle_.phase(); }
   bool IsQuarantined() const { return quarantine_.IsQuarantined(); }
 
+  // WP-15 (SW-0137, `diagnostics/modules.cpp`): the on-disk path this
+  // component's library was actually opened from -- empty (never a guess)
+  // if this `Component` was default-constructed and never `Load`ed.
+  std::filesystem::path library_path() const { return dso_.has_value() ? dso_->path() : std::filesystem::path(); }
+
   // config_path empty -> adasInit(NULL), the packed-bundle resolution
   // (R-SIM-3a). `Result::Fail(kEnvironment)` on a NULL handle, naming the
   // component.
@@ -326,5 +331,50 @@ class Component {
 
   std::map<std::string, PortBytes> out_buffers_;
 };
+
+// ---------------------------------------------------------------------------
+// isolate.cpp -- IMP-0096 / SW-0096 (WP-14)
+// ---------------------------------------------------------------------------
+
+// `R-SIM-19`'s per-stage `mode: isolated` bisection primitive, made real
+// out-of-process: `Quarantine` (above) only protects a component ALREADY
+// known bad from being re-entered inside THIS process; it cannot recover
+// from a genuine hang or a segfault, which takes the whole process with
+// it. `RunIsolatedStage` runs a second `simengine` process (`DD-09`: "the
+// isolated stage is a second simengine", `src/simengine/main.cpp`) and
+// classifies what happened to it -- `fail`/`crash`/`timeout` are three
+// outcomes and are never merged (`R-SIM-19`).
+enum class IsolatedOutcome {
+  kOk,            // exited 0
+  kFail,          // exited nonzero, cleanly -- the child reported its own error
+  kCrashed,       // terminated abnormally (POSIX signal / an unhandled-exception
+                   // exit status on Windows) -- the child never got to report
+  kTimedOut,      // still running past the deadline; killed by this call
+  kFailedToStart  // the process itself could not be spawned
+};
+
+std::string ToString(IsolatedOutcome outcome);
+
+struct IsolatedRunResult {
+  IsolatedOutcome outcome = IsolatedOutcome::kFailedToStart;
+  std::string stage;    // the stage this run isolated, named back per SW-0096's Accept
+  int exit_code = 0;    // meaningful only for kOk/kFail
+  std::string detail;   // spawn failure text, or empty
+};
+
+// Spawns `executable` with `args` (argv[1:]) and waits up to `timeout`.
+// `stage` is carried through into the result purely for reporting -- this
+// function itself never inspects `args` to find it, so a caller free to
+// pass any argv shape a future `simengine` flag needs.
+//
+// `stderr_capture_path` (WP-15, `diagnostics/reproducer.cpp`'s own crash-
+// path hook, `SW-0139`): when non-empty, the child's stderr is redirected
+// to this file instead of inherited, so a caller can read it back after a
+// `kCrashed`/`kFail` outcome and fold it into a reproducer package. Empty
+// (the default) preserves the exact inherited-stderr behaviour every
+// existing caller already relies on -- this is purely additive.
+IsolatedRunResult RunIsolatedStage(const std::string& stage, const std::filesystem::path& executable,
+                                    const std::vector<std::string>& args, std::chrono::milliseconds timeout,
+                                    const std::filesystem::path& stderr_capture_path = {});
 
 }  // namespace simcore::module_host

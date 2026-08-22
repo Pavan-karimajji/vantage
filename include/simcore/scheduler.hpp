@@ -95,4 +95,31 @@ class Scheduler {
   std::vector<std::string> order_;
 };
 
+// ---------------------------------------------------------------------------
+// dump.cpp -- IMP-0076 / SW-0076 (WP-15)
+// ---------------------------------------------------------------------------
+
+// One predicted tick: the stages `IsDue()` names, in `Order()`'s own
+// sequence -- never re-sorted, so a diff against the run's real per-tick
+// dispatch order (`ANL-SW-17`'s single loop body) is a same-order
+// comparison, not a set comparison.
+struct ScheduleTick {
+  std::uint64_t tick_index = 0;
+  std::int64_t now_ns = 0;
+  std::vector<std::string> due_stages;
+};
+
+// SW-0076: the full tick-by-tick plan for a bounded horizon, produced by a
+// SEPARATE `Scheduler` instance constructed fresh from `spec` and never
+// wired to a `Component`/`Runner` -- nothing is executed to produce this.
+// `horizon_ticks` counts `Advance()` calls, tick 0 (the construction state,
+// before any `Advance()`) included as the first entry.
+std::vector<ScheduleTick> PredictSchedule(const RunSpec& spec, std::uint64_t horizon_ticks);
+
+// Deterministic, line-oriented rendering of `PredictSchedule` -- diffable
+// byte-for-byte against a second dump of the same spec (`IT-10`'s own
+// comparison shape), and against the tick-by-tick due-stage sequence a real
+// run actually took.
+std::string ScheduleDumpText(const RunSpec& spec, std::uint64_t horizon_ticks);
+
 }  // namespace simcore::scheduler

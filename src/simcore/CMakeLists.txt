@@ -76,6 +76,23 @@ add_library(simcore STATIC
     runner/checkpoint.cpp
     runner/slice.cpp
     runner/cycle_loop.cpp
+    # WP-14 (SI-09): module_host/isolate.cpp -- R-SIM-19's per-stage
+    # `mode: isolated` bisection primitive, out-of-process (DD-09: the
+    # isolated stage is a second simengine). abi/simcore.cpp -- simcore's
+    # own embeddable C ABI (IMP-0144), the one thing simengine/main.cpp
+    # and IT-11's non-simengine test harness both link against.
+    module_host/isolate.cpp
+    abi/simcore.cpp
+    # WP-15 (SI-08): engine diagnostics -- IMP-0076/0131..0140. dump.cpp
+    # sits beside `Scheduler` itself (EXTEND, scheduler.hpp); the rest is
+    # the new diagnostics/ facility.
+    scheduler/dump.cpp
+    diagnostics/graph_dump.cpp
+    diagnostics/trace.cpp
+    diagnostics/cost.cpp
+    diagnostics/modules.cpp
+    diagnostics/breakpoints.cpp
+    diagnostics/reproducer.cpp
 )
 target_include_directories(simcore PUBLIC ${PROJECT_SOURCE_DIR}/include)
 # PRIVATE: third_party/ is an implementation detail of simcore's own .cpp
