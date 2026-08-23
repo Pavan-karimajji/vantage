@@ -148,13 +148,13 @@ def test_a_source_emitting_camera_stimulus_reaches_a_real_component_and_records_
     reader = reader_for(recording_path)
     try:
         topics = reader.topics()
-        assert "source/frame" in topics
-        assert "source/egoDyn" in topics
+        assert "/source/frame" in topics
+        assert "/source/egoDyn" in topics
         frame_payloads = [
-            payload for topic, _log_ns, _cap_ns, payload in reader.messages() if topic == "source/frame"
+            payload for topic, _log_ns, _cap_ns, payload in reader.messages() if topic == "/source/frame"
         ]
         egodyn_payloads = [
-            payload for topic, _log_ns, _cap_ns, payload in reader.messages() if topic == "source/egoDyn"
+            payload for topic, _log_ns, _cap_ns, payload in reader.messages() if topic == "/source/egoDyn"
         ]
     finally:
         reader.close()

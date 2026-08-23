@@ -106,7 +106,7 @@ def test_topic_list_equals_the_declared_ports_including_the_source_port(tmp_path
     topics = set(reader.topics())
     reader.close()
 
-    assert topics == {"source/veh_dyn", "under_test/verdict"}  # UT-C2-6, UT-C2-7
+    assert topics == {"/source/veh_dyn", "/under_test/verdict"}  # UT-C2-6, UT-C2-7
 
 
 # ---------------------------------------------------------------------------
@@ -133,8 +133,8 @@ def test_provenance_tags_source_and_stage_output_ports(tmp_path):
     topics = reader.topics()
     reader.close()
 
-    assert topics["source/veh_dyn"].provenance is Provenance.TRUTH
-    assert topics["under_test/verdict"].provenance is Provenance.SIMULATED
+    assert topics["/source/veh_dyn"].provenance is Provenance.TRUTH
+    assert topics["/under_test/verdict"].provenance is Provenance.SIMULATED
 
 
 def test_provenance_can_be_tagged_per_source_port(tmp_path):
@@ -155,7 +155,7 @@ def test_provenance_can_be_tagged_per_source_port(tmp_path):
     topics = reader.topics()
     reader.close()
 
-    assert topics["source/veh_dyn"].provenance is Provenance.MOCKED
+    assert topics["/source/veh_dyn"].provenance is Provenance.MOCKED
 
 
 # ---------------------------------------------------------------------------
@@ -204,8 +204,8 @@ def test_excluded_output_port_is_never_a_topic(tmp_path):
     topics = set(reader.topics())
     reader.close()
 
-    assert "under_test/verdict" not in topics
-    assert topics == {"source/veh_dyn"}
+    assert "/under_test/verdict" not in topics
+    assert topics == {"/source/veh_dyn"}
 
 
 def test_decimated_output_port_keeps_only_every_nth_tick(tmp_path):
@@ -221,7 +221,7 @@ def test_decimated_output_port_keeps_only_every_nth_tick(tmp_path):
     recorder.close()
 
     reader = McapReader(out_path)
-    verdict_messages = [m for m in reader.messages() if m[0] == "under_test/verdict"]
+    verdict_messages = [m for m in reader.messages() if m[0] == "/under_test/verdict"]
     reader.close()
 
     assert len(verdict_messages) == 2  # ticks 0 and 3 of 6 (index % 3 == 0)
@@ -248,7 +248,7 @@ def test_pipeline_none_records_every_emitted_source_port_and_nothing_else(tmp_pa
     topics = set(reader.topics())
     reader.close()
 
-    assert topics == {"source/veh_dyn", "source/gen_object_list"}
+    assert topics == {"/source/veh_dyn", "/source/gen_object_list"}
 
 
 # ---------------------------------------------------------------------------

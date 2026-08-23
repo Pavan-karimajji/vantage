@@ -20,12 +20,20 @@ everything the SUT reads" only needs what the pipeline actually wires.
 
 Topics are derived from the pipeline's own declared port manifests
 (`R-SIM-6` -- "did we record everything the SUT reads" true by
-construction) and named as the dot-joined qualified port name with dots
-replaced by slashes: `"source.gen_object_list"` -> `"source/gen_object_list"`,
-`"widget.outputs"` -> `"widget/outputs"`. That is exactly the inverse of
-`core.runner._topic_to_port_name`, so a recording this class writes needs
-no ingest map (`S-C9`) to read back -- its topics already equal the
-canonical port names `Pipeline` wiring uses.
+construction) and named `"/<stage>/<port>"` -- a leading slash, then only
+the FIRST dot of the qualified port name turned into a slash (a port name
+may itself contain dots, `R-SIM-4`'s `<function>.<port>`, and stays
+dotted): `"source.gen_object_list"` -> `"/source/gen_object_list"`,
+`"widget.outputs"` -> `"/widget/outputs"`, `"df.fn.outputs"` ->
+`"/df/fn.outputs"`. This is `simcore`'s own `PortNameToTopic`
+(`src/simcore/runner/cycle_loop.cpp`) convention, required for a
+`mode: measured` stage to match a recorded topic by exact string equality
+(found live, `WP-15b`) -- **not** a plain dot-to-slash inverse of
+`core.runner._topic_to_port_name`/`engine.bridge.topic_to_port_name`,
+though both tolerate it fine (they `strip("/")` before splitting, and
+collapsing one or two slashes into dots gives the same dotted result
+either way), so a recording this class writes still needs no ingest map
+(`S-C9`) to read back.
 """
 
 from __future__ import annotations
@@ -56,7 +64,8 @@ def _qualified(prefix: str, port: str) -> str:
 
 
 def topic_for(qualified_port_name: str) -> str:
-    return qualified_port_name.replace(".", "/")
+    stage, sep, rest = qualified_port_name.partition(".")
+    return f"/{stage}/{rest}" if sep else f"/{qualified_port_name}"
 
 
 class Recorder:

@@ -181,24 +181,6 @@ def _record_widget_recording(tmp_path: Path, values: list[float], *, descriptor_
     return recording_path
 
 
-@pytest.mark.skip(
-    reason="found live during WP-15b: sources/recorder.py::topic_for writes "
-    "'stage/port' (no leading slash) -- simcore's own PortNameToTopic "
-    "(src/simcore/runner/cycle_loop.cpp) requires '/stage/port' when "
-    "matching a `mode: measured` stage's own pro port against sources[]. "
-    "Confirmed by direct repro: an identical recording written with a "
-    "leading-slash topic ticks correctly through run_pipeline_via_engine; "
-    "one written via the real Recorder (this test's own "
-    "_record_widget_recording, the SAME code path `sim record` uses in "
-    "production) yields zero ticks with exit_code=0 (no error surfaced) -- "
-    "a real, currently-live defect for EVERY measured stage sourced from a "
-    "framework-produced recording, not specific to this test's fixture. "
-    "Out of scope for WP-15b's own Python-wiring pass to fix inside "
-    "simcore's C++ blind; closed by a follow-on aligning the two "
-    "conventions (either normalize both sides on read/match, or add the "
-    "leading slash to Recorder.topic_for and re-verify every existing "
-    "consumer of that convention)."
-)
 def test_check_scenario_end_to_end_resims_and_evaluates_expect(tmp_path):
     scalar_cls, descriptor_set = _scalar_message_cls()
     values = [0.0, 0.2, 0.6, 1.0]

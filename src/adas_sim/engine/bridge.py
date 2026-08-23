@@ -355,7 +355,12 @@ def topic_to_port_name(topic: str) -> str:
 
 
 def _port_name_to_topic(name: str) -> str:
-    return name.replace(".", "/")
+    """Matches `sources.recorder.topic_for`'s convention (`WP-15b` follow-on:
+    leading slash, only the first dot turned into a slash) -- this function's
+    output is compared for exact equality against `Recorder`-written topics
+    in `merge_engine_output_with_recording` below, so the two must agree."""
+    stage, sep, rest = name.partition(".")
+    return f"/{stage}/{rest}" if sep else f"/{name}"
 
 
 def validate_measured_stages_against_recording(
