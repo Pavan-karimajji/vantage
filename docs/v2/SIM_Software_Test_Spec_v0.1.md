@@ -363,6 +363,7 @@ Expected values are the served requirement's `Accept` clause (§0.1). Each row g
 | `UT-RUN-08` | `SW-0120` | `F-LONG` | Run a six-second slice of a twenty-minute recording; compare wall time and bytes read against the full run. |
 | `UT-RUN-09` | `SW-0395` | — | **`DEF`** — deferred with its parent. No case is written; the identifier is reserved so its absence is a decision. |
 | `UT-RUN-10` | `SW-0396` | `F-STUB` | Re-execute one cycle from a saved input snapshot; compare against the original cycle's outputs. |
+| `UT-RUN-15` | `SW-0135` | `F-STUB` | Attach a `ByteCounter` to a real `Runner`; run to completion; compare its per-topic/total against the test reader's own ground-truth pulled-byte count; confirm a run with no counter attached still completes. |
 
 ### 5.7 `SI-07` `errors` — `UT-ERR-01` … `UT-ERR-08`
 

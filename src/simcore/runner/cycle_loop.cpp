@@ -245,6 +245,7 @@ bool Runner::PullCycle(std::map<std::string, RecordedMessage>& payloads_by_port,
         break;
       }
       payloads_by_port[TopicToPortName(msg.topic)] = RecordedMessage{msg.payload, msg.capture_time_ns};
+      if (byte_counter_ != nullptr) byte_counter_->Observe(msg.topic, msg.payload.size());
     }
     carry_.erase(carry_.begin(), carry_.begin() + static_cast<std::ptrdiff_t>(consumed));
     if (boundary_hit) break;
@@ -479,7 +480,20 @@ Result<bool> Runner::StepOnce() {
   outcome_.cycles_executed += 1;
   outcome_.last_log_time_ns = t_ns;
   outcome_.divergence = latch_.first();
-  if (checkpoint_ != nullptr) checkpoint_->RecordCompleted(tick_index, t_ns, bytes_written_this_cycle);
+  if (checkpoint_ != nullptr) {
+    // IMP-0139: the exact bytes delivered to every executing stage's req
+    // port THIS cycle -- the same map IMP-0114's own write pass already
+    // reads from (see `delivered_req_`'s own top-of-block note above).
+    // Set BEFORE RecordCompleted, not after: RecordCompleted's own
+    // unbounded-flush default writes synchronously inside that call, so
+    // recording inputs afterward would flush the PREVIOUS cycle's capture
+    // paired with THIS cycle's progress.json (found live, off by one cycle,
+    // before this ordering was fixed).
+    std::map<std::string, std::vector<std::uint8_t>> inputs_this_cycle;
+    for (const auto& [qualified_port, value] : delivered_req_) inputs_this_cycle[qualified_port] = value.payload;
+    checkpoint_->RecordInputs(inputs_this_cycle);
+    checkpoint_->RecordCompleted(tick_index, t_ns, bytes_written_this_cycle);
+  }
 
   scheduler_->Advance();
   return Result<bool>::Ok(true);

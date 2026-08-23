@@ -433,7 +433,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The index shall be keyed by port, so a run reads only the ports its active graph requires.
 **Accept.** A run whose graph needs no image port decodes no image; bytes-read is lower than for the same run with an image consumer active, by at least the image channels' share of the file.
 **Verify.** T · `SYT-INP-05` · `ANL-02`   **Trace.** CN-0081, CN-0224
-**Built.** ◐ started — 0/3 software requirements done, in `WP-15`, `WP-17`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-15`, `WP-17`
 
 **`SYS-0006`** · `P1` · `R1` — Multiple sources merged on one time base
 **Shall.** The system shall permit multiple readers active in one run, merged onto a common time base.
@@ -1966,7 +1966,7 @@ mechanism.
 **Shall.** The system shall read and decode only the ports the active graph requires.
 **Accept.** A run of a function alone over a recording containing camera data decodes zero image bytes. Bytes-read is reported per run and is compared against the theoretical minimum for the port set.
 **Verify.** T · `SYT-NFR-01` · `ANL-31`   **Trace.** CN-0224, CN-0042
-**Built.** ◐ started — 2/4 software requirements done, in `WP-06`, `WP-09`, `WP-15`, `WP-17`
+**Built.** ◐ started — 3/4 software requirements done, in `WP-06`, `WP-09`, `WP-15`, `WP-17`
 
 **`SYS-0231`** · `P1` · `R1` — Lazy decode
 **Shall.** Data shall be decoded only when a simulating module consumes it or the player displays it.
@@ -1978,7 +1978,7 @@ mechanism.
 **Shall.** The system shall simulate only a requested time range.
 **Accept.** A six-second slice of a twenty-minute recording costs approximately the slice, not the file: wall time scales with slice length within a declared factor.
 **Verify.** T · `SYT-NFR-03` · `ANL-32`   **Trace.** CN-0231
-**Built.** ◐ started — 0/1 software requirements done, in `WP-13`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0233`** · `P0` · `R1` — Zero-copy across the language boundary
 **Shall.** Bulk data crossing into the scripting layer shall be exposed as array views onto engine-owned buffers, never as per-element scripting objects; the scripting layer shall never touch a message payload.

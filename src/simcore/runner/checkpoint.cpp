@@ -102,6 +102,16 @@ Checkpoint::Checkpoint(std::filesystem::path path, std::string run_id, io::ReadB
   pending_.run_id = run_id_;
 }
 
+std::filesystem::path Checkpoint::InputCaptureDir() const {
+  std::filesystem::path dir = path_;
+  dir += "_input_capture";
+  return dir;
+}
+
+void Checkpoint::RecordInputs(const std::map<std::string, std::vector<std::uint8_t>>& delivered_this_cycle) {
+  pending_inputs_ = delivered_this_cycle;
+}
+
 void Checkpoint::RecordCompleted(std::uint64_t tick_index, std::int64_t log_time_ns, std::size_t bytes_this_cycle) {
   pending_.tick_index = tick_index;
   pending_.log_time_ns = log_time_ns;
@@ -172,6 +182,56 @@ void Checkpoint::Write() {
     std::filesystem::remove(path_, ec);
     std::filesystem::rename(temp, path_, ec);
   }
+
+  // `IMP-0139`: one file per port, same temp-then-rename discipline as
+  // `progress.json` itself above -- a process killed mid-write leaves the
+  // PREVIOUS complete file, never a half-written one. A port present in an
+  // earlier cycle but absent from `pending_inputs_` now is removed, never
+  // left stale (this capture replaces outright, `RecordInputs`'s own
+  // header note) -- best-effort throughout: a capture that cannot be
+  // written never fails the run, same as `progress.json`'s own "a
+  // checkpoint that cannot be written never fails the run".
+  const std::filesystem::path capture_dir = InputCaptureDir();
+  std::filesystem::create_directories(capture_dir, ec);
+  if (!ec) {
+    for (const auto& entry : std::filesystem::directory_iterator(capture_dir, ec)) {
+      if (pending_inputs_.find(entry.path().stem().string()) == pending_inputs_.end()) {
+        std::filesystem::remove(entry.path(), ec);
+      }
+    }
+    for (const auto& [qualified_port, bytes] : pending_inputs_) {
+      const std::filesystem::path file = capture_dir / (qualified_port + ".bin");
+      std::filesystem::path file_temp = file;
+      file_temp += ".tmp";
+      {
+        std::ofstream port_out(file_temp, std::ios::binary | std::ios::trunc);
+        if (!port_out) continue;
+        if (!bytes.empty()) port_out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+      }
+      std::filesystem::rename(file_temp, file, ec);
+      if (ec) {
+        std::filesystem::remove(file, ec);
+        std::filesystem::rename(file_temp, file, ec);
+      }
+    }
+  }
+}
+
+std::map<std::string, std::vector<std::uint8_t>> Checkpoint::ReadInputCapture(const std::filesystem::path& path) {
+  std::map<std::string, std::vector<std::uint8_t>> result;
+  std::filesystem::path dir = path;
+  dir += "_input_capture";
+  std::error_code ec;
+  if (!std::filesystem::is_directory(dir, ec)) return result;
+  for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+    if (ec) break;
+    if (entry.path().extension() != ".bin") continue;
+    std::ifstream in(entry.path(), std::ios::binary);
+    if (!in) continue;
+    std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    result[entry.path().stem().string()] = std::move(bytes);
+  }
+  return result;
 }
 
 Result<CheckpointRecord> Checkpoint::Read(const std::filesystem::path& path) {

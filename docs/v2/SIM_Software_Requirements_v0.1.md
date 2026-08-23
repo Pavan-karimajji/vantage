@@ -1434,7 +1434,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The runner shall execute only a requested time range, seeking to its start rather than reading from the beginning.
 **Accept.** Wall time for a six-second slice of a twenty-minute recording scales with the slice within a declared factor.
 **Verify.** T · `UT-RUN-08` · A · `ANL-SW-26`   **Trace.** SYS-0232
-**Built.** ◐ started — `IMP-0120` in `WP-13`
+**Built.** ● done — `IMP-0120` in `WP-13`
 **Now.** `NEW`.
 
 **`SW-0395`** · `SI-06` · `P2` · `DEF` — Ego re-integration
@@ -1561,10 +1561,10 @@ Everything in this part exists to make one sentence true in code rather than in 
 **`SW-0135`** · `SI-08` · `P0` · `R1` — Bytes read is counted, not estimated
 **Shall.** Bytes read shall be counted at the codec boundary and attributed per topic.
 **Accept.** The per-topic total equals the run total. A run that decodes no image reports zero image bytes, and the number is a count, not a derivation from timing.
-**Verify.** T · `UT-EDG-04`   **Trace.** SYS-0230, SYS-0005
-**Built.** ◐ started — `IMP-0135` in `WP-15`
+**Verify.** T · `UT-EDG-04`, `UT-RUN-15`   **Trace.** SYS-0230, SYS-0005
+**Built.** ● done — `IMP-0135` in `WP-15`
 **Now.** `NEW`.
-*Note:* `SYS-0005`, `SYS-0230` and `SYS-0231` are all verified by comparing bytes read. Without a real counter each is verified by inference, and an inferred measurement is what `CN-0356` says will be declared satisfied.
+*Note:* `SYS-0005`, `SYS-0230` and `SYS-0231` are all verified by comparing bytes read. Without a real counter each is verified by inference, and an inferred measurement is what `CN-0356` says will be declared satisfied. `UT-RUN-15` (`WP-15`'s own `UT-EDG-04` proves the counter standalone; this proves it wired into a real `Runner`'s live cycle loop, `IMP-0135`'s own remaining half, closed 2026-08-23) is `tests/unit/test_ut_run_core.cpp`'s, not a second standalone-counter test.
 
 **`SW-0136`** · `SI-08` · `P1` · `R1` — Timing measurement never influences results
 **Shall.** No measured duration shall enter a scheduling decision, a value or an output.

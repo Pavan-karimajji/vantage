@@ -59,6 +59,7 @@
 #include <vector>
 
 #include "simcore/bus.hpp"
+#include "simcore/diagnostics.hpp"
 #include "simcore/errors.hpp"
 #include "simcore/io.hpp"
 #include "simcore/module_host.hpp"
@@ -191,18 +192,46 @@ class Checkpoint {
   // write pass) -- this class tracks no estimate of its own, matching
   // `max_bytes`'s own meaning on `io::WriterBase`.
   void RecordCompleted(std::uint64_t tick_index, std::int64_t log_time_ns, std::size_t bytes_this_cycle = 0);
+
+  // `IMP-0139`: the exact bytes delivered to every executing stage's req
+  // port this SAME cycle -- replaces the pending capture outright (never
+  // merges across cycles, so a port dropped from `delivered` between two
+  // calls does not linger as stale data from an earlier cycle). Written to
+  // disk on `RecordCompleted`'s own flush schedule, one file per port,
+  // under `<path>_input_capture/` beside `path` itself -- deliberately not
+  // a second bounds axis: this data is only ever useful paired with
+  // whichever cycle `progress.json` itself names, so it flushes exactly
+  // when that does, never independently.
+  //
+  // **Call this BEFORE `RecordCompleted` for the same cycle, not after.**
+  // `RecordCompleted`'s own unbounded-flush default writes synchronously
+  // inside that call -- calling this afterward pairs the wrong cycle's
+  // capture with `progress.json` (off by one, found live).
+  void RecordInputs(const std::map<std::string, std::vector<std::uint8_t>>& delivered_this_cycle);
+
   // Forced write regardless of the accumulated bounds; always safe.
   void Flush();
 
   static Result<CheckpointRecord> Read(const std::filesystem::path& path);
 
+  // `IMP-0139`: reads back whatever `RecordInputs` last flushed to disk --
+  // the supervisor's own read half, called from a DIFFERENT process than
+  // the one that wrote it (the crashed child), so this is a free function
+  // over a path, never a method on a `Checkpoint` instance the supervisor
+  // never constructed. Returns an empty map, never a `Result::Fail`, when
+  // the directory does not exist -- "no capture available" is a normal,
+  // named outcome (a crash before the first cycle completed), not an error.
+  static std::map<std::string, std::vector<std::uint8_t>> ReadInputCapture(const std::filesystem::path& path);
+
  private:
   void Write();
+  std::filesystem::path InputCaptureDir() const;
 
   std::filesystem::path path_;
   std::string run_id_;
   io::ReadBounds flush_bounds_;
   CheckpointRecord pending_;
+  std::map<std::string, std::vector<std::uint8_t>> pending_inputs_;
   std::size_t since_flush_ = 0;
   std::size_t bytes_since_flush_ = 0;
   std::int64_t span_start_ns_ = 0;
@@ -368,6 +397,12 @@ class Runner {
 
   void SetCheckpoint(Checkpoint* checkpoint) { checkpoint_ = checkpoint; }
 
+  // `IMP-0135`: optional, same nullable-pointer shape as `SetCheckpoint`
+  // above -- a run with no counter attached costs nothing extra. `PullCycle`
+  // is the one place bytes are read off the wire, so it is the one place
+  // `Observe` is called, once per message actually placed into a cycle.
+  void SetByteCounter(diagnostics::ByteCounter* byte_counter) { byte_counter_ = byte_counter; }
+
  private:
   Runner() = default;
 
@@ -383,6 +418,7 @@ class Runner {
   io::WriterBase* writer_ = nullptr;
   const mutate::Mutator* mutator_ = nullptr;
   Checkpoint* checkpoint_ = nullptr;
+  diagnostics::ByteCounter* byte_counter_ = nullptr;
   Options options_;
 
   std::map<std::string, module_host::Component*> components_;

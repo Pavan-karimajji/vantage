@@ -532,6 +532,58 @@ TEST(UtRun07Checkpoint, AnAbortedRunLeavesACheckpointAgreeingWithTheLastCycleInT
   std::filesystem::remove(progress);
 }
 
+// `IMP-0139`: the per-port input capture `WriteReproducer`'s own
+// `ReproducerInput::input_capture` needs, persisted by the SAME
+// `Checkpoint` that already survives a crash for `progress.json` -- a
+// black-box supervisor reads it back through `Checkpoint::ReadInputCapture`
+// after the child that wrote it has already died.
+TEST(UtRun07Checkpoint, InputCaptureNamesTheSameCycleAsProgressJsonAndSurvivesAnAbandonedRun) {
+  StubComponent stub("outputs");
+  ASSERT_TRUE(stub.ok());
+  Harness h(20);
+  const std::filesystem::path progress =
+      std::filesystem::temp_directory_path() / "simcore_ut_run_07b_progress.json";
+  std::filesystem::remove(progress);
+  std::filesystem::remove_all(std::filesystem::path(progress).concat("_input_capture"));
+
+  Checkpoint checkpoint(progress, h.spec.run_id);
+  auto constructed = Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base);
+  ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
+  Runner runner = std::move(constructed).value();
+  runner.SetCheckpoint(&checkpoint);
+
+  // Same "process dies mid-run" shape as the sibling test above -- no
+  // Flush, no Close, just an abandoned loop after cycle 2.
+  for (int i = 0; i < 3; ++i) {
+    auto step = runner.StepOnce();
+    ASSERT_TRUE(step.ok()) << step.error().Format();
+    ASSERT_TRUE(step.value());
+  }
+
+  auto record = Checkpoint::Read(progress);
+  ASSERT_TRUE(record.ok()) << record.error().Format();
+
+  // The supervisor's own read half -- a free function over the path, never
+  // a method on a Checkpoint instance the supervisor never constructed.
+  const auto capture = Checkpoint::ReadInputCapture(progress);
+  ASSERT_TRUE(capture.count("sut.objects"));
+  // Cycle 2's own recorded stimulus (MakeRecording's own encoding: byte i,
+  // then 0x01) -- the exact bytes StepOnce delivered to "sut"'s "objects"
+  // req port that cycle, not a re-derived or estimated value.
+  const std::vector<std::uint8_t> expected = {static_cast<std::uint8_t>(record.value().tick_index), 0x01};
+  EXPECT_EQ(capture.at("sut.objects"), expected);
+
+  std::filesystem::remove(progress);
+  std::filesystem::remove_all(std::filesystem::path(progress).concat("_input_capture"));
+}
+
+TEST(UtRun07Checkpoint, ReadInputCaptureIsAnEmptyMapNotAnErrorWhenNoneWasEverWritten) {
+  const std::filesystem::path progress =
+      std::filesystem::temp_directory_path() / "simcore_ut_run_07c_never_written.json";
+  std::filesystem::remove(progress);
+  EXPECT_TRUE(Checkpoint::ReadInputCapture(progress).empty());
+}
+
 TEST(UtRun07Checkpoint, NoCycleCompletedWritesNoFileRatherThanClaimingCycleZero) {
   const std::filesystem::path progress =
       std::filesystem::temp_directory_path() / "simcore_ut_run_07_empty.json";
@@ -581,11 +633,53 @@ TEST(UtRun08Slice, ExecutesOnlyTheRequestedRangeAndReadsFarLessThanTheWholeRecor
   EXPECT_EQ(outcome.value().cycles_executed, 10u);
   EXPECT_EQ(outcome.value().last_log_time_ns, 59 * kDtNs);
   // The cost scales with the slice, not the file. Asserted here on the
-  // reader's own pulled-message count; the byte-level form of this
-  // assertion is `IMP-0135`'s counter (`WP-15`), which does not exist yet
-  // -- see `slice.cpp`'s own header note.
+  // reader's own pulled-message count; `UtRun15ByteCounter` below is the
+  // byte-level form of this same claim, now that `IMP-0135`'s counter is
+  // wired into the live cycle loop.
   EXPECT_GT(full_pulled, 0u);
   EXPECT_LT(h.reader.pulled(), full_pulled / 4);
+}
+
+// ---------------------------------------------------------------------------
+// UT-RUN-15 -- IMP-0135: `ByteCounter` wired into the live cycle loop.
+// ---------------------------------------------------------------------------
+TEST(UtRun15ByteCounter, PerTopicAndTotalMatchWhatWasActuallyReadNeverEstimated) {
+  StubComponent stub("outputs");
+  ASSERT_TRUE(stub.ok());
+  Harness h(5);
+  diagnostics::ByteCounter counter;
+  auto constructed = Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base);
+  ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
+  Runner runner = std::move(constructed).value();
+  runner.SetByteCounter(&counter);
+
+  auto outcome = runner.Run();
+  ASSERT_TRUE(outcome.ok()) << outcome.error().Format();
+  ASSERT_EQ(outcome.value().cycles_executed, 5u);
+
+  // `pulled_bytes()` is the reader's own ground truth for what was actually
+  // read off the wire (same role it plays for `UtRun08Slice` above) --
+  // `ByteCounter::Total()` must equal it exactly, never estimated from
+  // timing or message count.
+  EXPECT_EQ(counter.Total(), h.reader.pulled_bytes());
+  EXPECT_GT(counter.Total(), 0u);
+
+  // Per-topic: `/source/stimulus` carries one byte per cycle, 5 cycles.
+  EXPECT_EQ(counter.ForTopic("/source/stimulus"), 5u);
+  // An unpulled topic reports exactly zero, never derived from timing.
+  EXPECT_EQ(counter.ForTopic("/topic/never/pulled"), 0u);
+}
+
+TEST(UtRun15ByteCounter, NoCounterAttachedCostsNothingExtraAndChangesNoBehaviour) {
+  StubComponent stub("outputs");
+  ASSERT_TRUE(stub.ok());
+  Harness h(5);
+  auto constructed = Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base);
+  ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
+  // Deliberately no SetByteCounter call -- the nullable-pointer default.
+  auto outcome = std::move(constructed).value().Run();
+  ASSERT_TRUE(outcome.ok()) << outcome.error().Format();
+  EXPECT_EQ(outcome.value().cycles_executed, 5u);
 }
 
 // ---------------------------------------------------------------------------
