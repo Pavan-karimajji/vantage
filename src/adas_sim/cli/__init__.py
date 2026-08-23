@@ -36,6 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     subparsers.add_parser("determinism", help="compare two recordings, axis derived not flagged (S-C6)", add_help=False)
     subparsers.add_parser("batch", help="run a pipeline over a recording set, isolated per recording (S-D7)", add_help=False)
     subparsers.add_parser("list", help="list ports|topics|layers|signals for a lib/recording/session (S-D6, DG-1)", add_help=False)
+    subparsers.add_parser("validate", help="lint a project's config, no recording or binary needed (IMP-0165)", add_help=False)
 
     args, remainder = parser.parse_known_args(argv)
     if args.verb == "doctor":
@@ -93,4 +94,7 @@ def main(argv: list[str] | None = None) -> int:
         # anything imported `adas_sim.cli.list`).
         from adas_sim.cli import list_cmd
         return list_cmd.run(remainder)
+    if args.verb == "validate":
+        from adas_sim.cli import validate
+        return validate.run(remainder)
     return 1  # unreachable: every registered verb is dispatched above
