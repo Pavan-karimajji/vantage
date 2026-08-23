@@ -1,7 +1,7 @@
-# Copyright (c) LT EPS. All Rights Reserved.
+# Copyright (c) <ORG>. All Rights Reserved.
 # Proprietary and Confidential.
 # COMPONENT: SIM
-# @author Pavan Karimajji <Pavan.Karimajji@larsentoubro.com>
+# @author Pavan Karimajji
 
 """`ST-C5-1`, the real half: `sim_implementation_plan.md`'s S-C5
 audit found the config bundle travelled with `df_sil`'s own *build* directory

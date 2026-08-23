@@ -1,7 +1,7 @@
 # Copyright (c) <ORG>. All Rights Reserved.
 # Proprietary and Confidential.
 # COMPONENT: SIM
-# @author Pavan Karimajji <Pavan.Karimajji@larsentoubro.com>
+# @author Pavan Karimajji
 
 """S-D3 slice 3 system test: the pipeline dock wired into `MainWindow`,
 read-only this slice (`view/pipeline_panel.py`'s own scope note -- no
@@ -14,12 +14,14 @@ live re-run). Three things proven, all offscreen (`P-7`):
 3. a REAL, resolvable `stubdll:` stage populates the dock for real, and
    `File > Save Run Manifest...` writes a real, reloadable manifest.
 
-(3) reuses `sil_host`'s own `echo_stub.dll` (built earlier this session
-by `S-C7`'s real verification, at the known `ws/sil_host-base-gtest-
-vs2026/tests/Release/` build path) rather than building a second trivial
-fixture library -- skips with a named reason if it is not present here,
-same pattern `test_c8_relocatability_installed.py` already uses for a
-missing `df_sil` build.
+(3) reuses this module's own `tests/fixtures/echo_stub` build output
+(`build-gtest-vs2026/tests/Release/echo_stub.dll` -- the same fixture
+`test_d15b_engine_bridge.py`'s own `_echo_stub_path` resolves, `WP-16`
+repointed this test onto it 2026-08-23 when `sil_host`, whose own build
+output this test used to reuse, was retired) rather than building a
+second trivial fixture library -- skips with a named reason if it is not
+present here, same pattern `test_c8_relocatability_installed.py` already
+uses for a missing `df_sil` build.
 
 **Slice 4 (`ST-D3-1`) adds real "Run" wiring tests**, same `echo_stub.dll`
 fixture: clicking `PipelinePanel`'s Run button executes the panel's
@@ -54,22 +56,21 @@ from adas_sim.player.shell.qt_window import MainWindow, set_high_dpi_policy  # n
 from adas_sim.scene.registry import layer_provider  # noqa: E402
 from adas_sim.scene.types import Layer, Prim  # noqa: E402
 
-_ECHO_STUB_DIR = Path(__file__).resolve().parents[4] / "ws" / "sil_host-base-gtest-vs2026" / "tests" / "Release"
+_ECHO_STUB_DIR = Path(__file__).resolve().parents[2] / "build-gtest-vs2026" / "tests" / "Release"
 _TICK_COUNT = 3
 _DT_NS = 50_000_000
 
-# ST-D8-1: `echo_stub.dll` is a Windows PE binary (S-C7's own build) -- a
-# stale copy left over from an earlier Windows session can exist on a
-# non-Windows checkout (this repo's own WSL shell, found and
-# pass the file-existence check while being unloadable by ctypes.CDLL on
-# this platform. Checking sys.platform FIRST (same precedent test_d7_
-# pin_builds_cli.py/test_c7_cross_host_resim.py already set) turns that
-# into a graceful, named skip instead of a bare assertion failure --
-# "skipping exactly the integration tests that need a library and naming
-# why" is ST-D8-1's own literal wording.
+# ST-D8-1: `echo_stub.dll` is a Windows PE binary -- a stale copy left over
+# from an earlier Windows session can exist on a non-Windows checkout (this
+# repo's own WSL shell, found and pass the file-existence check while being
+# unloadable by ctypes.CDLL on this platform. Checking sys.platform FIRST
+# (same precedent test_d7_pin_builds_cli.py already set) turns that into a
+# graceful, named skip instead of a bare assertion failure -- "skipping
+# exactly the integration tests that need a library and naming why" is
+# ST-D8-1's own literal wording.
 _SKIP_REASON = (
-    f"Windows-only (echo_stub.dll is a PE binary) needs sil_host's echo_stub.dll built at "
-    f"{_ECHO_STUB_DIR} (scripts/build.py sil_host -t gtest -p vs2026 -P base)"
+    f"Windows-only (echo_stub.dll is a PE binary) needs this module's own echo_stub.dll built at "
+    f"{_ECHO_STUB_DIR} (scripts/build.py sim -t gtest -p vs2026)"
 )
 _ECHO_STUB_UNAVAILABLE = sys.platform != "win32" or not (_ECHO_STUB_DIR / "echo_stub.dll").is_file()
 
