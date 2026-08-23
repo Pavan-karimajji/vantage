@@ -1457,7 +1457,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The system shall produce a Resolved Run Spec — flat, with every path resolved, every mode decided, every period computed, every validation passed — write it and its hash into the run artifacts, and treat it as the only input the engine takes.
 **Accept.** The engine performs no configuration inference, no schema upgrading, no wiring validation and no library search-path logic; it requires no configuration-language parser. The same spec hash always produces the same results.
 **Verify.** T · `SYT-CFG-08` · `ANL-24`   **Trace.** CN-0292, CN-0293, CN-0294, CN-0296, CN-0179; v1 `FR-SIM-30`
-**Built.** ◐ started — 6/9 software requirements done, in `WP-05`, `WP-09`, `WP-13`, `WP-16`, `WP-22`
+**Built.** ◐ started — 7/9 software requirements done, in `WP-05`, `WP-09`, `WP-13`, `WP-16`, `WP-22`
 
 **`SYS-0166`** · `P0` · `R1` — Absolute, pre-resolved binary paths
 **Shall.** The Resolved Run Spec shall carry absolute, already-resolved paths for every module binary; the engine shall perform no stem expansion and consult no search path.
@@ -2234,7 +2234,7 @@ Constraints are obligations on *how* the system is built, imposed because a corr
 **Shall.** No concept shall be implemented in both languages; where one exists on both sides today, one side shall be deleted rather than maintained in step.
 **Accept.** A named check enumerates the four historically duplicated subsystems — configuration load and validation, ingest-map parsing, module hosting, recording read and grouping — and confirms exactly one implementation of each. Any concept found in both languages is a defect.
 **Verify.** A · `ANL-44`   **Trace.** CN-0291, CN-0358, CN-0287; **defect** concept §21.3, §22.2
-**Built.** ◐ started — 3/5 software requirements done, in `WP-01`, `WP-03`, `WP-12`, `WP-16`, `WP-21`
+**Built.** ◐ started — 4/5 software requirements done, in `WP-01`, `WP-03`, `WP-12`, `WP-16`, `WP-21`
 
 **`SYS-0271`** · `P0` · `R1` — The engine never calls back into the scripting layer
 **Shall.** The engine shall never call back into Python during a run.

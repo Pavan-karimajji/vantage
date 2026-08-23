@@ -26,21 +26,23 @@ def _write(path: Path, text: str = "x = 1\n") -> None:
 def test_check_no_duplication_passes_on_the_current_skeleton():
     findings, notes, checked = check_no_duplication()
     assert findings == []
-    assert checked == 6
+    assert checked == 0
     assert len(notes) == len(KNOWN_PENDING_DUPLICATION)
 
 
-def test_check_no_duplication_all_six_capabilities_are_named():
-    """`codec` was briefly a seventh (`WP-15a`), removed 2026-08-23 auditing
-    `WP-16`: its C++ home is `simcore/io/codecs/mcap.cpp`, not `sil_host` --
-    `WP-15b`'s own subprocess-not-in-process decision means the Python
-    codec (`adas_sim.io.mcap`) never converges with it, so it was never
-    the phase-boundary duplication this check is for (see this module's
-    own docstring)."""
-    assert set(CAPABILITY_HOMES) == {
-        "pipeline_load_validate", "ingest_map_parse", "component_host",
-        "recording_read_group", "library_resolve", "multi_rate_scheduler",
-    }
+def test_check_no_duplication_no_capabilities_are_named_any_more():
+    """All six of Design SS14.2's historically duplicated capabilities
+    paired a `modules/sim` Python home against a `modules/sil_host` C++
+    home; `WP-16` deleted them from `sil_host` (proven equal at `WP-15a`)
+    and then unlinked `sil_host` itself, so `CAPABILITY_HOMES` is cleared
+    rather than left pointing at a path that no longer exists. `DD-04`'s
+    codec was briefly considered a seventh (`WP-15a`) but corrected out
+    2026-08-23: its C++ home was always `simcore/io/codecs/mcap.cpp`, inside
+    this module, not `sil_host`, and `WP-15b`'s own subprocess-not-in-
+    process decision means the Python codec never converges with it -- see
+    this module's own docstring."""
+    assert CAPABILITY_HOMES == {}
+    assert KNOWN_PENDING_DUPLICATION == {}
 
 
 def test_check_no_duplication_fails_on_a_planted_new_codec_duplication(tmp_path):

@@ -498,7 +498,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** `simcore` shall contain no configuration-file parser, no ingest-map parser, no wiring validator and no library search-path resolution.
 **Accept.** A named check enumerates the four and confirms zero implementations in the engine. Each of the four has exactly one implementation, in Python.
 **Verify.** A · `ANL-SW-08`   **Trace.** SYS-0165, SYS-0270; CN-0358
-**Built.** ○ not started — `IMP-0018` in `WP-16`
+**Built.** ● done — `IMP-0018` in `WP-16`
 **Now.** `DONE·TWICE` — all four exist in `sil_host/src/{pipeline,ingest_map,library_loader}.cpp` and in Python. This requirement is satisfied by deletion, and `SW-0019` is what makes the deletion safe.
 
 **`SW-0019`** · `SI-15` · `P0` · `R1` — Nothing is deleted before its replacement is proven equal

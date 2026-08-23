@@ -14,6 +14,18 @@
 #   per-row PASS / PENDING / FAIL with the evidence that produced it --
 #   never a bare "looks the same" (R-REQ-9).
 #
+#   **Historical since `WP-16` (2026-08-23):** this report did its job --
+#   all seven rows PASSed, `WP-16` deleted rows 1-6's retiring
+#   implementation from `sil_host` and then unlinked `sil_host` itself as a
+#   submodule. Rows 1-6 now report PENDING forever (their own gtest binary
+#   genuinely cannot be found, `sil_host` no longer exists to build it from)
+#   -- that is not a regression to chase, it is the expected shape of a
+#   completed migration's own gate; `main()`'s own PENDING-is-not-a-failure
+#   handling already treats it that way. Row 7 (the codec) is unaffected --
+#   its own two homes were never `sil_host`-vs-`simcore` (see
+#   `scripts/check_no_duplication.py`'s own correction note) and both still
+#   build.
+#
 #   `WP-16` -- the deletion package -- cannot begin until this report is
 #   green (`O-5`). A row that has no real survivor yet (the target C++ home
 #   lands in a later WP than WP-15a) is reported PENDING, not forced green:
