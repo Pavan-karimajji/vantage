@@ -8,8 +8,9 @@ one, end to end" -- a fresh component library with only a manifest is
 probed, wired into a five-line pipeline, run against `tiny.mcap`, and its
 outputs appear in a recording, with **no edit anywhere in modules/sim**.
 Every piece already existed and was exercised individually (`sim probe`
-against `echo_stub.c` in `test_d6_probe.py`, `resim_pipeline_merged`
-elsewhere) -- this is the chain, in one walkthrough, proving `R-SIM-16`'s
+against `echo_stub.c` in `test_d6_probe.py`, `engine.bridge.
+run_pipeline_merged_via_engine` elsewhere) -- this is the chain, in one
+walkthrough, proving `R-SIM-16`'s
 "a component onboards itself" and `GT-9`'s "every capability reachable in
 ~3 lines from a plain script" for the one case that matters most: a
 component this framework has never heard of.
@@ -36,9 +37,10 @@ from pathlib import Path
 import pytest
 
 from adas_sim.cli.probe import run as probe_run
+from adas_sim.diagnostics.errors import EnvironmentError_
+from adas_sim.engine.bridge import resolve_simengine_executable, run_pipeline_merged_via_engine
 from adas_sim.graph.build import Pipeline
 from adas_sim.runspec.manifest import build_manifest
-from adas_sim.core.resim import resim_pipeline_merged
 from adas_sim.session.session import Session
 from adas_sim.plugins.registry import reader_for
 
@@ -55,6 +57,14 @@ pytestmark = [
     pytest.mark.skipif(shutil.which("gcc") is None, reason="no C toolchain (gcc) available"),
     pytest.mark.skipif(not _INTERFACES_INCLUDE.is_dir(), reason="interfaces submodule not checked out"),
 ]
+
+
+@pytest.fixture(autouse=True)
+def _require_simengine():
+    try:
+        resolve_simengine_executable()
+    except EnvironmentError_ as exc:
+        pytest.skip(f"no built simengine found: {exc}")
 
 
 def _compile_fixture(out_dir: Path) -> Path:
@@ -94,20 +104,23 @@ def test_day_one_walkthrough_probe_pipeline_resim_recording(tmp_path, capsys):
     pipeline_path = tmp_path / "pipeline.yaml"
     _five_line_pipeline(pipeline_path)
     pipeline = Pipeline.load(pipeline_path, search=[tmp_path])
-    pipeline.init_components(None)  # the stub's own adasInit ignores configPath entirely
-    try:
-        # Step 3: run against tiny.mcap, writing a full merged recording --
-        # this IS "outputs appear in a recording" (core.resim.
-        # resim_pipeline_merged, R-SIM-6/R-SIM-13's one way a Session is
-        # ever built).
-        out_path = tmp_path / "day_one_result.mcap"
-        meta = build_manifest(
-            pipeline=pipeline, pipeline_path=pipeline_path, run_kind="resim",
-            source_kind="mcap", recording_path=_TINY,
-        )
-        resim_pipeline_merged(pipeline, _TINY, out_path, meta=meta)
-    finally:
-        pipeline.shutdown_components()
+
+    # Step 3: run against tiny.mcap, through the real simengine, writing a
+    # full merged recording -- this IS "outputs appear in a recording"
+    # (engine.bridge.run_pipeline_merged_via_engine, R-SIM-6/R-SIM-13's one
+    # way a Session is ever built). No init_components/shutdown_components
+    # here: nothing executes in this process any more (WP-15b) -- the
+    # stub's own adasInit, ignoring configPath entirely, runs inside
+    # simengine's own subprocess instead.
+    out_path = tmp_path / "day_one_result.mcap"
+    meta = build_manifest(
+        pipeline=pipeline, pipeline_path=pipeline_path, run_kind="resim",
+        source_kind="mcap", recording_path=_TINY,
+    )
+    result = run_pipeline_merged_via_engine(
+        pipeline, _TINY, out_path, meta=meta, run_id="day-one-walkthrough", search=[tmp_path],
+    )
+    assert result.ok, f"simengine exit_code={result.exit_code} stderr={result.stderr!r}"
 
     # Step 4: the result is a REAL recording, readable the one way any
     # recording is (no special-cased reader for this walkthrough).
@@ -115,10 +128,10 @@ def test_day_one_walkthrough_probe_pipeline_resim_recording(tmp_path, capsys):
     reader = reader_for(out_path)
     try:
         topics = reader.topics()
-        assert "echo_stub_with_output/echo" in topics
+        assert "/echo_stub_with_output/echo" in topics
         # messages() yields (topic, log_time_ns, capture_time_ns, payload).
         payloads = [payload for topic, _log_ns, _cap_ns, payload in reader.messages()
-                    if topic == "echo_stub_with_output/echo"]
+                    if topic == "/echo_stub_with_output/echo"]
     finally:
         reader.close()
     assert payloads, "the echo port's bytes never reached the recording"

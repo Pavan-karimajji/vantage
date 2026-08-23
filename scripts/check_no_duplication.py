@@ -5,9 +5,10 @@
 
 """IMP-0020 / ANL-SW-10 (docs/v2/SIM_Implementation_Plan_v0.1.md WP-01) --
 `SW-0019`/`SW-0020`: no capability survives a **phase boundary** with two
-implementations. Names the seven historically duplicated capabilities
-(Concept SS21.3's four, SwReq's six, plus `DD-04`'s codec as the seventh --
-Design SS14.2) and fails when both of a capability's two homes hold real
+implementations. Names the six historically duplicated capabilities
+(Concept SS21.3's four, SwReq's six -- Design SS14.2; `DD-04`'s codec was
+briefly a seventh, removed 2026-08-23, see this file's own correction note
+below) and fails when both of a capability's two homes hold real
 code **outside the migration's own, named, tracked window**.
 
 **Why this does not fail today.** Four of the six pre-existing duplications
@@ -34,6 +35,24 @@ two produce identical results on the same corpus (`tests/unit/test_a4_mcap.py`
 exactly the evidence `SW-0019` requires before a pending duplication is
 allowed to sit here rather than fail the build -- so "codec" moves into
 `KNOWN_PENDING_DUPLICATION`, closed by `WP-16` the same as the other six.
+
+**Corrected 2026-08-23, found auditing `WP-16` before executing it: "codec"
+is not actually one of the six.** The other six pair a Python home against
+`modules/sil_host`'s own C++ -- the SAME implementation, ported, with the
+`sil_host` half scheduled for outright deletion. "codec"'s C++ home is
+`simcore/io/codecs/mcap.cpp`, in THIS module, not `sil_host` -- and
+`WP-15b`'s own "subprocess, not in-process" decision (`engine/bridge.py`'s
+docstring: `simcore` builds static-only, no in-process ABI artifact to
+bind) means `adas_sim.io.mcap` is never going away: every rewired call site
+launches `simengine` as a child process and reads its output back into
+Python through this exact codec, permanently. Two real implementations
+that will never converge because they serve two different, permanently
+separate consumers (the C++ engine; the Python tooling/bridge reading its
+subprocess output) is not the phase-boundary duplication `SW-0019`/
+`SW-0020` are about -- so "codec" is removed from `CAPABILITY_HOMES`
+entirely rather than left in `KNOWN_PENDING_DUPLICATION` making a "closed
+by WP-16" promise that would still be false the day every other row here
+is.
 """
 
 from __future__ import annotations
@@ -46,7 +65,6 @@ SIM_ROOT = SCRIPT_DIR.parent
 SUPERPROJECT_ROOT = SIM_ROOT.parent.parent
 SIL_HOST = SUPERPROJECT_ROOT / "modules" / "sil_host" / "src"
 ADAS_SIM = SIM_ROOT / "src" / "adas_sim"
-SIMCORE = SIM_ROOT / "src" / "simcore"
 
 # capability -> (python home, cpp home). A "home" is real if the file
 # exists and is non-empty; either side may not exist yet.
@@ -57,7 +75,6 @@ CAPABILITY_HOMES: dict[str, tuple[Path, Path]] = {
     "recording_read_group": (ADAS_SIM / "io" / "base.py", SIL_HOST / "recording_reader.cpp"),
     "library_resolve": (ADAS_SIM / "resolve" / "library.py", SIL_HOST / "library_loader.cpp"),
     "multi_rate_scheduler": (ADAS_SIM / "core" / "runner.py", SIL_HOST / "pipeline.cpp"),
-    "codec": (ADAS_SIM / "io" / "mcap.py", SIMCORE / "io" / "codecs" / "mcap.cpp"),
 }
 
 # Retired one at a time as WP-16 deletes each `sil_host` half (Design SS2.2).
@@ -71,7 +88,6 @@ KNOWN_PENDING_DUPLICATION: dict[str, str] = {
     "recording_read_group": "closed by WP-16 -- sil_host/recording_reader.cpp deleted (survivor split across simcore/io + simcore/bus/cycle.cpp at WP-06/WP-08)",
     "library_resolve": "closed by WP-16 -- sil_host/library_loader.cpp's resolve half deleted",
     "multi_rate_scheduler": "closed by WP-16 -- sil_host/pipeline.cpp's Step() deleted (survivor is simcore/scheduler/due.cpp from WP-09)",
-    "codec": "closed by WP-16 -- adas_sim/io/{base,mcap,csv,jsonl}.py's read paths deleted (survivor is simcore/io + simcore/io/codecs/mcap.cpp from WP-06, proven equal by scripts/prove_equal.py row 7, WP-15a)",
 }
 
 
@@ -113,7 +129,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"note: {n}")
     for f in findings:
         print(f)
-    print(f"\n{checked}/7 capabilities checked")
+    print(f"\n{checked}/6 capabilities checked")
     if findings:
         print(f"{len(findings)} duplication violation(s)")
         return 1

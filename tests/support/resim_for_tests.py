@@ -3,23 +3,32 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`resim_pipeline` -- the resim engine (recording spec §9), built on
-`Pipeline.exec` + `io.base.group_by_log_time`.
+"""`resim_pipeline`/`resim_pipeline_merged` -- a pure-Python, in-process
+tick loop over `Pipeline.exec`, moved here from `adas_sim.core.resim`
+(`WP-16`, `IMP-0013`) when that module's own real callers were confirmed
+retired.
 
-Lives here rather than in `cli/resim.py` because `cli/` and `app/` carry no
-logic (`GT-9`), and `check/` needs this same tick-by-tick execution to
-evaluate a scenario's `expect:` against a live resim but may never import
-`cli/`.
+**Why this lives under `tests/`, not `src/adas_sim/`:** every real production
+caller of a resim now goes through `engine.bridge.run_pipeline_via_engine`
+(`WP-15b`) -- driving the real `simcore`/`simengine` engine, which needs a
+compiled `dll:`/`stubdll:` library on disk (`R-SIM-4`/`R-SIM-11`) and can
+never accept a bare Python closure. But a handful of tests deliberately use
+`resolve.component.InProcessSilComponent` + `impl: "stub:<name>"` -- a
+component that IS a Python closure, with no compiled binary and no build
+step -- because that is what makes them fast, portable and independent of
+whatever `.dll`/`.so` this session happens to have built. `engine.bridge`'s
+own docstring names exactly why that technique cannot go through the engine
+(`pipeline_to_run_spec` would emit an empty `impl:` for a `components=`
+-injected stage, since it has no file on disk).
 
-**Ingest-wrapped**, like the replay path in `core/runner.py` (`R-SIM-23`): a
-recording this framework did not produce carries its own topic vocabulary,
-remapped to port names by whichever `modules/*/sim/ingest/*.yaml` matches.
-For a recording it did produce, topics already equal port names (`R-SIM-6`),
-so wrapping is a no-op.
-
-`_topic_to_port_name` is a deliberate one-line copy of `core/runner.py`'s
-function rather than an import -- neither module imports the other for a
-one-liner.
+So the tick loop itself is not dead: it is the one thing that still runs a
+`stub:`-only pipeline at all. What is dead is running it as *production*
+code -- `sim resim`/`check scenario` never call it any more, and nothing
+under `src/adas_sim/` may import this module (a plain test-only helper has
+no place being reachable from the shipped package). Kept content-identical
+to the retired `core/resim.py` rather than rewritten, so its own proven
+behaviour (measured/simulate mixing, ingest-map wrapping, merged-file
+writing) carries over unchanged into its narrower role.
 """
 
 from __future__ import annotations
@@ -41,19 +50,11 @@ def _topic_to_port_name(topic: str) -> str:
 def _validate_measured_stages_against_recording(
     pipeline: Pipeline, topics: Mapping[str, TopicInfo], port_name_of: Mapping[str, str],
 ) -> None:
-    """`UT-C2-9`'s own hard-error half: a resim against a recording whose
-    port manifest differs from a `mode: measured` stage's own declared
-    outputs -- missing entirely, or a schema/`proto_type` mismatch --
-    refuses to start, naming both. `Pipeline.load`'s own `recording=`
-    parameter cannot do this for a real resim: it expects bare,
-    non-ingest-mapped topic keys (a vestige from before `S-C9`'s ingest
-    maps existed), and nothing in this codebase's real CLI ever wires it
-    up -- silently proceeding today means a measured stage with a missing
-    or mismatched output is fed an empty `measured` dict and produces
-    neutral/wrong output with no symptom (the tick loop below's own
-    `if ... in port_payloads` guard). This runs against the SAME
-    ingest-mapped topic index `resim_pipeline` already built -- no second
-    reader, no full `Session` decode just to pre-flight one resim."""
+    """A resim against a recording whose port manifest differs from a
+    `mode: measured` stage's own declared outputs -- missing entirely, or a
+    schema/`proto_type` mismatch -- refuses to start, naming both, rather
+    than silently feeding an empty `measured` dict and producing neutral/
+    wrong output with no symptom."""
     available = {port: topics[topic] for topic, port in port_name_of.items()}
     for stage in pipeline.stages:
         if stage.mode != "measured":
@@ -79,9 +80,6 @@ def _validate_measured_stages_against_recording(
 
 
 def _port_name_to_topic(name: str) -> str:
-    """Inverse of `_topic_to_port_name` -- private one-line copy, same
-    reasoning as that function's own docstring (`sources/recorder.py`'s
-    `topic_for` is not imported for a one-liner)."""
     return name.replace(".", "/")
 
 
@@ -102,28 +100,16 @@ def resim_pipeline(
 ) -> list[tuple[int, dict]]:
     """Runs `pipeline` tick by tick against `recording_path`: `mode:
     measured` stages are fed their recorded output bytes for that tick
-    (`Pipeline.exec`'s own `measured=` kwarg, `S-C1c`, unchanged);
-    `mode: simulate` stages execute live. Returns `(t_ns, outputs)` per
-    tick, `outputs` keyed exactly as `Pipeline.exec` returns it -- every
-    stage's port bytes this tick, by stage name then port name.
-
-    `on_tick`, if given, is called `(tick_count, t_ns)` immediately after
-    each tick's own `results.append` -- i.e. only once that tick has fully
-    completed. `core/batch_worker.py` uses this to checkpoint progress to
-    disk (`UT-D7-7`'s "last tick" gap): a process a `dll:`/`stubdll:`
-    library segfaults inside never returns from this function at all, so
-    the checkpoint file, not this function's return value, is the only
-    record of how far a crashing run got.
-    """
+    (`Pipeline.exec`'s own `measured=` kwarg); `mode: simulate` stages
+    execute live. Returns `(t_ns, outputs)` per tick, `outputs` keyed
+    exactly as `Pipeline.exec` returns it -- every stage's port bytes this
+    tick, by stage name then port name."""
     source_ports = _wired_source_ports(pipeline)
     measured_stage_names = [stage.name for stage in pipeline.stages if stage.mode == "measured"]
 
     reader = IngestRecordingReader(reader_for(recording_path), discover_ingest_maps())
     try:
         topics = reader.topics()
-        # Every topic key, in port-name space -- a no-op for a topic an
-        # ingest map already remapped to its final port name (S-C9), and
-        # the slash->dot conversion for one this framework recorded itself.
         port_name_of = {topic: _topic_to_port_name(topic) for topic in topics}
         _validate_measured_stages_against_recording(pipeline, topics, port_name_of)
         messages = list(reader.messages())
@@ -160,25 +146,11 @@ def resim_pipeline(
 
 
 def resim_pipeline_merged(pipeline: Pipeline, recording_path: Path, out_path: Path, *, meta: RunManifest) -> None:
-    """`S-D3`'s live-resim-to-Session capability (`ST-D3-1`): writes a FULL
-    merged recording at `out_path` -- every original topic passed through
-    unchanged, except each `mode: simulate` stage's own declared output
-    ports, which are overwritten with this resim's freshly-computed bytes
-    (`schema_bytes` populated from the component's own `descriptor_set`,
-    `R-SIM-11`, same fix as `Recorder._topics()`/`cli/resim.py`'s own
-    `_save_outputs`, so the merged file decodes exactly like a live
-    recording would). Unlike `cli/resim.py --save` (only the freshly-
-    simulated stages' own bytes), the file this writes is a complete
-    recording on its own -- `core/runner.build_session_from_recording` can
-    load it with no other input, which is the one and only way a `Session`
-    is ever built anywhere in this framework (`R-SIM-6`/`R-SIM-13`/
-    `R-SIM-14`): this function does not invent a second way, it produces
-    the artifact the existing way already knows how to read.
-
-    Same engine as `resim_pipeline` (`Pipeline.exec`, single-rate) -- a
-    GUI "Run" and `sim resim` must never silently diverge on the same
-    pipeline+recording (`R-SIM-16`'s "one engine").
-    """
+    """Writes a FULL merged recording at `out_path` -- every original topic
+    passed through unchanged, except each `mode: simulate` stage's own
+    declared output ports, which are overwritten with this resim's
+    freshly-computed bytes. `core/runner.build_session_from_recording` can
+    load the result with no other input."""
     source_ports = _wired_source_ports(pipeline)
     measured_stage_names = [stage.name for stage in pipeline.stages if stage.mode == "measured"]
     simulate_stages = [stage for stage in pipeline.stages if stage.mode == "simulate"]

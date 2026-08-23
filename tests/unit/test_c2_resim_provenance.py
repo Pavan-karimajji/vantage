@@ -12,12 +12,14 @@ real resim (it expects bare, non-ingest-mapped topic keys nothing in this
 codebase's real CLI ever supplies), and no mechanism at all produced the
 warning half before this pass.
 
-`core.resim._validate_measured_stages_against_recording` is the hard-error
-half (a real gap: `resim_pipeline` used to silently feed an empty
-`measured` dict for a missing/mismatched port and produce neutral-looking
-wrong output with no symptom). `core.manifest.check_library_provenance` is
-the warning half, deliberately the DEFAULT (unconditional) sibling of
-`--pin-builds`'s opt-in hard refusal (`UT-D7-9`).
+`tests.support.resim_for_tests._validate_measured_stages_against_recording`
+(`WP-16` moved this here from `core.resim` alongside `resim_pipeline` itself
+-- see that module's own docstring) is the hard-error half (a real gap:
+`resim_pipeline` used to silently feed an empty `measured` dict for a
+missing/mismatched port and produce neutral-looking wrong output with no
+symptom). `core.manifest.check_library_provenance` is the warning half,
+deliberately the DEFAULT (unconditional) sibling of `--pin-builds`'s opt-in
+hard refusal (`UT-D7-9`).
 """
 
 from __future__ import annotations
@@ -31,9 +33,10 @@ from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent,
 from adas_sim.graph.build import Pipeline, Stage
 from adas_sim.diagnostics.errors import AuthoringError, ProvenanceWarning
 from adas_sim.runspec.manifest import check_library_provenance
-from adas_sim.core.resim import resim_pipeline
 from adas_sim.io.base import ComponentBuildInfo, Provenance, RunManifest, TopicInfo
 from adas_sim.plugins.registry import writer_for
+
+from tests.support.resim_for_tests import resim_pipeline
 
 import adas_sim.io.mcap  # noqa: E402,F401 -- registers the ".mcap" codec
 

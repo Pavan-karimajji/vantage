@@ -29,9 +29,10 @@ from adas_sim.config.scenario import (
     EgoScenario, RoadHint, RunControl, Scenario, ScenarioContent, SensorModelRef, SutRef,
 )
 from adas_sim.runspec.manifest import build_manifest
-from adas_sim.core.resim import resim_pipeline
 from adas_sim.sources.recorder import Recorder
 from adas_sim.sources.synthetic import SyntheticSource
+
+from tests.support.resim_for_tests import resim_pipeline
 
 
 def _scalar_message_cls():

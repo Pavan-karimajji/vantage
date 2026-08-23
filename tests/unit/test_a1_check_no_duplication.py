@@ -26,22 +26,29 @@ def _write(path: Path, text: str = "x = 1\n") -> None:
 def test_check_no_duplication_passes_on_the_current_skeleton():
     findings, notes, checked = check_no_duplication()
     assert findings == []
-    assert checked == 7
+    assert checked == 6
     assert len(notes) == len(KNOWN_PENDING_DUPLICATION)
 
 
-def test_check_no_duplication_all_seven_capabilities_are_named():
+def test_check_no_duplication_all_six_capabilities_are_named():
+    """`codec` was briefly a seventh (`WP-15a`), removed 2026-08-23 auditing
+    `WP-16`: its C++ home is `simcore/io/codecs/mcap.cpp`, not `sil_host` --
+    `WP-15b`'s own subprocess-not-in-process decision means the Python
+    codec (`adas_sim.io.mcap`) never converges with it, so it was never
+    the phase-boundary duplication this check is for (see this module's
+    own docstring)."""
     assert set(CAPABILITY_HOMES) == {
         "pipeline_load_validate", "ingest_map_parse", "component_host",
         "recording_read_group", "library_resolve", "multi_rate_scheduler",
-        "codec",
     }
 
 
 def test_check_no_duplication_fails_on_a_planted_new_codec_duplication(tmp_path):
-    """The one capability with no known-pending entry: a C++ codec
-    appearing beside the Python one, with neither deleted, must fail
-    immediately -- this is the check's real teeth from day one."""
+    """A synthetic capability named "codec" (not the real, now-removed
+    entry above -- just a convenient name for this planted-violation case):
+    a C++ implementation appearing beside a Python one, with neither
+    deleted and no known-pending entry, must fail immediately -- this is
+    the check's real teeth from day one."""
     py = tmp_path / "mcap.py"
     cpp = tmp_path / "mcap.cpp"
     _write(py)

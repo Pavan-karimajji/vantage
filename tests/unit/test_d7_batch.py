@@ -23,8 +23,9 @@ from pathlib import Path
 from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent
 from adas_sim.graph.build import Pipeline
 from adas_sim.orchestrate.batch import RecordingOutcome, expand_recordings, run_batch, write_report
-from adas_sim.core.resim import resim_pipeline
 from adas_sim.engine.bridge import resolve_simengine_executable
+
+from tests.support.resim_for_tests import resim_pipeline
 from tests.system.test_d15b_engine_bridge import _echo_stub_path
 
 _TINY = Path(__file__).resolve().parent.parent / "fixtures" / "tiny.mcap"
@@ -123,9 +124,9 @@ def test_crashing_stage_is_contained_and_classified_crash(tmp_path, monkeypatch)
 
 def _direct_resim_outputs(pipeline_path: Path) -> list[tuple[int, dict]]:
     """A direct, non-subprocess resim of `_TINY` against `pipeline_path`, for
-    comparison against a batch result's own `last_tick_ns` -- same pattern
-    `test_d7_batch_isolation.py::test_pipeline_runs_identically_under_
-    resim_and_batch` already uses."""
+    comparison against a batch result's own `last_tick_ns`. `resim_pipeline`
+    comes from `tests/support/resim_for_tests.py`, not `adas_sim` (`WP-16`
+    moved it there -- see that module's own docstring)."""
     manifest = ComponentManifest(
         component="echo", version="test", abi_version=1, build_id="test-stub-echo",
         inputs=(), outputs=(), project="", config_bundle_sha256="", descriptor_set=b"", period_ns=0,

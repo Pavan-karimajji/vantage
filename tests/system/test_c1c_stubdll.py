@@ -38,8 +38,9 @@ import pytest
 
 from adas_sim.graph.build import Pipeline
 from adas_sim.diagnostics.determinism import compare_exact
+from adas_sim.diagnostics.errors import EnvironmentError_
+from adas_sim.engine.bridge import resolve_simengine_executable, run_pipeline_merged_via_engine
 from adas_sim.runspec.manifest import build_manifest
-from adas_sim.core.resim import resim_pipeline_merged
 from adas_sim.plugins.registry import reader_for
 
 _FIXTURE_SRC = Path(__file__).resolve().parents[1] / "fixtures" / "echo_stub" / "echo_stub_with_output.c"
@@ -109,6 +110,14 @@ def _require_interfaces_checkout():
         pytest.skip("interfaces submodule not checked out")
 
 
+@pytest.fixture(autouse=True)
+def _require_simengine():
+    try:
+        resolve_simengine_executable()
+    except EnvironmentError_ as exc:
+        pytest.skip(f"no built simengine found: {exc}")
+
+
 def _pipeline_yaml(path: Path, *, impl_kind: str) -> None:
     path.write_text(
         "version: 1\n"
@@ -124,15 +133,14 @@ def _pipeline_yaml(path: Path, *, impl_kind: str) -> None:
 
 def _resim_to(lib_dir: Path, pipeline_path: Path, out_path: Path) -> None:
     pipeline = Pipeline.load(pipeline_path, search=[lib_dir])
-    pipeline.init_components(None)
-    try:
-        meta = build_manifest(
-            pipeline=pipeline, pipeline_path=pipeline_path, run_kind="resim",
-            source_kind="mcap", recording_path=_TINY,
-        )
-        resim_pipeline_merged(pipeline, _TINY, out_path, meta=meta)
-    finally:
-        pipeline.shutdown_components()
+    meta = build_manifest(
+        pipeline=pipeline, pipeline_path=pipeline_path, run_kind="resim",
+        source_kind="mcap", recording_path=_TINY,
+    )
+    result = run_pipeline_merged_via_engine(
+        pipeline, _TINY, out_path, meta=meta, run_id=f"ut-c1c-15a-{out_path.stem}", search=[lib_dir],
+    )
+    assert result.ok, f"simengine exit_code={result.exit_code} stderr={result.stderr!r}"
 
 
 def test_ut_c1c_15a_stubdll_and_dll_impl_produce_byte_identical_results(tmp_path):

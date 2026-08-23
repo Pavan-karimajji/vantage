@@ -323,10 +323,20 @@ def _eval_row6(row: Row) -> RowResult:
 # landed src/simcore/io/{registry,reader_base,writer_base,decode,translate,
 # meta}.cpp + src/simcore/io/codecs/mcap.cpp, 14/14 IMP items done, verified
 # live (this session confirmed the file is real, 270 lines, and
-# `simcore_tests` runs its UT-IO-* suite green). `scripts/check_no_duplication.py`
-# already reports this pair as a live duplication (its own test currently
-# fails on exactly this) -- this row's PASS below is what justifies adding
-# "codec" to that script's KNOWN_PENDING_DUPLICATION, closed by WP-16.
+# `simcore_tests` runs its UT-IO-* suite green).
+#
+# **Corrected 2026-08-23, found auditing WP-16 before executing it: `io/
+# {base,mcap,csv,jsonl}.py`'s read paths are not "the retiring
+# implementation."** `WP-15b`'s own subprocess-not-in-process decision
+# (`engine/bridge.py`'s docstring) means the Python codec is permanent --
+# every rewired call site launches `simengine` as a child process and
+# reads its output back through exactly this code, forever. This row's
+# PASS is still real, valuable evidence (the two decoders agree on the
+# same corpus), and stays in the report -- what is wrong is the framing
+# that its own PASS "justifies" a deletion that was never going to happen.
+# `scripts/check_no_duplication.py` no longer lists "codec" at all (struck
+# 2026-08-23, same finding) rather than carrying a permanently-false
+# "closed by WP-16" promise.
 def _eval_row7(row: Row) -> RowResult:
     py_ok, py_detail = run_pytest(("tests/unit/test_a4_mcap.py",))
     cpp_status, cpp_detail = run_gtest(
@@ -360,7 +370,7 @@ ROWS: tuple[Row, ...] = (
         "sil_host/src/library_loader.cpp's resolve half",
         ("tests/unit/test_c1c_loader.py", "sil_host/tests/unit/test_pipeline_load_errors.cpp::StubdllImplLoads"), _eval_row6),
     Row(7, "Codec implementation", "simcore/io + src/simcore/io/codecs/mcap.cpp (C++, WP-06)",
-        "io/{base,mcap,csv,jsonl}.py read paths",
+        "io/{base,mcap,csv,jsonl}.py read paths (permanent, not retiring -- see this row's own note above)",
         ("tests/unit/test_a4_mcap.py", "tests/unit/test_ut_io_mcap_roundtrip.cpp", "tests/unit/test_ut_io_codec_contract.cpp"), _eval_row7),
 )
 

@@ -15,13 +15,17 @@ one family every other test happens to exercise.
 
 Deliberately synthetic (no real perception-core recording exists yet, the
 plan's own scope note) -- says so in the test's own name, never disguised
-as a real fixture. Drives the REAL `core.resim.resim_pipeline` (the exact
-function `cli/resim.py`/`sim resim` calls), with `discover_ingest_maps`
-monkeypatched to this test's own in-memory `IngestMap` -- the mechanism
-under test is `IngestRecordingReader`/`resim_pipeline`, not the real
-filesystem scan `S-C9`'s own docstring already covers via `df`'s checked-in
-`carla_legacy.yaml`, and a synthetic, framework-agnostic component
-("perception") has no real ingest map on disk to write one for."""
+as a real fixture. Drives the REAL `resim_pipeline` (`cli/resim.py`/
+`sim resim`'s own production path called this exact tick loop until `WP-16`
+moved it to `tests/support/resim_for_tests.py` -- see that module's own
+docstring for why a `stub:`-only pipeline like this one has no path through
+`engine.bridge`'s real, compiled-`.dll`-only engine), with
+`discover_ingest_maps` monkeypatched to this test's own in-memory
+`IngestMap` -- the mechanism under test is `IngestRecordingReader`/
+`resim_pipeline`, not the real filesystem scan `S-C9`'s own docstring
+already covers via `df`'s checked-in `carla_legacy.yaml`, and a synthetic,
+framework-agnostic component ("perception") has no real ingest map on disk
+to write one for."""
 
 from __future__ import annotations
 
@@ -31,10 +35,11 @@ import pytest
 
 from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
 from adas_sim.graph.build import Pipeline
-from adas_sim.core.resim import resim_pipeline
 from adas_sim.io.base import Provenance, RunManifest, TopicInfo
 from adas_sim.ingest.map import IngestMap, ProvidedPort
 from adas_sim.plugins.registry import writer_for
+
+from tests.support.resim_for_tests import resim_pipeline
 
 import adas_sim.io.mcap  # noqa: E402,F401 -- registers the ".mcap" codec
 
@@ -111,7 +116,7 @@ def test_synthetic_perception_recording_drives_a_two_stage_pipeline_through_its_
         absent=(),
         path=Path("<synthetic, in-memory -- ST-C9-2 test fixture, no real component owns this>"),
     )
-    monkeypatch.setattr("adas_sim.core.resim.discover_ingest_maps", lambda: (ingest_map,))
+    monkeypatch.setattr("tests.support.resim_for_tests.discover_ingest_maps", lambda: (ingest_map,))
 
     recording_path = tmp_path / "synthetic_perception.mcap"
     _write_synthetic_perception_recording(recording_path, tick_count=3)

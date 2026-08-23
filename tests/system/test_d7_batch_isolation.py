@@ -7,11 +7,20 @@
 
 - `ST-D7-2` -- over >=20 recordings, one report, a failing recording does
   not abort the run.
-- `ST-D7-3` -- the SAME pipeline file `sim resim` uses runs unmodified under
-  `sim batch` (`R-SIM-16` -- the identity is the point).
 - `ST-D7-5` -- a batch of 20 with one deliberately crashing and one
   deliberately hanging produces 18 normal outcomes plus those two, distinctly
   classified; the exit code reflects failure without hiding the successes.
+
+`ST-D7-3` (the SAME pipeline file `sim resim` uses runs unmodified under
+`sim batch`) had its own test here, `test_pipeline_runs_identically_under_
+resim_and_batch`, comparing against a direct `core.resim.resim_pipeline`
+call as an independent oracle -- struck `WP-16`: once `core/resim.py` is
+retired, there is no second Python implementation left to compare against,
+and `WP-15a` already proved `sil_host`/`simcore` equivalence at the C++
+level (`prove_equal.py`, 7/7 rows). `R-SIM-16`'s identity claim itself is
+unaffected -- `sim batch` and `sim resim` both go through
+`engine.bridge.run_pipeline_via_engine` today, by construction, not by a
+test comparing two implementations.
 """
 
 from __future__ import annotations
@@ -20,8 +29,6 @@ import pytest
 from pathlib import Path
 
 from adas_sim.cli.batch import run as batch_run
-from adas_sim.graph.build import Pipeline
-from adas_sim.core.resim import resim_pipeline
 from adas_sim.engine.bridge import resolve_simengine_executable
 from tests.system.test_d15b_engine_bridge import _echo_stub_path
 
@@ -101,30 +108,6 @@ def test_batch_over_20_recordings_one_report_failure_does_not_abort(tmp_path, mo
     assert len(crashed) == 1
     assert crashed[0].recording.stem == "rec_05"
     assert len(ok) == _RECORDING_COUNT - 1
-
-
-def test_pipeline_runs_identically_under_resim_and_batch(tmp_path, monkeypatch):
-    """ST-D7-3: the same pipeline file, unmodified, run through a direct
-    resim (`resim_pipeline`, an independent oracle -- `WP-15b` did not
-    touch `core/resim.py` itself, only its callers) and through
-    `sim batch`'s subprocess path -- both must see the same tick count for
-    the same recording, over the real `echo_stub` component."""
-    lib_dir = _echo_stub_lib_dir(tmp_path, monkeypatch)
-    pipeline_path = _echo_pipeline(tmp_path)
-
-    direct_pipeline = Pipeline.load(pipeline_path, search=[lib_dir])
-    direct_pipeline.init_components()
-    try:
-        direct_outputs = resim_pipeline(direct_pipeline, _TINY)
-    finally:
-        direct_pipeline.shutdown_components()
-
-    from adas_sim.orchestrate.batch import run_batch
-
-    batch_results = run_batch([_TINY], pipeline_path, search=[lib_dir])
-
-    assert batch_results[0].outcome == "ok"
-    assert batch_results[0].tick_count == len(direct_outputs)
 
 
 def test_batch_of_20_with_one_crash_one_hang_exit_code_reflects_failure(tmp_path, monkeypatch):

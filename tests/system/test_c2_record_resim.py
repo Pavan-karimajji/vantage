@@ -9,11 +9,15 @@ except one) and `ST-C2-2` (`sim resim` reproduces byte-identical outputs
 across two runs) -- `docs/sim_implementation_plan.md`.
 
 Drives the real engines underneath the CLI verbs (`sources.recorder.Recorder`,
-`core.resim.resim_pipeline`) rather than `cli.record.run`/`cli.resim.run`
-themselves: those top-level entry points resolve `impl:` through
-`dll:`/`stubdll:` only (no `components=` registry to inject a Python stub,
-same limitation `test_c1c_pipeline.py`'s own fixtures accept), and no
-compiled SIL library exists in this Python-only test environment.
+`resim_pipeline`) rather than `cli.record.run`/`cli.resim.run` themselves:
+those top-level entry points resolve `impl:` through `dll:`/`stubdll:` only
+(no `components=` registry to inject a Python stub, same limitation
+`test_c1c_pipeline.py`'s own fixtures accept), and no compiled SIL library
+exists in this Python-only test environment. `resim_pipeline` itself comes
+from `tests/support/resim_for_tests.py`, not `adas_sim` (`WP-16`, `IMP-0013`):
+production resim now goes through `engine.bridge.run_pipeline_via_engine`,
+which cannot run a `stub:`-only pipeline like this one at all (no compiled
+`.dll` to point it at) -- see that support module's own docstring.
 """
 
 from __future__ import annotations
@@ -28,9 +32,10 @@ from adas_sim.config.scenario import (
     EgoScenario, RoadHint, RunControl, Scenario, ScenarioContent, SensorModelRef, SutRef,
 )
 from adas_sim.runspec.manifest import build_manifest
-from adas_sim.core.resim import resim_pipeline
 from adas_sim.sources.recorder import Recorder
 from adas_sim.sources.synthetic import SyntheticSource
+
+from tests.support.resim_for_tests import resim_pipeline
 
 
 def _scenario(name: str = "t") -> Scenario:
