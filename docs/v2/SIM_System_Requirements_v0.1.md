@@ -2228,7 +2228,7 @@ Constraints are obligations on *how* the system is built, imposed because a corr
 **Shall.** Code executing per tick, per message or per sample shall be C++; code executing once per run, or at user-interaction or display rate, shall be Python.
 **Accept.** Every module of the system is classifiable by the rule with no case requiring judgement. A per-message code path in the scripting layer fails a static check.
 **Verify.** A · `ANL-43` · `INSP-11`   **Trace.** CN-0288, CN-0289; v1 `FR-SIM-30`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-15b`, `WP-16`
+**Built.** ◐ started — 0/1 software requirements done, in `WP-15b`, `WP-16`
 
 **`SYS-0270`** · `P0` · `R1` — One implementation per concept
 **Shall.** No concept shall be implemented in both languages; where one exists on both sides today, one side shall be deleted rather than maintained in step.

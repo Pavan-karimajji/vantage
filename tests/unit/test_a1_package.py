@@ -23,6 +23,9 @@ EXPECTED_SUBPACKAGES = {
     "core", "scene", "io", "sources", "check", "cli",
     "config", "graph", "ingest", "resolve", "runspec", "orchestrate",
     "diagnostics", "session", "render", "player", "plugins",
+    # WP-15b (IMP-0422): the one shared bridge onto simcore/simengine's C
+    # ABI every rewired call site (cli/resim.py first) goes through.
+    "engine",
 }
 
 #: UT-A1-2: importing any subpackage must not pull these in as a side effect.

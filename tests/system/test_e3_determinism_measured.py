@@ -11,14 +11,34 @@ same-process and fresh-process axes, over an actual resim. **The numbers
 go in this document, whatever they are** -- timed and reported, not
 asserted as a bound (`ST-B2-2`/`ST-D7-7`'s own discipline).
 
-**Same-process**: two `sim resim` calls made in-process (this test's own
-Python process), so `core.manifest._PROCESS_NONCE` -- generated once at
-import time -- is identical between them by construction; `derive_axis`
-should report `same_process`.
+**Found live by `WP-15b` (2026-08-23), corrected here rather than left
+silently red:** this test's own `same_process` claim assumed `cli.resim.
+run()` executed `df_sil.dll` in THIS Python process, so two calls shared
+one `process_nonce` by construction. `WP-15b` (`IMP-0422`) moved execution
+to a `simengine` subprocess per call (`engine.bridge` -- `simcore` is a
+STATIC library with no in-process ABI artifact to bind, see that module's
+own docstring on why subprocess is the only shape every call site could
+take). `cli.resim.run()` therefore now launches a genuinely separate OS
+process on every call, same as `sim.exe resim` always did -- there is no
+longer a Python-level "in-process" resim anywhere in the product to
+measure `same_process` against. `_resim_in_process`'s name is kept (only
+its own docstring below corrected) since it is still what a Python caller
+in this same process invokes; it is simply no longer same-process
+UNDERNEATH. The genuine same-process claim (two `simEngineRun` calls on
+one already-constructed engine, one OS process) now lives at the C++
+level -- `IT-11`/`UT-ABI-*` (`tests/integration/test_it11_embed_host.cpp`,
+`test_ut_abi_writer_and_resolver.cpp`) -- not here.
 
-**Fresh-process**: one in-process call plus one real `sim.exe resim`
-subprocess -- a genuinely separate process, a different `process_nonce`,
-same library/host/config, so `derive_axis` should report `fresh_process`.
+**What this test still proves, and does:** every one of the three resims
+below is fresh-process by construction now; `exact_ab`/`exact_ac` staying
+`True` is the determinism claim that actually matters (`R-SIM-24`) --
+`simengine` reproduces byte-identical output across independent process
+launches, over a real `df_sil.dll`.
+
+**Fresh-process**: any two of the three resims below -- each its own
+`simengine`/`sim.exe` OS process, a different `process_nonce`, same
+library/host/config -- so `derive_axis` reports `fresh_process` for every
+pair.
 
 **Rebuilt-binary and different-machine stay unmeasured here, honestly** --
 the first needs a second, independently-built `df_sil.dll` from the same
@@ -69,6 +89,10 @@ def _require_real_environment():
 
 
 def _resim_in_process(out_path: Path) -> None:
+    """Called in THIS Python process, but (since `WP-15b`) executes
+    `df_sil.dll` in a fresh `simengine` child process every time -- see
+    this module's own top-of-file note. Name kept: this is still the
+    "call it from Python code, not a shelled-out CLI" case."""
     exit_code = resim_run([
         str(_RECORDING), "--pipeline", str(_PIPELINE_PATH), "--save", str(out_path),
         "--search", str(_DF_SIL_DIR), "--config", str(_DF_SIL_DIR / "config"),
@@ -116,13 +140,17 @@ def test_gt13_determinism_same_process_and_fresh_process_measured(tmp_path, caps
 
     with capsys.disabled():
         print(f"\nGT-13/NR-SIM-40: {_RECORDING.name} through df_only.yaml against a real df_sil.dll")
-        print(f"  same_process  (2 in-process resims, {same_process_s:.2f}s): "
+        print(f"  fresh_process (2 Python-invoked resims, {same_process_s:.2f}s): "
               f"axis={axis_ab!r} exact={exact_ab}")
-        print(f"  fresh_process (in-process vs sim.exe subprocess, {fresh_process_s:.2f}s): "
+        print(f"  fresh_process (Python-invoked vs sim.exe subprocess, {fresh_process_s:.2f}s): "
               f"axis={axis_ac!r} exact={exact_ac}")
+        print("  same_process: no longer reachable from a Python call site since WP-15b -- see IT-11/UT-ABI-* instead")
         print("  rebuilt_binary, different_machine: not measured this pass (needs a second build / a second machine)")
 
-    assert axis_ab == "same_process"
+    # WP-15b: both pairs are fresh_process now (see this file's own
+    # top-of-file note) -- the claim that survives is determinism itself,
+    # not which axis it was filed under.
+    assert axis_ab == "fresh_process"
     assert exact_ab is True
     assert axis_ac == "fresh_process"
     assert exact_ac is True
