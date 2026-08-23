@@ -18,10 +18,28 @@ binding, for its own wire form or for a component's.
 from __future__ import annotations
 
 import ctypes
+import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
+
+if sys.platform == "win32":
+    # A malformed/wrong-architecture PE image (a deliberately-invalid test
+    # fixture, or a genuine build mismatch) makes Windows' own WER "close
+    # program" dialog pop up and BLOCK -- synchronously, at the OS level,
+    # before ctypes.CDLL below ever gets control back to raise the OSError
+    # its own except clause already handles. That is a modal dialog on the
+    # developer's desktop, not a Python exception, so no try/except here
+    # can prevent it -- only SetErrorMode, called once, before the first
+    # LoadLibrary this process ever attempts, does. SEM_FAILCRITICALERRORS
+    # (0x0001) + SEM_NOGPFAULTERRORBOX (0x0002): the process still gets a
+    # real error back (ctypes.CDLL still raises OSError exactly as before),
+    # it just never blocks on a human clicking OK first -- interactive and
+    # CI/headless runs behave identically either way, which is the actual
+    # goal (a `dll:` stage naming an invalid library is a normal, expected
+    # authoring/test error, not a crash needing an operator).
+    ctypes.windll.kernel32.SetErrorMode(0x0001 | 0x0002)
 
 from adas_sim.diagnostics.errors import ContractError, EnvironmentError_, InternalError
 from adas_sim.diagnostics.logging import Event, log
