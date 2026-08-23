@@ -19,7 +19,6 @@ build is not present -- same "not_built is never a failure" discipline
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
@@ -40,13 +39,22 @@ _ECHO_STUB_CANDIDATES_WINDOWS = (_SIM_ROOT / "build-gtest-vs2026" / "tests" / "R
 _ECHO_STUB_CANDIDATES_POSIX = (_SIM_ROOT / "build-gtest-ubuntu_gcc" / "tests" / "libecho_stub.so",)
 
 
-def _echo_stub_path() -> Path | None:
-    """`simengine`/`echo_stub` are native binaries -- on Windows, the
-    subprocess this test drives cannot load a Linux `.so` (nor vice versa)
-    even though WSL2 interop makes both trees visible on one filesystem,
-    so the candidate list is platform-scoped, same as
-    `engine.bridge._SIMENGINE_CANDIDATES`."""
-    candidates = _ECHO_STUB_CANDIDATES_WINDOWS if os.name == "nt" else _ECHO_STUB_CANDIDATES_POSIX
+def _echo_stub_path(engine_path: Path) -> Path | None:
+    """Paired with whichever `simengine` binary was actually resolved, by
+    its own `.exe`/no-suffix format -- **never** by `os.name`. Both a
+    vs2026 and an ubuntu_gcc build can be present on disk at once (WSL2
+    interop makes both trees visible from one Linux Python process), and
+    `resolve_simengine_executable`'s own candidate order (most-specific-
+    platform-first, unconditional on host OS, same as
+    `scripts/prove_equal.py`'s) can resolve a Windows `.exe` even while
+    this test itself runs under Linux `os.name == 'posix'`. Selecting the
+    stub from `os.name` instead of `engine_path`'s own format is exactly
+    the bug this fixes: it silently pairs a Windows `simengine.exe` with a
+    Linux `.so`, which Windows refuses to load with a blocking
+    'Bad Image' dialog (0xc000012f) -- the two binaries in one subprocess
+    invocation must always share one format, decided from the engine
+    binary that was actually picked, not from the host running pytest."""
+    candidates = _ECHO_STUB_CANDIDATES_WINDOWS if engine_path.suffix == ".exe" else _ECHO_STUB_CANDIDATES_POSIX
     for candidate in candidates:
         if candidate.is_file():
             return candidate
@@ -54,13 +62,14 @@ def _echo_stub_path() -> Path | None:
 
 
 def _require_engine_and_stub() -> tuple[Path, Path]:
-    stub = _echo_stub_path()
-    if stub is None:
-        pytest.skip(f"no built echo_stub found (looked for {_ECHO_STUB_CANDIDATES})")
     try:
         engine = resolve_simengine_executable()
     except EnvironmentError_ as exc:
         pytest.skip(f"no built simengine found: {exc}")
+    stub = _echo_stub_path(engine)
+    if stub is None:
+        pytest.skip(f"no built echo_stub found paired with {engine} (looked for "
+                     f"{_ECHO_STUB_CANDIDATES_WINDOWS if engine.suffix == '.exe' else _ECHO_STUB_CANDIDATES_POSIX})")
     return engine, stub
 
 

@@ -29,13 +29,16 @@ from tests.system.test_d15b_engine_bridge import (
 
 
 def _require_engine_and_stub() -> Path:
-    stub = _echo_stub_path()
-    if stub is None:
-        pytest.skip("no built echo_stub found for this platform")
+    # Paired by the resolved engine binary's own format, never by os.name --
+    # see test_d15b_engine_bridge.py::_echo_stub_path's own docstring for
+    # the exact "Bad Image" (0xc000012f) bug this pairing avoids.
     try:
-        resolve_simengine_executable()
+        engine = resolve_simengine_executable()
     except EnvironmentError_ as exc:
         pytest.skip(f"no built simengine found: {exc}")
+    stub = _echo_stub_path(engine)
+    if stub is None:
+        pytest.skip("no built echo_stub found paired with the resolved simengine binary")
     return stub
 
 
