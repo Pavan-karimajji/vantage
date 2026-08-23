@@ -17,6 +17,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
 from check_invariants import (  # noqa: E402
+    check_anl_sw61,
     check_codec_scope_no_function_name,
     check_gt1,
     check_gt3,
@@ -200,3 +201,44 @@ def test_check_ut_d8_9_is_case_sensitive_so_ordinary_english_survives(tmp_path):
         "# run this scenario on the test bench before the campaign starts\n", encoding="utf-8",
     )
     assert check_ut_d8_9(src_root=tmp_path) == []
+
+
+def test_check_anl_sw61_passes_on_an_empty_tree(tmp_path):
+    assert check_anl_sw61(all_src_root=tmp_path) == []
+
+
+def test_check_anl_sw61_fails_on_a_planted_load_library_call_outside_dso_cpp(tmp_path):
+    (tmp_path / "other.cpp").write_text('auto h = LoadLibraryW(path.c_str());\n', encoding="utf-8")
+    findings = check_anl_sw61(all_src_root=tmp_path)
+    assert findings
+    assert "ANL-SW-61" in findings[0]
+
+
+def test_check_anl_sw61_allows_the_load_library_call_inside_dso_cpp(tmp_path):
+    (tmp_path / "dso.cpp").write_text('auto h = LoadLibraryW(path.c_str());\n', encoding="utf-8")
+    assert check_anl_sw61(all_src_root=tmp_path) == []
+
+
+def test_check_anl_sw61_fails_on_a_planted_dlopen_call_outside_dso_cpp(tmp_path):
+    (tmp_path / "other.cpp").write_text('auto h = dlopen(path.c_str(), RTLD_NOW);\n', encoding="utf-8")
+    findings = check_anl_sw61(all_src_root=tmp_path)
+    assert findings
+    assert "ANL-SW-61" in findings[0]
+
+
+def test_check_anl_sw61_fails_on_a_planted_relative_walk_outside_config_paths(tmp_path):
+    (tmp_path / "adas_sim" / "other").mkdir(parents=True)
+    (tmp_path / "adas_sim" / "other" / "example.py").write_text(
+        "_ROOT = Path(__file__).resolve().parents[3]\n", encoding="utf-8",
+    )
+    findings = check_anl_sw61(all_src_root=tmp_path)
+    assert findings
+    assert "ANL-SW-61" in findings[0]
+
+
+def test_check_anl_sw61_allows_the_relative_walk_inside_config_paths_py(tmp_path):
+    (tmp_path / "adas_sim" / "config").mkdir(parents=True)
+    (tmp_path / "adas_sim" / "config" / "paths.py").write_text(
+        "_SIM_ROOT = Path(__file__).resolve().parents[3]\n", encoding="utf-8",
+    )
+    assert check_anl_sw61(all_src_root=tmp_path) == []

@@ -92,6 +92,20 @@ bool ParseArgs(int argc, char** argv, Args& out) {
   return !out.run_spec_path.empty();
 }
 
+// `IMP-0129`/`SW-0129` (`WP-03`): the C++ half of `P-4`'s "console UTF-8
+// reconfiguration, called once at every entry point" -- `adas_sim.
+// diagnostics.console.reconfigure_console_utf8` is the Python half,
+// already real. A Windows console defaults to `cp1252`/`cp850` and would
+// otherwise mangle the em-dashes/arrows this binary's own `[simengine]`
+// diagnostics print; a POSIX terminal already defaults to UTF-8, so
+// nothing is needed there.
+void EnableUtf8Console() {
+#if defined(_WIN32)
+  SetConsoleOutputCP(CP_UTF8);
+  SetConsoleCP(CP_UTF8);
+#endif
+}
+
 void PrintPid() {
 #if defined(_WIN32)
   std::cout << "[simengine] pid=" << GetCurrentProcessId() << "\n";
@@ -275,6 +289,8 @@ SimExitCode RunWithSupervision(const Args& args) {
 }  // namespace
 
 int main(int argc, char** argv) {
+  EnableUtf8Console();
+
   Args args;
   if (!ParseArgs(argc, argv, args)) {
     std::cerr << "usage: " << argv[0]

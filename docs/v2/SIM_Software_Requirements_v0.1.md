@@ -1516,7 +1516,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Every process entry point shall force console encoding before emitting output.
 **Accept.** Diagnostics containing non-ASCII characters read identically on both platforms in a default shell.
 **Verify.** T · `UT-ERR-07`   **Trace.** SYS-0126; CN-0363
-**Built.** ◐ started — `IMP-0129` in `WP-03`
+**Built.** ● done — `IMP-0129` in `WP-03`
 **Now.** `DONE·MOVE` — `core/console.py::reconfigure_console_utf8`, called at each entry point.
 
 **`SW-0130`** · `SI-07` · `P1` · `R1` — Every run ends with a warning summary that reconciles
@@ -3065,7 +3065,7 @@ These bind every software item, so none owns them alone; the item field reads `a
 **Shall.** Path handling, case sensitivity, separators and dynamic library loading shall each be abstracted behind one implementation.
 **Accept.** No user-facing surface exposes a platform difference. A static check finds one implementation of each.
 **Verify.** A · `ANL-SW-61`   **Trace.** SYS-0248
-**Built.** ◐ started — `IMP-0364` in `WP-03`
+**Built.** ● done — `IMP-0364` in `WP-03`
 **Now.** `PARTIAL` — path handling is consistent; dynamic loading is abstracted in `sil_host` and duplicated by the ctypes host in Python, which `SW-0018` removes.
 
 **`SW-0365`** · all · `P0` · `R1` — Floating-point expectations are part of the delivery contract

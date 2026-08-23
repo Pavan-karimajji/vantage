@@ -1248,7 +1248,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The system shall emit structured logs from a closed event vocabulary, with a human-readable console option, and console encoding shall be forced at every entry point.
 **Accept.** Every emitted event is a member of the published vocabulary; the same run's console output is byte-comparable across platforms after normalising line endings.
 **Verify.** T · `SYT-OUT-15`   **Trace.** CN-0116, CN-0286, CN-0363
-**Built.** ◐ started — 1/2 software requirements done, in `WP-03`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0127`** · `P0` · `R1` — The system does not decide pass or fail
 **Shall.** The system shall not decide whether a run passed.
@@ -2084,7 +2084,7 @@ Superseded (`SM-04`, 2026-08-20 — sole decomposer was `SI-18`'s scene-cache-bu
 **Shall.** Path handling, case sensitivity, separators and dynamic library loading shall be abstracted behind the system.
 **Accept.** No user-facing surface exposes a platform difference. A configuration written on one platform loads on the other with no edit.
 **Verify.** T · `SYT-NFR-16`   **Trace.** CN-0244, CN-0245
-**Built.** ◐ started — 2/3 software requirements done, in `WP-03`, `WP-10`
+**Built.** ● done — 3/3 software requirements done
 
 **`SYS-0249`** · `P0` · `R1` — Floating-point expectations are part of the contract
 **Shall.** Compiler flag expectations affecting floating-point behaviour shall be part of the delivery contract, and deviations shall be warned about at load.

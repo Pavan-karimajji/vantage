@@ -41,6 +41,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from adas_sim.config.fault import FaultVerb
+from adas_sim.config.paths import sim_root
 from adas_sim.diagnostics.errors import EnvironmentError_, InternalError
 from adas_sim.graph.build import Pipeline, _split_ref
 from adas_sim.io.base import Provenance, RunManifest, TopicInfo, group_by_log_time
@@ -80,7 +81,7 @@ SIM_EXIT_INFRA = 6
 SIM_EXIT_TIMEOUT = 7
 SIM_EXIT_CRASH = 8
 
-_MODULE_ROOT = Path(__file__).resolve().parents[3]  # modules/sim/
+_MODULE_ROOT = sim_root()
 
 #: Candidate build directories for the `simengine` executable, most
 #: specific platform first -- same shape `scripts/prove_equal.py`'s own

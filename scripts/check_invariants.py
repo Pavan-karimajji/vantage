@@ -280,6 +280,44 @@ _ANL_SW_34_DIRS = ("config", "graph", "ingest", "runspec")
 _IO_OR_CTYPES_IMPORT = re.compile(r"^\s*(?:from\s+adas_sim\.io(?:\.\w+)*\s+import|import\s+adas_sim\.io\b|import\s+ctypes\b|from\s+ctypes\s+import)")
 
 
+# ANL-SW-61 (WP-03, IMP-0364): "path handling and dynamic loading are
+# abstracted at one place each" (SW-0364). Two independent, narrow
+# invariants under one check ID, matching the design test spec's own
+# pairing: a real OS dynamic-load call belongs only in `dso.cpp`
+# (`simcore::module_host`, C++); the specific fragile-relative-path
+# anti-pattern IMP-0364's own text names -- `Path(__file__).resolve().
+# parents[N]`, hardcoded against this checkout's own directory depth --
+# belongs only in `config/paths.py` (`ConfigPaths`). Deliberately not a
+# blanket "no path-separator arithmetic anywhere" scan: that would be
+# broad enough to false-positive on unrelated string formatting with no
+# real fragility to it, which is not what either the Shall or the
+# violation this check exists to catch actually names.
+_DYNAMIC_LOAD_CALL = re.compile(r"\b(LoadLibrary[AW]?|dlopen)\s*\(")
+_RESOLVE_PARENTS_WALK = re.compile(r"\.resolve\(\)\.parents\[")
+
+
+def check_anl_sw61(all_src_root: Path = ALL_SRC_ROOT) -> list[str]:
+    """`ANL-SW-61`: a `LoadLibrary`/`dlopen` call outside `dso.cpp`, or a
+    `Path(...).resolve().parents[N]` relative-walk outside `config/
+    paths.py`."""
+    findings = []
+    for path in _iter_source_files(all_src_root):
+        if path.name == "dso.cpp":
+            continue
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if _DYNAMIC_LOAD_CALL.search(line):
+                findings.append(f"ANL-SW-61 {path}:{lineno}: dynamic-load call outside dso.cpp: {line.strip()!r}")
+    for path in _iter_py_files(all_src_root / "adas_sim"):
+        if path.name == "paths.py" and path.parent.name == "config":
+            continue
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if _RESOLVE_PARENTS_WALK.search(line):
+                findings.append(
+                    f"ANL-SW-61 {path}:{lineno}: fragile relative-path walk outside config/paths.py: {line.strip()!r}"
+                )
+    return findings
+
+
 def check_anl_sw34(src_root: Path = SRC_ROOT) -> list[str]:
     """`ANL-SW-34`: a direct `adas_sim.io`/`ctypes` import in `config/`,
     `graph/`, `ingest/` or `runspec/`. **Not yet in `run_all()`** -- `graph/
@@ -377,6 +415,7 @@ def run_all(
         *check_anl_sw02(),
         *check_anl_sw03(),
         *check_anl_sw04(),
+        *check_anl_sw61(all_src_root),
     ]
 
 
@@ -387,7 +426,7 @@ def main(argv: list[str] | None = None) -> int:
     if findings:
         print(f"\n{len(findings)} invariant violation(s)")
         return 1
-    print("GT-1, GT-2, GT-3, GT-6, GT-11, UT-D8-9, WP-02(b), ANL-SW-02/03/04: clean")
+    print("GT-1, GT-2, GT-3, GT-6, GT-11, UT-D8-9, WP-02(b), ANL-SW-02/03/04/61: clean")
     return 0
 
 
