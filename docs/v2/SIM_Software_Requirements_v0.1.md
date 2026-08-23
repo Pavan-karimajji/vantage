@@ -373,7 +373,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** `SI-14` shall emit a spec sufficient on its own to construct and run the engine, with no other file consulted at run time except the recordings and module binaries the spec names by absolute path.
 **Accept.** Running the engine with the configuration source tree deleted, and only the spec, the named recordings and the named binaries present, produces identical port values.
 **Verify.** T · `IT-01`   **Trace.** SYS-0165, SYS-0216, CN-0293
-**Built.** ◐ started — `IMP-0002` in `WP-05`
+**Built.** ● done — `IMP-0002` in `WP-05`
 **Now.** `NEW`.
 
 **`SW-0003`** · `SI-14` · `P0` · `R1` — The spec carries absolute pre-resolved binary paths

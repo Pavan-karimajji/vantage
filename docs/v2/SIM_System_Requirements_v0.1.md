@@ -1457,7 +1457,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The system shall produce a Resolved Run Spec — flat, with every path resolved, every mode decided, every period computed, every validation passed — write it and its hash into the run artifacts, and treat it as the only input the engine takes.
 **Accept.** The engine performs no configuration inference, no schema upgrading, no wiring validation and no library search-path logic; it requires no configuration-language parser. The same spec hash always produces the same results.
 **Verify.** T · `SYT-CFG-08` · `ANL-24`   **Trace.** CN-0292, CN-0293, CN-0294, CN-0296, CN-0179; v1 `FR-SIM-30`
-**Built.** ◐ started — 7/9 software requirements done, in `WP-05`, `WP-09`, `WP-13`, `WP-16`, `WP-22`
+**Built.** ◐ started — 8/9 software requirements done, in `WP-05`, `WP-09`, `WP-13`, `WP-16`, `WP-22`
 
 **`SYS-0166`** · `P0` · `R1` — Absolute, pre-resolved binary paths
 **Shall.** The Resolved Run Spec shall carry absolute, already-resolved paths for every module binary; the engine shall perform no stem expansion and consult no search path.
@@ -1807,7 +1807,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The engine shall be launchable from a Resolved Run Spec with no interpreter in the process.
 **Accept.** The debugging session contains no interpreter frames. The engine executable contains no configuration parser, no validation, no path search and no inference.
 **Verify.** D · `SYT-DIA-15` · `ANL-30`   **Trace.** CN-0219, CN-0388, CN-0389
-**Built.** ◐ started — 3/4 software requirements done, in `WP-05`, `WP-14`
+**Built.** ● done — 4/4 software requirements done
 
 **`SYS-0217`** · `P1` · `R1` — Symbols and shipped launch configurations
 **Shall.** Symbol resolution shall be documented and configurable for both platforms, and the package shall ship ready-made debugger launch configurations for common development environments on both.
