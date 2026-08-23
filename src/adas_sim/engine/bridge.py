@@ -40,6 +40,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from adas_sim.config.fault import FaultVerb
 from adas_sim.diagnostics.errors import EnvironmentError_, InternalError
 from adas_sim.graph.build import Pipeline, _split_ref
 from adas_sim.io.base import Provenance, RunManifest, TopicInfo, group_by_log_time
@@ -227,6 +228,74 @@ def _stage_impl_dict(pipeline: Pipeline, stage) -> dict:
     }
 
 
+def _fault_mutations(faults: Sequence, *, grid_step_ns: int) -> list[dict]:
+    """`WP-15b` follow-on (found attempting the package, closed here):
+    `scenario.run.faults` (`config/fault.py::Fault`) has no RunSpec array of
+    its own -- `simcore`'s own `mutate::FaultSpec`/`ApplyFault` exist
+    (`mutate/faults.cpp`) but nothing wires a `faults[]` key into the wire
+    format or the engine's cycle loop yet, a real design decision named as
+    a follow-on rather than guessed at during `WP-15b` itself.
+
+    **What actually closes the found gap today:** `FaultVerb.CORRUPT` is
+    exactly `OverrideVerb.CONST` applied to the STIMULUS (`config/fault.py`'s
+    own docstring: "corrupt reuses the override CONST verb's own byte-level
+    mutation") -- and the mutation vocabulary, its `window_ns` scoping and
+    its consumer-side application against a `source.<port>`-addressed value
+    (`cycle_loop.cpp`'s own `producer`/`bare` match, `R-SIM-21`'s reserved
+    `source.<port>` keyword) already exist and are already wired. So a
+    `corrupt` fault is translated into an equivalent `const` mutation here,
+    address `{stage: "source", port: <fault's own port>}` -- reusing tested
+    infrastructure end to end rather than adding a second, unwired
+    mechanism. `drop`/`stale`/`delay`/`invalidate` have no equivalent verb
+    in the closed six (`R-SIM-15`) -- each is a metadata flip `simcore`'s
+    `ApplyFault` already knows how to do, but with no wire format to reach
+    it yet -- so a fault of one of those verbs is a named, loud
+    `InternalError` rather than a silent no-op (`R-SIM-25`), until a real
+    `faults[]` RunSpec array + cycle-loop wiring lands as its own follow-on.
+
+    **Window translation:** `from_s`/`to_s` (inclusive both ends, `Fault.
+    active_at`) become `window_ns = [round(from_s*1e9), round(to_s*1e9)+1]`
+    -- `+1` because `simcore::mutate::InWindow` is half-open
+    (`[start_ns, end_ns)`, `IMP-0108`), so without it a fault active exactly
+    AT `to_s` would stop one nanosecond early. `after_tick` (open-ended)
+    becomes `[after_tick * grid_step_ns, None]` -- the same base grid
+    `Pipeline._tick_index` counts against (`R-SIM-18`), already computed
+    once for this same spec's own `grid.step_ns`, never re-derived."""
+    mutations: list[dict] = []
+    for fault in faults:
+        if fault.verb is not FaultVerb.CORRUPT:
+            raise InternalError(
+                expected="a run.faults verb this bridge can translate into a RunSpec mutation (today: corrupt only)",
+                found=f"verb={fault.verb.value!r} address={fault.address!r}",
+                where="adas_sim.engine.bridge._fault_mutations",
+                hint="drop/stale/delay/invalidate have no equivalent in the closed six-verb mutation "
+                     "vocabulary yet (WP-15b's own named follow-on, simcore::mutate::FaultSpec exists "
+                     "but no RunSpec faults[] array reaches it) -- only corrupt maps onto const",
+            )
+        resolved_address = resolve_address(fault.address, stage="source", where=f"run.faults address {fault.address!r}")
+        if fault.after_tick is not None:
+            if grid_step_ns <= 0:
+                raise InternalError(
+                    expected="a positive grid.step_ns to convert run.faults[].after_tick into a window_ns",
+                    found=f"grid_step_ns={grid_step_ns}", where="adas_sim.engine.bridge._fault_mutations",
+                    hint="no stage declares a period_ns > 0 for this pipeline",
+                )
+            window_ns = [fault.after_tick * grid_step_ns, None]
+        else:
+            window_ns = [round(fault.from_s * 1_000_000_000), round(fault.to_s * 1_000_000_000) + 1]
+        mutations.append({
+            "verb": "const",
+            "address": {
+                "stage": resolved_address.stage, "port": resolved_address.port,
+                "path": list(resolved_address.path),
+                "index": "*" if resolved_address.all_elements else resolved_address.index,
+            },
+            "operands": [fault.value],
+            "window_ns": window_ns,
+        })
+    return mutations
+
+
 def pipeline_to_run_spec(
     pipeline: Pipeline, *, run_id: str, recording_path: Path, recording_sha256: str = "",
     output_path: Path | None = None, exec_timeout_ms: int = 250,
@@ -287,13 +356,16 @@ def pipeline_to_run_spec(
                 "window_ns": [0, None],
             })
 
+    grid_step_ns = _compute_grid_step_ns(period_ns_by_stage)
+    mutations.extend(_fault_mutations(pipeline.faults, grid_step_ns=grid_step_ns))
+
     outputs = {"path": str(output_path), "codec": "mcap"} if output_path is not None else {}
 
     data: dict[str, object] = {
         "schema": RUN_SPEC_SCHEMA,
         "run_id": run_id,
         "spec_sha256": "",
-        "grid": {"step_ns": _compute_grid_step_ns(period_ns_by_stage)},
+        "grid": {"step_ns": grid_step_ns},
         "sources": [{
             "path": str(recording_path), "sha256": recording_sha256, "codec": "mcap",
             "ingest": [], "absent": [],  # WP-12's ingest-map parser not landed yet, same as emit_run_spec's own

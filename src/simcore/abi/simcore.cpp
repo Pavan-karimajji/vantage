@@ -164,6 +164,47 @@ void PopulateDescriptorPool(
   }
 }
 
+// `WP-15b` follow-on (`engine.bridge._fault_mutations`): a `run.faults`
+// `corrupt` verb is translated, on the Python side, into a `const` mutation
+// addressed `{stage: "source", port: <port>}` -- reusing the mutation
+// vocabulary/window/consumer-side matching this file already wires (`R-SIM-
+// 21`'s reserved `source.<port>` keyword) rather than a second, unwired
+// mechanism. But `resolve_port` below only ever looked in `spec.stages` for
+// a message `Descriptor`, and `"source"` is never a `SpecStage` -- a source
+// port has no component manifest, only whatever schema the RECORDING itself
+// declares per topic (`R-SIM-11`). This does the same best-effort,
+// multi-pass build `PopulateDescriptorPool` does for component manifests,
+// from every topic's own `TopicInfo::schema_bytes` instead -- so a `const`
+// mutation targeting `source.<port>.<field>` can resolve a `Descriptor` the
+// same way one targeting a real stage's own port already does.
+void PopulateDescriptorPoolFromTopics(const std::map<std::string, simcore::io::TopicInfo>& topics,
+                                       google::protobuf::DescriptorPool& pool) {
+  std::vector<google::protobuf::FileDescriptorProto> pending;
+  for (const auto& [topic, info] : topics) {
+    if (info.schema_bytes.empty()) continue;
+    google::protobuf::FileDescriptorSet file_set;
+    if (!file_set.ParseFromArray(info.schema_bytes.data(), static_cast<int>(info.schema_bytes.size()))) continue;
+    for (const auto& file_proto : file_set.file()) {
+      pending.push_back(file_proto);
+    }
+  }
+  for (std::size_t remaining = pending.size(); remaining > 0;) {
+    std::vector<google::protobuf::FileDescriptorProto> next;
+    std::size_t built_this_pass = 0;
+    for (const auto& file_proto : pending) {
+      if (pool.FindFileByName(file_proto.name()) != nullptr) continue;
+      if (pool.BuildFile(file_proto) != nullptr) {
+        ++built_this_pass;
+      } else {
+        next.push_back(file_proto);
+      }
+    }
+    pending = std::move(next);
+    if (built_this_pass == 0) break;
+    remaining = pending.size();
+  }
+}
+
 }  // namespace
 
 // One constructed engine: the spec plus every live object the cycle loop
@@ -292,9 +333,16 @@ SimEngine* simEngineCreate(const char* run_spec_json_path, const char* config_pa
   // spec with zero `mutations` still gets one, and it is a no-op by
   // construction (this file's own top note).
   PopulateDescriptorPool(engine->owned_components, engine->descriptor_pool);
+  // `WP-15b` follow-on: also from every recorded topic's own schema, so a
+  // `source.<port>`-addressed mutation (a translated `run.faults` `corrupt`
+  // entry, `engine.bridge._fault_mutations`, or a real user override) can
+  // resolve a `Descriptor` too -- a source port has no `SpecStage` manifest
+  // to draw one from otherwise (this file's own note on `PopulateDescriptor
+  // PoolFromTopics`).
+  PopulateDescriptorPoolFromTopics(engine->reader->Describe(), engine->descriptor_pool);
   engine->message_factory = std::make_unique<google::protobuf::DynamicMessageFactory>(&engine->descriptor_pool);
   simcore::mutate::Mutator::PortResolver resolve_port =
-      [&spec = engine->spec, &pool = engine->descriptor_pool](
+      [&spec = engine->spec, &pool = engine->descriptor_pool, &reader = *engine->reader](
           const std::string& stage, const std::string& port) -> std::optional<simcore::mutate::PortInfo> {
     for (const simcore::SpecStage& candidate : spec.stages) {
       if (candidate.name != stage) continue;
@@ -304,6 +352,20 @@ SimEngine* simEngineCreate(const char* run_spec_json_path, const char* config_pa
         if (descriptor == nullptr) return std::nullopt;
         return simcore::mutate::PortInfo{descriptor, candidate_port.fixed_slots};
       }
+    }
+    if (stage == "source") {
+      const std::map<std::string, simcore::io::TopicInfo> topics = reader.Describe();
+      const auto it = topics.find(simcore::runner::PortNameToTopic(stage + "." + port));
+      if (it == topics.end() || it->second.schema_name.empty()) return std::nullopt;
+      const google::protobuf::Descriptor* descriptor = pool.FindMessageTypeByName(it->second.schema_name);
+      if (descriptor == nullptr) return std::nullopt;
+      // A source port carries no `SpecPort::fixed_slots` of its own
+      // (`select`/`drop[*]` on the stimulus is not a case this pass adds --
+      // only `const`, from a translated `corrupt` fault, reaches this
+      // branch today); `std::nullopt` matches every real component's own
+      // still-unset `fixed_slots` (`runspec/address.py`'s own note on why
+      // that stays `None` until `S-C1d` lands).
+      return simcore::mutate::PortInfo{descriptor, std::nullopt};
     }
     return std::nullopt;
   };

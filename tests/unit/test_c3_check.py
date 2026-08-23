@@ -300,24 +300,6 @@ def _record_stim_recording(tmp_path: Path, name: str, values: list[float]) -> Pa
     return recording_path
 
 
-@pytest.mark.skip(
-    reason="found live during WP-15b: scenario.run.faults (FaultVerb/"
-    "Pipeline._apply_stimulus_faults, SS9.2) is applied entirely inside "
-    "Pipeline.exec()'s own Python tick loop, which the new engine bridge "
-    "(engine.bridge.run_pipeline_via_engine, driving simengine as a "
-    "subprocess) never calls -- pipeline_to_run_spec translates a stage's "
-    "declared overrides (R-SIM-15's six-verb vocabulary) into the RunSpec's "
-    "mutations, but has no equivalent translation for scenario.run.faults "
-    "at all, so a fault is now silently a no-op through this call site. "
-    "Confirmed live: this test's own EXP-CORRUPTED assertion fails because "
-    "the stimulus reaches echo_stub completely unmodified. Closing this "
-    "needs either (a) pipeline_to_run_spec translating each Fault into an "
-    "equivalent mutation (FaultVerb.CORRUPT -> OverrideVerb.CONST on "
-    "source.<port>, with from_s/to_s mapped to the mutation's window_ns) "
-    "or (b) simengine growing its own fault-timeline concept -- a real "
-    "design decision, not a wiring fix, so left as a named follow-on "
-    "rather than guessed at here.",
-)
 def test_check_scenario_applies_scenario_faults_during_resim(tmp_path, monkeypatch):
     engine, stub = _require_real_echo_stub()
     _configure_real_echo_stub(monkeypatch, lib_dir=tmp_path / "lib", stub_path=stub)
