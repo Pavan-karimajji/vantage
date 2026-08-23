@@ -201,7 +201,13 @@ def unresolved(spec: RunSpec) -> list[str]:
             for key, value in node.items():
                 child_where = f"{where}.{key}"
                 if key in ("path", "search") and isinstance(value, str):
-                    if not Path(value).is_absolute():
+                    # An empty path is the closed-vocabulary sentinel for
+                    # "no file" (a measured/off stage's `ImplRef`, same
+                    # literal shape `BuildAbi02RunSpecJson`'s own `meas`
+                    # stage fixture uses in
+                    # tests/integration/test_ut_abi_writer_and_resolver.cpp)
+                    # -- never a relative-path authoring mistake.
+                    if value and not Path(value).is_absolute():
                         findings.append(f"{child_where}: relative path {value!r}")
                 if isinstance(value, str) and (value.startswith("self.") or value.startswith("source.")):
                     findings.append(f"{child_where}: unresolved reference {value!r}")

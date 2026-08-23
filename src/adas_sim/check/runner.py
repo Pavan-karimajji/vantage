@@ -38,6 +38,7 @@ resim against.
 
 from __future__ import annotations
 
+import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -48,7 +49,14 @@ from adas_sim.graph.build import Pipeline
 from adas_sim.config.paths import superproject_root as _superproject_root
 from adas_sim.config.scenario import load_scenario
 from adas_sim.diagnostics.errors import AuthoringError
-from adas_sim.core.resim import resim_pipeline
+from adas_sim.engine.bridge import (
+    DEFAULT_RECORDING_EXT,
+    decode_ticks,
+    run_pipeline_via_engine,
+    topic_to_port_name,
+    validate_measured_stages_against_recording,
+)
+from adas_sim.plugins.registry import reader_for
 from adas_sim.session.tick import Pose2D, PortValue, Tick
 
 _SUPERPROJECT_ROOT = _superproject_root()
@@ -231,11 +239,41 @@ def check_scenario(
     pipeline = Pipeline.load(
         resolved_pipeline_path, search=search, components=components, faults=scenario.run.faults,
     )
-    pipeline.init_components(config_path)
+
+    # WP-15b (IMP-0422): execution moved to `simengine`, out of process
+    # (`engine.bridge` -- see that module's own docstring for why every
+    # call site is subprocess-shaped: `simcore` builds static-only, no
+    # in-process ABI artifact to bind). `init_components`/
+    # `shutdown_components` are gone from this call site: they existed to
+    # drive a real `CtypesSilComponent`'s `adasInit`/`adasShutdown`
+    # in-process, which `simengine` now does itself inside its own
+    # subprocess. The pre-flight check `resim_pipeline` used to run
+    # (`UT-C2-9`) is reused here directly, before the recording is handed
+    # to the engine, since a missing/mismatched `measured` stage output is
+    # cheaper to refuse up front than to discover as an all-`updated=False`
+    # tick after paying for a subprocess run.
+    reader = reader_for(resolved_recording)
     try:
-        outputs = resim_pipeline(pipeline, resolved_recording)
+        recording_topics = reader.topics()
     finally:
-        pipeline.shutdown_components()
+        reader.close()
+    port_name_of = {topic: topic_to_port_name(topic) for topic in recording_topics}
+    validate_measured_stages_against_recording(pipeline, recording_topics, port_name_of)
+
+    with tempfile.TemporaryDirectory(prefix="adas_sim_check_") as tmp_dir:
+        output_path = Path(tmp_dir) / f"check_out{DEFAULT_RECORDING_EXT}"
+        result = run_pipeline_via_engine(
+            pipeline, resolved_recording, run_id=f"check-{scenario.id}", output_path=output_path,
+            config_path=config_path,
+        )
+        if not result.ok:
+            raise AuthoringError(
+                expected="simengine to exit ok (SimExitCode kSimExitOk)",
+                found=f"exit_code={result.exit_code}: {result.stderr or result.stdout}",
+                where=f"simengine {resolved_pipeline_path} {resolved_recording}",
+                hint="see stderr above for the failing stage/spec",
+            )
+        outputs = decode_ticks(output_path)
     ticks = _ticks_from_resim(pipeline, outputs)
     sut = _sole_simulate_stage(pipeline)
     results = evaluate_scenario(scenario, ticks, sut=sut)

@@ -16,24 +16,52 @@
 
 from __future__ import annotations
 
+import pytest
 from pathlib import Path
 
 from adas_sim.cli.batch import run as batch_run
 from adas_sim.graph.build import Pipeline
 from adas_sim.core.resim import resim_pipeline
+from adas_sim.engine.bridge import resolve_simengine_executable
+from tests.system.test_d15b_engine_bridge import _echo_stub_path
 
 _TINY = Path(__file__).resolve().parent.parent / "fixtures" / "tiny.mcap"
 _RECORDING_COUNT = 20
+#: `tiny.mcap`'s own declared cadence (`tests/fixtures/make_tiny_mcap.py`).
+_ECHO_PERIOD_NS = 50_000_000
 
 
 def _echo_pipeline(tmp_path: Path) -> Path:
+    """`WP-15b`: `dll:echo_stub`, not `stub:echo` -- see
+    `tests/unit/test_d7_batch.py`'s own `_echo_pipeline` docstring, same
+    reasoning applied here."""
     path = tmp_path / "echo_pipeline.yaml"
     path.write_text(
         "version: 1\nname: echo_test\nstages:\n"
-        "  - name: echo\n    mode: simulate\n    impl: \"stub:echo\"\n    inputs: {}\n",
+        "  - name: echo\n    mode: simulate\n    impl: \"dll:echo_stub\"\n    inputs: {}\n",
         encoding="utf-8",
     )
     return path
+
+
+def _echo_stub_lib_dir(tmp_path: Path, monkeypatch) -> Path:
+    """Same helper as `tests/unit/test_d7_batch.py::_echo_stub_lib_dir`,
+    duplicated rather than cross-imported (a system-test file importing a
+    unit-test helper module would invert the usual dependency direction)."""
+    try:
+        engine = resolve_simengine_executable()
+    except Exception as exc:  # noqa: BLE001 -- EnvironmentError_, re-raised as a skip below
+        pytest.skip(f"no built simengine found: {exc}")
+    stub = _echo_stub_path(engine)
+    if stub is None:
+        pytest.skip("no built echo_stub found paired with the resolved simengine binary")
+    lib_dir = tmp_path / "lib"
+    lib_dir.mkdir(exist_ok=True)
+    (lib_dir / ("echo_stub" + stub.suffix)).write_bytes(stub.read_bytes())
+    monkeypatch.setenv("ADAS_SIL_TEST_STUB_NAME", "echo")
+    monkeypatch.setenv("ADAS_SIL_TEST_STUB_PERIOD_NS", str(_ECHO_PERIOD_NS))
+    monkeypatch.setenv("ADAS_SIL_TEST_STUB_OUTPUT_PORT", "heartbeat")
+    return lib_dir
 
 
 def _copy_recordings(tmp_path: Path, count: int) -> list[Path]:
@@ -48,6 +76,7 @@ def _copy_recordings(tmp_path: Path, count: int) -> list[Path]:
 
 def test_batch_over_20_recordings_one_report_failure_does_not_abort(tmp_path, monkeypatch):
     """ST-D7-2."""
+    lib_dir = _echo_stub_lib_dir(tmp_path, monkeypatch)
     pipeline = _echo_pipeline(tmp_path)
     recordings = _copy_recordings(tmp_path, _RECORDING_COUNT)
     # rec_05 fails cleanly (a load/authoring problem, not a crash) -- the
@@ -55,16 +84,9 @@ def test_batch_over_20_recordings_one_report_failure_does_not_abort(tmp_path, mo
     monkeypatch.setenv("ADAS_SIM_BATCH_TEST_STUB_MAP", "rec_05=crash")
     report_path = tmp_path / "report.md"
 
-    # --test-stub-echo is core/batch.py's own kwarg, not exposed on the CLI
-    # (a real sim batch never needs it -- a real component is always a
-    # dll:/stubdll:, see cli/batch.py). Drives core.batch.run_batch/
-    # write_report directly -- what cli/batch.py itself calls -- since no
-    # compiled component exists in this shell to exercise the CLI's own
-    # argv path end to end (test_cli_reports_failure_via_exit_code below
-    # covers the CLI layer with a case that needs no stub at all).
     from adas_sim.orchestrate.batch import run_batch, write_report
 
-    results = run_batch(recordings, pipeline, test_stub_echo=("echo",), timeout_s=5.0)
+    results = run_batch(recordings, pipeline, search=[lib_dir], timeout_s=5.0)
     write_report(results, report_path)
 
     assert len(results) == _RECORDING_COUNT
@@ -81,30 +103,25 @@ def test_batch_over_20_recordings_one_report_failure_does_not_abort(tmp_path, mo
     assert len(ok) == _RECORDING_COUNT - 1
 
 
-def test_pipeline_runs_identically_under_resim_and_batch(tmp_path):
-    """ST-D7-3: the same pipeline file, unmodified, run through sim resim's
-    own engine (resim_pipeline + components=) and through sim batch's
-    subprocess path -- both must see the same tick count for the same
-    recording."""
+def test_pipeline_runs_identically_under_resim_and_batch(tmp_path, monkeypatch):
+    """ST-D7-3: the same pipeline file, unmodified, run through a direct
+    resim (`resim_pipeline`, an independent oracle -- `WP-15b` did not
+    touch `core/resim.py` itself, only its callers) and through
+    `sim batch`'s subprocess path -- both must see the same tick count for
+    the same recording, over the real `echo_stub` component."""
+    lib_dir = _echo_stub_lib_dir(tmp_path, monkeypatch)
     pipeline_path = _echo_pipeline(tmp_path)
 
-    from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent
-
-    manifest = ComponentManifest(
-        component="echo", version="test", abi_version=1, build_id="test",
-        inputs=(), outputs=(), project="", config_bundle_sha256="", descriptor_set=b"", period_ns=0,
-    )
-    component = InProcessSilComponent(name="echo", manifest=manifest, fn=lambda dt_ns, inputs: {})
-    pipeline = Pipeline.load(pipeline_path, components={"echo": component})
-    pipeline.init_components()
+    direct_pipeline = Pipeline.load(pipeline_path, search=[lib_dir])
+    direct_pipeline.init_components()
     try:
-        direct_outputs = resim_pipeline(pipeline, _TINY)
+        direct_outputs = resim_pipeline(direct_pipeline, _TINY)
     finally:
-        pipeline.shutdown_components()
+        direct_pipeline.shutdown_components()
 
     from adas_sim.orchestrate.batch import run_batch
 
-    batch_results = run_batch([_TINY], pipeline_path, test_stub_echo=("echo",))
+    batch_results = run_batch([_TINY], pipeline_path, search=[lib_dir])
 
     assert batch_results[0].outcome == "ok"
     assert batch_results[0].tick_count == len(direct_outputs)
@@ -112,13 +129,14 @@ def test_pipeline_runs_identically_under_resim_and_batch(tmp_path):
 
 def test_batch_of_20_with_one_crash_one_hang_exit_code_reflects_failure(tmp_path, monkeypatch):
     """ST-D7-5."""
+    lib_dir = _echo_stub_lib_dir(tmp_path, monkeypatch)
     pipeline = _echo_pipeline(tmp_path)
     recordings = _copy_recordings(tmp_path, _RECORDING_COUNT)
     monkeypatch.setenv("ADAS_SIM_BATCH_TEST_STUB_MAP", "rec_03=crash;rec_11=hang")
 
     from adas_sim.orchestrate.batch import run_batch
 
-    results = run_batch(recordings, pipeline, test_stub_echo=("echo",), timeout_s=3.0)
+    results = run_batch(recordings, pipeline, search=[lib_dir], timeout_s=3.0)
 
     by_stem = {r.recording.stem: r.outcome for r in results}
     assert by_stem["rec_03"] == "crash"

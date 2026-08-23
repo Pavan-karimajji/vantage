@@ -42,6 +42,24 @@
 ///       "abi_test.AbiPort" while active, since the two must agree.
 ///       ADAS_SIL_TEST_STUB_OUTPUT_VALUE (default "42"): the `double`
 ///       encoded into that message.
+///
+///   ONE optional input port, mirroring the output port's own "read at
+///   call time" design, added for `WP-15b`'s own test-infrastructure gap
+///   (`check/runner.py`'s and `orchestrate/worker.py`'s tests need a real,
+///   resolvable component that genuinely echoes ONE input to its output --
+///   a `components=`-injected Python closure has no equivalent once a
+///   call site runs through a real subprocess boundary):
+///     ADAS_SIL_TEST_STUB_INPUT_PORT (default "" -- no input port at all)
+///     ADAS_SIL_TEST_STUB_INPUT_PROTO_TYPE (default "test.Echo")
+///     ADAS_SIL_TEST_STUB_INPUT_MAX_BYTES (default 64)
+///   When set, `adasExec` copies the named input port's own bytes
+///   VERBATIM to the named output port -- a raw-byte passthrough, no
+///   protobuf awareness needed here, since the caller's own serialized
+///   message round-trips unchanged (exactly what a Python
+///   `lambda dt_ns, inputs: {"outputs": inputs["in"]}` closure used to do
+///   in-process). Only fires when BOTH an input and an output port are
+///   declared; the output-only OUTPUT_VALUE/constant-byte behaviour above
+///   is unchanged when no input port is set.
 /// @author Pavan Karimajji
 
 #include <chrono>
@@ -163,6 +181,14 @@ ADAS_SIL_API size_t adasManifest(uint8_t* data, size_t cap) {
     *file_set.add_file() = BuildAbiTestFileDescriptorProto();
     manifest.set_descriptor_set(file_set.SerializeAsString());
   }
+  const std::string inputPort = EnvOr("ADAS_SIL_TEST_STUB_INPUT_PORT", "");
+  if (!inputPort.empty()) {
+    ::adas::sil::PortSpec* spec = manifest.add_inputs();
+    spec->set_name(inputPort);
+    spec->set_proto_type(realSchema ? "abi_test.AbiPort"
+                                     : EnvOr("ADAS_SIL_TEST_STUB_INPUT_PROTO_TYPE", "test.Echo"));
+    spec->set_max_bytes(static_cast<uint32_t>(EnvOrU64("ADAS_SIL_TEST_STUB_INPUT_MAX_BYTES", 64)));
+  }
 
   const size_t needed = static_cast<size_t>(manifest.ByteSizeLong());
   if (data == nullptr || cap < needed) {
@@ -181,7 +207,6 @@ ADAS_SIL_API void* adasInit(const char* configPath) {
 ADAS_SIL_API int32_t adasExec(void* handle, double dtS, const AdasPortSet* in, AdasPortSet* out) {
   (void)handle;
   (void)dtS;
-  (void)in;
   if (EnvOrBool("ADAS_SIL_TEST_STUB_HANG", false)) {
     // Deliberately never returns -- see ADAS_SIL_TEST_STUB_HANG above.
     // sleep_for (not a spin loop) is the real observable side effect that
@@ -197,10 +222,30 @@ ADAS_SIL_API int32_t adasExec(void* handle, double dtS, const AdasPortSet* in, A
   if (outputPort.empty() || !EnvOrBool("ADAS_SIL_TEST_STUB_OUTPUT_DUE", true)) {
     return 1;
   }
+  // ADAS_SIL_TEST_STUB_INPUT_PORT: a genuine echo -- the named input
+  // port's own bytes, verbatim, take over the output payload below. Only
+  // when the input was actually received this tick (`valid`); otherwise
+  // falls through to the constant/AbiPort payload unchanged, same as
+  // before this port existed.
+  const std::string inputPort = EnvOr("ADAS_SIL_TEST_STUB_INPUT_PORT", "");
+  std::vector<uint8_t> echoed;
+  bool haveEcho = false;
+  if (!inputPort.empty() && in != nullptr) {
+    for (size_t i = 0; i < in->count; ++i) {
+      if (in->ports[i].name == nullptr || inputPort != in->ports[i].name) continue;
+      if (in->ports[i].valid != 0 && in->ports[i].data != nullptr) {
+        echoed.assign(in->ports[i].data, in->ports[i].data + in->ports[i].len);
+        haveEcho = true;
+      }
+      break;
+    }
+  }
   const bool realSchema = EnvOrBool("ADAS_SIL_TEST_STUB_OUTPUT_REAL_SCHEMA", false);
-  const std::vector<uint8_t> payload = realSchema
-                                            ? EncodeAbiTestPort(EnvOrDouble("ADAS_SIL_TEST_STUB_OUTPUT_VALUE", 42.0))
-                                            : std::vector<uint8_t>{0xAB};
+  const std::vector<uint8_t> payload = haveEcho
+                                            ? echoed
+                                            : (realSchema
+                                                   ? EncodeAbiTestPort(EnvOrDouble("ADAS_SIL_TEST_STUB_OUTPUT_VALUE", 42.0))
+                                                   : std::vector<uint8_t>{0xAB});
   for (size_t i = 0; i < out->count; ++i) {
     if (out->ports[i].name == nullptr || outputPort != out->ports[i].name) continue;
     if (out->ports[i].cap >= payload.size()) {

@@ -7,30 +7,54 @@
 
 `core/batch.py` launches one of these per recording -- isolation is at run
 granularity, never per tick. This module does one recording's worth of
-`Pipeline.load` -> `init_components` -> `resim_pipeline` -> `shutdown_components`
-and writes its outcome as JSON to `--out-json`.
+`Pipeline.load` -> `engine.bridge.run_pipeline_via_engine` and writes its
+outcome as JSON to `--out-json`.
 
 **It only ever reports `ok` or `fail` about itself.** A real crash kills this
 process before it can write anything, so the parent classifies
 `crash`/`timeout`/`fail` from the outside (missing JSON plus an abnormal exit)
 rather than trusting a value a dying process claims about its own death.
 
-`--checkpoint-json` is overwritten after every tick, and is the only record of
-progress that survives a crash -- in-memory state dies with the process.
+`WP-15b` (`IMP-0422`): execution moved to `simengine`, one further
+subprocess out from this one (`engine.bridge` -- `simcore` is a STATIC
+library with no in-process ABI artifact to bind, see that module's own
+docstring). Two consequences, found live and left as named follow-ons
+rather than guessed at here:
 
-Three test-only hooks, never reachable from a real `sim batch`:
+- **`--checkpoint-json` is currently never written.** It existed to record
+  progress after every tick (`_write_checkpoint`, driven by
+  `resim_pipeline`'s own `on_tick` callback) so a mid-run crash's last tick
+  survived the crash. `simengine` has real per-cycle checkpointing in C++
+  (`src/simcore/runner/checkpoint.cpp`) but no ABI/CLI path exposing it yet
+  (`WP-14a`'s own addendum names this gap) -- there is currently no
+  mechanism for this process to observe a tick boundary inside its own
+  child subprocess. The flag is still accepted (never written) so
+  `orchestrate/batch.py`'s own `--checkpoint-json` plumbing needs no
+  change; a crash's `tick_count`/`last_tick_ns` now read `unknown`
+  (`R-SIM-25`/`NR-SIM-4`) rather than the last real tick, which is the
+  honest answer, not a regression papered over.
+- **`--test-stub-echo`'s own `InProcessSilComponent` injection is gone.**
+  A Python closure has no equivalent once this stage runs through
+  `simengine`'s own subprocess boundary (the same gap `WP-14a`'s addendum
+  names for all three of `WP-15b`'s remaining call sites). The flag is
+  still accepted for CLI compatibility with `orchestrate/batch.py`'s own
+  `--test-stub-echo` forwarding, but is now a no-op: a stage still needs a
+  real `impl: dll:<stem>` resolvable via `--search` (the real,
+  built `echo_stub` test fixture, `tests/fixtures/echo_stub`, is the
+  real answer for a test needing a real component with no production
+  library -- see `tests/unit/test_d7_batch.py`'s own updated fixtures).
+
+Two test-only hooks remain live (unaffected by the above -- both fire
+before `Pipeline.load`, so neither ever touches the engine):
 
 - `ADAS_SIM_BATCH_TEST_STUB=crash|hang` -- die or hang with no pipeline
   involved, so the parent's classifier can be tested without a component that
   can be told to segfault. `ADAS_SIM_BATCH_TEST_STUB_MAP="stemA=crash;stemB=hang"`
   is the per-recording form.
-- `--test-stub-echo NAME` -- inject a zero-port `InProcessSilComponent` for one
-  stage, so the end-to-end path (`ST-D7-2`, `ST-D7-3`) runs with no compiled
-  component available.
-- `ADAS_SIM_BATCH_TEST_CRASH_AFTER_TICK=N` -- run N ticks for real, then exit
-  abnormally from inside `on_tick`. The one shape the blanket hook cannot
-  produce, and what proves the checkpoint reflects real progress at the moment
-  of death.
+- `ADAS_SIM_TEST_FORCE_ABORT` (forwarded to the `simengine` child via the
+  environment) aborts inside `simengine` itself -- `src/simengine/main.cpp`'s
+  own hook, reused here rather than duplicated (`UT-D7-7`'s own "genuine
+  abnormal termination" case, now one level further out).
 """
 
 from __future__ import annotations
@@ -39,32 +63,18 @@ import argparse
 import json
 import os
 import sys
+import tempfile
 import time
 from pathlib import Path
 
-from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent
 from adas_sim.graph.build import Pipeline
 from adas_sim.diagnostics.errors import SimError
-from adas_sim.core.resim import resim_pipeline
+from adas_sim.engine.bridge import count_ticks, run_pipeline_via_engine
 
 #: Values `ADAS_SIM_BATCH_TEST_STUB` recognizes -- a closed set, same
 #: discipline every other closed vocabulary in this codebase uses, so a typo
 #: fails loudly (KeyError) rather than silently running the real pipeline.
 _TEST_HOOKS = ("crash", "hang")
-
-
-def _empty_manifest(name: str) -> ComponentManifest:
-    """A manifest with no declared ports -- `--test-stub-echo`'s own stage
-    therefore needs no `inputs:` wiring in the test pipeline file, and
-    `resim_pipeline` calls `exec()` with an empty input map every tick."""
-    return ComponentManifest(
-        component=name, version="test", abi_version=1, build_id="test-stub-echo",
-        inputs=(), outputs=(), project="", config_bundle_sha256="", descriptor_set=b"", period_ns=0,
-    )
-
-
-def _echo_component(name: str) -> InProcessSilComponent:
-    return InProcessSilComponent(name=name, manifest=_empty_manifest(name), fn=lambda dt_ns, inputs: {})
 
 
 def _hook_for_recording(recording: Path | None) -> str | None:
@@ -130,59 +140,43 @@ def _write_result(out_json: Path, **fields: object) -> None:
     out_json.write_text(json.dumps(fields, sort_keys=True), encoding="utf-8")
 
 
-def _write_checkpoint(path: Path, *, tick_count: int, last_tick_ns: int) -> None:
-    """Overwritten after every tick (`UT-D7-7`) -- written to a sibling
-    `.tmp` path and `os.replace`d into place so a reader (`core/batch.py`,
-    after this process is already dead) never observes a torn write, same
-    discipline `Recorder`/writer code elsewhere in this framework uses for
-    any file another process reads concurrently."""
-    tmp_path = path.with_name(path.name + ".tmp")
-    tmp_path.write_text(json.dumps({"tick_count": tick_count, "last_tick_ns": last_tick_ns}), encoding="utf-8")
-    os.replace(tmp_path, path)
-
-
 def main(argv: list[str] | None = None) -> int:
     _maybe_run_test_hook(None)  # the blanket-only shortcut, before paying for argparse
 
     args = _build_parser().parse_args(argv)
     _maybe_run_test_hook(args.recording)  # the per-recording ADAS_SIM_BATCH_TEST_STUB_MAP case
-    components = {name: _echo_component(name) for name in args.test_stub_echo} or None
-
-    crash_after_tick = os.environ.get("ADAS_SIM_BATCH_TEST_CRASH_AFTER_TICK")
-    progress: dict[str, int | None] = {"tick_count": 0, "last_tick_ns": None}
-
-    def _on_tick(tick_count: int, t_ns: int) -> None:
-        progress["tick_count"] = tick_count
-        progress["last_tick_ns"] = t_ns
-        if args.checkpoint_json is not None:
-            _write_checkpoint(args.checkpoint_json, tick_count=tick_count, last_tick_ns=t_ns)
-        if crash_after_tick is not None and tick_count == int(crash_after_tick):
-            os._exit(139)  # see ADAS_SIM_BATCH_TEST_CRASH_AFTER_TICK in this module's docstring
+    # args.test_stub_echo, args.checkpoint_json: accepted for CLI
+    # compatibility with orchestrate/batch.py's own forwarding, both
+    # currently no-ops -- see this module's own docstring for why.
 
     try:
-        pipeline = Pipeline.load(args.pipeline, search=tuple(args.search), components=components)
-        pipeline.init_components(args.config)
-        try:
-            outputs = resim_pipeline(pipeline, args.recording, on_tick=_on_tick)
-        finally:
-            pipeline.shutdown_components()
+        pipeline = Pipeline.load(args.pipeline, search=tuple(args.search))
+        with tempfile.TemporaryDirectory(prefix="adas_sim_batch_worker_") as tmp_dir:
+            output_path = Path(tmp_dir) / "out.mcap"
+            result = run_pipeline_via_engine(
+                pipeline, args.recording, run_id=f"batch-{args.recording.stem}", output_path=output_path,
+                config_path=args.config,
+            )
+            if not result.ok:
+                _write_result(
+                    args.out_json, outcome="fail",
+                    error=f"simengine exit_code={result.exit_code}: {result.stderr or result.stdout}",
+                    tick_count=None, last_tick_ns=None,
+                )
+                return 1
+            tick_count = count_ticks(output_path)
     except SimError as exc:
-        _write_result(
-            args.out_json, outcome="fail", error=str(exc),
-            tick_count=progress["tick_count"], last_tick_ns=progress["last_tick_ns"],
-        )
+        _write_result(args.out_json, outcome="fail", error=str(exc), tick_count=None, last_tick_ns=None)
         return 1
     except Exception as exc:  # noqa: BLE001 -- a framework bug is still a clean "fail" report,
         # never a silent process death; only os._exit (the test hook above) or a real
         # crash inside a C library skips this reporting path entirely.
         _write_result(
-            args.out_json, outcome="fail", error=f"{type(exc).__name__}: {exc}",
-            tick_count=progress["tick_count"], last_tick_ns=progress["last_tick_ns"],
+            args.out_json, outcome="fail", error=f"{type(exc).__name__}: {exc}", tick_count=None, last_tick_ns=None,
         )
         return 1
 
-    last_tick_ns = outputs[-1][0] if outputs else None
-    _write_result(args.out_json, outcome="ok", tick_count=len(outputs), last_tick_ns=last_tick_ns)
+    _write_result(args.out_json, outcome="ok", tick_count=tick_count, last_tick_ns=None)
     return 0
 
 

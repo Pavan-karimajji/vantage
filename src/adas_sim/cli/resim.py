@@ -23,19 +23,20 @@ import argparse
 import os
 import shutil
 import tempfile
+import uuid
+from dataclasses import replace
 from pathlib import Path
 
 from adas_sim.graph.build import Pipeline
 from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.runspec.manifest import (
+    build_manifest,
     check_library_provenance,
     load_run_spec,
     resolve_swept_config,
     verify_pinned_builds,
 )
-from adas_sim.engine.bridge import run_pipeline_via_engine
-from adas_sim.io.base import group_by_log_time
-from adas_sim.plugins.registry import reader_for
+from adas_sim.engine.bridge import count_ticks, overwrite_manifest_meta, run_pipeline_via_engine
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -67,20 +68,6 @@ def build_parser() -> argparse.ArgumentParser:
             "(NR-SIM-24)",
     )
     return parser
-
-
-def _count_ticks(output_path: Path) -> int:
-    """Ticks are the resim's own unit of progress (`resim_pipeline`'s
-    previous return value, one entry per input group) -- read back from
-    the engine's own output recording rather than counted in Python, since
-    `WP-15b` moved tick execution to `simengine` (`R-SIM-16`)."""
-    reader = reader_for(output_path)
-    try:
-        topics = reader.topics()
-        messages = list(reader.messages())
-        return sum(1 for _ in group_by_log_time(messages, expected_topics=topics.keys()))
-    finally:
-        reader.close()
 
 
 def run(argv: list[str] | None = None) -> int:
@@ -136,8 +123,34 @@ def run(argv: list[str] | None = None) -> int:
                 where=f"simengine {args.pipeline} {recording}",
                 hint="see stderr above for the failing stage/spec",
             )
-        tick_count = _count_ticks(output_path)
+        tick_count = count_ticks(output_path)
         if args.save:
+            # NR-SIM-24, engine.bridge.overwrite_manifest_meta's own
+            # docstring: simengine's own writer embeds no run manifest at
+            # all -- a real one (component_build_shas included) is built
+            # here exactly as core/resim.py's own caller used to, and
+            # overwrites the recording's meta. Only a --save'd recording
+            # is patched, matching the pre-WP-15b behavior (a temp/
+            # cleanup-only output is never read again).
+            meta = build_manifest(
+                pipeline=pipeline, pipeline_path=args.pipeline, run_kind="resim", source_kind="mcap",
+                project=project, recording_path=recording, component_build_shas=pipeline.component_build_shas(),
+                bundle_overrides=spec.overrides, base_bundle_sha=resolved.base_bundle_sha,
+            )
+            # build_manifest's own process_nonce is a module-level constant
+            # (runspec/manifest.py::_PROCESS_NONCE) scoped to the PYTHON
+            # CALLER's process -- correct pre-WP-15b, when that process
+            # also did the computing. Now every call launches a genuinely
+            # fresh simengine subprocess to compute the actual result
+            # (R-SIM-24's own same_process/fresh_process axis is about
+            # THAT), so two `sim resim` calls from one Python process (a
+            # script driving several resims, or this same pytest process)
+            # would otherwise share one nonce and read back as
+            # same_process despite two independently-computing engine
+            # processes -- overridden here, per call, to the subprocess
+            # this specific run just launched.
+            meta = replace(meta, process_nonce=uuid.uuid4().hex)
+            overwrite_manifest_meta(output_path, meta)
             print(f"wrote {args.save}")
     finally:
         if resolved.scratch_dir is not None:

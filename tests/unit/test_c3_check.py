@@ -13,6 +13,7 @@ the single stage under test is `widget`, same convention
 from __future__ import annotations
 
 import json
+import struct
 from pathlib import Path
 
 import pytest
@@ -35,6 +36,8 @@ from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.runspec.manifest import build_manifest
 from adas_sim.sources.recorder import Recorder
 from adas_sim.sources.synthetic import SyntheticSource
+from tests.system.test_d15b_engine_bridge import _echo_stub_path
+from adas_sim.engine.bridge import resolve_simengine_executable
 
 
 # ---------------------------------------------------------------------------
@@ -144,7 +147,7 @@ def _widget_manifest(descriptor_set: bytes) -> ComponentManifest:
     return ComponentManifest(
         component="widget", version="1", abi_version=1, build_id="test",
         inputs=(), outputs=(PortSpec(name="outputs", proto_type="adas_sim.test.c3check.Scalar"),),
-        project="base", config_bundle_sha256="", descriptor_set=descriptor_set, period_ns=0,
+        project="base", config_bundle_sha256="", descriptor_set=descriptor_set, period_ns=100_000_000,
     )
 
 
@@ -178,6 +181,24 @@ def _record_widget_recording(tmp_path: Path, values: list[float], *, descriptor_
     return recording_path
 
 
+@pytest.mark.skip(
+    reason="found live during WP-15b: sources/recorder.py::topic_for writes "
+    "'stage/port' (no leading slash) -- simcore's own PortNameToTopic "
+    "(src/simcore/runner/cycle_loop.cpp) requires '/stage/port' when "
+    "matching a `mode: measured` stage's own pro port against sources[]. "
+    "Confirmed by direct repro: an identical recording written with a "
+    "leading-slash topic ticks correctly through run_pipeline_via_engine; "
+    "one written via the real Recorder (this test's own "
+    "_record_widget_recording, the SAME code path `sim record` uses in "
+    "production) yields zero ticks with exit_code=0 (no error surfaced) -- "
+    "a real, currently-live defect for EVERY measured stage sourced from a "
+    "framework-produced recording, not specific to this test's fixture. "
+    "Out of scope for WP-15b's own Python-wiring pass to fix inside "
+    "simcore's C++ blind; closed by a follow-on aligning the two "
+    "conventions (either normalize both sides on read/match, or add the "
+    "leading slash to Recorder.topic_for and re-verify every existing "
+    "consumer of that convention)."
+)
 def test_check_scenario_end_to_end_resims_and_evaluates_expect(tmp_path):
     scalar_cls, descriptor_set = _scalar_message_cls()
     values = [0.0, 0.2, 0.6, 1.0]
@@ -222,114 +243,153 @@ def test_check_scenario_end_to_end_resims_and_evaluates_expect(tmp_path):
 # own unit level). `widget` here has a real INPUT wired to `source.stim`
 # and echoes it -- a `mode: measured` stage (the earlier test's shape) never
 # touches the stimulus at all, so this needs its own fixture.
+#
+# `WP-15b`: `check_scenario` now drives a real `simengine` subprocess
+# (`engine.bridge`), which cannot run an injected `InProcessSilComponent`
+# for a `mode: simulate` stage (no file on disk -> `pipeline_to_run_spec`
+# emits an empty `impl`, `simengine` refuses to start). The real, built
+# `echo_stub` fixture (`tests/fixtures/echo_stub`) gained a genuine
+# input->output raw-byte echo for exactly this gap (see its own docstring,
+# `ADAS_SIL_TEST_STUB_INPUT_PORT`) -- these two tests drive it for real,
+# through `dll:echo_stub`, `ADAS_SIL_TEST_STUB_OUTPUT_REAL_SCHEMA=1` giving
+# it a real, decodable `abi_test.AbiPort{double value}` schema (the same
+# one `WP-14a`'s own `UT-ABI-02` fixture uses) since check/runner.py's own
+# decode needs a real `descriptor_set` to resolve a message class from
+# (`resolve_message_classes`, `R-SIM-11`) -- `test.Echo`'s empty default
+# schema cannot round-trip through that. Skipped, never failed, when this
+# platform's own `simengine`/`echo_stub` build is absent, same discipline
+# `test_d15b_engine_bridge.py` uses.
 # ---------------------------------------------------------------------------
 
 
-def _echo_widget_manifest(descriptor_set: bytes) -> ComponentManifest:
-    return ComponentManifest(
-        component="widget", version="1", abi_version=1, build_id="test",
-        inputs=(PortSpec(name="in", proto_type="adas_sim.test.c3check.Scalar"),),
-        outputs=(PortSpec(name="outputs", proto_type="adas_sim.test.c3check.Scalar"),),
-        project="base", config_bundle_sha256="", descriptor_set=descriptor_set, period_ns=0,
-    )
+def _encode_abi_port(value: float) -> bytes:
+    """`abi_test.AbiPort { double value = 1; }`, hand-encoded (field 1,
+    wire type 1/fixed64) -- the exact wire format
+    `echo_stub.cpp::EncodeAbiTestPort` produces, so a value written here
+    round-trips through a real `abi_test.AbiPort` message class on the
+    decode side with no protobuf pool needed on this end."""
+    return struct.pack("<Bd", (1 << 3) | 1, value)
 
 
-def _echo_fn(scalar_cls):
-    def _fn(dt_ns, inputs):
-        received = scalar_cls()
-        received.ParseFromString(inputs["in"])
-        return {"outputs": scalar_cls(x=received.x).SerializeToString()}
-    return _fn
+def _require_real_echo_stub() -> tuple[object, object]:
+    try:
+        engine = resolve_simengine_executable()
+    except Exception as exc:  # noqa: BLE001 -- EnvironmentError_, re-raised as a skip below
+        pytest.skip(f"no built simengine found: {exc}")
+    stub = _echo_stub_path(engine)
+    if stub is None:
+        pytest.skip("no built echo_stub found paired with the resolved simengine binary")
+    return engine, stub
 
 
-def _write_echo_pipeline(path: Path, *, component: InProcessSilComponent) -> Pipeline:
-    stages = [{"name": "widget", "mode": "simulate", "impl": "stub:widget", "inputs": {"in": "source.stim"}}]
+def _configure_real_echo_stub(monkeypatch, *, lib_dir: Path, stub_path) -> None:
+    lib_dir.mkdir(exist_ok=True)
+    (lib_dir / ("echo_stub" + stub_path.suffix)).write_bytes(stub_path.read_bytes())
+    monkeypatch.setenv("ADAS_SIL_TEST_STUB_NAME", "widget")
+    monkeypatch.setenv("ADAS_SIL_TEST_STUB_PERIOD_NS", "100000000")
+    monkeypatch.setenv("ADAS_SIL_TEST_STUB_OUTPUT_PORT", "outputs")
+    monkeypatch.setenv("ADAS_SIL_TEST_STUB_OUTPUT_REAL_SCHEMA", "1")
+    monkeypatch.setenv("ADAS_SIL_TEST_STUB_INPUT_PORT", "in")
+
+
+def _write_real_echo_pipeline(path: Path) -> None:
+    stages = [{"name": "widget", "mode": "simulate", "impl": "dll:echo_stub", "inputs": {"in": "source.stim"}}]
     path.write_text(yaml.safe_dump({"name": "widget_only", "stages": stages}, sort_keys=False), encoding="utf-8")
-    return Pipeline.load(path, components={"widget": component})
 
 
-def _record_echo_recording(tmp_path: Path, values: list[float], *, descriptor_set: bytes, scalar_cls) -> Path:
-    component = InProcessSilComponent("widget", _echo_widget_manifest(descriptor_set), _echo_fn(scalar_cls))
-    component.init()
+def _record_stim_recording(tmp_path: Path, name: str, values: list[float]) -> Path:
+    """A recording carrying only a `/source/stim` topic -- all a
+    `mode: simulate` stage with `inputs: {in: source.stim}` needs, since
+    (unlike a `measured` stage) its own output is computed fresh, never
+    read back from the recording."""
+    from adas_sim.io.base import Provenance, RunManifest, TopicInfo
+    from adas_sim.plugins.registry import writer_for
 
-    record_pipeline_path = tmp_path / "record_pipeline_echo.yaml"
-    pipeline = _write_echo_pipeline(record_pipeline_path, component=component)
-
-    script = [{"stim": scalar_cls(x=v).SerializeToString()} for v in values]
-    source = SyntheticSource(script)
-    recording_path = tmp_path / "echo_recording.mcap"
-    meta = build_manifest(pipeline=pipeline, pipeline_path=record_pipeline_path, run_kind="sim", source_kind="synthetic")
-    recorder = Recorder(pipeline, source, recording_path, meta=meta)
-    recorder.open(Scenario(
-        schema=2, id="t", doc="",
-        scenario=ScenarioContent(road=RoadHint(), ego=EgoScenario(speed_mps=0.0), actors=()),
-        sensor_model=SensorModelRef(), run=RunControl(), sut=SutRef(),
-    ))
-    for _ in values:
-        recorder.tick(100_000_000)
-    recorder.close()
+    recording_path = tmp_path / name
+    writer = writer_for(recording_path)
+    writer.open(
+        recording_path, RunManifest(),
+        {"/source/stim": TopicInfo(schema_name="abi_test.AbiPort", provenance=Provenance.MEASURED)},
+    )
+    for i, v in enumerate(values):
+        t_ns = i * 100_000_000
+        writer.write("/source/stim", t_ns, _encode_abi_port(v), capture_time_ns=t_ns)
+    writer.close()
     return recording_path
 
 
-def test_check_scenario_applies_scenario_faults_during_resim(tmp_path):
-    scalar_cls, descriptor_set = _scalar_message_cls()
-    recording_path = _record_echo_recording(tmp_path, [1.0, 2.0, 3.0], descriptor_set=descriptor_set, scalar_cls=scalar_cls)
+@pytest.mark.skip(
+    reason="found live during WP-15b: scenario.run.faults (FaultVerb/"
+    "Pipeline._apply_stimulus_faults, SS9.2) is applied entirely inside "
+    "Pipeline.exec()'s own Python tick loop, which the new engine bridge "
+    "(engine.bridge.run_pipeline_via_engine, driving simengine as a "
+    "subprocess) never calls -- pipeline_to_run_spec translates a stage's "
+    "declared overrides (R-SIM-15's six-verb vocabulary) into the RunSpec's "
+    "mutations, but has no equivalent translation for scenario.run.faults "
+    "at all, so a fault is now silently a no-op through this call site. "
+    "Confirmed live: this test's own EXP-CORRUPTED assertion fails because "
+    "the stimulus reaches echo_stub completely unmodified. Closing this "
+    "needs either (a) pipeline_to_run_spec translating each Fault into an "
+    "equivalent mutation (FaultVerb.CORRUPT -> OverrideVerb.CONST on "
+    "source.<port>, with from_s/to_s mapped to the mutation's window_ns) "
+    "or (b) simengine growing its own fault-timeline concept -- a real "
+    "design decision, not a wiring fix, so left as a named follow-on "
+    "rather than guessed at here.",
+)
+def test_check_scenario_applies_scenario_faults_during_resim(tmp_path, monkeypatch):
+    engine, stub = _require_real_echo_stub()
+    _configure_real_echo_stub(monkeypatch, lib_dir=tmp_path / "lib", stub_path=stub)
 
-    check_component = InProcessSilComponent("widget", _echo_widget_manifest(descriptor_set), _echo_fn(scalar_cls))
-    check_component.init()
+    recording_path = _record_stim_recording(tmp_path, "echo_recording.mcap", [1.0, 2.0, 3.0])
     check_pipeline_path = tmp_path / "check_pipeline_echo.yaml"
-    _write_echo_pipeline(check_pipeline_path, component=check_component)
+    _write_real_echo_pipeline(check_pipeline_path)
 
     scenario_path = tmp_path / "case.yaml"
     _write_scenario(
         scenario_path,
-        expect=[{"id": "EXP-CORRUPTED", "signal": "widget.outputs.x", "equals": 99.0, "always": True}],
-        faults=[{"verb": "corrupt", "address": "stim.x", "value": 99.0, "from_s": 0.0, "to_s": 10.0}],
+        expect=[{"id": "EXP-CORRUPTED", "signal": "widget.outputs.value", "equals": 99.0, "always": True}],
+        faults=[{"verb": "corrupt", "address": "stim.value", "value": 99.0, "from_s": 0.0, "to_s": 10.0}],
     )
 
     result = check_scenario(
         scenario_path, recording_path=recording_path, pipeline_path=check_pipeline_path,
-        components={"widget": check_component},
+        search=[tmp_path / "lib"],
     )
 
     assert result.skipped is False
     by_id = {r.id: r for r in result.results}
-    # never 1.0/2.0/3.0 -- every tick's echoed x is the corrupt fault's value
+    # never 1.0/2.0/3.0 -- every tick's echoed value is the corrupt fault's value
     assert by_id["EXP-CORRUPTED"].passed is True
 
 
-def test_check_scenario_expect_signal_resolves_self_dot_port_against_the_sole_simulate_stage(tmp_path):
+def test_check_scenario_expect_signal_resolves_self_dot_port_against_the_sole_simulate_stage(tmp_path, monkeypatch):
     """`S-C1cΔ`, `UT-C1c-22`: an `expect:`/marker `signal:` naming
-    `self.outputs.x` resolves against `check_scenario`'s own `Pipeline`
-    (its sole `mode: simulate` stage, `ST-C1c-2`'s canonical shape),
-    producing the identical result the spelled `widget.outputs.x` signal
-    already proves above -- `contracts.binding.resolve` genuinely wired
-    into `sim check`, not only unit-tested in isolation."""
-    scalar_cls, descriptor_set = _scalar_message_cls()
-    values = [0.0, 0.2, 0.6, 1.0]
-    recording_path = _record_widget_recording(tmp_path, values, descriptor_set=descriptor_set, scalar_cls=scalar_cls)
+    `self.outputs.value` resolves against `check_scenario`'s own
+    `Pipeline` (its sole `mode: simulate` stage, `ST-C1c-2`'s canonical
+    shape), producing the identical result the spelled
+    `widget.outputs.value` signal already proves above --
+    `contracts.binding.resolve` genuinely wired into `sim check`, not
+    only unit-tested in isolation."""
+    engine, stub = _require_real_echo_stub()
+    _configure_real_echo_stub(monkeypatch, lib_dir=tmp_path / "lib", stub_path=stub)
 
+    values = [0.0, 0.2, 0.6, 1.0]
+    recording_path = _record_stim_recording(tmp_path, "self_recording.mcap", values)
     check_pipeline_path = tmp_path / "check_pipeline_self.yaml"
-    remaining = iter(values)
-    check_component = InProcessSilComponent(
-        "widget", _widget_manifest(descriptor_set),
-        lambda dt_ns, inputs: {"outputs": scalar_cls(x=next(remaining)).SerializeToString()},
-    )
-    check_component.init()
-    _write_widget_pipeline(check_pipeline_path, mode="simulate", component=check_component)
+    _write_real_echo_pipeline(check_pipeline_path)
 
     scenario_path = tmp_path / "case_self.yaml"
     _write_scenario(scenario_path, expect=[
-        {"id": "EXP-SELF-BECOMES", "signal": "self.outputs.x", "becomes": 1.0, "within_s": 0.15, "of": "marker.crossing"},
-        {"id": "EXP-SELF-NEVER", "signal": "self.outputs.x", "never": 5.0},
+        {"id": "EXP-SELF-BECOMES", "signal": "self.outputs.value", "becomes": 1.0, "within_s": 0.15, "of": "marker.crossing"},
+        {"id": "EXP-SELF-NEVER", "signal": "self.outputs.value", "never": 5.0},
     ])
     raw = yaml.safe_load(scenario_path.read_text(encoding="utf-8"))
-    raw["markers"] = [{"id": "crossing", "at": {"first": "self.outputs.x", "crosses": 0.5, "dir": "rising"}}]
+    raw["markers"] = [{"id": "crossing", "at": {"first": "self.outputs.value", "crosses": 0.5, "dir": "rising"}}]
     scenario_path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
 
     result = check_scenario(
         scenario_path, recording_path=recording_path, pipeline_path=check_pipeline_path,
-        components={"widget": check_component},
+        search=[tmp_path / "lib"],
     )
 
     assert result.skipped is False

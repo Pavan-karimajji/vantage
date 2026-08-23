@@ -70,7 +70,7 @@ from adas_sim.config.scenario import Scenario, load_scenario
 from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.session.history import Interaction
 from adas_sim.runspec.manifest import build_manifest, write_run_manifest
-from adas_sim.core.resim import resim_pipeline_merged
+from adas_sim.engine.bridge import run_pipeline_merged_via_engine
 from adas_sim.core.runner import (
     LoadCancelled, SceneCache, build_reactive_layers, build_session_from_recording, build_static_scene,
 )
@@ -179,8 +179,11 @@ class _ResimWorker(QtCore.QObject):
 
     Reuses the exact same machinery `sim resim --pipeline <manifest>`
     would (`Pipeline.load` re-resolves `dll:`/`stubdll:` stages fresh,
-    same single-rate `exec()` engine via `resim_pipeline_merged`, `S-D3`
-    slice 4) -- a GUI "Run" and the CLI must never silently diverge
+    same engine via `engine.bridge.run_pipeline_merged_via_engine` --
+    `WP-15b`, `IMP-0422`: a real `simengine` subprocess now does the tick
+    execution `resim_pipeline_merged` used to do in-process, then the
+    bridge merges its output back into a full copy of the recording, same
+    contract) -- a GUI "Run" and the CLI must never silently diverge
     (`R-SIM-16`). `loaded` is the SAME signal shape `_SessionLoadWorker`
     emits, so `MainWindow` treats a resim result exactly like opening any
     other recording (`_on_loaded`, unchanged)."""
@@ -203,16 +206,20 @@ class _ResimWorker(QtCore.QObject):
     def run(self) -> None:
         try:
             pipeline = Pipeline.load(self._pipeline_path, search=self._pipeline_search)
-            pipeline.init_components(self._config_path)
-            try:
-                meta = build_manifest(
-                    pipeline=pipeline, pipeline_path=self._pipeline_path, run_kind="resim", source_kind="mcap",
-                    project=self._project, recording_path=self._recording_path,
-                    component_build_shas=pipeline.component_build_shas(),
+            meta = build_manifest(
+                pipeline=pipeline, pipeline_path=self._pipeline_path, run_kind="resim", source_kind="mcap",
+                project=self._project, recording_path=self._recording_path,
+                component_build_shas=pipeline.component_build_shas(),
+            )
+            result = run_pipeline_merged_via_engine(
+                pipeline, self._recording_path, self._out_path, meta=meta,
+                run_id=f"gui-run-{self._pipeline_path.stem}", config_path=self._config_path,
+                search=self._pipeline_search,
+            )
+            if not result.ok:
+                raise RuntimeError(
+                    f"simengine exit_code={result.exit_code}: {result.stderr or result.stdout}"
                 )
-                resim_pipeline_merged(pipeline, self._recording_path, self._out_path, meta=meta)
-            finally:
-                pipeline.shutdown_components()
             session = build_session_from_recording(self._out_path)
         except Exception as exc:  # noqa: BLE001 -- surfaced to the GUI, never crashes the worker thread
             self.failed.emit(str(exc))
