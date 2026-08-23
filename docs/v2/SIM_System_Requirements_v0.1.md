@@ -1984,7 +1984,7 @@ mechanism.
 **Shall.** Bulk data crossing into the scripting layer shall be exposed as array views onto engine-owned buffers, never as per-element scripting objects; the scripting layer shall never touch a message payload.
 **Accept.** No per-element conversion occurs on any per-message path. A profile of a representative run shows no scripting-layer frames inside the per-message path.
 **Verify.** A · `ANL-33` · T · `SYT-NFR-04`   **Trace.** CN-0290, CN-0229, CN-0288; **defect** concept §22.5
-**Built.** ◐ started — 1/4 software requirements done, in `WP-11`, `WP-15b`, `WP-16`, `WP-29`
+**Built.** ◐ started — 2/4 software requirements done, in `WP-11`, `WP-15b`, `WP-16`, `WP-29`
 
 **`SYS-0234`** · `P0` · `R1` — Per-cycle cost is budgeted with a number and measured
 **Shall.** Per-cycle cost and per-worker campaign throughput shall each carry a declared numeric budget, measured on §18.0's reference configuration, and reported per release.
@@ -2228,7 +2228,7 @@ Constraints are obligations on *how* the system is built, imposed because a corr
 **Shall.** Code executing per tick, per message or per sample shall be C++; code executing once per run, or at user-interaction or display rate, shall be Python.
 **Accept.** Every module of the system is classifiable by the rule with no case requiring judgement. A per-message code path in the scripting layer fails a static check.
 **Verify.** A · `ANL-43` · `INSP-11`   **Trace.** CN-0288, CN-0289; v1 `FR-SIM-30`
-**Built.** ◐ started — 0/1 software requirements done, in `WP-15b`, `WP-16`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0270`** · `P0` · `R1` — One implementation per concept
 **Shall.** No concept shall be implemented in both languages; where one exists on both sides today, one side shall be deleted rather than maintained in step.
