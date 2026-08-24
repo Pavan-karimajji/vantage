@@ -953,7 +953,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** A declared period that is not an integer multiple of the base grid shall be a load error naming both numbers, and shall never be rounded.
 **Accept.** The error carries both integers. No path applies rounding, truncation or nearest-multiple correction.
 **Verify.** T · `UT-GRF-01`   **Trace.** SYS-0066
-**Built.** ○ not started — `IMP-0063` in `WP-20`
+**Built.** ● done — `IMP-0063` in `WP-20`
 **Now.** `DONE·TWICE` — `contracts/pipeline.py::_require_multiple` and `sil_host/src/pipeline.cpp::RequirePeriodIsMultipleOfBaseGrid`, identically worded by construction. The Python one survives.
 
 **`SW-0064`** · `SI-03` · `P0` · `R1` — Due-ness is an integer predicate
@@ -1050,7 +1050,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** A cycle in the graph with no delay on any edge shall be refused at load, listing every module in the loop in order.
 **Accept.** The error lists the loop in traversal order. A loop broken by a one-step delay loads.
 **Verify.** T · `UT-GRF-02`   **Trace.** SYS-0078
-**Built.** ○ not started — `IMP-0074` in `WP-20`
+**Built.** ● done — `IMP-0074` in `WP-20`
 **Now.** `NEW`.
 
 **`SW-0075`** · `SI-03` · `P0` · `R1` — The scheduler reads no payload
@@ -1399,7 +1399,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Excluding or decimating a port that a `simulate` stage consumes shall be a load error at record time.
 **Accept.** The error names the port and the consuming stage, and occurs before recording begins.
 **Verify.** T · `UT-GRF-04`   **Trace.** SYS-0116
-**Built.** ○ not started — `IMP-0115` in `WP-20`
+**Built.** ● done — `IMP-0115` in `WP-20`
 **Now.** `DONE·MOVE` — implemented in `contracts/pipeline.py`.
 
 **`SW-0116`** · `SI-06` · `P0` · `R1` — Divergence is detected at its first occurrence
@@ -1872,14 +1872,14 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The base grid step shall be computed as the greatest common divisor of the declared periods and shall not be settable in configuration.
 **Accept.** No configuration key sets the grid. With 20 ms and 30 ms declared the grid is 10 ms, and both modules fire on their correct ticks.
 **Verify.** T · `UT-GRF-10`   **Trace.** SYS-0066
-**Built.** ○ not started — `IMP-0172` in `WP-20`
+**Built.** ● done — `IMP-0172` in `WP-20`
 **Now.** `DONE·TWICE` — computed in `contracts/pipeline.py` and again in C++; the Python one survives (`SW-0006`, `SW-0062`).
 
 **`SW-0173`** · `SI-11` · `P0` · `R1` — No tolerance makes a period fit the grid
 **Shall.** `SI-11` shall provide no snap tolerance, no nearest-multiple correction and no rounding of any kind on a declared period; a period that is not an integer multiple of the derived grid shall be refused naming both integers.
 **Accept.** No configuration key can cause 19.99 ms to be accepted beside 20 ms. The refusal names both values and the grid they were checked against.
 **Verify.** T · `UT-GRF-11`   **Trace.** SYS-0066; CN-0394
-**Built.** ○ not started — `IMP-0173` in `WP-20`
+**Built.** ● done — `IMP-0173` in `WP-20`
 **Now.** `NEW`.
 *Note:* a rounded period does not stay a rounding — it accumulates, and it surfaces as a module producing values at the wrong moments, which reads as a defect in the module rather than in the scheduling that caused it. That is why this is stated as a prohibition on the tool rather than as advice to the user.
 

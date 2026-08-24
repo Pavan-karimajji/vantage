@@ -851,7 +851,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The base grid step shall be the greatest common divisor of all declared periods, derived and never configured; a declared period that is not an integer multiple of it shall be a load error naming both numbers, and shall never be rounded, snapped or matched to a nearest value.
 **Accept.** With 20 ms and 30 ms declared, the grid is 10 ms and both modules fire on their correct ticks. A period of 19.99 ms beside one of 20 ms is refused naming both, and no configured tolerance can make it accepted.
 **Verify.** T · `SYT-TIM-08`   **Trace.** CN-0145, CN-0394
-**Built.** ◐ started — 3/6 software requirements done, in `WP-05`, `WP-09`, `WP-20`
+**Built.** ● done — 6/6 software requirements done
 *Note:* a rounded period does not stay a rounding. It accumulates, and it surfaces as a module producing values at the wrong moments — which reads as a defect in the module rather than in the scheduling that caused it.
 
 **`SYS-0285`** · `P0` · `R1` — Every declared period enters the grid, whatever triggers the module
@@ -937,7 +937,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A zero-delay cycle in the graph shall be rejected, naming the loop.
 **Accept.** The error lists every module in the loop in order.
 **Verify.** T · `SYT-TIM-19`   **Trace.** CN-0153
-**Built.** ○ not started — 0/1 software requirements done, in `WP-20`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0079`** · `P1` · `R1` — The latency model is recorded
 **Shall.** The latency model in force shall be recorded in the run manifest.
@@ -1186,7 +1186,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Each port shall declare a record policy from the closed set full, excluded, decimated-by-N; the policy shall be recorded for **every** declared port.
 **Accept.** A reader of the artifact alone can answer "was this complete?" for every port. Excluding or decimating an input a simulated stage consumes is a load error at record time.
 **Verify.** T · `SYT-OUT-06`   **Trace.** CN-0317; v1 `NR-SIM-42`
-**Built.** ◐ started — 2/3 software requirements done, in `WP-05`, `WP-13`, `WP-20`
+**Built.** ● done — 3/3 software requirements done
 
 **`SYS-0117`** · `P0` · `R1` — Volume is estimated before it is produced
 **Shall.** Recording volume shall be estimated before a run or campaign starts, labelled an upper bound, and revised from the measured rate.

@@ -37,8 +37,6 @@ import hashlib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
-from functools import reduce
-from math import gcd
 from pathlib import Path
 from typing import Literal
 from warnings import warn
@@ -57,6 +55,8 @@ from adas_sim.diagnostics.errors import AuthoringError, ContractError, Provenanc
 from adas_sim.session.tick import PortValue
 from adas_sim.io.base import RecordingReader
 from adas_sim.sources.base import Source
+from adas_sim.graph import grid as _grid
+from adas_sim.graph.record_policy import check_consumed_ports_recorded
 
 #: The only shape that has ever existed -- `_resolve_version`'s upgrade is a
 #: no-op today; a real v2 would add a transform step there (`CR-SIM-23`).
@@ -259,37 +259,10 @@ def _parse_record(raw: Mapping[str, object], *, stage_name: str) -> dict[str, Re
 
 
 def validate_recordable(stages: Sequence[Stage], components: Mapping[str, SilComponent]) -> None:
-    """Recording-time-only check (`NR-SIM-42`'s "two different times, two
-    different answers"): the recorder calls this before starting, never
-    `Pipeline.load` itself -- the very same pipeline loads fine for resim,
-    where an excluded/decimated port is merely a cut `sim probe` reports as
-    infeasible, not an error. A `mode: simulate` stage consuming a
-    producing stage's output that is `excluded`/`decimate`d is a load error
-    naming both ends: you would be recording a run whose own inputs you are
-    not keeping, which can never be resimmed. `source.*`-fed inputs are
-    exempt -- stimulus has no `record:` policy of its own in this model,
-    the recorder always keeps it in full."""
-    by_name = {stage.name: stage for stage in stages}
-    for stage in stages:
-        if stage.mode != "simulate":
-            continue
-        for port_name, ref in stage.inputs.items():
-            producer_name, ref_port = _split_ref(ref)
-            if producer_name == "source":
-                continue
-            producer_stage = by_name.get(producer_name)
-            if producer_stage is None:
-                continue  # an undeclared producer is already _validate_wiring's error
-            policy = record_policy_for(producer_stage, ref_port)
-            if policy.verb is RecordVerb.FULL:
-                continue
-            detail = f"decimate={policy.decimate_n}" if policy.verb is RecordVerb.DECIMATE else policy.verb.value
-            raise AuthoringError(
-                expected=f"'{producer_name}.{ref_port}' to be recorded 'full' while "
-                         f"stage '{stage.name}' (mode: simulate) consumes it as '{port_name}'",
-                found=f"record: {detail}", where=f"stage '{producer_name}' record '{ref_port}'",
-                hint="set record: full for this port, or set the consuming stage to mode: measured/off",
-            )
+    """`IMP-0115`, `MOVE`: relocated to `graph/record_policy.py::
+    check_consumed_ports_recorded` (`WP-20`). Kept here as a thin wrapper --
+    `test_c2_source.py` imports this name directly."""
+    check_consumed_ports_recorded(stages, components)
 
 
 def _resolve_components(
@@ -358,38 +331,23 @@ def _validate_cross_component_agreement(
 
 
 def _require_multiple(period_ns: int, base_grid_ns: int, *, stage_name: str) -> None:
-    """The guard `_compute_base_grid_ns` calls for every declared period.
-    Kept as its own function, independently unit-tested with adversarial
-    numbers (`test_c1c_pipeline.py`): a `base_grid_ns` that is genuinely the
-    GCD of every period in the set makes this tautologically always pass
-    (GCD divides every member of the set it was computed from, by
-    definition) -- there is no set of real, correctly-derived periods that
-    can ever fail it. The check stays anyway, because `R-SIM-18` states the
-    invariant explicitly and a future change to how periods are supplied
-    (e.g. a per-pipeline override) could make it reachable; a guard that is
-    unreachable today is cheap, and finding out it is unreachable is what
-    this comment records -- not a reason to delete it."""
-    if period_ns % base_grid_ns != 0:
-        raise AuthoringError(
-            expected=f"period_ns to be an integer multiple of the base grid ({base_grid_ns} ns)",
-            found=f"stage '{stage_name}' period_ns={period_ns}",
-            where="Pipeline base grid (R-SIM-18)",
-            hint=f"base grid {base_grid_ns} ns is the GCD of every stage's declared period_ns",
-        )
+    """`IMP-0063`, `DEDUPE`: relocated to `graph/grid.py::check_period_multiples`
+    (`WP-20`). Kept here as a thin wrapper -- this private name is imported
+    directly by `test_c1c_pipeline.py` and by this module's own
+    `_compute_base_grid_ns` below."""
+    _grid.check_period_multiples(period_ns, base_grid_ns, stage_name=stage_name)
 
 
 def _compute_base_grid_ns(stages: Sequence[Stage], components: Mapping[str, SilComponent]) -> int:
     """`R-SIM-18`: the base grid is the GCD of every declared (nonzero)
     `period_ns` -- derived, never configured, never rounded. `0` means
     undeclared: that stage is due every call and does not participate in
-    the GCD. No declared periods at all -> no grid (`0`)."""
-    periods = [
-        components[stage.name].manifest.period_ns for stage in stages
-        if components[stage.name].manifest.period_ns > 0
-    ]
-    if not periods:
+    the GCD. No declared periods at all -> no grid (`0`). GCD derivation
+    itself is `graph/grid.py::derive_step` (`IMP-0172`, `DEDUPE`)."""
+    periods = [components[stage.name].manifest.period_ns for stage in stages]
+    base_grid_ns = _grid.derive_step(periods)
+    if base_grid_ns == 0:
         return 0
-    base_grid_ns = reduce(gcd, periods)
     for stage in stages:
         period_ns = components[stage.name].manifest.period_ns
         if period_ns > 0:
@@ -688,6 +646,7 @@ class Pipeline:
         name = raw.get("name", path.stem)
         allow_mixed_projects = bool(raw.get("allow_mixed_projects", False))
         stages = cls.parse_stages(path)
+        _grid.check_zero_delay_cycles([s.name for s in stages], {s.name: s.inputs for s in stages})
         resolved, bundle_dirs, library_paths = _resolve_components(stages, search=search, components=components or {})
         _validate_wiring(stages, resolved, recording, source)
         _validate_overrides(stages, resolved)

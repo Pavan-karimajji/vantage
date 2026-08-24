@@ -782,17 +782,17 @@ flowchart LR
 ### WP-20 · `MP-3` · `SI-11` `graph` — wiring and **transitive** coherence
 - [ ] **Prereq:** `WP-16`.
 - [ ] **Lands:** `IMP-0063`, `IMP-0074`, `IMP-0111`, `IMP-0115`, `IMP-0167`…`IMP-0186`, `IMP-0400`, `IMP-0411` — 26.
-  - [ ] `IMP-0063` · `SW-0063` · `DEDUPE` — `graph/grid.py::check_period_multiples`
-  - [ ] `IMP-0074` · `SW-0074` · `NEW` — `graph/build.py::check_zero_delay_cycles`
+  - [x] `IMP-0063` · `SW-0063` · `DEDUPE` — `graph/grid.py::check_period_multiples`. **Phase 1 closed 2026-08-24 (`WP-20` first slice):** relocated from `build.py::_require_multiple` verbatim; `build.py` keeps `_require_multiple` as a thin delegating wrapper (`test_c1c_pipeline.py` imports the private name directly). `tests/unit/test_grf_grid.py::test_a_period_not_a_multiple_of_the_derived_step_raises`/`..._does_not_raise`.
+  - [x] `IMP-0074` · `SW-0074` · `NEW` — `graph/grid.py::check_zero_delay_cycles` (design row named `build.py`; landed in `grid.py` alongside `derive_step`/`check_period_multiples`, the more natural home — all three are pure grid/graph-shape functions with no `Pipeline`/component dependency). **Phase 1 closed 2026-08-24:** DFS cycle detection over `Stage.inputs`' producer references, naming every stage in traversal order. Wired into `Pipeline.load()` (called before `_resolve_components`). **Named honestly, not silently narrowed:** today's wiring grammar (`_validate_wiring`'s forward-reference check) already makes a same-tick cycle structurally unreachable through `Pipeline.load` — there is no "one-step delay"/previous-tick reference syntax yet, so `SW-0074`'s Accept clause's second half ("a loop broken by a one-step delay loads") describes a wiring-grammar feature this pass does not add. `check_zero_delay_cycles` is tested directly with hand-built graphs (real cycles, 2- and 3-stage) plus one `Pipeline.load` end-to-end case proving the forward-reference check is what actually fires first. `tests/unit/test_grf_grid.py`.
   - [ ] `IMP-0111` · `SW-0111` · `MOVE` — `graph/feasible.py::check_measured_supported`
-  - [ ] `IMP-0115` · `SW-0115` · `MOVE` — `graph/record_policy.py::check_consumed_ports_recorded`
+  - [x] `IMP-0115` · `SW-0115` · `MOVE` — `graph/record_policy.py::check_consumed_ports_recorded`. **Phase 1 closed 2026-08-24:** relocated verbatim from `build.py::validate_recordable`; `build.py` keeps `validate_recordable` as a thin wrapper (`test_c2_source.py` imports it directly). No new test needed beyond the existing `test_c2_source.py` coverage, which now exercises the relocated code through the same public name.
   - [ ] `IMP-0167` · `SW-0167` · `KEEP` — `graph/build.py::build`
   - [ ] `IMP-0168` · `SW-0168` · `MOVE` — `build.py::check_single_producer`
   - [ ] `IMP-0169` · `SW-0169` · `EXTEND` — `build.py::check_required_inputs`
   - [ ] `IMP-0170` · `SW-0170` · `EXTEND` — `build.py::check_port_types`
-  - [ ] `IMP-0171` · `SW-0171` · `NEW` — `build.py::check_port_kinds`
-  - [ ] `IMP-0172` · `SW-0172` · `DEDUPE` — `grid.py::derive_step`
-  - [ ] `IMP-0173` · `SW-0173` · `NEW` — `grid.py` has **no** `snap` function and the schema has no tolerance key…
+  - [ ] `IMP-0171` · `SW-0171` · `NEW` — `build.py::check_port_kinds` — **scoping note, found mid-`WP` 2026-08-24:** a `kind: "control"|"data"` tag on `PortSpec` is a wire-format change to `ComponentManifest`'s hand-built bootstrap protobuf schema (`resolve/component.py`'s field-number table, "byte-identical to `interfaces/proto/Adas__Sil/component_manifest.proto`") — a cross-repo contract change (`R-IFACE-1`: `modules/interfaces` is the only place this schema is defined), not a same-module addition. Deferred rather than worked around with a disconnected local field.
+  - [x] `IMP-0172` · `SW-0172` · `DEDUPE` — `grid.py::derive_step`. **Phase 1 closed 2026-08-24:** relocated the GCD derivation out of `build.py::_compute_base_grid_ns`, which now calls `grid.derive_step`. `tests/unit/test_grf_grid.py::test_derive_step_*`, plus `test_a_base_grid_key_in_the_pipeline_file_has_no_effect` proving `SW-0172`'s "not settable in configuration" half (`Pipeline.load` never reads a `base_grid:` key at all).
+  - [x] `IMP-0173` · `SW-0173` · `NEW` — prove-absence, `grid.py` has **no** `snap` function and no `tolerance` name. **Phase 1 closed 2026-08-24:** `tests/unit/test_grf_grid.py::test_grid_module_declares_no_snap_function`/`..._no_tolerance_constant_or_function` introspect `dir(grid)` directly (not a text grep, which would self-trigger on this module's own explanatory docstrings).
   - [ ] `IMP-0174` · `SW-0174` · `EXTEND` — `graph/coherence.py::ancestors`
   - [ ] `IMP-0175` · `SW-0175` · `EXTEND` — `coherence.py::descendants`
   - [ ] `IMP-0176` · `SW-0176` · `EXTEND` — `coherence.py::Verdict`
