@@ -32,6 +32,18 @@ target_link_libraries(sim_test_fixture_echo_stub PRIVATE AdasInterfaces::AdasInt
 target_compile_definitions(sim_test_fixture_echo_stub PRIVATE ADAS_SIL_ABI_EXPORTS)
 set_target_properties(sim_test_fixture_echo_stub PROPERTIES OUTPUT_NAME "echo_stub")
 
+# WP-27 (SI-25 transport): UT-TRN-05's own real "engine" -- a standalone
+# executable (not a linked-in test body), so the test that spawns it can
+# genuinely kill it, same real-crash shape module_host::RunIsolatedStage's
+# own spawn/reap already uses. See fixtures/trn_engine_host/trn_engine_host.cpp's
+# own top note.
+add_executable(sim_test_fixture_trn_engine_host fixtures/trn_engine_host/trn_engine_host.cpp)
+target_link_libraries(sim_test_fixture_trn_engine_host PRIVATE simcore)
+target_compile_definitions(sim_test_fixture_trn_engine_host PRIVATE
+    ADAS_SIM_TEST_FIXTURE_DIR="$<TARGET_FILE_DIR:sim_test_fixture_echo_stub>"
+)
+add_dependencies(sim_test_fixture_trn_engine_host sim_test_fixture_echo_stub)
+
 # WP-06: modules/sim's first C++ test binary (WP-03's own scoping note: "no
 # gtest target, no C++ tests exist yet"). UT-IO-01..21 (io codec contract).
 set(SIM_TEST_SOURCES
@@ -109,6 +121,9 @@ set(SIM_TEST_SOURCES
     # WP-27 (SI-25 transport): UT-TRN-01, a real Runner wired to both
     # transports, diffing the consumer's observed stream.
     integration/test_it_transport.cpp
+    # WP-27 (SI-25 transport): UT-TRN-05, a real killed engine process
+    # (sim_test_fixture_trn_engine_host) with a player attached.
+    integration/test_it_trn05_crash.cpp
 )
 
 add_executable(simcore_tests ${SIM_TEST_SOURCES})
@@ -137,8 +152,10 @@ target_compile_definitions(simcore_tests PRIVATE
     # reason ADAS_SIM_TEST_FIXTURE_DIR is: one place, known at configure
     # time, never a relative path a test has to guess at from its own cwd.
     IT10_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/graph_dump"
+    # WP-27: UT-TRN-05 spawns this real "engine" process and kills it.
+    TRN_ENGINE_HOST_EXECUTABLE="$<TARGET_FILE:sim_test_fixture_trn_engine_host>"
 )
-add_dependencies(simcore_tests sim_test_fixture_echo_stub simengine)
+add_dependencies(simcore_tests sim_test_fixture_echo_stub simengine sim_test_fixture_trn_engine_host)
 
 include(GoogleTest)
 gtest_discover_tests(simcore_tests)

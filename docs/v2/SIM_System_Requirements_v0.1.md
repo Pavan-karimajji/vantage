@@ -1613,7 +1613,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The batch shall report per-run outcome as exactly one of ok, fail, crash, timeout, and shall judge crash and hang from outside the worker.
 **Accept.** The four are individually producible and never collapse into one another; a segfaulting process is reported as `crash` even though it cannot report its own death.
 **Verify.** T · `SYT-BAT-06`   **Trace.** CN-0348; v1 `NR-SIM-22`
-**Built.** ◐ started — 3/6 software requirements done, in `WP-10`, `WP-13`, `WP-14`, `WP-22`, `WP-23`, `WP-27`
+**Built.** ◐ started — 4/6 software requirements done, in `WP-10`, `WP-13`, `WP-14`, `WP-22`, `WP-23`, `WP-27`
 
 **`SYS-0187`** · `P1` · `R1` — Aggregated status
 **Shall.** The batch shall produce an aggregated status list with per-run result, failure reason and duration.
@@ -1625,7 +1625,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** Every crash shall record recording, configuration, last completed cycle, captured standard error and run id; a worker shall checkpoint progress so a crashing run's last completed cycle is known.
 **Accept.** From the crash record alone, the failure is reopened in process on a developer machine.
 **Verify.** T · `SYT-BAT-08`   **Trace.** CN-0348, CN-0349, CN-0223; v1 `NR-SIM-22`
-**Built.** ◐ started — 2/6 software requirements done, in `WP-06`, `WP-13`, `WP-22`, `WP-23`, `WP-27`
+**Built.** ◐ started — 3/6 software requirements done, in `WP-06`, `WP-13`, `WP-22`, `WP-23`, `WP-27`
 
 **`SYS-0189`** · `P1` · `R1` — Parameter sweeps
 **Shall.** Parameter sweeps shall be supported.

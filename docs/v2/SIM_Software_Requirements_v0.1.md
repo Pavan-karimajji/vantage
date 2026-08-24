@@ -2986,7 +2986,7 @@ Superseded (`SM-01` trial), `SW-0324` — was *Display-only data is decoded only
 **Shall.** The player shall detect an engine that has terminated and report it with the last tick received, rather than blocking.
 **Accept.** Killing the engine leaves the player responsive and stating what happened, with the session up to the last received tick intact.
 **Verify.** T · `UT-TRN-05`   **Trace.** SYS-0186, SYS-0188
-**Built.** ○ not started — `IMP-0356` in `WP-27`
+**Built.** ● done — `IMP-0356` in `WP-27`
 **Now.** `NEW`.
 
 **Ownership split (`SYNC:SM-06`, `D-5`, 2026-08-21), amended not superseded —
