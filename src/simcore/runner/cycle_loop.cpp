@@ -444,7 +444,7 @@ Result<bool> Runner::StepOnce() {
   };
 
   std::size_t bytes_written_this_cycle = 0;
-  if (writer_ != nullptr) {
+  if (writer_ != nullptr || transport_publisher_ != nullptr) {
     const bool informational = latch_.InformationalOnly(tick_index);
     for (const RecordedTopic& topic : recorded_topics_) {
       if (!topic.policy.WritesAt(tick_index)) continue;
@@ -463,14 +463,23 @@ Result<bool> Runner::StepOnce() {
         value = bus_->Get(topic.qualified_port, now_ns);
         if (value.origin == bus::Origin::Unknown) continue;  // nothing has ever produced it
       }
-      io::RawMessage message;
-      message.topic = topic.topic;
-      message.log_time_ns = t_ns;
-      if (value.header.t_capture_ns.has_value()) message.capture_time_ns = value.header.t_capture_ns.value();
-      message.payload = value.payload;
-      message.informational_only = informational;
-      bytes_written_this_cycle += message.payload.size();
-      writer_->WriteMessage(message);
+      if (writer_ != nullptr) {
+        io::RawMessage message;
+        message.topic = topic.topic;
+        message.log_time_ns = t_ns;
+        if (value.header.t_capture_ns.has_value()) message.capture_time_ns = value.header.t_capture_ns.value();
+        message.payload = value.payload;
+        message.informational_only = informational;
+        bytes_written_this_cycle += message.payload.size();
+        writer_->WriteMessage(message);
+      }
+      // SI-25 transport (UT-TRN-*): the same value the recorder would have
+      // written, handed to the live-viewer publisher instead/as well --
+      // independent of whether a writer exists at all (a resim with no
+      // writer can still be watched live).
+      if (transport_publisher_ != nullptr) {
+        transport_publisher_->Publish(tick_index, topic.qualified_port, value.payload.data(), value.payload.size());
+      }
     }
   }
 

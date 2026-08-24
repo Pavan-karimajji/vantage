@@ -106,6 +106,9 @@ set(SIM_TEST_SOURCES
     # WP-13's own IT-09 (IMP-0114): mixed record policies proved through
     # the real C ABI, closing this row's last remaining gap.
     integration/test_it09_record_policy.cpp
+    # WP-27 (SI-25 transport): UT-TRN-01, a real Runner wired to both
+    # transports, diffing the consumer's observed stream.
+    integration/test_it_transport.cpp
 )
 
 add_executable(simcore_tests ${SIM_TEST_SOURCES})

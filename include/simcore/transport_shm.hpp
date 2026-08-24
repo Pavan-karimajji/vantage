@@ -39,6 +39,7 @@
 #pragma once
 
 #include "transport/ITransport.hpp"
+#include "simcore/transport_publisher.hpp"
 
 #include <atomic>
 #include <cstddef>
@@ -55,7 +56,7 @@ namespace simcore::transport {
 inline constexpr std::size_t kShmMaxFrameBytes = 256 * 1024;
 inline constexpr std::size_t kShmMaxPortNameLen = 64;
 
-class SharedMemoryTransport : public adas::transport::ITransport {
+class SharedMemoryTransport : public adas::transport::ITransport, public TransportPublisher {
  public:
   // The engine creates the named segment and owns its lifetime (unlinks it
   // on destruction); a client (player) opens an existing one and never
@@ -84,7 +85,7 @@ class SharedMemoryTransport : public adas::transport::ITransport {
   // caller defect -- asserted, never silently truncated (R-SIM-25's
   // "never a plausible default" applied to a byte budget, not just a
   // display field).
-  void Publish(uint64_t tickIndex, const std::string& portName, const uint8_t* data, std::size_t size);
+  void Publish(uint64_t tickIndex, const std::string& portName, const uint8_t* data, std::size_t size) override;
 
   // Test hook (Role::kEngine only, not part of the ITransport contract):
   // marks the engine's own recorded process id as gone without actually
@@ -95,6 +96,12 @@ class SharedMemoryTransport : public adas::transport::ITransport {
   // check on the recorded pid; this hook exists only because a unit test
   // cannot conveniently kill its own process mid-test.
   void SimulateEngineDeath();
+
+  // SW-0353's own "dropped frames are counted and reported" half -- lives
+  // in the mapped segment, so a client-role object reports the same count
+  // the engine sees (InProcessTransport's own counterpart, exposed the
+  // same way).
+  std::uint64_t DroppedFrames() const;
 
   // adas::transport::ITransport
   adas::transport::AttachResult attach(uint32_t clientVersion, uint32_t* outEngineVersion) override;

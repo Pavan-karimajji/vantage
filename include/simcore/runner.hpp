@@ -66,6 +66,7 @@
 #include "simcore/mutate.hpp"
 #include "simcore/runspec.hpp"
 #include "simcore/scheduler.hpp"
+#include "simcore/transport_publisher.hpp"
 
 namespace simcore::runner {
 
@@ -403,6 +404,14 @@ class Runner {
   // `Observe` is called, once per message actually placed into a cycle.
   void SetByteCounter(diagnostics::ByteCounter* byte_counter) { byte_counter_ = byte_counter; }
 
+  // `SI-25` `transport` (`UT-TRN-*`, `WP-27`): optional, same nullable-
+  // pointer shape as `SetCheckpoint`/`SetByteCounter` above -- a run with
+  // no publisher attached costs nothing extra and behaves identically
+  // (`SW-0352`'s non-perturbing guarantee, structural here rather than
+  // tested per call). Every port value the write pass already resolves for
+  // recording is also handed to the publisher, once, same tick.
+  void SetTransportPublisher(transport::TransportPublisher* publisher) { transport_publisher_ = publisher; }
+
  private:
   Runner() = default;
 
@@ -419,6 +428,7 @@ class Runner {
   const mutate::Mutator* mutator_ = nullptr;
   Checkpoint* checkpoint_ = nullptr;
   diagnostics::ByteCounter* byte_counter_ = nullptr;
+  transport::TransportPublisher* transport_publisher_ = nullptr;
   Options options_;
 
   std::map<std::string, module_host::Component*> components_;

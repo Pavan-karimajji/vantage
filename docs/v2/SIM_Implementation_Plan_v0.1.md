@@ -1069,16 +1069,19 @@ fraction (1 `SW` + 2 `SYS` of ~130 total UIDs the full table names).
       it — `engineAlive()` correctly flips `false` only then. Both
       backends now have parity: not just compiled on both platforms, but
       each independently proven against a real killed process, not a
-      same-process simulation. **Not yet done, explicitly deferred,
+      same-process simulation. **`UT-TRN-01` closed 2026-08-24, a later
+      pass:** `Runner::SetTransportPublisher` wired both transport classes
+      through the real scheduler for the first time (`IMP-0349`'s own row
+      below has the full record). **Still not done, explicitly deferred,
       matching this plan's own incremental-slice precedent (`SM-01`):**
-      the IT-level `UT-TRN-01`..`05` fixtures (`F-STUB`/`F-BULK`/`F-LONG`/
-      `F-STUB-CRASH`, a real component wired through the scheduler) — this
-      pass proves both transport classes themselves, not yet anything
-      wired to a real scheduler or a real player process.
+      `UT-TRN-02`..`05` and `IT-19` (`F-BULK`/`F-LONG`/`F-STUB-CRASH` —
+      channel-usage observation, measured tick rate with a slow/mid-run/
+      detaching player, and a real killed engine with a player attached,
+      all through the real scheduler).
 - [ ] **Lands:** `IMP-0017`, `IMP-0298`, `IMP-0349`…`IMP-0356` — 10.
   - [ ] `IMP-0017` · `SW-0017` · `NEW` — `ANL-SW-07`
   - [ ] `IMP-0298` · `SW-0298` · `NEW` — `session/attach.py`
-  - [ ] `IMP-0349` · `SW-0349` · `NEW` — contract + both `InProcessTransport` and `SharedMemoryTransport` landed, unit-tested. IT-level `UT-TRN-01` (a real consumer diffed across both transports, wired through the scheduler) not started.
+  - [x] `IMP-0349` · `SW-0349` · `NEW` — contract + both `InProcessTransport` and `SharedMemoryTransport` landed, unit-tested. **`UT-TRN-01` closed 2026-08-24**: `Runner::SetTransportPublisher` (`runner.hpp`, nullable pointer, same shape `SetCheckpoint`/`SetByteCounter` use) wired into `cycle_loop.cpp`'s existing write-pass loop — every port value already resolved for recording is also handed to the publisher, independent of whether a writer exists. A new shared `TransportPublisher` interface (`transport_publisher.hpp`) lets `Runner` hold either transport without knowing which; both `InProcessTransport`/`SharedMemoryTransport` now implement it alongside `ITransport`. `tests/integration/test_it_transport.cpp` (`ItTrn01Transport`, 2 cases) drives a real `Runner` + real `echo_stub` (`F-STUB`) through the actual scheduler twice — once publishing to `InProcessTransport`, once to `SharedMemoryTransport` (engine-role object publishing, a separate client-role object consuming, same segment) — and diffs the two consumers' observed frame streams: identical tick/port/payload for all 15 frames (3 ports × 5 cycles), neither empty. `simcore_tests` **206/207 on `vs2026`** (the one failure the same pre-existing `UtEdg08Reproducer` Windows temp-lock race), `check_invariants.py` clean. **Also added in passing, needed for `UT-TRN-03`'s own future Accept clause:** `DroppedFrames()` on both transports (`InProcessTransport`'s own `dropped_` counter; `SharedMemoryTransport`'s in the mapped `Header`, visible to a client-role object too) — not yet exercised by an IT-level test.
   - [ ] `IMP-0350` · `SW-0350` · `KEEP` — `ANL-SW-58`
   - [ ] `IMP-0351` · `SW-0351` · `NEW` — `src/simcore/transport/shm.cpp` landed and unit-tested (zero-copy bulk read proven directly, `TransportShm.DataCrossesThroughTheMappedSegmentNotACopyOnTheStack`); IT-level `UT-TRN-02` (`F-BULK`, a real consumer observing which channel a control message used) not started
   - [ ] `IMP-0352` · `SW-0352` · `NEW` — both `inproc.cpp` and `shm.cpp`'s `attach`/`detach` proven non-perturbing at unit level (`TransportInproc.AttachDetachDoesNotPerturbPublish`, `TransportShm.AttachDetachDoesNotPerturbPublish`); IT-level `IT-19` (measured engine tick rate with/without a player) not started
@@ -1087,7 +1090,7 @@ fraction (1 `SW` + 2 `SYS` of ~130 total UIDs the full table names).
   - [ ] `IMP-0355` · `SW-0355` · `NEW` — both transports' version negotiation landed and unit-tested (`TransportInproc.VersionMismatchRefusedBeforeAnyDataCrosses`, `TransportShm.VersionMismatchRefusedBeforeAnyDataCrosses` + `shm.cpp`'s own depth-mismatch refusal); no separate `negotiate.cpp` file, folded into each transport's own `attach()`
   - [ ] `IMP-0356` · `SW-0356` · `NEW` — `inproc.cpp`'s `MarkEngineDead()`/`engineAlive()`/`lastTickReceived()` landed and unit-tested; `shm.cpp`'s own `SimulateEngineDeath()`/`engineAlive()`/`lastTickReceived()` landed, unit-tested (`TransportShm.DeadEngineReportedNotWaitedOn`) **and** verified against a real OS-level crash (`fork()` smoke test, child process `_exit()`s without running its destructor, parent's `engineAlive()` correctly flips false only once the OS has reaped it) — no separate `liveness.cpp` file, folded into each transport's own state
 - [ ] **Files:** contract `modules/interfaces/cpp/transport/ITransport.hpp` (landed); engine-side `src/simcore/transport/inproc.cpp` + `shm.cpp` (both landed, cross-process folds in its own attach/detach/negotiation/liveness rather than the four separate files this row originally named); player-side client is `modules/viz`'s own scope (`VIZ:SI-16`), not this file list.
-- [ ] **Exit:** **two** transports against one interface, because one implementation behind an interface is an interface nobody has tested. Both landed (`InProcessTransport`, `SharedMemoryTransport`). `IT-19` measures engine tick rate with and without a player attached — not started. A slow player drops frames; it never slows the engine (proven at unit level for both transports; not yet at IT level against a real scheduler).
+- [~] **Exit:** **two** transports against one interface, because one implementation behind an interface is an interface nobody has tested. Both landed (`InProcessTransport`, `SharedMemoryTransport`). **`UT-TRN-01` closed 2026-08-24** — a real consumer diffed across both transports, wired through the real scheduler (`test_it_transport.cpp`, see `IMP-0349`'s own row above). Still open: `IT-19` (measured engine tick rate with and without a player attached — not started); a slow player drops frames without slowing the engine, proven at unit level for both transports (`DroppedFrames()` now exposed on both, `IMP-0349`'s own note) but not yet at IT level against a real scheduler (`UT-TRN-03`). — closed by: `IT-19`/`UT-TRN-03` landing.
 
 ### WP-28 · `MP-4` · `SI-22` `launcher`
 - [ ] **Prereq:** `WP-26`.

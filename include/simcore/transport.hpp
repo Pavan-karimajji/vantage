@@ -29,6 +29,7 @@
 #pragma once
 
 #include "transport/ITransport.hpp"
+#include "simcore/transport_publisher.hpp"
 
 #include <cstdint>
 #include <mutex>
@@ -37,7 +38,7 @@
 
 namespace simcore::transport {
 
-class InProcessTransport : public adas::transport::ITransport {
+class InProcessTransport : public adas::transport::ITransport, public TransportPublisher {
  public:
   // depth: ring capacity in frames. A small bound is deliberate -- a large
   // one just delays the drop `SW-0353` requires, it does not avoid it.
@@ -47,7 +48,7 @@ class InProcessTransport : public adas::transport::ITransport {
   // one port's bytes for one tick. Never blocks; may overwrite the oldest
   // unread slot (SW-0353). Copies `data` into owned storage immediately, so
   // the caller's own buffer is free to change the instant this returns.
-  void Publish(uint64_t tickIndex, const std::string& portName, const uint8_t* data, std::size_t size);
+  void Publish(uint64_t tickIndex, const std::string& portName, const uint8_t* data, std::size_t size) override;
 
   // Test/host hook: marks the engine as no longer alive. In-process, "the
   // engine dies" is the host process dying, which takes this object with
@@ -55,6 +56,12 @@ class InProcessTransport : public adas::transport::ITransport {
   // false, lastTickReceived() still queryable) has a real shape to test
   // without actually crashing the process.
   void MarkEngineDead();
+
+  // SW-0353's own "dropped frames are counted and reported" half --
+  // incremented exactly where Publish() overwrites an unread slot (the
+  // same condition that already moves readIndex_ past it), never
+  // estimated separately.
+  std::uint64_t DroppedFrames() const;
 
   // adas::transport::ITransport
   adas::transport::AttachResult attach(uint32_t clientVersion, uint32_t* outEngineVersion) override;
@@ -78,6 +85,7 @@ class InProcessTransport : public adas::transport::ITransport {
   std::size_t writeIndex_ = 0;
   std::size_t readIndex_ = 0;
   std::size_t pending_ = 0;
+  std::uint64_t dropped_ = 0;
   bool attached_ = false;
   bool engineAlive_ = true;
   // Backing storage for the frame most recently handed back by tryReceive

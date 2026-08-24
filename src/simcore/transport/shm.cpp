@@ -76,6 +76,10 @@ struct SharedMemoryTransport::Header {
   std::atomic<uint32_t> readIndex;
   std::atomic<int64_t> engineAlivePid;  // 0 == no engine / reported dead
   std::atomic<uint64_t> lastPublishedTick;
+  // SW-0353's own "dropped frames are counted and reported" half -- lives
+  // in the segment (not a private member) so a client-role object can
+  // report it too, same as lastPublishedTick.
+  std::atomic<uint64_t> droppedFrames;
 };
 
 struct SharedMemoryTransport::Slot {
@@ -100,6 +104,7 @@ SharedMemoryTransport::SharedMemoryTransport(std::string name, Role role, std::s
     header_->writeIndex.store(0, std::memory_order_relaxed);
     header_->readIndex.store(0, std::memory_order_relaxed);
     header_->lastPublishedTick.store(0, std::memory_order_relaxed);
+    header_->droppedFrames.store(0, std::memory_order_relaxed);
     for (std::size_t i = 0; i < depth_; ++i) {
       slots_[i].unread.store(0, std::memory_order_relaxed);
     }
@@ -254,8 +259,14 @@ void SharedMemoryTransport::Publish(uint64_t tickIndex, const std::string& portN
     // stale data on its next turn (SW-0353: silent to the producer,
     // never a block). Same logic InProcessTransport::Publish uses.
     header_->readIndex.store(next, std::memory_order_release);
+    header_->droppedFrames.fetch_add(1, std::memory_order_relaxed);
   }
   header_->lastPublishedTick.store(tickIndex, std::memory_order_release);
+}
+
+std::uint64_t SharedMemoryTransport::DroppedFrames() const {
+  assert(mapped_);
+  return header_->droppedFrames.load(std::memory_order_relaxed);
 }
 
 void SharedMemoryTransport::SimulateEngineDeath() {

@@ -2936,7 +2936,7 @@ Superseded (`SM-01` trial), `SW-0324` — was *Display-only data is decoded only
 **Shall.** The interface between player and engine shall be fixed, and at least two transports — in-process pass-through and local shared memory — shall be implemented against it unchanged.
 **Accept.** Switching transport changes no interface signature and no consumer.
 **Verify.** T · `UT-TRN-01`   **Trace.** SYS-0273
-**Built.** ○ not started — `IMP-0349` in `WP-27`
+**Built.** ● done — `IMP-0349` in `WP-27`
 **Now.** `NEW`.
 
 **`SW-0350`** · `SI-25` · `P0` · `R1` — No view reads engine memory directly

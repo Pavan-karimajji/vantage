@@ -30,9 +30,15 @@ void InProcessTransport::Publish(uint64_t tickIndex, const std::string& portName
     // stale data on its next turn (SW-0353: the drop is silent to the
     // producer, never a block).
     readIndex_ = writeIndex_;
+    ++dropped_;
   } else {
     ++pending_;
   }
+}
+
+std::uint64_t InProcessTransport::DroppedFrames() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return dropped_;
 }
 
 void InProcessTransport::MarkEngineDead() {

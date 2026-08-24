@@ -2252,7 +2252,7 @@ Constraints are obligations on *how* the system is built, imposed because a corr
 **Shall.** The transport between player and engine shall be replaceable — in-process pass-through, local shared memory, or network — without changing the interface, with bulk data over shared memory and control and metadata over a channel of the transport's choosing.
 **Accept.** Two transports are implemented against one unchanged interface. No view is permitted to read an engine pointer directly under any circumstance.
 **Verify.** T · `SYT-CON-10` · `ANL-47`   **Trace.** CN-0050, CN-0051, CN-0052
-**Built.** ○ not started — 0/4 software requirements done, in `WP-27`
+**Built.** ◐ started — 1/4 software requirements done, in `WP-27`
 **Amended 2026-08-20** — kept, not superseded (`SM-01`). The `Shall`/`Accept` text is unaffected by `D-5`: it states the interface property, not who implements which side. What `D-5` settles is where each side's *code* lives once split — contract → `modules/interfaces` (`R-IFACE-1`), engine-side implementation → this module's own `simcore/transport`, client-side implementation → `modules/viz` — which is `SM-06`'s execution, prereq `SM-01`, not yet run. `SW-0349`..`SW-0356` (`SI-25`) stay `amend`, matching `SM-01`'s own table.
 
 **`SYS-0274`** · `P0` · `R1` — The framework names no function and no component
