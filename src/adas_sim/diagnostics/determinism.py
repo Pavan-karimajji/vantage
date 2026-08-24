@@ -21,10 +21,11 @@ every divergence found plus the worst headroom fraction consumed.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
+from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.diagnostics.tolerance import ToleranceSet
 from adas_sim.io.base import RecordingReader, RunManifest, TopicInfo
 
@@ -221,3 +222,43 @@ def compare_with_tolerance(
                         detail=f"{value_a!r} != {value_b!r} (exact-only field)",
                     ))
     return divergences, worst_headroom
+
+
+#: `IMP-0283`'s own gate/measurement split: axes A/B have no tolerance
+#: field at all, so a caller asking this formatter to print one for them is
+#: an authoring mistake, not a legitimate "nothing to report" case.
+_GATE_AXES: frozenset[DeterminismAxis] = frozenset({"same_process", "fresh_process"})
+
+
+def format_report(
+    axis: DeterminismAxis, divergences: Sequence[Divergence], *,
+    headroom: float = 0.0, tolerance: ToleranceSet | None = None,
+) -> str:
+    """`R-SIM-24`'s own anti-spiral line, printed rather than left to
+    whoever remembers to look: a PASSING report on a measurement axis
+    (`rebuilt_binary`/`different_machine`) states the tolerance it used and
+    the headroom consumed. A gate axis (`same_process`/`fresh_process`) has
+    no tolerance field to print -- calling this for one is refused, naming
+    the axis, rather than silently printing a blank tolerance line
+    (`IMP-0283`'s own "nothing to widen" made mechanical)."""
+    if axis in _GATE_AXES:
+        raise AuthoringError(
+            expected="a measurement axis (rebuilt_binary or different_machine)",
+            found=f"axis={axis!r}", where="adas_sim.diagnostics.determinism.format_report",
+            hint=f"{axis} is a gate with no tolerance field -- print divergences directly, never headroom",
+        )
+    if divergences:
+        lines = [f"FAIL ({AXIS_LABELS[axis]}): {len(divergences)} divergence(s)"]
+        for d in divergences:
+            lines.append(f"  tick={d.tick_index} topic={d.topic!r} field={d.field!r}: {d.detail}")
+        return "\n".join(lines)
+
+    component = tolerance.component if tolerance is not None else "(no tolerance file)"
+    sha = tolerance.sha256 if tolerance is not None else ""
+    lines = [
+        f"PASS ({AXIS_LABELS[axis]}): tolerance={component!r} sha256={sha or '(none)'} "
+        f"headroom_consumed={headroom:.3f}",
+    ]
+    for row in (tolerance.rows if tolerance is not None else ()):
+        lines.append(f"  field={row.field!r} abs_tol={row.abs_tol} why={row.why!r}")
+    return "\n".join(lines)

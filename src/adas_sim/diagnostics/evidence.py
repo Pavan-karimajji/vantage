@@ -62,6 +62,18 @@ class Evidence:
     #: marker) -- both `None` for every other `kind`.
     layer_id: str | None = None
     derived: bool | None = None
+    #: `IMP-0274`, from `IMP-0050`/`IMP-0052` (`simcore/bus`'s `Rung`/
+    #: `Quality`, `WP-08`): how the timing this value carries was recovered.
+    #: `None` today for every `kind` -- `WP-08`'s own explicit scope
+    #: boundary leaves wire-level decode and run-manifest reporting of
+    #: `rung`/`quality` as named follow-ons, so no Python-side `PortValue`
+    #: (`session/tick.py`) carries either field yet to read from. The
+    #: fields exist now so `render_panel`/`render_text` never need a second
+    #: schema change once that data starts arriving; until then they
+    #: honestly format `"unknown"` (`R-SIM-25`, `NR-SIM-4`) rather than
+    #: guessing from `origin`.
+    rung: str | None = None
+    quality: str | None = None
 
     def __repr__(self) -> str:
         return f"<Evidence {self.address!r} kind={self.kind} tick={self.tick}>"
@@ -178,6 +190,7 @@ def evidence(address: str, session: Session, tick: int) -> Evidence:
 EVIDENCE_FIELDS = (
     "address", "kind", "value", "tick", "t_ns", "topic", "origin", "run_id",
     "config_bundle_sha256", "component_build_id", "layer_id", "derived",
+    "rung", "quality",
 )
 
 

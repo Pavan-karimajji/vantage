@@ -1523,7 +1523,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Every run shall end with a compact summary of warning counts by category, and the counts shall reconcile exactly with the structured log.
 **Accept.** The summary count for each category equals the number of log events of that category, compared automatically.
 **Verify.** T · `UT-ERR-08`   **Trace.** SYS-0206
-**Built.** ○ not started — `IMP-0130` in `WP-24`
+**Built.** ● done — `IMP-0130` in `WP-24`
 **Now.** `NEW`.
 
 ---
@@ -2632,105 +2632,105 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The dry run shall report the resolved configuration with the source layer of each value, the graph, the schedule, the injection boundary, the coherence result and an estimated duration, loading no module and decoding no message.
 **Accept.** A module-load counter and a message-decode counter both read zero after a dry run. Every listed element is present.
 **Verify.** T · `UT-DIA-01`   **Trace.** SYS-0202, SYS-0263
-**Built.** ○ not started — `IMP-0271` in `WP-24`
+**Built.** ● done — `IMP-0271` in `WP-24`
 **Now.** `PARTIAL` — `core/explain.py` resolves names and reports where they came from; the graph, schedule, injection boundary, coherence result and duration estimate are absent.
 
 **`SW-0272`** · `SI-17` · `P1` · `R1` — The duration estimate is stated with its own accuracy
 **Shall.** The estimated duration shall be reported together with the factor within which it has been measured to fall.
 **Accept.** The factor is a measured number on the reference configuration of SysReq §18.0, reported alongside the estimate rather than claimed in prose. It is declared from the first campaign's measurement; a later campaign whose estimate falls outside it fails.
 **Verify.** A · `ANL-SW-43`   **Trace.** SYS-0238
-**Built.** ○ not started — `IMP-0272` in `WP-24`
+**Built.** ● done — `IMP-0272` in `WP-24`
 **Now.** `NEW` — **`OQ-14` closed 2026-08-13**; baseline-seeded, failable from the second campaign.
 
 **`SW-0273`** · `SI-17` · `P0` · `R1` — One evidence producer, two formatters
 **Shall.** There shall be exactly one function producing an evidence record for an address at a tick, and both the graphical panel and the command-line query shall format its output.
 **Accept.** For a sampled set of addresses the two outputs are field-for-field identical. A static check finds no second code path capable of producing an evidence answer.
 **Verify.** T · `UT-DIA-02` · A · `ANL-SW-44`   **Trace.** SYS-0154, SYS-0153
-**Built.** ○ not started — `IMP-0273` in `WP-24`
+**Built.** ● done — `IMP-0273` in `WP-24`
 **Now.** `DONE` — `core/evidence.py::evidence` with `format_evidence`, consumed by `cli/explain.py --at` and `view/evidence_panel.py`. Structurally identical by construction, not by discipline.
 
 **`SW-0274`** · `SI-17` · `P0` · `R1` — An evidence answer reaches the bytes
 **Shall.** For any primitive, layer or plotted sample the evidence record shall carry port, topic, tick, origin tag, source timestamp, configuration bundle, module build, and whether the value was published by a module or reconstructed by a layer.
 **Accept.** Every field is present or reads *unknown*; no field carries a plausible-looking default.
 **Verify.** T · `UT-DIA-03`   **Trace.** SYS-0153, SYS-0034
-**Built.** ○ not started — `IMP-0274` in `WP-24`
+**Built.** ● done — `IMP-0274` in `WP-24`
 **Now.** `PARTIAL` — the record carries port, topic, tick, origin, bundle origin, run identifier and the derived flag; the source timestamp and module build are not joined in, because `SW-0043`'s header does not exist yet.
 
 **`SW-0275`** · `SI-17` · `P0` · `R1` — The evidence chain needs no new capture and no new index
 **Shall.** The evidence answer shall be composed from records the run already produces — the run identifier to the manifest, the layer to its resolved port requirements, the port to its topic and origin, the pick identifier to the entity — and shall require no additional capture.
 **Accept.** Enabling evidence changes no port value and adds no per-tick cost measurable above noise.
 **Verify.** T · `UT-DIA-04`   **Trace.** SYS-0153; CN-0343
-**Built.** ○ not started — `IMP-0275` in `WP-24`
+**Built.** ● done — `IMP-0275` in `WP-24`
 **Now.** `DONE` — this is exactly how `core/evidence.py` is built.
 
 **`SW-0276`** · `SI-17` · `P1` · `R1` — The chain stops at the module boundary
 **Shall.** An evidence answer shall state where a value came from and shall not state why an algorithm produced it.
 **Accept.** No evidence answer contains an inference about module-internal reasoning.
 **Verify.** I · `INSP-SW-05`   **Trace.** SYS-0155
-**Built.** ○ not started — `IMP-0276` in `WP-24`
+**Built.** ● done — `IMP-0276` in `WP-24`
 **Now.** `DONE`.
 
 **`SW-0277`** · `SI-17` · `P0` · `R1` — An environment report never raises
 **Shall.** One operation shall report library resolution, configuration agreement, recording cut support and plug-in inspection, and shall never raise.
 **Accept.** Run against a deliberately broken environment — missing library, corrupt bundle, unreadable recording, incompatible plug-in — it reports each fault and exits normally in every case.
 **Verify.** T · `UT-DIA-05`   **Trace.** SYS-0208
-**Built.** ○ not started — `IMP-0277` in `WP-24`
+**Built.** ● done — `IMP-0277` in `WP-24`
 **Now.** `DONE` — `cli/doctor.py` over `core/diagnostics.py`, with the never-raises property tested.
 
 **`SW-0278`** · `SI-17` · `P1` · `R1` — Any name resolves to an explanation
 **Shall.** Any name — port, topic, layer, error code, style token, run identifier — shall resolve to an explanation, with near-match suggestions on failure.
 **Accept.** A misspelled name of each kind produces the correct suggestion and names the set searched.
 **Verify.** T · `UT-DIA-06`   **Trace.** SYS-0207
-**Built.** ○ not started — `IMP-0278` in `WP-24`
+**Built.** ● done — `IMP-0278` in `WP-24`
 **Now.** `DONE` — `core/explain.py` plus `cli/explain.py`.
 
 **`SW-0279`** · `SI-17` · `P0` · `R1` — A probe reads a module's ports from its manifest
 **Shall.** Probing a module shall read its ports, types, periods and schemas from its manifest with no hand-mapping and no per-module code.
 **Accept.** Probing a module the framework has never seen lists its full port set. No framework file is edited to add a module.
 **Verify.** T · `UT-DIA-07`   **Trace.** SYS-0053, SYS-0022
-**Built.** ○ not started — `IMP-0279` in `WP-24`
+**Built.** ● done — `IMP-0279` in `WP-24`
 **Now.** `DONE` — `cli/probe.py`, and the same load path is reused by the player's probe panel rather than reimplemented.
 
 **`SW-0280`** · `SI-17` · `P0` · `R1` — Run comparison names the first divergence
 **Shall.** A comparison between two runs, or between a run and a recording, shall report the first diverging tick, port and field, and the bound in force.
 **Accept.** A bare pass or fail is never produced as a comparison result.
 **Verify.** T · `UT-DIA-08`   **Trace.** SYS-0205, SYS-0244
-**Built.** ○ not started — `IMP-0280` in `WP-24`
+**Built.** ● done — `IMP-0280` in `WP-24`
 **Now.** `DONE` — `core/determinism.py`'s `compare_exact` and `compare_with_tolerance` both report a `Divergence` naming tick, port and field.
 
 **`SW-0281`** · `SI-17` · `P0` · `R1` — The comparison axis is derived from the manifests
 **Shall.** Which reproducibility axis a comparison exercises shall be derived from the two runs' manifests, and a pair differing in more than one dimension shall be reported as inconclusive naming every difference.
 **Accept.** A pair differing in host and build is inconclusive for both axes, naming both differences. No caller-supplied flag selects the axis.
 **Verify.** T · `UT-DIA-09`   **Trace.** SYS-0241
-**Built.** ○ not started — `IMP-0281` in `WP-24`
+**Built.** ● done — `IMP-0281` in `WP-24`
 **Now.** `DONE` — `core/determinism.py::derive_axis` is exactly this.
 
 **`SW-0282`** · `SI-17` · `P0` · `R1` — The comparison is over port values, never file bytes
 **Shall.** Reproducibility comparison shall be over decoded port values.
 **Accept.** Two recordings of one deterministic run, differing in run identifier and timestamp, compare equal.
 **Verify.** T · `UT-DIA-10`   **Trace.** SYS-0242
-**Built.** ○ not started — `IMP-0282` in `WP-24`
+**Built.** ● done — `IMP-0282` in `WP-24`
 **Now.** `DONE`.
 
 **`SW-0283`** · `SI-17` · `P0` · `R1` — Two axes are gates, two are measurements
 **Shall.** Same-process and fresh-process reproducibility shall be exact and blocking, with no tolerance field; rebuilt-binary and different-machine shall be measured against a declared tolerance and tracked.
 **Accept.** The first two have no tolerance field to widen. A passing report on the last two prints the tolerance used and the headroom consumed.
 **Verify.** T · `UT-DIA-11`   **Trace.** SYS-0240, SYS-0243
-**Built.** ○ not started — `IMP-0283` in `WP-24`
+**Built.** ● done — `IMP-0283` in `WP-24`
 **Now.** `PARTIAL` — the axis model and the tolerance file exist; headroom is not printed on a pass, which is the anti-spiral half.
 
 **`SW-0284`** · `SI-17` · `P0` · `R1` — Tolerance is declared once, per component and field, with a mandatory reason
 **Shall.** Tolerance shall be declared once per component and field, defaulting to exact, with integers and enumerations exact and not overridable, and every row carrying a mandatory written reason.
 **Accept.** A row with no reason is refused at load. An integer row with a tolerance is refused.
 **Verify.** T · `UT-DIA-12`   **Trace.** SYS-0243
-**Built.** ○ not started — `IMP-0284` in `WP-24`
+**Built.** ● done — `IMP-0284` in `WP-24`
 **Now.** `DONE` — `core/tolerance.py`, with the mandatory `why:` enforced as an authoring error.
 
 **`SW-0285`** · `SI-17` · `P1` · `R1` — Any internal port is recordable by naming it
 **Shall.** Any internal port shall become recorded output by naming it in configuration, with no code change, and untapping shall have no other effect.
 **Accept.** A tapped port appears in the output with full provenance; removing the tap leaves the run otherwise byte-identical.
 **Verify.** T · `UT-DIA-13`   **Trace.** SYS-0203
-**Built.** ○ not started — `IMP-0285` in `WP-24`
+**Built.** ◐ started — `IMP-0285` in `WP-24`
 **Now.** `PARTIAL` — the record policy mechanism can express it; there is no tap concept distinct from a declared port.
 
 **`SW-0286`** · `SI-17` · `P1` · `R1` — Diagnostics are reachable from a script, not only a terminal
@@ -2744,7 +2744,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The question *where did this value come from* shall be answerable for any value from the scripting API, returning the same record `SW-0273`'s producer returns.
 **Accept.** The scripted answer and the command-line answer are field-for-field identical, checked automatically. No third derivation exists.
 **Verify.** T · `UT-DIA-15`   **Trace.** SYS-0210, SYS-0154
-**Built.** ○ not started — `IMP-0403` in `WP-24`
+**Built.** ◐ started — `IMP-0403` in `WP-24`
 **Now.** `DONE` — `core.evidence.evidence` is a plain function; the command line is one caller and the panel is another.
 
 ---

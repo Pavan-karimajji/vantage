@@ -18,9 +18,13 @@ test), so this module cannot import it. `cli/explain.py`, which may import
 from __future__ import annotations
 
 import sys
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from pathlib import Path
 
 from adas_sim.config import ResolvedConfig
 from adas_sim.diagnostics.errors import AuthoringError, ContractError, EnvironmentError_, InternalError
+from adas_sim.diagnostics.estimate import DurationEstimate, Shape, estimate_duration
 from adas_sim.diagnostics.suggest import near_matches
 from adas_sim.session.session import Session
 from adas_sim.plugins.registry import codec_info, registered_extensions
@@ -155,3 +159,100 @@ def explain(name: str, session: Session, *, config: ResolvedConfig | None = None
         "searched": ["run_id", "topics", "registered layers", "codecs", "error codes"],
         "did_you_mean": matches,
     }
+
+
+# ---------------------------------------------------------------------------
+# `IMP-0271` -- the dry run: resolved plan, executed nothing (`SW-0271`,
+# `CN-0207`).
+# ---------------------------------------------------------------------------
+
+
+class _StagesOnly:
+    """The one attribute `graph.coherence.classify`/`ancestors`/
+    `descendants` actually read (that module's own docstring: "no reader,
+    no loader, no path"). A real `graph.build.Pipeline` cannot be
+    constructed with zero component resolution (`Pipeline.__init__` needs a
+    real manifest per stage to derive the base grid) -- this stands in for
+    one everywhere coherence classification only ever looks at `.stages`,
+    so a dry run classifies coherence with the same zero module loads
+    `Pipeline.parse_stages` already gives the rest of this function."""
+
+    __slots__ = ("stages",)
+
+    def __init__(self, stages: Sequence[object]) -> None:
+        self.stages = stages
+
+
+def injection_boundary(stages: Sequence[object]) -> tuple[tuple[str, str, str, str], ...]:
+    """`CN-0121`: the set of ports crossing from a `measured` stage into a
+    `simulate` stage, logged before the first tick on a real run
+    (`SW-0113`) and reported here with none of that run happening --
+    computed structurally from `Stage.mode`/`Stage.inputs` alone, the exact
+    zero-load shape `SW-0271` needs. Returns `(measured_stage, measured_
+    port, simulate_stage, simulate_port)` tuples, in stage-declaration
+    order."""
+    from adas_sim.graph.build import _split_ref  # local: avoids a module-load-order cycle
+
+    mode_by_name = {stage.name: stage.mode for stage in stages}
+    boundary: list[tuple[str, str, str, str]] = []
+    for stage in stages:
+        if stage.mode != "simulate":
+            continue
+        for port_name, ref in stage.inputs.items():
+            producer_name, producer_port = _split_ref(ref)
+            if mode_by_name.get(producer_name) == "measured":
+                boundary.append((producer_name, producer_port, stage.name, port_name))
+    return tuple(boundary)
+
+
+@dataclass(frozen=True, slots=True)
+class DryRun:
+    """`SW-0271`'s own five listed elements, plus the resolved plan they sit
+    on top of. `schedule` is per-stage: a declared rate needs that stage's
+    own component manifest (`R-SIM-18`), which this function never loads --
+    every entry therefore reads `"unknown"` today (`R-SIM-25`), honestly,
+    rather than dlopen-ing a library to answer it."""
+
+    stages: tuple[Mapping[str, object], ...]
+    resolved_config: Mapping[object, Mapping[str, object]] | None
+    schedule: Mapping[str, str]
+    injection_boundary: tuple[tuple[str, str, str, str], ...]
+    coherence: tuple[object, ...]
+    estimate: DurationEstimate
+    modules_loaded: int
+    messages_decoded: int
+
+
+def dry_run(
+    pipeline_path: Path, *, config: ResolvedConfig | None = None,
+    tick_count: int = 0, estimate_history_path: Path | None = None,
+) -> DryRun:
+    """`SW-0271`: report the resolved plan and execute nothing. Loads no
+    module (`Pipeline.parse_stages` reads the YAML only, no `dll:`/
+    `stubdll:` lookup) and decodes no message (nothing here opens a
+    recording) -- `modules_loaded`/`messages_decoded` are always `0`,
+    returned rather than merely implied so a caller can assert it directly
+    (`UT-DIA-01`'s own "count ticks executed and libraries loaded")."""
+    from adas_sim.graph import coherence
+    from adas_sim.graph.build import Pipeline
+
+    stages = Pipeline.parse_stages(pipeline_path)
+    boundary = injection_boundary(stages)
+    findings = coherence.classify(_StagesOnly(stages))
+    schedule = {stage.name: "unknown" for stage in stages}
+    shape = Shape(stage_count=len(stages), tick_count=tick_count)
+    estimate = estimate_duration(shape, history_path=estimate_history_path)
+
+    return DryRun(
+        stages=tuple(
+            {"name": s.name, "mode": s.mode, "impl": s.impl, "inputs": dict(s.inputs)}
+            for s in stages
+        ),
+        resolved_config=config.resolved if config is not None else None,
+        schedule=schedule,
+        injection_boundary=boundary,
+        coherence=findings,
+        estimate=estimate,
+        modules_loaded=0,
+        messages_decoded=0,
+    )

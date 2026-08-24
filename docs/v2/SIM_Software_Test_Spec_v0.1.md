@@ -63,9 +63,11 @@ rather than given a plausible number.
 **Seeded is not unsupplied.** A seeded row has a number the next run can exceed,
 a written reason and printed headroom; an unsupplied row has none of those. What
 a seeded row does not answer is *"is it fast enough?"* — an absolute, and it
-stays with whoever owns throughput expectations. One row elsewhere still
-carries `⊘` for a different reason (`UT-DIA-02`): it awaits an implementation,
-not a number.
+stays with whoever owns throughput expectations. `UT-DIA-02` carried `⊘` for a
+different reason (it awaited an implementation, not a number) until `WP-24`
+landed `diagnostics/evidence.py`'s `ANL-SW-44` static check and its own test;
+the mark is removed, not reused, now that the implementation it was waiting
+on exists.
 
 ---
 
@@ -588,7 +590,7 @@ Added 2026-08-22 alongside `SW-0422`/`SW-0423`, found while attempting `WP-15b`:
 | ID | Serves | Fixture | Steps |
 |---|---|---|---|
 | `UT-DIA-01` | `SW-0271` | `F-CHAIN4` | Run the dry run; enumerate what it reported; count ticks executed and libraries loaded. |
-| `UT-DIA-02` `⊘` | `SW-0273` | `F-CHAIN4` | Format a sampled set of addresses through both formatters; compare field for field; search for a second code path producing an evidence answer. |
+| `UT-DIA-02` | `SW-0273` | `F-CHAIN4` | Format a sampled set of addresses through both formatters; compare field for field; search for a second code path producing an evidence answer. |
 | `UT-DIA-03` | `SW-0274` | `F-LADDER` | Ask for evidence where several fields are unfillable; inspect each for `unknown` versus a plausible default. |
 | `UT-DIA-04` | `SW-0275` | `F-CHAIN4` | Run with evidence enabled and disabled; compare port values and per-tick cost against measurement noise. |
 | `UT-DIA-05` | `SW-0277` | — | Run the environment report against a missing library, a corrupt bundle, an unreadable recording and an incompatible plug-in. |
