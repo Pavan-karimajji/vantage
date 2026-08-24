@@ -1392,7 +1392,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The runner shall offer every declared port — every stage's inputs and outputs — to the writer, filtered only by the declared per-port record policy.
 **Accept.** No declared port is absent from the recording without an explicit policy entry saying so.
 **Verify.** T · `IT-09`   **Trace.** SYS-0120, SYS-0116
-**Built.** ◐ started — `IMP-0114` in `WP-13`
+**Built.** ● done — `IMP-0114` in `WP-13`
 **Now.** `DONE·MOVE` — `sources/recorder.py` derives its topic list from the port manifests exactly as required.
 
 **`SW-0115`** · `SI-11` · `P0` · `R1` — Excluding or decimating a consumed input is a record-time load error

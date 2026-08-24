@@ -1186,7 +1186,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Each port shall declare a record policy from the closed set full, excluded, decimated-by-N; the policy shall be recorded for **every** declared port.
 **Accept.** A reader of the artifact alone can answer "was this complete?" for every port. Excluding or decimating an input a simulated stage consumes is a load error at record time.
 **Verify.** T · `SYT-OUT-06`   **Trace.** CN-0317; v1 `NR-SIM-42`
-**Built.** ◐ started — 1/3 software requirements done, in `WP-05`, `WP-13`, `WP-20`
+**Built.** ◐ started — 2/3 software requirements done, in `WP-05`, `WP-13`, `WP-20`
 
 **`SYS-0117`** · `P0` · `R1` — Volume is estimated before it is produced
 **Shall.** Recording volume shall be estimated before a run or campaign starts, labelled an upper bound, and revised from the measured rate.
@@ -1210,7 +1210,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The recorder shall derive its topic list from the pipeline's port manifests, so that every declared port — every stage's inputs and outputs — is recorded, subject only to the declared per-port record policy.
 **Accept.** No declared port is absent from the recording without an explicit policy entry saying so.
 **Verify.** T · `SYT-OUT-10`   **Trace.** CN-0113, CN-0317
-**Built.** ◐ started — 2/3 software requirements done, in `WP-05`, `WP-13`, `WP-14a`
+**Built.** ● done — 3/3 software requirements done
 
 **`SYS-0121`** · `P0` · `R1` — A recording is a model; a format is a codec
 **Shall.** The recording model shall be `meta` plus typed topics plus two-clock messages, and no consumer of a recording — layer provider, renderer, expectation, analysis — shall be able to learn which format it came from.

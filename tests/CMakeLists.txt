@@ -103,6 +103,9 @@ set(SIM_TEST_SOURCES
     # WP-15 (SI-08): simEngineCreate wires a real Checkpoint (IMP-0139's
     # own design decision, 2026-08-24) -- UT-ABI-03.
     integration/test_ut_abi_checkpoint.cpp
+    # WP-13's own IT-09 (IMP-0114): mixed record policies proved through
+    # the real C ABI, closing this row's last remaining gap.
+    integration/test_it09_record_policy.cpp
 )
 
 add_executable(simcore_tests ${SIM_TEST_SOURCES})
