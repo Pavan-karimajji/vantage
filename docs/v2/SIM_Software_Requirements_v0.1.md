@@ -350,7 +350,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** `SI-13` shall produce, before emission, a `RecordingIndex` per named recording — per topic: declared payload type, message count, first and last timestamp, the highest timing rung the data supports, and the origin tag where the file carries one — and a `ModuleManifest` per named module, both as plain structures with no open handle.
 **Accept.** The index is obtained through the same reader a run uses and the manifest through the same entry point the module host uses, so neither can describe a file differently from the way the run will read it. Both are serialisable, and a hand-written one drives every consumer's unit tests with no file and no binary present.
 **Verify.** T · `UT-RES-11`   **Trace.** SYS-0287, SYS-0288; CN-0396, CN-0397, CN-0398
-**Built.** ○ not started — `IMP-0410` in `WP-21`
+**Built.** ● done — `IMP-0410` in `WP-21`
 **Now.** `PARTIAL` — `contracts/component.py`'s probe path reads manifests correctly; nothing produces a recording index, and the checks that need one read the recording at first tick instead.
 *Note:* the *"highest timing rung the data supports"* field closes `OQ-01` (2026-08-12). *"Do the recordings in scope carry task/cycle marking?"* is not answered once, globally, for a corpus nobody has enumerated — it is **measured per recording** by this index and printed by `sim probe`, for our own files and foreign ones alike. A capture format we have never seen therefore yields an unknown *value*, never an unanswered question, and rung 1 being inert becomes observable rather than assumed.
 
@@ -490,7 +490,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** `SI-13` shall be permitted to open a module binary and a recording for the probe pass (`SW-0410`), calling only the manifest and version entry points and only the reader's describe entry point; every entry point that executes a module or advances a run shall be unreachable from the configuration layer.
 **Accept.** A symbol-level check finds the manifest, ABI-version and describe calls in `SI-13` and nowhere else in the configuration layer, and finds no initialise, execute, shutdown or step call anywhere outside `SI-23` and `SI-25`. Three Python packages may bind the C interface: `resolve`, `pyapi` and `transport`, and no fourth.
 **Verify.** A · `ANL-SW-07` · T · `UT-RES-10`   **Trace.** SYS-0287, SYS-0288; CN-0396, CN-0397
-**Built.** ○ not started — `IMP-0409` in `WP-21`
+**Built.** ◐ started — `IMP-0409` in `WP-21`
 **Now.** `PARTIAL` — `contracts/pipeline.py` loads component libraries to read their manifests, which is the right operation in the wrong package.
 *Note:* stated as a symbol rule rather than an import rule because the obligation is *not executing*, and a check on folder membership forbids the wrong thing. Forbidding execution by symbol is stricter than forbidding the binding by directory, and it is the form that survives the probe pass existing at all.
 
@@ -2049,7 +2049,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Ingest maps shall be resolved from beside the component library, never from a source checkout.
 **Accept.** A run from installed artifacts alone, with no source tree present, resolves every map.
 **Verify.** T · `IT-14`   **Trace.** SYS-0021
-**Built.** ○ not started — `IMP-0194` in `WP-21`
+**Built.** ● done — `IMP-0194` in `WP-21`
 **Now.** `DONE` — the whole `modules/<n>/sim/` tree is copied beside the library at build time and resolved from there.
 
 **`SW-0195`** · `SI-12` · `P0` · `R1` — A map is data, and applying it creates nothing
@@ -2120,84 +2120,84 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** There shall be exactly one implementation that turns a stem plus search directories into an absolute binary path, in Python, applying the platform's own naming pattern.
 **Accept.** A static check finds one implementation. The engine contains none.
 **Verify.** A · `ANL-SW-08` · T · `UT-RES-01`   **Trace.** SYS-0166; CN-0384
-**Built.** ○ not started — `IMP-0203` in `WP-21`
+**Built.** ● done — `IMP-0203` in `WP-21`
 **Now.** `DONE·TWICE` — `contracts/loader.py::resolve_library` is the Python one and is already documented as *"the ONE place"*; `sil_host/src/library_loader.cpp` contradicts that and is deleted.
 
 **`SW-0204`** · `SI-13` · `P0` · `R1` — Resolution reports what it searched and what it chose
 **Shall.** Resolution shall report the directories searched in order, the pattern applied, the candidates found and the one chosen.
 **Accept.** A failed resolution names every directory searched. A successful one records the chosen path in the run manifest.
 **Verify.** T · `UT-RES-02`   **Trace.** SYS-0166, SYS-0209
-**Built.** ○ not started — `IMP-0204` in `WP-21`
+**Built.** ● done — `IMP-0204` in `WP-21`
 **Now.** `DONE·MOVE` — implemented with the `N-8` naming discipline.
 
 **`SW-0205`** · `SI-13` · `P1` · `R1` — Availability is determined without loading
 **Shall.** Whether a module has a binary for the running platform shall be determinable without loading it.
 **Accept.** A module with no binary for the platform is reported as unavailable before launch, not as a load failure after it.
 **Verify.** T · `UT-RES-03`   **Trace.** SYS-0162
-**Built.** ○ not started — `IMP-0205` in `WP-21`
+**Built.** ● done — `IMP-0205` in `WP-21`
 **Now.** `PARTIAL` — resolution answers existence; the platform-availability report as a set does not exist.
 
 **`SW-0206`** · `SI-13` · `P0` · `R1` — The configuration bundle is one atomic artifact per component and build
 **Shall.** The build shall pack one configuration bundle per component and build, beside the library, with a content hash covering it.
 **Accept.** The hash covers every file in the bundle. A bundle whose contents changed without its hash changing is not producible.
 **Verify.** T · `UT-RES-04`   **Trace.** SYS-0177
-**Built.** ○ not started — `IMP-0206` in `WP-21`
+**Built.** ● done — `IMP-0206` in `WP-21`
 **Now.** `DONE` — implemented, with the hash checked at load.
 
 **`SW-0207`** · `SI-13` · `P0` · `R1` — Bundle resolution is module-relative, explicit wins, mismatch warns
 **Shall.** A bundle shall resolve relative to its library by default, an explicit path shall win, and a project mismatch shall be a warning naming both projects.
 **Accept.** All three behaviours are exercised, and the resolved bundle is recorded in the run manifest.
 **Verify.** T · `UT-RES-05`   **Trace.** SYS-0177
-**Built.** ○ not started — `IMP-0207` in `WP-21`
+**Built.** ● done — `IMP-0207` in `WP-21`
 **Now.** `DONE` — `adasInit(NULL)` plus the explicit-path path, with the mismatch warning.
 
 **`SW-0208`** · `SI-13` · `P0` · `R1` — The viewer resolves the bundle the module was initialised with
 **Shall.** The viewer shall resolve the configuration bundle in the order embedded-in-recording, library directory, source checkout, and shall state which it read.
 **Accept.** The viewer names the bundle it used. A missing bundle is reported in the display, never silently substituted from the source checkout.
 **Verify.** T · `UT-RES-06`   **Trace.** SYS-0177, SYS-0208
-**Built.** ○ not started — `IMP-0208` in `WP-21`
+**Built.** ● done — `IMP-0208` in `WP-21`
 **Now.** `DONE` — `model/project.py::resolve` implements exactly this order and reports the tier.
 
 **`SW-0209`** · `SI-13` · `P0` · `R1` — Plug-ins are discovered from a path of library directories
 **Shall.** Visualization plug-ins shall be discovered from a configured path of library directories and shall require no sibling source checkout and no interpreter path variable.
 **Accept.** Pointing the player at a folder of installed libraries renders their layers with no rebuild of the player.
 **Verify.** T · `IT-15`   **Trace.** SYS-0255
-**Built.** ○ not started — `IMP-0209` in `WP-21`
+**Built.** ● done — `IMP-0209` in `WP-21`
 **Now.** `DONE` — `model/plugins.py::PluginBundle.resolve`, with an installed-artifacts relocatability test.
 
 **`SW-0210`** · `SI-13` · `P0` · `R1` — A recording carries a plug-in's identity, never its code
 **Shall.** A recording shall embed the configuration bundle's bytes and the plug-in bundle's hash and identity only.
 **Accept.** Opening a recording produced elsewhere executes no code from it. A missing plug-in degrades to *these layers unavailable*, naming the hashes expected.
 **Verify.** T · `UT-RES-07`   **Trace.** SYS-0253
-**Built.** ○ not started — `IMP-0210` in `WP-21`
+**Built.** ● done — `IMP-0210` in `WP-21`
 **Now.** `DONE` — the asymmetry is implemented deliberately and is covered by tests.
 
 **`SW-0211`** · `SI-13` · `P0` · `R1` — The plug-in API version is read before the plug-in is imported
 **Shall.** A plug-in's declared API version range shall be read from a file, before importing any of its code, and an incompatible plug-in shall be refused rather than half-loaded.
 **Accept.** The refusal decision is made with no plug-in module imported, checked by an import counter.
 **Verify.** T · `UT-RES-08`   **Trace.** SYS-0254
-**Built.** ○ not started — `IMP-0211` in `WP-21`
+**Built.** ● done — `IMP-0211` in `WP-21`
 **Now.** `DONE` — `modules/<n>/sim/plugin.yaml` is read first for exactly this reason.
 
 **`SW-0212`** · `SI-13` · `P1` · `R1` — Resolution happens once, and the result is what everything uses
 **Shall.** Every resolvable artifact shall be resolved once per run and the resolved value carried in the spec and the manifest; no consumer shall re-resolve.
 **Accept.** Changing the environment after resolution cannot change what the run uses. A static check finds no second resolution call on the run path.
 **Verify.** A · `ANL-SW-37`   **Trace.** SYS-0166, SYS-0124
-**Built.** ○ not started — `IMP-0212` in `WP-21`
+**Built.** ◐ started — `IMP-0212` in `WP-21`
 **Now.** `PARTIAL` — resolution is centralised per artifact kind but happens lazily at several points rather than once.
 
 **`SW-0213`** · `SI-13` · `P1` · `R1` — A local build is honestly reported as unpinnable
 **Shall.** A re-execution shall be pinnable to a module build verified against the library hash the recording carries, and a locally built library shall be reported as unpinnable rather than accepted as pinned.
 **Accept.** A pinned re-execution against a different build refuses naming both hashes; a local build reports honestly.
 **Verify.** T · `UT-RES-09`   **Trace.** SYS-0246
-**Built.** ○ not started — `IMP-0213` in `WP-21`
+**Built.** ● done — `IMP-0213` in `WP-21`
 **Now.** `DONE·MOVE` — `core/manifest.py::verify_pinned_builds` and `check_library_provenance`.
 
 **`SW-0214`** · `SI-13` · `P1` · `R1` — Every resolution order is the same shape
 **Shall.** Every ordered resolution in the system — project configuration, bundle, plug-in bundle, description, ingest map — shall use one implementation of the ordered-tier-with-reported-tier pattern.
 **Accept.** A static check finds one implementation. Adding a resolvable artifact kind adds a declaration, not a resolver.
 **Verify.** A · `ANL-SW-38`   **Trace.** SYS-0270, SYS-0177
-**Built.** ○ not started — `IMP-0214` in `WP-21`
+**Built.** ● done — `IMP-0214` in `WP-21`
 **Now.** `PARTIAL` — the pattern is implemented three times independently (`model/project.py`, `model/plugins.py`, `contracts/loader.py`) with the same shape and no shared implementation. Small, but it is the shape drift starts in.
 
 ---

@@ -27,6 +27,10 @@ ALL_SRC_ROOT = SIM_ROOT / "src"
 #: WP-05: the engine-only surface `ANL-SW-02`/`ANL-SW-03`/`ANL-SW-04` scan --
 #: design §3.2's own enforcement table, mechanised.
 SIMCORE_ROOT = SIM_ROOT / "src" / "simcore"
+#: WP-21: `ANL-SW-08`'s own C++ surface -- both engine-side trees, not just
+#: `simcore`, since a duplicate resolver could just as easily land in the
+#: `simengine` executable itself.
+SIMENGINE_ROOT = SIM_ROOT / "src" / "simengine"
 
 # GT-1: R-SIM-1's grep, `\b(aeb|bsd|lca|acc|ldw|lka)\b`, run over modules/sim/src.
 #
@@ -339,6 +343,137 @@ def check_anl_sw34(src_root: Path = SRC_ROOT) -> list[str]:
     return findings
 
 
+# ANL-SW-07 (WP-21, IMP-0409): "SI-13 is the only Python item that binds
+# the C interface for this, and is bounded by symbol" (SW-0409). A literal
+# scan for the three execute-path symbol names, permitted only under
+# `pyapi/`, `transport/`, `resolve/` -- `resolve/component.py`'s own
+# `CtypesSilComponent` legitimately carries them (it is IN `resolve/`,
+# `SI-13`); the boundary this check enforces is the SYMBOL BINDING site,
+# never appearing outside those three folders, matching the design's own
+# "stricter than forbidding the binding by folder, and the only form that
+# survives the probe pass existing" (SwReq SWQ-14). **Scope, stated
+# honestly:** this cannot decide arbitrary call-graph reachability (e.g.
+# `graph/build.py` importing `CtypesSilComponent` by class name and calling
+# its `.exec()` — a real, permanent behaviour, `WP-16`'s own "not a
+# duplicate; stays" note) -- only whether the literal ctypes symbol tokens
+# are bound outside the three permitted folders, which is what "bounded by
+# symbol" cashes out to as something a static grep can mechanically check.
+#
+# Matched as an ATTRIBUTE ACCESS (`.adasInit`), not a bare token: this
+# codebase's own docstrings/CLI help text/comments cite these three names
+# in prose constantly (e.g. "config path forwarded to each stage's
+# adasInit", "`` `adasInit(NULL)` will fail``") -- a bare-token scan finds
+# a false positive on nearly every such mention. A real ctypes binding is
+# always an attribute of a loaded `CDLL` (`dll.adasInit`, `self._dll.
+# adasExec`); prose never spells the name with a leading dot.
+_EXEC_SYMBOL_TOKENS = re.compile(r"\.(adasInit|adasExec|adasShutdown)\b")
+_ANL_SW_07_ALLOWED_DIRS = ("pyapi", "transport", "resolve")
+
+
+def check_anl_sw07(src_root: Path = SRC_ROOT) -> list[str]:
+    """`ANL-SW-07`: an `adasInit`/`adasExec`/`adasShutdown` symbol token
+    outside `pyapi/`, `transport/`, `resolve/`."""
+    findings = []
+    for path in _iter_py_files(src_root):
+        relative_parts = path.relative_to(src_root).parts
+        if relative_parts and relative_parts[0] in _ANL_SW_07_ALLOWED_DIRS:
+            continue
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if _EXEC_SYMBOL_TOKENS.search(line):
+                findings.append(f"ANL-SW-07 {path}:{lineno}: execute-path symbol outside pyapi/transport/resolve: {line.strip()!r}")
+    return findings
+
+
+# ANL-SW-08 (WP-21, IMP-0203): `resolve_library` implemented exactly once
+# across the whole tree -- today that's Python's `resolve/library.py`
+# alone (`library_loader.cpp`'s own resolve half died at `WP-16`). A
+# second, C++-side stem-to-path resolver reappearing in `simcore`/
+# `simengine` would silently reintroduce the duplication `WP-16` closed.
+#: Requires an immediately-following `(` -- a real call or definition, not
+#: a backtick-quoted prose mention (`dso.cpp`'s own doc comment cites the
+#: deleted `ResolveLibrary` by name as history, `` `ResolveLibrary` ``,
+#: which this must not flag).
+_LIBRARY_RESOLVER_TOKENS = re.compile(
+    r"(?<![A-Za-z0-9_])(ResolveLibrary|resolve_library|LibraryResolver)\s*\("
+)
+
+
+def check_anl_sw08(simcore_root: Path = SIMCORE_ROOT, simengine_root: Path = SIMENGINE_ROOT) -> list[str]:
+    """`ANL-SW-08`: no C++ stem-to-path library resolver under `src/simcore/**`
+    or `src/simengine/**` -- `resolve_library` (Python) is the one
+    implementation."""
+    findings = []
+    for root in (simcore_root, simengine_root):
+        for path in _iter_source_files(root):
+            for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+                if _LIBRARY_RESOLVER_TOKENS.search(line):
+                    findings.append(f"ANL-SW-08 {path}:{lineno}: a second library resolver outside Python: {line.strip()!r}")
+    return findings
+
+
+# ANL-SW-37 (WP-21, IMP-0212): `resolve_library` called from exactly one
+# place. **Not yet in `run_all()`** -- today's real tree has three call
+# sites (`graph/build.py`, `runspec/emit.py`, `resolve/probe.py`), not the
+# design's target one (`runspec/emit.py` alone, with the launcher and
+# `graph/build.py` reading its already-resolved `Resolution` instead of
+# calling `resolve_library` a second/third time). Consolidating those call
+# sites is real behavioural work outside this pass's own `Files:` scope
+# (`resolve/{library,bundle,plugins,component,order}.py`) -- same class of
+# honest deferral `ANL-SW-34`'s own docstring already uses. This function
+# is real and tested (a planted-violation case proves it fails when it
+# should) so wiring it into `run_all()` is a one-line change once that
+# consolidation lands.
+_RESOLVE_LIBRARY_CALL = re.compile(r"(?<![A-Za-z0-9_.])resolve_library\s*\(")
+_RESOLVE_LIBRARY_DEF = re.compile(r"^\s*def\s+resolve_library\s*\(")
+
+
+def check_anl_sw37(src_root: Path = SRC_ROOT) -> list[str]:
+    """`ANL-SW-37`: every call site of `resolve_library(...)` in the tree,
+    excluding its own definition. A finding lists every call site found
+    when there is more than one."""
+    call_sites: list[str] = []
+    for path in _iter_py_files(src_root):
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if _RESOLVE_LIBRARY_DEF.match(line):
+                continue
+            if _RESOLVE_LIBRARY_CALL.search(line):
+                call_sites.append(f"{path}:{lineno}")
+    if len(call_sites) > 1:
+        return [f"ANL-SW-37 resolve_library called from {len(call_sites)} places, expected exactly 1: {call_sites}"]
+    return []
+
+
+# ANL-SW-38 (WP-21, IMP-0214): the three resolvers (`library.py`,
+# `bundle.py`, `plugins.py`) each return the shared `Resolution[...]` shape
+# through `order.py`'s one helper (`ordered_tiers`) -- checked mechanically
+# by requiring each file to both import from `resolve.order` and declare a
+# function returning `Resolution[...]`.
+_RESOLVERS_FOR_ANL_SW_38 = ("library.py", "bundle.py", "plugins.py")
+_ORDER_IMPORT = re.compile(r"^\s*from\s+adas_sim\.resolve\.order\s+import\b")
+_RETURNS_RESOLUTION = re.compile(r"->\s*Resolution\[")
+
+
+def check_anl_sw38(src_root: Path = SRC_ROOT) -> list[str]:
+    """`ANL-SW-38`: each of `resolve/{library,bundle,plugins}.py` imports
+    `resolve.order` and declares a function returning `Resolution[...]`."""
+    findings = []
+    resolve_dir = src_root / "resolve"
+    for filename in _RESOLVERS_FOR_ANL_SW_38:
+        path = resolve_dir / filename
+        if not path.is_file():
+            findings.append(f"ANL-SW-38 {path}: file does not exist")
+            continue
+        text = path.read_text(encoding="utf-8")
+        lines = text.splitlines()
+        imports_order = any(_ORDER_IMPORT.match(line) for line in lines)
+        returns_resolution = bool(_RETURNS_RESOLUTION.search(text))
+        if not imports_order:
+            findings.append(f"ANL-SW-38 {path}: does not import adas_sim.resolve.order")
+        if not returns_resolution:
+            findings.append(f"ANL-SW-38 {path}: no function returns Resolution[...]")
+    return findings
+
+
 # WP-05, design §3.2's enforcement table -- three engine-only greps over
 # `src/simcore/**`, excluding the vendored `third_party/` (not our own code,
 # same reasoning `_iter_source_files` already applies to GT-1).
@@ -412,6 +547,9 @@ def run_all(
         *check_no_world_model_client(sim_root),
         *check_codec_scope_no_function_name(sim_root),
         *check_no_manifest_names_codec(superproject_root),
+        *check_anl_sw07(src_root),
+        *check_anl_sw08(),
+        *check_anl_sw38(src_root),
         *check_anl_sw02(),
         *check_anl_sw03(),
         *check_anl_sw04(),
@@ -426,7 +564,7 @@ def main(argv: list[str] | None = None) -> int:
     if findings:
         print(f"\n{len(findings)} invariant violation(s)")
         return 1
-    print("GT-1, GT-2, GT-3, GT-6, GT-11, UT-D8-9, WP-02(b), ANL-SW-02/03/04/61: clean")
+    print("GT-1, GT-2, GT-3, GT-6, GT-11, UT-D8-9, WP-02(b), ANL-SW-02/03/04/07/08/38/61: clean")
     return 0
 
 

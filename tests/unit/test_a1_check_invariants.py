@@ -17,6 +17,10 @@ if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
 from check_invariants import (  # noqa: E402
+    check_anl_sw07,
+    check_anl_sw08,
+    check_anl_sw37,
+    check_anl_sw38,
     check_anl_sw61,
     check_codec_scope_no_function_name,
     check_gt1,
@@ -242,3 +246,115 @@ def test_check_anl_sw61_allows_the_relative_walk_inside_config_paths_py(tmp_path
         "_SIM_ROOT = Path(__file__).resolve().parents[3]\n", encoding="utf-8",
     )
     assert check_anl_sw61(all_src_root=tmp_path) == []
+
+
+# --------------------------------------------------------------------------
+# WP-21 (IMP-0409/IMP-0203/IMP-0212/IMP-0214): ANL-SW-07/08/37/38.
+# --------------------------------------------------------------------------
+
+
+def test_check_anl_sw07_passes_on_an_empty_tree(tmp_path):
+    assert check_anl_sw07(src_root=tmp_path) == []
+
+
+def test_check_anl_sw07_allows_a_real_ctypes_binding_inside_resolve(tmp_path):
+    (tmp_path / "resolve").mkdir(parents=True)
+    (tmp_path / "resolve" / "component.py").write_text(
+        "dll.adasInit.argtypes = [ctypes.c_char_p]\nhandle = dll.adasInit(encoded)\n", encoding="utf-8",
+    )
+    assert check_anl_sw07(src_root=tmp_path) == []
+
+
+def test_check_anl_sw07_fails_on_a_planted_binding_in_the_configuration_layer(tmp_path):
+    (tmp_path / "graph").mkdir(parents=True)
+    (tmp_path / "graph" / "other.py").write_text("self._dll.adasExec(handle, dt_s, ins, outs)\n", encoding="utf-8")
+    findings = check_anl_sw07(src_root=tmp_path)
+    assert findings
+    assert "ANL-SW-07" in findings[0]
+
+
+def test_check_anl_sw07_does_not_flag_prose_mentioning_the_symbol_name(tmp_path):
+    """The real tree cites `adasInit`/`adasExec`/`adasShutdown` in comments
+    and CLI help text constantly (`config path forwarded to each stage's
+    adasInit`) -- this must never be a false positive."""
+    (tmp_path / "graph").mkdir(parents=True)
+    (tmp_path / "graph" / "other.py").write_text(
+        'help="config path forwarded to each stage\'s adasInit; falls back"\n', encoding="utf-8",
+    )
+    assert check_anl_sw07(src_root=tmp_path) == []
+
+
+def test_check_anl_sw08_passes_on_an_empty_tree(tmp_path):
+    assert check_anl_sw08(simcore_root=tmp_path / "simcore", simengine_root=tmp_path / "simengine") == []
+
+
+def test_check_anl_sw08_fails_on_a_planted_cpp_resolver(tmp_path):
+    simcore = tmp_path / "simcore"
+    simcore.mkdir(parents=True)
+    (simcore / "loader.cpp").write_text("Path ResolveLibrary(const std::string& stem) {\n", encoding="utf-8")
+    findings = check_anl_sw08(simcore_root=simcore, simengine_root=tmp_path / "simengine")
+    assert findings
+    assert "ANL-SW-08" in findings[0]
+
+
+def test_check_anl_sw08_does_not_flag_a_prose_mention_of_the_deleted_resolver(tmp_path):
+    simcore = tmp_path / "simcore"
+    simcore.mkdir(parents=True)
+    (simcore / "dso.cpp").write_text("// folded the old `ResolveLibrary` + `DynamicLibrary` into one Open()\n", encoding="utf-8")
+    assert check_anl_sw08(simcore_root=simcore, simengine_root=tmp_path / "simengine") == []
+
+
+def test_check_anl_sw37_passes_with_one_call_site(tmp_path):
+    (tmp_path / "runspec").mkdir(parents=True)
+    (tmp_path / "runspec" / "emit.py").write_text("lib_path = resolve_library(stem, search=search)\n", encoding="utf-8")
+    assert check_anl_sw37(src_root=tmp_path) == []
+
+
+def test_check_anl_sw37_fails_on_a_planted_second_call_site(tmp_path):
+    (tmp_path / "runspec").mkdir(parents=True)
+    (tmp_path / "runspec" / "emit.py").write_text("lib_path = resolve_library(stem, search=search)\n", encoding="utf-8")
+    (tmp_path / "graph").mkdir(parents=True)
+    (tmp_path / "graph" / "other.py").write_text("lib_path = resolve_library(ref, search=search)\n", encoding="utf-8")
+    findings = check_anl_sw37(src_root=tmp_path)
+    assert findings
+    assert "ANL-SW-37" in findings[0]
+
+
+def test_check_anl_sw38_passes_when_all_three_resolvers_return_resolution(tmp_path):
+    resolve_dir = tmp_path / "resolve"
+    resolve_dir.mkdir(parents=True)
+    body = (
+        "from adas_sim.resolve.order import Resolution, ordered_tiers\n"
+        "def resolve_x() -> Resolution[int]:\n    ...\n"
+    )
+    for filename in ("library.py", "bundle.py", "plugins.py"):
+        (resolve_dir / filename).write_text(body, encoding="utf-8")
+    assert check_anl_sw38(src_root=tmp_path) == []
+
+
+def test_check_anl_sw38_fails_when_a_resolver_does_not_return_resolution(tmp_path):
+    resolve_dir = tmp_path / "resolve"
+    resolve_dir.mkdir(parents=True)
+    body = (
+        "from adas_sim.resolve.order import Resolution, ordered_tiers\n"
+        "def resolve_x() -> Resolution[int]:\n    ...\n"
+    )
+    (resolve_dir / "library.py").write_text(body, encoding="utf-8")
+    (resolve_dir / "bundle.py").write_text(body, encoding="utf-8")
+    (resolve_dir / "plugins.py").write_text("def resolve_plugins(path):\n    return None\n", encoding="utf-8")
+    findings = check_anl_sw38(src_root=tmp_path)
+    assert findings
+    assert any("plugins.py" in f for f in findings)
+
+
+def test_check_anl_sw38_fails_when_a_resolver_file_is_missing(tmp_path):
+    resolve_dir = tmp_path / "resolve"
+    resolve_dir.mkdir(parents=True)
+    findings = check_anl_sw38(src_root=tmp_path)
+    assert len(findings) == 3
+
+
+def test_anl_sw07_08_38_are_wired_into_run_all_on_the_real_tree():
+    """Real, mechanised, and clean against this checkout -- not merely
+    tested against a synthetic tree (`R-REQ-9`)."""
+    assert run_all() == []

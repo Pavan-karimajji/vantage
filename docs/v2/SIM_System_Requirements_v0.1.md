@@ -533,7 +533,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Ingest maps shall be deployed beside the component library and resolved from there, never read from a source checkout.
 **Accept.** A run from installed artifacts alone, with no source tree present, resolves every ingest map.
 **Verify.** T · `SYT-INP-21`   **Trace.** CN-0310, CN-0285; v1 `FR-SIM-64`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-21`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0022`** · `P0` · `R1` — Feasible cuts are computed, not discovered
 **Shall.** Given a recording and the manifests present, the system shall compute the set of feasible cuts before any run.
@@ -1236,7 +1236,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A past run shall be reproducible from its manifest alone.
 **Accept.** `E2E-08` completes on a machine with no access to the originating machine.
 **Verify.** T · `E2E-08`   **Trace.** CN-0253, CN-0296
-**Built.** ○ not started — 0/2 software requirements done, in `WP-21`, `WP-22`
+**Built.** ◐ started — 0/2 software requirements done, in `WP-21`, `WP-22`
 
 **`SYS-0125`** · `P0` · `R1` — Distinct exit codes
 **Shall.** The system shall return distinct, documented exit codes for at least: success, configuration error, coherence violation, module failure, input or integrity error, and infrastructure error — identical on both platforms.
@@ -1435,7 +1435,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The launcher shall show which modules are available, their versions, and which lack a binary for the current platform.
 **Accept.** A module with no binary for the running platform is shown as unavailable before launch, not as a load failure after it.
 **Verify.** D · `SYT-CFG-05`   **Trace.** CN-0177
-**Built.** ◐ started — 0/2 software requirements done, in `WP-21`, `WP-28`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-21`, `WP-28`
 
 **`SYS-0163`** · `P0` · `R1` — Feasible cuts per recording, in the UI
 **Shall.** The launcher shall show, per recording, which modules could be set to `measured` given what that file actually carries.
@@ -1463,20 +1463,20 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The Resolved Run Spec shall carry absolute, already-resolved paths for every module binary; the engine shall perform no stem expansion and consult no search path.
 **Accept.** Which file was chosen is decided once, recorded in the manifest, and reproducible. Changing the search path after resolution cannot change which binary the engine loads.
 **Verify.** T · `SYT-CFG-09`   **Trace.** CN-0384, CN-0385
-**Built.** ◐ started — 3/6 software requirements done, in `WP-05`, `WP-10`, `WP-21`
+**Built.** ◐ started — 5/6 software requirements done, in `WP-05`, `WP-10`, `WP-21`
 
 **`SYS-0287`** · `P0` · `R1` — Resolution is two passes: probe, then emit
 **Shall.** The system shall obtain, before emitting a Resolved Run Spec, a **recording index** stating what each named recording carries and a **module manifest** stating what each named module declares; and both shall be read through the same interfaces the run itself uses.
 **Accept.** Every spec field that depends on a file's contents — the ports a recording provides, the timing rung each supports, the ports it declares it never carries, and each module's period, ABI version and port set — is filled from the probe pass and from no other source. A configuration approved by the probe pass is never rejected by the run for a reason the probe could have seen.
 **Verify.** T · `SYT-CFG-24`   **Trace.** CN-0396, CN-0397, CN-0165
-**Built.** ◐ started — 0/3 software requirements done, in `WP-05`, `WP-21`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-05`, `WP-21`
 *Note:* stated because the spec's own rule is that the engine decides nothing the configuration layer could have decided — and several of those fields cannot be decided without opening a file. Naming the probe pass is what keeps that rule true instead of quietly reintroducing a second, simpler reader for configuration time.
 
 **`SYS-0288`** · `P0` · `R1` — What the probe returns is data, and it is passed, not fetched
 **Shall.** The recording index and the module manifest shall be plain data structures, and the graph, coherence, ingest and launcher functions that need them shall receive them as arguments rather than opening any file or library themselves.
 **Accept.** Coherence classification, cut feasibility, ingest-family matching and mode validation all run against in-memory structures with no file open and no library loaded, and are testable with a hand-written index.
 **Verify.** T · `SYT-CFG-25`   **Trace.** CN-0398, CN-0089
-**Built.** ◐ started — 0/4 software requirements done, in `WP-04`, `WP-20`, `WP-21`
+**Built.** ◐ started — 1/4 software requirements done, in `WP-04`, `WP-20`, `WP-21`
 *Note:* this is what lets those functions stay free of any dependency on the reader, which is the property their unit tests rest on.
 
 **`SYS-0167`** · `P0` · `R1` — The engine states what it actually loaded
@@ -1553,7 +1553,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The build shall pack one atomic configuration bundle per component and build, beside the library, with a content hash; the system shall resolve it relative to the library, an explicit path shall win, and a project mismatch shall be a warning.
 **Accept.** Configuration is never compiled into the library — editing a value and re-running requires no rebuild. The viewer reads the same bundle the module was initialised with, and states which one it read.
 **Verify.** T · `SYT-CFG-20`   **Trace.** CN-0285; v1 `FR-SIM-21`, `FR-SIM-22`
-**Built.** ◐ started — 2/6 software requirements done, in `WP-04`, `WP-10`, `WP-21`
+**Built.** ● done — 6/6 software requirements done
 *Note (`OQ-07`, closed 2026-08-12):* *"should the system inject parameters, or point at the module's existing parameter file?"* — **it passes a path and never a value.** `adasInit` takes `configPath`, and this requirement plus `R-SIM-3a` settle the rest. Injection is not a close call: the bundle is *"a build output, never a second place to edit a value"*, and this requirement's own acceptance — *the viewer reads the same bundle the module was initialised with, and states which one* — is unsatisfiable if a value can arrive from somewhere else, because there would then be two answers to *"what wheelbase did this run use?"*, free to disagree. **A parameter sweep is a bundle variant**: copy, change the one key, re-hash, point `adasInit` at it, record the hash. That meets `SYS-0072`'s acceptance verbatim (*"a rate sweep changes only a calibration value; no rebuild occurs and no host file is edited"*), because producing a variant is neither a rebuild nor a host edit. It implies one small helper beside the run spec — copy · patch one key · re-hash — which is a file, not a mechanism. §4.1 in `SIM_Open_Question_Answers_v0.1.md`.
 
 **`SYS-0178`** · `P0` · `R1` — Cross-component configuration agreement
@@ -1757,13 +1757,13 @@ link must resolve to an explanation, never to nothing.
 **Shall.** A single command shall report library resolution, configuration agreement, recording cut support and plugin inspection, and shall never raise an exception.
 **Accept.** Run against a deliberately broken environment — missing library, corrupt bundle, unreadable recording, incompatible plugin — it reports each fault and exits normally in every case.
 **Verify.** T · `SYT-DIA-07`   **Trace.** CN-0353; v1 `NR-SIM-4`
-**Built.** ◐ started — 1/3 software requirements done, in `WP-15`, `WP-21`, `WP-24`
+**Built.** ◐ started — 2/3 software requirements done, in `WP-15`, `WP-21`, `WP-24`
 
 **`SYS-0209`** · `P0` · `R1` — A closed error taxonomy in one shape
 **Shall.** Errors shall come from a closed taxonomy — authoring, environment, contract, internal — each carrying expected, found, where and hint, in one fixed shape.
 **Accept.** Every error the system can emit is a member of the taxonomy and carries all four fields. An error outside the taxonomy fails a static check.
 **Verify.** T · `SYT-DIA-08` · `ANL-29`   **Trace.** CN-0354, CN-0286
-**Built.** ◐ started — 3/4 software requirements done, in `WP-03`, `WP-10`, `WP-21`
+**Built.** ● done — 4/4 software requirements done
 
 **`SYS-0210`** · `P0` · `R1` — Provenance query
 **Shall.** For any value, the system shall answer where it came from.
@@ -2068,7 +2068,7 @@ Superseded (`SM-04`, 2026-08-20 — sole decomposer was `SI-18`'s scene-cache-bu
 **Shall.** A re-execution shall be pinnable to a specific module build, verified against the library hash the recording carries; a locally built library shall be reported as unpinnable.
 **Accept.** A pinned re-execution against a different build refuses, naming both hashes. A local build is honestly reported rather than silently accepted as pinned.
 **Verify.** T · `SYT-NFR-14`   **Trace.** CN-0366; v1 `NR-SIM-24`
-**Built.** ◐ started — 1/2 software requirements done, in `WP-15`, `WP-21`
+**Built.** ● done — 2/2 software requirements done
 
 ---
 
@@ -2118,19 +2118,19 @@ Superseded (`SM-04`, 2026-08-20 — sole decomposer was `SI-18`'s scene-cache-bu
 **Shall.** A recording shall carry a plugin's identity and hash, never its implementation.
 **Accept.** Opening a recording produced elsewhere executes no code from that recording. A missing plugin degrades to *these layers unavailable*, naming the hashes expected.
 **Verify.** T · `SYT-CON-02`   **Trace.** CN-0367; v1 `NR-SIM-44`
-**Built.** ◐ started — 1/2 software requirements done, in `WP-06`, `WP-21`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0254`** · `P0` · `R1` — The plugin API carries its own version, in a file
 **Shall.** The plugin API shall carry its own version range, independent of the recording format and the module ABI, declared in a file the player reads *before* importing the plugin.
 **Accept.** An incompatible plugin is refused, not half-loaded. The decision is made without importing the plugin's code.
 **Verify.** T · `SYT-CON-03`   **Trace.** CN-0368; v1 `NR-SIM-44`
-**Built.** ○ not started — 0/3 software requirements done, in `WP-21`, `WP-29`, `WP-31`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-21`, `WP-29`, `WP-31`
 
 **`SYS-0255`** · `P0` · `R1` — Authoring home and deployed form are different questions
 **Shall.** A component's plugins shall be authored in the component's own repository and *deployed* beside its library by the build, with the same hash discipline as the configuration bundle; the player shall discover plugins from a path of library directories.
 **Accept.** Pointing the player at a folder of installed libraries renders their layers, with no sibling checkout, no interpreter path variable and no rebuild of the player.
 **Verify.** T · `SYT-CON-04`   **Trace.** CN-0285, CN-0030; v1 `FR-SIM-64`, `FR-SIM-70`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-21`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0256`** · `P1` · `R1` — A project extends by plugin, never by fork
 **Shall.** Where a project needs behaviour the package does not provide, the mechanism shall be a plugin on a public interface.
@@ -2234,7 +2234,7 @@ Constraints are obligations on *how* the system is built, imposed because a corr
 **Shall.** No concept shall be implemented in both languages; where one exists on both sides today, one side shall be deleted rather than maintained in step.
 **Accept.** A named check enumerates the four historically duplicated subsystems — configuration load and validation, ingest-map parsing, module hosting, recording read and grouping — and confirms exactly one implementation of each. Any concept found in both languages is a defect.
 **Verify.** A · `ANL-44`   **Trace.** CN-0291, CN-0358, CN-0287; **defect** concept §21.3, §22.2
-**Built.** ◐ started — 4/5 software requirements done, in `WP-01`, `WP-03`, `WP-12`, `WP-16`, `WP-21`
+**Built.** ● done — 5/5 software requirements done
 
 **`SYS-0271`** · `P0` · `R1` — The engine never calls back into the scripting layer
 **Shall.** The engine shall never call back into Python during a run.

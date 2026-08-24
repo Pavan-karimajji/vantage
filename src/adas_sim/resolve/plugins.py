@@ -1,7 +1,7 @@
-# Copyright (c) LT EPS. All Rights Reserved.
+# Copyright (c) <ORG>. All Rights Reserved.
 # Proprietary and Confidential.
 # COMPONENT: SIM
-# @author Pavan Karimajji <Pavan.Karimajji@larsentoubro.com>
+# @author Pavan Karimajji
 
 """`PluginBundle.resolve()` -- plug-ins are **authored** in the component
 (`modules/<name>/sim/`, `R-SIM-1`) and **delivered** beside its built library,
@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
@@ -31,6 +32,7 @@ from typing import Literal
 import yaml
 
 from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.resolve.order import Resolution, ordered_tiers
 
 PluginBundleOrigin = Literal["explicit", "embedded", "library", "checkout"]
 
@@ -149,6 +151,53 @@ class PluginBundle:
             spec.loader.exec_module(module)
             modules.append(module)
         return tuple(modules)
+
+
+def discover_plugins(plugin_path: Sequence[Path]) -> tuple[PluginBundle, ...]:
+    """`IMP-0209`: one `PluginBundle` per library directory in `plugin_path`
+    that carries a `sim/plugin.yaml` -- "point the player at a folder of
+    DLLs and it draws them" (`R-SIM-20`), true across the whole path at
+    once, not just the first hit. A directory with no plug-in is skipped,
+    never an error (`PluginBundle.resolve` already returns `None` for that
+    case)."""
+    bundles: list[PluginBundle] = []
+    for library_dir in plugin_path:
+        bundle = PluginBundle.resolve(library_dir=Path(library_dir) / "sim")
+        if bundle is not None:
+            bundles.append(bundle)
+    return tuple(bundles)
+
+
+def resolve_plugins(plugin_path: Sequence[Path]) -> Resolution[tuple[PluginBundle, ...]]:
+    """`IMP-0214`: `discover_plugins` above, reported in the shared
+    `Resolution[T]` shape (`ANL-SW-38`) alongside `resolve_library`/
+    `resolve_bundle`. One tier -- the whole `plugin_path` -- since plug-in
+    discovery is a union across every directory, not a first-match
+    priority order like the library/bundle resolvers."""
+
+    def thunk() -> tuple[PluginBundle, ...] | None:
+        found = discover_plugins(plugin_path)
+        return found if found else None
+
+    return ordered_tiers([("plugin_path", thunk)])
+
+
+PinStatus = Literal["pinned", "mismatch", "unpinnable"]
+
+
+def pin_status(current_sha256: str, recorded_sha256: str | None) -> PinStatus:
+    """`IMP-0213`: a library whose hash matches no published build is
+    reported `"unpinnable"`, never silently treated as pinned -- the
+    three-way outcome `runspec/manifest.py::verify_pinned_builds`/
+    `check_library_provenance` each computed ad hoc, ported here where
+    resolution's own determinism-side behaviour belongs. `recorded_sha256`
+    is `""`/`None` exactly when a recording carries no verifiable build
+    hash for the stage (`NR-SIM-4`: absence is never read as a match)."""
+    if not recorded_sha256:
+        return "unpinnable"
+    if recorded_sha256 != current_sha256:
+        return "mismatch"
+    return "pinned"
 
 
 def register_plugin_root(library_dir: Path) -> Path:

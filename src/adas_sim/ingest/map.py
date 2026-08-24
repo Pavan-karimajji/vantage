@@ -35,11 +35,14 @@ port has no stage segment to strip (`"source"` is the framework's own
 reserved producer name, `contracts/pipeline.py`'s grammar) and passes
 through unchanged.
 
-**Loaded from the source checkout, not a plug-in path.** `S-C8` (the
-plug-in path, build order #14) does not exist yet -- the same scoped gap a
-component's own calibration-reading layer providers already document
-(`S-C4`): `discover_ingest_maps` scans `modules/*/sim/ingest/*.yaml` under
-the superproject root directly. Revisit when `S-C8` lands.
+**Two discovery paths, one parser.** `discover_ingest_maps` scans `modules/
+*/sim/ingest/*.yaml` under the superproject root directly -- a source-
+checkout convenience for local development. `discover_ingest_maps_from_
+library_dirs` (`WP-21`, `IMP-0194`) is the deployed-location counterpart:
+`<library_dir>/sim/ingest/*.yaml` across a plug-in path, exactly the
+directory `R-SIM-20`'s build already copies `sim/` into beside the config
+bundle -- no source checkout reachable, `IT-14`'s own claim. Both call the
+one real parser, `_parse_ingest_map`.
 """
 
 from __future__ import annotations
@@ -215,6 +218,26 @@ def discover_ingest_maps(superproject_root: Path = _SUPERPROJECT_ROOT) -> tuple[
     collision between two maps is reported the same way on every run."""
     maps = []
     for ingest_dir in sorted(superproject_root.glob("modules/*/sim/ingest")):
+        for path in sorted(ingest_dir.glob("*.yaml")):
+            maps.append(_parse_ingest_map(path))
+    return tuple(maps)
+
+
+def discover_ingest_maps_from_library_dirs(plugin_path: Sequence[Path]) -> tuple[IngestMap, ...]:
+    """`IMP-0194`/`SW-0194`: the deployed-location counterpart to
+    `discover_ingest_maps` above -- reads `<library_dir>/sim/ingest/*.yaml`
+    for each library directory in `plugin_path`, the same plug-in path a
+    player points at a folder of built libraries (`R-SIM-20`, `resolve/
+    plugins.py::discover_plugins`'s own directory-of-directories shape).
+    Never opens a source checkout: `IT-14` runs this with `modules/*/sim/
+    ingest` deleted entirely. Reuses `_parse_ingest_map`, the one parser --
+    the difference from `discover_ingest_maps` is only which directories
+    are searched."""
+    maps = []
+    for library_dir in sorted(Path(d) for d in plugin_path):
+        ingest_dir = library_dir / "sim" / "ingest"
+        if not ingest_dir.is_dir():
+            continue
         for path in sorted(ingest_dir.glob("*.yaml")):
             maps.append(_parse_ingest_map(path))
     return tuple(maps)

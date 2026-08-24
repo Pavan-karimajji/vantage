@@ -51,6 +51,7 @@ from adas_sim.io.base import (
 )
 from adas_sim.plugins.registry import reader_for
 from adas_sim.config.project import ProjectModel, materialize_derived_bundle
+from adas_sim.resolve.plugins import pin_status
 
 #: `S-C6` (`R-SIM-24`): generated ONCE per process, at import time -- every
 #: `RunManifest` this process builds carries the same value, which is exactly
@@ -288,14 +289,15 @@ def verify_pinned_builds(pipeline: Pipeline, recording_path: Path) -> None:
             continue
         current_sha = current_shas[stage.name]
         recorded_sha = recorded_shas.get(stage.name, "")
-        if not recorded_sha:
+        status = pin_status(current_sha, recorded_sha)  # IMP-0213: ported to resolve/plugins.py
+        if status == "unpinnable":
             raise ContractError(
                 expected="a library_sha256 this recording was pinned against",
                 found="none -- this recording carries no verifiable build hash for this stage",
                 where=f"stage '{stage.name}' ({recording_path})",
                 hint="unpinnable: record a new baseline with a real dll:/stubdll: build, or drop --pin-builds",
             )
-        if recorded_sha != current_sha:
+        if status == "mismatch":
             raise ContractError(
                 expected=f"library_sha256={recorded_sha} (the build that produced this recording)",
                 found=f"library_sha256={current_sha} (the build currently resolved)",
@@ -339,7 +341,7 @@ def check_library_provenance(pipeline: Pipeline, recording_path: Path) -> None:
             continue
         current_sha = current_shas[stage.name]
         recorded_sha = recorded_shas.get(stage.name, "")
-        if recorded_sha and recorded_sha != current_sha:
+        if pin_status(current_sha, recorded_sha) == "mismatch":
             warn(ProvenanceWarning(
                 f"stage '{stage.name}': library_sha256 differs from the recording that produced it "
                 f"(recorded {recorded_sha}, resolved {current_sha}) -- results may not reproduce it exactly "

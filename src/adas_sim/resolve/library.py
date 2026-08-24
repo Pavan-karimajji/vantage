@@ -13,11 +13,12 @@ fact is consulted (sim_api_reference.md SS3.2, sim_portability.md P-5).
 from __future__ import annotations
 
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 from adas_sim.diagnostics.errors import EnvironmentError_
+from adas_sim.resolve.order import Resolution, ordered_tiers
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +54,35 @@ def resolve_library_report(stem: str, *, search: Sequence[Path], platform: str =
         stem=stem, resolved=None, matched_directory=None, matched_pattern=None,
         directories_searched=tuple(search), candidate_patterns=candidates,
     )
+
+
+def resolve_library_resolution(stem: str, *, search: Sequence[Path], platform: str = sys.platform) -> Resolution[Path]:
+    """`IMP-0204`: the same search as `resolve_library_report`, but in the
+    shared `Resolution[T]` shape (`ANL-SW-38`) -- one tier per directory
+    searched, so `searched`/`rejected` name every directory tried and why
+    each one lost, and `chosen`/`tier` name the winning file and directory.
+    """
+    candidates = _candidate_names(stem, platform=platform)
+
+    def try_directory(directory: Path) -> Callable[[], Path | None]:
+        def thunk() -> Path | None:
+            for name in candidates:
+                path = directory / name
+                if path.is_file():
+                    return path
+            return None
+
+        return thunk
+
+    return ordered_tiers([(str(directory), try_directory(directory)) for directory in search])
+
+
+def is_available(stem: str, *, search: Sequence[Path], platform: str = sys.platform) -> bool:
+    """`IMP-0205`: file existence plus the platform pattern, with no
+    `dlopen`/`ctypes.CDLL` call -- what the launcher shows before launch
+    (`IMP-0344`); loading to find out would make a broken module crash it.
+    """
+    return resolve_library_report(stem, search=search, platform=platform).resolved is not None
 
 
 def _candidate_names(stem: str, *, platform: str) -> tuple[str, ...]:
