@@ -967,7 +967,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Mode shall be overridable per output port for expert cases.
 **Accept.** One port of a simulated module can be sourced from the recording while its siblings are computed; the run manifest lists the exception explicitly.
 **Verify.** T · `SYT-STG-03`   **Trace.** CN-0119, CN-0129
-**Built.** ○ not started — 0/1 software requirements done, in `WP-20`
+**Built.** ● done — 1/1 software requirements done
 *Note (`OQ-04`, closed 2026-08-12):* *"is module-level staging plus per-port override sufficient granularity?"* — **yes, and the question understates what exists.** Addressability is four levels deep, not two: per module (`SYS-0080`'s two axes), per port (this requirement), **per field path within a port** (`egoDyn.vx`) and **per element of a repeated field** (`[i]`, `[*]`) — the last two from `R-SIM-15`'s closed index grammar. Nobody has yet needed the two finer levels that already exist. **The one missing axis is missing on purpose:** there is no time-varying or conditional override — no predicate, no expression language, no user-supplied callable — because *an override may destroy or attenuate information; it may never create an entity*, and the two written alternatives are *edit the scenario* (also data, versioned and hashed) or *a `stub:` stage* (code, in the open, testable). **Reopen condition, deliberately demanding:** a concrete case, with an example recording, that neither alternative serves. That is a change request with evidence, not an open question — and the answer would still more likely be a fifth verb than a predicate.
 
 **`SYS-0083`** · `P0` · `R1` — The injection boundary is logged
@@ -1048,13 +1048,13 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Setting a stage to `simulate` shall by default flip intervening stages to `simulate`, undoably; forcing the gap open shall remain possible and shall badge the orphaned stage.
 **Accept.** Both paths are exercisable; neither is silent.
 **Verify.** T · `SYT-STG-15`   **Trace.** CN-0324, CN-0325; v1 `FR-SIM-44`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-20`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0096`** · `P1` · `R1` — Every toggle is undoable
 **Shall.** A mode change shall return a new configuration, leaving the previous one intact.
 **Accept.** After N toggles, the original configuration is recoverable exactly, and the configuration round-trips byte-identically.
 **Verify.** T · `SYT-STG-16`   **Trace.** CN-0325, CN-0347
-**Built.** ○ not started — 0/1 software requirements done, in `WP-20`
+**Built.** ● done — 1/1 software requirements done
 
 ### 9.3 Overrides and fault injection
 

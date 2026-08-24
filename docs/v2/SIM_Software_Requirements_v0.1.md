@@ -1952,14 +1952,14 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Setting a stage to `simulate` shall by default flip intervening stages to `simulate`, undoably, and forcing the gap open shall remain possible and shall badge the orphaned stage.
 **Accept.** Both paths are exercisable and neither is silent.
 **Verify.** T · `UT-GRF-21`   **Trace.** SYS-0095
-**Built.** ○ not started — `IMP-0183` in `WP-20`
+**Built.** ● done — `IMP-0183` in `WP-20`
 **Now.** `DONE·MOVE` — `with_mode(stage, mode, close_gaps=...)` implements exactly this, including the warning on `close_gaps=False`.
 
 **`SW-0184`** · `SI-11` · `P1` · `R1` — Every mode change returns a new configuration
 **Shall.** A mode change shall return a new configuration object, leaving the previous one intact.
 **Accept.** After N toggles the original is recoverable exactly, and the configuration round-trips byte-identically.
 **Verify.** T · `UT-GRF-22`   **Trace.** SYS-0096
-**Built.** ○ not started — `IMP-0184` in `WP-20`
+**Built.** ● done — `IMP-0184` in `WP-20`
 **Now.** `DONE·MOVE` — `with_mode` returns a new `Pipeline`; the round-trip half depends on `SW-0155`.
 
 **`SW-0185`** · `SI-11` · `P0` · `R1` — Feasible cuts are computed before any run
@@ -1980,7 +1980,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Mode shall be overridable per output port, so one port of a `simulate` stage may be sourced from the recording while its siblings are computed.
 **Accept.** The exception is listed explicitly in the run manifest and is subject to the same coherence classification as a stage-level mode.
 **Verify.** T · `UT-GRF-25`   **Trace.** SYS-0082
-**Built.** ○ not started — `IMP-0400` in `WP-20`
+**Built.** ● done — `IMP-0400` in `WP-20`
 **Now.** `NEW`. *Whether stage-level staging plus per-port override is sufficient granularity is `OQ-04`, open.*
 
 **`SW-0401`** · `SI-11` · `P2` · `R2` — A module may be instantiated more than once

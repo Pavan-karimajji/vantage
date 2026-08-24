@@ -107,7 +107,11 @@ class Stage:
     not yet applied during `exec()` (a later slice wires that in).
     `record` is keyed by this stage's own OUTPUT port name (or `"*"`), the
     per-port capture policy the recorder honours (`NR-SIM-42`, `S-C2`) --
-    unrelated to `overrides`, which governs this stage's INPUT side."""
+    unrelated to `overrides`, which governs this stage's INPUT side.
+    `port_modes` (`IMP-0400`, `WP-20`) is a per-OUTPUT-port mode override on
+    top of this stage's own `mode` -- empty by default, so every pipeline
+    predating this field is unaffected; `graph/modes.py::with_port_mode` is
+    the one place that sets an entry."""
 
     name: str
     mode: Mode
@@ -115,6 +119,7 @@ class Stage:
     inputs: Mapping[str, str]
     overrides: Mapping[str, Override] = field(default_factory=dict)
     record: Mapping[str, RecordPolicy] = field(default_factory=dict)
+    port_modes: Mapping[str, Mode] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -618,6 +623,7 @@ class Pipeline:
                 inputs=dict(spec.get("inputs", {})),
                 overrides=_parse_overrides(spec.get("overrides", {}), stage_name=spec["name"]),
                 record=_parse_record(spec.get("record", {}), stage_name=spec["name"]),
+                port_modes=dict(spec.get("port_modes", {})),
             )
             for spec in raw.get("stages", [])
         )
@@ -974,54 +980,19 @@ class Pipeline:
         return tuple(chains)
 
     def with_mode(self, stage: str, mode: Mode, *, close_gaps: bool = True) -> Pipeline:
-        """Returns a NEW pipeline; `impl:`/`inputs:` are retained on the
-        changed stage so the toggle is reversible (`R-SIM-10`). With
-        `close_gaps` (default), any severed chain the change just created
-        that involves `stage` is closed by flipping its `measured` member to
-        `simulate` too -- undoably, since the caller keeps the old object.
+        """`IMP-0183`/`IMP-0184`, `MOVE`: relocated to `graph/modes.py::
+        with_mode` (`WP-20` phase 4), now rewired onto `coherence.classify`'s
+        transitive fix instead of the one-hop `severed_chains()`. Kept here
+        as a thin wrapper -- this is a widely-called public method."""
+        from adas_sim.graph.modes import with_mode as _with_mode
+        return _with_mode(self, stage, mode, close_gaps=close_gaps)
 
-        `close_gaps=False` forces the gap open deliberately (watching one
-        stage's divergence while a downstream stage stays on known-good
-        input, `R-SIM-10`'s own example) -- never silent: exactly ONE
-        `ProvenanceWarning` names every stage `close_gaps=True` would have
-        flipped, badged *"computed, not consumed"* wherever a GUI renders it
-        (`S-D6`, `UT-D6-6`). The run itself is never blocked -- this is a
-        warning a headless caller sees in the log, not an error."""
-        names = {s.name for s in self.stages}
-        if stage not in names:
-            raise AuthoringError(
-                expected="a declared stage name", found=stage, where="Pipeline.with_mode",
-                hint=f"declared stages: {', '.join(names)}",
-            )
-        new_stages = tuple(
-            Stage(name=s.name, mode=mode, impl=s.impl, inputs=s.inputs, overrides=s.overrides, record=s.record)
-            if s.name == stage else s
-            for s in self.stages
-        )
-        result = Pipeline(
-            name=self.name, stages=new_stages, version=self.version, components=self._components,
-            faults=self._faults, library_paths=self.library_paths,
-        )
-        to_close = {
-            chain.measured for chain in result.severed_chains() if stage in (chain.upstream, chain.measured, chain.downstream)
-        }
-        if not to_close:
-            return result
-        if not close_gaps:
-            warn(ProvenanceWarning(
-                f"stage(s) {', '.join(sorted(to_close))} computed, not consumed -- "
-                f"setting '{stage}' to {mode!r} severed the chain to it and close_gaps=False left the gap open"
-            ))
-            return result
-        closed_stages = tuple(
-            Stage(name=s.name, mode="simulate", impl=s.impl, inputs=s.inputs, overrides=s.overrides, record=s.record)
-            if s.name in to_close else s
-            for s in new_stages
-        )
-        return Pipeline(
-            name=self.name, stages=closed_stages, version=self.version, components=self._components,
-            library_paths=self.library_paths,
-        )
+    def with_port_mode(self, stage: str, port: str, mode: Mode) -> Pipeline:
+        """`IMP-0400`, `NEW`: `graph/modes.py::with_port_mode`, a per-output-
+        port mode override on top of `stage`'s own mode. Kept as a thin
+        wrapper matching `with_mode`'s own shape."""
+        from adas_sim.graph.modes import with_port_mode as _with_port_mode
+        return _with_port_mode(self, stage, port, mode)
 
     def to_yaml(self) -> str:
         data = {
@@ -1044,6 +1015,7 @@ class Pipeline:
                         }}
                         if s.record else {}
                     ),
+                    **({"port_modes": dict(s.port_modes)} if s.port_modes else {}),
                 }
                 for s in self.stages
             ],
