@@ -2876,49 +2876,49 @@ Superseded (`SM-01` trial), `SW-0324` — was *Display-only data is decoded only
 **Shall.** The launcher shall present each module's mode and implementation and allow both to be chosen independently.
 **Accept.** Every combination expressible in configuration is reachable, and nothing is reachable that is not expressible in configuration.
 **Verify.** D · `UT-LNC-01`   **Trace.** SYS-0158, SYS-0080
-**Built.** ○ not started — `IMP-0341` in `WP-28`
+**Built.** ● done — `IMP-0341` in `WP-28`
 **Now.** `PARTIAL` — the pipeline panel presents mode and implementation; it is a panel, not a launcher, and it does not write a run configuration.
 
 **`SW-0342`** · `SI-22` · `P0` · `R1` — Coherence is classified at selection time
 **Shall.** The launcher shall run the coherence classification as the selection changes and block launch on a broken chain, offering the same remedies as the headless path.
 **Accept.** The block occurs on selection, before launch is invoked, and the remedy text is identical to the headless message.
 **Verify.** D · `UT-LNC-02`   **Trace.** SYS-0159
-**Built.** ○ not started — `IMP-0342` in `WP-28`
+**Built.** ● done — `IMP-0342` in `WP-28`
 **Now.** `NEW`.
 
 **`SW-0343`** · `SI-22` · `P0` · `R1` — The launcher writes a file and holds no hidden state
 **Shall.** The launcher shall write a run configuration file and pass it onward, holding no state absent from that file.
 **Accept.** Any run started from the graphical surface is reproducible headlessly from the saved file, producing identical port values.
 **Verify.** T · `IT-21`   **Trace.** SYS-0160
-**Built.** ○ not started — `IMP-0343` in `WP-28`
+**Built.** ● done — `IMP-0343` in `WP-28`
 **Now.** `NEW`. *This is the requirement that links interactive work to continuous integration, and it does not exist yet.*
 
 **`SW-0344`** · `SI-22` · `P1` · `R1` — Availability is shown before launch, not discovered after
 **Shall.** The launcher shall show which modules are available, their versions, and which lack a binary for the running platform.
 **Accept.** A module with no binary for the platform is shown unavailable before launch, not as a load failure after it.
 **Verify.** D · `UT-LNC-03`   **Trace.** SYS-0162
-**Built.** ○ not started — `IMP-0344` in `WP-28`
+**Built.** ◐ started — `IMP-0344` in `WP-28`
 **Now.** `PARTIAL` — `sim doctor` reports resolution; the launcher does not exist to show it.
 
 **`SW-0345`** · `SI-22` · `P0` · `R1` — Feasible cuts are shown per recording
 **Shall.** The launcher shall show, per recording, which modules could be set to `measured` given what that file carries.
 **Accept.** The set shown equals the set computed headlessly.
 **Verify.** T · `UT-LNC-04`   **Trace.** SYS-0163
-**Built.** ○ not started — `IMP-0345` in `WP-28`
+**Built.** ● done — `IMP-0345` in `WP-28`
 **Now.** `PARTIAL` — computed headlessly and shown in the pipeline panel; not shown per recording at selection time.
 
 **`SW-0346`** · `SI-22` · `P1` · `R1` — One action yields a complete run
 **Shall.** Adding recordings and selecting a layout shall be possible in the launcher, so one action yields a complete run.
 **Accept.** A run is startable from an empty state within a declared number of interactions, recorded in the demonstration.
 **Verify.** D · `UT-LNC-05`   **Trace.** SYS-0161
-**Built.** ○ not started — `IMP-0346` in `WP-28`
+**Built.** ● done — `IMP-0346` in `WP-28`
 **Now.** `PARTIAL` — the start page offers recent files, a library probe and sample configurations, which is the shape; the launch path is not complete.
 
 **`SW-0347`** · `SI-22` · `P1` · `R1` — The launcher and the command line share the configuration schema
 **Shall.** The launcher shall read and write the same configuration files the command line consumes, with no launcher-only fields.
 **Accept.** A file written by the launcher loads unmodified headlessly, and one written by hand loads in the launcher.
 **Verify.** T · `UT-LNC-06`   **Trace.** SYS-0160, SYS-0181
-**Built.** ○ not started — `IMP-0347` in `WP-28`
+**Built.** ● done — `IMP-0347` in `WP-28`
 **Now.** `NEW`.
 
 **`SW-0348`** · `SI-22` · `P1` · `R1` — A common configuration change is completed unaided within a budget

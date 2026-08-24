@@ -26,6 +26,10 @@ EXPECTED_SUBPACKAGES = {
     # WP-15b (IMP-0422): the one shared bridge onto simcore/simengine's C
     # ABI every rewired call site (cli/resim.py first) goes through.
     "engine",
+    # WP-28 (SI-22): the launcher's own in-memory state + selection-time
+    # coherence classification + availability/feasible-cut display + the
+    # one seam (write.py) into an actual run.
+    "launcher",
 }
 
 #: UT-A1-2: importing any subpackage must not pull these in as a side effect.

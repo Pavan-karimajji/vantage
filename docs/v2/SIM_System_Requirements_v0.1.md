@@ -955,7 +955,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Every module in the graph shall carry a mode — `simulate`, `measured` or `off` — and, when simulating, an implementation, and the two shall be independently settable.
 **Accept.** All valid combinations are expressible; setting mode does not change implementation and vice versa. Implementation is retained on a `measured` module so the toggle is reversible.
 **Verify.** T · `SYT-STG-01`   **Trace.** CN-0118; v1 `FR-SIM-41`, `FR-SIM-42`
-**Built.** ◐ started — 1/2 software requirements done, in `WP-13`, `WP-28`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0081`** · `P0` · `R1` — Executed and injected are indistinguishable to a consumer
 **Shall.** A stage's port set shall be identical whether the stage executed or its outputs were injected from a recording.
@@ -1411,37 +1411,37 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The launcher shall present each module with its mode and implementation and allow the user to choose both.
 **Accept.** Every combination expressible in configuration is reachable in the UI; nothing is reachable in the UI that is not expressible in configuration.
 **Verify.** D · `SYT-CFG-01`   **Trace.** CN-0171; v1 `FR-SIM-42`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-28`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0159`** · `P0` · `R1` — Coherence is checked at selection time
 **Shall.** The launcher shall run the coherence classification at selection time and shall block launch on a broken chain, offering the same remedies as the headless path.
 **Accept.** The block occurs on selection, before launch is pressed, and the remedies are textually identical to the headless message.
 **Verify.** D · `SYT-CFG-02`   **Trace.** CN-0172
-**Built.** ○ not started — 0/1 software requirements done, in `WP-28`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0160`** · `P0` · `R1` — The launcher writes a file and holds no hidden state
 **Shall.** The launcher shall write a run configuration file and pass it to the engine, holding no state that is not in that file.
 **Accept.** Any run started from the GUI is reproducible headlessly from the saved file, producing identical port values.
 **Verify.** T · `SYT-CFG-03`   **Trace.** CN-0174, CN-0175
-**Built.** ○ not started — 0/2 software requirements done, in `WP-28`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0161`** · `P1` · `R1` — One action yields a complete run
 **Shall.** The launcher shall allow adding recordings and selecting a layout, so one action yields a complete run.
 **Accept.** A run is startable from an empty state in a bounded number of interactions, recorded in the demonstration.
 **Verify.** D · `SYT-CFG-04`   **Trace.** CN-0176
-**Built.** ○ not started — 0/1 software requirements done, in `WP-28`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0162`** · `P1` · `R1` — Availability is shown, not discovered
 **Shall.** The launcher shall show which modules are available, their versions, and which lack a binary for the current platform.
 **Accept.** A module with no binary for the running platform is shown as unavailable before launch, not as a load failure after it.
 **Verify.** D · `SYT-CFG-05`   **Trace.** CN-0177
-**Built.** ○ not started — 0/2 software requirements done, in `WP-21`, `WP-28`
+**Built.** ◐ started — 0/2 software requirements done, in `WP-21`, `WP-28`
 
 **`SYS-0163`** · `P0` · `R1` — Feasible cuts per recording, in the UI
 **Shall.** The launcher shall show, per recording, which modules could be set to `measured` given what that file actually carries.
 **Accept.** The set shown equals the set `probe` computes headlessly.
 **Verify.** T · `SYT-CFG-06`   **Trace.** CN-0344; v1 `CR-SIM-21`
-**Built.** ◐ started — 1/2 software requirements done, in `WP-20`, `WP-28`
+**Built.** ● done — 2/2 software requirements done
 
 ---
 
@@ -1582,7 +1582,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** A batch shall be a set of runs from one run configuration plus a list of recordings, and optionally parameter sets.
 **Accept.** The developer's own run configuration is the batch's input unchanged, with only a scenario list wrapped around it — there is no second configuration format for batch.
 **Verify.** T · `SYT-BAT-01`   **Trace.** CN-0185; v1 `FR-SIM-46`, `NR-SIM-21`
-**Built.** ○ not started — 0/3 software requirements done, in `WP-23`, `WP-28`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-23`, `WP-28`
 
 **`SYS-0182`** · `P0` · `R1` — One process per run
 **Shall.** Runs shall execute in parallel as separate processes, never as threads.

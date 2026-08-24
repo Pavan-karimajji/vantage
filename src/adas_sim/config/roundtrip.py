@@ -43,3 +43,14 @@ def round_trip(path: Path) -> bytes:
     buf = io.BytesIO()
     _yaml.dump(data, buf)
     return buf.getvalue()
+
+
+def dump(data: object) -> bytes:
+    """`IMP-0347`: serialises a plain in-memory structure (dict/list, no
+    existing file to preserve) through the SAME configured `_yaml` instance
+    `round_trip` reads back with -- `launcher/write.py`'s own "no second,
+    hand-rolled YAML writer" (this module's own top note), for a caller
+    with nothing on disk yet rather than an existing file to edit."""
+    buf = io.BytesIO()
+    _yaml.dump(data, buf)
+    return buf.getvalue()
