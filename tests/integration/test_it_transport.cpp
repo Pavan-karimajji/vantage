@@ -20,18 +20,31 @@
 ///   what makes "diff the consumer's source" a meaningful assertion here
 ///   rather than a coincidence.
 ///
+///   **`UT-TRN-03` (`F-LONG`, closed 2026-08-24, a later pass in this same
+///   file):** "attach a deliberately slow reader; sample engine tick rate;
+///   read the reported drop count." The reader here is the worst case a
+///   slow one can be -- it never calls `tryReceive` at all until the run
+///   is over -- against a real `Runner`/`echo_stub` run long enough
+///   (300 cycles) to be a meaningful sample. Engine wall time is compared
+///   against an identical run with no publisher attached at all, with a
+///   deliberately generous bound (this is a regression catch for a real
+///   block, not a micro-benchmark -- a tight bound on synthetic in-memory
+///   timing would be the flaky test this codebase's own `WP-06` scoping
+///   note (`ANL-SW-12`) already argues against). The **deterministic**
+///   half of this test is `DroppedFrames()`: with the ring never drained,
+///   the drop count is exactly `published - depth`, checked as an exact
+///   equality on both transports, not just "greater than zero."
+///
 ///   **Not attempted this pass, named rather than silently dropped:**
 ///   `UT-TRN-02` (`F-BULK`, channel-usage observation -- already proven at
 ///   unit level, `TransportShm.DataCrossesThroughTheMappedSegmentNotACopyOnTheStack`,
 ///   and this implementation has no second control channel to observe,
 ///   `SW-0351`'s own "may" clause, `transport_shm.hpp`'s top note);
-///   `UT-TRN-03` (`F-LONG`, measured engine tick rate with/without a slow
-///   reader -- needs a real timing harness, `IT-19`'s own sibling
-///   concern); `UT-TRN-05` (`F-STUB-CRASH`, a real killed engine process
-///   with a player attached -- `TransportShm`'s own unit tests already
-///   prove the OS-level liveness mechanism itself via `fork()`/
-///   `TerminateProcess`, but not through a real `Runner` in the loop);
-///   `IT-19` (measured tick rate with a player attaching mid-run). `UT-TRN-04`
+///   `UT-TRN-05` (`F-STUB-CRASH`, a real killed engine process with a
+///   player attached -- `TransportShm`'s own unit tests already prove the
+///   OS-level liveness mechanism itself via `fork()`/`TerminateProcess`,
+///   but not through a real `Runner` in the loop); `IT-19` (measured tick
+///   rate with a player attaching mid-run, then detaching). `UT-TRN-04`
 ///   (version negotiation) needed no IT-level repeat: `attach()` never
 ///   touches the scheduler or the bus, so `TransportInproc`/
 ///   `TransportShm.VersionMismatchRefusedBeforeAnyDataCrosses` already
@@ -42,6 +55,8 @@
 #include "simcore/transport.hpp"
 #include "simcore/transport_shm.hpp"
 
+#include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <map>
@@ -321,6 +336,83 @@ TEST(ItTrn01Transport, AbsentPublisherLeavesTheRunUnaffected) {
   auto outcome = std::move(constructed).value().Run();
   ASSERT_TRUE(outcome.ok()) << outcome.error().Format();
   EXPECT_EQ(outcome.value().cycles_executed, 3u);
+}
+
+// ---------------------------------------------------------------------------
+// UT-TRN-03 -- SW-0353: a slow player never slows the engine, and dropped
+// frames are counted and reported.
+// ---------------------------------------------------------------------------
+
+TEST(ItTrn03SlowReader, EngineWallTimeIsUnaffectedAndDropCountIsExact) {
+  constexpr std::size_t kCycles = 300;  // F-LONG's own "long enough to sample" spirit
+  constexpr std::size_t kDepth = 4;     // small and deliberate -- most frames must drop
+  constexpr std::size_t kPortsPerCycle = 3;  // meas.objects, sut.objects, sut.outputs
+
+  // -- Baseline: no publisher attached at all.
+  StubComponent stub_baseline("it_trn03_baseline");
+  ASSERT_TRUE(stub_baseline.ok());
+  Harness baseline(kCycles);
+  auto runner_baseline =
+      Runner::Construct(baseline.spec, baseline.scheduler, baseline.bus, baseline.reader,
+                        {{"sut", stub_baseline.get()}}, &baseline.writer_base);
+  ASSERT_TRUE(runner_baseline.ok()) << runner_baseline.error().Format();
+  const auto t0 = std::chrono::steady_clock::now();
+  auto outcome_baseline = std::move(runner_baseline).value().Run();
+  const auto baseline_wall = std::chrono::steady_clock::now() - t0;
+  ASSERT_TRUE(outcome_baseline.ok()) << outcome_baseline.error().Format();
+
+  // -- Slow reader: a publisher is attached but NEVER drained during the
+  // run -- the worst case a slow consumer can be, on both transports.
+  StubComponent stub_inproc("it_trn03_inproc");
+  ASSERT_TRUE(stub_inproc.ok());
+  Harness h_inproc(kCycles);
+  simcore::transport::InProcessTransport transport_inproc(kDepth);
+  auto runner_inproc = Runner::Construct(h_inproc.spec, h_inproc.scheduler, h_inproc.bus, h_inproc.reader,
+                                         {{"sut", stub_inproc.get()}}, &h_inproc.writer_base);
+  ASSERT_TRUE(runner_inproc.ok()) << runner_inproc.error().Format();
+  Runner r_inproc = std::move(runner_inproc).value();
+  r_inproc.SetTransportPublisher(&transport_inproc);
+  const auto t1 = std::chrono::steady_clock::now();
+  auto outcome_inproc = r_inproc.Run();
+  const auto inproc_wall = std::chrono::steady_clock::now() - t1;
+  ASSERT_TRUE(outcome_inproc.ok()) << outcome_inproc.error().Format();
+
+  StubComponent stub_shm("it_trn03_shm");
+  ASSERT_TRUE(stub_shm.ok());
+  Harness h_shm(kCycles);
+  simcore::transport::SharedMemoryTransport engine_side(
+      "it_trn03_shm", simcore::transport::SharedMemoryTransport::Role::kEngine, kDepth);
+  auto runner_shm = Runner::Construct(h_shm.spec, h_shm.scheduler, h_shm.bus, h_shm.reader,
+                                      {{"sut", stub_shm.get()}}, &h_shm.writer_base);
+  ASSERT_TRUE(runner_shm.ok()) << runner_shm.error().Format();
+  Runner r_shm = std::move(runner_shm).value();
+  r_shm.SetTransportPublisher(&engine_side);
+  const auto t2 = std::chrono::steady_clock::now();
+  auto outcome_shm = r_shm.Run();
+  const auto shm_wall = std::chrono::steady_clock::now() - t2;
+  ASSERT_TRUE(outcome_shm.ok()) << outcome_shm.error().Format();
+
+  // Loose, deliberately generous bound -- catches a real block (Publish()
+  // waiting on a reader that never comes), not a micro-benchmark. An
+  // absolute floor is included because a baseline run near 0ms would make
+  // any ratio meaningless.
+  const auto floor = std::chrono::milliseconds(50);
+  const auto baseline_ms = std::chrono::duration_cast<std::chrono::milliseconds>(baseline_wall);
+  const auto bound = std::max(baseline_ms * 10, floor);
+  EXPECT_LE(std::chrono::duration_cast<std::chrono::milliseconds>(inproc_wall), bound)
+      << "InProcessTransport appears to have blocked the engine";
+  EXPECT_LE(std::chrono::duration_cast<std::chrono::milliseconds>(shm_wall), bound)
+      << "SharedMemoryTransport appears to have blocked the engine";
+
+  // Exact, deterministic: with the ring never drained, every publish past
+  // the first `kDepth` frames overwrites an unread slot -- the same
+  // arithmetic TransportInproc/Shm.SlowConsumerDropsFramesNeverBlocksProducer
+  // prove for a handful of frames, now over a real run's full port set.
+  const std::uint64_t published = kCycles * kPortsPerCycle;
+  ASSERT_GT(published, kDepth);
+  const std::uint64_t expected_dropped = published - kDepth;
+  EXPECT_EQ(transport_inproc.DroppedFrames(), expected_dropped);
+  EXPECT_EQ(engine_side.DroppedFrames(), expected_dropped);
 }
 
 }  // namespace simcore::runner

@@ -1069,15 +1069,16 @@ fraction (1 `SW` + 2 `SYS` of ~130 total UIDs the full table names).
       it — `engineAlive()` correctly flips `false` only then. Both
       backends now have parity: not just compiled on both platforms, but
       each independently proven against a real killed process, not a
-      same-process simulation. **`UT-TRN-01` closed 2026-08-24, a later
-      pass:** `Runner::SetTransportPublisher` wired both transport classes
-      through the real scheduler for the first time (`IMP-0349`'s own row
-      below has the full record). **Still not done, explicitly deferred,
-      matching this plan's own incremental-slice precedent (`SM-01`):**
-      `UT-TRN-02`..`05` and `IT-19` (`F-BULK`/`F-LONG`/`F-STUB-CRASH` —
-      channel-usage observation, measured tick rate with a slow/mid-run/
-      detaching player, and a real killed engine with a player attached,
-      all through the real scheduler).
+      same-process simulation. **`UT-TRN-01` and `UT-TRN-03` closed
+      2026-08-24, a later pass:** `Runner::SetTransportPublisher` wired
+      both transport classes through the real scheduler for the first
+      time, and a real 300-cycle run proved the ring-buffer drop math
+      exactly under a never-drained reader (`IMP-0349`/`IMP-0353`'s own
+      rows below have the full record). **Still not done, explicitly
+      deferred, matching this plan's own incremental-slice precedent
+      (`SM-01`):** `UT-TRN-02`/`05` and `IT-19` (`F-BULK`/`F-STUB-CRASH` —
+      channel-usage observation, and a real killed engine with a player
+      attached mid-run then detaching, both through the real scheduler).
 - [ ] **Lands:** `IMP-0017`, `IMP-0298`, `IMP-0349`…`IMP-0356` — 10.
   - [ ] `IMP-0017` · `SW-0017` · `NEW` — `ANL-SW-07`
   - [ ] `IMP-0298` · `SW-0298` · `NEW` — `session/attach.py`
@@ -1085,12 +1086,12 @@ fraction (1 `SW` + 2 `SYS` of ~130 total UIDs the full table names).
   - [ ] `IMP-0350` · `SW-0350` · `KEEP` — `ANL-SW-58`
   - [ ] `IMP-0351` · `SW-0351` · `NEW` — `src/simcore/transport/shm.cpp` landed and unit-tested (zero-copy bulk read proven directly, `TransportShm.DataCrossesThroughTheMappedSegmentNotACopyOnTheStack`); IT-level `UT-TRN-02` (`F-BULK`, a real consumer observing which channel a control message used) not started
   - [ ] `IMP-0352` · `SW-0352` · `NEW` — both `inproc.cpp` and `shm.cpp`'s `attach`/`detach` proven non-perturbing at unit level (`TransportInproc.AttachDetachDoesNotPerturbPublish`, `TransportShm.AttachDetachDoesNotPerturbPublish`); IT-level `IT-19` (measured engine tick rate with/without a player) not started
-  - [ ] `IMP-0353` · `SW-0353` · `NEW` — both transports' ring-buffer drop proven unit-level (`TransportInproc.SlowConsumerDropsFramesNeverBlocksProducer`, `TransportShm.SlowConsumerDropsFramesNeverBlocksProducer`); the IT-level `UT-TRN-03` (`F-LONG`, measured engine tick rate) not started
+  - [x] `IMP-0353` · `SW-0353` · `NEW` — both transports' ring-buffer drop proven unit-level (`TransportInproc.SlowConsumerDropsFramesNeverBlocksProducer`, `TransportShm.SlowConsumerDropsFramesNeverBlocksProducer`). **`UT-TRN-03` closed 2026-08-24**: `tests/integration/test_it_transport.cpp`'s `ItTrn03SlowReader` runs a real 300-cycle `Runner`/`echo_stub` run three ways — no publisher, `InProcessTransport` (`depth=4`), `SharedMemoryTransport` (`depth=4`) — with the ring never drained during the run (the worst case a slow reader can be). Engine wall time stays within a deliberately generous bound (10x baseline or 50ms, whichever is larger — a regression catch for a real block, not a micro-benchmark, matching `WP-06`'s own `ANL-SW-12` scoping precedent for why a tight synthetic-timing bound would be the flaky test instead). The **deterministic** half: `DroppedFrames()` on both transports equals exactly `published - depth` (900 - 4 = 896), not merely "greater than zero." `simcore_tests` **207/208 on `vs2026`** (the one failure the same pre-existing `UtEdg08Reproducer` race), stable across 3 repeated runs (~28ms each), `check_invariants.py` clean.
   - [ ] `IMP-0354` · `SW-0354` · `NEW` — contract shape landed (`ITransport.hpp`'s `PortFrame` carries ports, ticks and bytes only, no codec/world-model/component name); `ANL-SW-59`'s static check against a real implementation not started
   - [ ] `IMP-0355` · `SW-0355` · `NEW` — both transports' version negotiation landed and unit-tested (`TransportInproc.VersionMismatchRefusedBeforeAnyDataCrosses`, `TransportShm.VersionMismatchRefusedBeforeAnyDataCrosses` + `shm.cpp`'s own depth-mismatch refusal); no separate `negotiate.cpp` file, folded into each transport's own `attach()`
   - [ ] `IMP-0356` · `SW-0356` · `NEW` — `inproc.cpp`'s `MarkEngineDead()`/`engineAlive()`/`lastTickReceived()` landed and unit-tested; `shm.cpp`'s own `SimulateEngineDeath()`/`engineAlive()`/`lastTickReceived()` landed, unit-tested (`TransportShm.DeadEngineReportedNotWaitedOn`) **and** verified against a real OS-level crash (`fork()` smoke test, child process `_exit()`s without running its destructor, parent's `engineAlive()` correctly flips false only once the OS has reaped it) — no separate `liveness.cpp` file, folded into each transport's own state
 - [ ] **Files:** contract `modules/interfaces/cpp/transport/ITransport.hpp` (landed); engine-side `src/simcore/transport/inproc.cpp` + `shm.cpp` (both landed, cross-process folds in its own attach/detach/negotiation/liveness rather than the four separate files this row originally named); player-side client is `modules/viz`'s own scope (`VIZ:SI-16`), not this file list.
-- [~] **Exit:** **two** transports against one interface, because one implementation behind an interface is an interface nobody has tested. Both landed (`InProcessTransport`, `SharedMemoryTransport`). **`UT-TRN-01` closed 2026-08-24** — a real consumer diffed across both transports, wired through the real scheduler (`test_it_transport.cpp`, see `IMP-0349`'s own row above). Still open: `IT-19` (measured engine tick rate with and without a player attached — not started); a slow player drops frames without slowing the engine, proven at unit level for both transports (`DroppedFrames()` now exposed on both, `IMP-0349`'s own note) but not yet at IT level against a real scheduler (`UT-TRN-03`). — closed by: `IT-19`/`UT-TRN-03` landing.
+- [~] **Exit:** **two** transports against one interface, because one implementation behind an interface is an interface nobody has tested. Both landed (`InProcessTransport`, `SharedMemoryTransport`). **`UT-TRN-01`/`UT-TRN-03` closed 2026-08-24** — a real consumer diffed across both transports, wired through the real scheduler; a slow player drops frames (exact count) without measurably slowing the engine, both through a real `Runner`/`echo_stub` run (`test_it_transport.cpp`, see `IMP-0349`/`IMP-0353`'s own rows above). Still open: `IT-19` (measured engine tick rate with a player attaching mid-run and detaching — not started; `UT-TRN-03` covered the simpler "attached the whole run" case, not the attach/detach transition `IT-19` itself is about). — closed by: `IT-19`/`UT-TRN-02`/`UT-TRN-05` landing.
 
 ### WP-28 · `MP-4` · `SI-22` `launcher`
 - [ ] **Prereq:** `WP-26`.

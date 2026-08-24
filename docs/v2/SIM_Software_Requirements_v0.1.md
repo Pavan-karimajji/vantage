@@ -2964,7 +2964,7 @@ Superseded (`SM-01` trial), `SW-0324` — was *Display-only data is decoded only
 **Shall.** A player consuming slower than the engine produces shall drop frames on the display side and shall not apply back-pressure to the run.
 **Accept.** Engine wall time is unchanged between a run with a slow player attached and one with none. Dropped frames are counted and reported.
 **Verify.** T · `UT-TRN-03`   **Trace.** SYS-0129, SYS-0059
-**Built.** ○ not started — `IMP-0353` in `WP-27`
+**Built.** ● done — `IMP-0353` in `WP-27`
 **Now.** `NEW`.
 *Note:* the alternative — the display pacing the simulation — would make the run's duration, and therefore the timing report, depend on whether someone was watching.
 
