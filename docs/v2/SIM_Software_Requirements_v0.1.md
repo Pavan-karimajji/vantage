@@ -1889,42 +1889,42 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** A `measured` module shall be classified stale if any module anywhere upstream of it in the data graph, transitively, is `simulate`.
 **Accept.** The case *simulate → measured → measured → simulate* is classified stale at both measured modules. A direct-neighbour implementation fails this test.
 **Verify.** T · `UT-GRF-12`   **Trace.** SYS-0087; **defect** concept §22.4
-**Built.** ○ not started — `IMP-0174` in `WP-20`
+**Built.** ● done — `IMP-0174` in `WP-20`
 **Now.** `PARTIAL`, and wrong in the way that matters — `contracts/pipeline.py::severed_chains` inspects **one hop** upstream (`ref_stage`'s mode) and **one hop** downstream (a later stage referencing this stage directly). The two-measured-in-sequence case produces no finding and a corrupted result, silently.
 
 **`SW-0175`** · `SI-11` · `P0` · `R1` — Consumption is evaluated over the transitive descendant set
 **Shall.** Whether a stale module is consumed by a `simulate` module shall be evaluated over the transitive descendant set.
 **Accept.** A stale module consumed three hops downstream by a `simulate` module is classified a broken chain.
 **Verify.** T · `UT-GRF-13`   **Trace.** SYS-0087
-**Built.** ○ not started — `IMP-0175` in `WP-20`
+**Built.** ● done — `IMP-0175` in `WP-20`
 **Now.** `PARTIAL` — same defect, downstream side.
 
 **`SW-0176`** · `SI-11` · `P0` · `R1` — Exactly three outcomes
 **Shall.** The classification shall yield exactly broken chain (error), orphan simulation (warning) or injection (normal), with no unclassified state.
 **Accept.** Each outcome is produced by a crafted configuration and no configuration produces a fourth or an unclassified result.
 **Verify.** T · `UT-GRF-14`   **Trace.** SYS-0088
-**Built.** ○ not started — `IMP-0176` in `WP-20`
+**Built.** ● done — `IMP-0176` in `WP-20`
 **Now.** `PARTIAL` — severed chains are detected as one outcome; orphan simulation exists only as a warning inside `with_mode`, not as a classification.
 
 **`SW-0177`** · `SI-11` · `P0` · `R1` — Classification runs with nothing opened and nothing executed
 **Shall.** The classification shall be computable from the graph alone, with no recording opened and no module loaded, and shall be callable as a standalone check.
 **Accept.** It completes on a ten-module graph in under a second with no file handle opened on a recording.
 **Verify.** T · `UT-GRF-15`   **Trace.** SYS-0089
-**Built.** ○ not started — `IMP-0177` in `WP-20`
+**Built.** ● done — `IMP-0177` in `WP-20`
 **Now.** `DONE·MOVE` — `severed_chains()` is a pure function over the loaded pipeline.
 
 **`SW-0178`** · `SI-11` · `P0` · `R1` — A broken chain blocks, naming the path and the landing point
 **Shall.** A broken chain shall block the run by default, naming every stale module, the path that made each stale, and the consumer where the corruption would land.
 **Accept.** The run does not execute and the message contains all three elements.
 **Verify.** T · `UT-GRF-16`   **Trace.** SYS-0090
-**Built.** ○ not started — `IMP-0178` in `WP-20`
+**Built.** ● done — `IMP-0178` in `WP-20`
 **Now.** `PARTIAL` — `SeveredChain` carries upstream, measured, downstream and both port names, which is the right shape; it is returned rather than raised and nothing blocks on it.
 
 **`SW-0179`** · `SI-11` · `P1` · `R1` — Remedies are computed, including the smallest change
 **Shall.** On a broken chain the system shall compute remedies including the minimal change, and one remedy shall promote every affected module to `simulate` while printing exactly what changed.
 **Accept.** The suggested remedy applied verbatim produces a passing classification.
 **Verify.** T · `UT-GRF-17`   **Trace.** SYS-0091
-**Built.** ○ not started — `IMP-0179` in `WP-20`
+**Built.** ● done — `IMP-0179` in `WP-20`
 **Now.** `PARTIAL` — `with_mode(close_gaps=True)` implements the promote remedy and prints what it changed; the minimal-change remedy is not computed.
 
 **`SW-0180`** · `SI-11` · `P0` · `R1` — A waiver requires a flag and a written reason, and marks permanently

@@ -1000,31 +1000,31 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A `measured` module shall be classified stale if any module anywhere upstream in the data graph, transitively, is `simulate`; consumption shall likewise be evaluated over the transitive descendant set.
 **Accept.** The case *simulate → measured → measured → simulate* is classified as a broken chain. A direct-neighbour-only implementation fails this test.
 **Verify.** T · `SYT-STG-07`   **Trace.** CN-0322; **defect** concept §22.4
-**Built.** ○ not started — 0/2 software requirements done, in `WP-20`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0088`** · `P0` · `R1` — Three outcomes, not two
 **Shall.** The classification shall yield exactly three outcomes: broken chain (error), orphan simulation (warning), injection (normal).
 **Accept.** Each outcome is produced by a crafted configuration; no configuration produces a fourth outcome or an unclassified state.
 **Verify.** T · `SYT-STG-08`   **Trace.** CN-0322, CN-0324
-**Built.** ○ not started — 0/1 software requirements done, in `WP-20`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0089`** · `P0` · `R1` — Classification runs before execution and standalone
 **Shall.** The classification shall be computable without executing anything and shall be available as a standalone check.
 **Accept.** The check runs in a lint job in under one second on a ten-module graph, with no recording opened.
 **Verify.** T · `SYT-STG-09`   **Trace.** CN-0323, CN-0122, CN-0128
-**Built.** ◐ started — 1/3 software requirements done, in `WP-04`, `WP-20`
+**Built.** ◐ started — 2/3 software requirements done, in `WP-04`, `WP-20`
 
 **`SYS-0090`** · `P0` · `R1` — A broken chain blocks
 **Shall.** A broken chain shall block the run by default.
 **Accept.** The run does not execute. The message names every stale module, the path that made it stale, and the consumer where corruption would land.
 **Verify.** T · `SYT-STG-10`   **Trace.** CN-0123
-**Built.** ○ not started — 0/1 software requirements done, in `WP-20`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0091`** · `P1` · `R1` — Remedies are offered, including the smallest
 **Shall.** On a broken chain the system shall offer remedies including the minimal change, and shall provide an option that promotes affected modules to `simulate` automatically while printing exactly what changed.
 **Accept.** The suggested remedy, applied verbatim, produces a passing classification.
 **Verify.** T · `SYT-STG-11`   **Trace.** CN-0124
-**Built.** ○ not started — 0/1 software requirements done, in `WP-20`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0092`** · `P0` · `R1` — Waiving is explicit and permanent
 **Shall.** A broken chain shall be waivable only with an explicit flag *and* a written reason, and a waived run shall be permanently marked incoherent in the run manifest, in every export, and visibly in the player.
