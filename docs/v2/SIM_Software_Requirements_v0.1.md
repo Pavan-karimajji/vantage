@@ -3149,8 +3149,8 @@ These bind every software item, so none owns them alone; the item field reads `a
 **Shall.** A user-visible name shall be identical in the log, in configuration and on screen, with no surface renaming a concept for presentation.
 **Accept.** For a sampled set the three strings are identical, checked automatically.
 **Verify.** A · `ANL-SW-69`   **Trace.** SYS-0267
-**Built.** ◐ started — `IMP-0375` in `WP-01`
-**Now.** `PARTIAL` — the naming rules are written and largely followed; nothing compares the three surfaces.
+**Built.** ● done — `IMP-0375` in `WP-01`
+**Now.** `DONE` — `ANL-SW-69` (`tests/unit/test_a1_check_anl_sw69.py`) cross-checks config, screen and log for a sampled port name.
 
 **`SW-0376`** · all · `P0` · `R1` — Automated execution exists from the first increment
 **Shall.** Automated execution of the test suite shall be established at the start of the build order, and manual verification shall never be the sole evidence for any requirement.

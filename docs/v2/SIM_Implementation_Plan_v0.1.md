@@ -233,7 +233,7 @@ flowchart LR
 
 ### WP-01 · `MP-0` · CI and the analysis-check harness
 - [x] **Prereq:** none. This is the entry point (`O-1`).
-- [~] **Lands:** `IMP-0020`, `IMP-0357`, `IMP-0361`, `IMP-0366`, `IMP-0367`, `IMP-0370`…`IMP-0376`, `IMP-0378`, `IMP-0383`, `IMP-0408`, `IMP-0415`, `IMP-0417`, `IMP-0418` — 18. 15/18 done and tested; closed by: `IMP-0366` (real GH Actions run), `IMP-0375` (WP-04 port names), `IMP-0417` (first cited artifact kind) below.
+- [~] **Lands:** `IMP-0020`, `IMP-0357`, `IMP-0361`, `IMP-0366`, `IMP-0367`, `IMP-0370`…`IMP-0376`, `IMP-0378`, `IMP-0383`, `IMP-0408`, `IMP-0415`, `IMP-0417`, `IMP-0418` — 18. 16/18 done and tested; closed by: `IMP-0366` (real GH Actions run), `IMP-0417` (first cited artifact kind) below.
   - [x] `IMP-0020` · `SW-0020` · `NEW` — `scripts/check_no_duplication.py`
   - [x] `IMP-0357` · `SW-0357` · `KEEP` — `scripts/check_invariants.py`
   - [x] `IMP-0361` · `SW-0361` · `EXTEND` — `scripts/check_closed_sets.py`
@@ -244,7 +244,7 @@ flowchart LR
   - [x] `IMP-0372` · `SW-0372` · `NEW` — `docs/v2/py/trace_check.py`
   - [x] `IMP-0373` · `SW-0373` · `KEEP` — No status column anywhere. `Now.` is SwReq's dated planning field and is…
   - [x] `IMP-0374` · `SW-0374` · `KEEP` — `scripts/check_headers.py`
-  - [~] `IMP-0375` · `SW-0375` · `EXTEND` — One string for one thing: a port named in a log, in configuration and on… — closed by: a log surface only, re-checked 2026-08-24 — **stale note found:** this used to say "nothing is checkable before `config/`/`ports.yaml` exist," but `WP-04` has since landed `config/ports.yaml` (`modules/df/conf/ports.yaml` et al., real port names) and the screen surface already exists and agrees character-for-character (`df_viz/layers/port_tree.hpp`'s `AppendPortTree`, e.g. `"objects"`/`"egoDyn"` matching config verbatim); the genuinely missing piece is a **log** surface — no logging framework call anywhere in `simcore`/`adas_sim` ever names a port, confirmed by search. `ANL-SW-69`'s three-surface cross-check is buildable across 2 of 3 surfaces today; adding sim log output is the real remaining gap.
+  - [x] `IMP-0375` · `SW-0375` · `EXTEND` — One string for one thing: a port named in a log, in configuration and on screen is character-identical — closed 2026-08-24: `CtypesSilComponent.init()` (`src/adas_sim/resolve/component.py`) now emits one `Event.STAGE_INIT` line per manifest port, `port=spec.name` sourced from the manifest (never a literal, R-SIM-1); `ANL-SW-69` lands as `tests/unit/test_a1_check_anl_sw69.py`, cross-checking config (`modules/df/conf/ports.yaml`), screen (`df_viz/layers/*.cpp`'s literal `AppendPortTree(...)` root_name args) and the captured log line against the real `df_sil.dll` — 4/4 green, plus a planted-character-difference case (`R-REQ-9`).
   - [x] `IMP-0376` · `SW-0376` · `EXTEND` — CI runs from the first increment (`CN-0351`), which is why `WP-01` is CI…
   - [x] `IMP-0378` · `SW-0378` · `KEEP` — `impl.kind == "stub"` lets the whole suite run with no compiled componen…
   - [x] `IMP-0383` · `SW-0383` · `KEEP` — `scripts/check_invariants.py` gains an `io`-scope rule: no identifier un…

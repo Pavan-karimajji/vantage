@@ -390,6 +390,8 @@ class CtypesSilComponent:
                 hint="pass an explicit config_path, or build a config/ bundle beside the library (R-SIM-3a)",
             )
         self._handle = handle
+        for spec in (*self.manifest.inputs, *self.manifest.outputs):
+            log(Event.STAGE_INIT, run=self.name, stage=self.name, port=spec.name)
 
     def shutdown(self) -> None:
         if self._handle is not None:

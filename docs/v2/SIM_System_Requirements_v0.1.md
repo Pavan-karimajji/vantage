@@ -2210,7 +2210,7 @@ Superseded (`SM-04`, 2026-08-20 — sole decomposer was `SI-18`'s scene-cache-bu
 **Shall.** Names visible to a user — ports, layers, error codes, log events, style tokens, run ids — shall follow a published convention chosen so that a name in a log, a name in a configuration file and a name on screen are the same string.
 **Accept.** For a sampled set, the string in the log, the configuration and the display is identical; no surface renames a concept for presentation.
 **Verify.** A · `ANL-41`   **Trace.** CN-0352; v1 `FR-SIM-49`
-**Built.** ◐ started — 1/2 software requirements done, in `WP-01`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0268`** · `P1` · `R1` — The interface stays lean
 **Shall.** The user-facing surface — CLI verbs, configuration file kinds, panel types, extension points — shall be a closed, published, countable set, and growth shall require a requirement.
