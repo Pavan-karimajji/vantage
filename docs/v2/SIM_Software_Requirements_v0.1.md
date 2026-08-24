@@ -2957,7 +2957,7 @@ Superseded (`SM-01` trial), `SW-0324` — was *Display-only data is decoded only
 **Shall.** Attaching and detaching shall not alter the engine's execution, values or timing model.
 **Accept.** A run with attach and detach produces port values identical to a control run with no player.
 **Verify.** T · `IT-19`   **Trace.** SYS-0129
-**Built.** ○ not started — `IMP-0352` in `WP-27`
+**Built.** ● done — `IMP-0352` in `WP-27`
 **Now.** `NEW`.
 
 **`SW-0353`** · `SI-25` · `P1` · `R1` — A slow player never slows the engine

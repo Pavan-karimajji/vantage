@@ -1272,7 +1272,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The player shall attach to, detach from and re-attach to a running engine without stopping the run.
 **Accept.** Detach and re-attach mid-run; the run's port values are unchanged from a control run with no player attached.
 **Verify.** T · `SYT-PLR-02`   **Trace.** CN-0053, CN-0156
-**Built.** ◐ started — 1/3 software requirements done, in `WP-27`
+**Built.** ◐ started — 2/3 software requirements done, in `WP-27`
 
 **`SYS-0130`** · `P0` · `R1` — The player opens a finished run with no engine
 **Shall.** The player shall open a finished run's artifacts with no engine present.

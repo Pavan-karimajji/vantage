@@ -52,12 +52,32 @@
 ///   a genuinely separate, killable process running a real `Runner` --
 ///   see that file's own top note.
 ///
-///   **Not attempted this pass, named rather than silently dropped:**
-///   `IT-19` (measured tick rate with a player attaching mid-run, then
-///   detaching -- needs a live consumer thread racing the engine thread,
-///   a different shape of test than anything in this file). `UT-TRN-04`
-///   (version negotiation) needed no IT-level repeat: `attach()` never
-///   touches the scheduler or the bus, so `TransportInproc`/
+///   **`IT-19` (`SW-0298`, `SW-0352`, closed 2026-08-24, a later pass in
+///   this same file):** the one test in this file that needs a genuinely
+///   live consumer racing the engine thread rather than an attach fully
+///   before or fully after `Run()`. A real `Runner`/`echo_stub` steps
+///   cycle by cycle on a background thread with a real per-tick sleep
+///   (`std::this_thread::sleep_for`, same device `trn_engine_host.cpp`
+///   uses for `UT-TRN-05`) while the TEST thread attaches a client
+///   partway through, drains a few live frames to prove it is a real
+///   player and not an idle handle, detaches, and lets the run continue
+///   to exhaustion -- so the attach and the detach both land while
+///   `StepOnce()` is actually mid-loop, never before the first call or
+///   after the last. `SW-0298`/`SW-0352`'s own `Accept` clause is about
+///   VALUES, not timing ("produces port values identical to a control run
+///   with no player attached"), so the test's real assertion is a
+///   byte-for-byte `RawMessage` diff between this run's `CapturingWriter`
+///   output and an independent control run's, over the identical spec and
+///   recording, with no publisher ever attached to the control run. The
+///   engine's own tick progress (an atomic counter, incremented once per
+///   completed `StepOnce()`, sampled at each phase boundary) is checked
+///   too, matching this row's literal Test Spec wording ("measure engine
+///   tick rate ... attaching mid-run, and after detach") -- a generous
+///   bound per phase (same "catch a real block, not a micro-benchmark"
+///   reasoning `UT-TRN-03` already uses), not a precision timing claim.
+///
+///   `UT-TRN-04` (version negotiation) needed no IT-level repeat: `attach()`
+///   never touches the scheduler or the bus, so `TransportInproc`/
 ///   `TransportShm.VersionMismatchRefusedBeforeAnyDataCrosses` already
 ///   exercise the real code path end to end.
 /// @author Pavan Karimajji
@@ -67,6 +87,7 @@
 #include "simcore/transport_shm.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -74,6 +95,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <thread>
 #include <tuple>
 #include <vector>
 
@@ -157,6 +179,24 @@ class NullWriter final : public simcore::io::Writer {
   void Write(const RawMessage&) override {}
   void WriteMeta(const std::string&, const std::vector<std::uint8_t>&) override {}
   void Close() override {}
+};
+
+// IT-19 -- keeps every written message so two runs' output can be diffed
+// byte-for-byte (`SW-0298`/`SW-0352`'s own "identical to a control run"
+// Accept clause).
+class CapturingWriter final : public simcore::io::Writer {
+ public:
+  Result<bool> Open(const std::filesystem::path&, const std::map<std::string, TopicInfo>&) override {
+    return Result<bool>::Ok(true);
+  }
+  void Write(const RawMessage& msg) override { messages_.push_back(msg); }
+  void WriteMeta(const std::string&, const std::vector<std::uint8_t>&) override {}
+  void Close() override {}
+
+  const std::vector<RawMessage>& messages() const { return messages_; }
+
+ private:
+  std::vector<RawMessage> messages_;
 };
 
 // One measured stage (source-fed) -> one simulate stage (echo_stub). No
@@ -501,6 +541,153 @@ TEST(ItTrn02Bulk, BulkPayloadCrossesIntactThroughTheMappedSegment) {
     ++bulk_frames_checked;
   }
   EXPECT_EQ(bulk_frames_checked, kCycles);
+}
+
+// ---------------------------------------------------------------------------
+// IT-19 -- SW-0298/SW-0352: attach and detach do not disturb a run already
+// in progress.
+// ---------------------------------------------------------------------------
+
+// Byte-for-byte, no tolerance -- `SW-0298`/`SW-0352`'s own Accept clause.
+bool MessagesEqual(const std::vector<RawMessage>& a, const std::vector<RawMessage>& b) {
+  if (a.size() != b.size()) return false;
+  for (std::size_t i = 0; i < a.size(); ++i) {
+    if (a[i].topic != b[i].topic) return false;
+    if (a[i].log_time_ns != b[i].log_time_ns) return false;
+    if (a[i].payload != b[i].payload) return false;
+  }
+  return true;
+}
+
+TEST(ItTrn19MidRunAttach, AttachAndDetachDuringARunProduceIdenticalValuesAndDoNotStallTheEngine) {
+  constexpr std::size_t kCycles = 200;
+  constexpr std::size_t kDepth = 64;  // generous: this test is not about the drop path
+  const auto kTickSleep = std::chrono::milliseconds(2);
+  const auto kWindow = std::chrono::milliseconds(100);  // one phase's real-time budget
+
+  // -- Control: no publisher attached at any point.
+  StubComponent stub_ctrl("it_trn19_ctrl");
+  ASSERT_TRUE(stub_ctrl.ok());
+  RunSpec spec_ctrl = MakeSpec();
+  VectorReader reader_ctrl(MakeRecording(kCycles), MakeTopics());
+  simcore::scheduler::Scheduler scheduler_ctrl(spec_ctrl);
+  simcore::bus::PortBus bus_ctrl;
+  CapturingWriter sink_ctrl;
+  simcore::io::WriterBase writer_base_ctrl(sink_ctrl);
+  auto constructed_ctrl =
+      Runner::Construct(spec_ctrl, scheduler_ctrl, bus_ctrl, reader_ctrl, {{"sut", stub_ctrl.get()}}, &writer_base_ctrl);
+  ASSERT_TRUE(constructed_ctrl.ok()) << constructed_ctrl.error().Format();
+  auto outcome_ctrl = std::move(constructed_ctrl).value().Run();
+  ASSERT_TRUE(outcome_ctrl.ok()) << outcome_ctrl.error().Format();
+
+  // -- Live run: a real background thread steps the engine cycle by cycle
+  // with a real per-tick sleep, so the test thread has genuine wall-clock
+  // room to attach and detach WHILE `StepOnce()` is mid-loop.
+  StubComponent stub_live("it_trn19_live");
+  ASSERT_TRUE(stub_live.ok());
+  RunSpec spec_live = MakeSpec();
+  VectorReader reader_live(MakeRecording(kCycles), MakeTopics());
+  simcore::scheduler::Scheduler scheduler_live(spec_live);
+  simcore::bus::PortBus bus_live;
+  CapturingWriter sink_live;
+  simcore::io::WriterBase writer_base_live(sink_live);
+  simcore::transport::SharedMemoryTransport engine_side(
+      "it_trn19_shm", simcore::transport::SharedMemoryTransport::Role::kEngine, kDepth);
+
+  auto constructed_live =
+      Runner::Construct(spec_live, scheduler_live, bus_live, reader_live, {{"sut", stub_live.get()}}, &writer_base_live);
+  ASSERT_TRUE(constructed_live.ok()) << constructed_live.error().Format();
+  Runner runner_live = std::move(constructed_live).value();
+  runner_live.SetTransportPublisher(&engine_side);
+
+  std::atomic<std::size_t> ticks_done{0};
+  std::atomic<bool> engine_finished{false};
+  const auto t_start = std::chrono::steady_clock::now();
+  std::thread engine_thread([&]() {
+    for (;;) {
+      auto step = runner_live.StepOnce();
+      ASSERT_TRUE(step.ok()) << step.error().Format();
+      if (!step.value()) break;  // exhausted
+      ticks_done.fetch_add(1, std::memory_order_release);
+      std::this_thread::sleep_for(kTickSleep);
+    }
+    engine_finished.store(true, std::memory_order_release);
+  });
+
+  // Phase 1: no player. The minimum possible engine run time is
+  // kCycles * kTickSleep, comfortably above 3 * kWindow, so the engine is
+  // still mid-run at every checkpoint below.
+  std::this_thread::sleep_for(kWindow);
+  const auto t1 = std::chrono::steady_clock::now();
+  const std::size_t ticks_phase1 = ticks_done.load(std::memory_order_acquire);
+  ASSERT_FALSE(engine_finished.load(std::memory_order_acquire)) << "engine finished before the player attached";
+
+  // Phase 2: attach WHILE the engine is mid-run, and drain a few live
+  // frames to prove this is a real player, not an idle handle.
+  simcore::transport::SharedMemoryTransport client_side(
+      "it_trn19_shm", simcore::transport::SharedMemoryTransport::Role::kClient, kDepth);
+  uint32_t engine_version = 0;
+  ASSERT_EQ(client_side.attach(simcore::transport::SharedMemoryTransport::kProtocolVersion, &engine_version),
+            adas::transport::AttachResult::kOk);
+  std::size_t frames_drained = 0;
+  const auto drain_until = std::chrono::steady_clock::now() + kWindow;
+  while (std::chrono::steady_clock::now() < drain_until) {
+    adas::transport::PortFrame frame{};
+    if (client_side.tryReceive(&frame)) {
+      ++frames_drained;
+    } else {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+  }
+  EXPECT_GT(frames_drained, 0u) << "attached mid-run but never observed a live frame";
+  const auto t2 = std::chrono::steady_clock::now();
+  const std::size_t ticks_phase2 = ticks_done.load(std::memory_order_acquire);
+  ASSERT_FALSE(engine_finished.load(std::memory_order_acquire)) << "engine finished before the player detached";
+
+  // Phase 3: detach WHILE the engine is still mid-run, then let it run on
+  // unattended to exhaustion.
+  client_side.detach();
+  std::this_thread::sleep_for(kWindow);
+  const auto t3 = std::chrono::steady_clock::now();
+  const std::size_t ticks_phase3 = ticks_done.load(std::memory_order_acquire);
+
+  engine_thread.join();
+  ASSERT_TRUE(engine_finished.load(std::memory_order_acquire));
+  EXPECT_EQ(ticks_done.load(std::memory_order_acquire), kCycles);
+
+  // The engine progressed through every phase -- no stall on attach, none
+  // on detach.
+  EXPECT_GT(ticks_phase1, 0u) << "no progress before the player ever attached";
+  EXPECT_GT(ticks_phase2, ticks_phase1) << "no progress while the player was attached";
+  EXPECT_GT(ticks_phase3, ticks_phase2) << "no progress after the player detached";
+
+  // Generous per-phase rate bound, measured (not assumed) -- the `UT-TRN-03`
+  // "regression catch for a real block, not a micro-benchmark" reasoning.
+  // Baseline is phase 1's own measured ms/tick (no player at all); phases 2
+  // (attached) and 3 (detached) must stay within a wide multiple of it. A
+  // real stall (attach/detach blocking the engine) would blow this bound by
+  // orders of magnitude, not by scheduler noise.
+  auto ms_per_tick = [](std::chrono::steady_clock::time_point from, std::chrono::steady_clock::time_point to,
+                        std::size_t ticks) {
+    return std::chrono::duration<double, std::milli>(to - from).count() / static_cast<double>(ticks);
+  };
+  const double baseline_ms_per_tick = ms_per_tick(t_start, t1, ticks_phase1);
+  const double phase2_ms_per_tick = ms_per_tick(t1, t2, ticks_phase2 - ticks_phase1);
+  const double phase3_ms_per_tick = ms_per_tick(t2, t3, ticks_phase3 - ticks_phase2);
+  const double floor_ms = 5.0;
+  const double bound_ms_per_tick = std::max(baseline_ms_per_tick * 10.0, floor_ms);
+  EXPECT_LE(phase2_ms_per_tick, bound_ms_per_tick)
+      << "engine tick rate collapsed on attach (baseline " << baseline_ms_per_tick << " ms/tick, attached "
+      << phase2_ms_per_tick << " ms/tick)";
+  EXPECT_LE(phase3_ms_per_tick, bound_ms_per_tick)
+      << "engine tick rate collapsed on detach (baseline " << baseline_ms_per_tick << " ms/tick, detached "
+      << phase3_ms_per_tick << " ms/tick)";
+
+  // SW-0298/SW-0352's own Accept clause: values identical to the control
+  // run, regardless of the concurrent attach/detach.
+  EXPECT_TRUE(MessagesEqual(sink_ctrl.messages(), sink_live.messages()))
+      << "mid-run attach/detach altered the run's own output "
+      << "(" << sink_ctrl.messages().size() << " vs " << sink_live.messages().size() << " messages)";
 }
 
 }  // namespace simcore::runner
