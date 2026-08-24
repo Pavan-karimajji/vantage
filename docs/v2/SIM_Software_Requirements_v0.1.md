@@ -1931,21 +1931,21 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** A broken chain shall be waivable only with an explicit flag and a written reason, and the waived run shall be permanently marked incoherent in the manifest, in every export and visibly in the player.
 **Accept.** No code path waives without both. The mark survives export, conversion and re-import.
 **Verify.** T · `UT-GRF-18`   **Trace.** SYS-0092
-**Built.** ○ not started — `IMP-0180` in `WP-20`
+**Built.** ● done — `IMP-0180` in `WP-20`
 **Now.** `NEW`.
 
 **`SW-0181`** · `SI-11` · `P1` · `R1` — Policy can forbid waivers entirely
 **Shall.** A policy setting shall be able to forbid waivers, under which a waived run exits with the coherence-violation exit code rather than executing.
 **Accept.** Under the policy the run does not execute and the exit code is the coherence one.
 **Verify.** T · `UT-GRF-19`   **Trace.** SYS-0093
-**Built.** ○ not started — `IMP-0181` in `WP-20`
+**Built.** ● done — `IMP-0181` in `WP-20`
 **Now.** `NEW`.
 
 **`SW-0182`** · `SI-11` · `P1` · `R1` — An orphan warns once and badges
 **Shall.** An orphan simulation shall warn exactly once naming every affected module, badge them *computed, not consumed* wherever rendered, and never block.
 **Accept.** A ten-tick run with an orphan produces one warning, not ten, and the badge appears in the player and in the headless summary.
 **Verify.** T · `UT-GRF-20`   **Trace.** SYS-0094
-**Built.** ○ not started — `IMP-0182` in `WP-20`
+**Built.** ● done — `IMP-0182` in `WP-20`
 **Now.** `PARTIAL` — the warning text exists in `with_mode`; it fires at toggle time rather than per run, and the badge exists only in the pipeline panel.
 
 **`SW-0183`** · `SI-11` · `P1` · `R1` — Closing the gap is the default; forcing it open is possible and never silent

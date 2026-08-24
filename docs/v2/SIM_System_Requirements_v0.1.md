@@ -1030,19 +1030,19 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A broken chain shall be waivable only with an explicit flag *and* a written reason, and a waived run shall be permanently marked incoherent in the run manifest, in every export, and visibly in the player.
 **Accept.** No code path waives without both. The mark survives export, conversion and re-import.
 **Verify.** T · `SYT-STG-12`   **Trace.** CN-0125, CN-0126
-**Built.** ○ not started — 0/2 software requirements done, in `WP-20`, `WP-22`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-20`, `WP-22`
 
 **`SYS-0093`** · `P1` · `R1` — Waivers can be forbidden by policy
 **Shall.** A policy setting shall be able to forbid waivers entirely.
 **Accept.** Under the policy, a waived run exits with the coherence-violation exit code rather than executing.
 **Verify.** T · `SYT-STG-13`   **Trace.** CN-0127
-**Built.** ○ not started — 0/1 software requirements done, in `WP-20`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0094`** · `P1` · `R1` — Orphan simulation warns once and badges
 **Shall.** An orphan simulation shall warn exactly once, naming every affected module, and those modules shall be badged *computed, not consumed* wherever rendered. It shall never block.
 **Accept.** A ten-tick run with an orphan produces one warning, not ten, and the badge appears in the player and in the headless summary.
 **Verify.** T · `SYT-STG-14`   **Trace.** CN-0324
-**Built.** ○ not started — 0/1 software requirements done, in `WP-20`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0095`** · `P1` · `R1` — Closing the gap is the default, forcing it open is allowed
 **Shall.** Setting a stage to `simulate` shall by default flip intervening stages to `simulate`, undoably; forcing the gap open shall remain possible and shall badge the orphaned stage.
