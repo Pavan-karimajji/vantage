@@ -569,7 +569,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Missing or invalid fields shall be represented explicitly and never silently zero-filled.
 **Accept.** A port value with an absent field reports absent through every surface — export, player, evidence query — and never `0`, `0.0` or an empty list.
 **Verify.** T · `SYT-DAT-03`   **Trace.** CN-0070; v1 `NR-SIM-4`
-**Built.** ◐ started — 1/2 software requirements done, in `WP-07`, `WP-29`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0027`** · `P1` · `R1` — Project-local extension
 **Shall.** A project shall be able to extend the port model in a project-local namespace without forking the core.
@@ -581,7 +581,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Payload schemas shall travel with the component, embedded in its manifest, and the framework shall require no generated bindings and no sibling source checkout to decode any component's ports.
 **Accept.** A machine with only the component's installed artifacts decodes every port it produces. Removing every generated binding from the environment changes nothing.
 **Verify.** T · `SYT-DAT-05`   **Trace.** CN-0297; v1 `NR-SIM-10`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-29`
+**Built.** ● done — 1/1 software requirements done
 
 ### 6.2 Signal header
 
@@ -1384,7 +1384,7 @@ None of the three is superseded — their `Shall`/`Accept` text is unchanged and
 **Shall.** The graphical evidence panel and the command-line evidence query shall be rendered from one producer, so the two cannot disagree.
 **Accept.** For a sampled set of addresses, the two outputs are field-for-field identical. There is no second code path capable of producing an evidence answer.
 **Verify.** T · `SYT-PLR-25` · `ANL-22`   **Trace.** CN-0343; v1 `FR-SIM-67`
-**Built.** ◐ started — 1/2 software requirements done, in `WP-24`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0155`** · `P1` · `R1` — The chain stops at the module boundary
 **Shall.** The evidence chain shall state where a value came from and shall not attempt to state why an algorithm produced it.
@@ -1702,7 +1702,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** Every capability shall be reachable from a plain script in a few lines, with no command line and no window.
 **Accept.** For a stated list of capabilities, each is exercised from a script of no more than a declared line count. No capability exists that is reachable only through the GUI.
 **Verify.** T · `SYT-BAT-18` · `INSP-08`   **Trace.** CN-0350, CN-0213; v1 `FR-SIM-46`
-**Built.** ◐ started — 0/3 software requirements done, in `WP-23`, `WP-29`
+**Built.** ◐ started — 2/3 software requirements done, in `WP-23`, `WP-29`
 
 **`SYS-0201`** · `P0` · `R1` — CI exists from the start of the build order
 **Shall.** Automated execution of the test suite shall be established at the start of the build order, not at the end.
@@ -1769,13 +1769,13 @@ link must resolve to an explanation, never to nothing.
 **Shall.** For any value, the system shall answer where it came from.
 **Accept.** As `SYS-0153` and `SYS-0154`, from the command line and from a script.
 **Verify.** T · `SYT-DIA-09`   **Trace.** CN-0209
-**Built.** ◐ started — 0/1 software requirements done, in `WP-24`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0211`** · `P1` · `R1` — Everything the CLI does, from Python
 **Shall.** Everything the command line does shall be available from the scripting API.
 **Accept.** For each CLI verb, an equivalent scripted call exists and produces the same artifacts.
 **Verify.** T · `SYT-DIA-10`   **Trace.** CN-0213, CN-0350
-**Built.** ◐ started — 0/3 software requirements done, in `WP-23`, `WP-29`
+**Built.** ◐ started — 2/3 software requirements done, in `WP-23`, `WP-29`
 
 ### 16.2 Native debugging
 
@@ -1984,7 +1984,7 @@ mechanism.
 **Shall.** Bulk data crossing into the scripting layer shall be exposed as array views onto engine-owned buffers, never as per-element scripting objects; the scripting layer shall never touch a message payload.
 **Accept.** No per-element conversion occurs on any per-message path. A profile of a representative run shows no scripting-layer frames inside the per-message path.
 **Verify.** A · `ANL-33` · T · `SYT-NFR-04`   **Trace.** CN-0290, CN-0229, CN-0288; **defect** concept §22.5
-**Built.** ◐ started — 2/4 software requirements done, in `WP-11`, `WP-15b`, `WP-16`, `WP-29`
+**Built.** ● done — 4/4 software requirements done
 
 **`SYS-0234`** · `P0` · `R1` — Per-cycle cost is budgeted with a number and measured
 **Shall.** Per-cycle cost and per-worker campaign throughput shall each carry a declared numeric budget, measured on §18.0's reference configuration, and reported per release.
@@ -2112,7 +2112,7 @@ Superseded (`SM-04`, 2026-08-20 — sole decomposer was `SI-18`'s scene-cache-bu
 **Shall.** The system shall expose exactly four public extension points — Reader, Exporter, Visualization, Module — each with a versioned interface and a conformance test kit, discovered by registration and never by editing the core.
 **Accept.** A fifth extension point cannot be added without a requirement change. Each of the four is exercised by a template plugin shipped with the package that passes its own conformance kit.
 **Verify.** T · `SYT-CON-01` · `INSP-09`   **Trace.** CN-0255, CN-0256, CN-0257, CN-0258, CN-0044
-**Built.** ○ not started — 0/2 software requirements done, in `WP-29`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0253`** · `P0` · `R1` — A recording never executes code
 **Shall.** A recording shall carry a plugin's identity and hash, never its implementation.
@@ -2124,7 +2124,7 @@ Superseded (`SM-04`, 2026-08-20 — sole decomposer was `SI-18`'s scene-cache-bu
 **Shall.** The plugin API shall carry its own version range, independent of the recording format and the module ABI, declared in a file the player reads *before* importing the plugin.
 **Accept.** An incompatible plugin is refused, not half-loaded. The decision is made without importing the plugin's code.
 **Verify.** T · `SYT-CON-03`   **Trace.** CN-0368; v1 `NR-SIM-44`
-**Built.** ◐ started — 1/3 software requirements done, in `WP-21`, `WP-29`, `WP-31`
+**Built.** ◐ started — 2/3 software requirements done, in `WP-21`, `WP-29`, `WP-31`
 
 **`SYS-0255`** · `P0` · `R1` — Authoring home and deployed form are different questions
 **Shall.** A component's plugins shall be authored in the component's own repository and *deployed* beside its library by the build, with the same hash discipline as the configuration bundle; the player shall discover plugins from a path of library directories.
@@ -2136,7 +2136,7 @@ Superseded (`SM-04`, 2026-08-20 — sole decomposer was `SI-18`'s scene-cache-bu
 **Shall.** Where a project needs behaviour the package does not provide, the mechanism shall be a plugin on a public interface.
 **Accept.** No project branch of the package exists. Every project-specific behaviour in the reference projects is implemented as a plugin.
 **Verify.** I · `INSP-10`   **Trace.** CN-0017, CN-0018, CN-0036, CN-0279
-**Built.** ○ not started — 0/1 software requirements done, in `WP-29`
+**Built.** ● done — 1/1 software requirements done
 
 ---
 
@@ -2152,7 +2152,7 @@ Superseded (`SM-04`, 2026-08-20 — sole decomposer was `SI-18`'s scene-cache-bu
 **Shall.** The package version, the port model version and the module ABI version shall be versioned independently under semantic versioning, with a published compatibility matrix.
 **Accept.** The matrix is generated from the enforced constants, not hand-maintained. A combination outside it is refused at load, naming all three versions.
 **Verify.** T · `SYT-CON-06`   **Trace.** CN-0260, CN-0370; v1 `NR-SIM-9`
-**Built.** ◐ started — 1/4 software requirements done, in `WP-05`, `WP-27`, `WP-29`, `WP-31`
+**Built.** ◐ started — 2/4 software requirements done, in `WP-05`, `WP-27`, `WP-29`, `WP-31`
 
 **`SYS-0259`** · `P1` · `R1` — Projects pin a range
 **Shall.** A project shall pin a package version range, and the tool shall refuse to run outside it.

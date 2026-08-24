@@ -7,16 +7,52 @@
 §4). A new format is one class plus one registration -- nothing above `io/`
 changes, and no layer provider, renderer or expectation ever learns a format
 exists (R-SIM-14).
+
+**`EXTENSION_POINTS`** (`SW-0358`/`SW-0359`, `IMP-0358`/`IMP-0359`): this
+module's codec registry is one of exactly four public extension points --
+`reader`, `exporter`, `visualization`, `module` -- each discovered by
+registration, never by editing a core list (`SW-0359`). A fifth requires a
+requirement change (`SW-0358`'s own Accept clause), so the tuple's length is
+what a conformance kit and `ANL-SW-*` both assert against, not a comment.
+`extension_point_home()` names where each point's own registration function
+lives, so a script does not need to know four import paths to find out.
+
+The **codec** registry above is `"reader"`'s home (a codec is a reader
+*and* a writer registered together, but "reader" is the extension point's
+published name -- a recording that can only be written, e.g. today's CSV,
+registers a writer here and is still exercised by `"exporter"`'s own kit,
+never `"reader"`'s, since `SW-0358`'s four points are about *what a plug-in
+does*, not which of `register()`'s two keyword arguments it used).
+
+The **exporter** registry below is new (`IMP-0358`'s own `EXTEND`): unlike a
+codec, an export is lossy and terminal (`R-SIM-14`) and is never accepted
+back as a resim input, so it is looked up by a bare format name (`"csv"`),
+never a file extension a reader could also claim.
 """
 
 from __future__ import annotations
 
 import importlib
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Final, Mapping
 
 from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.io.base import RecordingReader, RecordingWriter
+
+#: `SW-0358`'s four public extension points, asserted by length. Adding a
+#: fifth here with no requirement change is exactly the growth `UT-PLG-02`'s
+#: own "attempt to add a fifth" case refuses.
+EXTENSION_POINTS: Final[tuple[str, ...]] = ("reader", "exporter", "visualization", "module")
+
+#: Where each extension point's own registration function lives -- one
+#: place a script or a new component's author finds all four without
+#: knowing four import paths in advance.
+_EXTENSION_POINT_HOMES: Final[Mapping[str, str]] = {
+    "reader": "adas_sim.plugins.registry.register(ext, reader=...)",
+    "exporter": "adas_sim.plugins.registry.register_exporter(name, factory)",
+    "visualization": "adas_sim.scene.registry.layer_provider(layer_id)",
+    "module": "adas_sim.resolve.plugins.PluginBundle.resolve(...)",
+}
 
 #: A reader factory takes the path -- a reader is fully loaded and ready to
 #: use as soon as `reader_for()` returns it (`RecordingReader`'s Protocol has
@@ -122,5 +158,71 @@ def writer_for(path: Path) -> RecordingWriter:
         raise AuthoringError(
             expected=f"a registered extension: {registered_extensions()}", found=repr(path.suffix),
             where=str(path), hint="register a codec for this extension, or use one already registered",
+        )
+    return factory()
+
+
+def extension_point_home(point: str) -> str:
+    """`SW-0358`: where `point`'s own registration function lives. Raises
+    naming the closed set for anything outside it -- a fifth extension
+    point is a requirement change, never a new entry here."""
+    if point not in _EXTENSION_POINT_HOMES:
+        raise AuthoringError(
+            expected=f"one of the four extension points: {EXTENSION_POINTS}", found=repr(point),
+            where="adas_sim.plugins.registry.extension_point_home",
+            hint="SW-0358: a fifth extension point needs a requirement change, not a new registry entry",
+        )
+    return _EXTENSION_POINT_HOMES[point]
+
+
+# ---- "exporter" -- new registration surface (IMP-0358) --------------------
+#
+# An export is lossy and terminal (R-SIM-14): it is never accepted back as a
+# resim input, so it is looked up by a bare format name, never a file
+# extension a round-trippable codec could also claim. `cli/export.py`
+# constructs `CsvWriter` directly today (it needs per-call `ports=`/
+# `on_missing=` a zero-argument factory cannot carry) -- this registry is
+# the extension point CSV already satisfies, available to any caller that
+# does not need that per-call configuration (a conformance kit, a future
+# `--format` option), without becoming a second, competing construction
+# path for `cli/export.py`'s own use.
+
+_EXPORTERS: dict[str, Callable[[], RecordingWriter]] = {}
+
+#: `"csv"` -> the built-in module that registers it, imported lazily on
+#: first lookup -- same reasoning as `_BUILTIN_CODEC_MODULES` above (no
+#: subpackage pulls in a dependency at import time, `UT-A1-2`).
+_BUILTIN_EXPORTER_MODULES: Final[Mapping[str, tuple[str, str]]] = {"csv": ("adas_sim.io.csv", "CsvWriter")}
+
+
+def _load_builtin_exporter(name: str) -> None:
+    if name in _EXPORTERS:
+        return
+    entry = _BUILTIN_EXPORTER_MODULES.get(name)
+    if entry is not None:
+        module_name, attr = entry
+        module = importlib.import_module(module_name)
+        _EXPORTERS[name] = getattr(module, attr)
+
+
+def register_exporter(name: str, factory: Callable[[], RecordingWriter]) -> None:
+    """Registers an export format by name (`"csv"`, ...) -- discovery by
+    registration alone (`SW-0359`), never an edit to `cli/export.py` or this
+    module's own source."""
+    _EXPORTERS[name] = factory
+
+
+def registered_exporters() -> list[str]:
+    return sorted(set(_EXPORTERS) | set(_BUILTIN_EXPORTER_MODULES))
+
+
+def exporter_for(name: str) -> RecordingWriter:
+    _load_builtin_exporter(name)
+    factory = _EXPORTERS.get(name)
+    if factory is None:
+        raise AuthoringError(
+            expected=f"a registered exporter: {registered_exporters()}", found=repr(name),
+            where="adas_sim.plugins.registry.exporter_for",
+            hint="register_exporter(name, factory) before requesting it",
         )
     return factory()

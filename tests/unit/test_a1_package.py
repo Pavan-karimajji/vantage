@@ -30,6 +30,9 @@ EXPECTED_SUBPACKAGES = {
     # coherence classification + availability/feasible-cut display + the
     # one seam (write.py) into an actual run.
     "launcher",
+    # WP-29 (SI-23): the whole scripting surface -- Api, ArrayView, the
+    # thin binding onto the engine invocation path.
+    "pyapi",
 }
 
 #: UT-A1-2: importing any subpackage must not pull these in as a side effect.

@@ -461,14 +461,14 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Bulk data exposed to Python shall be an array view onto an engine-owned buffer, and the scripting layer shall never construct a per-element object from a payload.
 **Accept.** Reading a point cloud into Python allocates no per-point object; the view's base pointer is inside the engine's buffer.
 **Verify.** T · `UT-API-01`   **Trace.** SYS-0233; CN-0290
-**Built.** ○ not started — `IMP-0014` in `WP-29`
+**Built.** ● done — `IMP-0014` in `WP-29`
 **Now.** `NEW`.
 
 **`SW-0015`** · `SI-23` · `P1` · `R1` — A view is invalidated, never silently stale
 **Shall.** A view onto an engine buffer shall be invalidated when the engine reuses that buffer, and any access to an invalidated view shall raise.
 **Accept.** Holding a view across a tick and reading it raises, naming the tick it was taken at. It never returns the next tick's bytes as though they were the previous tick's.
 **Verify.** T · `UT-API-02`   **Trace.** SYS-0233, SYS-0026
-**Built.** ○ not started — `IMP-0015` in `WP-29`
+**Built.** ● done — `IMP-0015` in `WP-29`
 **Now.** `NEW`.
 *Note:* this is the failure zero-copy buys. Without it, `SW-0014` trades an honest cost for a silent wrong answer, which is the opposite of what this specification optimises for.
 
@@ -2328,14 +2328,14 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Every capability shall be reachable from a script in no more than a declared number of lines, with no command line and no window.
 **Accept.** For a stated list of capabilities each is exercised from a script within the declared line count. No capability exists that is reachable only through the graphical surface.
 **Verify.** T · `UT-API-03` · I · `INSP-SW-04`   **Trace.** SYS-0200; CN-0350
-**Built.** ○ not started — `IMP-0230` in `WP-29`
+**Built.** ● done — `IMP-0230` in `WP-29`
 **Now.** `DONE·MOVE` — the property holds structurally, including a Python console inside the player bound to the live session. The declared line budget does not exist, so the requirement cannot currently be failed.
 
 **`SW-0231`** · `SI-23` · `P1` · `R1` — Every verb has a scripted equivalent producing the same artifacts
 **Shall.** For each command-line verb there shall be a scripted call producing the same artifacts.
 **Accept.** For each verb, artifacts produced by the two paths compare equal, excluding per-run fields.
 **Verify.** T · `UT-API-04`   **Trace.** SYS-0211
-**Built.** ○ not started — `IMP-0231` in `WP-29`
+**Built.** ● done — `IMP-0231` in `WP-29`
 **Now.** `DONE` — true by construction of `SW-0229`.
 
 **`SW-0232`** · `SI-15` · `P0` · `R1` — The verb set is closed, published and counted
@@ -2391,14 +2391,14 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The scripting API shall carry its own version, independent of the recording format and the module ABI.
 **Accept.** A script pinned to a major version refuses an incompatible package, naming both.
 **Verify.** T · `UT-API-05`   **Trace.** SYS-0258, SYS-0254
-**Built.** ○ not started — `IMP-0239` in `WP-29`
+**Built.** ● done — `IMP-0239` in `WP-29`
 **Now.** `PARTIAL` — a package version exists; the scripting surface is not separately versioned.
 
 **`SW-0240`** · `SI-23` · `P1` · `R1` — The scripting surface never requires generated bindings
 **Shall.** No scripted use shall require generated message bindings or a sibling source checkout; message classes shall be built at run time from the schemas the manifest carries.
 **Accept.** Removing every generated binding from the environment changes nothing. A machine with only installed artifacts decodes every port.
 **Verify.** T · `IT-18`   **Trace.** SYS-0028
-**Built.** ○ not started — `IMP-0240` in `WP-29`
+**Built.** ● done — `IMP-0240` in `WP-29`
 **Now.** `DONE` — schemas travel in the manifest as a descriptor set and classes are built from it; generated bindings are used when present and never required.
 
 ---
@@ -2737,14 +2737,14 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Every diagnostic shall be callable as a function returning structured data, with the textual rendering a separate step.
 **Accept.** Each diagnostic's structured result is consumable without parsing text.
 **Verify.** T · `UT-DIA-14`   **Trace.** SYS-0211, SYS-0200
-**Built.** ○ not started — `IMP-0286` in `WP-29`
+**Built.** ● done — `IMP-0286` in `WP-29`
 **Now.** `DONE` — every diagnostic lives in `core/` and returns data; `cli/` only formats.
 
 **`SW-0403`** · `SI-17` · `P0` · `R1` — The provenance query is the evidence producer, reached from a script
 **Shall.** The question *where did this value come from* shall be answerable for any value from the scripting API, returning the same record `SW-0273`'s producer returns.
 **Accept.** The scripted answer and the command-line answer are field-for-field identical, checked automatically. No third derivation exists.
 **Verify.** T · `UT-DIA-15`   **Trace.** SYS-0210, SYS-0154
-**Built.** ◐ started — `IMP-0403` in `WP-24`
+**Built.** ● done — `IMP-0403` in `WP-24`
 **Now.** `DONE` — `core.evidence.evidence` is a plain function; the command line is one caller and the panel is another.
 
 ---
@@ -3023,14 +3023,14 @@ These bind every software item, so none owns them alone; the item field reads `a
 **Shall.** There shall be exactly four public extension points — reader, exporter, visualization, module — each with a versioned interface and a conformance kit, discovered by registration.
 **Accept.** A fifth cannot be added without a requirement change. Each of the four is exercised by a shipped template plug-in that passes its own conformance kit.
 **Verify.** T · `UT-PLG-02` · I · `INSP-SW-07`   **Trace.** SYS-0252
-**Built.** ○ not started — `IMP-0358` in `WP-29`
+**Built.** ● done — `IMP-0358` in `WP-29`
 **Now.** `PARTIAL` — all four exist as registries; conformance kits and template plug-ins do not.
 
 **`SW-0359`** · `SI-24` · `P0` · `R1` — A plug-in is discovered by registration, never by editing the core
 **Shall.** Adding a plug-in of any kind shall require no edit to a framework file.
 **Accept.** Each of the four kinds is added by registration alone in a test, and a static check finds no plug-in roster.
 **Verify.** T · `UT-PLG-03`   **Trace.** SYS-0252, SYS-0256
-**Built.** ○ not started — `IMP-0359` in `WP-29`
+**Built.** ● done — `IMP-0359` in `WP-29`
 **Now.** `DONE` — true for all four registries today.
 
 **`SW-0360`** · `SI-24` · `P0` · `R1` — Three contracts are versioned independently, with a generated matrix
