@@ -1590,8 +1590,8 @@ Everything in this part exists to make one sentence true in code rather than in 
 **`SW-0139`** · `SI-08` · `P1` · `R1` — A crash writes a minimal reproducer
 **Shall.** On a module crash the engine shall write a package containing the spec, the input snapshot at the failing cycle, the module identity and the captured standard error.
 **Accept.** The package reproduces the crash on another machine with nothing else from the original environment.
-**Verify.** T · `UT-EDG-08`   **Trace.** SYS-0219, SYS-0049
-**Built.** ◐ started — `IMP-0139` in `WP-15`
+**Verify.** T · `UT-EDG-08`, `UT-ABI-03`   **Trace.** SYS-0219, SYS-0049
+**Built.** ● done — `IMP-0139` in `WP-15`
 **Now.** `NEW`.
 
 **`SW-0140`** · `SI-08` · `P1` · `R1` — Diagnostics never raise

@@ -126,6 +126,17 @@ struct SpecOutputs {
   std::string codec;
 };
 
+// IMP-0139's own gap, design-decided 2026-08-24: mirrors `SpecOutputs`
+// exactly -- `path` empty means "no checkpoint declared", matching every
+// spec (pre- and post- this change) that omits the `checkpoint` key, and
+// gated in `simEngineCreate` the identical way `IMP-0426` gates the writer
+// on `outputs.path`. Kept as its own top-level key, never derived from
+// `outputs.path`, so checkpointing stays independently toggleable from
+// output recording (`R-SIM-15`'s explicit-opt-in discipline).
+struct SpecCheckpoint {
+  std::string path;
+};
+
 struct RunSpec {
   std::string schema;
   std::string run_id;
@@ -137,6 +148,7 @@ struct RunSpec {
   std::vector<std::string> order;
   std::string coherence_verdict;
   SpecOutputs outputs;
+  SpecCheckpoint checkpoint;
   int limits_exec_timeout_ms = 0;
   std::string limits_severity_exit;
 };

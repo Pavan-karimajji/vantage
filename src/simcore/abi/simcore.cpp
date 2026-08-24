@@ -231,6 +231,12 @@ struct SimEngine {
   google::protobuf::DescriptorPool descriptor_pool;
   std::unique_ptr<google::protobuf::DynamicMessageFactory> message_factory;
   std::optional<simcore::mutate::Mutator> mutator;
+  // IMP-0139: absent (no checkpoint written) when the spec declares no
+  // `checkpoint.path` -- same shape as `writer_base` above, gated the
+  // identical way in `simEngineCreate`. Declared BEFORE `runner` so it
+  // outlives the `Runner` that borrows a raw pointer to it (declaration
+  // order is destruction order, reversed -- this struct's own top note).
+  std::optional<simcore::runner::Checkpoint> checkpoint;
   std::optional<simcore::runner::Runner> runner;
 
   explicit SimEngine(simcore::RunSpec s) : spec(std::move(s)), scheduler(spec), bus(0) {}
@@ -384,6 +390,15 @@ SimEngine* simEngineCreate(const char* run_spec_json_path, const char* config_pa
     return nullptr;
   }
   engine->runner = std::move(runner_result).value();
+
+  // IMP-0139: open a real checkpoint iff the resolved spec declares one --
+  // the same gate `IMP-0426` uses for the writer above. Absent
+  // `checkpoint.path` leaves `checkpoint` unset and `Runner::checkpoint_`
+  // `nullptr`, matching every pre-existing spec's behaviour exactly.
+  if (!engine->spec.checkpoint.path.empty()) {
+    engine->checkpoint.emplace(engine->spec.checkpoint.path, engine->spec.run_id);
+    engine->runner->SetCheckpoint(&*engine->checkpoint);
+  }
 
   return engine.release();
 }

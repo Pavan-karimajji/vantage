@@ -100,6 +100,9 @@ set(SIM_TEST_SOURCES
     # WP-14a (SI-09): the embeddable ABI's real writer and real resolver
     # (IMP-0426/IMP-0427) -- UT-ABI-01/UT-ABI-02.
     integration/test_ut_abi_writer_and_resolver.cpp
+    # WP-15 (SI-08): simEngineCreate wires a real Checkpoint (IMP-0139's
+    # own design decision, 2026-08-24) -- UT-ABI-03.
+    integration/test_ut_abi_checkpoint.cpp
 )
 
 add_executable(simcore_tests ${SIM_TEST_SOURCES})

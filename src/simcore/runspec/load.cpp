@@ -209,6 +209,12 @@ Result<RunSpec> LoadRunSpec(std::string_view json_text) {
       spec.outputs.path = outputs_node.value("path", std::string());
       spec.outputs.codec = outputs_node.value("codec", std::string());
     }
+    // IMP-0139: same optional-on-read shape as `outputs` above -- an absent
+    // "checkpoint" key (every pre-existing spec) parses to `checkpoint.path`
+    // staying empty, which `simEngineCreate` reads as "no checkpoint".
+    if (root.contains("checkpoint") && root.at("checkpoint").is_object()) {
+      spec.checkpoint.path = root.at("checkpoint").value("path", std::string());
+    }
     spec.limits_exec_timeout_ms = root.at("limits").at("exec_timeout_ms").get<int>();
     spec.limits_severity_exit = root.at("limits").at("severity_exit").get<std::string>();
 

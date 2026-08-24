@@ -118,6 +118,7 @@
       }
     },
     "outputs": {"type": "object"},
+    "checkpoint": {"type": "object"},
     "limits": {
       "type": "object", "additionalProperties": false,
       "required": ["exec_timeout_ms", "severity_exit"],

@@ -723,7 +723,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Module errors and crashes shall be reported as the module, the cycle, and the input snapshot at that cycle.
 **Accept.** From the report alone, the failing cycle is re-executable in a debugger without re-running the preceding cycles from scratch.
 **Verify.** T · `SYT-PRC-13`   **Trace.** CN-0097, CN-0223
-**Built.** ◐ started — 1/2 software requirements done, in `WP-10`, `WP-15`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0050`** · `P0` · `R1` — Symbols bound at run time, by name
 **Shall.** Every module export shall be bound at run time by name; the system shall link no component library at compile time.
@@ -1825,7 +1825,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** On a module crash the engine shall write a minimal reproducer package.
 **Accept.** The package reproduces the crash on another machine with nothing else from the original environment.
 **Verify.** T · `SYT-DIA-18`   **Trace.** CN-0223
-**Built.** ◐ started — 1/2 software requirements done, in `WP-10`, `WP-15`
+**Built.** ● done — 2/2 software requirements done
 
 ---
 

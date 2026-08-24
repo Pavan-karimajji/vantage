@@ -233,6 +233,7 @@ def emit_run_spec(
     overrides: Mapping[str, Mapping[str, Override]] | None = None,
     sources: Sequence[SourceSpec] = (),
     outputs: Mapping[str, object] | None = None,
+    checkpoint: Mapping[str, object] | None = None,
     limits: Mapping[str, object] | None = None,
     diagnostics: Mapping[str, object] | None = None,
 ) -> RunSpec:
@@ -247,6 +248,7 @@ def emit_run_spec(
     on_missing_defaults = on_missing_defaults or {}
     overrides = overrides or {}
     outputs = dict(outputs or {})
+    checkpoint = dict(checkpoint or {})
     limits = {"exec_timeout_ms": 250, "severity_exit": "error", **(limits or {})}
     diagnostics = {"cycle_trace": False, "graph_dump": False, **(diagnostics or {})}
 
@@ -330,6 +332,7 @@ def emit_run_spec(
         "order": list(_topological_order([u["name"] for u in units_list], depends_on)),
         "coherence": {"verdict": "unknown", "stale": [], "waiver": None},  # SI-12 not landed yet
         "outputs": outputs,
+        "checkpoint": checkpoint,
         "limits": limits,
         "diagnostics": diagnostics,
     }

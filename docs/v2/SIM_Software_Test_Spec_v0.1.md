@@ -403,14 +403,15 @@ Expected values are the served requirement's `Accept` clause (§0.1). Each row g
 | `UT-EXE-05` | `SW-0148` | `F-SPEC` | Trigger each taxonomy kind; compare the process exit code on both platforms. |
 | `UT-EXE-06` | `SW-0397` | — | Load the shipped launch configurations on both platforms; resolve a symbol in a loaded module. |
 
-### 5.9a `SI-09` (`WP-14a`) — `UT-ABI-01` … `UT-ABI-02`
+### 5.9a `SI-09` (`WP-14a`/`WP-15`) — `UT-ABI-01` … `UT-ABI-03`
 
-Added 2026-08-22 alongside `SW-0422`/`SW-0423`, found while attempting `WP-15b`: `simEngineCreate` was a deliberately read-only, override-free slice (`WP-14`'s own scope cut), so nothing driven through the C ABI could retrieve results or honor a declared override.
+Added 2026-08-22 alongside `SW-0422`/`SW-0423`, found while attempting `WP-15b`: `simEngineCreate` was a deliberately read-only, override-free slice (`WP-14`'s own scope cut), so nothing driven through the C ABI could retrieve results or honor a declared override. `UT-ABI-03` added 2026-08-24: the same gap for `WP-15`'s own `Checkpoint` — no real `simengine.exe` run had ever written a `progress.json`, proven only by isolated `Runner`+`Checkpoint` unit tests, never through this file's own C-ABI-alone shape.
 
 | ID | Serves | Fixture | Steps |
 |---|---|---|---|
 | `UT-ABI-01` | `SW-0422` | `F-SPEC` | Construct via `simEngineCreate` with a spec declaring recording output; run to completion; read the written recording back and assert every declared, non-excluded port is present with real per-tick values, not an empty or absent file. |
 | `UT-ABI-02` | `SW-0423` | `F-SPEC` | Two runs through `simEngineCreate`: one spec carrying a declared override, one without. Assert the override is applied in the first; assert the second is unchanged from the pre-`WP-14a` no-resolver behaviour. |
+| `UT-ABI-03` | `SW-0139` | `F-SPEC` | Two runs through `simEngineCreate`: one spec declaring `checkpoint.path`, one without. Assert the first produces a real, readable `progress.json` naming the correct `run_id` and last completed cycle; assert the second completes exactly as before, with no checkpoint declared. |
 
 ### 5.10 `SI-10` `config` — `UT-CFG-01` … `UT-CFG-18`
 
