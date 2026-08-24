@@ -539,7 +539,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Given a recording and the manifests present, the system shall compute the set of feasible cuts before any run.
 **Accept.** `probe` reports the feasible set; every cut it reports runs, and every cut it excludes is refused at load with a reason.
 **Verify.** T · `SYT-INP-22`   **Trace.** CN-0344; v1 `CR-SIM-21`
-**Built.** ○ not started — 0/2 software requirements done, in `WP-20`, `WP-24`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-20`, `WP-24`
 
 ---
 
@@ -1441,7 +1441,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The launcher shall show, per recording, which modules could be set to `measured` given what that file actually carries.
 **Accept.** The set shown equals the set `probe` computes headlessly.
 **Verify.** T · `SYT-CFG-06`   **Trace.** CN-0344; v1 `CR-SIM-21`
-**Built.** ○ not started — 0/2 software requirements done, in `WP-20`, `WP-28`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-20`, `WP-28`
 
 ---
 
@@ -1507,7 +1507,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** Every reference shall resolve, every mode shall be checked against the recording, and every type shall match, at load; every failure shall name both ends.
 **Accept.** No configuration error is first observable during execution. A crafted invalid configuration fails before the first cycle in every case in the error catalogue.
 **Verify.** T · `SYT-CFG-14`   **Trace.** CN-0346, CN-0039
-**Built.** ◐ started — 1/4 software requirements done, in `WP-04`, `WP-20`
+**Built.** ◐ started — 2/4 software requirements done, in `WP-04`, `WP-20`
 
 **`SYS-0172`** · `P1` · `R1` — Configuration round-trips
 **Shall.** Writing back what was read shall produce a byte-identical file.
@@ -1883,7 +1883,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The system shall validate a project's declared trace catalogue against what a recording actually carries, and shall refuse to set a module to `measured` whose outputs are absent.
 **Accept.** A module declared traced but absent from the file is refused at load, naming the module and the ports missing.
 **Verify.** T · `SYT-REC-09`   **Trace.** CN-0021, CN-0022, CN-0268
-**Built.** ○ not started — 0/2 software requirements done, in `WP-20`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-20`
 
 **`SYS-0229`** · `P2` · `R1` — Per-cycle size budget is visible at design time
 **Shall.** The trace catalogue shall carry a per-cycle size budget, and the system shall report a recording's measured per-cycle size against it.

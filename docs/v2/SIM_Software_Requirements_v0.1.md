@@ -358,7 +358,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Cut feasibility, `measured`-mode validation, coherence classification and ingest-family matching shall take the `RecordingIndex` and the `ModuleManifest` set as arguments, and shall open no recording, load no library and import no codec.
 **Accept.** Every one of those functions runs to completion against hand-written structures with no file on disk. An import check finds no codec or C-interface import in `SI-10`, `SI-11`, `SI-12` or `SI-14`.
 **Verify.** T · `UT-GRF-27` · A · `ANL-SW-34`   **Trace.** SYS-0288; CN-0398
-**Built.** ○ not started — `IMP-0411` in `WP-20`
+**Built.** ◐ started — `IMP-0411` in `WP-20`
 **Now.** `PARTIAL` — the classification functions are already pure over the pipeline object; the feasibility checks are not, because they have no index to be pure over.
 
 **`SW-0412`** · `SI-14` · `P0` · `R1` — Emission records what it was told, so a spec cannot be run against a different file
@@ -1371,7 +1371,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Setting a stage to `measured` where the recording does not carry its declared outputs shall be a startup error naming the stage and every missing port, never a partial injection.
 **Accept.** The error occurs before the first tick and names every missing port, not the first one.
 **Verify.** T · `UT-GRF-03`   **Trace.** SYS-0228, SYS-0171
-**Built.** ○ not started — `IMP-0111` in `WP-20`
+**Built.** ● done — `IMP-0111` in `WP-20`
 **Now.** `DONE·MOVE` — `contracts/pipeline.py`'s wiring validation does exactly this and `sil_host` mirrors it.
 
 **`SW-0112`** · `SI-06` · `P0` · `R1` — An `off` stage's ports are simply absent
@@ -1966,7 +1966,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Given a recording's topic index and the manifests present, the system shall compute the set of feasible cuts without executing anything.
 **Accept.** Every cut reported runs; every cut excluded is refused at load with a reason. The set equals what the launcher shows.
 **Verify.** T · `UT-GRF-23`   **Trace.** SYS-0022, SYS-0163
-**Built.** ○ not started — `IMP-0185` in `WP-20`
+**Built.** ● done — `IMP-0185` in `WP-20`
 **Now.** `DONE·MOVE` — `cli/probe.py` over the ingest map's `provides:`/`absent:` computes and reports exactly this.
 
 **`SW-0186`** · `SI-11` · `P0` · `R1` — The trace catalogue is validated against the file

@@ -57,6 +57,7 @@ from adas_sim.io.base import RecordingReader
 from adas_sim.sources.base import Source
 from adas_sim.graph import grid as _grid
 from adas_sim.graph.record_policy import check_consumed_ports_recorded
+from adas_sim.graph.feasible import check_measured_supported
 
 #: The only shape that has ever existed -- `_resolve_version`'s upgrade is a
 #: no-op today; a real v2 would add a transform step there (`CR-SIM-23`).
@@ -448,14 +449,7 @@ def _validate_wiring(
                 )
 
         if stage.mode == "measured" and recording is not None:
-            topics = set(recording.topics())
-            missing = [spec.name for spec in manifest.outputs if spec.name not in topics]
-            if missing:
-                raise AuthoringError(
-                    expected=f"the recording to contain stage '{stage.name}''s output topics",
-                    found=f"missing: {', '.join(missing)}", where=f"stage '{stage.name}' (mode: measured)",
-                    hint="record this stage's outputs, or set mode: simulate or off",
-                )
+            check_measured_supported(stage.name, manifest.outputs, recording.topics())
 
 
 def _validate_overrides(stages: Sequence[Stage], components: Mapping[str, SilComponent]) -> None:

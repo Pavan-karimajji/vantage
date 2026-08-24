@@ -23,29 +23,18 @@ from pathlib import Path
 
 from adas_sim.graph.build import Pipeline
 from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.graph.feasible import (
+    CutFeasibility, ModuleManifest, RecordingIndex, RecordingTopic, feasible_cuts as _feasible_cuts,
+)
 from adas_sim.session.signals import resolve_series
 from adas_sim.session.tick import Tick
 from adas_sim.io.base import RunManifest
 from adas_sim.ingest.map import AbsentPort, ProvidedPort
 
-
-@dataclass(frozen=True, slots=True)
-class CutFeasibility:
-    """One pipeline stage's answer to "can this recording drive it as
-    `mode: measured`" (`R-SIM-23`, `CR-SIM-21` made mechanical) -- a query,
-    computed from `Session.provides`/`Session.absent` and the stage's own
-    component manifest, never a load-time assertion (`contracts/pipeline.py`'s
-    own `_validate_wiring` is that; this is the "what's possible" report
-    `sim probe` and the developer start page read *before* choosing one)."""
-
-    stage: str
-    feasible: bool
-    #: One entry per missing/mismatched output port, human-readable and
-    #: naming the port -- `()` when `feasible` is `True`.
-    missing: tuple[str, ...] = ()
-
-    def __repr__(self) -> str:
-        return f"<CutFeasibility stage={self.stage!r} feasible={self.feasible}>"
+#: `CutFeasibility`'s real home is `graph/feasible.py` now (`WP-20` phase 5,
+#: `IMP-0185`) -- imported above and re-exposed under this module's own
+#: name so `from adas_sim.session.session import CutFeasibility` keeps
+#: working for any existing caller.
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,28 +117,25 @@ class Session:
         return resolve_series(self.ticks, path, project=project)
 
     def feasible_cuts(self, pipeline: Pipeline) -> tuple[CutFeasibility, ...]:
-        """Per stage in `pipeline`, whether this file can drive it as
-        `mode: measured` -- every declared output port present with a
-        matching `proto_type` (`UT-C9-3`: a mismatch is refused, never
-        coerced), each miss naming the port and why (missing entirely, or a
-        declared-`absent` reason, `UT-C9-2`)."""
-        results = []
-        for stage in pipeline.stages:
-            manifest = pipeline.manifest_for(stage.name)
-            missing: list[str] = []
-            for spec in manifest.outputs:
-                provided = self.provides.get(spec.name)
-                if provided is None:
-                    absent = self.absent.get(spec.name)
-                    reason = absent.reason if absent is not None else "not provided by this recording"
-                    missing.append(f"{spec.name}: {reason}")
-                elif provided.proto_type != spec.proto_type:
-                    missing.append(
-                        f"{spec.name}: recording provides {provided.proto_type!r}, "
-                        f"pipeline expects {spec.proto_type!r}"
-                    )
-            results.append(CutFeasibility(stage=stage.name, feasible=not missing, missing=tuple(missing)))
-        return tuple(results)
+        """`IMP-0185`, `MOVE` (`WP-20` phase 5): relocated to `graph/
+        feasible.py::feasible_cuts`, re-typed onto plain `RecordingIndex`/
+        `ModuleManifest` data instead of a live `Session`/`Pipeline`. Kept
+        here as a thin wrapper -- builds the two from this `Session`'s own
+        `provides`/`absent` fields and `pipeline`'s own stage manifests, so
+        every existing caller (`sim doctor`, `test_c9_ingest.py`) is
+        unaffected."""
+        index = RecordingIndex(
+            topics={
+                port.manifest_port: RecordingTopic(proto_type=port.proto_type, origin=port.origin.value)
+                for port in self.provides.values()
+            },
+            absent={port.port: port.reason for port in self.absent.values()},
+        )
+        stage_manifests = {
+            stage.name: ModuleManifest(name=stage.name, outputs=pipeline.manifest_for(stage.name).outputs)
+            for stage in pipeline.stages
+        }
+        return _feasible_cuts(index, stage_manifests)
 
     def has_simulated_output(self) -> bool:
         """`AR-57`: whether ANY port in this run ever carried
