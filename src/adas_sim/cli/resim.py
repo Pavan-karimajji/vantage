@@ -36,7 +36,8 @@ from adas_sim.runspec.manifest import (
     resolve_swept_config,
     verify_pinned_builds,
 )
-from adas_sim.engine.bridge import count_ticks, overwrite_manifest_meta, run_pipeline_via_engine
+from adas_sim.engine.bridge import count_ticks, overwrite_manifest_meta
+from adas_sim.orchestrate.run import invoke_engine
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -113,7 +114,7 @@ def run(argv: list[str] | None = None) -> int:
         cleanup_output = True
     try:
         run_id = f"resim-{args.pipeline.stem}-{recording.stem}"
-        result = run_pipeline_via_engine(
+        result = invoke_engine(
             pipeline, recording, run_id=run_id, output_path=output_path, config_path=config,
         )
         if not result.ok:

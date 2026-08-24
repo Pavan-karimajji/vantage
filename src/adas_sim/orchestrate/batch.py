@@ -29,16 +29,27 @@ from __future__ import annotations
 import functools
 import glob
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from collections import Counter
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
-from uuid import uuid4
+
+from adas_sim.orchestrate import limits as _limits
+from adas_sim.runspec.manifest import ResolvedRunConfig, build_manifest, resolve_swept_config, write_manifest
+
+#: `RecordingOutcome.outcome` -> `RunManifest.outcome` (`runspec/manifest.py`'s
+#: own closed vocabulary, `"completed"|"failed"|"crashed"|"timeout"`) --
+#: `IMP-0222`'s own "written from OUTSIDE the worker" half: a crash/timeout
+#: is classified by THIS module (`_classify`, from process exit code/timer),
+#: never by the worker's own `finally` (which a real crash never reaches).
+_MANIFEST_OUTCOME_OF = {"ok": "completed", "fail": "failed", "crash": "crashed", "timeout": "timeout"}
 
 #: The closed outcome vocabulary (R-SIM-19: "never merged"). Kept as a tuple,
 #: not an enum -- RecordingOutcome.outcome is compared/formatted as a plain
@@ -63,6 +74,10 @@ class RecordingOutcome:
     last_tick_ns: int | None = None
     error: str = ""
     stderr_excerpt: str = ""
+    #: `SW-0248`: `""` (no breach), `"memory"` -- never a fifth `outcome`
+    #: value (R-SIM-19's vocabulary stays exactly four); a memory breach
+    #: still reports `outcome="fail"`, distinguished here instead.
+    limit_breach: str = ""
 
 
 def expand_recordings(args: Sequence[str]) -> list[Path]:
@@ -151,12 +166,70 @@ def _classify(
     )
 
 
+def _entry_paths(out_dir: Path, index: int, recording: Path) -> tuple[Path, Path]:
+    """Deterministic per-entry filenames (`{index:04d}_{stem}`), unlike the
+    random `uuid4` suffix a one-shot temp-dir run used -- `SW-0249`'s resume
+    needs to find yesterday's own `out_json` for entry N without keeping a
+    separate ledger, and a fresh `uuid4` per call would make that
+    unrecoverable across process restarts."""
+    stem = f"{index:04d}_{recording.stem}"
+    return out_dir / f"{stem}.json", out_dir / f"{stem}.checkpoint.json"
+
+
+def _write_outcome_manifest(out_dir: Path, index: int, recording: Path, pipeline_path: Path, outcome: RecordingOutcome) -> None:
+    """`IMP-0222`/`SW-0222`: a standalone `run_manifest.json` written for
+    EVERY entry, including a `crash`/`timeout` this module classified from
+    the outside (`_classify`) -- never only for `ok`. `last_completed_cycle`
+    is `outcome.tick_count` when the worker or a checkpoint reported one,
+    else `-1` (`SW-0119` pending: no per-tick checkpoint channel across the
+    `simengine` subprocess boundary yet, `orchestrate/worker.py`'s own
+    documented gap) -- honest, never a guess. `run_kind="resim"`: a batch
+    entry executes an existing recording exactly like `sim resim` does
+    (`SW-0233`), and `"batch"` is not itself in the manifest schema's own
+    closed `run_kind` enum."""
+    manifest = build_manifest(
+        pipeline_path=pipeline_path, run_kind="resim", source_kind="mcap", recording_path=recording,
+        outcome=_MANIFEST_OUTCOME_OF[outcome.outcome],
+        last_completed_cycle=outcome.tick_count if outcome.tick_count is not None else -1,
+    )
+    write_manifest(manifest, out_dir / "manifest" / f"{index:04d}_{recording.stem}")
+
+
+def _load_completed(out_json: Path, recording: Path) -> RecordingOutcome | None:
+    """`SW-0249`: a run is "completed" when the WORKER itself wrote a
+    terminal result (`ok`/`fail`) -- never when the parent merely
+    remembers launching it. `crash`/`timeout` leave no readable `out_json`
+    by construction (`_classify`'s own reasoning), so they are correctly
+    NOT recognized as completed here and are re-executed on resume, which
+    is the right behaviour for a run nobody ever saw finish."""
+    if not out_json.is_file():
+        return None
+    try:
+        data = json.loads(out_json.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    outcome = data.get("outcome")
+    if outcome not in ("ok", "fail"):
+        return None
+    return RecordingOutcome(
+        recording=recording, outcome=outcome, duration_s=0.0,
+        tick_count=data.get("tick_count"), last_tick_ns=data.get("last_tick_ns"),
+        error=str(data.get("error", "")),
+    )
+
+
 def _launch_worker(
-    recording: Path, *, pipeline_path: Path, search: tuple[Path, ...], config: Path | None, timeout_s: float,
-    test_stub_echo: tuple[str, ...], out_dir: Path,
+    entry: tuple[int, Path], *, pipeline_path: Path, search: tuple[Path, ...], config: Path | None, timeout_s: float,
+    test_stub_echo: tuple[str, ...], out_dir: Path, resume: bool, memory_limit_mb: float | None,
 ) -> RecordingOutcome:
-    out_json = out_dir / f"{recording.stem}-{uuid4().hex[:8]}.json"
-    checkpoint_json = out_dir / f"{recording.stem}-{uuid4().hex[:8]}.checkpoint.json"
+    index, recording = entry
+    out_json, checkpoint_json = _entry_paths(out_dir, index, recording)
+
+    if resume:
+        existing = _load_completed(out_json, recording)
+        if existing is not None:
+            return existing
+
     cmd = [
         sys.executable, "-m", "adas_sim.orchestrate.worker",
         "--recording", str(recording), "--pipeline", str(pipeline_path), "--out-json", str(out_json),
@@ -170,37 +243,174 @@ def _launch_worker(
         cmd += ["--test-stub-echo", name]
 
     start = time.monotonic()
+    if memory_limit_mb is not None:
+        result = _launch_worker_with_memory_limit(
+            cmd, recording, out_json, checkpoint_json, start, timeout_s=timeout_s,
+            limit=_limits.MemoryLimit(limit_bytes=int(memory_limit_mb * 1024 * 1024)),
+        )
+    else:
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=timeout_s)
+        except subprocess.TimeoutExpired as exc:
+            duration_s = time.monotonic() - start
+            stderr = exc.stderr if isinstance(exc.stderr, str) else ""
+            result = _classify(
+                recording, None, out_json, checkpoint_json, duration_s, timed_out=True, timeout_stderr=stderr,
+            )
+        else:
+            duration_s = time.monotonic() - start
+            result = _classify(recording, proc, out_json, checkpoint_json, duration_s, timed_out=False, timeout_stderr="")
+
+    _write_outcome_manifest(out_dir, index, recording, pipeline_path, result)
+    return result
+
+
+def _launch_worker_with_memory_limit(
+    cmd: list[str], recording: Path, out_json: Path, checkpoint_json: Path, start: float, *,
+    timeout_s: float, limit: _limits.MemoryLimit,
+) -> RecordingOutcome:
+    """`SW-0248`'s memory half: a `Popen`, polled on its own thread (never
+    blocking the caller -- `subprocess.run` above is the no-limit fast path,
+    kept unchanged for the overwhelming common case). A breach terminates
+    the process and the result is reported `outcome="fail"` with
+    `limit_breach="memory"` -- distinct from a plain `fail`, never merged
+    into `crash`/`timeout` (`R-SIM-19`)."""
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
+    breached = threading.Event()
+
+    def _watch() -> None:
+        while proc.poll() is None:
+            rss = _limits.rss_bytes(proc.pid)
+            if _limits.breach_reason(rss, limit):
+                breached.set()
+                proc.terminate()
+                return
+            time.sleep(limit.poll_interval_s)
+
+    watcher = threading.Thread(target=_watch, daemon=True)
+    watcher.start()
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=timeout_s)
-    except subprocess.TimeoutExpired as exc:
+        stdout, stderr = proc.communicate(timeout=timeout_s)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        stdout, stderr = proc.communicate()
         duration_s = time.monotonic() - start
-        stderr = exc.stderr if isinstance(exc.stderr, str) else ""
+        watcher.join(timeout=1.0)
+        if breached.is_set():
+            return RecordingOutcome(
+                recording=recording, outcome="fail", duration_s=duration_s,
+                error=f"memory limit {limit.limit_bytes} bytes exceeded", stderr_excerpt=stderr[-_STDERR_EXCERPT_BYTES:],
+                limit_breach="memory",
+            )
         return _classify(
             recording, None, out_json, checkpoint_json, duration_s, timed_out=True, timeout_stderr=stderr,
         )
-
+    watcher.join(timeout=1.0)
     duration_s = time.monotonic() - start
-    return _classify(recording, proc, out_json, checkpoint_json, duration_s, timed_out=False, timeout_stderr="")
+    completed = subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
+    result = _classify(recording, completed, out_json, checkpoint_json, duration_s, timed_out=False, timeout_stderr="")
+    if breached.is_set() and result.outcome != "ok":
+        result = replace(result, limit_breach="memory")
+    return result
 
 
 def run_batch(
     recordings: Sequence[Path], pipeline_path: Path, *,
     search: Sequence[Path] = (), config: Path | None = None, jobs: int = 1, timeout_s: float = 300.0,
-    test_stub_echo: Sequence[str] = (),
+    test_stub_echo: Sequence[str] = (), out_dir: Path | None = None, resume: bool = False,
+    memory_limit_mb: float | None = None,
 ) -> list[RecordingOutcome]:
     """Runs `pipeline_path` -- the SAME file `sim resim` would take,
     unmodified (`R-SIM-16`, `ST-D7-3`) -- against every recording in
     `recordings`, one subprocess each. Returns results in `recordings`'
     OWN order regardless of completion order (`ThreadPoolExecutor.map`'s own
     guarantee) -- a deterministic report is worth more than a marginally
-    earlier print of whichever recording happened to finish first."""
+    earlier print of whichever recording happened to finish first.
+
+    `out_dir`, when given, is used as a PERSISTENT per-entry artifact
+    directory (deterministic filenames, `_entry_paths`) instead of a
+    one-shot temp directory -- required for `resume=True` (`SW-0249`) and
+    for `reconcile` (`SW-0244`) to find these files after this call
+    returns. `out_dir` is never created/removed by this function; a caller
+    owns its lifetime (typically `orchestrate/artifacts.py::run_dir`'s own
+    `checkpoints/` subdirectory)."""
+    if out_dir is not None:
+        worker = functools.partial(
+            _launch_worker, pipeline_path=pipeline_path, search=tuple(search), config=config,
+            timeout_s=timeout_s, test_stub_echo=tuple(test_stub_echo), out_dir=out_dir, resume=resume,
+            memory_limit_mb=memory_limit_mb,
+        )
+        with ThreadPoolExecutor(max_workers=max(1, jobs)) as executor:
+            return list(executor.map(worker, enumerate(recordings)))
+
     with tempfile.TemporaryDirectory(prefix="adas_sim_batch_") as tmp_dir:
         worker = functools.partial(
             _launch_worker, pipeline_path=pipeline_path, search=tuple(search), config=config,
-            timeout_s=timeout_s, test_stub_echo=tuple(test_stub_echo), out_dir=Path(tmp_dir),
+            timeout_s=timeout_s, test_stub_echo=tuple(test_stub_echo), out_dir=Path(tmp_dir), resume=False,
+            memory_limit_mb=memory_limit_mb,
         )
         with ThreadPoolExecutor(max_workers=max(1, jobs)) as executor:
-            return list(executor.map(worker, recordings))
+            return list(executor.map(worker, enumerate(recordings)))
+
+
+def reconcile(out_dir: Path, recordings: Sequence[Path]) -> list[RecordingOutcome]:
+    """`SW-0244`: rebuilds the aggregate from the per-run artifacts on disk
+    -- never from an in-memory accumulator -- so the aggregate and the
+    individual results cannot disagree by construction. Mirrors `_classify`'s
+    own crash/timeout inference: an entry with no readable `out_json` and no
+    checkpoint is reported `crash` (the honest read of "the worker never
+    told us anything"), since `reconcile` has no live process or exit code
+    to distinguish a genuine crash from a timeout after the fact -- a
+    caller wanting that distinction keeps `run_batch`'s own live return
+    value; `reconcile` answers "what does the directory say happened","""
+    results: list[RecordingOutcome] = []
+    for index, recording in enumerate(recordings):
+        out_json, checkpoint_json = _entry_paths(out_dir, index, recording)
+        completed = _load_completed(out_json, recording)
+        if completed is not None:
+            results.append(completed)
+            continue
+        tick_count, last_tick_ns = _read_checkpoint(checkpoint_json)
+        results.append(RecordingOutcome(
+            recording=recording, outcome="crash", duration_s=0.0,
+            tick_count=tick_count, last_tick_ns=last_tick_ns, error="no readable out_json (reconciled from disk)",
+        ))
+    return results
+
+
+def sweep_configs(
+    base_config: Path, param: str, values: Sequence[object], *, project: str = "base",
+) -> dict[object, ResolvedRunConfig]:
+    """`SW-0250`: one derived config bundle per swept value, each differing
+    from `base_config` in exactly `param` -- the diffable unit `UT-ORC-16`
+    asserts. Reuses `runspec/manifest.py::resolve_swept_config`
+    (`NR-SIM-6`'s own mechanism, already `DONE`) rather than re-deriving
+    bundles here; a caller owns every `ResolvedRunConfig.scratch_dir`
+    returned and must remove it (same lifetime discipline
+    `resolve_swept_config` itself documents)."""
+    return {value: resolve_swept_config(base_config, {param: value}, project=project) for value in values}
+
+
+def sweep(
+    recordings: Sequence[Path], pipeline_path: Path, param: str, values: Sequence[object], *,
+    base_config: Path, project: str = "base", **run_batch_kwargs: object,
+) -> dict[object, list[RecordingOutcome]]:
+    """`batch.py::sweep` (`IMP-0250`): runs the whole batch once per swept
+    value, each against its own derived bundle -- `SW-0256`'s "no batch-only
+    configuration format" holds because every entry is a plain `run_batch`
+    call with a differently-resolved `config`."""
+    results: dict[object, list[RecordingOutcome]] = {}
+    resolved_by_value = sweep_configs(base_config, param, values, project=project)
+    try:
+        for value, resolved in resolved_by_value.items():
+            results[value] = run_batch(
+                recordings, pipeline_path, config=resolved.effective_config, **run_batch_kwargs,  # type: ignore[arg-type]
+            )
+    finally:
+        for resolved in resolved_by_value.values():
+            if resolved.scratch_dir is not None:
+                shutil.rmtree(resolved.scratch_dir, ignore_errors=True)
+    return results
 
 
 def write_report(results: Sequence[RecordingOutcome], path: Path) -> None:

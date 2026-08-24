@@ -52,10 +52,10 @@ from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.engine.bridge import (
     DEFAULT_RECORDING_EXT,
     decode_ticks,
-    run_pipeline_via_engine,
     topic_to_port_name,
     validate_measured_stages_against_recording,
 )
+from adas_sim.orchestrate.run import invoke_engine
 from adas_sim.plugins.registry import reader_for
 from adas_sim.session.tick import Pose2D, PortValue, Tick
 
@@ -262,7 +262,7 @@ def check_scenario(
 
     with tempfile.TemporaryDirectory(prefix="adas_sim_check_") as tmp_dir:
         output_path = Path(tmp_dir) / f"check_out{DEFAULT_RECORDING_EXT}"
-        result = run_pipeline_via_engine(
+        result = invoke_engine(
             pipeline, resolved_recording, run_id=f"check-{scenario.id}", output_path=output_path,
             config_path=config_path,
         )

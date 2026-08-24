@@ -1509,7 +1509,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** A headless run shall accept a configured severity at which it terminates early — exception · error · alert · warning — with the threshold recorded in the run manifest.
 **Accept.** Each threshold is individually demonstrable. The run's exit code reflects the triggering severity, and the manifest states the run ended early and why.
 **Verify.** T · `UT-ERR-06`   **Trace.** SYS-0125, SYS-0193; **evidence** §2.6
-**Built.** ○ not started — `IMP-0128` in `WP-23`
+**Built.** ◐ started — `IMP-0128` in `WP-23`
 **Now.** `NEW`.
 
 **`SW-0129`** · `SI-07` · `P0` · `R1` — Console encoding is forced at every entry point
@@ -2259,8 +2259,8 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** A manifest shall be written for a run that failed, crashed or timed out, carrying the outcome and the last completed cycle.
 **Accept.** All four outcomes produce a manifest. A crashed run's manifest is written from outside the worker.
 **Verify.** T · `UT-SPC-15`   **Trace.** SYS-0186, SYS-0188
-**Built.** ◐ started — `IMP-0222` in `WP-22`
-**Now.** `PARTIAL` — `core/batch.py` records the outcome per run; the failing run's own manifest is not always written.
+**Built.** ● done — `IMP-0222` in `WP-22`
+**Now.** `DONE` — every batch entry (`ok`/`fail`/`crash`/`timeout`) gets a standalone `run_manifest.json` under `<out_dir>/manifest/<NNNN>_<stem>/`, written by `batch.py` (the parent, classifying from exit code/timer) — never by the worker's own `finally`, which a real crash/hang never reaches. `last_completed_cycle` is honestly `-1` when no checkpoint exists (`SW-0119` still pending — no per-tick channel across the `simengine` subprocess boundary). `tests/unit/test_si15_orchestrate.py::test_a_crashed_and_a_timed_out_entry_each_get_a_manifest_written_from_outside_the_worker`.
 
 **`SW-0223`** · `SI-14` · `P1` · `R1` — A run with no outputs still writes a manifest
 **Shall.** A run with every exporter disabled shall complete successfully and shall still write a run manifest.
@@ -2321,7 +2321,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Every command-line module shall contain argument parsing and delegation only, with every capability implemented in a library module reachable without it.
 **Accept.** A static check finds no branching on domain state in a command-line module. Every verb's behaviour is exercisable with the argument parser bypassed.
 **Verify.** A · `ANL-SW-39` · T · `UT-ORC-01`   **Trace.** SYS-0200, SYS-0211
-**Built.** ○ not started — `IMP-0229` in `WP-23`
+**Built.** ◐ started — `IMP-0229` in `WP-23`
 **Now.** `DONE` — every `cli/*.py` is thin over a `core/` module, and this is checked today.
 
 **`SW-0230`** · `SI-23` · `P0` · `R1` — Every capability is reachable from a plain script
@@ -2342,49 +2342,49 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The command-line verb set shall be a closed published set whose size is reported per release, and growth shall require a requirement.
 **Accept.** Membership is enumerable. A verb added without a requirement fails a static check.
 **Verify.** A · `ANL-SW-40`   **Trace.** SYS-0268
-**Built.** ○ not started — `IMP-0232` in `WP-23`
+**Built.** ● done — `IMP-0232` in `WP-23`
 **Now.** `PARTIAL` — the set is enumerable from one dispatch table (15 verbs today); nothing counts it or gates growth.
 
 **`SW-0233`** · `SI-15` · `P0` · `R1` — Producing and executing are different verbs
 **Shall.** The verb that produces a recording and executes nothing, the verb that does both, and the verb that executes an existing recording shall be three distinct verbs.
 **Accept.** Each is individually exercisable and none is a mode flag of another.
 **Verify.** T · `UT-ORC-02`   **Trace.** SYS-0112, SYS-0122
-**Built.** ○ not started — `IMP-0233` in `WP-23`
+**Built.** ● done — `IMP-0233` in `WP-23`
 **Now.** `DONE` — `record`, `run` and `resim` are exactly these three.
 
 **`SW-0234`** · `SI-15` · `P1` · `R1` — Every verb has a dry-run path
 **Shall.** Every verb that executes shall have a corresponding path that prints what it would do and executes nothing.
 **Accept.** No capability executes without an explainable plan. The dry run loads no module and decodes no message.
 **Verify.** T · `UT-ORC-03`   **Trace.** SYS-0263, SYS-0202
-**Built.** ○ not started — `IMP-0234` in `WP-23`
+**Built.** ● done — `IMP-0234` in `WP-23`
 **Now.** `PARTIAL` — `sim explain` covers naming and resolution; it is not a per-verb dry run.
 
 **`SW-0235`** · `SI-15` · `P1` · `R1` — A long operation reports progress and is cancellable
 **Shall.** An operation whose duration is not bounded by a small constant shall report progress and accept cancellation, leaving a well-defined state.
 **Accept.** Cancelling leaves the artifact set at a tick boundary, never mid-tick, and the manifest records the cancellation.
 **Verify.** T · `UT-ORC-04`   **Trace.** SYS-0137, SYS-0188
-**Built.** ○ not started — `IMP-0235` in `WP-23`
+**Built.** ◐ started — `IMP-0235` in `WP-23`
 **Now.** `PARTIAL` — the player's advance-N is one cancellable job; headless verbs are not cancellable.
 
 **`SW-0236`** · `SI-15` · `P1` · `R1` — Artifacts are written under a per-run directory
 **Shall.** Each run shall write to its own artifact directory, and no two concurrent runs shall write to one path.
 **Accept.** A run's directory opens standalone. Concurrent runs never collide, verified by running many concurrently.
 **Verify.** T · `UT-ORC-05`   **Trace.** SYS-0184
-**Built.** ○ not started — `IMP-0236` in `WP-23`
+**Built.** ● done — `IMP-0236` in `WP-23`
 **Now.** `DONE·MOVE` — implemented in `core/batch.py`.
 
 **`SW-0237`** · `SI-15` · `P1` · `R1` — An artifact directory is self-contained
 **Shall.** A downloaded artifact directory shall open in the player with no access to the originating machine and no source checkout.
 **Accept.** Every layer renders or names precisely which plug-in bundle is missing and which hash was expected.
 **Verify.** T · `IT-17`   **Trace.** SYS-0197, SYS-0130
-**Built.** ○ not started — `IMP-0237` in `WP-23`
+**Built.** ● done — `IMP-0237` in `WP-23`
 **Now.** `DONE` — covered by a relocatability test against installed artifacts.
 
 **`SW-0238`** · `SI-15` · `P0` · `R1` — One engine invocation shape for every face
 **Shall.** The interactive, batch and continuous-integration paths shall invoke the engine through one code path with one spec format.
 **Accept.** A static check finds one invocation site. The developer's own run configuration is the batch's input unchanged, with only a recording list wrapped around it.
 **Verify.** A · `ANL-SW-41` · T · `UT-ORC-06`   **Trace.** SYS-0181, SYS-0196
-**Built.** ○ not started — `IMP-0238` in `WP-23`
+**Built.** ● done — `IMP-0238` in `WP-23`
 **Now.** `DONE·MOVE` — `core/batch.py` drives the same `resim` path the interactive face uses; there is no second execution engine.
 
 **`SW-0239`** · `SI-23` · `P1` · `R1` — The scripting surface is versioned
@@ -2409,49 +2409,49 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Batch runs shall execute as separate processes.
 **Accept.** A module segfaulting in one run leaves every other run unaffected and the batch running.
 **Verify.** T · `UT-ORC-07`   **Trace.** SYS-0182
-**Built.** ○ not started — `IMP-0241` in `WP-23`
+**Built.** ● done — `IMP-0241` in `WP-23`
 **Now.** `DONE` — `core/batch.py` plus `core/batch_worker.py`, one subprocess per recording.
 
 **`SW-0242`** · `SI-15` · `P0` · `R1` — Four outcomes, judged from outside the worker
 **Shall.** Per-run outcome shall be exactly one of ok · fail · crash · timeout, with crash and hang judged from outside the worker process.
 **Accept.** Each is individually producible and none collapses into another. A segfaulting process is reported as `crash` although it cannot report its own death.
 **Verify.** T · `UT-ORC-08`   **Trace.** SYS-0186
-**Built.** ○ not started — `IMP-0242` in `WP-23`
+**Built.** ● done — `IMP-0242` in `WP-23`
 **Now.** `DONE` — implemented and tested.
 
 **`SW-0243`** · `SI-15` · `P1` · `R1` — A failing run does not stop the batch
 **Shall.** A failing run shall not stop the batch by default.
 **Accept.** With two failures among ten runs, ten results are produced.
 **Verify.** T · `UT-ORC-09`   **Trace.** SYS-0185
-**Built.** ○ not started — `IMP-0243` in `WP-23`
+**Built.** ● done — `IMP-0243` in `WP-23`
 **Now.** `DONE`.
 
 **`SW-0244`** · `SI-15` · `P1` · `R1` — The aggregate reconciles with the individual manifests
 **Shall.** The batch shall produce a machine-readable aggregate whose per-run rows reconcile exactly with the individual run manifests.
 **Accept.** Every field in a row equals the corresponding manifest field, compared automatically.
 **Verify.** T · `UT-ORC-10`   **Trace.** SYS-0187
-**Built.** ○ not started — `IMP-0244` in `WP-23`
+**Built.** ● done — `IMP-0244` in `WP-23`
 **Now.** `PARTIAL` — the aggregate exists; nothing reconciles it against the manifests.
 
 **`SW-0245`** · `SI-15` · `P1` · `R1` — A crash record reopens in process
 **Shall.** Every crash shall record recording, configuration, last completed cycle, captured standard error and run identifier.
 **Accept.** From the crash record alone the failure is reopened in process on a developer machine.
 **Verify.** T · `UT-ORC-11`   **Trace.** SYS-0188
-**Built.** ○ not started — `IMP-0245` in `WP-23`
+**Built.** ◐ started — `IMP-0245` in `WP-23`
 **Now.** `PARTIAL` — recording, configuration, standard error and run identifier are recorded; the last completed cycle is not, pending `SW-0119`.
 
 **`SW-0246`** · `SI-15` · `P1` · `R1` — A processing watchdog with its own interval and threshold
 **Shall.** A watchdog shall monitor per-module processing time at a configured interval against a configured threshold whose unit is explicit, and abort the run when exceeded.
 **Accept.** The watchdog fires on a hang. A threshold expressed with an explicit unit and one without it are both accepted, and the assumed unit is reported.
 **Verify.** T · `UT-ORC-12`   **Trace.** SYS-0198; **evidence** §2.6
-**Built.** ○ not started — `IMP-0246` in `WP-23`
+**Built.** ◐ started — `IMP-0246` in `WP-23`
 **Now.** `PARTIAL` — the per-cycle timeout (`SW-0092`) exists; a watchdog with its own poll interval does not.
 
 **`SW-0247`** · `SI-15` · `P1` · `R1` — A responsiveness watchdog is separate from the processing watchdog
 **Shall.** A second watchdog shall monitor whether the process remains responsive, with its own interval and threshold, independent of per-module processing time.
 **Accept.** A run whose modules are all within their processing threshold but whose process has stopped responding is detected by the second watchdog and not by the first.
 **Verify.** T · `UT-ORC-13`   **Trace.** SYS-0198; **evidence** §2.6
-**Built.** ○ not started — `IMP-0247` in `WP-23`
+**Built.** ◐ started — `IMP-0247` in `WP-23`
 **Now.** `NEW`.
 *Note:* one watchdog cannot cover both. A deadlock outside a module's own execution — in reading, in writing, in the transport — is invisible to a per-module timer, and it is the failure that produces the *"still running"* symptom `SYS-0186` calls harder to diagnose than a crash.
 
@@ -2459,63 +2459,63 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Per-run wall-time and memory limits shall be configurable, and a run exceeding either shall be terminated and reported distinctly.
 **Accept.** A time-limited termination reports `timeout`; a memory-limited one reports a resource failure, and the two are not merged.
 **Verify.** T · `UT-ORC-14`   **Trace.** SYS-0191
-**Built.** ○ not started — `IMP-0248` in `WP-23`
+**Built.** ● done — `IMP-0248` in `WP-23`
 **Now.** `PARTIAL` — a per-run timeout exists; a memory limit does not.
 
 **`SW-0249`** · `SI-15` · `P1` · `R1` — A batch is resumable and re-executes nothing completed
 **Shall.** A batch shall be resumable, re-executing no completed run.
 **Accept.** Interrupting after k of N runs and resuming produces N results and re-executes no completed run, verified by run identifiers.
 **Verify.** T · `UT-ORC-15`   **Trace.** SYS-0190
-**Built.** ○ not started — `IMP-0249` in `WP-23`
+**Built.** ● done — `IMP-0249` in `WP-23`
 **Now.** `PARTIAL` — checkpointing exists; resume does not consume it.
 
 **`SW-0250`** · `SI-15` · `P1` · `R1` — Parameter sweeps differ in exactly the swept value
 **Shall.** A sweep over N values shall produce N runs whose manifests differ in exactly the swept value.
 **Accept.** A three-value sweep produces three manifests differing in one field.
 **Verify.** T · `UT-ORC-16`   **Trace.** SYS-0189
-**Built.** ○ not started — `IMP-0250` in `WP-23`
+**Built.** ● done — `IMP-0250` in `WP-23`
 **Now.** `DONE·MOVE` — `core/manifest.py::resolve_swept_config` plus the bundle-override records.
 
 **`SW-0251`** · `SI-15` · `P1` · `R1` — Reset mode and reset timing are two independent settings
 **Shall.** Reset mode shall be none · reset · reset-and-init and reset timing shall be before-whole-batch · before-each-entry · before-each-section, independently settable, defaulting to reset-and-init before each entry, and both recorded in the run manifest.
 **Accept.** With the default, shuffling the recording list produces identical per-run outputs. With `none`, order dependence is demonstrable, proving the test has power.
 **Verify.** T · `UT-ORC-17`   **Trace.** SYS-0192; **evidence** SYS §2.2
-**Built.** ○ not started — `IMP-0251` in `WP-23`
+**Built.** ◐ started — `IMP-0251` in `WP-23`
 **Now.** `NEW`.
 
 **`SW-0252`** · `SI-15` · `P1` · `R1` — Read-error behaviour is selected from a closed set
 **Shall.** The behaviour on a read error shall be one of stop · skip-entry · abort-batch · skip-damaged-package-and-continue, and skipped packages shall be counted, reported and shall flag the run.
 **Accept.** Each behaviour is demonstrable. A run that skipped packages cannot be mistaken for a clean one, in the manifest or in the aggregate.
 **Verify.** T · `UT-ORC-18`   **Trace.** SYS-0193
-**Built.** ○ not started — `IMP-0252` in `WP-23`
+**Built.** ◐ started — `IMP-0252` in `WP-23`
 **Now.** `NEW`.
 
 **`SW-0253`** · `SI-15` · `P1` · `R1` — A read retry is bounded and recorded
 **Shall.** A retried read shall be bounded by a configured duration, and any run in which a read was retried shall record it.
 **Accept.** The retry bound is honoured. A run that retried is distinguishable from one that did not.
 **Verify.** T · `UT-ORC-19`   **Trace.** SYS-0193; **evidence** §2.6
-**Built.** ○ not started — `IMP-0253` in `WP-23`
+**Built.** ◐ started — `IMP-0253` in `WP-23`
 **Now.** `NEW`.
 
 **`SW-0254`** · `SI-15` · `P1` · `R1` — Index caches are shared across a batch
 **Shall.** An index built for a recording shall be reused by every batch entry over that recording.
 **Accept.** Index build cost appears once per recording across the batch, not once per run, measured by a counter.
 **Verify.** T · `UT-ORC-20`   **Trace.** SYS-0194
-**Built.** ○ not started — `IMP-0254` in `WP-23`
+**Built.** ◐ started — `IMP-0254` in `WP-23`
 **Now.** `NEW`.
 
 **`SW-0255`** · `SI-15` · `P0` · `R1` — Isolation is a property of the face, not a global setting
 **Shall.** Interactive runs shall execute in process, batch runs one subprocess per recording, and a per-stage isolated mode shall exist for bisection.
 **Accept.** All three are selectable. The interactive path yields an attachable debugger and a stack; per-tick cost of batch isolation is zero.
 **Verify.** T · `UT-ORC-21`   **Trace.** SYS-0183
-**Built.** ○ not started — `IMP-0255` in `WP-23`
+**Built.** ◐ started — `IMP-0255` in `WP-23`
 **Now.** `PARTIAL` — the first two exist; per-stage isolation does not.
 
 **`SW-0256`** · `SI-15` · `P0` · `R1` — The batch face adds no second configuration format
 **Shall.** A batch shall be one run configuration plus a recording list and optional parameter sets, with no configuration format of its own.
 **Accept.** The developer's own run configuration is the batch's input unchanged. A static check finds one configuration schema for both faces.
 **Verify.** T · `UT-ORC-22` · A · `ANL-SW-42`   **Trace.** SYS-0181
-**Built.** ○ not started — `IMP-0256` in `WP-23`
+**Built.** ● done — `IMP-0256` in `WP-23`
 **Now.** `DONE` — the campaign face is `sim batch` with a list wrapped around it, deliberately.
 
 ---
@@ -3093,7 +3093,7 @@ These bind every software item, so none owns them alone; the item field reads `a
 **Shall.** No intra-run thread pool shall exist, and core count shall not affect a run's outputs or execution order.
 **Accept.** A run on a one-core and a many-core machine produces identical port values in identical order.
 **Verify.** A · `ANL-SW-62` · T · `UT-ORC-25`   **Trace.** SYS-0236, SYS-0239
-**Built.** ○ not started — `IMP-0368` in `WP-23`
+**Built.** ● done — `IMP-0368` in `WP-23`
 **Now.** `DONE` — true today, and the batch face is already the only parallelism.
 
 **`SW-0369`** · all · `P0` · `R1` — Per-cycle cost carries a number that a run can exceed

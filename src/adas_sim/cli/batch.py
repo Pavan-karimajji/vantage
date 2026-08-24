@@ -30,6 +30,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--search", type=Path, action="append", default=[], help="dll:/stubdll: search directory")
     parser.add_argument("--config", type=Path, default=None)
     parser.add_argument("--timeout-s", type=float, default=300.0, help="per-recording subprocess timeout")
+    parser.add_argument(
+        "--out-dir", type=Path, default=None,
+        help="persistent per-entry artifact directory (required for --resume, SW-0249)",
+    )
+    parser.add_argument(
+        "--resume", action="store_true",
+        help="skip recordings whose --out-dir already carries a completed (ok/fail) result (SW-0249)",
+    )
+    parser.add_argument(
+        "--memory-limit-mb", type=float, default=None,
+        help="per-recording resident-memory cap; a breach is reported distinctly from fail/crash/timeout (SW-0248)",
+    )
     return parser
 
 
@@ -39,10 +51,15 @@ def run(argv: list[str] | None = None) -> int:
     if not recordings:
         print("sim batch: no recordings matched")
         return 2
+    if args.resume and args.out_dir is None:
+        print("sim batch: --resume requires --out-dir")
+        return 2
+    if args.out_dir is not None:
+        args.out_dir.mkdir(parents=True, exist_ok=True)
 
     results = run_batch(
         recordings, args.pipeline, search=args.search, config=args.config, jobs=args.jobs,
-        timeout_s=args.timeout_s,
+        timeout_s=args.timeout_s, out_dir=args.out_dir, resume=args.resume, memory_limit_mb=args.memory_limit_mb,
     )
 
     if args.report is not None:

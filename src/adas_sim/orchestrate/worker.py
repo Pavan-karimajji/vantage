@@ -69,7 +69,8 @@ from pathlib import Path
 
 from adas_sim.graph.build import Pipeline
 from adas_sim.diagnostics.errors import SimError
-from adas_sim.engine.bridge import count_ticks, run_pipeline_via_engine
+from adas_sim.engine.bridge import count_ticks
+from adas_sim.orchestrate.run import invoke_engine
 
 #: Values `ADAS_SIM_BATCH_TEST_STUB` recognizes -- a closed set, same
 #: discipline every other closed vocabulary in this codebase uses, so a typo
@@ -153,7 +154,7 @@ def main(argv: list[str] | None = None) -> int:
         pipeline = Pipeline.load(args.pipeline, search=tuple(args.search))
         with tempfile.TemporaryDirectory(prefix="adas_sim_batch_worker_") as tmp_dir:
             output_path = Path(tmp_dir) / "out.mcap"
-            result = run_pipeline_via_engine(
+            result = invoke_engine(
                 pipeline, args.recording, run_id=f"batch-{args.recording.stem}", output_path=output_path,
                 config_path=args.config,
             )
