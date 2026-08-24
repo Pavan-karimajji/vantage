@@ -2950,7 +2950,7 @@ Superseded (`SM-01` trial), `SW-0324` — was *Display-only data is decoded only
 **Shall.** Bulk data shall cross by shared memory; control and metadata may use a separate channel.
 **Accept.** Frame data does not cross a socket. The bulk path's throughput does not scale with message count in the control path.
 **Verify.** T · `UT-TRN-02`   **Trace.** SYS-0273
-**Built.** ○ not started — `IMP-0351` in `WP-27`
+**Built.** ● done — `IMP-0351` in `WP-27`
 **Now.** `NEW`.
 
 **`SW-0352`** · `SI-25` · `P1` · `R1` — Attaching and detaching are non-perturbing

@@ -35,16 +35,27 @@
 ///   the drop count is exactly `published - depth`, checked as an exact
 ///   equality on both transports, not just "greater than zero."
 ///
+///   **`UT-TRN-02` (`F-BULK`, closed 2026-08-24, a later pass in this same
+///   file):** a 200 KB payload (well under `kShmMaxFrameBytes`, clearly
+///   "bulk") crosses through a real `Runner`/`echo_stub` run and is
+///   compared byte-for-byte against its known source content per cycle --
+///   the integrity claim `TransportShm`'s own unit-level zero-copy proof
+///   (`DataCrossesThroughTheMappedSegmentNotACopyOnTheStack`, small
+///   payloads only) does not by itself cover: does a real *large* value
+///   survive the Runner's own value-resolution/write-pass path intact.
+///   This implementation has no second control channel to observe
+///   separately (`SW-0351`'s own "may" clause, `transport_shm.hpp`'s top
+///   note) -- one `tryReceive()` surface carries both bulk and small
+///   frames, structurally, so there is nothing else to check on that half.
+///
+///   **`UT-TRN-05` (`F-STUB-CRASH`, closed 2026-08-24, `test_it_trn05_crash.cpp`):**
+///   a genuinely separate, killable process running a real `Runner` --
+///   see that file's own top note.
+///
 ///   **Not attempted this pass, named rather than silently dropped:**
-///   `UT-TRN-02` (`F-BULK`, channel-usage observation -- already proven at
-///   unit level, `TransportShm.DataCrossesThroughTheMappedSegmentNotACopyOnTheStack`,
-///   and this implementation has no second control channel to observe,
-///   `SW-0351`'s own "may" clause, `transport_shm.hpp`'s top note);
-///   `UT-TRN-05` (`F-STUB-CRASH`, a real killed engine process with a
-///   player attached -- `TransportShm`'s own unit tests already prove the
-///   OS-level liveness mechanism itself via `fork()`/`TerminateProcess`,
-///   but not through a real `Runner` in the loop); `IT-19` (measured tick
-///   rate with a player attaching mid-run, then detaching). `UT-TRN-04`
+///   `IT-19` (measured tick rate with a player attaching mid-run, then
+///   detaching -- needs a live consumer thread racing the engine thread,
+///   a different shape of test than anything in this file). `UT-TRN-04`
 ///   (version negotiation) needed no IT-level repeat: `attach()` never
 ///   touches the scheduler or the bus, so `TransportInproc`/
 ///   `TransportShm.VersionMismatchRefusedBeforeAnyDataCrosses` already
@@ -413,6 +424,83 @@ TEST(ItTrn03SlowReader, EngineWallTimeIsUnaffectedAndDropCountIsExact) {
   const std::uint64_t expected_dropped = published - kDepth;
   EXPECT_EQ(transport_inproc.DroppedFrames(), expected_dropped);
   EXPECT_EQ(engine_side.DroppedFrames(), expected_dropped);
+}
+
+// ---------------------------------------------------------------------------
+// UT-TRN-02 -- SW-0351: bulk data crosses intact through the mapped
+// segment, over a real Runner-wired run.
+// ---------------------------------------------------------------------------
+
+std::vector<RawMessage> MakeBulkRecording(std::size_t cycles, std::size_t payload_bytes) {
+  std::vector<RawMessage> messages;
+  for (std::size_t i = 0; i < cycles; ++i) {
+    RawMessage objects;
+    objects.topic = "/meas/objects";
+    objects.log_time_ns = static_cast<std::int64_t>(i) * kDtNs;
+    objects.payload.resize(payload_bytes);
+    // Deterministic, per-cycle-distinct content -- a copy bug (truncation,
+    // a stale slot, an off-by-one on the wrap) would show up as a mismatch
+    // against THIS exact pattern, not just "some bytes."
+    for (std::size_t b = 0; b < payload_bytes; ++b) {
+      objects.payload[b] = static_cast<std::uint8_t>((i * 7 + b) & 0xFF);
+    }
+    messages.push_back(objects);
+  }
+  return messages;
+}
+
+TEST(ItTrn02Bulk, BulkPayloadCrossesIntactThroughTheMappedSegment) {
+  // Comfortably under kShmMaxFrameBytes (256 KiB, transport_shm.hpp) --
+  // clearly "bulk" (SI-25's own F-BULK spirit: a payload large enough that
+  // a copy or a truncation would be obvious, not a coincidence of small
+  // numbers).
+  constexpr std::size_t kPayloadBytes = 200'000;
+  constexpr std::size_t kCycles = 3;
+  // Generous: 3 declared ports x kCycles publishes total -- this test is
+  // about payload integrity, not the drop path (that is UT-TRN-03's own
+  // concern), so the ring must never fill during this run.
+  constexpr std::size_t kDepth = 32;
+
+  StubComponent stub("it_trn02_bulk");
+  ASSERT_TRUE(stub.ok());
+
+  RunSpec spec = MakeSpec();
+  VectorReader reader(MakeBulkRecording(kCycles, kPayloadBytes), MakeTopics());
+  simcore::scheduler::Scheduler scheduler(spec);
+  simcore::bus::PortBus bus;
+  NullWriter sink;
+  simcore::io::WriterBase writer_base(sink);
+
+  simcore::transport::SharedMemoryTransport engine_side(
+      "it_trn02_shm", simcore::transport::SharedMemoryTransport::Role::kEngine, kDepth);
+  simcore::transport::SharedMemoryTransport client_side(
+      "it_trn02_shm", simcore::transport::SharedMemoryTransport::Role::kClient, kDepth);
+  uint32_t engine_version = 0;
+  ASSERT_EQ(client_side.attach(simcore::transport::SharedMemoryTransport::kProtocolVersion, &engine_version),
+            adas::transport::AttachResult::kOk);
+
+  auto constructed = Runner::Construct(spec, scheduler, bus, reader, {{"sut", stub.get()}}, &writer_base);
+  ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
+  Runner runner = std::move(constructed).value();
+  runner.SetTransportPublisher(&engine_side);
+  auto outcome = runner.Run();
+  ASSERT_TRUE(outcome.ok()) << outcome.error().Format();
+
+  const std::vector<RawMessage> expected = MakeBulkRecording(kCycles, kPayloadBytes);
+  std::size_t bulk_frames_checked = 0;
+  adas::transport::PortFrame frame{};
+  while (client_side.tryReceive(&frame)) {
+    if (std::string(frame.portName) != "meas.objects") continue;  // sut.objects/outputs also cross, smaller
+    // The received size must match exactly -- no silent truncation at
+    // kShmMaxFrameBytes or anywhere else on the write path.
+    ASSERT_EQ(frame.size, kPayloadBytes) << "tick " << frame.tickIndex;
+    const auto& want = expected[frame.tickIndex].payload;
+    ASSERT_EQ(want.size(), kPayloadBytes);
+    EXPECT_EQ(std::memcmp(frame.data, want.data(), kPayloadBytes), 0)
+        << "bulk payload corrupted in transit at tick " << frame.tickIndex;
+    ++bulk_frames_checked;
+  }
+  EXPECT_EQ(bulk_frames_checked, kCycles);
 }
 
 }  // namespace simcore::runner
