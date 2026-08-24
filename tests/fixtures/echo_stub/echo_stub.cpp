@@ -14,7 +14,11 @@
 ///   read from environment variables at CALL time inside adasManifest()
 ///   (never cached at load time), so one built DLL serves every test case
 ///   with no rebuild: ADAS_SIL_TEST_STUB_NAME (default "echo_stub"),
-///   ADAS_SIL_TEST_STUB_PERIOD_NS (default "0").
+///   ADAS_SIL_TEST_STUB_PERIOD_NS (default "0"),
+///   ADAS_SIL_TEST_STUB_ABI_VERSION (default: the real `ADAS_SIL_ABI_VERSION`
+///   -- any other value makes adasAbiVersion() report a mismatch, the one
+///   fixture `Component::Load`'s ABI-version gate needs to prove itself
+///   against a real DSO).
 ///
 ///   ONE optional output port, same "read at call time" design, proves
 ///   `Component::Exec`'s grow-once-and-retry path against a real
@@ -156,7 +160,13 @@ std::vector<uint8_t> EncodeAbiTestPort(double value) {
 extern "C" {
 
 ADAS_SIL_API int32_t adasAbiVersion(void) {
-  return ADAS_SIL_ABI_VERSION;
+  // `ADAS_SIL_TEST_STUB_ABI_VERSION` (default: the real, matching version):
+  // `Component::Load`'s ABI-version gate (`component.cpp`'s own
+  // `found != kAbiVersion` check) has no other fixture to prove it against
+  // -- the real ABI version is baked in everywhere else. Read at call time,
+  // same "no rebuild for a new test case" discipline as every other knob in
+  // this file's own top note.
+  return static_cast<int32_t>(EnvOrU64("ADAS_SIL_TEST_STUB_ABI_VERSION", ADAS_SIL_ABI_VERSION));
 }
 
 ADAS_SIL_API size_t adasManifest(uint8_t* data, size_t cap) {

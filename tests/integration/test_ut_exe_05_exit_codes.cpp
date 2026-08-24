@@ -12,15 +12,15 @@
 ///     - `Ok` (0), `Config` (2), `Infra` (6), `Crash` (8), `Timeout` (7):
 ///       each has a REAL path in this codebase today and each is
 ///       exercised here.
-///     - `Module` (4, `Kind::Contract`'s default): the only real call
-///       sites (`Component::Load`'s ABI-version check / manifest decode
-///       failure, `src/simcore/module_host/component.cpp`) need a fixture
-///       library that reports a WRONG ABI version or an unparsable
-///       manifest -- every fixture this repo ships (`echo_stub`,
-///       `c5_bundle_fixture`) reports the real, current ABI version and a
-///       well-formed manifest. Building a new fixture is outside `WP-14`'s
-///       own stated file scope (`main.cpp`/`isolate.cpp`/`simcore.h` and
-///       their tests) -- **honestly not exercised here**, not faked.
+///     - `Module` (4, `Kind::Contract`'s default): `Component::Load`'s
+///       ABI-version check (`src/simcore/module_host/component.cpp`)
+///       compares `adasAbiVersion()`'s return value against `kAbiVersion`
+///       and nothing else -- confirmed live by reading that function
+///       before adding a fixture for it, 2026-08-24. `echo_stub` gained an
+///       env-gated `ADAS_SIL_TEST_STUB_ABI_VERSION` (default: the real
+///       version) so this repo's existing fixture can report a wrong one
+///       with no new DLL. **Exercised for real below**
+///       (`ModuleOnAnAbiVersionMismatch`).
 ///     - `Coherence` (3) and `Input` (5): `docs/v2/errors.yaml`'s own
 ///       words -- "a coherence-graph verdict blocked the run (`WP-20`)"
 ///       and "a damaged/refused recording (`WP-19`)" -- name the work
@@ -71,6 +71,24 @@ class EnvGuard {
 std::filesystem::path TempPath(const std::string& name) { return std::filesystem::temp_directory_path() / name; }
 std::filesystem::path SimenginePath() { return std::filesystem::path(SIMENGINE_EXECUTABLE); }
 
+// Same escaping discipline `test_ut_abi_writer_and_resolver.cpp`'s own top
+// note requires -- a Windows path fed unescaped into a JSON string literal
+// was this file's own pre-existing, already-documented defect (`WP-14a`/
+// `WP-15a`), found live re-checking this row 2026-08-24: it failed
+// `OkOnARealSuccessfulRun` and `TimeoutWhenASupervisedAttemptNeverReturns`
+// on `vs2026` for the same reason every other pre-existing-failure note in
+// this doc set already names, not a platform limitation.
+std::string JsonEscape(const std::filesystem::path& path) {
+  const std::string raw = path.string();
+  std::string out;
+  out.reserve(raw.size());
+  for (char c : raw) {
+    if (c == '\\' || c == '"') out.push_back('\\');
+    out.push_back(c);
+  }
+  return out;
+}
+
 std::filesystem::path EchoStubPath() {
 #if defined(_WIN32)
   return std::filesystem::path(ADAS_SIM_TEST_FIXTURE_DIR) / "echo_stub.dll";
@@ -104,11 +122,11 @@ std::filesystem::path WriteStubRunSpec(const std::filesystem::path& spec_path, c
     "schema": "adas.sim.runspec/1.0", "run_id": "20260822T000000Z-exe05",
     "spec_sha256": "0", "grid": {"step_ns": 10000000},
     "sources": [{"path": ")"
-      << recording.string() << R"(", "sha256": "0", "codec": "mcap"}],
+      << JsonEscape(recording) << R"(", "sha256": "0", "codec": "mcap"}],
     "stages": [{
       "name": "sut", "mode": "simulate",
       "impl": {"kind": "dll", "path": ")"
-      << EchoStubPath().string() << R"(", "pattern": "", "search": []},
+      << JsonEscape(EchoStubPath()) << R"(", "pattern": "", "search": []},
       "period_ns": 10000000, "abi_version": 1, "config_bundle_sha256": "",
       "ports": [], "inputs": []
     }],
@@ -134,6 +152,21 @@ TEST(UtExe05ExitCodes, ConfigOnBadArguments) {
   const auto result = simcore::module_host::RunIsolatedStage("sut", SimenginePath(), {}, std::chrono::seconds(5));
   EXPECT_EQ(result.outcome, simcore::module_host::IsolatedOutcome::kFail);
   EXPECT_EQ(result.exit_code, static_cast<int>(kSimExitConfig));
+}
+
+TEST(UtExe05ExitCodes, ModuleOnAnAbiVersionMismatch) {
+  const auto recording = WriteTinyRecording(TempPath("ut_exe_05_module.mcap"));
+  const auto spec = WriteStubRunSpec(TempPath("ut_exe_05_module.json"), recording);
+  EnvGuard name("ADAS_SIL_TEST_STUB_NAME", "exe05module");
+  // Any value other than the real ADAS_SIL_ABI_VERSION -- Component::Load's
+  // gate compares this against kAbiVersion and nothing else (component.cpp,
+  // confirmed by reading it before this test was written), so the mismatch
+  // fails at Load(), before Init() or a single Exec() call.
+  EnvGuard bad_abi("ADAS_SIL_TEST_STUB_ABI_VERSION", "999");
+  const auto result =
+      simcore::module_host::RunIsolatedStage("sut", SimenginePath(), {spec.string()}, std::chrono::seconds(5));
+  EXPECT_EQ(result.outcome, simcore::module_host::IsolatedOutcome::kFail);
+  EXPECT_EQ(result.exit_code, static_cast<int>(kSimExitModule));
 }
 
 TEST(UtExe05ExitCodes, InfraOnAnUnreadableRunSpecFile) {

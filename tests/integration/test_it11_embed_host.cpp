@@ -38,6 +38,22 @@ std::filesystem::path TempPath(const std::string& name) {
   return std::filesystem::temp_directory_path() / name;
 }
 
+// Same escaping discipline `test_ut_abi_writer_and_resolver.cpp`'s own top
+// note requires -- an unescaped Windows path fed into a JSON string literal
+// was this file's own pre-existing, already-documented `WP-14a`/`WP-15a`
+// defect (`ConstructsRunsAndDestroysThroughTheCAbiAlone`'s own listed
+// failure throughout this doc set). Fixed live, 2026-08-24.
+std::string JsonEscape(const std::filesystem::path& path) {
+  const std::string raw = path.string();
+  std::string out;
+  out.reserve(raw.size());
+  for (char c : raw) {
+    if (c == '\\' || c == '"') out.push_back('\\');
+    out.push_back(c);
+  }
+  return out;
+}
+
 // A tiny real `.mcap` recording -- three heartbeat messages 10ms apart --
 // written through the SAME `io::CodecRegistry`/`mcap` codec a real
 // recording would go through (never a hand-rolled byte layout).
@@ -73,11 +89,11 @@ std::filesystem::path WriteRunSpec(const std::filesystem::path& spec_path, const
     "spec_sha256": "0000000000000000000000000000000000000000000000000000000000000",
     "grid": {"step_ns": 10000000},
     "sources": [{"path": ")"
-      << recording.string() << R"(", "sha256": "0", "codec": "mcap"}],
+      << JsonEscape(recording) << R"(", "sha256": "0", "codec": "mcap"}],
     "stages": [{
       "name": "sut", "mode": "simulate",
       "impl": {"kind": "dll", "path": ")"
-      << stub.string() << R"(", "pattern": "", "search": []},
+      << JsonEscape(stub) << R"(", "pattern": "", "search": []},
       "period_ns": 10000000, "abi_version": 1, "config_bundle_sha256": "",
       "ports": [{"name": "outputs", "dir": "pro", "kind": "data", "proto_type": "test.Echo",
                  "record": "full", "sampling": "latest", "on_missing": "hold", "fixed_slots": null}],

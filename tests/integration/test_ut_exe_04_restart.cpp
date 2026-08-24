@@ -57,6 +57,22 @@ class EnvGuard {
 
 std::filesystem::path TempPath(const std::string& name) { return std::filesystem::temp_directory_path() / name; }
 
+// Same escaping discipline `test_ut_abi_writer_and_resolver.cpp`'s own top
+// note requires -- an unescaped Windows path fed into a JSON string literal
+// was this file's own pre-existing, already-documented `WP-14a`/`WP-15a`
+// defect (`EnabledRunThatSucceedsRecordsExactlyOneOkAttempt`'s own listed
+// failure throughout this doc set). Fixed live, 2026-08-24.
+std::string JsonEscape(const std::filesystem::path& path) {
+  const std::string raw = path.string();
+  std::string out;
+  out.reserve(raw.size());
+  for (char c : raw) {
+    if (c == '\\' || c == '"') out.push_back('\\');
+    out.push_back(c);
+  }
+  return out;
+}
+
 // A run spec `simengine` can genuinely load -- doesn't need to be exercised
 // to completion for the crash cases (`ADAS_SIM_TEST_FORCE_ABORT` aborts
 // before the spec is even opened), but the "default run succeeds, one
@@ -68,7 +84,7 @@ std::filesystem::path WriteMinimalRunSpec(const std::filesystem::path& spec_path
     "schema": "adas.sim.runspec/1.0", "run_id": "20260822T000000Z-exe04",
     "spec_sha256": "0", "grid": {"step_ns": 10000000},
     "sources": [{"path": ")"
-      << recording.string() << R"(", "sha256": "0", "codec": "mcap"}],
+      << JsonEscape(recording) << R"(", "sha256": "0", "codec": "mcap"}],
     "stages": [], "mutations": [], "order": [],
     "coherence": {"verdict": "clean"}, "limits": {"exec_timeout_ms": 2000, "severity_exit": "crash"}
   })";
