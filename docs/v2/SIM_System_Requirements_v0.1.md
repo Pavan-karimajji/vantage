@@ -1118,7 +1118,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Data after the divergence point plus a configurable grace window shall be flagged informational-only in exports.
 **Accept.** The flag is present per row/message, not only in a header, so a downstream consumer reading a slice cannot miss it.
 **Verify.** T · `SYT-STG-25`   **Trace.** CN-0134
-**Built.** ◐ started — 0/1 software requirements done, in `WP-13`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0107`** · `P1` · `R1` — The divergence point reaches the external framework
 **Shall.** The run manifest shall carry both the coherence classification and the divergence point.

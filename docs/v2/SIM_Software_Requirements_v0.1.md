@@ -1413,7 +1413,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Data produced after the divergence point plus a configured grace window shall carry an informational-only flag on each message, not only in a header.
 **Accept.** A consumer reading an arbitrary slice of the export cannot miss the flag.
 **Verify.** T · `UT-RUN-06`   **Trace.** SYS-0106
-**Built.** ◐ started — `IMP-0117` in `WP-13`
+**Built.** ● done — `IMP-0117` in `WP-13`
 **Now.** `NEW`.
 
 **`SW-0118`** · `SI-06` · `P0` · `R1` — Simulated output never reaches a reader

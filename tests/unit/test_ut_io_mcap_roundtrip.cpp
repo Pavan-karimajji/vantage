@@ -104,5 +104,42 @@ TEST(UtIo22McapRoundtrip, SeekLandsOnTheFirstMessageAtOrAfterTheGivenTime) {
   EXPECT_EQ(batch.messages[1].log_time_ns, 3000);
 }
 
+// IMP-0117: `informational_only` (`RawMessage`, `io.hpp`) round-trips per
+// message through the real `.mcap` codec -- the codec-level carrier
+// `WP-13`'s own row named as a gap, closed here as `WP-06`'s (`SI-01`)
+// scope.
+TEST(UtIo22McapRoundtrip, InformationalOnlyRoundTripsPerMessage) {
+  CodecRegistry registry;
+  ASSERT_TRUE(codecs::RegisterMcap(registry).ok());
+
+  const std::filesystem::path path = TempPath("ut_io_22_informational_only.mcap");
+  auto writer = registry.OpenWrite(path);
+  ASSERT_TRUE(writer.ok());
+  ASSERT_TRUE(writer.value()->Open(path, {}).ok());
+
+  for (const auto& [t_ns, flagged] : {std::pair{1000, false}, std::pair{2000, true}, std::pair{3000, false}}) {
+    RawMessage message;
+    message.topic = "df.a";
+    message.log_time_ns = t_ns;
+    message.payload = {static_cast<std::uint8_t>(t_ns / 1000)};
+    message.informational_only = flagged;
+    writer.value()->Write(message);
+  }
+  writer.value()->Close();
+
+  auto reader = registry.OpenRead(path);
+  ASSERT_TRUE(reader.ok());
+  ASSERT_TRUE(reader.value()->Open(path).ok());
+
+  ReadBounds bounds;
+  bounds.max_messages = 100;
+  const Batch batch = reader.value()->ReadRange(bounds);
+
+  ASSERT_EQ(batch.messages.size(), 3u);
+  EXPECT_FALSE(batch.messages[0].informational_only);
+  EXPECT_TRUE(batch.messages[1].informational_only);
+  EXPECT_FALSE(batch.messages[2].informational_only);
+}
+
 }  // namespace
 }  // namespace simcore::io

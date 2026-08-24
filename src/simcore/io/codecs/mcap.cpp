@@ -29,6 +29,9 @@
 #define MCAP_IMPLEMENTATION
 #include <mcap/mcap.hpp>
 
+#include <set>
+#include <utility>
+
 #include "simcore/io.hpp"
 
 namespace simcore::io::codecs {
@@ -40,6 +43,14 @@ Error MakeError(Kind kind, std::string expected, std::string found, std::string 
 }
 
 const char kTopicProvenanceMetaName[] = "topic_provenance";
+// IMP-0117 (`WP-13`'s own named gap, `include/simcore/io.hpp::RawMessage::
+// informational_only`): a sibling `Metadata` record per flagged message,
+// written immediately beside it (never accumulated -- SW-0040/SW-0041's
+// "no reordering, no accumulation" applies to bookkeeping the same as to
+// payloads). Reuses the `topic_provenance` precedent one level down: mcap's
+// own `metadataIndexes()` is a `std::multimap`, so many records sharing this
+// one name is a supported, not a repurposed, shape.
+const char kInformationalOnlyMetaName[] = "informational_only";
 
 std::vector<std::uint8_t> ToBytes(const mcap::ByteArray& data) {
   return std::vector<std::uint8_t>(reinterpret_cast<const std::uint8_t*>(data.data()),
@@ -108,6 +119,14 @@ class McapWriter final : public Writer {
     msg.dataSize = message.payload.size();
     msg.data = reinterpret_cast<const std::byte*>(message.payload.data());
     (void)writer_.write(msg);
+
+    if (message.informational_only) {
+      mcap::Metadata flag;
+      flag.name = kInformationalOnlyMetaName;
+      flag.metadata["topic"] = message.topic;
+      flag.metadata["log_time_ns"] = std::to_string(message.log_time_ns);
+      (void)writer_.write(flag);
+    }
   }
 
   void WriteMeta(const std::string& kind_name, const std::vector<std::uint8_t>& bytes) override {
@@ -147,6 +166,7 @@ class McapReader final : public Reader {
           Kind::Environment, "a readable .mcap summary", summary_status.message, path.string()));
     }
     ReadTopicProvenance();
+    ReadInformationalOnly();
     ResetView(0);
     return Result<bool>::Ok(true);
   }
@@ -209,6 +229,20 @@ class McapReader final : public Reader {
     }
   }
 
+  void ReadInformationalOnly() {
+    const auto range = reader_.metadataIndexes().equal_range(kInformationalOnlyMetaName);
+    for (auto it = range.first; it != range.second; ++it) {
+      mcap::Record record;
+      if (!mcap::McapReader::ReadRecord(*reader_.dataSource(), it->second.offset, &record).ok()) continue;
+      mcap::Metadata metadata;
+      if (!mcap::McapReader::ParseMetadata(record, &metadata).ok()) continue;
+      const auto topic_it = metadata.metadata.find("topic");
+      const auto time_it = metadata.metadata.find("log_time_ns");
+      if (topic_it == metadata.metadata.end() || time_it == metadata.metadata.end()) continue;
+      informational_only_.emplace(topic_it->second, std::stoll(time_it->second));
+    }
+  }
+
   void ResetView(mcap::Timestamp start_time) {
     lookahead_.reset();
     mcap::ReadMessageOptions options(start_time, mcap::MaxTime);
@@ -238,6 +272,7 @@ class McapReader final : public Reader {
     msg.capture_time_ns = static_cast<std::int64_t>(mv.message.publishTime);
     const auto* byte_ptr = reinterpret_cast<const std::uint8_t*>(mv.message.data);
     msg.payload.assign(byte_ptr, byte_ptr + mv.message.dataSize);
+    msg.informational_only = informational_only_.count({msg.topic, msg.log_time_ns}) > 0;
     ++(*iterator_);
     return msg;
   }
@@ -249,6 +284,7 @@ class McapReader final : public Reader {
   std::optional<mcap::LinearMessageView::Iterator> iterator_;
   std::optional<RawMessage> lookahead_;
   std::map<std::string, std::string> provenance_by_topic_;
+  std::set<std::pair<std::string, std::int64_t>> informational_only_;
 };
 
 }  // namespace
