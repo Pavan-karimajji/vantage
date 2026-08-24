@@ -48,6 +48,7 @@ from adas_sim.config.scenario import Scenario
 from adas_sim.diagnostics.errors import InternalError
 from adas_sim.io.base import Provenance, RunManifest, TopicInfo
 from adas_sim.plugins.registry import writer_for
+from adas_sim.runspec import volume
 from adas_sim.sources.base import Source
 
 #: `max_bytes: 0` (undeclared) fallback -- mirrors `contracts/component.py`'s
@@ -55,8 +56,10 @@ from adas_sim.sources.base import Source
 #: agree on what "unknown" means.
 _DEFAULT_PORT_BYTES = 256
 
-#: `ST-C2-3`'s "revised after the first hundred ticks" threshold.
-REVISE_AFTER_TICKS = 100
+#: `IMP-0225` (`MOVE`): the real constant now lives in `runspec/volume.py`;
+#: re-exported here so `from adas_sim.sources.recorder import
+#: REVISE_AFTER_TICKS` (an existing test import) keeps working unchanged.
+REVISE_AFTER_TICKS = volume.REVISE_AFTER_TICKS
 
 
 def _qualified(prefix: str, port: str) -> str:
@@ -188,17 +191,24 @@ class Recorder:
         """`ST-C2-3`: an upper bound from each recorded port's own
         `max_bytes` (falling back to `_DEFAULT_PORT_BYTES` the same way an
         undeclared output cap does) times `ticks` -- the caller
-        (`cli/record.py`) labels this an upper bound, never a measurement."""
-        per_tick = len(self._wired_source_ports()) * _DEFAULT_PORT_BYTES
-        per_tick += sum(port_spec.max_bytes or _DEFAULT_PORT_BYTES for _stage, port_spec, _policy in self._recorded_stage_output_ports())
-        return per_tick * ticks
+        (`cli/record.py`) labels this an upper bound, never a measurement.
+        `IMP-0225` (`MOVE`): the arithmetic itself is `runspec.volume.
+        estimate_upper_bound_bytes`; this method only resolves this
+        `Recorder`'s own per-port byte caps into the plain list that
+        function takes."""
+        port_max_bytes = [_DEFAULT_PORT_BYTES for _ in self._wired_source_ports()]
+        port_max_bytes += [
+            port_spec.max_bytes or _DEFAULT_PORT_BYTES
+            for _stage, port_spec, _policy in self._recorded_stage_output_ports()
+        ]
+        return volume.estimate_upper_bound_bytes(port_max_bytes, ticks)
 
     def revised_estimate_bytes(self, total_ticks: int) -> int | None:
         """`None` until `REVISE_AFTER_TICKS` real ticks are written -- before
-        that, only `estimate_upper_bound_bytes` is honest to report."""
-        if self._ticks_written < REVISE_AFTER_TICKS:
-            return None
-        return int(self._bytes_written / self._ticks_written * total_ticks)
+        that, only `estimate_upper_bound_bytes` is honest to report.
+        `IMP-0225` (`MOVE`): delegates to `runspec.volume.
+        revised_estimate_bytes`."""
+        return volume.revised_estimate_bytes(self._bytes_written, self._ticks_written, total_ticks)
 
     def open(self, scenario: Scenario) -> None:
         self._source.start(scenario)

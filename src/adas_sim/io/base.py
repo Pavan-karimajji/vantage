@@ -105,6 +105,16 @@ class ComponentBuildInfo:
     #: own job. Kept as a field now so a recording written today already
     #: has a place for it, rather than retrofitting the schema later.
     package_ref: str = ""
+    #: `IMP-0226` (`R-SIM-24`, `S-C6`): this stage's own `modules/<name>/
+    #: sim/tolerance.yaml`, hashed -- `diagnostics.tolerance.ToleranceSet.
+    #: sha256`. `""` when the component declares no tolerance file (every
+    #: field exact, the honest zero-configuration case, `load_tolerance`'s
+    #: own default -- never an error).
+    tolerance_sha256: str = ""
+    #: `IMP-0215`'s own "timing model" half: this stage's own declared
+    #: sample period in integer nanoseconds (`R-SIM-18`), `0` when the
+    #: component declares none (runs every base-grid tick).
+    period_ns: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,6 +171,20 @@ class FaultRecord:
     from_s: float | None = None
     to_s: float | None = None
     after_tick: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DelayStepRecord:
+    """`IMP-0402` (`SW-0402`, `CN-0154`): one wired edge's declared transport
+    delay, exactly as `runspec/emit.py`'s own `stages[].inputs[].
+    delay_steps` carries it in the Resolved Run Spec (`0` = same-tick, the
+    universal default today -- `SW-0073`'s own execution-side consumption
+    of this value is separate, later work; this record only states what
+    was DECLARED, so a manifest reader can tell a same-tick result from a
+    delayed one even before that execution support lands)."""
+
+    edge: str  # "<consumer_stage>.<consumer_port>"
+    delay_steps: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -240,6 +264,54 @@ class RunManifest:
     #: (`core.ids.REQUIRED_KEYS` does not name it) so it cannot perturb what
     #: it measures.
     process_nonce: str = ""
+    #: `IMP-0216` (`SW-0216`, `IT-16`): the Resolved Run Spec's own
+    #: `spec_sha256` (`runspec/canon.py::compute_spec_sha256`) -- `""` when
+    #: no spec was emitted for this run (every caller predating `WP-05`'s
+    #: `emit.py`, or a `sim record` run with no pipeline at all). The spec
+    #: bytes themselves travel as a sibling artifact (`write_run_spec`'s own
+    #: `.spec.json`, `engine/bridge.py`'s convention); this field is the
+    #: hash a reader checks the two agree on, never a second copy of the
+    #: spec's own bytes.
+    run_spec_sha256: str = ""
+    #: `IMP-0224` (`SW-0224`, `CN-0114`): the whole pipeline's own
+    #: `graph.coherence.classify()` outcome, aggregated to worst-of
+    #: (`"broken"` if any finding is `BROKEN`, else `"orphan"` if any is
+    #: `ORPHAN`, else `"normal"`) -- `"unknown"` when no pipeline was
+    #: classified (a `sim record` run with no pipeline). `R-SIM-25`: an
+    #: explicit non-answer, never a guessed `"normal"`.
+    coherence_verdict: str = "unknown"
+    #: One `graph.coherence.render_finding()` string per finding
+    #: `classify()` returned -- empty when `coherence_verdict` is
+    #: `"normal"` or `"unknown"`, never a placeholder for an unclassified
+    #: run (`coherence_verdict` alone answers that).
+    coherence_findings: tuple[str, ...] = ()
+    #: `IMP-0224`: the first tick past which a `mode: simulate` stage's
+    #: output diverged from the recording it was resimmed against, as
+    #: `simcore::runner::divergence.cpp::DivergenceLatch` reports it --
+    #: `"unknown"` when no divergence observer supplied a value (today,
+    #: always: `simcore`'s divergence latch has no Python binding yet, so
+    #: this field is a real, honest placeholder rather than a guess that
+    #: the run never diverged).
+    divergence: str = "unknown"
+    #: `IMP-0222` (`SW-0222`): `"completed"` | `"failed"` | `"crashed"` |
+    #: `"timeout"` -- always one of these four, never blank, so a manifest
+    #: written from a `finally` states which of the four outcomes it is
+    #: reporting on.
+    outcome: str = "completed"
+    #: `IMP-0222`: the last cycle this run actually completed, `-1` when
+    #: unknown (a `completed` run's own `-1` means "not tracked per cycle
+    #: by this caller," never "zero cycles ran" -- callers that DO track
+    #: per-cycle progress pass the real count for every outcome, `completed`
+    #: included).
+    last_completed_cycle: int = -1
+    #: `IMP-0402` (`SW-0402`, `CN-0154`): every wired edge's declared
+    #: transport delay, in force for this run -- see `DelayStepRecord`'s own
+    #: docstring for what "in force" does and does not claim yet.
+    delay_steps: tuple[DelayStepRecord, ...] = field(default_factory=tuple)
+    #: `IMP-0215`'s own "timing model" half: `graph.grid.derive_step()` over
+    #: every non-`off` stage's declared period (`R-SIM-18`) -- `0` when no
+    #: stage declares a period (no pipeline, or every period `0`).
+    grid_step_ns: int = 0
 
     @property
     def known(self) -> bool:
@@ -300,6 +372,8 @@ def manifest_to_dict(manifest: RunManifest) -> dict:
                 "config_bundle_embedded": c.config_bundle_embedded,
                 "enabled_functions": list(c.enabled_functions),
                 "package_ref": c.package_ref,
+                "tolerance_sha256": c.tolerance_sha256,
+                "period_ns": c.period_ns,
             }
             for c in manifest.components
         ],
@@ -322,6 +396,16 @@ def manifest_to_dict(manifest: RunManifest) -> dict:
             {"address": o.address, "value": o.value} for o in manifest.bundle_overrides
         ],
         "base_config_bundle_sha256": manifest.base_config_bundle_sha256,
+        "run_spec_sha256": manifest.run_spec_sha256,
+        "coherence_verdict": manifest.coherence_verdict,
+        "coherence_findings": list(manifest.coherence_findings),
+        "divergence": manifest.divergence,
+        "outcome": manifest.outcome,
+        "last_completed_cycle": manifest.last_completed_cycle,
+        "delay_steps": [
+            {"edge": d.edge, "delay_steps": d.delay_steps} for d in manifest.delay_steps
+        ],
+        "grid_step_ns": manifest.grid_step_ns,
     }
 
 
@@ -342,6 +426,8 @@ def manifest_from_dict(data: dict) -> RunManifest:
             config_bundle_embedded=c.get("config_bundle_embedded", False),
             enabled_functions=tuple(c.get("enabled_functions", ())),
             package_ref=c.get("package_ref", ""),
+            tolerance_sha256=c.get("tolerance_sha256", ""),
+            period_ns=c.get("period_ns", 0),
         )
         for c in data.get("components", ())
     )
@@ -363,6 +449,10 @@ def manifest_from_dict(data: dict) -> RunManifest:
     bundle_overrides = tuple(
         BundleOverrideRecord(address=o["address"], value=o.get("value"))
         for o in data.get("bundle_overrides", ())
+    )
+    delay_steps = tuple(
+        DelayStepRecord(edge=d["edge"], delay_steps=d.get("delay_steps", 0))
+        for d in data.get("delay_steps", ())
     )
     return RunManifest(
         manifest_version=data.get("manifest_version", 0),
@@ -386,6 +476,14 @@ def manifest_from_dict(data: dict) -> RunManifest:
         faults=faults,
         bundle_overrides=bundle_overrides,
         base_config_bundle_sha256=data.get("base_config_bundle_sha256", ""),
+        run_spec_sha256=data.get("run_spec_sha256", ""),
+        coherence_verdict=data.get("coherence_verdict", "unknown"),
+        coherence_findings=tuple(data.get("coherence_findings", ())),
+        divergence=data.get("divergence", "unknown"),
+        outcome=data.get("outcome", "completed"),
+        last_completed_cycle=data.get("last_completed_cycle", -1),
+        delay_steps=delay_steps,
+        grid_step_ns=data.get("grid_step_ns", 0),
     )
 
 

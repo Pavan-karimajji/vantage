@@ -943,7 +943,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The latency model in force shall be recorded in the run manifest.
 **Accept.** Every declared delay appears in the manifest; a run reproduced from the manifest reproduces the delays.
 **Verify.** T · `SYT-TIM-20`   **Trace.** CN-0154
-**Built.** ○ not started — 0/1 software requirements done, in `WP-22`
+**Built.** ◐ started — 0/1 software requirements done, in `WP-22`
 
 ---
 
@@ -1086,7 +1086,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Every override shall appear in the run manifest, and an overridden port shall be badged in the player and tagged `overridden` on its topic.
 **Accept.** An override invisible in the manifest is not producible by any path.
 **Verify.** T · `SYT-STG-21`   **Trace.** CN-0131, CN-0299
-**Built.** ◐ started — 4/5 software requirements done, in `WP-05`, `WP-11`, `WP-22`
+**Built.** ● done — 5/5 software requirements done
 
 **`SYS-0102`** · `P1` · `R1` — An override contradicting coherence is a waiver
 **Shall.** An override that contradicts the coherence classification shall be treated exactly like a waiver.
@@ -1149,7 +1149,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Outputs shall be plugins; zero or more may be active, and a run with no outputs shall be legal.
 **Accept.** A run with every exporter disabled completes successfully and still writes a run manifest.
 **Verify.** T · `SYT-OUT-01`   **Trace.** CN-0107
-**Built.** ○ not started — 0/1 software requirements done, in `WP-22`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0111`** · `P0` · `R1` — Export formats for release one
 **Shall.** The system shall export to the interchange format, to a columnar text format, and to a replayable recording the system can read back.
@@ -1174,7 +1174,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Every artifact shall embed the run manifest.
 **Accept.** Any artifact, taken alone to another machine, identifies the run that produced it.
 **Verify.** T · `SYT-OUT-04`   **Trace.** CN-0111, CN-0203
-**Built.** ◐ started — 1/2 software requirements done, in `WP-06`, `WP-22`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0115`** · `P0` · `R1` — Exports preserve the header
 **Shall.** Exported data shall preserve the signal header, including origin and mode.
@@ -1192,7 +1192,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Recording volume shall be estimated before a run or campaign starts, labelled an upper bound, and revised from the measured rate.
 **Accept.** The estimate for a known recording is within a stated factor of the actual; the campaign refuses to start if the estimate exceeds a configured budget.
 **Verify.** T · `SYT-OUT-07` · `ANL-14`   **Trace.** CN-0317, CN-0376; v1 `NR-SIM-23`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-22`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0118`** · `P0` · `R1` — Bulk data is referenced, not inlined
 **Shall.** Bulk arrays — point clouds, images, occupancy grids — shall be referenced into the recording by topic and time, never inlined into a scene or a tick structure.
@@ -1230,7 +1230,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Every run shall produce a machine-readable run manifest carrying at minimum: tool version, resolved run spec and its hash, module ids/versions/binary hashes, input paths and content hashes, per-module mode and implementation, timing model, reset policy, coherence result, divergence point, override list, per-port record policy, per-port timing-recovery rung, host platform, and start and end time.
 **Accept.** Every listed field is present in every manifest, each either a value or an explicit *unknown*. A field that cannot be filled never carries a plausible default.
 **Verify.** T · `SYT-OUT-13`   **Trace.** CN-0113, CN-0252, CN-0114; v1 `NR-SIM-4`
-**Built.** ◐ started — 2/7 software requirements done, in `WP-05`, `WP-15`, `WP-22`
+**Built.** ◐ started — 6/7 software requirements done, in `WP-05`, `WP-15`, `WP-22`
 
 **`SYS-0124`** · `P0` · `R1` — Reproducible from the manifest alone
 **Shall.** A past run shall be reproducible from its manifest alone.
@@ -1372,7 +1372,7 @@ None of the three is superseded — their `Shall`/`Accept` text is unchanged and
 **Shall.** A snapshot shall be a single frame plus a provenance sidecar, written atomically — both or neither — and two snapshots of the same cycle shall be byte-identical.
 **Accept.** Interrupting a snapshot write leaves neither file. Two snapshots of one cycle hash equal.
 **Verify.** T · `SYT-PLR-23`   **Trace.** CN-0341; v1 `FR-SIM-13`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-22`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0153`** · `P0` · `R1` — From anything on screen to the bytes that produced it
 **Shall.** For any primitive, layer or plotted sample, the system shall answer in one action: which port, topic, tick, origin tag, source timestamp, configuration bundle and module build produced it, and whether the value was published by a module or reconstructed by a layer.
@@ -1457,7 +1457,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The system shall produce a Resolved Run Spec — flat, with every path resolved, every mode decided, every period computed, every validation passed — write it and its hash into the run artifacts, and treat it as the only input the engine takes.
 **Accept.** The engine performs no configuration inference, no schema upgrading, no wiring validation and no library search-path logic; it requires no configuration-language parser. The same spec hash always produces the same results.
 **Verify.** T · `SYT-CFG-08` · `ANL-24`   **Trace.** CN-0292, CN-0293, CN-0294, CN-0296, CN-0179; v1 `FR-SIM-30`
-**Built.** ◐ started — 8/9 software requirements done, in `WP-05`, `WP-09`, `WP-13`, `WP-16`, `WP-22`
+**Built.** ● done — 9/9 software requirements done
 
 **`SYS-0166`** · `P0` · `R1` — Absolute, pre-resolved binary paths
 **Shall.** The Resolved Run Spec shall carry absolute, already-resolved paths for every module binary; the engine shall perform no stem expansion and consult no search path.
@@ -1501,7 +1501,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** Every configuration file shall carry a schema version, and an unrecognised version shall be refused rather than best-guessed.
 **Accept.** A file with a future version is refused naming both versions. A file with no version is refused naming the omission.
 **Verify.** T · `SYT-CFG-13`   **Trace.** CN-0345; v1 `CR-SIM-23`
-**Built.** ◐ started — 3/4 software requirements done, in `WP-04`, `WP-05`, `WP-12`, `WP-22`
+**Built.** ● done — 4/4 software requirements done
 
 **`SYS-0171`** · `P0` · `R1` — Validation at load, never at first cycle
 **Shall.** Every reference shall resolve, every mode shall be checked against the recording, and every type shall match, at load; every failure shall name both ends.
@@ -1684,7 +1684,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** A downloaded artifact directory shall open in the player with no access to the originating machine.
 **Accept.** `E2E-08` completes from a downloaded archive on a clean machine.
 **Verify.** T · `E2E-08`   **Trace.** CN-0203
-**Built.** ○ not started — 0/2 software requirements done, in `WP-22`, `WP-23`
+**Built.** ◐ started — 0/2 software requirements done, in `WP-22`, `WP-23`
 
 **`SYS-0198`** · `P1` · `R1` — Watchdog, and its automatic suspension
 **Shall.** An optional watchdog shall abort a run whose module exceeds a configured processing time, and shall be automatically disabled when a debugger is attached or in debug mode.
@@ -2038,7 +2038,7 @@ Superseded (`SM-04`, 2026-08-20 — sole decomposer was `SI-18`'s scene-cache-bu
 **Shall.** Which axis a comparison exercises shall be derived from the two runs' manifests — host, process identity, library hash, build id, configuration bundle hash — and a pair differing in more than one dimension shall not be accepted as evidence for the narrower axis.
 **Accept.** A pair differing in host *and* build is reported as inconclusive for both axes, naming both differences.
 **Verify.** T · `SYT-NFR-09`   **Trace.** CN-0364
-**Built.** ○ not started — 0/2 software requirements done, in `WP-22`, `WP-24`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-22`, `WP-24`
 
 **`SYS-0242`** · `P0` · `R1` — The comparison is over port values, never file bytes
 **Shall.** Reproducibility comparison shall be over port values, never over recording file bytes.
@@ -2050,7 +2050,7 @@ Superseded (`SM-04`, 2026-08-20 — sole decomposer was `SI-18`'s scene-cache-bu
 **Shall.** Tolerance shall be declared once per component and field, defaulting to exact, with integers and enumerations exact and not overridable, every row carrying a mandatory written reason, and the declaration's hash recorded in the run manifest.
 **Accept.** A tolerance row with no reason is refused. A passing report prints the tolerance used and the headroom consumed, so a widening trend is visible without anyone choosing to look. The first two axes have no tolerance field at all, so there is nothing to widen.
 **Verify.** T · `SYT-NFR-11`   **Trace.** CN-0365; v1 `NR-SIM-40`
-**Built.** ○ not started — 0/3 software requirements done, in `WP-22`, `WP-24`
+**Built.** ◐ started — 1/3 software requirements done, in `WP-22`, `WP-24`
 
 **`SYS-0244`** · `P0` · `R1` — A divergence report names the first difference
 **Shall.** A divergence shall be reported with the first diverging tick, port, field and the bound in force.

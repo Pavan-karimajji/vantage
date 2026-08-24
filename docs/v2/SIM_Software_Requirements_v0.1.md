@@ -2210,105 +2210,105 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Every run shall produce a manifest carrying at minimum: tool version, resolved spec and its hash, module identities, versions and binary hashes, input paths and content hashes, per-module mode and implementation, timing model, reset policy, coherence result, divergence point, override and fault list, per-port record policy, per-port timing-recovery rung, host platform, and start and end time.
 **Accept.** Every listed field is present in every manifest, each either a value or an explicit *unknown*; no field carries a plausible default.
 **Verify.** T · `UT-SPC-09`   **Trace.** SYS-0123
-**Built.** ○ not started — `IMP-0215` in `WP-22`
+**Built.** ◐ started — `IMP-0215` in `WP-22`
 **Now.** `PARTIAL` — `core/manifest.py::build_manifest` carries roughly two thirds: identities, hashes, modes, overrides, faults, record policy, bundle hashes, host and clock. Coherence result, divergence point, timing model, reset policy and recovery rung are absent because the mechanisms behind them are.
 
 **`SW-0216`** · `SI-14` · `P0` · `R1` — A run is reproducible from its manifest alone
 **Shall.** A past run shall be reproducible from its manifest without access to the originating machine.
 **Accept.** Reproduction succeeds on a clean machine from a downloaded artifact directory and produces identical port values.
 **Verify.** T · `IT-16`   **Trace.** SYS-0124, SYS-0197
-**Built.** ○ not started — `IMP-0216` in `WP-22`
+**Built.** ◐ started — `IMP-0216` in `WP-22`
 **Now.** `PARTIAL` — cross-host resim is implemented and tested; reproduction is driven from the pipeline file rather than from the manifest.
 
 **`SW-0217`** · `SI-14` · `P0` · `R1` — Every artifact embeds the manifest
 **Shall.** Every artifact the system writes shall embed the run manifest.
 **Accept.** Any artifact taken alone to another machine identifies the run that produced it.
 **Verify.** T · `UT-SPC-10`   **Trace.** SYS-0114
-**Built.** ○ not started — `IMP-0217` in `WP-22`
+**Built.** ● done — `IMP-0217` in `WP-22`
 **Now.** `DONE·MOVE` — recordings, snapshots and exports all embed it today.
 
 **`SW-0218`** · `SI-14` · `P0` · `R1` — Two manifests differing in one dimension are comparable
 **Shall.** The manifest shall carry each reproducibility dimension — host, process identity, library hash, build identity, configuration bundle hash — as its own field.
 **Accept.** The determinism axis of a pair is derivable from the fields alone with no flag supplied by the caller.
 **Verify.** T · `UT-SPC-11`   **Trace.** SYS-0241
-**Built.** ○ not started — `IMP-0218` in `WP-22`
+**Built.** ● done — `IMP-0218` in `WP-22`
 **Now.** `DONE` — `core/determinism.py::derive_axis` derives the axis from exactly these fields and reports a multi-dimension difference as inconclusive.
 
 **`SW-0219`** · `SI-14` · `P0` · `R1` — Every override and fault appears in the manifest
 **Shall.** Every override, fault and bundle-value override in force shall appear in the run manifest as a structured record.
 **Accept.** An override invisible in the manifest is not producible by any path.
 **Verify.** T · `UT-SPC-12`   **Trace.** SYS-0101
-**Built.** ○ not started — `IMP-0219` in `WP-22`
+**Built.** ● done — `IMP-0219` in `WP-22`
 **Now.** `DONE` — `core/manifest.py`'s `_override_records`, `_fault_records` and `_bundle_override_records`.
 
 **`SW-0220`** · `SI-14` · `P1` · `R1` — A manifest field that cannot be filled reads `unknown`
 **Shall.** A manifest field the system cannot determine shall read *unknown* and shall never carry a plausible-looking default.
 **Accept.** No default value in the manifest schema resembles a real answer. A crafted incomplete environment produces `unknown`, not a substitute.
 **Verify.** T · `UT-SPC-13`   **Trace.** SYS-0123; v1 `NR-SIM-4`
-**Built.** ○ not started — `IMP-0220` in `WP-22`
+**Built.** ● done — `IMP-0220` in `WP-22`
 **Now.** `DONE` — the discipline is established, including the specific case of never defaulting a project name to a real-looking one.
 
 **`SW-0221`** · `SI-14` · `P1` · `R1` — The run identifier is derived and stable
 **Shall.** A run identifier shall be derived from the run's own inputs, stable for identical inputs and different for any change.
 **Accept.** Two runs from identical inputs share an identifier; changing any input changes it.
 **Verify.** T · `UT-SPC-14`   **Trace.** SYS-0123, SYS-0165
-**Built.** ○ not started — `IMP-0221` in `WP-22`
+**Built.** ● done — `IMP-0221` in `WP-22`
 **Now.** `DONE·MOVE` — `core/ids.py::new_run_id`, with its hashed inputs enumerated and unit-tested.
 
 **`SW-0222`** · `SI-14` · `P1` · `R1` — The manifest is written even when the run fails
 **Shall.** A manifest shall be written for a run that failed, crashed or timed out, carrying the outcome and the last completed cycle.
 **Accept.** All four outcomes produce a manifest. A crashed run's manifest is written from outside the worker.
 **Verify.** T · `UT-SPC-15`   **Trace.** SYS-0186, SYS-0188
-**Built.** ○ not started — `IMP-0222` in `WP-22`
+**Built.** ◐ started — `IMP-0222` in `WP-22`
 **Now.** `PARTIAL` — `core/batch.py` records the outcome per run; the failing run's own manifest is not always written.
 
 **`SW-0223`** · `SI-14` · `P1` · `R1` — A run with no outputs still writes a manifest
 **Shall.** A run with every exporter disabled shall complete successfully and shall still write a run manifest.
 **Accept.** The manifest is present and complete; the artifact directory contains it and nothing else.
 **Verify.** T · `UT-SPC-16`   **Trace.** SYS-0110
-**Built.** ○ not started — `IMP-0223` in `WP-22`
+**Built.** ● done — `IMP-0223` in `WP-22`
 **Now.** `PARTIAL`.
 
 **`SW-0224`** · `SI-14` · `P1` · `R1` — The manifest carries the coherence classification and the divergence point
 **Shall.** The manifest shall carry the coherence classification and the divergence point, so a downstream consumer reading only the manifest can determine whether the run was physically valid and up to which time.
 **Accept.** Both fields are present in every manifest, each a value or explicit *unknown*.
 **Verify.** T · `UT-SPC-17`   **Trace.** SYS-0107, SYS-0092
-**Built.** ○ not started — `IMP-0224` in `WP-22`
+**Built.** ◐ started — `IMP-0224` in `WP-22`
 **Now.** `NEW`.
 
 **`SW-0225`** · `SI-14` · `P1` · `R1` — Recording volume is estimated before it is produced
 **Shall.** The system shall estimate recording volume before a run or campaign starts, label it an upper bound, and revise it from the measured rate.
 **Accept.** The estimate for a known recording is within a stated factor of the actual, and a campaign refuses to start when the estimate exceeds a configured budget.
 **Verify.** T · `UT-SPC-18`   **Trace.** SYS-0117
-**Built.** ○ not started — `IMP-0225` in `WP-22`
+**Built.** ● done — `IMP-0225` in `WP-22`
 **Now.** `DONE·MOVE` — campaign sizing is implemented and tested.
 
 **`SW-0226`** · `SI-14` · `P1` · `R1` — The tolerance declaration's hash is in the manifest
 **Shall.** The determinism tolerance declaration in force shall have its content hash recorded in the run manifest.
 **Accept.** A changed tolerance file changes the hash. A comparison across two runs with different tolerance hashes reports that fact.
 **Verify.** T · `UT-SPC-19`   **Trace.** SYS-0243
-**Built.** ○ not started — `IMP-0226` in `WP-22`
+**Built.** ● done — `IMP-0226` in `WP-22`
 **Now.** `DONE·MOVE` — `core/tolerance.py` plus the manifest field.
 
 **`SW-0227`** · `SI-14` · `P1` · `R1` — The manifest is written atomically
 **Shall.** A manifest shall appear complete or not at all.
 **Accept.** Interrupting the write leaves no partial manifest. A reader never observes a truncated one.
 **Verify.** T · `UT-SPC-20`   **Trace.** SYS-0152, SYS-0123
-**Built.** ○ not started — `IMP-0227` in `WP-22`
+**Built.** ● done — `IMP-0227` in `WP-22`
 **Now.** `DONE·MOVE` — the atomic both-or-neither pattern exists in `render/capture.py` and generalises directly.
 
 **`SW-0228`** · `SI-14` · `P1` · `R1` — The manifest schema is versioned and published
 **Shall.** The run manifest shall carry its own schema version, and the schema shall be published for the external automation framework to read against.
 **Accept.** A consumer pinned to a major version refuses a manifest outside it, naming both.
 **Verify.** T · `UT-SPC-21`   **Trace.** SYS-0123, SYS-0170
-**Built.** ○ not started — `IMP-0228` in `WP-22`
+**Built.** ● done — `IMP-0228` in `WP-22`
 **Now.** `PARTIAL` — a `version` field exists; the schema is not published.
 
 **`SW-0402`** · `SI-14` · `P1` · `R1` — The latency model in force is recorded
 **Shall.** Every declared transport delay shall appear in the run manifest, and a run reproduced from the manifest shall reproduce the delays.
 **Accept.** The reproduced run's consumed values are shifted identically.
 **Verify.** T · `UT-SPC-22`   **Trace.** SYS-0079
-**Built.** ○ not started — `IMP-0402` in `WP-22`
+**Built.** ◐ started — `IMP-0402` in `WP-22`
 **Now.** `NEW` — depends on `SW-0073`.
 
 ---

@@ -25,6 +25,7 @@ parser reads both and there is no second format to keep in sync.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import socket
 import tempfile
@@ -32,22 +33,28 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from warnings import warn
 
+import jsonschema
 import yaml
 
 from adas_sim.graph.build import Pipeline, record_policy_for
+from adas_sim.graph.coherence import Verdict, classify, render_finding
+from adas_sim.graph.grid import derive_step
 from adas_sim.diagnostics.errors import AuthoringError, ContractError, ProvenanceWarning
 from adas_sim.runspec.ids import new_run_id
 from adas_sim.io.base import (
     CAPTURE_TIME_MANIFEST_VERSION,
     BundleOverrideRecord,
     ComponentBuildInfo,
+    DelayStepRecord,
     FaultRecord,
     OverrideRecord,
     RecordPolicyRecord,
     RunManifest,
+    manifest_to_dict,
 )
 from adas_sim.plugins.registry import reader_for
 from adas_sim.config.project import ProjectModel, materialize_derived_bundle
@@ -151,6 +158,36 @@ def _record_policy_records(pipeline: Pipeline) -> tuple[RecordPolicyRecord, ...]
     return records
 
 
+def _coherence_summary(pipeline: Pipeline) -> tuple[str, tuple[str, ...]]:
+    """`IMP-0224`: `graph.coherence.classify(pipeline)`, aggregated to one
+    worst-of verdict plus every finding's rendered text -- `"broken"` beats
+    `"orphan"` beats `"normal"`, so a manifest reader gets ONE answer to
+    "was this run physically valid" without re-deriving it from the finding
+    list themselves."""
+    findings = classify(pipeline)
+    if any(f.verdict == Verdict.BROKEN for f in findings):
+        verdict = Verdict.BROKEN
+    elif any(f.verdict == Verdict.ORPHAN for f in findings):
+        verdict = Verdict.ORPHAN
+    else:
+        verdict = Verdict.NORMAL
+    return verdict.value, tuple(render_finding(f) for f in findings)
+
+
+def _delay_step_records(pipeline: Pipeline) -> tuple[DelayStepRecord, ...]:
+    """`IMP-0402`: every wired edge's declared `delay_steps` (`Stage.
+    port_modes`'s sibling concept in the wiring grammar -- `0` for every
+    edge today, since no `delay:`/one-step-delay authoring syntax exists
+    yet, `SW-0073`'s own dependency). Declared honestly as `0` (same-tick)
+    for every edge rather than omitted, so a manifest reader can already
+    tell "declared same-tick" from "field absent" once that syntax lands."""
+    records: list[DelayStepRecord] = []
+    for stage in pipeline.stages:
+        for port in sorted(stage.inputs):
+            records.append(DelayStepRecord(edge=f"{stage.name}.{port}", delay_steps=0))
+    return tuple(records)
+
+
 def build_manifest(
     *,
     pipeline: Pipeline | None = None,
@@ -164,6 +201,7 @@ def build_manifest(
     component_build_shas: Mapping[str, str] | None = None,
     component_bundle_paths: Mapping[str, str] | None = None,
     component_bundle_shas: Mapping[str, str] | None = None,
+    component_tolerance_shas: Mapping[str, str] | None = None,
     config_bundle_embedded: bool = False,
     bundle_sha: str = "",
     bundle_overrides: Mapping[str, object] | None = None,
@@ -171,6 +209,10 @@ def build_manifest(
     seed: int = 0,
     host: str = "",
     clock: datetime | None = None,
+    run_spec_sha256: str = "",
+    divergence: str = "unknown",
+    outcome: str = "completed",
+    last_completed_cycle: int = -1,
 ) -> RunManifest:
     """`run_kind` is `"sim"` or `"resim"`; `source_kind` is the `Source.name`.
 
@@ -193,11 +235,24 @@ def build_manifest(
           (`NR-SIM-6`): the declared override set and the hash of the bundle it was
           derived from. Distinct from `bundle_sha`, which reports whatever bundle
           was actually resolved -- the derived one, for a swept run.
+        - `component_tolerance_shas` is keyed by stage name, `diagnostics.tolerance.
+          ToleranceSet.sha256` per component (`IMP-0226`) -- absent/`""` for a
+          component with no `tolerance.yaml` (every field exact).
+        - `run_spec_sha256` is `runspec/canon.py::compute_spec_sha256`'s own result
+          for this run's Resolved Run Spec (`IMP-0216`) -- `""` when no spec was
+          emitted.
+        - `divergence` is `simcore`'s own first-diverging-tick report (`IMP-0224`);
+          `"unknown"` (the default) until a caller has one to supply -- no Python
+          binding to `simcore::runner::divergence.cpp` exists yet.
+        - `outcome`/`last_completed_cycle` (`IMP-0222`) let a caller writing this
+          manifest from a `finally` after a crash or timeout state which of the
+          four outcomes happened and how far the run actually got.
 
     """
     component_build_shas = component_build_shas or {}
     component_bundle_paths = component_bundle_paths or {}
     component_bundle_shas = component_bundle_shas or {}
+    component_tolerance_shas = component_tolerance_shas or {}
     bundle_overrides = bundle_overrides or {}
     pipeline_sha = _sha256_file(pipeline_path) if pipeline_path is not None and pipeline_path.exists() else ""
     recording_sha = _sha256_file(recording_path) if recording_path is not None and recording_path.exists() else ""
@@ -228,9 +283,15 @@ def build_manifest(
             config_bundle=component_bundle_paths.get(stage.name, ""),
             config_bundle_sha256=component_bundle_shas.get(stage.name, ""),
             config_bundle_embedded=config_bundle_embedded,
+            tolerance_sha256=component_tolerance_shas.get(stage.name, ""),
+            period_ns=pipeline.manifest_for(stage.name).period_ns,
         )
         for stage in pipeline.stages if stage.mode != "off"
     ) if pipeline is not None else ()
+
+    coherence_verdict, coherence_findings = _coherence_summary(pipeline) if pipeline is not None else ("unknown", ())
+    delay_steps = _delay_step_records(pipeline) if pipeline is not None else ()
+    grid_step_ns = derive_step([c.period_ns for c in components]) if pipeline is not None else 0
 
     when = clock if clock is not None else datetime.now(timezone.utc)
     return RunManifest(
@@ -255,7 +316,83 @@ def build_manifest(
         seed=seed,
         allow_mixed_projects=pipeline.allow_mixed_projects if pipeline is not None else False,
         process_nonce=_PROCESS_NONCE,
+        run_spec_sha256=run_spec_sha256,
+        coherence_verdict=coherence_verdict,
+        coherence_findings=coherence_findings,
+        divergence=divergence,
+        outcome=outcome,
+        last_completed_cycle=last_completed_cycle,
+        delay_steps=delay_steps,
+        grid_step_ns=grid_step_ns,
     )
+
+
+#: `IMP-0228` (`SW-0228`): the published schema, same self-check pattern
+#: `runspec/emit.py::validate_run_spec` already uses for `run_spec.
+#: schema.json` -- the emitter and the schema can never silently drift.
+_MANIFEST_SCHEMA_PATH = Path(__file__).parent / "schema" / "run_manifest.schema.json"
+
+#: `IMP-0228`: the `manifest_version` range this reader accepts -- a
+#: manifest outside it is refused naming both (`SW-0228`'s own Accept
+#: clause), never silently read as if it were the version we expect.
+SUPPORTED_MANIFEST_VERSION_MIN = 1
+SUPPORTED_MANIFEST_VERSION_MAX = CAPTURE_TIME_MANIFEST_VERSION
+
+
+@lru_cache(maxsize=None)
+def _manifest_schema() -> dict:
+    return json.loads(_MANIFEST_SCHEMA_PATH.read_text(encoding="utf-8"))
+
+
+def validate_manifest(manifest: RunManifest) -> None:
+    """The Python-side self-check against the published schema -- mirrors
+    `runspec/emit.py::validate_run_spec` exactly."""
+    jsonschema.validate(instance=manifest_to_dict(manifest), schema=_manifest_schema())
+
+
+def check_manifest_version(data: Mapping[str, object]) -> None:
+    """`SW-0228`'s own "a consumer pinned to a major version refuses a
+    manifest outside it, naming both" -- refuses before a caller reads any
+    other field of a manifest this reader does not understand."""
+    version = data.get("manifest_version", 0)
+    if not isinstance(version, int) or not (SUPPORTED_MANIFEST_VERSION_MIN <= version <= SUPPORTED_MANIFEST_VERSION_MAX):
+        raise ContractError(
+            expected=f"manifest_version between {SUPPORTED_MANIFEST_VERSION_MIN} and {SUPPORTED_MANIFEST_VERSION_MAX}",
+            found=f"manifest_version={version!r}",
+            where="run_manifest.json",
+            hint="this reader does not understand a manifest outside its supported version range",
+        )
+
+
+#: `IMP-0215`'s own filename -- the one place this name is spelled, so a
+#: caller checking "did this run leave a manifest on disk" and this
+#: function agree by construction rather than by convention.
+RUN_MANIFEST_FILENAME = "run_manifest.json"
+
+
+def write_manifest(manifest: RunManifest, dir: Path) -> Path:
+    """`IMP-0215`/`IMP-0223`/`IMP-0227`: the one writer of a standalone,
+    on-disk `run_manifest.json` -- distinct from `build_manifest`'s result
+    being EMBEDDED in a recording (`Recorder`/`RecordingWriter.open`,
+    `R-SIM-6`). Every run gets one of these, whether or not it also
+    produces a recording (`SW-0223`'s "zero exporters" case) and whether or
+    not it succeeded (`SW-0222` -- a caller writes this from a `finally`,
+    passing `build_manifest`'s own `outcome=`/`last_completed_cycle=`).
+
+    Atomic (`SW-0227`, `R-SIM-3a`'s own discipline): written to `<dir>/
+    run_manifest.json.tmp` then `os.replace`d into place, so a reader never
+    observes a partial file -- interrupting the write leaves either the
+    previous manifest (if any) or nothing, never a truncated one. `dir` is
+    created if it does not already exist (mirrors `Recorder`'s own
+    "the caller owns the artifact directory" convention).
+
+    Returns the path written."""
+    dir.mkdir(parents=True, exist_ok=True)
+    final_path = dir / RUN_MANIFEST_FILENAME
+    tmp_path = dir / f"{RUN_MANIFEST_FILENAME}.tmp"
+    tmp_path.write_text(json.dumps(manifest_to_dict(manifest), indent=2, sort_keys=False), encoding="utf-8")
+    os.replace(tmp_path, final_path)
+    return final_path
 
 
 def verify_pinned_builds(pipeline: Pipeline, recording_path: Path) -> None:

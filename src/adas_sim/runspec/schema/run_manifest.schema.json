@@ -1,0 +1,127 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "adas-sim/run_manifest.schema.json",
+  "title": "adas-sim Run Manifest (SI-14, design doc SS17, SW-0228)",
+  "description": "The provenance of one run -- tool version, resolved spec and its hash, module identities and hashes, coherence and divergence, overrides/faults, per-port record policy, host and timing. Written for every run, standalone (run_manifest.json, IMP-0215/IMP-0223) and embedded in every artifact this system writes (IMP-0217). A field the system cannot determine is the literal string 'unknown', never a plausible default (R-SIM-25).",
+  "type": "object",
+  "required": [
+    "manifest_version", "run_id", "run_kind", "created_utc", "host",
+    "source_kind", "project", "components", "overrides", "record_policies",
+    "faults", "bundle_overrides", "run_spec_sha256", "coherence_verdict",
+    "coherence_findings", "divergence", "outcome", "last_completed_cycle",
+    "delay_steps", "grid_step_ns", "seed", "allow_mixed_projects", "process_nonce"
+  ],
+  "properties": {
+    "manifest_version": {"type": "integer", "minimum": 0},
+    "run_id": {"type": "string"},
+    "run_kind": {"enum": ["", "sim", "resim"]},
+    "created_utc": {"type": "string"},
+    "host": {"type": "string"},
+    "source_kind": {"type": "string"},
+    "scenario": {"type": "string"},
+    "scenario_sha256": {"type": "string"},
+    "recording": {"type": "string"},
+    "recording_sha256": {"type": "string"},
+    "project": {"type": "string"},
+    "pipeline": {"type": "string"},
+    "seed": {"type": "integer"},
+    "allow_mixed_projects": {"type": "boolean"},
+    "process_nonce": {"type": "string"},
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name", "library_sha256", "build_id", "abi_version",
+          "manifest_sha256", "config_bundle", "config_bundle_sha256",
+          "config_bundle_embedded", "enabled_functions", "package_ref",
+          "tolerance_sha256", "period_ns"
+        ],
+        "properties": {
+          "name": {"type": "string"},
+          "library_sha256": {"type": "string"},
+          "build_id": {"type": "string"},
+          "abi_version": {"type": "integer"},
+          "manifest_sha256": {"type": "string"},
+          "config_bundle": {"type": "string"},
+          "config_bundle_sha256": {"type": "string"},
+          "config_bundle_embedded": {"type": "boolean"},
+          "enabled_functions": {"type": "array", "items": {"type": "string"}},
+          "package_ref": {"type": "string"},
+          "tolerance_sha256": {"type": "string"},
+          "period_ns": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "overrides": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["stage", "address", "verb"],
+        "properties": {
+          "stage": {"type": "string"},
+          "address": {"type": "string"},
+          "verb": {"type": "string"},
+          "value": {"type": ["number", "null"]}
+        }
+      }
+    },
+    "record_policies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["port", "verb", "decimate_n"],
+        "properties": {
+          "port": {"type": "string"},
+          "verb": {"type": "string"},
+          "decimate_n": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "faults": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["verb", "address"],
+        "properties": {
+          "verb": {"type": "string"},
+          "address": {"type": "string"},
+          "value": {"type": ["number", "null"]},
+          "from_s": {"type": ["number", "null"]},
+          "to_s": {"type": ["number", "null"]},
+          "after_tick": {"type": ["integer", "null"]}
+        }
+      }
+    },
+    "bundle_overrides": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["address"],
+        "properties": {
+          "address": {"type": "string"},
+          "value": {}
+        }
+      }
+    },
+    "base_config_bundle_sha256": {"type": "string"},
+    "run_spec_sha256": {"type": "string"},
+    "coherence_verdict": {"enum": ["normal", "orphan", "broken", "unknown"]},
+    "coherence_findings": {"type": "array", "items": {"type": "string"}},
+    "divergence": {"type": "string"},
+    "outcome": {"enum": ["completed", "failed", "crashed", "timeout"]},
+    "last_completed_cycle": {"type": "integer", "minimum": -1},
+    "delay_steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["edge", "delay_steps"],
+        "properties": {
+          "edge": {"type": "string"},
+          "delay_steps": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "grid_step_ns": {"type": "integer", "minimum": 0}
+  }
+}
