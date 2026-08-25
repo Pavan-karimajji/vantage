@@ -1236,7 +1236,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A past run shall be reproducible from its manifest alone.
 **Accept.** `E2E-08` completes on a machine with no access to the originating machine.
 **Verify.** T · `E2E-08`   **Trace.** CN-0253, CN-0296
-**Built.** ◐ started — 0/2 software requirements done, in `WP-21`, `WP-22`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-21`, `WP-22`
 
 **`SYS-0125`** · `P0` · `R1` — Distinct exit codes
 **Shall.** The system shall return distinct, documented exit codes for at least: success, configuration error, coherence violation, module failure, input or integrity error, and infrastructure error — identical on both platforms.
@@ -1463,7 +1463,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The Resolved Run Spec shall carry absolute, already-resolved paths for every module binary; the engine shall perform no stem expansion and consult no search path.
 **Accept.** Which file was chosen is decided once, recorded in the manifest, and reproducible. Changing the search path after resolution cannot change which binary the engine loads.
 **Verify.** T · `SYT-CFG-09`   **Trace.** CN-0384, CN-0385
-**Built.** ◐ started — 5/6 software requirements done, in `WP-05`, `WP-10`, `WP-21`
+**Built.** ● done — 6/6 software requirements done
 
 **`SYS-0287`** · `P0` · `R1` — Resolution is two passes: probe, then emit
 **Shall.** The system shall obtain, before emitting a Resolved Run Spec, a **recording index** stating what each named recording carries and a **module manifest** stating what each named module declares; and both shall be read through the same interfaces the run itself uses.
@@ -1625,7 +1625,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** Every crash shall record recording, configuration, last completed cycle, captured standard error and run id; a worker shall checkpoint progress so a crashing run's last completed cycle is known.
 **Accept.** From the crash record alone, the failure is reopened in process on a developer machine.
 **Verify.** T · `SYT-BAT-08`   **Trace.** CN-0348, CN-0349, CN-0223; v1 `NR-SIM-22`
-**Built.** ◐ started — 4/6 software requirements done, in `WP-06`, `WP-13`, `WP-22`, `WP-23`, `WP-27`
+**Built.** ◐ started — 5/6 software requirements done, in `WP-06`, `WP-13`, `WP-22`, `WP-23`, `WP-27`
 
 **`SYS-0189`** · `P1` · `R1` — Parameter sweeps
 **Shall.** Parameter sweeps shall be supported.

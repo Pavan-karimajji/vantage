@@ -6,7 +6,7 @@
 """`S-D8` `ProbePanel` tests (`docs/sim_implementation_plan.md`,
 `sim_player.md` §4): probing a real, unloadable path fails visibly (no
 DLL needed for this half); probing a real manifest (mocked
-`CtypesSilComponent`, the same "no DLL in this shell" boundary the rest
+`probe_manifest`, the same "no DLL in this shell" boundary the rest
 of this session's own tests draw) renders every input/output port."""
 
 from __future__ import annotations
@@ -14,8 +14,6 @@ from __future__ import annotations
 import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
-from pathlib import Path
 
 import pytest
 
@@ -39,12 +37,6 @@ def _manifest() -> ComponentManifest:
     )
 
 
-class _FakeComponent:
-    def __init__(self, path: Path) -> None:
-        del path
-        self.manifest = _manifest()
-
-
 def test_probing_a_nonexistent_path_fails_visibly_no_dll_needed(tmp_path):
     _app()
     panel = ProbePanel()
@@ -65,7 +57,7 @@ def test_probing_a_nonexistent_path_emits_load_failed(tmp_path):
 
 def test_probing_a_real_manifest_renders_inputs_and_outputs(monkeypatch, tmp_path):
     _app()
-    monkeypatch.setattr("adas_sim.player.shell.panels.probe.CtypesSilComponent", _FakeComponent)
+    monkeypatch.setattr("adas_sim.player.shell.panels.probe.probe_manifest", lambda path: _manifest())
     panel = ProbePanel()
     panel.probe(tmp_path / "demo.dll")
 
@@ -83,7 +75,7 @@ def test_probing_a_real_manifest_renders_inputs_and_outputs(monkeypatch, tmp_pat
 
 def test_probing_a_real_manifest_emits_manifest_loaded(monkeypatch, tmp_path):
     _app()
-    monkeypatch.setattr("adas_sim.player.shell.panels.probe.CtypesSilComponent", _FakeComponent)
+    monkeypatch.setattr("adas_sim.player.shell.panels.probe.probe_manifest", lambda path: _manifest())
     panel = ProbePanel()
     received = []
     panel.manifest_loaded.connect(received.append)

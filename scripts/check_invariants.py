@@ -412,34 +412,44 @@ def check_anl_sw08(simcore_root: Path = SIMCORE_ROOT, simengine_root: Path = SIM
 
 
 # ANL-SW-37 (WP-21, IMP-0212): `resolve_library` called from exactly one
-# place. **Not yet in `run_all()`** -- today's real tree has three call
-# sites (`graph/build.py`, `runspec/emit.py`, `resolve/probe.py`), not the
-# design's target one (`runspec/emit.py` alone, with the launcher and
-# `graph/build.py` reading its already-resolved `Resolution` instead of
-# calling `resolve_library` a second/third time). Consolidating those call
-# sites is real behavioural work outside this pass's own `Files:` scope
-# (`resolve/{library,bundle,plugins,component,order}.py`) -- same class of
-# honest deferral `ANL-SW-34`'s own docstring already uses. This function
-# is real and tested (a planted-violation case proves it fails when it
-# should) so wiring it into `run_all()` is a one-line change once that
-# consolidation lands.
+# place, plus two named, decided exceptions (2026-08-25) rather than a
+# blanket "under resolve/ or graph/" carve-out -- an unlisted new call site
+# anywhere else still fails the check.
+#
+# - `resolve/probe.py` is PERMANENT: it resolves a bare stem the user typed
+#   for `sim probe <lib>`, with no `RunSpec`/pipeline stage in the picture --
+#   a different operation from resolving a stage's `impl:`, not an instance
+#   of the thing this check guards against.
+# - `graph/build.py` is TEMPORARY, pending Bench building a `RunSpec` first
+#   and constructing its `Pipeline` from that (so `_resolve_components`
+#   reads `IMP-0003`'s already-resolved `stages[].impl` instead of calling
+#   `resolve_library` itself). That refactor is a separate work package, not
+#   this pass's `Files:` scope -- see the plan's `IMP-0212` row for the
+#   `closed by` condition. Removing this entry is how that row closes.
 _RESOLVE_LIBRARY_CALL = re.compile(r"(?<![A-Za-z0-9_.])resolve_library\s*\(")
 _RESOLVE_LIBRARY_DEF = re.compile(r"^\s*def\s+resolve_library\s*\(")
+_ANL_SW_37_ALLOWED_CALLERS = (
+    Path("resolve") / "probe.py",       # permanent -- no RunSpec exists yet at this call
+    Path("graph") / "build.py",         # temporary -- closed by the Bench-through-RunSpec refactor
+)
 
 
 def check_anl_sw37(src_root: Path = SRC_ROOT) -> list[str]:
     """`ANL-SW-37`: every call site of `resolve_library(...)` in the tree,
-    excluding its own definition. A finding lists every call site found
-    when there is more than one."""
+    excluding its own definition and the two named exceptions above. A
+    finding lists every unexpected call site found."""
     call_sites: list[str] = []
     for path in _iter_py_files(src_root):
+        relative = path.relative_to(src_root)
+        if relative in _ANL_SW_37_ALLOWED_CALLERS:
+            continue
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             if _RESOLVE_LIBRARY_DEF.match(line):
                 continue
             if _RESOLVE_LIBRARY_CALL.search(line):
                 call_sites.append(f"{path}:{lineno}")
     if len(call_sites) > 1:
-        return [f"ANL-SW-37 resolve_library called from {len(call_sites)} places, expected exactly 1: {call_sites}"]
+        return [f"ANL-SW-37 resolve_library called from {len(call_sites)} unexpected places, expected exactly 1: {call_sites}"]
     return []
 
 
@@ -549,6 +559,7 @@ def run_all(
         *check_no_manifest_names_codec(superproject_root),
         *check_anl_sw07(src_root),
         *check_anl_sw08(),
+        *check_anl_sw37(src_root),
         *check_anl_sw38(src_root),
         *check_anl_sw02(),
         *check_anl_sw03(),
@@ -564,7 +575,7 @@ def main(argv: list[str] | None = None) -> int:
     if findings:
         print(f"\n{len(findings)} invariant violation(s)")
         return 1
-    print("GT-1, GT-2, GT-3, GT-6, GT-11, UT-D8-9, WP-02(b), ANL-SW-02/03/04/07/08/38/61: clean")
+    print("GT-1, GT-2, GT-3, GT-6, GT-11, UT-D8-9, WP-02(b), ANL-SW-02/03/04/07/08/37/38/61: clean")
     return 0
 
 

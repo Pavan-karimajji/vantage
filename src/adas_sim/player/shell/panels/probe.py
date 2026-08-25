@@ -6,10 +6,11 @@
 """`ProbePanel` -- `sim probe` as a panel, not just a verb (`S-D8`,
 `sim_player.md` §4: "drop a library on the window and Vantage prints its
 ports, types and schemas. This is the **day-one screen** for a new
-component"). Reuses `contracts.component.CtypesSilComponent` directly --
-the exact same load `cli/probe.py` performs, never a re-parse of that
-command's own text output, so the two can never silently disagree about
-what a library declares.
+component"). Reuses `resolve.probe.probe_manifest` directly -- the exact
+same load `cli/probe.py` performs (`SW-0409`: reads `adasManifest()` only,
+opens no component handle), never a re-parse of that command's own text
+output, so the two can never silently disagree about what a library
+declares.
 
 **No mapping step** (`sim_architecture.md` §5.16.1, `cli/probe.py`'s own
 docstring): every field shown comes straight off `adasManifest()`'s
@@ -21,7 +22,8 @@ from pathlib import Path
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from adas_sim.resolve.component import ComponentManifest, CtypesSilComponent, PortSpec
+from adas_sim.resolve.component import ComponentManifest, PortSpec
+from adas_sim.resolve.probe import probe_manifest
 from adas_sim.diagnostics.errors import SimError
 
 _PORT_COLUMNS = ("port", "proto_type", "optional", "owner", "period_us")
@@ -71,15 +73,15 @@ class ProbePanel(QtWidgets.QWidget):
         start page's own `probe_requested` signal all reach exactly one
         code path (`app/shell/window.py`'s own integration point)."""
         try:
-            component = CtypesSilComponent(path)
+            manifest = probe_manifest(path)
         except SimError as exc:
             message = str(exc)
             self._summary_label.setText(f"could not load {path}: {message}")
             self._ports_tree.clear()
             self.load_failed.emit(message)
             return
-        self._render_manifest(path, component.manifest)
-        self.manifest_loaded.emit(component.manifest)
+        self._render_manifest(path, manifest)
+        self.manifest_loaded.emit(manifest)
 
     def _render_manifest(self, path: Path, manifest: ComponentManifest) -> None:
         self._summary_label.setText(

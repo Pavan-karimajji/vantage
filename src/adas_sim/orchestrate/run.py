@@ -36,7 +36,7 @@ def invoke_engine(
     pipeline: Pipeline, recording_path: Path, *, run_id: str, output_path: Path,
     config_path: Path | None = None, exec_timeout_ms: int = 250,
     spec_json_path: Path | None = None, simengine_path: Path | None = None, search: Sequence[Path] = (),
-    progress: ProgressSink | None = None,
+    progress: ProgressSink | None = None, checkpoint_path: Path | None = None,
 ) -> EngineRunResult:
     """The one call every face makes to drive `simengine` against an
     existing recording (the interactive workspace, `sim resim`, `sim check`,
@@ -49,7 +49,11 @@ def invoke_engine(
     `simengine` subprocess boundary to check it again mid-run
     (`orchestrate/worker.py`'s own documented gap) -- consistent with
     `SW-0235`'s tick-boundary guarantee: a process never launched is exactly
-    as "at a boundary" as one that ran to completion."""
+    as "at a boundary" as one that ran to completion. `checkpoint_path`, when
+    given, is forwarded to `run_pipeline_via_engine` unchanged -- a real
+    `progress.json` on disk (`SW-0119`), still only readable AFTER this call
+    returns (or the process dies), not a live mid-run channel; that remains
+    this docstring's own named gap."""
     sink = progress if progress is not None else ProgressSink()
     if sink.cancelled:
         sink.message("cancelled before start")
@@ -60,6 +64,7 @@ def invoke_engine(
     result = run_pipeline_via_engine(
         pipeline, recording_path, run_id=run_id, output_path=output_path, config_path=config_path,
         exec_timeout_ms=exec_timeout_ms, spec_json_path=spec_json_path, simengine_path=simengine_path, search=search,
+        checkpoint_path=checkpoint_path,
     )
     sink.report(1, 1)
     sink.message(f"finished run {run_id}: ok={result.ok}")

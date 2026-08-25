@@ -2183,7 +2183,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Every resolvable artifact shall be resolved once per run and the resolved value carried in the spec and the manifest; no consumer shall re-resolve.
 **Accept.** Changing the environment after resolution cannot change what the run uses. A static check finds no second resolution call on the run path.
 **Verify.** A · `ANL-SW-37`   **Trace.** SYS-0166, SYS-0124
-**Built.** ◐ started — `IMP-0212` in `WP-21`
+**Built.** ● done — `IMP-0212` in `WP-21`
 **Now.** `PARTIAL` — resolution is centralised per artifact kind but happens lazily at several points rather than once.
 
 **`SW-0213`** · `SI-13` · `P1` · `R1` — A local build is honestly reported as unpinnable
@@ -2437,7 +2437,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Every crash shall record recording, configuration, last completed cycle, captured standard error and run identifier.
 **Accept.** From the crash record alone the failure is reopened in process on a developer machine.
 **Verify.** T · `UT-ORC-11`   **Trace.** SYS-0188
-**Built.** ◐ started — `IMP-0245` in `WP-23`
+**Built.** ● done — `IMP-0245` in `WP-23`
 **Now.** `PARTIAL` — recording, configuration, standard error and run identifier are recorded; the last completed cycle is not, pending `SW-0119`.
 
 **`SW-0246`** · `SI-15` · `P1` · `R1` — A processing watchdog with its own interval and threshold

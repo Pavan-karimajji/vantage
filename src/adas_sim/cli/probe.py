@@ -22,7 +22,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from adas_sim.resolve.component import CtypesSilComponent, PortSpec
+from adas_sim.resolve.component import PortSpec
+from adas_sim.resolve.probe import probe_manifest
 from adas_sim.session.session import Session
 from adas_sim.plugins.registry import is_registered_recording_extension
 
@@ -41,8 +42,9 @@ def _print_port(port: PortSpec) -> None:
 
 
 def _probe_library(path: Path) -> int:
-    component = CtypesSilComponent(path)
-    manifest = component.manifest
+    # `probe_manifest` (`resolve/probe.py`, `SW-0409`): reads `adasManifest()`
+    # only -- `sim probe` never opens a component handle.
+    manifest = probe_manifest(path)
     print(f"library          {path}")
     print(f"component        {manifest.component}")
     print(f"version          {manifest.version}")

@@ -17,7 +17,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from adas_sim.resolve.component import CtypesSilComponent
+from adas_sim.resolve.probe import probe_manifest
 from adas_sim.core.runner import build_static_scene
 from adas_sim.session.session import Session
 from adas_sim.plugins.registry import reader_for
@@ -31,8 +31,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _list_ports(lib_path: Path) -> int:
-    component = CtypesSilComponent(lib_path)
-    manifest = component.manifest
+    # `probe_manifest` (`resolve/probe.py`, `SW-0409`): reads `adasManifest()`
+    # only, never opening a component handle -- this verb never needs one.
+    manifest = probe_manifest(lib_path)
     print(f"inputs ({len(manifest.inputs)}):")
     for port in manifest.inputs:
         print(f"  {port.name:<28} {port.proto_type}")

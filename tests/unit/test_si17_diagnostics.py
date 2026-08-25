@@ -267,12 +267,7 @@ def test_probe_lists_the_full_port_set_of_a_component_never_seen_before(monkeypa
         project="base", config_bundle_sha256="cfg", descriptor_set=b"", period_ns=0,
     )
 
-    class _FakeComponent:
-        def __init__(self, path):
-            del path
-            self.manifest = manifest
-
-    monkeypatch.setattr(probe_cli, "CtypesSilComponent", _FakeComponent)
+    monkeypatch.setattr(probe_cli, "probe_manifest", lambda path: manifest)
     exit_code = probe_cli.run([str(Path("does-not-matter.dll"))])
     out = capsys.readouterr().out
 

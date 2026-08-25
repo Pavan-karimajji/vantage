@@ -19,13 +19,15 @@ difference, left as a named follow-on rather than touched speculatively --
 `player/shell/**` is the one place these workspace names are the whole
 point, `UT-D8-9`).
 
-**`last_completed_cycle` gap, named rather than hidden:** a `crash`/
-`timeout` `RecordingOutcome.last_tick_ns` is `None` today for any run driven
-through `simengine` (`orchestrate/worker.py`'s own docstring: no per-tick
-checkpoint channel exists across that subprocess boundary yet, `SW-0119`).
-`open_on_bench` therefore falls back to `at_s=0.0` -- identical to the
-GUI's own existing fallback for a non-crash row -- honestly, rather than
-guessing a tick (`R-SIM-25`/`NR-SIM-4`)."""
+**`last_completed_cycle` gap, closed 2026-08-25 (`SW-0119`):** a `crash`/
+`timeout` `RecordingOutcome.last_tick_ns` now comes from `simengine`'s own
+real `progress.json`, forwarded through `orchestrate/worker.py` and read by
+`orchestrate/batch.py::read_checkpoint_tick`. `open_on_bench` still falls
+back to `at_s=0.0` -- identical to the GUI's own existing fallback for a
+non-crash row -- for the residual case a checkpoint file itself cannot
+cover: no `--checkpoint-json` path was ever given, or the process died
+before its first cycle completed (nothing to have written), honestly rather
+than guessing a tick (`R-SIM-25`/`NR-SIM-4`)."""
 
 from __future__ import annotations
 

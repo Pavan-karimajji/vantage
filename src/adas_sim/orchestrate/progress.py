@@ -18,10 +18,13 @@ its own ad-hoc printer.
 
 **Known limitation, stated rather than hidden:** today's engine invocation
 (`engine.bridge.run_pipeline_via_engine`) drives a `simengine` subprocess with
-no per-tick callback across that process boundary (the same gap
-`orchestrate/worker.py`'s own docstring names for `--checkpoint-json`) --
-so `ProgressSink.on_progress` fires only at coarse boundaries (job
-started/finished) for a `simengine`-backed run, not per tick. Cancellation is
+no LIVE per-tick callback across that process boundary. `--checkpoint-json`
+(`SW-0119`, closed) gives a real on-disk `progress.json` after the process
+returns or dies, which is what lets `orchestrate/batch.py` report a
+crash/timeout's last completed tick -- but nothing here polls it WHILE the
+subprocess is still running, so `ProgressSink.on_progress` still fires only
+at coarse boundaries (job started/finished) for a `simengine`-backed run,
+not per tick. Cancellation is
 therefore honoured **at the next process-boundary check**, never mid-tick
 inside `simengine` -- consistent with `SW-0235`'s own Accept clause ("leaves
 the artifact set at a tick boundary, never mid-tick"), since a subprocess

@@ -299,7 +299,7 @@ def _fault_mutations(faults: Sequence, *, grid_step_ns: int) -> list[dict]:
 
 def pipeline_to_run_spec(
     pipeline: Pipeline, *, run_id: str, recording_path: Path, recording_sha256: str = "",
-    output_path: Path | None = None, exec_timeout_ms: int = 250,
+    output_path: Path | None = None, exec_timeout_ms: int = 250, checkpoint_path: Path | None = None,
 ) -> RunSpec:
     """Builds a Resolved Run Spec (`IF-09`) directly from an already-loaded
     `Pipeline` -- the Python-object twin of `runspec.emit.emit_run_spec`,
@@ -311,7 +311,15 @@ def pipeline_to_run_spec(
 
     `output_path=None` means no recording output declared -- the engine
     still runs, but nothing downstream can read results back (`SW-0013`'s
-    callers always pass one; see each call site for why)."""
+    callers always pass one; see each call site for why).
+
+    `checkpoint_path=None` (the default) omits the `checkpoint` key
+    entirely, matching `load.cpp`'s own "absent key leaves `checkpoint.path`
+    empty" -- checkpointing stays off unless a caller asks for it. When
+    given, `simEngineCreate` writes a real `progress.json` there after every
+    completed cycle (`SW-0119`, `src/simcore/runner/checkpoint.cpp`), which
+    is what lets a crashed/timed-out run still report its last completed
+    tick (`orchestrate/batch.py::read_checkpoint_tick`)."""
     manifests: dict[str, ComponentManifest] = {stage.name: pipeline.manifest_for(stage.name) for stage in pipeline.stages}
     period_ns_by_stage = {name: m.period_ns for name, m in manifests.items()}
 
@@ -379,6 +387,8 @@ def pipeline_to_run_spec(
         "limits": {"exec_timeout_ms": exec_timeout_ms, "severity_exit": "error"},
         "diagnostics": {"cycle_trace": False, "graph_dump": False},
     }
+    if checkpoint_path is not None:
+        data["checkpoint"] = {"path": str(checkpoint_path)}
 
     spec = RunSpec(data=data)
     validate_run_spec(spec)
@@ -397,16 +407,19 @@ def run_pipeline_via_engine(
     pipeline: Pipeline, recording_path: Path, *, run_id: str, output_path: Path,
     config_path: Path | None = None, exec_timeout_ms: int = 250,
     spec_json_path: Path | None = None, simengine_path: Path | None = None, search: Sequence[Path] = (),
+    checkpoint_path: Path | None = None,
 ) -> EngineRunResult:
     """The one call every rewired call site makes: build the spec, write it
     (`runspec.canon.write_run_spec`, the same canonical form
     `runspec/manifest.py` already uses), run it through `simengine`, return
     the outcome. `spec_json_path` defaults to a sibling of `output_path`
     (`<output_path>.spec.json`) so a caller inspecting a failed run finds
-    the exact spec that failed next to the (possibly partial) recording."""
+    the exact spec that failed next to the (possibly partial) recording.
+    `checkpoint_path` is forwarded to `pipeline_to_run_spec` unchanged --
+    `None` means no checkpointing, matching that function's own default."""
     spec = pipeline_to_run_spec(
         pipeline, run_id=run_id, recording_path=recording_path, output_path=output_path,
-        exec_timeout_ms=exec_timeout_ms,
+        exec_timeout_ms=exec_timeout_ms, checkpoint_path=checkpoint_path,
     )
     spec_path = spec_json_path if spec_json_path is not None else output_path.with_suffix(output_path.suffix + ".spec.json")
     write_run_spec(spec, spec_path)

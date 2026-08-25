@@ -42,7 +42,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Literal
 
-from adas_sim.resolve.component import CtypesSilComponent
+from adas_sim.resolve.probe import probe_manifest
 from adas_sim.resolve.library import resolve_library_report
 from adas_sim.graph.build import Pipeline, Stage
 from adas_sim.diagnostics.errors import AuthoringError, SimError
@@ -105,7 +105,9 @@ def _bundle_diagnoses(
             continue  # nothing to load -- the library finding above already reports the real problem
         lib_path = Path(str(entry["resolved"]))
         try:
-            sut_manifest = CtypesSilComponent(lib_path).manifest
+            # `probe_manifest` (`resolve/probe.py`, `SW-0409`): reads
+            # `adasManifest()` only -- a diagnosis never opens a handle.
+            sut_manifest = probe_manifest(lib_path)
         except SimError as exc:
             results.append({
                 "stage": entry["stage"], "ok": False,

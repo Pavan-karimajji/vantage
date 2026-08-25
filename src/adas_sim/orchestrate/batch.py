@@ -102,23 +102,27 @@ def expand_recordings(args: Sequence[str]) -> list[Path]:
     return result
 
 
-def _read_checkpoint(checkpoint_json: Path) -> tuple[int | None, int | None]:
-    """`(tick_count, last_tick_ns)` from `batch_worker.py`'s own
-    `--checkpoint-json`, or `(None, None)` if it was never written or is
-    unreadable -- a crashing process can leave no checkpoint at all (it died
-    before the first tick) or, in principle, a torn one; either way this
-    reports `unknown` rather than a guessed value (`R-SIM-25`/`NR-SIM-4`).
-    The worker writes this file via `os.replace`, so a fully-written-but-
-    stale checkpoint (from a PREVIOUS tick) is the only failure mode this
-    needs to tolerate, and `json.loads` alone already handles that -- it is
-    never torn."""
+def read_checkpoint_tick(checkpoint_json: Path) -> tuple[int | None, int | None]:
+    """`(tick_count, last_tick_ns)` from `simengine`'s own real `progress.json`
+    (`SW-0119`, `src/simcore/runner/checkpoint.cpp::Checkpoint::Write`), or
+    `(None, None)` if it was never written or is unreadable -- a crashing
+    process can leave no checkpoint at all (it died before the first cycle
+    completed) or, in principle, a torn one; either way this reports
+    `unknown` rather than a guessed value (`R-SIM-25`/`NR-SIM-4`). `simengine`
+    writes this file via a temp-then-rename, so a fully-written-but-stale
+    checkpoint (from a PREVIOUS cycle) is the only failure mode this needs
+    to tolerate, and `json.loads` alone already handles that -- it is never
+    torn. Field names (`last_completed_tick_index`/`last_completed_log_time_ns`)
+    are the C++ writer's own, not this module's choosing -- shared with
+    `orchestrate/worker.py`, which reads the exact same file for its own
+    `ok`/`fail` result."""
     if not checkpoint_json.is_file():
         return None, None
     try:
         data = json.loads(checkpoint_json.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None, None
-    return data.get("tick_count"), data.get("last_tick_ns")
+    return data.get("last_completed_tick_index"), data.get("last_completed_log_time_ns")
 
 
 def _classify(
@@ -126,7 +130,7 @@ def _classify(
     duration_s: float, *, timed_out: bool, timeout_stderr: str,
 ) -> RecordingOutcome:
     if timed_out:
-        tick_count, last_tick_ns = _read_checkpoint(checkpoint_json)
+        tick_count, last_tick_ns = read_checkpoint_tick(checkpoint_json)
         return RecordingOutcome(
             recording=recording, outcome="timeout", duration_s=duration_s,
             tick_count=tick_count, last_tick_ns=last_tick_ns,
@@ -157,8 +161,9 @@ def _classify(
     # write one. That is exactly what a crash looks like from the outside
     # (R-SIM-19) -- never inferred from anything the process itself claimed.
     # The checkpoint file is the one thing that CAN survive this death
-    # (UT-D7-7) -- it is written by the worker, read here by the parent.
-    tick_count, last_tick_ns = _read_checkpoint(checkpoint_json)
+    # (UT-D7-7) -- it is written by simengine itself, one process further
+    # in, read here by the parent regardless of which of the two died.
+    tick_count, last_tick_ns = read_checkpoint_tick(checkpoint_json)
     return RecordingOutcome(
         recording=recording, outcome="crash", duration_s=duration_s,
         tick_count=tick_count, last_tick_ns=last_tick_ns,
@@ -180,10 +185,11 @@ def _write_outcome_manifest(out_dir: Path, index: int, recording: Path, pipeline
     """`IMP-0222`/`SW-0222`: a standalone `run_manifest.json` written for
     EVERY entry, including a `crash`/`timeout` this module classified from
     the outside (`_classify`) -- never only for `ok`. `last_completed_cycle`
-    is `outcome.tick_count` when the worker or a checkpoint reported one,
-    else `-1` (`SW-0119` pending: no per-tick checkpoint channel across the
-    `simengine` subprocess boundary yet, `orchestrate/worker.py`'s own
-    documented gap) -- honest, never a guess. `run_kind="resim"`: a batch
+    is `outcome.tick_count` when the worker's own result or `simengine`'s
+    real `progress.json` (`SW-0119`, closed) reported one, else `-1` -- a
+    run whose engine never reached a completed cycle (`Pipeline.load`
+    failed, or a crash before cycle 1) genuinely has none, honest rather
+    than a guess. `run_kind="resim"`: a batch
     entry executes an existing recording exactly like `sim resim` does
     (`SW-0233`), and `"batch"` is not itself in the manifest schema's own
     closed `run_kind` enum."""
@@ -370,7 +376,7 @@ def reconcile(out_dir: Path, recordings: Sequence[Path]) -> list[RecordingOutcom
         if completed is not None:
             results.append(completed)
             continue
-        tick_count, last_tick_ns = _read_checkpoint(checkpoint_json)
+        tick_count, last_tick_ns = read_checkpoint_tick(checkpoint_json)
         results.append(RecordingOutcome(
             recording=recording, outcome="crash", duration_s=0.0,
             tick_count=tick_count, last_tick_ns=last_tick_ns, error="no readable out_json (reconciled from disk)",

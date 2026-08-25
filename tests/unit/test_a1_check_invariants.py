@@ -320,6 +320,30 @@ def test_check_anl_sw37_fails_on_a_planted_second_call_site(tmp_path):
     assert "ANL-SW-37" in findings[0]
 
 
+def test_check_anl_sw37_passes_with_the_two_named_exceptions(tmp_path):
+    (tmp_path / "runspec").mkdir(parents=True)
+    (tmp_path / "runspec" / "emit.py").write_text("lib_path = resolve_library(stem, search=search)\n", encoding="utf-8")
+    (tmp_path / "resolve").mkdir(parents=True)
+    (tmp_path / "resolve" / "probe.py").write_text("path = resolve_library(str(path_or_stem), search=search)\n", encoding="utf-8")
+    (tmp_path / "graph").mkdir(parents=True)
+    (tmp_path / "graph" / "build.py").write_text("lib_path = resolve_library(ref, search=search)\n", encoding="utf-8")
+    assert check_anl_sw37(src_root=tmp_path) == []
+
+
+def test_check_anl_sw37_still_fails_on_an_unlisted_third_call_site(tmp_path):
+    (tmp_path / "runspec").mkdir(parents=True)
+    (tmp_path / "runspec" / "emit.py").write_text("lib_path = resolve_library(stem, search=search)\n", encoding="utf-8")
+    (tmp_path / "resolve").mkdir(parents=True)
+    (tmp_path / "resolve" / "probe.py").write_text("path = resolve_library(str(path_or_stem), search=search)\n", encoding="utf-8")
+    (tmp_path / "graph").mkdir(parents=True)
+    (tmp_path / "graph" / "build.py").write_text("lib_path = resolve_library(ref, search=search)\n", encoding="utf-8")
+    (tmp_path / "launcher").mkdir(parents=True)
+    (tmp_path / "launcher" / "model.py").write_text("lib_path = resolve_library(ref, search=search)\n", encoding="utf-8")
+    findings = check_anl_sw37(src_root=tmp_path)
+    assert findings
+    assert "ANL-SW-37" in findings[0]
+
+
 def test_check_anl_sw38_passes_when_all_three_resolvers_return_resolution(tmp_path):
     resolve_dir = tmp_path / "resolve"
     resolve_dir.mkdir(parents=True)

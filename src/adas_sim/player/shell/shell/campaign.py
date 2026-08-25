@@ -34,6 +34,7 @@ from pathlib import Path
 from PySide6 import QtCore, QtWidgets
 
 from adas_sim.orchestrate.batch import RecordingOutcome, run_batch
+from adas_sim.orchestrate.reopen import open_on_bench
 
 
 def batch_invocation_text(
@@ -227,5 +228,8 @@ class CampaignWidget(QtWidgets.QWidget):
     def _on_result_row_activated(self, item: QtWidgets.QTableWidgetItem) -> None:
         result: RecordingOutcome = item.data(QtCore.Qt.ItemDataRole.UserRole)
         if result is not None and self._pipeline_path is not None:
-            at_s = result.last_tick_ns / 1e9 if result.last_tick_ns is not None else 0.0
-            self.open_on_bench_requested.emit(result.recording, self._pipeline_path, at_s)
+            # `orchestrate/reopen.py::open_on_bench` (`SW-0245`) -- the same
+            # decision, factored out, rather than a second `at_s` fallback
+            # duplicated here (`IMP-0245`'s own named follow-on).
+            recording, pipeline_path, at_s = open_on_bench(result, self._pipeline_path)
+            self.open_on_bench_requested.emit(recording, pipeline_path, at_s)

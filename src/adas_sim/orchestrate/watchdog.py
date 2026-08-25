@@ -20,12 +20,13 @@ its own schedule and calls `heartbeat(now)` whenever it observes activity.
 
 **Known integration gap, named rather than hidden:** wiring either watchdog
 to a REAL `sim batch` subprocess needs a heartbeat channel across the
-`simengine` process boundary that does not exist yet -- the same gap
-`orchestrate/worker.py`'s own docstring names for `--checkpoint-json`
-(no per-tick callback survives the `WP-15b` move to a `simengine`
-subprocess). Both classes are complete and unit-tested against a simulated
-clock; the missing piece is a producer of real heartbeats, not the consumer
-logic here."""
+`simengine` process boundary. `--checkpoint-json` (`SW-0119`, closed) gives
+a real on-disk `progress.json`, flushed after every completed cycle -- a
+*pollable* heartbeat source now exists -- but `orchestrate/batch.py` still
+blocks on `subprocess.run` rather than polling that file on a timer while
+the worker runs, so nothing calls `heartbeat()` yet. Both classes are
+complete and unit-tested against a simulated clock; the missing piece is a
+poller driving them from the file, not the consumer logic here."""
 
 from __future__ import annotations
 

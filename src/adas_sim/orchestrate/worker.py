@@ -21,18 +21,21 @@ library with no in-process ABI artifact to bind, see that module's own
 docstring). Two consequences, found live and left as named follow-ons
 rather than guessed at here:
 
-- **`--checkpoint-json` is currently never written.** It existed to record
-  progress after every tick (`_write_checkpoint`, driven by
-  `resim_pipeline`'s own `on_tick` callback) so a mid-run crash's last tick
-  survived the crash. `simengine` has real per-cycle checkpointing in C++
-  (`src/simcore/runner/checkpoint.cpp`) but no ABI/CLI path exposing it yet
-  (`WP-14a`'s own addendum names this gap) -- there is currently no
-  mechanism for this process to observe a tick boundary inside its own
-  child subprocess. The flag is still accepted (never written) so
-  `orchestrate/batch.py`'s own `--checkpoint-json` plumbing needs no
-  change; a crash's `tick_count`/`last_tick_ns` now read `unknown`
-  (`R-SIM-25`/`NR-SIM-4`) rather than the last real tick, which is the
-  honest answer, not a regression papered over.
+- **`--checkpoint-json` is now `simengine`'s own `progress.json` (`SW-0119`,
+  closed 2026-08-24).** `WP-14a`'s ABI/CLI gap is closed (`simEngineCreate`
+  writes it directly, `src/simcore/runner/checkpoint.cpp`), so this process
+  no longer writes the file itself -- it forwards `args.checkpoint_json`
+  straight through to `invoke_engine` as `checkpoint_path`, and `simengine`
+  flushes it after every completed cycle **in its own subprocess**, which is
+  exactly what lets it survive a crash of that subprocess (and of this one).
+  `orchestrate/batch.py::read_checkpoint_tick` reads it directly on a
+  `crash`/`timeout` classification. **Still not a live channel:** the file
+  is only observable once written to disk, so a `ProgressSink`/
+  `CancelToken` mid-run check (`orchestrate/progress.py`) and either
+  watchdog (`orchestrate/watchdog.py`) still have no per-tick signal while
+  this process's own child is still running -- that gap is unchanged by
+  this fix and needs `orchestrate/batch.py` polling the file on a timer
+  instead of blocking on `subprocess.run`, a separate follow-on.
 - **`--test-stub-echo`'s own `InProcessSilComponent` injection is gone.**
   A Python closure has no equivalent once this stage runs through
   `simengine`'s own subprocess boundary (the same gap `WP-14a`'s addendum
@@ -70,6 +73,7 @@ from pathlib import Path
 from adas_sim.graph.build import Pipeline
 from adas_sim.diagnostics.errors import SimError
 from adas_sim.engine.bridge import count_ticks
+from adas_sim.orchestrate.batch import read_checkpoint_tick
 from adas_sim.orchestrate.run import invoke_engine
 
 #: Values `ADAS_SIM_BATCH_TEST_STUB` recognizes -- a closed set, same
@@ -141,14 +145,26 @@ def _write_result(out_json: Path, **fields: object) -> None:
     out_json.write_text(json.dumps(fields, sort_keys=True), encoding="utf-8")
 
 
+def _checkpoint_result(checkpoint_json: Path | None) -> tuple[int | None, int | None]:
+    """`(tick_count, last_tick_ns)` from `simengine`'s real `progress.json`
+    (`orchestrate/batch.py::read_checkpoint_tick`, shared rather than
+    reimplemented), or `(None, None)` when no `--checkpoint-json` was given
+    at all -- distinct from that file existing but reporting nothing, which
+    `read_checkpoint_tick` itself already returns as `(None, None)`."""
+    if checkpoint_json is None:
+        return None, None
+    return read_checkpoint_tick(checkpoint_json)
+
+
 def main(argv: list[str] | None = None) -> int:
     _maybe_run_test_hook(None)  # the blanket-only shortcut, before paying for argparse
 
     args = _build_parser().parse_args(argv)
     _maybe_run_test_hook(args.recording)  # the per-recording ADAS_SIM_BATCH_TEST_STUB_MAP case
-    # args.test_stub_echo, args.checkpoint_json: accepted for CLI
-    # compatibility with orchestrate/batch.py's own forwarding, both
-    # currently no-ops -- see this module's own docstring for why.
+    # args.test_stub_echo: accepted for CLI compatibility with
+    # orchestrate/batch.py's own forwarding, still a no-op -- see this
+    # module's own docstring for why. args.checkpoint_json is forwarded to
+    # invoke_engine below -- no longer a no-op.
 
     try:
         pipeline = Pipeline.load(args.pipeline, search=tuple(args.search))
@@ -156,16 +172,18 @@ def main(argv: list[str] | None = None) -> int:
             output_path = Path(tmp_dir) / "out.mcap"
             result = invoke_engine(
                 pipeline, args.recording, run_id=f"batch-{args.recording.stem}", output_path=output_path,
-                config_path=args.config,
+                config_path=args.config, checkpoint_path=args.checkpoint_json,
             )
             if not result.ok:
+                tick_count, last_tick_ns = _checkpoint_result(args.checkpoint_json)
                 _write_result(
                     args.out_json, outcome="fail",
                     error=f"simengine exit_code={result.exit_code}: {result.stderr or result.stdout}",
-                    tick_count=None, last_tick_ns=None,
+                    tick_count=tick_count, last_tick_ns=last_tick_ns,
                 )
                 return 1
             tick_count = count_ticks(output_path)
+            _, last_tick_ns = _checkpoint_result(args.checkpoint_json)
     except SimError as exc:
         _write_result(args.out_json, outcome="fail", error=str(exc), tick_count=None, last_tick_ns=None)
         return 1
@@ -177,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    _write_result(args.out_json, outcome="ok", tick_count=tick_count, last_tick_ns=None)
+    _write_result(args.out_json, outcome="ok", tick_count=tick_count, last_tick_ns=last_tick_ns)
     return 0
 
 
