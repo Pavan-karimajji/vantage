@@ -2487,14 +2487,14 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The behaviour on a read error shall be one of stop · skip-entry · abort-batch · skip-damaged-package-and-continue, and skipped packages shall be counted, reported and shall flag the run.
 **Accept.** Each behaviour is demonstrable. A run that skipped packages cannot be mistaken for a clean one, in the manifest or in the aggregate.
 **Verify.** T · `UT-ORC-18`   **Trace.** SYS-0193
-**Built.** ◐ started — `IMP-0252` in `WP-23`
+**Built.** ● done — `IMP-0252` in `WP-23`
 **Now.** `NEW`.
 
 **`SW-0253`** · `SI-15` · `P1` · `R1` — A read retry is bounded and recorded
 **Shall.** A retried read shall be bounded by a configured duration, and any run in which a read was retried shall record it.
 **Accept.** The retry bound is honoured. A run that retried is distinguishable from one that did not.
 **Verify.** T · `UT-ORC-19`   **Trace.** SYS-0193; **evidence** §2.6
-**Built.** ◐ started — `IMP-0253` in `WP-23`
+**Built.** ● done — `IMP-0253` in `WP-23`
 **Now.** `NEW`.
 
 **`SW-0254`** · `SI-15` · `P1` · `R1` — Index caches are shared across a batch

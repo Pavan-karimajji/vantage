@@ -194,6 +194,20 @@ def test_error_kind_round_trips():
     assert default.error_kind == ""
 
 
+def test_skipped_packages_round_trips():
+    """`IMP-0252`: one more instance of the same distinguish-by-field
+    pattern `cancelled`/`read_error`/`error_kind` already use -- a run that
+    skipped damaged mcap chunks under `ReadError.SKIP_PACKAGE` carries the
+    count, never conflated with a clean run's default `0`."""
+    manifest = build_manifest(run_kind="resim", source_kind="mcap", clock=_CLOCK, skipped_packages=2)
+    assert manifest.skipped_packages == 2
+    restored = manifest_from_dict(manifest_to_dict(manifest))
+    assert restored.skipped_packages == 2
+
+    default = build_manifest(run_kind="sim", source_kind="synthetic", clock=_CLOCK)
+    assert default.skipped_packages == 0
+
+
 # ---------------------------------------------------------------------------
 # UT-SPC-16 -- SW-0223: a run with zero exporters still writes a manifest
 # ---------------------------------------------------------------------------

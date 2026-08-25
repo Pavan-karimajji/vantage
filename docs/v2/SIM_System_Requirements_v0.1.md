@@ -1656,7 +1656,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The behaviour on a read error shall be configurable as stop / skip entry / abort batch / skip the damaged package and continue; skipped packages shall be counted, reported, and shall flag the run.
 **Accept.** Each behaviour is demonstrable; a run that skipped packages cannot be mistaken for a clean one.
 **Verify.** T · `SYT-BAT-13`   **Trace.** CN-0198, CN-0199
-**Built.** ◐ started — 1/4 software requirements done, in `WP-19`, `WP-23`
+**Built.** ◐ started — 3/4 software requirements done, in `WP-19`, `WP-23`
 
 **`SYS-0194`** · `P1` · `R1` — Shared index caches
 **Shall.** Index caches shall be shared across a batch.

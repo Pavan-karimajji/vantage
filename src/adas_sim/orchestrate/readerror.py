@@ -20,7 +20,10 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
+from pathlib import Path
 from typing import TypeVar
+
+from adas_sim.plugins.registry import reader_for
 
 
 class ReadError(StrEnum):
@@ -70,3 +73,44 @@ def retry(
             time.sleep(min(retry_interval_s, max(0.0, bound_s - elapsed)))
             continue
         return result, RetryOutcome(attempts=attempts, succeeded=True, elapsed_s=clock() - start, errors=tuple(errors))
+
+
+def _open_and_probe(recording: Path, on_read_error: ReadError | str) -> int:
+    """`IMP-0252`/`IMP-0253`: a genuine Python-side read of `recording`,
+    proving the file opens and parses -- `.topics()` alone (schema/
+    provenance, no full `messages()` decode). Returns the count of damaged
+    packages (mcap chunks) found and skipped, always `0` under any policy
+    other than `SKIP_PACKAGE` (they never pay for the extra chunk-decode
+    pass) and `0` for a codec with no such concept (`check_faults` absent,
+    `R-SIM-14`'s "a missing capability degrades explicitly," never a
+    guess). A file whose EVERY chunk is corrupted has nothing left to
+    skip-and-continue -- that is whole-file damage, raised here so the
+    caller's own retry/fail path handles it exactly as it does for every
+    other policy. `reader.close()` in `finally` means a retried attempt
+    never leaks a handle."""
+    reader = reader_for(recording)
+    try:
+        reader.topics()
+        if on_read_error != ReadError.SKIP_PACKAGE.value:
+            return 0
+        check_faults = getattr(reader, "check_faults", None)
+        if check_faults is None:
+            return 0
+        faults = check_faults()
+        if faults.total > 0 and faults.corrupted == faults.total:
+            raise OSError(f"every one of {faults.total} package(s) in {recording} is damaged")
+        return faults.corrupted
+    finally:
+        reader.close()
+
+
+def probe_recording(
+    recording: Path, *, on_read_error: ReadError | str, bound_s: float,
+) -> tuple[int, RetryOutcome]:
+    """`orchestrate/worker.py`'s own pre-flight, extracted so it is directly
+    testable against a real damaged-chunk fixture with no `Pipeline.load`/
+    engine invocation needed. `(skipped_packages, outcome)` -- `skipped_
+    packages` is `0` when `outcome.succeeded` is `False` (nothing was
+    read), matching `retry`'s own "no result" convention."""
+    result, outcome = retry(lambda: _open_and_probe(recording, on_read_error), bound_s=bound_s)
+    return (result if result is not None else 0), outcome

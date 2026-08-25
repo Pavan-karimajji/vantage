@@ -17,11 +17,15 @@ already flat -- no wrapping needed).
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 
 import yaml
+from mcap.data_stream import ReadDataStream
 from mcap.reader import make_reader
+from mcap.records import Chunk
+from mcap.stream_reader import breakup_chunk
 from mcap.writer import Writer as _McapWriter
 
 from adas_sim.io.base import (
@@ -39,6 +43,20 @@ CAPABILITIES = Capabilities(
     embedded_schemas=True, random_access=True, meta_blocks=True,
     arbitrary_topics=True, round_trips=True, capture_time=True, write_only=False,
 )
+
+@dataclass(frozen=True, slots=True)
+class ChunkFaultResult:
+    """`IMP-0252`/`IMP-0253` (`SW-0252`): one mcap chunk is one "package" for
+    `ReadError.SKIP_PACKAGE` -- the file's own summary/schema/channel index
+    (`McapReader.topics()`) can be fully intact while an individual chunk's
+    compressed bytes are corrupted; `topics()` alone never reads chunk data,
+    so it cannot see this. `total` is `0` for a file with no chunk index
+    (an unindexed or empty recording) -- a real, honest "nothing to check,"
+    never conflated with `corrupted`."""
+
+    total: int
+    corrupted: int
+
 
 _MANIFEST_META = "manifest"
 _CONFIG_BUNDLE_META = "config_bundle"
@@ -176,6 +194,30 @@ class McapReader:
         for _schema, channel, message in self._reader.iter_messages(topics=topics):
             capture_time_ns = message.publish_time if capture_aware else None
             yield channel.topic, message.log_time, capture_time_ns, message.data
+
+    def check_faults(self) -> ChunkFaultResult:
+        """Extra, beyond the `RecordingReader` Protocol's minimum (same
+        "internal helpers ... are free" allowance `config_bundle_bytes`/
+        `plugin_bundles_meta` already use above) -- eagerly decodes every
+        indexed chunk (CRC-validated, `R-SIM-25`: a bit flip inside a
+        compressed chunk must be CAUGHT, not silently returned as
+        different-but-valid bytes) and counts how many fail. A caller that
+        wants `skip_package` to mean something beyond whole-file damage
+        calls this explicitly, since it is real I/O over the whole file
+        (unlike `topics()`, which reads only the summary section) -- never
+        run implicitly by `topics()` or `messages()` themselves."""
+        summary = self._reader.get_summary()
+        if summary is None or not summary.chunk_indexes:
+            return ChunkFaultResult(total=0, corrupted=0)
+        corrupted = 0
+        for chunk_index in summary.chunk_indexes:
+            self._file.seek(chunk_index.chunk_start_offset + 1 + 8)
+            try:
+                chunk = Chunk.read(ReadDataStream(self._file))
+                list(breakup_chunk(chunk, validate_crc=True))
+            except Exception:  # noqa: BLE001 -- any decode/CRC failure marks this chunk corrupted
+                corrupted += 1
+        return ChunkFaultResult(total=len(summary.chunk_indexes), corrupted=corrupted)
 
     def close(self) -> None:
         self._file.close()

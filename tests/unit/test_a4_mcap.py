@@ -22,7 +22,7 @@ from adas_sim.io.base import (
     TopicInfo,
     group_by_log_time,
 )
-from adas_sim.io.mcap import CAPABILITIES, McapReader, McapWriter
+from adas_sim.io.mcap import CAPABILITIES, ChunkFaultResult, McapReader, McapWriter
 
 _TOPICS = {
     "/source/veh_dyn": TopicInfo(schema_name="adas_sim.test.VehDyn", provenance=Provenance.MEASURED),
@@ -244,3 +244,92 @@ def test_none_capture_time_is_distinguishable_from_a_genuine_equal_stamp(tmp_pat
     assert old_message[2] is None
     assert new_message[2] == 5_000_000
     assert new_message[1] == new_message[2]  # genuinely coincide: a real equality, not a fabricated one
+
+
+def _multi_chunk_mcap(path) -> None:
+    """A real multi-chunk mcap file -- `chunk_size=64` forces `Writer` to
+    rotate chunks well before this test's own ~40 messages would otherwise
+    fit in one (`IMP-0252`'s own "one damaged package within an otherwise-
+    good recording" fixture, decided 2026-08-25: a "package" is an mcap
+    chunk). Bypasses `McapWriter` deliberately, same as
+    `test_a_recording_with_no_meta_degrades_to_unknown_without_raising`
+    above -- `chunk_size` is not a parameter `McapWriter.open` exposes."""
+    with path.open("wb") as f:
+        raw = RawMcapWriter(f, chunk_size=64)
+        raw.start(profile="", library="test")
+        schema_id = raw.register_schema(name="adas_sim.test.VehDyn", encoding="", data=b"")
+        channel_id = raw.register_channel(topic="/source/veh_dyn", message_encoding="protobuf", schema_id=schema_id)
+        for i in range(40):
+            raw.add_message(channel_id=channel_id, log_time=i, data=bytes([i % 256]) * 16, publish_time=i)
+        raw.finish()
+
+
+def test_check_faults_on_a_clean_multi_chunk_file_finds_nothing(tmp_path):
+    """`IMP-0252`: a genuine multi-chunk file (proving the fixture itself
+    is real, not a single-chunk file masquerading as one) with every chunk
+    intact reports zero corrupted, out of more than one total."""
+    path = tmp_path / "clean.mcap"
+    _multi_chunk_mcap(path)
+
+    reader = McapReader(path)
+    result = reader.check_faults()
+    reader.close()
+
+    assert result.total > 1  # the fixture's own precondition: genuinely multi-chunk
+    assert result.corrupted == 0
+
+
+def test_check_faults_finds_exactly_the_one_corrupted_chunk(tmp_path):
+    """`IMP-0252`/`IMP-0253`'s own residual gap, closed: `topics()` alone
+    (the existing `orchestrate/worker.py` pre-flight) cannot see this --
+    it never reads chunk data, only the summary section -- so this proves
+    `check_faults()` catches what `topics()` structurally cannot. A single
+    flipped byte inside one chunk's own compressed/CRC-checked region is
+    caught by `breakup_chunk(validate_crc=True)`; every OTHER chunk in the
+    same file still decodes clean, proving "one damaged package among
+    several good ones" rather than whole-file damage."""
+    path = tmp_path / "one_corrupt.mcap"
+    _multi_chunk_mcap(path)
+
+    reader = McapReader(path)
+    summary = reader._reader.get_summary()  # test-only reach-in: need a real ChunkIndex to corrupt precisely
+    chunk_indexes = summary.chunk_indexes
+    assert len(chunk_indexes) > 1  # the fixture's own precondition
+    target = chunk_indexes[0]
+    reader.close()
+
+    with path.open("r+b") as f:
+        victim_offset = target.chunk_start_offset + target.chunk_length - 5
+        f.seek(victim_offset)
+        byte = f.read(1)
+        f.seek(victim_offset)
+        f.write(bytes([byte[0] ^ 0xFF]))
+
+    reader = McapReader(path)
+    result = reader.check_faults()
+    topics = reader.topics()  # the existing pre-flight -- proves it does NOT see this
+    reader.close()
+
+    assert result == ChunkFaultResult(total=len(chunk_indexes), corrupted=1)
+    assert topics["/source/veh_dyn"].schema_name  # topics() itself unaffected by chunk-level damage
+
+
+def test_check_faults_on_a_file_with_no_chunk_index_reports_zero_of_zero(tmp_path):
+    """`IMP-0252`: an unindexed/foreign-writer file (no `ChunkIndex` at
+    all -- `use_chunking=False`, unlike this module's own default writer)
+    is a real, honest `total=0` -- "nothing to check," never conflated
+    with `corrupted=0` on a file that WAS checked."""
+    path = tmp_path / "unchunked.mcap"
+    with path.open("wb") as f:
+        raw = RawMcapWriter(f, use_chunking=False)
+        raw.start(profile="", library="test")
+        schema_id = raw.register_schema(name="adas_sim.test.VehDyn", encoding="", data=b"")
+        channel_id = raw.register_channel(topic="/source/veh_dyn", message_encoding="protobuf", schema_id=schema_id)
+        raw.add_message(channel_id=channel_id, log_time=0, data=b"\x00", publish_time=0)
+        raw.finish()
+
+    reader = McapReader(path)
+    result = reader.check_faults()
+    reader.close()
+
+    assert result == ChunkFaultResult(total=0, corrupted=0)

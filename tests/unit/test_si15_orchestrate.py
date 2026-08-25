@@ -817,6 +817,99 @@ def test_abort_batch_cancels_a_still_running_job_when_one_entry_s_read_fails(tmp
     assert results[1].cancelled is True
 
 
+def _multi_chunk_mcap_one_corrupted(tmp_path: Path) -> Path:
+    """A real multi-chunk mcap file with exactly one chunk's bytes flipped
+    -- `IMP-0252`'s own "one damaged package within an otherwise-good
+    recording" fixture (decided 2026-08-25: a "package" is an mcap chunk),
+    built directly here rather than checked in, same discipline
+    `_corrupted_mcap` above uses for whole-file damage."""
+    from mcap.writer import Writer as RawMcapWriter
+
+    path = tmp_path / "one_corrupt.mcap"
+    with path.open("wb") as f:
+        raw = RawMcapWriter(f, chunk_size=64)
+        raw.start(profile="", library="test")
+        schema_id = raw.register_schema(name="adas_sim.test.VehDyn", encoding="", data=b"")
+        channel_id = raw.register_channel(topic="/source/veh_dyn", message_encoding="protobuf", schema_id=schema_id)
+        for i in range(40):
+            raw.add_message(channel_id=channel_id, log_time=i, data=bytes([i % 256]) * 16, publish_time=i)
+        raw.finish()
+
+    from adas_sim.io.mcap import McapReader
+
+    reader = McapReader(path)
+    chunk_indexes = reader._reader.get_summary().chunk_indexes  # test-only reach-in, same as test_a4_mcap.py
+    assert len(chunk_indexes) > 1  # the fixture's own precondition: genuinely multi-chunk
+    target = chunk_indexes[0]
+    reader.close()
+
+    with path.open("r+b") as f:
+        victim_offset = target.chunk_start_offset + target.chunk_length - 5
+        f.seek(victim_offset)
+        byte = f.read(1)
+        f.seek(victim_offset)
+        f.write(bytes([byte[0] ^ 0xFF]))
+    return path
+
+
+def test_probe_recording_skip_package_counts_and_continues_past_one_damaged_chunk(tmp_path):
+    """`IMP-0252`/`IMP-0253`'s own stated residual, closed: `readerror.
+    probe_recording` under `ReadError.SKIP_PACKAGE` finds and skips exactly
+    the one damaged chunk in an otherwise-good multi-chunk recording (never
+    reachable through `topics()` alone, `io/mcap.py::McapReader.
+    check_faults`'s own docstring) and reports success -- distinct from
+    `skip_entry`'s whole-file-damage behaviour on the SAME fixture shape,
+    which this test also proves by contrast."""
+    damaged = _multi_chunk_mcap_one_corrupted(tmp_path)
+
+    skipped_packages, outcome = readerror.probe_recording(damaged, on_read_error="skip_package", bound_s=1.0)
+    assert outcome.succeeded is True
+    assert skipped_packages == 1
+
+    # Contrast: a policy other than skip_package never pays for the chunk
+    # scan, so the very same damaged file reports zero and still succeeds
+    # -- topics() alone cannot see the corrupted chunk (SW-0252's own
+    # "package" concept simply is not checked under that policy).
+    skipped_packages_other_policy, other_outcome = readerror.probe_recording(
+        damaged, on_read_error="skip_entry", bound_s=1.0,
+    )
+    assert other_outcome.succeeded is True
+    assert skipped_packages_other_policy == 0
+
+
+def test_probe_recording_skip_package_fails_when_every_chunk_is_damaged(tmp_path):
+    """`IMP-0252`: when nothing survives, there is nothing left to
+    skip-and-continue -- that is whole-file damage, reported through the
+    same retry/fail path every other policy uses, never silently treated
+    as "zero packages skipped, run proceeds."."""
+    from mcap.writer import Writer as RawMcapWriter
+
+    path = tmp_path / "totally_corrupt.mcap"
+    with path.open("wb") as f:
+        raw = RawMcapWriter(f, chunk_size=1024 * 1024)
+        raw.start(profile="", library="test")
+        schema_id = raw.register_schema(name="adas_sim.test.VehDyn", encoding="", data=b"")
+        channel_id = raw.register_channel(topic="/source/veh_dyn", message_encoding="protobuf", schema_id=schema_id)
+        raw.add_message(channel_id=channel_id, log_time=0, data=b"\x00" * 16, publish_time=0)
+        raw.finish()
+
+    from adas_sim.io.mcap import McapReader
+
+    reader = McapReader(path)
+    (target,) = reader._reader.get_summary().chunk_indexes  # the one and only chunk
+    reader.close()
+    with path.open("r+b") as f:
+        victim_offset = target.chunk_start_offset + target.chunk_length - 5
+        f.seek(victim_offset)
+        byte = f.read(1)
+        f.seek(victim_offset)
+        f.write(bytes([byte[0] ^ 0xFF]))
+
+    skipped_packages, outcome = readerror.probe_recording(path, on_read_error="skip_package", bound_s=0.3)
+    assert outcome.succeeded is False
+    assert skipped_packages == 0
+
+
 def test_should_reset_before_is_called_once_per_entry_with_the_real_index(tmp_path, monkeypatch):
     """`IMP-0251`: `run_batch`'s own per-entry lifecycle now calls
     `should_reset_before` for real -- a spy proves it fires once per entry

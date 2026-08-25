@@ -109,6 +109,15 @@ class RecordingOutcome:
     #: not a Python exception). `orchestrate/severity.py::severity_for_kind`
     #: maps this to a `Severity` for `--exit-on`.
     error_kind: str = ""
+    #: `IMP-0252`/`IMP-0253` (`SW-0252`): count of damaged packages (mcap
+    #: chunks) this job's own pre-flight found and skipped under
+    #: `ReadError.SKIP_PACKAGE` -- `0` for every job launched under a
+    #: different policy or whose recording had none. Only ever set on the
+    #: `"ok"` outcome (a `"fail"` under `SKIP_PACKAGE` means every package
+    #: was damaged, `orchestrate/worker.py::_open_and_probe`'s own "nothing
+    #: left to skip" case -- that is whole-file damage, reported through
+    #: `read_error` instead, same as any other policy).
+    skipped_packages: int = 0
 
 
 def expand_recordings(args: Sequence[str]) -> list[Path]:
@@ -180,6 +189,7 @@ def _classify(
         return RecordingOutcome(
             recording=recording, outcome="ok", duration_s=duration_s,
             tick_count=result.get("tick_count"), last_tick_ns=result.get("last_tick_ns"),  # type: ignore[arg-type]
+            skipped_packages=int(result.get("skipped_packages", 0)),  # type: ignore[arg-type]
         )
     if result is not None and result.get("outcome") == "fail":
         return RecordingOutcome(
@@ -236,7 +246,7 @@ def _write_outcome_manifest(
         cancelled=outcome.cancelled,
         read_error=outcome.read_error, read_retry_attempts=outcome.read_retry_attempts,
         reset_mode=reset_policy.mode.value, reset_when=reset_policy.when.value,
-        error_kind=outcome.error_kind,
+        error_kind=outcome.error_kind, skipped_packages=outcome.skipped_packages,
     )
     write_manifest(manifest, out_dir / "manifest" / f"{index:04d}_{recording.stem}")
 
@@ -262,7 +272,7 @@ def _load_completed(out_json: Path, recording: Path) -> RecordingOutcome | None:
         tick_count=data.get("tick_count"), last_tick_ns=data.get("last_tick_ns"),
         error=str(data.get("error", "")),
         read_error=str(data.get("read_error", "")), read_retry_attempts=int(data.get("read_retry_attempts", 0)),
-        error_kind=str(data.get("error_kind", "")),
+        error_kind=str(data.get("error_kind", "")), skipped_packages=int(data.get("skipped_packages", 0)),
     )
 
 

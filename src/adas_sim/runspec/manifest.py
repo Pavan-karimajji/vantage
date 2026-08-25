@@ -219,6 +219,7 @@ def build_manifest(
     reset_mode: str = "",
     reset_when: str = "",
     error_kind: str = "",
+    skipped_packages: int = 0,
 ) -> RunManifest:
     """`run_kind` is `"sim"` or `"resim"`; `source_kind` is the `Source.name`.
 
@@ -264,6 +265,10 @@ def build_manifest(
           ResetPolicy` this run was launched with -- the policy, never the
           per-entry decision (which is trivially always-true under
           `orchestrate/batch.py`'s own fresh-subprocess-per-recording isolation).
+        - `skipped_packages` (`IMP-0252`) is the damaged-mcap-chunk count this
+          run's own pre-flight found and skipped under `ReadError.
+          SKIP_PACKAGE` -- `0` (the default) for every other policy and for
+          a run that found none.
 
     """
     component_build_shas = component_build_shas or {}
@@ -347,6 +352,7 @@ def build_manifest(
         error_kind=error_kind,
         delay_steps=delay_steps,
         grid_step_ns=grid_step_ns,
+        skipped_packages=skipped_packages,
     )
 
 

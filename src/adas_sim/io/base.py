@@ -327,6 +327,16 @@ class RunManifest:
     #: actually happened -- the policy is the real, checkable fact.
     reset_mode: str = ""
     reset_when: str = ""
+    #: `IMP-0252` (`SW-0252`): count of damaged packages (mcap chunks) this
+    #: run's own pre-flight found and skipped under `ReadError.SKIP_PACKAGE`
+    #: -- `0` for every run that found none, including every run launched
+    #: under a different `read_error` policy (that policy's pre-flight
+    #: never scans chunks at all, `orchestrate/worker.py::_open_and_probe`).
+    #: A nonzero value is the flag `SW-0252`'s Accept clause asks for --
+    #: "a run that skipped packages cannot be mistaken for a clean one" --
+    #: same distinguish-by-field pattern as `cancelled`/`read_error`, never
+    #: a fifth `outcome` value.
+    skipped_packages: int = 0
     #: `IMP-0128` (`SW-0128`): this run's own caught `SimError.kind`
     #: (`""` for `ok`, or a failure the worker did not raise a `SimError`
     #: for) -- `orchestrate.severity.severity_for_kind` maps it to a
@@ -440,6 +450,7 @@ def manifest_to_dict(manifest: RunManifest) -> dict:
             {"edge": d.edge, "delay_steps": d.delay_steps} for d in manifest.delay_steps
         ],
         "grid_step_ns": manifest.grid_step_ns,
+        "skipped_packages": manifest.skipped_packages,
     }
 
 
@@ -524,6 +535,7 @@ def manifest_from_dict(data: dict) -> RunManifest:
         error_kind=data.get("error_kind", ""),
         delay_steps=delay_steps,
         grid_step_ns=data.get("grid_step_ns", 0),
+        skipped_packages=data.get("skipped_packages", 0),
     )
 
 
