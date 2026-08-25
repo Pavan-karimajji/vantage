@@ -35,7 +35,7 @@
 #       This is the call `WP-16` makes after deleting `sil_host`: the
 #       retiring implementation's tests are gone by then, so only the
 #       survivor side is comparable, and it must not have shrunk.
-# @author Pavan Karimajji <pavankarimajji1997@gmail.com>
+# @author Pavan Karimajji <Pavan.Karimajji@larsentoubro.com>
 
 from __future__ import annotations
 

@@ -49,7 +49,7 @@
 #   build scope. It is reported PENDING-BUILD with the exact command to
 #   produce it, and the row's contribution to the overall gate is held open
 #   rather than silently passed.
-# @author Pavan Karimajji <pavankarimajji1997@gmail.com>
+# @author Pavan Karimajji <Pavan.Karimajji@larsentoubro.com>
 
 from __future__ import annotations
 

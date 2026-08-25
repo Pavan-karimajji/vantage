@@ -20,7 +20,7 @@
 #   set transitively -- there is no separate "engine" package to check
 #   against yet, and the escape hatch (splitting `io` into its own Conan
 #   package) is written into SM-02's own box for the day that stops holding.
-# @author Pavan Karimajji <pavankarimajji1997@gmail.com>
+# @author Pavan Karimajji <Pavan.Karimajji@larsentoubro.com>
 
 import argparse
 import json

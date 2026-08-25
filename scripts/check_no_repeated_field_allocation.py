@@ -25,7 +25,7 @@
 #   trust (`R-REQ-9`'s planted-violation discipline one level down: this
 #   file's own `__main__` self-test proves the check still catches a real
 #   `Add`/`InsertRepeated` call when one is planted).
-# @author Pavan Karimajji <pavankarimajji1997@gmail.com>
+# @author Pavan Karimajji <Pavan.Karimajji@larsentoubro.com>
 
 from __future__ import annotations
 

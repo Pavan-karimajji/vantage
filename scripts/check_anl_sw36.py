@@ -19,7 +19,7 @@
 #   never an OP token, and is never flagged -- a naive `[+\-*/%]` grep
 #   across this codebase's comment-heavy style would be red everywhere and
 #   nowhere useful. Only a real arithmetic OP token in live code counts.
-# @author Pavan Karimajji <pavankarimajji1997@gmail.com>
+# @author Pavan Karimajji <Pavan.Karimajji@larsentoubro.com>
 
 from __future__ import annotations
 
