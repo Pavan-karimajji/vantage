@@ -1188,8 +1188,9 @@ Never started, so this is a scope removal, not a code move.
 
 ### WP-32 · `MP-6` · `SM-11` — the embeddable ABI's per-tick step, `vantage`'s own real dependency
 
-**Serves:** `SM-11` (`VIZ_Sync_Plan_v0.1.md` §2 — "`vantage`, the in-proc
-host"), `SI-09` (`abi`, this document's own `WP-14`/`WP-14a` family).
+**Serves:** `SM-11` (`SYNC:SM-11`, `VIZ_Sync_Plan_v0.1.md` §2 — "`vantage`,
+the in-proc host"), `SI-09` (`abi`, this document's own `WP-14`/`WP-14a`
+family).
 Opened and closed 2026-08-25, scoping `SM-11`: that row's own text ("the
 executable that links `adas-sim` and `adas-viz-player`... in-process
 attach with zero transport marshalling") assumed a mechanism that did not
@@ -1251,6 +1252,176 @@ repo over.
       **214/215** (the one pre-existing `UtEdg08Reproducer` Windows
       temp-lock race is the only non-pass, matching the documented
       baseline exactly). `docs/v2/py/trace_check.py` PASS.
+
+---
+
+### WP-33 · `MP-6` · `SM-11` — the `PortFrame`→`Tick` bridge, `vantage`'s mechanism half
+
+**Serves:** `SM-11` (`SYNC:SM-11`, `VIZ_Sync_Plan_v0.1.md` §2 — "`vantage`,
+the in-proc host"), continuing `WP-32`'s own scope cut.
+
+**Prereq:** `WP-32` (`IMP-0429`, `ABI_VERSION` 2).
+
+Opened and closed 2026-08-25. `WP-32`'s own top note named the remaining gap
+as "the GUI executable itself" and disclaimed it as a separate follow-on;
+this session's own research found the gap was bigger than a hookup — **no
+code anywhere turned a live `PortFrame` into a `viz::session::Tick`.**
+`viz::session::PushSource::DeliverTick` (`VZ-15`/`WP-12`) existed as the
+intended live-push entry point with no caller. Getting that bridge to build
+as a real, permanent part of this repo then surfaced a genuine architectural
+conflict (`sim` and `viz` mutually needing each other) and, in chasing it
+down, **four separate real, pre-existing defects in the shared,
+byte-identical `conanfile.py` template** (R-BUILD-1, all 8 real copies) —
+none hit before because nothing had ever resolved a components-carrying
+`cmake_layout` package as an ordinary editable Conan dependency of a THIRD
+package before this pass. Every fix below is verified live, including a
+full regression pass (`sim`, `viz`, `interfaces`, `mathlib` own `gtest`
+targets, 100% green except `sim`'s one pre-existing, already-documented
+`UtEdg08Reproducer` flake).
+
+**Scope note, decided with the user after the first pass:** an in-tree
+aggregator path (`scripts/build.py sim --with viz ...`) was also made to
+work during this session — an `AdasSim::io` `ALIAS` in `modules/sim/src/
+simcore/CMakeLists.txt`, guarded `find_package()` calls in `modules/viz/
+CMakeLists.txt`, and a `forward_closure` seeding change in the root
+`scripts/build.py`. Since `vantage` ended up as its own Conan package
+(below) and never uses the aggregator, none of that is load-bearing for
+`vantage` itself — **all three were reverted** rather than kept as unused
+surface area, verified clean by re-running `sim`'s and `viz`'s own `gtest`
+targets after reverting (same 214/215 and 41/41 as before). Only the
+`conanfile.py` fixes below stay, because they are real bugs any future
+real cross-package consumption of a `cmake_layout` component would hit
+regardless of whether an aggregator is ever used.
+
+**Where `vantage` ended up living, and why:** `modules/sim/vantage/` — a
+**second, independent Conan package** (`adas-vantage`) physically inside the
+`modules/sim` git repo, requiring both `adas-sim` and `adas-viz` as ordinary
+ic dependencies (an unremarkable diamond: neither of them requires
+`adas-vantage` back). Two approaches were tried and conclusively failed
+first, each for a real reason:
+1. **A package-level `adas-sim -> adas-viz` Conan requires is a hard cycle**
+   — `adas-viz` already requires `adas-sim` unconditionally (its own
+   `player` component's `AdasSim::io` edge). `conan graph info`: `ERROR:
+   There is a cycle/loop in the graph`. Reverted immediately
+   (`conf/build.yml`/`CMakePresets.json` back to their `WP-32` shape).
+2. **The in-tree aggregator's `add_subdirectory()`-ordered composability
+   pattern is one-directional** — `vantage` needing `AdasViz::player` before
+   `modules/sim`'s own `CMakeLists.txt` runs, while viz's `player` needs
+   `AdasSim::io` before ITS runs, is a genuine mutual need no ordering of two
+   sequential `add_subdirectory()` calls can satisfy — confirmed by hand and
+   by CMake itself refusing outright once `cmake_language(DEFER ...)` was
+   tried to sidestep the ordering: `Subdirectories may not be created during
+   deferred execution.` Keeping `vantage` inside `adas-sim`'s own CMake tree
+   is therefore not possible at all, by any means tried.
+Moving `vantage` to its own package (confirmed with the user, a deliberate,
+named deviation from `R-GIT-1`'s "one repo per component") sidesteps both:
+Conan resolves `adas-vantage -> adas-sim` and `adas-vantage -> adas-viz ->
+adas-sim` as an ordinary diamond, no cycle, and both dependencies resolve as
+plain, already-built Conan packages — no aggregator, no ordering tricks.
+
+- [x] **Lands:** `IMP-0430` — 1.
+  - [x] `IMP-0430` · `SW-0426` · `NEW` — `modules/sim/vantage/cpp/vantage/
+        frame_bridge.{hpp,cpp}` (`sim::vantage::FrameBridge`) + `host_loop.
+        {hpp,cpp}` (`sim::vantage::RunEmbedded`) — `UT-ABI-04`'s own
+        attach/step/drain loop, now bridging every cycle's real frames into
+        a `Tick` and delivering it through `PushSource::DeliverTick`
+        instead of handing raw bytes back to a test. **Verified live, for
+        real, in the committed location:** `modules/sim/vantage/build.bat
+        -t gtest -p vs2026` (its own copy of the byte-identical machinery,
+        R-BUILD-1/2/3) resolves `adas-sim`/`adas-viz` as ordinary editable
+        Conan dependencies, builds `vantage_bridge.lib` clean, and
+        `vantage_tests.exe` **passes**: `It23VantageBridge.
+        EmbeddedRunDeliversTicksMatchingTheTransportsRealFrames ... Passed
+        0.09 sec` — `100% tests passed`.
+- [x] **Real defects found, all fixed live, three kept as permanent shared-
+      machinery corrections (R-BUILD-1, applied byte-identically to all 8
+      real `conanfile.py` copies), documented rather than worked around:**
+  1. **Package-level Conan cycle** (`adas-sim -> adas-viz -> adas-sim`) —
+     described above; the reason `vantage` is its own package.
+  2. **Aggregator ordering cannot satisfy a mutual in-tree need**, and
+     `cmake_language(DEFER ...)` cannot rescue it either (CMake refuses
+     `add_subdirectory()` inside a deferred call outright) — described
+     above; the reason `vantage` is not inside `adas-sim`'s own tree. An
+     in-tree aggregator build was made to work while chasing this (a real
+     `AdasSim::io` `ALIAS`, guarded `find_package()` calls in viz, a
+     `forward_closure` seeding change in the root dispatcher), but since
+     `vantage` never uses the aggregator, all three were reverted rather
+     than kept as unused surface area (this row's own top note has the
+     account) — nothing from this finding survives in the tree.
+  3. **A `cmake_layout` package's UNNAMED ROOT never got the editable-mode
+     libdirs/bindirs/includedirs override its own named-component branch
+     already had** — `conanfile.py`'s `package_info()` set nothing for the
+     root beyond `builddirs`, so CMakeDeps fell back to Conan's plain
+     package-folder default (`<package_folder>/lib`), which never exists
+     for an editable package. Surfaced as `find_package(AdasSim REQUIRED)`/
+     `find_package(AdasViz REQUIRED)` failing outright — "Library
+     'adas-viz-host' not found in package" — the first time anything had
+     ever resolved a components-carrying `cmake_layout` package's bare root
+     rather than immediately scoping to one named component. **Fixed**:
+     the same override, generalized to the root.
+  4. **The existing named-component override, once mirrored to the root,
+     turned out itself to compute the WRONG directory** — `self.cpp.build.
+     libdirs`/`.bindirs` are layout()'s own bare per-config folder name
+     (e.g. `"Release"`), meant to be read relative to `self.folders.build`;
+     CMakeDeps instead joins whatever `cpp_info.libdirs` holds against
+     `PACKAGE_FOLDER` (the bare recipe folder in editable mode), so mirroring
+     it verbatim produced a directory that never existed
+     (`modules/viz/Release` rather than `modules/viz/build-sil-vs2026/
+     build/Release`). **Fixed**: the real path is now computed explicitly
+     (`build-sil-<platform>/build/<build_type>`), the same way the OTHER
+     `layout_kind`'s branch already computes its own `build_subdir`
+     explicitly rather than trusting a `self.cpp.build.*` mirror. A related
+     find: `viz`'s own vendored third-party sub-targets (`src/third_party/
+     glfw|imgui|implot/`, each its own `add_subdirectory()`) land in NESTED
+     directories the single computed path doesn't cover — closed with a
+     new, generic, data-driven `recipe.editable_extra_libdirs:` field
+     (`conf/build.yml`, R-VAR-3; empty for every recipe but viz's).
+  5. **`layout()`'s `self.cpp.source.includedirs = ["cpp", "include"]` was
+     unconditional**, but only `interfaces` actually ships an `include/`
+     directory (its own header comment already said so) — for `mathlib`/
+     `viz` (no such directory), CMake's IMPORTED-target validation (unlike a
+     plain target) hard-errors on a nonexistent entry in
+     `INTERFACE_INCLUDE_DIRECTORIES` ("includes non-existent path"),
+     surfacing only once something resolved the package through a real
+     `find_package()` while editable. **Fixed**: `"include"` is now
+     conditional on the directory actually existing.
+  6. **Named, NOT fixed at the root cause, worked around locally instead:**
+     even with fixes 3–5 landed, `AdasInterfaces::AdasInterfaces`'s own
+     generated `INTERFACE_INCLUDE_DIRECTORIES` — and separately, plain
+     `protobuf::libprotobuf`'s — still comes out empty in vantage's own
+     build, confirmed by direct instrumentation of `package_info()` (Python
+     computes `["cpp", "include"]` correctly; the generated `.cmake` data
+     file still shows nothing). This looks like a genuine, deeper Conan/
+     CMakeDeps limitation in how it regenerates a dependency's own
+     per-config data when reached this way, not something `conanfile.py`'s
+     own `cpp_info` assignments can reach — not chased further given the
+     diminishing return. Worked around **locally**, in `modules/sim/
+     vantage/cpp/vantage/CMakeLists.txt` and `tests/CMakeLists.txt`
+     specifically: read the real, correct `..._PACKAGE_FOLDER_RELEASE`
+     variable CMakeDeps itself already generates (confirmed correct in
+     every case checked) and add the known-real subdirectories directly.
+     Fragile (an internal Conan variable name, not public API) and named as
+     a workaround in both files — a real fix, if one exists, belongs in the
+     shared `conanfile.py` template, future work.
+- [x] **Named, honest limitations in the bridge itself (not silently worked
+  around):** `PortValue::schema_bytes`/`schema_name` are left empty — no
+  manifest source is wired into this pass, and per `R-SIM-25` an unfilled
+  field reads `unknown`, never a guessed value. `Tick::t_ns`/`PortValue::
+  t_ns` carry the engine's own cycle count, not true elapsed nanoseconds —
+  the ABI exposes no wall-clock/period value at this remove (`R-SIM-18`'s
+  period lives in the config bundle, not fetched here).
+- [x] **Exit — `UT-VTG-01`/`IT-23`, closed real:** `modules/sim/vantage/
+      tests/vantage/test_it23_vantage_bridge.cpp`'s
+      `EmbeddedRunDeliversTicksMatchingTheTransportsRealFrames` — the same
+      `F-SPEC`/`echo_stub` fixture shape `IT-11` uses (a local copy, not a
+      shared reference — `adas-vantage` is its own Conan package and must
+      build standalone), run through `sim::vantage::RunEmbedded` into a real
+      `viz::session::PushSource`, pulled back out via `NextTick()`. Asserts
+      exactly 3 delivered ticks, each carrying a `sut.outputs` port whose
+      payload matches the transport's own published byte exactly
+      (`echo_stub`'s default `0xAB`), `origin == kSimulated`, both schema
+      fields empty. **Passed live, in the real committed package** (not a
+      scratch/throwaway tree): `100% tests passed out of 1`.
 
 ---
 

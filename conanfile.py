@@ -190,7 +190,18 @@ class AdasComponent(ConanFile):
             # "adas/adas_sil_abi.h", even though the in-tree aggregator path
             # already works (CMake target_include_directories PUBLIC on
             # adas-interfaces already covers both directories there).
-            self.cpp.source.includedirs = ["cpp", "include"]
+            # WP-33 (SM-11), found live: "include" was unconditional here,
+            # but only `interfaces` actually ships one (this comment's own
+            # justification) -- for a cmake_layout component with no such
+            # directory (mathlib, viz), CMake's imported-target validation
+            # (unlike a plain target) hard-errors on a nonexistent entry in
+            # INTERFACE_INCLUDE_DIRECTORIES ("includes non-existent path"),
+            # surfacing only once something resolved this package through a
+            # real find_package() while editable -- the in-tree aggregator
+            # path never hits imported-target validation at all.
+            self.cpp.source.includedirs = ["cpp"] + (
+                ["include"] if (Path(self.recipe_folder) / "include").is_dir() else []
+            )
             self.cpp.build.includedirs = ["generated"]
             # S-C1d: exposes cmake/ (sil_ports_generate.cmake) on a consumer's
             # CMAKE_MODULE_PATH via CMakeDeps, so df/vdy's own CMakeLists.txt
@@ -291,12 +302,55 @@ class AdasComponent(ConanFile):
             # identical file, difference lives in conf/build.yml data).
             self.cpp_info.libs = meta["libs"]
         conf = _conf(self.recipe_folder)
+        is_editable = getattr(getattr(self, "_conan_node", None), "recipe", None) == "Editable"
+        # WP-33 (SM-11), found live in three stages -- a components-carrying
+        # cmake_layout package's UNNAMED ROOT never got an editable-mode
+        # libdirs/bindirs override at all (unlike the OTHER layout_kind's
+        # named-component branch further down), and once given one, mirroring
+        # `self.cpp.build.libdirs` verbatim still resolved wrong: that value
+        # is layout()'s own bare per-config folder ("Release"), meant to be
+        # read relative to `self.folders.build` -- CMakeDeps instead joins it
+        # against PACKAGE_FOLDER (the bare recipe folder in editable mode),
+        # producing a directory that never existed (`modules/viz/Release`
+        # rather than `modules/viz/build-sil-vs2026/build/Release`). A bare
+        # `find_package(AdasSim REQUIRED)`/`find_package(AdasViz REQUIRED)`
+        # therefore failed immediately -- "Library 'adas-viz-host' not found
+        # in package" -- even though the SAME library resolves fine once its
+        # own named component's path is computed explicitly, mirroring how
+        # the OTHER layout_kind's branch below already computes its own
+        # build_subdir explicitly rather than trusting a `self.cpp.build.*`
+        # mirror. Never triggered before this pass: nothing had ever called a
+        # plain find_package() on a components-carrying cmake_layout package
+        # while it was registered editable -- every existing consumer used
+        # the in-tree aggregator instead (add_subdirectory(), no CMakeDeps
+        # involved at all).
+        editable_cmake_layout_libdirs = None
         if conf.get("layout_kind") == "cmake_layout":
             # Mirrors layout()'s editable-mode builddirs above, for a real
             # `conan create` package - untested by this stage (today's only
             # exercised path is editable mode), kept symmetric on principle
             # rather than left to silently diverge later.
             self.cpp_info.builddirs = ["cmake"]
+            if is_editable:
+                platform = _editable_platform(conf, str(self.options.project), self.settings.os)
+                build_type = str(self.settings.build_type) if self.settings.get_safe("build_type") else "Release"
+                base = f"build-sil-{platform}/build"
+                # recipe.editable_extra_libdirs: (conf/build.yml data, R-VAR-3)
+                # -- a component whose own CMakeLists.txt builds vendored
+                # sub-targets into nested directories (viz's src/third_party/
+                # glfw|imgui|implot/, each its own add_subdirectory()) has
+                # libraries CMakeDeps must find OUTSIDE the single main build
+                # dir above. Found live: `adas_viz_imgui`/`adas_viz_glfw`/
+                # `adas_viz_implot` are exactly this case, each landing at
+                # `<base>/src/third_party/<name>/<build_type>`, not `<base>/
+                # <build_type>`. Empty/absent for every component with no
+                # vendored sub-targets (every recipe but viz's, today).
+                editable_cmake_layout_libdirs = [f"{base}/{build_type}"] + [
+                    f"{base}/{extra}/{build_type}" for extra in meta.get("editable_extra_libdirs", [])
+                ]
+                self.cpp_info.libdirs = editable_cmake_layout_libdirs
+                self.cpp_info.bindirs = editable_cmake_layout_libdirs
+                self.cpp_info.includedirs = self.cpp.source.includedirs
         name = self._cmake_name()
         self.cpp_info.set_property("cmake_target_name", f"{name}::{name}")
         self.cpp_info.set_property("cmake_file_name", name)
@@ -343,6 +397,15 @@ class AdasComponent(ConanFile):
             comp.requires = comp_meta.get("requires", [])
             if conf.get("layout_kind") == "cmake_layout":
                 comp.builddirs = ["cmake"]
+                # WP-33 (SM-11): same explicitly-computed editable path(s)
+                # the root above now uses (`editable_cmake_layout_libdirs`)
+                # -- see that block's own comment for why mirroring
+                # `self.cpp.build.libdirs` verbatim resolved to the wrong
+                # directory, and why more than one dir may be needed.
+                if is_editable:
+                    comp.libdirs = editable_cmake_layout_libdirs
+                    comp.bindirs = editable_cmake_layout_libdirs
+                    comp.includedirs = self.cpp.source.includedirs
             elif self.package_type in ("shared-library", "static-library"):
                 # A named component does not inherit layout()'s self.cpp.build
                 # the way the unnamed root cpp_info does (SM-02's own live

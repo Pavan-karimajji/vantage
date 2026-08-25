@@ -59,9 +59,19 @@ recipe:
       # `protobuf::libprotobuf` added for `SM-05a` (the `.erg` codec):
       # DescriptorPool/DynamicMessageFactory reflection to reconstruct real
       # port messages from a manifest's own descriptor_set bytes (R-SIM-11)
-      # -- third-party, like mcap, so `io` still requires nothing
-      # first-party (this component's own comment above, unchanged).
-      requires: [mcap::mcap, protobuf::libprotobuf]
+      # -- third-party, like mcap.
+      # `adas-interfaces::adas-interfaces` added WP-33 (SM-11), found live:
+      # `io`'s own public header (`simcore/transport.hpp`, part of `libs:
+      # [simcore]` above) `#include`s modules/interfaces' `transport/
+      # ITransport.hpp` (R-IFACE-1) -- a real, pre-existing first-party
+      # header need this component's own comment (below, now stale) assumed
+      # away. Never surfaced before this pass: every existing consumer of
+      # `AdasSim::io` reached AdasInterfaces' headers some OTHER way in the
+      # same build (sim's own in-tree simcore target, or viz's own
+      # `player` component separately declaring it) -- `vantage` is the
+      # first consumer linking bare `AdasSim::io` with nothing else
+      # supplying that header path.
+      requires: [mcap::mcap, protobuf::libprotobuf, adas-interfaces::adas-interfaces]
 
 variants:
   base:

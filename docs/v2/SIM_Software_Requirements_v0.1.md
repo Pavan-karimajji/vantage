@@ -1690,6 +1690,13 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Built.** ○ not started — `IMP-0397` in `WP-31`
 **Now.** `NEW`.
 
+**`SW-0426`** · `SI-09` · `P1` · `R1` — A live in-process run bridges into the player's own Tick shape
+**Shall.** An in-process host attaching via `SW-0425`'s mechanism shall be able to turn the real frames it drains between steps into `viz::session::Tick`s delivered through the player's own `PushSource::DeliverTick`, so `vantage` (`SM-11`) needs no second ingestion path beside the one every other `Source` already uses.
+**Accept.** Driving a real run through the embedded ABI and this bridge, then pulling from the fed `PushSource`, returns one `Tick` per stepped cycle carrying the exact port names and payload bytes the transport delivered — never a fabricated or re-derived value (`R-SIM-7`). A field this pass cannot resolve (`schema_bytes`/`schema_name`) is left empty, never a guessed value (`R-SIM-25`).
+**Verify.** T · `UT-VTG-01`; `IT-23`   **Trace.** SYS-0272 (`SW-0425`'s own parent — the same "engine is a library, usable without the executable" concept, extended to its player-side consumer)
+**Built.** ● done — `IMP-0430` in `WP-33`
+**Now.** `NEW` — nothing turned a live frame into a `Tick` before this pass; `PushSource::DeliverTick` existed with no caller (`VZ-15`/`WP-12`).
+
 ---
 
 # PART C — THE CONFIGURATION LAYER (Python)

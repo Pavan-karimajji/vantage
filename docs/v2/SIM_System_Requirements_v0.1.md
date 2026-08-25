@@ -2246,7 +2246,7 @@ Constraints are obligations on *how* the system is built, imposed because a corr
 **Shall.** The engine shall be built as a library with a stable C ABI and shall be usable without the executable; the executable shall contain argument handling and lifecycle only.
 **Accept.** The player or any host embeds the library directly. The executable contains no configuration parser, no validation, no path search and no inference; its growth beyond a stated size is a review trigger.
 **Verify.** A · `ANL-46`   **Trace.** CN-0047, CN-0048, CN-0388, CN-0389, CN-0390
-**Built.** ● done — 3/3 software requirements done
+**Built.** ● done — 4/4 software requirements done
 
 **`SYS-0273`** · `P0` · `R1` — Transport is replaceable behind a fixed interface
 **Shall.** The transport between player and engine shall be replaceable — in-process pass-through, local shared memory, or network — without changing the interface, with bulk data over shared memory and control and metadata over a channel of the transport's choosing.

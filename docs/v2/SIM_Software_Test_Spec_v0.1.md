@@ -205,6 +205,7 @@ Each crosses one named interface. The seam (`IF-09`) and the module ABI (`IF-01`
 | `IT-19` | `SW-0298`, `SW-0352` | `IF-11` | `F-STUB`, `F-LONG` | Measure engine tick rate with no player, with one attaching mid-run, and after detach. |
 | `IT-21` | `SW-0343` | `IF-16` | `F-CHAIN4` | Make a selection in the launcher, save, launch; confirm `launch()` was reached only through the written path, and the headless re-run is identical. |
 | `IT-22` | `SW-0379` | — | `df` and `vdy` | A **second** component completes the published checklist unaided, with no SIM-team edit and no framework file changed. |
+| `IT-23` | `SW-0426` | `IF-09` | `F-SPEC`, `F-STUB` | Same embed-host shape as `IT-11`'s own `UT-ABI-04` case, extended past the transport into the player side: attach, step to exhaustion, bridge every cycle's real frames into a `viz::session::PushSource` via `FrameBridge`, then pull every delivered `Tick` back out and compare its port names/payload bytes against what the transport actually published. |
 
 ---
 
@@ -415,6 +416,14 @@ Added 2026-08-22 alongside `SW-0422`/`SW-0423`, found while attempting `WP-15b`:
 | `UT-ABI-02` | `SW-0423` | `F-SPEC` | Two runs through `simEngineCreate`: one spec carrying a declared override, one without. Assert the override is applied in the first; assert the second is unchanged from the pre-`WP-14a` no-resolver behaviour. |
 | `UT-ABI-03` | `SW-0139` | `F-SPEC` | Two runs through `simEngineCreate`: one spec declaring `checkpoint.path`, one without. Assert the first produces a real, readable `progress.json` naming the correct `run_id` and last completed cycle; assert the second completes exactly as before, with no checkpoint declared. |
 | `UT-ABI-04` | `SW-0425` | `F-SPEC` | Construct via `simEngineCreate`; attach a real `InProcessTransport` via `simEngineAttachTransport` (converted to `TransportPublisher*` before erasure, per that function's own documented gotcha); loop `simEngineStepOnce`, draining `tryReceive()` between each call. Assert the exact number of real cycles stepped matches the spec's own recording length, that real per-cycle frames are observed BETWEEN steps (not only after the loop ends), and that `simEngineStepOnce` on an already-exhausted/`nullptr` engine is a `kSimExitConfig` refusal, never a crash. |
+
+### 5.9b `SI-09` (`WP-33`) — `UT-VTG-01`
+
+Added 2026-08-25 (`SM-11`, `vantage`): `UT-ABI-04` proved the ABI's own per-tick mechanism; nothing yet proved the frames it delivers actually become a `viz::session::Tick` a `Source` consumer could pull. Built ONLY under the `gtest_viz` target (`tests/vantage/`) — `simcore_tests`/the plain `gtest` target stay viz-free, per `O-7`.
+
+| ID | Serves | Fixture | Steps |
+|---|---|---|---|
+| `UT-VTG-01` | `SW-0426` | `F-SPEC` | Same `simEngineCreate`/attach/step/drain loop as `UT-ABI-04`, feeding every cycle's drained frames through `FrameBridge::AddFrame`/`TakeTick` into a real `viz::session::PushSource::DeliverTick` instead of collecting raw bytes. Pulls every delivered tick back out via `PushSource::NextTick` and asserts: one `Tick` per stepped cycle, each carrying a `PortValue` named `sut.outputs` whose `payload` equals the exact bytes the transport published for that cycle, and `schema_bytes`/`schema_name` both empty (the named, undone-on-purpose limitation `SW-0426`'s own Accept states). |
 
 ### 5.10 `SI-10` `config` — `UT-CFG-01` … `UT-CFG-18`
 
