@@ -50,6 +50,7 @@
 #include "simcore/runner.hpp"
 #include "simcore/runspec.hpp"
 #include "simcore/scheduler.hpp"
+#include "simcore/transport_publisher.hpp"
 
 namespace {
 
@@ -413,6 +414,27 @@ SimExitCode simEngineRun(SimEngine* engine, char* err_buf, std::size_t err_buf_c
     WriteErr(err_buf, err_buf_cap, outcome.error().Format());
     return ToC(simcore::DefaultExitCode(outcome.error().kind));
   }
+  return kSimExitOk;
+}
+
+void simEngineAttachTransport(SimEngine* engine, void* transport_publisher) {
+  if (engine == nullptr || !engine->runner.has_value()) return;
+  engine->runner->SetTransportPublisher(
+      static_cast<simcore::transport::TransportPublisher*>(transport_publisher));
+}
+
+SimExitCode simEngineStepOnce(SimEngine* engine, char* err_buf, std::size_t err_buf_cap, int32_t* out_continue) {
+  if (out_continue != nullptr) *out_continue = 0;
+  if (engine == nullptr || !engine->runner.has_value()) {
+    WriteErr(err_buf, err_buf_cap, "simEngineStepOnce called with no constructed engine");
+    return kSimExitConfig;
+  }
+  const Result<bool> step = engine->runner->StepOnce();
+  if (!step.ok()) {
+    WriteErr(err_buf, err_buf_cap, step.error().Format());
+    return ToC(simcore::DefaultExitCode(step.error().kind));
+  }
+  if (out_continue != nullptr) *out_continue = step.value() ? 1 : 0;
   return kSimExitOk;
 }
 

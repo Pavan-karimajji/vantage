@@ -194,7 +194,7 @@ Each crosses one named interface. The seam (`IF-09`) and the module ABI (`IF-01`
 | `IT-08` | `SW-0107` | `IF-09` | `F-CHAIN4` | Declare an override pinning a port across the injection boundary; confirm it is refused without a waiver and takes the waiver path with one. |
 | `IT-09` | `SW-0114` | `IF-09` | `F-CHAIN4`, `F-STUB` | Run with mixed record policies; confirm every declared port is present or explicitly `excluded`, answerable from the artifact alone. |
 | `IT-10` | `SW-0131` | `IF-09` | `F-CHAIN4`, `F-STUB2` | Diff the engine's own graph-and-schedule dump against the configuration layer's prediction. **A disagreement is a defect in the seam.** |
-| `IT-11` | `SW-0144` | `IF-09` | `F-SPEC`, `F-STUB` | Embed `simcore` from a test host that is **not** `simengine`; run to completion. |
+| `IT-11` | `SW-0144`, `SW-0425` | `IF-09` | `F-SPEC`, `F-STUB` | Embed `simcore` from a test host that is **not** `simengine`; run to completion (`SW-0144`). Also (`SW-0425`): attach a real transport, step tick by tick, drain real frames between steps. |
 | `IT-12` | `SW-0158` | `IF-13` | `F-CFGSET` | Run from a customer checkout with the package installed read-only. |
 | `IT-13` | `SW-0162` | `IF-09` | `F-LIBDIR`, `F-STUB` | Change a calibration value in the bundle; re-run; **build nothing**; observe the changed result. |
 | `IT-14` | `SW-0194` | `IF-05` | `F-LIBDIR` | Delete the source checkout; run; the map resolves from the deployed directory. |
@@ -405,15 +405,16 @@ Expected values are the served requirement's `Accept` clause (§0.1). Each row g
 | `UT-EXE-05` | `SW-0148` | `F-SPEC` | Trigger each taxonomy kind; compare the process exit code on both platforms. |
 | `UT-EXE-06` | `SW-0397` | — | Load the shipped launch configurations on both platforms; resolve a symbol in a loaded module. |
 
-### 5.9a `SI-09` (`WP-14a`/`WP-15`) — `UT-ABI-01` … `UT-ABI-03`
+### 5.9a `SI-09` (`WP-14a`/`WP-15`/`WP-32`) — `UT-ABI-01` … `UT-ABI-04`
 
-Added 2026-08-22 alongside `SW-0422`/`SW-0423`, found while attempting `WP-15b`: `simEngineCreate` was a deliberately read-only, override-free slice (`WP-14`'s own scope cut), so nothing driven through the C ABI could retrieve results or honor a declared override. `UT-ABI-03` added 2026-08-24: the same gap for `WP-15`'s own `Checkpoint` — no real `simengine.exe` run had ever written a `progress.json`, proven only by isolated `Runner`+`Checkpoint` unit tests, never through this file's own C-ABI-alone shape.
+Added 2026-08-22 alongside `SW-0422`/`SW-0423`, found while attempting `WP-15b`: `simEngineCreate` was a deliberately read-only, override-free slice (`WP-14`'s own scope cut), so nothing driven through the C ABI could retrieve results or honor a declared override. `UT-ABI-03` added 2026-08-24: the same gap for `WP-15`'s own `Checkpoint` — no real `simengine.exe` run had ever written a `progress.json`, proven only by isolated `Runner`+`Checkpoint` unit tests, never through this file's own C-ABI-alone shape. `UT-ABI-04` added 2026-08-25 (`SM-11`, `vantage`): `simEngineRun`'s one blocking call gives no per-tick hook, which an in-process host pumping a renderer between cycles genuinely needs.
 
 | ID | Serves | Fixture | Steps |
 |---|---|---|---|
 | `UT-ABI-01` | `SW-0422` | `F-SPEC` | Construct via `simEngineCreate` with a spec declaring recording output; run to completion; read the written recording back and assert every declared, non-excluded port is present with real per-tick values, not an empty or absent file. |
 | `UT-ABI-02` | `SW-0423` | `F-SPEC` | Two runs through `simEngineCreate`: one spec carrying a declared override, one without. Assert the override is applied in the first; assert the second is unchanged from the pre-`WP-14a` no-resolver behaviour. |
 | `UT-ABI-03` | `SW-0139` | `F-SPEC` | Two runs through `simEngineCreate`: one spec declaring `checkpoint.path`, one without. Assert the first produces a real, readable `progress.json` naming the correct `run_id` and last completed cycle; assert the second completes exactly as before, with no checkpoint declared. |
+| `UT-ABI-04` | `SW-0425` | `F-SPEC` | Construct via `simEngineCreate`; attach a real `InProcessTransport` via `simEngineAttachTransport` (converted to `TransportPublisher*` before erasure, per that function's own documented gotcha); loop `simEngineStepOnce`, draining `tryReceive()` between each call. Assert the exact number of real cycles stepped matches the spec's own recording length, that real per-cycle frames are observed BETWEEN steps (not only after the loop ends), and that `simEngineStepOnce` on an already-exhausted/`nullptr` engine is a `kSimExitConfig` refusal, never a crash. |
 
 ### 5.10 `SI-10` `config` — `UT-CFG-01` … `UT-CFG-18`
 

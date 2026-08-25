@@ -1186,6 +1186,74 @@ Never started, so this is a scope removal, not a code move.
 
 ---
 
+### WP-32 · `MP-6` · `SM-11` — the embeddable ABI's per-tick step, `vantage`'s own real dependency
+
+**Serves:** `SM-11` (`VIZ_Sync_Plan_v0.1.md` §2 — "`vantage`, the in-proc
+host"), `SI-09` (`abi`, this document's own `WP-14`/`WP-14a` family).
+Opened and closed 2026-08-25, scoping `SM-11`: that row's own text ("the
+executable that links `adas-sim` and `adas-viz-player`... in-process
+attach with zero transport marshalling") assumed a mechanism that did not
+exist — `simEngineRun` runs to completion in one blocking call, giving no
+host a per-tick hook to pump a renderer between cycles, and no attach
+point for a transport at all. **This row closes that mechanism, real and
+tested; the GUI executable itself (`vantage.cpp`, real argv, a live GL
+loop, cross-submodule `modules/sim` → `modules/viz` CMake wiring) is a
+separate, larger follow-on, not attempted here** — same "mechanism first,
+integration after" split this plan already used for `VZ-19`/`WP-21` one
+repo over.
+
+- [x] **Lands:** `IMP-0429` — 1.
+  - [x] `IMP-0429` · `SW-0425` · `NEW` — `include/simcore/abi/simcore.h` +
+        `src/simcore/abi/simcore.cpp` — `ABI_VERSION` bumped 1→2 (`SW-0144`'s
+        own "any host, no privileged access" contract extended, not
+        replaced — `ABI_VERSION 1`'s three functions are unchanged, and a
+        caller ignoring the two new ones gets identical behaviour):
+        `simEngineAttachTransport(SimEngine*, void*)` and
+        `simEngineStepOnce(SimEngine*, char*, size_t, int32_t*)`, the exact
+        per-cycle body `simEngineRun`'s own internal loop already calls
+        (`ANL-SW-17`'s "no second loop body" invariant — verified by
+        construction, `simEngineStepOnce` calls `Runner::StepOnce()`
+        directly, the same function `simEngineRun`'s own loop calls). `void*`
+        because `simcore::transport::TransportPublisher` is a C++ type this
+        plain-C header cannot name — the same opaque-pointer shape
+        `SimEngine*` itself already uses.
+- [x] **Real defect found and fixed in the SAME pass, documented loudly
+      rather than silently worked around:** `InProcessTransport` and
+      `SharedMemoryTransport` both multiply-inherit `adas::transport::
+      ITransport` AND `simcore::transport::TransportPublisher`. Erasing a
+      derived pointer to `void*` (`static_cast<void*>(&transport)`) skips
+      the base-class offset adjustment the compiler only applies while it
+      still has both types in view — `simEngineAttachTransport`'s own
+      internal `static_cast<TransportPublisher*>(void*)` cannot recover
+      it from a bare `void*` alone. **This does not crash** — it silently
+      attaches to the wrong subobject and delivers no real frames, found
+      live exactly that way (`UT-ABI-04`'s own first attempt: 4 steps
+      instead of 3, zero frames received) before being traced to the
+      pointer-erasure order. Fixed by documenting the mandatory calling
+      convention in the header itself (convert to `TransportPublisher*`
+      BEFORE erasing, `simcore.h`'s own new top note) rather than trying
+      to make the C ABI itself foolproof against it (not possible without
+      typed pointers, which defeats the point of a stable plain-C ABI).
+- [x] **Exit — `UT-ABI-04`, closed real:** `tests/integration/
+      test_it11_embed_host.cpp`'s `AttachTransportThenStepOnceDeliversReal
+      FramesBetweenTicks` — the SAME `IT-11` embed-host harness that
+      already proves `SW-0144` (a real second host, through nothing but
+      `abi/simcore.h`), extended: attaches a real `InProcessTransport`,
+      loops `simEngineStepOnce`, drains `tryReceive()` BETWEEN steps (the
+      actual pump shape a live renderer needs — proving frames are
+      available mid-run, not just accumulated and read back at the end).
+      Asserts exactly 3 real cycles stepped (matching the fixture
+      recording's own length) and exactly 3 real per-cycle frames
+      received, each carrying the tick-accurate payload. A second case,
+      `StepOnceWithNoConstructedEngineIsAConfigExitNotACrash`, proves the
+      refusal path. **Verified live:** real `vs2026`/MSVC rebuild (WSL2
+      interop into the native Windows toolchain) — `simcore_tests`
+      **214/215** (the one pre-existing `UtEdg08Reproducer` Windows
+      temp-lock race is the only non-pass, matching the documented
+      baseline exactly). `docs/v2/py/trace_check.py` PASS.
+
+---
+
 ## 8. Tracking
 
 ### 8.1 Progress, derived

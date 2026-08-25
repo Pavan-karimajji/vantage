@@ -1647,6 +1647,13 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Built.** ● done — `IMP-0427` in `WP-14a`
 **Now.** `NEW` — same function, same comment: *"this host does not yet wire a `PortResolver` for mutations"* (`WP-14`'s own named scope limit). Blocks `check/runner.py`'s fault/override tests specifically (`R-SIM-15`, `SI-05`'s existing verb application is real but unreachable through this ABI).
 
+**`SW-0425`** · `SI-09` · `P0` · `R1` — The embeddable ABI supports a per-tick, in-process host
+**Shall.** The embeddable ABI shall let a host attach a transport publisher and step the engine one cycle at a time, so an in-process consumer (`SM-11`, `vantage`) can pump a renderer between cycles without waiting for the whole run to finish.
+**Accept.** A host calling `simEngineAttachTransport` then looping `simEngineStepOnce` observes real per-cycle published frames between steps — the exact same values `simEngineRun`'s own internal loop would have produced, over the same Run Spec, with `SW-0144`'s "no privileged access" preserved (`simEngineStepOnce` is `simEngineRun`'s own per-cycle body, not a second one).
+**Verify.** T · `UT-ABI-04`; `IT-11`   **Trace.** SYS-0272 (`SW-0144`'s own parent — an extension of the same "any host, no privileged access" concept, not a new one)
+**Built.** ● done — `IMP-0429` in `WP-32`
+**Now.** `NEW` — `simEngineRun`'s one blocking call gave `simengine`/`IT-11`'s own host everything either needed; neither needed a per-tick hook, so `ABI_VERSION 1` never grew one. `SM-11` is the first real need for it.
+
 **`SW-0145`** · `SI-09` · `P0` · `R1` — One binary serves interactive, batch and continuous-integration use
 **Shall.** There shall be one engine executable, used unchanged by the desktop, batch and continuous-integration paths.
 **Accept.** The binary hash is identical in all three paths. No build option produces a variant with different behaviour.
