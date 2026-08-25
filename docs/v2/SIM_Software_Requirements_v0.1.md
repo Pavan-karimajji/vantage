@@ -2444,14 +2444,14 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** A watchdog shall monitor per-module processing time at a configured interval against a configured threshold whose unit is explicit, and abort the run when exceeded.
 **Accept.** The watchdog fires on a hang. A threshold expressed with an explicit unit and one without it are both accepted, and the assumed unit is reported.
 **Verify.** T · `UT-ORC-12`   **Trace.** SYS-0198; **evidence** §2.6
-**Built.** ◐ started — `IMP-0246` in `WP-23`
+**Built.** ● done — `IMP-0246` in `WP-23`
 **Now.** `PARTIAL` — the per-cycle timeout (`SW-0092`) exists; a watchdog with its own poll interval does not.
 
 **`SW-0247`** · `SI-15` · `P1` · `R1` — A responsiveness watchdog is separate from the processing watchdog
 **Shall.** A second watchdog shall monitor whether the process remains responsive, with its own interval and threshold, independent of per-module processing time.
 **Accept.** A run whose modules are all within their processing threshold but whose process has stopped responding is detected by the second watchdog and not by the first.
 **Verify.** T · `UT-ORC-13`   **Trace.** SYS-0198; **evidence** §2.6
-**Built.** ◐ started — `IMP-0247` in `WP-23`
+**Built.** ● done — `IMP-0247` in `WP-23`
 **Now.** `NEW`.
 *Note:* one watchdog cannot cover both. A deadlock outside a module's own execution — in reading, in writing, in the transport — is invisible to a per-module timer, and it is the failure that produces the *"still running"* symptom `SYS-0186` calls harder to diagnose than a crash.
 

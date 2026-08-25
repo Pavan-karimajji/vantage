@@ -38,10 +38,12 @@ import time
 from collections import Counter
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 from adas_sim.orchestrate import limits as _limits
+from adas_sim.orchestrate import watchdog as _watchdog
+from adas_sim.orchestrate.progress import CancelToken, ProgressSink
 from adas_sim.runspec.manifest import ResolvedRunConfig, build_manifest, resolve_swept_config, write_manifest
 
 #: `RecordingOutcome.outcome` -> `RunManifest.outcome` (`runspec/manifest.py`'s
@@ -78,6 +80,15 @@ class RecordingOutcome:
     #: value (R-SIM-19's vocabulary stays exactly four); a memory breach
     #: still reports `outcome="fail"`, distinguished here instead.
     limit_breach: str = ""
+    #: `SW-0235`: set when a caller-supplied `CancelToken` was cancelled
+    #: while this recording's subprocess was in flight -- same "fail" outcome,
+    #: same distinguish-by-field pattern `limit_breach` already established,
+    #: never a fifth `outcome` value.
+    cancelled: bool = False
+    #: `SW-0246`/`SW-0247`: `""` (no watchdog fired), `"processing"` or
+    #: `"responsiveness"` -- which of the two independent watchdogs killed
+    #: this job. Same pattern as `limit_breach`/`cancelled`.
+    watchdog: str = ""
 
 
 def expand_recordings(args: Sequence[str]) -> list[Path]:
@@ -227,6 +238,8 @@ def _load_completed(out_json: Path, recording: Path) -> RecordingOutcome | None:
 def _launch_worker(
     entry: tuple[int, Path], *, pipeline_path: Path, search: tuple[Path, ...], config: Path | None, timeout_s: float,
     test_stub_echo: tuple[str, ...], out_dir: Path, resume: bool, memory_limit_mb: float | None,
+    progress: ProgressSink | None = None, cancel: CancelToken | None = None,
+    watchdogs: _watchdog.WatchdogThresholds | None = None,
 ) -> RecordingOutcome:
     index, recording = entry
     out_json, checkpoint_json = _entry_paths(out_dir, index, recording)
@@ -249,10 +262,19 @@ def _launch_worker(
         cmd += ["--test-stub-echo", name]
 
     start = time.monotonic()
-    if memory_limit_mb is not None:
-        result = _launch_worker_with_memory_limit(
-            cmd, recording, out_json, checkpoint_json, start, timeout_s=timeout_s,
-            limit=_limits.MemoryLimit(limit_bytes=int(memory_limit_mb * 1024 * 1024)),
+    #: `IMP-0235`: the polling path (checkpoint-tick progress, cancellation,
+    #: watchdog heartbeats, memory) is only entered when a caller actually
+    #: asks for one of those -- `subprocess.run` below stays the unmodified
+    #: fast path for the overwhelming common case (no caller-visible change
+    #: for every existing call site that passes none of these).
+    if memory_limit_mb is not None or progress is not None or cancel is not None or watchdogs is not None:
+        limit = (
+            _limits.MemoryLimit(limit_bytes=int(memory_limit_mb * 1024 * 1024)) if memory_limit_mb is not None
+            else None
+        )
+        result = _launch_worker_polled(
+            cmd, recording, out_json, checkpoint_json, start, timeout_s=timeout_s, limit=limit,
+            progress=progress, cancel=cancel, watchdogs=watchdogs,
         )
     else:
         try:
@@ -271,27 +293,102 @@ def _launch_worker(
     return result
 
 
-def _launch_worker_with_memory_limit(
+@dataclass(slots=True)
+class _PollFinding:
+    """Set by `_launch_worker_polled`'s own watcher thread, read by the main
+    thread after `communicate()` returns -- plain attribute writes/reads, not
+    an `Event` per condition: only one watcher thread ever writes, and it
+    stops polling (and therefore stops writing) the instant it sets one, so
+    there is no concurrent-write race to guard against."""
+
+    memory_breached: bool = False
+    cancelled: bool = False
+    watchdog: str = ""  # "" | "processing" | "responsiveness"
+
+    @property
+    def triggered(self) -> bool:
+        return self.memory_breached or self.cancelled or bool(self.watchdog)
+
+
+def _launch_worker_polled(
     cmd: list[str], recording: Path, out_json: Path, checkpoint_json: Path, start: float, *,
-    timeout_s: float, limit: _limits.MemoryLimit,
+    timeout_s: float, limit: _limits.MemoryLimit | None,
+    progress: ProgressSink | None, cancel: CancelToken | None, watchdogs: _watchdog.WatchdogThresholds | None,
 ) -> RecordingOutcome:
-    """`SW-0248`'s memory half: a `Popen`, polled on its own thread (never
-    blocking the caller -- `subprocess.run` above is the no-limit fast path,
-    kept unchanged for the overwhelming common case). A breach terminates
-    the process and the result is reported `outcome="fail"` with
-    `limit_breach="memory"` -- distinct from a plain `fail`, never merged
-    into `crash`/`timeout` (`R-SIM-19`)."""
+    """`IMP-0235`/`SW-0248`'s shared polling path: a `Popen`, watched on its
+    own thread while the main thread blocks in `communicate(timeout=
+    timeout_s)` (never blocking the caller beyond the existing wall-time
+    cap). Each poll tick, at `watchdogs.poll_interval_s` (default from
+    `MemoryLimit.poll_interval_s`, `0.5s`, when only a memory limit is set):
+
+    - reads `--checkpoint-json` (`read_checkpoint_tick`) -- an advancing
+      tick count reports `progress.on_progress` and heartbeats
+      `ProcessingWatchdog`; the subprocess merely still being alive at this
+      poll heartbeats `ResponsivenessWatchdog` (`SW-0247`'s own "any sign of
+      life", not only a completed unit of work).
+    - checks the memory limit, when given (`SW-0248`, unchanged behaviour
+      from the pre-2026-08-25 memory-only path).
+    - checks `cancel.cancelled`, when a `CancelToken` was supplied.
+
+    Any one of memory/cancel/watchdog terminates the subprocess; `_classify`
+    then reads exactly as it does for an ordinary crash (no readable
+    `out_json`, abnormal exit), and the specific reason is layered on
+    afterward via `RecordingOutcome.limit_breach`/`cancelled`/`watchdog` --
+    the same distinguish-by-field pattern throughout this module, never a
+    fifth `outcome` value (`R-SIM-19`)."""
+    poll_interval_s = (
+        watchdogs.poll_interval_s if watchdogs is not None
+        else limit.poll_interval_s if limit is not None
+        else 0.5
+    )
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
-    breached = threading.Event()
+    finding = _PollFinding()
+    processing = _watchdog.ProcessingWatchdog(watchdogs.processing_s, poll_interval_s) if watchdogs else None
+    responsiveness = (
+        _watchdog.ResponsivenessWatchdog(watchdogs.responsiveness_s, poll_interval_s) if watchdogs else None
+    )
+    #: `_PollingWatchdog._last_heartbeat` defaults to `0.0`, not the current
+    #: clock -- `time.monotonic()` is an arbitrary reference point (uptime on
+    #: most platforms), so an un-seeded watchdog would read `now - 0.0` as
+    #: already past threshold and fire on its very first poll. Every real
+    #: caller (`tests/unit/test_si15_orchestrate.py`'s own watchdog tests)
+    #: seeds `heartbeat` immediately after construction; this is that seed.
+    if processing is not None:
+        processing.heartbeat(start)
+    if responsiveness is not None:
+        responsiveness.heartbeat(start)
+    last_tick_count: int | None = None
 
     def _watch() -> None:
+        nonlocal last_tick_count
         while proc.poll() is None:
-            rss = _limits.rss_bytes(proc.pid)
-            if _limits.breach_reason(rss, limit):
-                breached.set()
+            now = time.monotonic()
+            if responsiveness is not None:
+                responsiveness.heartbeat(now)
+            tick_count, _ = read_checkpoint_tick(checkpoint_json)
+            if tick_count is not None and tick_count != last_tick_count:
+                last_tick_count = tick_count
+                if processing is not None:
+                    processing.heartbeat(now)
+                if progress is not None:
+                    progress.report(tick_count)
+            if limit is not None and _limits.breach_reason(_limits.rss_bytes(proc.pid), limit):
+                finding.memory_breached = True
                 proc.terminate()
                 return
-            time.sleep(limit.poll_interval_s)
+            if cancel is not None and cancel.cancelled:
+                finding.cancelled = True
+                proc.terminate()
+                return
+            if processing is not None and processing.poll(now):
+                finding.watchdog = "processing"
+                proc.terminate()
+                return
+            if responsiveness is not None and responsiveness.poll(now):
+                finding.watchdog = "responsiveness"
+                proc.terminate()
+                return
+            time.sleep(poll_interval_s)
 
     watcher = threading.Thread(target=_watch, daemon=True)
     watcher.start()
@@ -302,22 +399,45 @@ def _launch_worker_with_memory_limit(
         stdout, stderr = proc.communicate()
         duration_s = time.monotonic() - start
         watcher.join(timeout=1.0)
-        if breached.is_set():
-            return RecordingOutcome(
-                recording=recording, outcome="fail", duration_s=duration_s,
-                error=f"memory limit {limit.limit_bytes} bytes exceeded", stderr_excerpt=stderr[-_STDERR_EXCERPT_BYTES:],
-                limit_breach="memory",
-            )
+        if finding.triggered:
+            return _finding_outcome(finding, recording, duration_s, limit, stderr)
         return _classify(
             recording, None, out_json, checkpoint_json, duration_s, timed_out=True, timeout_stderr=stderr,
         )
     watcher.join(timeout=1.0)
     duration_s = time.monotonic() - start
+    if finding.triggered:
+        return _finding_outcome(finding, recording, duration_s, limit, stderr)
     completed = subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
-    result = _classify(recording, completed, out_json, checkpoint_json, duration_s, timed_out=False, timeout_stderr="")
-    if breached.is_set() and result.outcome != "ok":
-        result = replace(result, limit_breach="memory")
-    return result
+    return _classify(recording, completed, out_json, checkpoint_json, duration_s, timed_out=False, timeout_stderr="")
+
+
+def _finding_outcome(
+    finding: _PollFinding, recording: Path, duration_s: float, limit: _limits.MemoryLimit | None, stderr: str,
+) -> RecordingOutcome:
+    """One `RecordingOutcome` for whichever `_PollFinding` fired -- always
+    `outcome="fail"` (a deliberate supervisor action, not a self-reported
+    result and not a plain wall-timeout), distinguished by exactly one of
+    `limit_breach`/`cancelled`/`watchdog` (`_PollFinding.triggered` is only
+    `True` when the watcher stopped at its first match, so exactly one is
+    ever set)."""
+    if finding.memory_breached:
+        assert limit is not None
+        return RecordingOutcome(
+            recording=recording, outcome="fail", duration_s=duration_s,
+            error=f"memory limit {limit.limit_bytes} bytes exceeded", stderr_excerpt=stderr[-_STDERR_EXCERPT_BYTES:],
+            limit_breach="memory",
+        )
+    if finding.cancelled:
+        return RecordingOutcome(
+            recording=recording, outcome="fail", duration_s=duration_s,
+            error="cancelled", stderr_excerpt=stderr[-_STDERR_EXCERPT_BYTES:], cancelled=True,
+        )
+    return RecordingOutcome(
+        recording=recording, outcome="fail", duration_s=duration_s,
+        error=f"{finding.watchdog} watchdog fired", stderr_excerpt=stderr[-_STDERR_EXCERPT_BYTES:],
+        watchdog=finding.watchdog,
+    )
 
 
 def run_batch(
@@ -325,6 +445,8 @@ def run_batch(
     search: Sequence[Path] = (), config: Path | None = None, jobs: int = 1, timeout_s: float = 300.0,
     test_stub_echo: Sequence[str] = (), out_dir: Path | None = None, resume: bool = False,
     memory_limit_mb: float | None = None,
+    progress: ProgressSink | None = None, cancel: CancelToken | None = None,
+    watchdogs: _watchdog.WatchdogThresholds | None = None,
 ) -> list[RecordingOutcome]:
     """Runs `pipeline_path` -- the SAME file `sim resim` would take,
     unmodified (`R-SIM-16`, `ST-D7-3`) -- against every recording in
@@ -339,12 +461,23 @@ def run_batch(
     for `reconcile` (`SW-0244`) to find these files after this call
     returns. `out_dir` is never created/removed by this function; a caller
     owns its lifetime (typically `orchestrate/artifacts.py::run_dir`'s own
-    `checkpoints/` subdirectory)."""
+    `checkpoints/` subdirectory).
+
+    `progress`/`cancel`/`watchdogs` (`IMP-0235`/`IMP-0246`/`IMP-0247`), when
+    given, are shared across every job the same `ProgressSink` already is
+    across `sim run`/`sim resim` (`orchestrate/progress.py`'s own docstring)
+    -- each job's own subprocess is polled on `watchdogs.poll_interval_s`
+    (or `0.5s` with no `watchdogs`) for an advancing checkpoint tick
+    (`progress.on_progress`), the subprocess's mere aliveness
+    (`ResponsivenessWatchdog.heartbeat`) and `cancel.cancelled`. None of
+    the three changes behaviour for a caller that passes none of them --
+    `_launch_worker` only enters the polling path when at least one of
+    `memory_limit_mb`/`progress`/`cancel`/`watchdogs` is given."""
     if out_dir is not None:
         worker = functools.partial(
             _launch_worker, pipeline_path=pipeline_path, search=tuple(search), config=config,
             timeout_s=timeout_s, test_stub_echo=tuple(test_stub_echo), out_dir=out_dir, resume=resume,
-            memory_limit_mb=memory_limit_mb,
+            memory_limit_mb=memory_limit_mb, progress=progress, cancel=cancel, watchdogs=watchdogs,
         )
         with ThreadPoolExecutor(max_workers=max(1, jobs)) as executor:
             return list(executor.map(worker, enumerate(recordings)))
@@ -353,7 +486,7 @@ def run_batch(
         worker = functools.partial(
             _launch_worker, pipeline_path=pipeline_path, search=tuple(search), config=config,
             timeout_s=timeout_s, test_stub_echo=tuple(test_stub_echo), out_dir=Path(tmp_dir), resume=False,
-            memory_limit_mb=memory_limit_mb,
+            memory_limit_mb=memory_limit_mb, progress=progress, cancel=cancel, watchdogs=watchdogs,
         )
         with ThreadPoolExecutor(max_workers=max(1, jobs)) as executor:
             return list(executor.map(worker, enumerate(recordings)))

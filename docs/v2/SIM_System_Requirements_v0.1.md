@@ -1690,7 +1690,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** An optional watchdog shall abort a run whose module exceeds a configured processing time, and shall be automatically disabled when a debugger is attached or in debug mode.
 **Accept.** The watchdog fires on a hang; attaching a debugger suppresses it without a configuration edit.
 **Verify.** T · `SYT-BAT-16`   **Trace.** CN-0204, CN-0205, CN-0218
-**Built.** ◐ started — 1/3 software requirements done, in `WP-10`, `WP-23`
+**Built.** ● done — 3/3 software requirements done
 
 **`SYS-0199`** · `P1` · `R1` — Per-module timing statistics
 **Shall.** Per-module timing statistics shall be reported.

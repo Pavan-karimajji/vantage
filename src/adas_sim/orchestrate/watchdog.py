@@ -18,15 +18,17 @@ with no thread and no subprocess of their own -- a caller (`orchestrate/
 batch.py`'s worker supervision, or a future interactive in-process run) drives `poll(now)` on
 its own schedule and calls `heartbeat(now)` whenever it observes activity.
 
-**Known integration gap, named rather than hidden:** wiring either watchdog
-to a REAL `sim batch` subprocess needs a heartbeat channel across the
-`simengine` process boundary. `--checkpoint-json` (`SW-0119`, closed) gives
-a real on-disk `progress.json`, flushed after every completed cycle -- a
-*pollable* heartbeat source now exists -- but `orchestrate/batch.py` still
-blocks on `subprocess.run` rather than polling that file on a timer while
-the worker runs, so nothing calls `heartbeat()` yet. Both classes are
-complete and unit-tested against a simulated clock; the missing piece is a
-poller driving them from the file, not the consumer logic here."""
+**2026-08-25: wired to a real `sim batch` subprocess.**
+`orchestrate/batch.py::_launch_worker_polled` now polls `--checkpoint-json`
+on a timer while the worker subprocess runs (`WatchdogThresholds` below
+configures both thresholds plus the shared poll interval) -- a completed-tick
+change calls `ProcessingWatchdog.heartbeat`, and the mere fact that the
+subprocess is still alive at each poll calls `ResponsivenessWatchdog.heartbeat`
+(this module's own docstring above: "any observed sign of life", not only a
+completed unit of work). A firing watchdog terminates the subprocess and the
+job is reported `outcome="fail"`, `watchdog="processing"|"responsiveness"` --
+same distinguish-by-field pattern `SW-0248`'s `limit_breach` already
+established, never a fifth `outcome` value (`R-SIM-19`)."""
 
 from __future__ import annotations
 
@@ -110,3 +112,16 @@ class ResponsivenessWatchdog(_PollingWatchdog):
     responding to the OS, still writing nothing new -- fires
     `ProcessingWatchdog` but not this one; a run stuck in a kernel-level wait
     with no observable output at all fires this one too."""
+
+
+@dataclass(frozen=True, slots=True)
+class WatchdogThresholds:
+    """`orchestrate/batch.py::_launch_worker_polled`'s own config for both
+    watchdogs plus the shared poll interval -- one dataclass rather than
+    four loose parameters, so a caller either supplies both thresholds or
+    passes `None` for no watchdog supervision at all (opt-in, `IMP-0235`'s
+    own polling path is only entered when a caller asks for it)."""
+
+    processing_s: float
+    responsiveness_s: float
+    poll_interval_s: float = 0.5

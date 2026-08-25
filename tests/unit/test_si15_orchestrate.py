@@ -569,3 +569,52 @@ def test_memory_limit_is_reported_distinctly_from_a_plain_fail(tmp_path):
     results = run_batch([_TINY], missing_pipeline, memory_limit_mb=0.000001, timeout_s=15.0)
     assert results[0].limit_breach == "memory"
     assert results[0].outcome in ("fail", "crash", "timeout")
+
+
+def test_a_pre_cancelled_token_terminates_the_job_and_is_reported_distinctly(tmp_path):
+    """`IMP-0235`: `run_batch` enters the polling path (`_launch_worker_polled`)
+    the instant a `CancelToken` is supplied, even one already cancelled
+    before launch -- the very first poll tick sees `cancel.cancelled` and
+    terminates the subprocess, reported `cancelled=True` rather than a bare
+    `fail` (same distinguish-by-field pattern as `limit_breach`)."""
+    missing_pipeline = tmp_path / "does_not_exist.yaml"
+    cancel = CancelToken()
+    cancel.cancel()
+    results = run_batch([_TINY], missing_pipeline, cancel=cancel, timeout_s=15.0)
+    assert results[0].cancelled is True
+    assert results[0].outcome == "fail"
+
+
+def test_a_zero_threshold_watchdog_terminates_the_job_and_names_which_one(tmp_path):
+    """`IMP-0246`/`IMP-0247`: a `WatchdogThresholds` with an effectively-zero
+    processing threshold fires on the first poll tick (the subprocess has
+    not completed a cycle yet), terminating the job and reporting
+    `watchdog="processing"` -- proves the poll loop actually drives the
+    watchdog from a real subprocess, not just the pure clock-injected unit
+    tests above."""
+    missing_pipeline = tmp_path / "does_not_exist.yaml"
+    thresholds = watchdog.WatchdogThresholds(processing_s=0.0, responsiveness_s=100.0, poll_interval_s=0.05)
+    results = run_batch([_TINY], missing_pipeline, watchdogs=thresholds, timeout_s=15.0)
+    assert results[0].watchdog == "processing"
+    assert results[0].outcome == "fail"
+
+
+def test_a_progress_sink_does_not_change_outcome_for_a_run_with_nothing_to_report(tmp_path):
+    """`IMP-0235`: supplying a `ProgressSink` alone (no memory limit, no
+    cancel, no watchdogs) still routes `_launch_worker` through the polling
+    path (`_launch_worker_polled`) instead of the untouched `subprocess.run`
+    fast path -- this is the plumbing smoke test that the switch is
+    transparent when nothing actually fires. `on_progress` is never called
+    here (a missing pipeline never advances a checkpoint tick), so this
+    intentionally does not assert on `calls` -- a real subprocess's own
+    tick-by-tick reporting is exercised live in Bench/CI against a built
+    `simengine`, out of reach of this environment's own test double.
+    Deliberately tolerant on the exact outcome, same as
+    `test_memory_limit_is_reported_distinctly_from_a_plain_fail` above --
+    a missing pipeline's own `fail`-vs-`crash` classification is
+    `test_a_bad_pipeline_reports_fail_not_crash`'s concern, not this test's;
+    this one only proves the polling path does not raise."""
+    missing_pipeline = tmp_path / "does_not_exist.yaml"
+    sink = ProgressSink()
+    results = run_batch([_TINY], missing_pipeline, progress=sink, timeout_s=15.0)
+    assert results[0].outcome in ("fail", "crash")
