@@ -19,6 +19,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
 from check_invariants import (  # noqa: E402
     check_anl_sw07,
     check_anl_sw08,
+    check_anl_sw35,
     check_anl_sw37,
     check_anl_sw38,
     check_anl_sw61,
@@ -378,7 +379,33 @@ def test_check_anl_sw38_fails_when_a_resolver_file_is_missing(tmp_path):
     assert len(findings) == 3
 
 
-def test_anl_sw07_08_38_are_wired_into_run_all_on_the_real_tree():
+def test_check_anl_sw35_passes_on_the_current_build_py():
+    """`ANL-SW-35`: the real `graph/build.py` reads `stages` from
+    `parse_stages(path)`, never a literal chain."""
+    assert check_anl_sw35() == []
+
+
+def test_check_anl_sw35_fails_on_a_planted_hard_coded_chain(tmp_path):
+    graph_dir = tmp_path / "graph"
+    graph_dir.mkdir(parents=True)
+    (graph_dir / "build.py").write_text(
+        'stages = ["perception", "fusion", "aeb"]\n', encoding="utf-8",
+    )
+    findings = check_anl_sw35(src_root=tmp_path)
+    assert findings
+    assert "ANL-SW-35" in findings[0]
+
+
+def test_check_anl_sw35_allows_a_dynamic_build(tmp_path):
+    graph_dir = tmp_path / "graph"
+    graph_dir.mkdir(parents=True)
+    (graph_dir / "build.py").write_text(
+        "stages = cls.parse_stages(path)\nstages: list[Stage] = []\n", encoding="utf-8",
+    )
+    assert check_anl_sw35(src_root=tmp_path) == []
+
+
+def test_anl_sw07_08_35_38_are_wired_into_run_all_on_the_real_tree():
     """Real, mechanised, and clean against this checkout -- not merely
     tested against a synthetic tree (`R-REQ-9`)."""
     assert run_all() == []

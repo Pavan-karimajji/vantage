@@ -19,6 +19,7 @@ build is not present -- same "not_built is never a failure" discipline
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -142,6 +143,16 @@ def test_run_pipeline_via_engine_produces_a_real_recording(tmp_path, monkeypatch
 
     assert result.ok, f"simengine exit_code={result.exit_code} stderr={result.stderr!r} stdout={result.stdout!r}"
     assert output_path.is_file()
+
+    # `IMP-0216`: `write_run_spec`'s own returned hash reaches the caller
+    # through `EngineRunResult.spec_sha256` -- previously discarded here,
+    # so no caller (including `cli/resim.py`'s own `--save` -> `build_manifest`
+    # call) ever saw a real value. Cross-checked against the sidecar
+    # `.spec.json` this same call wrote, which embeds the identical hash.
+    assert result.spec_sha256, "write_run_spec's own returned hash never reached the caller"
+    spec_path = output_path.with_suffix(output_path.suffix + ".spec.json")
+    spec_data = json.loads(spec_path.read_text(encoding="utf-8"))
+    assert spec_data["spec_sha256"] == result.spec_sha256
 
     reader = reader_for(output_path)
     try:

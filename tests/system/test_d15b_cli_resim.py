@@ -80,6 +80,11 @@ def test_sim_resim_cli_runs_a_real_stage_through_simengine(tmp_path, monkeypatch
     reader = reader_for(save_path)
     try:
         assert "/sut/outputs" in reader.topics()
+        # IMP-0216: --save's own build_manifest call now receives a real
+        # spec_sha256 (engine.bridge.run_pipeline_via_engine's own returned
+        # write_run_spec hash, previously discarded) instead of the field's
+        # "" default.
+        assert reader.meta().run_spec_sha256
     finally:
         reader.close()
 

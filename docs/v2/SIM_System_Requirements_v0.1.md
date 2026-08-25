@@ -651,7 +651,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The system shall build the module graph from manifests plus the project's active module list, and shall hardcode no chain.
 **Accept.** No file in the system enumerates a specific processing chain. Reordering or replacing the chain is a configuration change only.
 **Verify.** T · `SYT-PRC-02` · `ANL-06`   **Trace.** CN-0088, CN-0028, CN-0037; v1 `FR-SIM-1`, `FR-SIM-2`
-**Built.** ○ not started — 0/1 software requirements done, in `WP-20`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0039`** · `P0` · `R1` — One producer per port
 **Shall.** A port shall have exactly one producer in a run.
@@ -747,7 +747,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A module's port set shall be read from its manifest at probe time, with no port-mapping step and no per-module code in the framework.
 **Accept.** Onboarding a module requires no edit to any framework file. The single permitted exception is a declared legacy implementation kind for binaries that genuinely cannot carry a manifest, and such stages are individually identifiable in the run manifest.
 **Verify.** T · `SYT-PRC-16` · `ANL-08`   **Trace.** CN-0037, CN-0088; v1 `FR-SIM-2`
-**Built.** ◐ started — 4/5 software requirements done, in `WP-10`, `WP-20`, `WP-24`
+**Built.** ● done — 5/5 software requirements done
 
 **`SYS-0054`** · `P0` · `R1` — Modules do not read the clock
 **Shall.** Modules shall not read wall-clock time; all time shall arrive through the cycle time and the port headers.

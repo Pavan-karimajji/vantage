@@ -1837,7 +1837,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The graph shall be built from module manifests plus the project's active module list, and no file shall enumerate a specific processing chain.
 **Accept.** Reordering or replacing the chain is a configuration change only. A static check finds no hard-coded chain.
 **Verify.** T · `UT-GRF-05` · A · `ANL-SW-35`   **Trace.** SYS-0038, SYS-0053
-**Built.** ○ not started — `IMP-0167` in `WP-20`
+**Built.** ● done — `IMP-0167` in `WP-20`
 **Now.** `DONE` — `contracts/pipeline.py` builds from manifests; this is the property `GT-1`'s grep already protects.
 
 **`SW-0168`** · `SI-11` · `P0` · `R1` — A port has exactly one producer

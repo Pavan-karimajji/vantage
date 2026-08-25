@@ -37,7 +37,7 @@ import json
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from adas_sim.config.fault import FaultVerb
@@ -163,6 +163,12 @@ class EngineRunResult:
     stdout: str
     stderr: str
     output_path: Path | None
+    #: `IMP-0216` (`SW-0216`, `IT-16`): `runspec/canon.py::write_run_spec`'s
+    #: own returned hash, attached by `run_pipeline_via_engine` -- the one
+    #: caller that both writes a spec and returns a result. `""` for a
+    #: caller of `run_engine` directly against an already-written spec
+    #: path, which has no spec object to hash from.
+    spec_sha256: str = ""
 
 
 def run_engine(
@@ -422,11 +428,12 @@ def run_pipeline_via_engine(
         exec_timeout_ms=exec_timeout_ms, checkpoint_path=checkpoint_path,
     )
     spec_path = spec_json_path if spec_json_path is not None else output_path.with_suffix(output_path.suffix + ".spec.json")
-    write_run_spec(spec, spec_path)
-    return run_engine(
+    spec_sha256 = write_run_spec(spec, spec_path)
+    result = run_engine(
         spec_path, config_path=config_path, exec_timeout_ms=exec_timeout_ms,
         simengine_path=simengine_path, search=search, output_path=output_path,
     )
+    return replace(result, spec_sha256=spec_sha256)
 
 
 def topic_to_port_name(topic: str) -> str:

@@ -484,6 +484,33 @@ def check_anl_sw38(src_root: Path = SRC_ROOT) -> list[str]:
     return findings
 
 
+# ANL-SW-35 (WP-20, IMP-0167): the graph is built from module manifests plus
+# the project's active module list, and no file enumerates a specific
+# processing chain (SW-0167). `Pipeline.load` already reads `stages` purely
+# from the pipeline YAML's own `parse_stages` -- this is a regression guard,
+# not a fix: a hard-coded stage-name SEQUENCE assigned to a `stages`-named
+# variable (`stages = ["perception", "fusion", "aeb"]`) is the shape a
+# reintroduced literal chain would take. Deliberately narrow -- an empty
+# list/tuple, a `Stage(...)` object literal, or a call like
+# `cls.parse_stages(path)` never matches (no leading quoted string), so a
+# real dynamic build stays invisible to this check the way `check_gt1`'s own
+# banned-token grep stays invisible to ordinary prose.
+_HARDCODED_STAGE_CHAIN = re.compile(r"""\b\w*stages?\w*\s*[:=]\s*[\[(]\s*["'][\w.]+["']\s*,""")
+
+
+def check_anl_sw35(src_root: Path = SRC_ROOT) -> list[str]:
+    """`ANL-SW-35`: `graph/build.py` never assigns a `stages`-named variable
+    a literal list/tuple of quoted stage names."""
+    findings = []
+    path = src_root / "graph" / "build.py"
+    if not path.is_file():
+        return findings
+    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if _HARDCODED_STAGE_CHAIN.search(line):
+            findings.append(f"ANL-SW-35 {path}:{lineno}: hard-coded stage chain: {line.strip()!r}")
+    return findings
+
+
 # WP-05, design §3.2's enforcement table -- three engine-only greps over
 # `src/simcore/**`, excluding the vendored `third_party/` (not our own code,
 # same reasoning `_iter_source_files` already applies to GT-1).
@@ -561,6 +588,7 @@ def run_all(
         *check_anl_sw08(),
         *check_anl_sw37(src_root),
         *check_anl_sw38(src_root),
+        *check_anl_sw35(src_root),
         *check_anl_sw02(),
         *check_anl_sw03(),
         *check_anl_sw04(),
@@ -575,7 +603,7 @@ def main(argv: list[str] | None = None) -> int:
     if findings:
         print(f"\n{len(findings)} invariant violation(s)")
         return 1
-    print("GT-1, GT-2, GT-3, GT-6, GT-11, UT-D8-9, WP-02(b), ANL-SW-02/03/04/07/08/37/38/61: clean")
+    print("GT-1, GT-2, GT-3, GT-6, GT-11, UT-D8-9, WP-02(b), ANL-SW-02/03/04/07/08/35/37/38/61: clean")
     return 0
 
 
