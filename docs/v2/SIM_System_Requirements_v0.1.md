@@ -1469,14 +1469,14 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The system shall obtain, before emitting a Resolved Run Spec, a **recording index** stating what each named recording carries and a **module manifest** stating what each named module declares; and both shall be read through the same interfaces the run itself uses.
 **Accept.** Every spec field that depends on a file's contents — the ports a recording provides, the timing rung each supports, the ports it declares it never carries, and each module's period, ABI version and port set — is filled from the probe pass and from no other source. A configuration approved by the probe pass is never rejected by the run for a reason the probe could have seen.
 **Verify.** T · `SYT-CFG-24`   **Trace.** CN-0396, CN-0397, CN-0165
-**Built.** ◐ started — 1/3 software requirements done, in `WP-05`, `WP-21`
+**Built.** ◐ started — 2/3 software requirements done, in `WP-05`, `WP-21`
 *Note:* stated because the spec's own rule is that the engine decides nothing the configuration layer could have decided — and several of those fields cannot be decided without opening a file. Naming the probe pass is what keeps that rule true instead of quietly reintroducing a second, simpler reader for configuration time.
 
 **`SYS-0288`** · `P0` · `R1` — What the probe returns is data, and it is passed, not fetched
 **Shall.** The recording index and the module manifest shall be plain data structures, and the graph, coherence, ingest and launcher functions that need them shall receive them as arguments rather than opening any file or library themselves.
 **Accept.** Coherence classification, cut feasibility, ingest-family matching and mode validation all run against in-memory structures with no file open and no library loaded, and are testable with a hand-written index.
 **Verify.** T · `SYT-CFG-25`   **Trace.** CN-0398, CN-0089
-**Built.** ◐ started — 1/4 software requirements done, in `WP-04`, `WP-20`, `WP-21`
+**Built.** ◐ started — 2/4 software requirements done, in `WP-04`, `WP-20`, `WP-21`
 *Note:* this is what lets those functions stay free of any dependency on the reader, which is the property their unit tests rest on.
 
 **`SYS-0167`** · `P0` · `R1` — The engine states what it actually loaded

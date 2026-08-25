@@ -490,7 +490,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** `SI-13` shall be permitted to open a module binary and a recording for the probe pass (`SW-0410`), calling only the manifest and version entry points and only the reader's describe entry point; every entry point that executes a module or advances a run shall be unreachable from the configuration layer.
 **Accept.** A symbol-level check finds the manifest, ABI-version and describe calls in `SI-13` and nowhere else in the configuration layer, and finds no initialise, execute, shutdown or step call anywhere outside `SI-23` and `SI-25`. Three Python packages may bind the C interface: `resolve`, `pyapi` and `transport`, and no fourth.
 **Verify.** A · `ANL-SW-07` · T · `UT-RES-10`   **Trace.** SYS-0287, SYS-0288; CN-0396, CN-0397
-**Built.** ◐ started — `IMP-0409` in `WP-21`
+**Built.** ● done — `IMP-0409` in `WP-21`
 **Now.** `PARTIAL` — `contracts/pipeline.py` loads component libraries to read their manifests, which is the right operation in the wrong package.
 *Note:* stated as a symbol rule rather than an import rule because the obligation is *not executing*, and a check on folder membership forbids the wrong thing. Forbidding execution by symbol is stricter than forbidding the binding by directory, and it is the form that survives the probe pass existing at all.
 
