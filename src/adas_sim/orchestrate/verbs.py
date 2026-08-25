@@ -27,10 +27,16 @@ therefore never import a single `cli.*` submodule eagerly; each is imported
 only inside the closure the caller actually invokes.
 
 `VERBS`'s own callables reach the CLI module's `run(argv) -> int`, not a
-`pyapi` function -- `adas_sim.pyapi` does not exist yet (`WP-29`,
-`IMP-0230`/`IMP-0231`). This is the interim, honestly-scoped shape: once
-`pyapi` lands, `VERBS`'s values move to the `pyapi` callables it wraps, and
-`cli/__init__.py` keeps dispatching through this same table unchanged."""
+`pyapi` function. **`adas_sim.pyapi` landed at `WP-29`** (`IMP-0230`/
+`IMP-0231`), but only wraps verb DISPATCH (`pyapi.Api.verb`/`dry_run` call
+straight through to `VERBS[name].run(argv)`) plus its own pre-existing
+diagnostics (`SW-0286`) -- no verb's actual business logic (recording
+construction, engine invocation, manifest building, batch orchestration,
+...) has been migrated INTO `pyapi.Api` itself, so `SW-0229`'s literal
+Accept clause ("every `cli/*.py` module imports nothing but `argparse` and
+`adas_sim.pyapi`", `ANL-SW-39`, whole-tree) still does not hold -- that is
+a dedicated follow-on WP migrating each verb's own logic one method at a
+time, not a consequence of `pyapi` merely existing (`IMP-0229`, `WP-23`)."""
 
 from __future__ import annotations
 

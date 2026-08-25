@@ -312,6 +312,21 @@ class RunManifest:
     #: already established at the batch-report layer; this is that same
     #: fact recorded in the manifest itself.
     cancelled: bool = False
+    #: `IMP-0252`/`IMP-0253` (`SW-0252`/`SW-0253`): `""` (no read error) or
+    #: one of `orchestrate.readerror.ReadError`'s own values -- the policy
+    #: this run was launched with, when its own pre-flight recording read
+    #: failed. `read_retry_attempts` is `0` when no read error occurred.
+    read_error: str = ""
+    read_retry_attempts: int = 0
+    #: `IMP-0251` (`SW-0251`): the `orchestrate.reset.ResetPolicy` (mode x
+    #: timing) this run was launched with -- `""` when no policy was
+    #: recorded (a caller predating this field). Never the per-entry
+    #: DECISION `should_reset_before` returned: under `orchestrate/batch.py`'s
+    #: own one-fresh-subprocess-per-recording isolation invariant, that
+    #: decision is trivially always-true and would misrepresent what
+    #: actually happened -- the policy is the real, checkable fact.
+    reset_mode: str = ""
+    reset_when: str = ""
     #: `IMP-0402` (`SW-0402`, `CN-0154`): every wired edge's declared
     #: transport delay, in force for this run -- see `DelayStepRecord`'s own
     #: docstring for what "in force" does and does not claim yet.
@@ -411,6 +426,10 @@ def manifest_to_dict(manifest: RunManifest) -> dict:
         "outcome": manifest.outcome,
         "last_completed_cycle": manifest.last_completed_cycle,
         "cancelled": manifest.cancelled,
+        "read_error": manifest.read_error,
+        "read_retry_attempts": manifest.read_retry_attempts,
+        "reset_mode": manifest.reset_mode,
+        "reset_when": manifest.reset_when,
         "delay_steps": [
             {"edge": d.edge, "delay_steps": d.delay_steps} for d in manifest.delay_steps
         ],
@@ -492,6 +511,10 @@ def manifest_from_dict(data: dict) -> RunManifest:
         outcome=data.get("outcome", "completed"),
         last_completed_cycle=data.get("last_completed_cycle", -1),
         cancelled=data.get("cancelled", False),
+        read_error=data.get("read_error", ""),
+        read_retry_attempts=data.get("read_retry_attempts", 0),
+        reset_mode=data.get("reset_mode", ""),
+        reset_when=data.get("reset_when", ""),
         delay_steps=delay_steps,
         grid_step_ns=data.get("grid_step_ns", 0),
     )

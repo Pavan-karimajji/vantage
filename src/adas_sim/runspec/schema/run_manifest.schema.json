@@ -9,6 +9,7 @@
     "source_kind", "project", "components", "overrides", "record_policies",
     "faults", "bundle_overrides", "run_spec_sha256", "coherence_verdict",
     "coherence_findings", "divergence", "outcome", "last_completed_cycle", "cancelled",
+    "read_error", "read_retry_attempts", "reset_mode", "reset_when",
     "delay_steps", "grid_step_ns", "seed", "allow_mixed_projects", "process_nonce"
   ],
   "properties": {
@@ -112,6 +113,10 @@
     "outcome": {"enum": ["completed", "failed", "crashed", "timeout"]},
     "last_completed_cycle": {"type": "integer", "minimum": -1},
     "cancelled": {"type": "boolean"},
+    "read_error": {"enum": ["", "stop", "skip_entry", "abort_batch", "skip_package"]},
+    "read_retry_attempts": {"type": "integer", "minimum": 0},
+    "reset_mode": {"enum": ["", "none", "reset", "reset_init"]},
+    "reset_when": {"enum": ["", "batch", "entry", "section"]},
     "delay_steps": {
       "type": "array",
       "items": {

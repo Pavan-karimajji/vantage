@@ -2501,7 +2501,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** An index built for a recording shall be reused by every batch entry over that recording.
 **Accept.** Index build cost appears once per recording across the batch, not once per run, measured by a counter.
 **Verify.** T · `UT-ORC-20`   **Trace.** SYS-0194
-**Built.** ◐ started — `IMP-0254` in `WP-23`
+**Built.** ● done — `IMP-0254` in `WP-23`
 **Now.** `NEW`.
 
 **`SW-0255`** · `SI-15` · `P0` · `R1` — Isolation is a property of the face, not a global setting

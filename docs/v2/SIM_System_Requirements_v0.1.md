@@ -1662,7 +1662,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** Index caches shall be shared across a batch.
 **Accept.** Index build cost appears once per recording across the batch, not once per run.
 **Verify.** T · `SYT-BAT-14` · `ANL-26`   **Trace.** CN-0192
-**Built.** ◐ started — 0/2 software requirements done, in `WP-17`, `WP-23`
+**Built.** ◐ started — 1/2 software requirements done, in `WP-17`, `WP-23`
 
 ---
 

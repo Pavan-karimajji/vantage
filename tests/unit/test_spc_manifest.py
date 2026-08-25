@@ -155,6 +155,33 @@ def test_cancelled_is_recorded_distinctly_from_outcome():
     assert default.cancelled is False
 
 
+def test_read_error_and_reset_policy_round_trip():
+    """`IMP-0252`/`IMP-0253`/`IMP-0251`: `read_error`/`read_retry_attempts`/
+    `reset_mode`/`reset_when` all round-trip the same way `cancelled` does
+    above -- one more instance of the distinguish-by-field pattern, not a
+    special case."""
+    manifest = build_manifest(
+        run_kind="resim", source_kind="mcap", clock=_CLOCK, outcome="failed",
+        read_error="abort_batch", read_retry_attempts=3, reset_mode="reset_init", reset_when="entry",
+    )
+    assert manifest.read_error == "abort_batch"
+    assert manifest.read_retry_attempts == 3
+    assert manifest.reset_mode == "reset_init"
+    assert manifest.reset_when == "entry"
+    data = manifest_to_dict(manifest)
+    restored = manifest_from_dict(data)
+    assert restored.read_error == "abort_batch"
+    assert restored.read_retry_attempts == 3
+    assert restored.reset_mode == "reset_init"
+    assert restored.reset_when == "entry"
+
+    default = build_manifest(run_kind="sim", source_kind="synthetic", clock=_CLOCK)
+    assert default.read_error == ""
+    assert default.read_retry_attempts == 0
+    assert default.reset_mode == ""
+    assert default.reset_when == ""
+
+
 # ---------------------------------------------------------------------------
 # UT-SPC-16 -- SW-0223: a run with zero exporters still writes a manifest
 # ---------------------------------------------------------------------------

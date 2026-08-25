@@ -214,6 +214,10 @@ def build_manifest(
     outcome: str = "completed",
     last_completed_cycle: int = -1,
     cancelled: bool = False,
+    read_error: str = "",
+    read_retry_attempts: int = 0,
+    reset_mode: str = "",
+    reset_when: str = "",
 ) -> RunManifest:
     """`run_kind` is `"sim"` or `"resim"`; `source_kind` is the `Source.name`.
 
@@ -251,6 +255,14 @@ def build_manifest(
         - `cancelled` (`IMP-0235`) states whether a `CancelToken` ended this run --
           `outcome` still reports one of the closed four values (`"failed"` for a
           cancelled run, `R-SIM-19`), distinguished here instead.
+        - `read_error`/`read_retry_attempts` (`IMP-0252`/`IMP-0253`) state the
+          `orchestrate.readerror.ReadError` policy in force and how many attempts
+          were made, when this run's own pre-flight recording read failed --
+          `""`/`0` (the defaults) when no read error occurred.
+        - `reset_mode`/`reset_when` (`IMP-0251`) state the `orchestrate.reset.
+          ResetPolicy` this run was launched with -- the policy, never the
+          per-entry decision (which is trivially always-true under
+          `orchestrate/batch.py`'s own fresh-subprocess-per-recording isolation).
 
     """
     component_build_shas = component_build_shas or {}
@@ -327,6 +339,10 @@ def build_manifest(
         outcome=outcome,
         last_completed_cycle=last_completed_cycle,
         cancelled=cancelled,
+        read_error=read_error,
+        read_retry_attempts=read_retry_attempts,
+        reset_mode=reset_mode,
+        reset_when=reset_when,
         delay_steps=delay_steps,
         grid_step_ns=grid_step_ns,
     )

@@ -41,9 +41,14 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
+from adas_sim.graph.feasible import RecordingIndex
 from adas_sim.orchestrate import limits as _limits
 from adas_sim.orchestrate import watchdog as _watchdog
 from adas_sim.orchestrate.progress import CancelToken, ProgressSink
+from adas_sim.orchestrate.readerror import ReadError
+from adas_sim.orchestrate.reset import DEFAULT_RESET_POLICY, ResetPolicy, should_reset_before
+from adas_sim.plugins.registry import reader_for
+from adas_sim.resolve.probe import describe_recording
 from adas_sim.runspec.manifest import ResolvedRunConfig, build_manifest, resolve_swept_config, write_manifest
 
 #: `RecordingOutcome.outcome` -> `RunManifest.outcome` (`runspec/manifest.py`'s
@@ -89,6 +94,14 @@ class RecordingOutcome:
     #: `"responsiveness"` -- which of the two independent watchdogs killed
     #: this job. Same pattern as `limit_breach`/`cancelled`.
     watchdog: str = ""
+    #: `IMP-0252`/`IMP-0253`: `""` (no read error) or one of
+    #: `readerror.ReadError`'s own values -- the policy this job was
+    #: launched with, when its own pre-flight recording read failed.
+    #: `read_retry_attempts` is `0` when no read error occurred, `>= 1`
+    #: otherwise (at least one attempt is always made, `readerror.retry`'s
+    #: own invariant).
+    read_error: str = ""
+    read_retry_attempts: int = 0
 
 
 def expand_recordings(args: Sequence[str]) -> list[Path]:
@@ -166,6 +179,7 @@ def _classify(
             recording=recording, outcome="fail", duration_s=duration_s,
             tick_count=result.get("tick_count"), last_tick_ns=result.get("last_tick_ns"),  # type: ignore[arg-type]
             error=str(result.get("error", "")), stderr_excerpt=proc.stderr[-_STDERR_EXCERPT_BYTES:],
+            read_error=str(result.get("read_error", "")), read_retry_attempts=int(result.get("read_retry_attempts", 0)),  # type: ignore[arg-type]
         )
 
     # No readable, self-reported outcome: the process died before it could
@@ -192,7 +206,10 @@ def _entry_paths(out_dir: Path, index: int, recording: Path) -> tuple[Path, Path
     return out_dir / f"{stem}.json", out_dir / f"{stem}.checkpoint.json"
 
 
-def _write_outcome_manifest(out_dir: Path, index: int, recording: Path, pipeline_path: Path, outcome: RecordingOutcome) -> None:
+def _write_outcome_manifest(
+    out_dir: Path, index: int, recording: Path, pipeline_path: Path, outcome: RecordingOutcome,
+    reset_policy: ResetPolicy = DEFAULT_RESET_POLICY,
+) -> None:
     """`IMP-0222`/`SW-0222`: a standalone `run_manifest.json` written for
     EVERY entry, including a `crash`/`timeout` this module classified from
     the outside (`_classify`) -- never only for `ok`. `last_completed_cycle`
@@ -209,6 +226,8 @@ def _write_outcome_manifest(out_dir: Path, index: int, recording: Path, pipeline
         outcome=_MANIFEST_OUTCOME_OF[outcome.outcome],
         last_completed_cycle=outcome.tick_count if outcome.tick_count is not None else -1,
         cancelled=outcome.cancelled,
+        read_error=outcome.read_error, read_retry_attempts=outcome.read_retry_attempts,
+        reset_mode=reset_policy.mode.value, reset_when=reset_policy.when.value,
     )
     write_manifest(manifest, out_dir / "manifest" / f"{index:04d}_{recording.stem}")
 
@@ -233,6 +252,7 @@ def _load_completed(out_json: Path, recording: Path) -> RecordingOutcome | None:
         recording=recording, outcome=outcome, duration_s=0.0,
         tick_count=data.get("tick_count"), last_tick_ns=data.get("last_tick_ns"),
         error=str(data.get("error", "")),
+        read_error=str(data.get("read_error", "")), read_retry_attempts=int(data.get("read_retry_attempts", 0)),
     )
 
 
@@ -241,9 +261,25 @@ def _launch_worker(
     test_stub_echo: tuple[str, ...], out_dir: Path, resume: bool, memory_limit_mb: float | None,
     progress: ProgressSink | None = None, cancel: CancelToken | None = None,
     watchdogs: _watchdog.WatchdogThresholds | None = None,
+    on_read_error: str = ReadError.SKIP_ENTRY.value, read_retry_bound_s: float = 5.0,
+    reset_policy: ResetPolicy = DEFAULT_RESET_POLICY,
 ) -> RecordingOutcome:
     index, recording = entry
     out_json, checkpoint_json = _entry_paths(out_dir, index, recording)
+
+    #: `IMP-0251`: called once per entry, per the per-entry lifecycle
+    #: `SW-0251`'s own row named as missing -- the DECISION is not acted on
+    #: here (a fresh subprocess per recording is already reset+init by
+    #: construction, `R-SIM-19`'s own isolation invariant; there is no
+    #: persistent-worker mode for `ResetMode.NONE`/`ResetWhen.BATCH`/
+    #: `SECTION` to meaningfully change), so `_write_outcome_manifest`
+    #: below records the POLICY (`mode`/`when`), never this trivially-
+    #: always-true-under-fresh-subprocess-isolation decision, which would
+    #: misrepresent what actually happened. `is_first_in_section` treats the
+    #: whole batch as one section -- `run_batch`'s flat `recordings` list has
+    #: no real section concept yet, so `ResetWhen.SECTION` reads identically
+    #: to `BATCH` here; a real section boundary is future work.
+    should_reset_before(reset_policy, index=index, is_first_in_section=(index == 0))
 
     if resume:
         existing = _load_completed(out_json, recording)
@@ -254,6 +290,7 @@ def _launch_worker(
         sys.executable, "-m", "adas_sim.orchestrate.worker",
         "--recording", str(recording), "--pipeline", str(pipeline_path), "--out-json", str(out_json),
         "--checkpoint-json", str(checkpoint_json),
+        "--on-read-error", on_read_error, "--read-retry-bound-s", str(read_retry_bound_s),
     ]
     for directory in search:
         cmd += ["--search", str(directory)]
@@ -290,7 +327,20 @@ def _launch_worker(
             duration_s = time.monotonic() - start
             result = _classify(recording, proc, out_json, checkpoint_json, duration_s, timed_out=False, timeout_stderr="")
 
-    _write_outcome_manifest(out_dir, index, recording, pipeline_path, result)
+    if result.read_error == ReadError.ABORT_BATCH.value and cancel is not None:
+        # `IMP-0252`: this ONE job's own read failure said "abort the whole
+        # batch" -- cancelling the SHARED token here (rather than in
+        # `run_batch`'s own dispatch loop, which only sees results after
+        # `ThreadPoolExecutor.map` collects them all) reaches every other
+        # in-flight/not-yet-started job at its own next poll tick, reusing
+        # `IMP-0235`'s existing cancel machinery instead of a second one.
+        # `run_batch` guarantees `cancel is not None` whenever a caller asks
+        # for `on_read_error="abort_batch"` (auto-created if not supplied),
+        # so the polling path (never the `subprocess.run` fast path above)
+        # is always what runs when this branch can fire.
+        cancel.cancel()
+
+    _write_outcome_manifest(out_dir, index, recording, pipeline_path, result, reset_policy=reset_policy)
     return result
 
 
@@ -448,6 +498,9 @@ def run_batch(
     memory_limit_mb: float | None = None,
     progress: ProgressSink | None = None, cancel: CancelToken | None = None,
     watchdogs: _watchdog.WatchdogThresholds | None = None,
+    recording_index_cache: dict[Path, RecordingIndex] | None = None,
+    on_read_error: str = ReadError.SKIP_ENTRY.value, read_retry_bound_s: float = 5.0,
+    reset_policy: ResetPolicy = DEFAULT_RESET_POLICY,
 ) -> list[RecordingOutcome]:
     """Runs `pipeline_path` -- the SAME file `sim resim` would take,
     unmodified (`R-SIM-16`, `ST-D7-3`) -- against every recording in
@@ -473,12 +526,63 @@ def run_batch(
     (`ResponsivenessWatchdog.heartbeat`) and `cancel.cancelled`. None of
     the three changes behaviour for a caller that passes none of them --
     `_launch_worker` only enters the polling path when at least one of
-    `memory_limit_mb`/`progress`/`cancel`/`watchdogs` is given."""
+    `memory_limit_mb`/`progress`/`cancel`/`watchdogs` is given.
+
+    `recording_index_cache` (`IMP-0254`), when given, is a caller-owned
+    dict (same lifetime discipline `out_dir` already documents -- this
+    function never creates or clears it) populated with one
+    `resolve.probe.describe_recording` result per UNIQUE recording path
+    before any job dispatches, so a caller re-running the same recording
+    list repeatedly (`sweep`, below) probes each file once rather than once
+    per swept value. A path already present is left alone -- a caller
+    seeding the cache itself (e.g. from an earlier probe pass) is honoured,
+    never re-probed.
+
+    `on_read_error`/`read_retry_bound_s` (`IMP-0252`/`IMP-0253`,
+    `orchestrate.readerror.ReadError`): forwarded to every worker's own
+    `--on-read-error`/`--read-retry-bound-s`, so each recording's own
+    pre-flight read is retried within the bound and a failure is reported
+    distinctly (`RecordingOutcome.read_error`/`read_retry_attempts`), same
+    `R-SIM-19` distinguish-by-field pattern as `limit_breach`/`cancelled`/
+    `watchdog` -- never a fifth `outcome` value. `"stop"` and
+    `"abort_batch"` reach beyond one job, both enacted HERE rather than
+    inside a worker (a worker only ever sees its own recording):
+    `"stop"` refuses the whole operation up front -- every recording is
+    pre-flighted (open + `.topics()`, no retry) before any job dispatches,
+    and the first unreadable one raises, launching nothing. `"abort_batch"`
+    forces `cancel` into existence when the caller did not supply one (so
+    the polling path, not the `subprocess.run` fast path, is always what
+    runs) -- `_launch_worker`'s own post-job check cancels that shared
+    token the instant one job's `read_error` reports `"abort_batch"`,
+    reaching every other in-flight/not-yet-started job at its own next
+    poll tick, reusing `IMP-0235`'s existing mechanism rather than a
+    second one. `"skip_entry"`/`"skip_package"` need no enactment here --
+    a failing entry not stopping the batch is already `IMP-0243`'s own
+    default."""
+    if on_read_error == ReadError.STOP.value:
+        for recording in recordings:
+            try:
+                reader = reader_for(recording)
+                try:
+                    reader.topics()
+                finally:
+                    reader.close()
+            except Exception as exc:  # noqa: BLE001 -- exactly the read failure this policy refuses to proceed past
+                raise RuntimeError(f"on-read-error=stop: {recording} unreadable: {type(exc).__name__}: {exc}") from exc
+    if on_read_error == ReadError.ABORT_BATCH.value and cancel is None:
+        cancel = CancelToken()
+
+    if recording_index_cache is not None:
+        for recording in recordings:
+            if recording not in recording_index_cache:
+                recording_index_cache[recording] = describe_recording(recording)
+
     if out_dir is not None:
         worker = functools.partial(
             _launch_worker, pipeline_path=pipeline_path, search=tuple(search), config=config,
             timeout_s=timeout_s, test_stub_echo=tuple(test_stub_echo), out_dir=out_dir, resume=resume,
             memory_limit_mb=memory_limit_mb, progress=progress, cancel=cancel, watchdogs=watchdogs,
+            on_read_error=on_read_error, read_retry_bound_s=read_retry_bound_s, reset_policy=reset_policy,
         )
         with ThreadPoolExecutor(max_workers=max(1, jobs)) as executor:
             return list(executor.map(worker, enumerate(recordings)))
@@ -488,6 +592,7 @@ def run_batch(
             _launch_worker, pipeline_path=pipeline_path, search=tuple(search), config=config,
             timeout_s=timeout_s, test_stub_echo=tuple(test_stub_echo), out_dir=Path(tmp_dir), resume=False,
             memory_limit_mb=memory_limit_mb, progress=progress, cancel=cancel, watchdogs=watchdogs,
+            on_read_error=on_read_error, read_retry_bound_s=read_retry_bound_s, reset_policy=reset_policy,
         )
         with ThreadPoolExecutor(max_workers=max(1, jobs)) as executor:
             return list(executor.map(worker, enumerate(recordings)))
@@ -538,7 +643,16 @@ def sweep(
     """`batch.py::sweep` (`IMP-0250`): runs the whole batch once per swept
     value, each against its own derived bundle -- `SW-0256`'s "no batch-only
     configuration format" holds because every entry is a plain `run_batch`
-    call with a differently-resolved `config`."""
+    call with a differently-resolved `config`.
+
+    `IMP-0254`: `recordings` is the SAME list run once per swept value, so
+    this is the one existing call site that legitimately re-probes an
+    identical recording set N times -- one `recording_index_cache` dict is
+    built here (unless the caller already passed one in
+    `run_batch_kwargs`, honoured instead of overridden) and shared across
+    every `run_batch` call this makes, so each unique recording is probed
+    once across the whole sweep rather than once per value."""
+    run_batch_kwargs.setdefault("recording_index_cache", {})
     results: dict[object, list[RecordingOutcome]] = {}
     resolved_by_value = sweep_configs(base_config, param, values, project=project)
     try:

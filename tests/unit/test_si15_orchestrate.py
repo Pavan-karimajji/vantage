@@ -21,7 +21,8 @@ import pytest
 import yaml
 
 from adas_sim.orchestrate import artifacts, limits, readerror, reset, severity, watchdog
-from adas_sim.orchestrate.batch import RecordingOutcome, reconcile, run_batch, sweep_configs
+from adas_sim.orchestrate.reset import ResetMode, ResetPolicy, ResetWhen
+from adas_sim.orchestrate.batch import RecordingOutcome, reconcile, run_batch, sweep, sweep_configs
 from adas_sim.orchestrate.progress import CancelToken, ProgressSink
 from adas_sim.orchestrate.reopen import open_on_bench
 from adas_sim.orchestrate.verbs import VERBS, assert_dry_run_table_complete, verb_count
@@ -515,6 +516,60 @@ def test_sweep_configs_produce_one_bundle_per_value_differing_only_in_the_swept_
     assert seen_values == {1.1, 1.2, 1.3}
 
 
+def test_run_batch_probes_a_shared_recording_index_cache_once_per_unique_path(tmp_path, monkeypatch):
+    """`IMP-0254`: `recording_index_cache`, when given, is populated once per
+    UNIQUE recording path before any job dispatches -- a duplicate entry in
+    `recordings` is probed once, not once per occurrence."""
+    import adas_sim.orchestrate.batch as batch_module
+
+    calls: list[Path] = []
+    real = batch_module.describe_recording
+
+    def _counting(path):
+        calls.append(path)
+        return real(path)
+
+    monkeypatch.setattr(batch_module, "describe_recording", _counting)
+
+    missing_pipeline = tmp_path / "does_not_exist.yaml"
+    cache: dict[Path, object] = {}
+    run_batch([_TINY, _TINY], missing_pipeline, recording_index_cache=cache, timeout_s=15.0)
+
+    assert calls == [_TINY]
+    assert _TINY in cache
+
+
+def test_sweep_shares_one_recording_index_cache_across_every_swept_value(tmp_path, monkeypatch):
+    """`IMP-0254`'s own named "amortize across workers" story: `sweep` re-runs
+    the SAME recording list once per swept value -- without a shared cache
+    that would re-probe every recording once per value; with one, each
+    unique recording is probed exactly once across the whole sweep."""
+    import adas_sim.orchestrate.batch as batch_module
+
+    calls: list[Path] = []
+    real = batch_module.describe_recording
+
+    def _counting(path):
+        calls.append(path)
+        return real(path)
+
+    monkeypatch.setattr(batch_module, "describe_recording", _counting)
+
+    base = tmp_path / "base"
+    base.mkdir()
+    (base / "default.yaml").write_text(
+        "aeb:\n  AEB_TTC_PRE_WARNING_THRESHOLD_S: 1.0\n  AEB_MIN_SPEED_MPS: 1.0\n", encoding="utf-8",
+    )
+    missing_pipeline = tmp_path / "does_not_exist.yaml"
+
+    sweep(
+        [_TINY], missing_pipeline, "aeb.AEB_TTC_PRE_WARNING_THRESHOLD_S", [1.1, 1.2, 1.3],
+        base_config=base, project="base", timeout_s=15.0,
+    )
+
+    assert calls == [_TINY]
+
+
 # --------------------------------------------------------------------------
 # batch.py -- IMP-0222 (SW-0222), landed as a byproduct of this package's
 # own orchestrate/run.py::invoke_engine wiring (WP-22 left this row [~]
@@ -619,6 +674,114 @@ def test_a_zero_threshold_watchdog_terminates_the_job_and_names_which_one(tmp_pa
     results = run_batch([_TINY], missing_pipeline, watchdogs=thresholds, timeout_s=15.0)
     assert results[0].watchdog == "processing"
     assert results[0].outcome == "fail"
+
+
+def _corrupted_mcap(tmp_path: Path) -> Path:
+    """A truncated copy of `_TINY` -- opens but fails to parse
+    (`McapReader.__init__` raises `OSError` on the truncated stream),
+    the genuine damaged-recording fixture `IMP-0252`/`IMP-0253`'s own
+    doc row named as their missing piece, built in `tmp_path` rather than
+    checked in."""
+    corrupted = tmp_path / "corrupted.mcap"
+    corrupted.write_bytes(_TINY.read_bytes()[:20])
+    return corrupted
+
+
+def test_a_damaged_recording_is_retried_then_reported_as_a_read_error(tmp_path):
+    """`IMP-0252`/`IMP-0253`: the pre-flight read in `orchestrate/worker.py`
+    (real Python-side, before `Pipeline.load`) retries within
+    `read_retry_bound_s`, then reports `read_error`/`read_retry_attempts`
+    -- a real damaged-file test, not just `readerror.py`'s own
+    clock-injected unit tests."""
+    corrupted = _corrupted_mcap(tmp_path)
+    missing_pipeline = tmp_path / "does_not_exist.yaml"
+
+    results = run_batch(
+        [corrupted], missing_pipeline, on_read_error="skip_entry", read_retry_bound_s=0.3, timeout_s=15.0,
+    )
+
+    assert results[0].outcome == "fail"
+    assert results[0].read_error == "skip_entry"
+    assert results[0].read_retry_attempts >= 1
+    assert "read error" in results[0].error
+
+
+def test_stop_refuses_the_whole_batch_before_launching_anything(tmp_path):
+    """`IMP-0252`: `on_read_error="stop"` pre-flights every recording BEFORE
+    any job dispatches -- a damaged recording anywhere in the list raises,
+    and nothing is launched (proven by a second, perfectly valid recording
+    never getting an out_json written)."""
+    corrupted = _corrupted_mcap(tmp_path)
+    missing_pipeline = tmp_path / "does_not_exist.yaml"
+    out_dir = tmp_path / "artifacts"
+    out_dir.mkdir()
+
+    with pytest.raises(RuntimeError, match="on-read-error=stop"):
+        run_batch([corrupted, _TINY], missing_pipeline, on_read_error="stop", out_dir=out_dir, timeout_s=15.0)
+
+    assert list(out_dir.iterdir()) == []  # nothing dispatched, not even the valid entry
+
+
+def test_abort_batch_cancels_a_still_running_job_when_one_entry_s_read_fails(tmp_path):
+    """`IMP-0252`: `on_read_error="abort_batch"` reaches BEYOND the failing
+    entry -- reusing `IMP-0235`'s own `CancelToken` machinery (auto-created
+    here since the caller supplied none), the failing entry's own
+    `_launch_worker` cancels the shared token, which the still-running/
+    not-yet-started entry's own poll loop picks up and terminates on,
+    reported `cancelled=True` -- distinct from that entry ever getting a
+    chance to run for real."""
+    corrupted = _corrupted_mcap(tmp_path)
+    missing_pipeline = tmp_path / "does_not_exist.yaml"
+
+    results = run_batch(
+        [corrupted, _TINY], missing_pipeline, on_read_error="abort_batch", jobs=1, timeout_s=15.0,
+    )
+
+    assert results[0].read_error == "abort_batch"
+    assert results[1].cancelled is True
+
+
+def test_should_reset_before_is_called_once_per_entry_with_the_real_index(tmp_path, monkeypatch):
+    """`IMP-0251`: `run_batch`'s own per-entry lifecycle now calls
+    `should_reset_before` for real -- a spy proves it fires once per entry
+    with the entry's own index, not just that the pure decision function
+    is unit-tested in isolation (`readerror.py`'s own tests above)."""
+    import adas_sim.orchestrate.batch as batch_module
+
+    calls: list[tuple[int, bool]] = []
+    real = batch_module.should_reset_before
+
+    def _spy(policy, *, index, is_first_in_section):
+        calls.append((index, is_first_in_section))
+        return real(policy, index=index, is_first_in_section=is_first_in_section)
+
+    monkeypatch.setattr(batch_module, "should_reset_before", _spy)
+
+    missing_pipeline = tmp_path / "does_not_exist.yaml"
+    run_batch([_TINY, _TINY, _TINY], missing_pipeline, timeout_s=15.0)
+
+    assert [c[0] for c in calls] == [0, 1, 2]
+
+
+def test_the_manifest_carries_the_reset_policy_not_the_trivial_decision(tmp_path):
+    """`IMP-0251`'s own manifest half: `reset_mode`/`reset_when` reach the
+    on-disk manifest as the POLICY this run was configured with -- not the
+    per-entry decision, which is trivially always-true under
+    `orchestrate/batch.py`'s fresh-subprocess-per-recording isolation and
+    would misrepresent what a `ResetMode.NONE`-configured run actually did."""
+    from adas_sim.runspec.manifest import RUN_MANIFEST_FILENAME
+
+    out_dir = tmp_path / "artifacts"
+    out_dir.mkdir()
+    missing_pipeline = tmp_path / "does_not_exist.yaml"
+    policy = ResetPolicy(mode=ResetMode.NONE, when=ResetWhen.SECTION)
+
+    run_batch([_TINY], missing_pipeline, out_dir=out_dir, reset_policy=policy, timeout_s=15.0)
+
+    manifest_path = out_dir / "manifest" / "0000_tiny" / RUN_MANIFEST_FILENAME
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert data["reset_mode"] == "none"
+    assert data["reset_when"] == "section"
 
 
 def test_a_progress_sink_does_not_change_outcome_for_a_run_with_nothing_to_report(tmp_path):

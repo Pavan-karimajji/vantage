@@ -74,7 +74,9 @@ from adas_sim.graph.build import Pipeline
 from adas_sim.diagnostics.errors import SimError
 from adas_sim.engine.bridge import count_ticks
 from adas_sim.orchestrate.batch import read_checkpoint_tick
+from adas_sim.orchestrate.readerror import ReadError, retry
 from adas_sim.orchestrate.run import invoke_engine
+from adas_sim.plugins.registry import reader_for
 
 #: Values `ADAS_SIM_BATCH_TEST_STUB` recognizes -- a closed set, same
 #: discipline every other closed vocabulary in this codebase uses, so a typo
@@ -138,6 +140,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--config", type=Path, default=None)
     parser.add_argument("--test-stub-echo", action="append", default=[], metavar="STAGE_NAME")
     parser.add_argument("--checkpoint-json", type=Path, default=None)
+    parser.add_argument("--on-read-error", choices=[e.value for e in ReadError], default=ReadError.SKIP_ENTRY.value)
+    parser.add_argument("--read-retry-bound-s", type=float, default=5.0)
     return parser
 
 
@@ -165,6 +169,39 @@ def main(argv: list[str] | None = None) -> int:
     # orchestrate/batch.py's own forwarding, still a no-op -- see this
     # module's own docstring for why. args.checkpoint_json is forwarded to
     # invoke_engine below -- no longer a no-op.
+
+    def _open_and_probe() -> None:
+        """`IMP-0252`/`IMP-0253`: a genuine Python-side read of `--recording`
+        before `Pipeline.load` -- today's only pre-flight this file gets is
+        `simengine`'s own C++ decoder, once, with no retry and no
+        classification. `.topics()` alone (schema/provenance, no full
+        `messages()` decode) is enough to prove the file opens and parses;
+        `reader.close()` in `finally` means a retried attempt never leaks a
+        handle."""
+        reader = reader_for(args.recording)
+        try:
+            reader.topics()
+        finally:
+            reader.close()
+
+    _, read_outcome = retry(_open_and_probe, bound_s=args.read_retry_bound_s)
+    if not read_outcome.succeeded:
+        # Every policy value is reported the same way from inside ONE
+        # worker -- this process only ever sees its own recording, so
+        # `stop`/`abort_batch`'s own "beyond this one entry" behaviour is
+        # enacted by the PARENT (`orchestrate/batch.py::run_batch`'s own
+        # pre-flight for `stop`, `_launch_worker`'s own cancel-on-abort for
+        # `abort_batch`), never here -- this worker reports the fact
+        # (`read_error`, the policy it was launched with) and exits
+        # cleanly, same as any other expected `fail`.
+        _write_result(
+            args.out_json, outcome="fail",
+            error=f"read error after {read_outcome.attempts} attempt(s): "
+                  f"{read_outcome.errors[-1] if read_outcome.errors else ''}",
+            read_error=args.on_read_error, read_retry_attempts=read_outcome.attempts,
+            tick_count=None, last_tick_ns=None,
+        )
+        return 1
 
     try:
         pipeline = Pipeline.load(args.pipeline, search=tuple(args.search))

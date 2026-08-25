@@ -19,6 +19,7 @@ import argparse
 from pathlib import Path
 
 from adas_sim.orchestrate.batch import expand_recordings, run_batch, write_report
+from adas_sim.orchestrate.readerror import ReadError
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -42,6 +43,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--memory-limit-mb", type=float, default=None,
         help="per-recording resident-memory cap; a breach is reported distinctly from fail/crash/timeout (SW-0248)",
     )
+    parser.add_argument(
+        "--on-read-error", choices=[e.value for e in ReadError], default=ReadError.SKIP_ENTRY.value,
+        help="policy when a recording's own pre-flight read fails (SW-0252)",
+    )
+    parser.add_argument(
+        "--read-retry-bound-s", type=float, default=5.0,
+        help="wall-clock bound on retrying a failed recording read (SW-0253)",
+    )
     return parser
 
 
@@ -60,6 +69,7 @@ def run(argv: list[str] | None = None) -> int:
     results = run_batch(
         recordings, args.pipeline, search=args.search, config=args.config, jobs=args.jobs,
         timeout_s=args.timeout_s, out_dir=args.out_dir, resume=args.resume, memory_limit_mb=args.memory_limit_mb,
+        on_read_error=args.on_read_error, read_retry_bound_s=args.read_retry_bound_s,
     )
 
     if args.report is not None:
