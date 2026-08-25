@@ -1727,7 +1727,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** Any internal port shall be recordable by naming it in configuration, with no code change.
 **Accept.** A tapped port appears in the output with full provenance; untapping removes it with no other effect.
 **Verify.** T · `SYT-DIA-02`   **Trace.** CN-0208
-**Built.** ◐ started — 0/1 software requirements done, in `WP-24`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0204`** · `P1` · `R1` — Cycle trace
 **Shall.** An optional per-cycle log shall record which modules ran, which inputs they received, and how long each took.

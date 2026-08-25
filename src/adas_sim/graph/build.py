@@ -52,6 +52,7 @@ from adas_sim.config.fault import Fault, FaultVerb, apply_fault
 from adas_sim.resolve.library import resolve_library
 from adas_sim.config.override import Override, OverrideVerb, parse_override_verb
 from adas_sim.diagnostics.errors import AuthoringError, ContractError, ProvenanceWarning
+from adas_sim.diagnostics.tap import Tap, parse_taps, resolve_taps
 from adas_sim.session.tick import PortValue
 from adas_sim.io.base import RecordingReader
 from adas_sim.sources.base import Source
@@ -492,11 +493,18 @@ class Pipeline:
     def __init__(
         self, *, name: str, stages: tuple[Stage, ...], version: int, components: Mapping[str, SilComponent],
         faults: Sequence[Fault] = (), allow_mixed_projects: bool = False, mixed_projects: bool = False,
-        library_paths: Mapping[str, Path | None] | None = None,
+        library_paths: Mapping[str, Path | None] | None = None, taps: tuple[Tap, ...] = (),
     ) -> None:
         self.name = name
         self.stages = stages
         self.version = version
+        #: `IMP-0285` (`SW-0285`): declared `taps: {<stage>: [<port>, ...]}`
+        #: -- validated against each stage's real manifest at LOAD (below),
+        #: same "never at first tick" discipline this class's own docstring
+        #: states. `sources/recorder.py::Recorder` is the one real consumer
+        #: (`_topics`/`tick`, output-port taps only -- see that module's own
+        #: docstring for the named input-port residual).
+        self.taps = taps
         self._components = dict(components)
         #: `dll:`/`stubdll:` stages' resolved library file, keyed by stage
         #: name -- `None` (absent from a `components=`-supplied stage) same
@@ -653,9 +661,34 @@ class Pipeline:
         mixed_projects = _validate_cross_component_agreement(
             bundle_dirs, resolved, allow_mixed_projects=allow_mixed_projects,
         )
+        taps = parse_taps(raw.get("taps", {}))
+        if taps:
+            # `IMP-0285`: validated at LOAD, same discipline every other
+            # `raw` field on this method already follows -- an unknown
+            # stage/port fails here, not silently at record time.
+            manifests = {name: component.manifest for name, component in resolved.items()}
+            resolved_ports = resolve_taps(taps, manifests)
+            # `sources/recorder.py::Recorder` -- the one real consumer -- can
+            # only record a declared OUTPUT port today: `Pipeline.step()`
+            # returns one `PortValue` per output port and nothing for inputs
+            # (this class's own `step()` docstring), so an input-port tap
+            # would resolve cleanly here and then silently record nothing,
+            # exactly the gap `R-SIM-25` exists to prevent. `tap.py::
+            # resolve_taps` itself still allows either (its own docstring's
+            # deliberate design), so this is a CONSUMER-side restriction,
+            # not a change to that already-tested function.
+            for t, port_spec in zip(taps, resolved_ports):
+                if port_spec not in manifests[t.stage].outputs:
+                    raise AuthoringError(
+                        expected=f"tap '{t.stage}.{t.port}' to name a declared OUTPUT port",
+                        found=f"'{t.port}' is an input on stage '{t.stage}'",
+                        where="Pipeline.load taps:",
+                        hint="recording an internal INPUT port is not supported yet -- only outputs can be tapped",
+                    )
         return cls(
             name=name, stages=stages, version=version, components=resolved, faults=faults,
             allow_mixed_projects=allow_mixed_projects, mixed_projects=mixed_projects, library_paths=library_paths,
+            taps=taps,
         )
 
     def _message_classes_for(self, stage_name: str) -> Mapping[str, type]:
@@ -988,10 +1021,17 @@ class Pipeline:
         from adas_sim.graph.modes import with_port_mode as _with_port_mode
         return _with_port_mode(self, stage, port, mode)
 
+    def _taps_by_stage(self) -> dict[str, list[str]]:
+        by_stage: dict[str, list[str]] = {}
+        for t in self.taps:
+            by_stage.setdefault(t.stage, []).append(t.port)
+        return by_stage
+
     def to_yaml(self) -> str:
         data = {
             "version": self.version,
             "name": self.name,
+            **({"taps": self._taps_by_stage()} if self.taps else {}),
             "stages": [
                 {
                     "name": s.name, "mode": s.mode,

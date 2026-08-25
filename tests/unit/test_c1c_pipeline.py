@@ -31,6 +31,7 @@ from adas_sim.config.fault import Fault, FaultVerb
 from adas_sim.config.override import Override, OverrideVerb
 from adas_sim.graph.build import Pipeline
 from adas_sim.diagnostics.errors import AuthoringError, ContractError, InternalError, ProvenanceWarning
+from adas_sim.diagnostics.tap import Tap
 
 
 def _manifest(
@@ -1156,3 +1157,60 @@ def test_pipeline_load_parses_allow_mixed_projects_and_exposes_mixed_projects(tm
 
     assert pipeline.allow_mixed_projects is True
     assert pipeline.mixed_projects is False  # only one real bundle dir known (none, here) -- nothing to compare
+
+
+def test_pipeline_load_parses_and_validates_taps(tmp_path):
+    """`IMP-0285`: `taps:` is validated at LOAD (same discipline every other
+    `raw` field on `Pipeline.load` already follows), exposed on the loaded
+    `Pipeline`, and round-trips through `to_yaml`."""
+    producer = _manifest(component="producer", outputs=[PortSpec(name="debug", proto_type="test.Debug")])
+    path = tmp_path / "pipeline.yaml"
+    path.write_text(
+        yaml.safe_dump({
+            "name": "test", "version": 1, "taps": {"producer": ["debug"]},
+            "stages": [{"name": "producer", "mode": "simulate", "impl": "stub:producer", "inputs": {}}],
+        }),
+        encoding="utf-8",
+    )
+
+    pipeline = Pipeline.load(path, components={"producer": _stub("producer", producer)})
+
+    assert pipeline.taps == (Tap(stage="producer", port="debug"),)
+    assert "taps:" in pipeline.to_yaml()
+    assert yaml.safe_load(pipeline.to_yaml())["taps"] == {"producer": ["debug"]}
+
+
+def test_pipeline_load_refuses_a_tap_naming_an_unknown_port(tmp_path):
+    producer = _manifest(component="producer", outputs=[PortSpec(name="debug", proto_type="test.Debug")])
+    path = tmp_path / "pipeline.yaml"
+    path.write_text(
+        yaml.safe_dump({
+            "name": "test", "version": 1, "taps": {"producer": ["no_such_port"]},
+            "stages": [{"name": "producer", "mode": "simulate", "impl": "stub:producer", "inputs": {}}],
+        }),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AuthoringError, match="no_such_port"):
+        Pipeline.load(path, components={"producer": _stub("producer", producer)})
+
+
+def test_pipeline_load_refuses_a_tap_naming_an_input_port(tmp_path):
+    """`IMP-0285`'s own consumer-side scope limit: `Pipeline.step()` returns
+    no value for an input port (this class's own `step()` docstring), so a
+    tap naming one would resolve cleanly and then record nothing -- refused
+    here instead, at load, rather than left as a silent gap (`R-SIM-25`).
+    `tap.py::resolve_taps` itself is unchanged -- still allows either kind,
+    per its own docstring; this is `Pipeline.load`'s own restriction."""
+    consumer = _manifest(component="consumer", inputs=[PortSpec(name="egoDyn", proto_type="test.VehDyn")])
+    path = tmp_path / "pipeline.yaml"
+    path.write_text(
+        yaml.safe_dump({
+            "name": "test", "version": 1, "taps": {"consumer": ["egoDyn"]},
+            "stages": [{"name": "consumer", "mode": "simulate", "impl": "stub:consumer", "inputs": {}}],
+        }),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AuthoringError, match="input"):
+        Pipeline.load(path, components={"consumer": _stub("consumer", consumer)})

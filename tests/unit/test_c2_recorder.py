@@ -66,15 +66,18 @@ def _under_test_component(fn) -> InProcessSilComponent:
     return component, manifest
 
 
-def _pipeline(tmp_path: Path, *, record: dict | None = None, component=None) -> Pipeline:
+def _pipeline(tmp_path: Path, *, record: dict | None = None, component=None, taps: dict | None = None) -> Pipeline:
     stage = {
         "name": "under_test", "mode": "simulate", "impl": "stub:under_test",
         "inputs": {"egoDyn": "source.veh_dyn"},
     }
     if record is not None:
         stage["record"] = record
+    data: dict = {"name": "test", "stages": [stage]}
+    if taps is not None:
+        data["taps"] = taps
     path = tmp_path / "pipeline.yaml"
-    path.write_text(yaml.safe_dump({"name": "test", "stages": [stage]}, sort_keys=False), encoding="utf-8")
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     if component is None:
         component, _ = _under_test_component(lambda dt_ns, inputs: {"verdict": b"ok"})
     return Pipeline.load(path, components={"under_test": component})
@@ -206,6 +209,60 @@ def test_excluded_output_port_is_never_a_topic(tmp_path):
 
     assert "/under_test/verdict" not in topics
     assert topics == {"/source/veh_dyn"}
+
+
+def test_a_tap_recovers_an_excluded_output_port(tmp_path):
+    """`IMP-0285` (`SW-0285`): the wiring half this row's own doc row named
+    missing -- `taps:` names `verdict` on the same stage that ALSO
+    `excludes` it, and the tap wins: the port appears in the recording
+    anyway. Naming it in `taps:` is the one way to get an excluded port
+    back without touching the pipeline's own `record:` policy."""
+    pipeline = _pipeline(tmp_path, record={"verdict": "excluded"}, taps={"under_test": ["verdict"]})
+    pipeline_path = tmp_path / "pipeline.yaml"
+    source = SyntheticSource([{"veh_dyn": b"vd0"}])
+    out_path = tmp_path / "out.mcap"
+    recorder = Recorder(pipeline, source, out_path, meta=_manifest_for(pipeline, pipeline_path))
+
+    recorder.open(_scenario())
+    recorder.tick(50_000_000)
+    recorder.close()
+
+    reader = McapReader(out_path)
+    topics = set(reader.topics())
+    messages = [m for m in reader.messages() if m[0] == "/under_test/verdict"]
+    reader.close()
+
+    assert "/under_test/verdict" in topics
+    assert len(messages) == 1
+
+
+def test_removing_the_tap_leaves_the_rest_of_the_run_unchanged(tmp_path):
+    """`tap.py`'s own docstring claim, checked at the recorder layer:
+    removing a tap has no effect beyond the tapped port's own topic --
+    `/source/veh_dyn` is identical with or without `taps:` declared."""
+    with_tap = _pipeline(tmp_path, record={"verdict": "excluded"}, taps={"under_test": ["verdict"]})
+    stage = {
+        "name": "under_test", "mode": "simulate", "impl": "stub:under_test",
+        "inputs": {"egoDyn": "source.veh_dyn"}, "record": {"verdict": "excluded"},
+    }
+    no_tap_path = tmp_path / "no_tap.yaml"
+    no_tap_path.write_text(yaml.safe_dump({"name": "test", "stages": [stage]}, sort_keys=False), encoding="utf-8")
+    component, _ = _under_test_component(lambda dt_ns, inputs: {"verdict": b"ok"})
+    without_tap = Pipeline.load(no_tap_path, components={"under_test": component})
+
+    source_topics = {}
+    for label, pipeline, path in (("with", with_tap, tmp_path / "pipeline.yaml"), ("without", without_tap, no_tap_path)):
+        source = SyntheticSource([{"veh_dyn": b"vd0"}])
+        out_path = tmp_path / f"{label}.mcap"
+        recorder = Recorder(pipeline, source, out_path, meta=_manifest_for(pipeline, path))
+        recorder.open(_scenario())
+        recorder.tick(50_000_000)
+        recorder.close()
+        reader = McapReader(out_path)
+        source_topics[label] = {m[0]: m[3] for m in reader.messages() if m[0] == "/source/veh_dyn"}
+        reader.close()
+
+    assert source_topics["with"] == source_topics["without"]
 
 
 def test_decimated_output_port_keeps_only_every_nth_tick(tmp_path):

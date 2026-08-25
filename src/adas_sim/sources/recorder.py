@@ -46,6 +46,7 @@ from types import MappingProxyType
 from adas_sim.graph.build import Pipeline, RecordVerb, _split_ref, record_policy_for
 from adas_sim.config.scenario import Scenario
 from adas_sim.diagnostics.errors import InternalError
+from adas_sim.diagnostics.tap import resolve_taps
 from adas_sim.io.base import Provenance, RunManifest, TopicInfo
 from adas_sim.plugins.registry import writer_for
 from adas_sim.runspec import volume
@@ -167,6 +168,22 @@ class Recorder:
                 result.append((stage, port_spec, policy))
         return result
 
+    def _tapped_output_ports(self) -> list[tuple]:
+        """`IMP-0285` (`SW-0285`): every declared `taps:` entry, resolved to
+        its `(stage, PortSpec)` pair -- `Pipeline.load` already validated
+        each one names a real, existing OUTPUT port (an input-port tap is
+        refused at load, `Pipeline.step()` returns no input values to
+        record); this re-resolves (pure, cheap, same function) into the
+        `(stage, port_spec)` shape `_topics`/`tick` already use for a
+        normally-wired output. Empty when `pipeline is None` or declares no
+        taps -- `sim record`'s own case, or a pipeline with none."""
+        if self._pipeline is None or not self._pipeline.taps:
+            return []
+        stage_by_name = {stage.name: stage for stage in self._pipeline.stages}
+        manifests = {stage.name: self._pipeline.manifest_for(stage.name) for stage in self._pipeline.stages}
+        resolved_ports = resolve_taps(self._pipeline.taps, manifests)
+        return list(zip((stage_by_name[t.stage] for t in self._pipeline.taps), resolved_ports))
+
     def _topics(self) -> dict[str, TopicInfo]:
         topics: dict[str, TopicInfo] = {}
         for port in self._wired_source_ports():
@@ -181,6 +198,14 @@ class Recorder:
             # R-SIM-11: the component's own adasManifest() descriptor_set,
             # so a stage's recorded output decodes on replay instead of
             # staying raw bytes forever (previously never wired in here).
+            topics[topic_for(name)] = TopicInfo(
+                schema_name=port_spec.proto_type or name, provenance=Provenance.SIMULATED,
+                schema_bytes=self._pipeline.manifest_for(stage.name).descriptor_set,
+            )
+        for stage, port_spec in self._tapped_output_ports():
+            name = _qualified(stage.name, port_spec.name)
+            if topic_for(name) in topics:
+                continue  # already recorded via normal output wiring -- the tap is a redundant no-op, not an error
             topics[topic_for(name)] = TopicInfo(
                 schema_name=port_spec.proto_type or name, provenance=Provenance.SIMULATED,
                 schema_bytes=self._pipeline.manifest_for(stage.name).descriptor_set,
@@ -254,8 +279,21 @@ class Recorder:
                 continue  # this pipeline never wired it -- not this recording's business (R-SIM-6)
             self._write_one(_qualified("source", port), payload, log_time_ns)
 
-        for stage, port_spec, policy in self._recorded_stage_output_ports():
+        recorded_output_ports = self._recorded_stage_output_ports()
+        for stage, port_spec, policy in recorded_output_ports:
             if policy.verb is RecordVerb.DECIMATE and self._tick_index % policy.decimate_n != 0:
+                continue
+            value = result.get(_qualified(stage.name, port_spec.name))
+            if value is None or not value.updated:
+                continue  # held or absent this tick -- nothing new to write
+            self._write_one(_qualified(stage.name, port_spec.name), value.raw_bytes, log_time_ns)
+
+        # `IMP-0285`: a tap already covered by normal output wiring above is
+        # a redundant no-op (same reasoning `_topics`' own skip uses) --
+        # never a double write of the same topic this tick.
+        already_recorded = {(stage.name, port_spec.name) for stage, port_spec, _policy in recorded_output_ports}
+        for stage, port_spec in self._tapped_output_ports():
+            if (stage.name, port_spec.name) in already_recorded:
                 continue
             value = result.get(_qualified(stage.name, port_spec.name))
             if value is None or not value.updated:

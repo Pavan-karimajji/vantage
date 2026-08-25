@@ -2730,7 +2730,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** Any internal port shall become recorded output by naming it in configuration, with no code change, and untapping shall have no other effect.
 **Accept.** A tapped port appears in the output with full provenance; removing the tap leaves the run otherwise byte-identical.
 **Verify.** T · `UT-DIA-13`   **Trace.** SYS-0203
-**Built.** ◐ started — `IMP-0285` in `WP-24`
+**Built.** ● done — `IMP-0285` in `WP-24`
 **Now.** `PARTIAL` — the record policy mechanism can express it; there is no tap concept distinct from a declared port.
 
 **`SW-0286`** · `SI-17` · `P1` · `R1` — Diagnostics are reachable from a script, not only a terminal
