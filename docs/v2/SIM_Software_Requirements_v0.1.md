@@ -1851,7 +1851,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** A required input with neither a producer nor a recording source shall be refused, naming the consumer, the port, and every candidate considered with the reason each failed.
 **Accept.** The message lists every candidate, not only the count.
 **Verify.** T · `UT-GRF-07`   **Trace.** SYS-0040; CN-0346
-**Built.** ○ not started — `IMP-0169` in `WP-20`
+**Built.** ● done — `IMP-0169` in `WP-20`
 **Now.** `PARTIAL` — refusal exists and names both ends; the candidate list does not.
 
 **`SW-0170`** · `SI-11` · `P0` · `R1` — Port types are matched at load

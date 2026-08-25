@@ -663,7 +663,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A required input with neither a producer nor a recording source shall be a rejected configuration.
 **Accept.** Refused at load, naming the consumer, the port, and every candidate that was considered and why each failed.
 **Verify.** T · `SYT-PRC-04`   **Trace.** CN-0090, CN-0346
-**Built.** ◐ started — 1/2 software requirements done, in `WP-05`, `WP-20`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0041`** · `P1` · `R1` — Manifests may be generated, but the checked-in file is the authority
 **Shall.** A manifest may be auto-generated as a first draft from the build, and the checked-in manifest shall be the authority.

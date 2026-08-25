@@ -369,6 +369,34 @@ def _find_port(specs: Sequence[PortSpec], name: str) -> PortSpec | None:
     return None
 
 
+def _describe_candidates(
+    stages: Sequence[Stage], components: Mapping[str, SilComponent], upto: int, proto_type: str,
+) -> str:
+    """`SW-0169`/`SYS-0040`: a required input with no producer is refused
+    "naming ... every candidate considered with the reason each failed."
+    **Human decision, 2026-08-25:** this grammar has no auto-resolution
+    search (`R-SIM-4`, ports are named and discovered, never positional
+    OR searched) -- so "considered" cannot mean "an algorithm tried it."
+    Decided to mean the honest, checkable alternative: every earlier
+    ACTIVE stage's own declared output port is a real candidate that
+    COULD have been named in this input's `inputs:` entry, whether or not
+    its type actually matches -- annotated with why it would or would not
+    satisfy this input, so a human choosing a wiring line sees what is on
+    offer rather than a bare refusal. `Source` candidates are deliberately
+    excluded: `Source.emits()` carries no type information (`IMP-0170`'s
+    own separately-deferred gap), so a source port could never be
+    honestly annotated "matches" or "mismatches" here -- listing it
+    without a reason would violate this same row's own Accept clause."""
+    candidates = [
+        f"'{earlier.name}.{output.name}' (type matches)"
+        if output.proto_type == proto_type
+        else f"'{earlier.name}.{output.name}' (produces {output.proto_type!r}, need {proto_type!r})"
+        for earlier in stages[:upto] if earlier.mode != "off"
+        for output in components[earlier.name].manifest.outputs
+    ]
+    return "; ".join(candidates) if candidates else "(no earlier active stage declares any output port)"
+
+
 def _validate_wiring(
     stages: Sequence[Stage], components: Mapping[str, SilComponent], recording: RecordingReader | None,
     source: Source | None = None,
@@ -398,9 +426,11 @@ def _validate_wiring(
             ref = stage.inputs.get(input_spec.name)
             if ref is None:
                 if not input_spec.optional and stage.mode == "simulate":
+                    candidates = _describe_candidates(stages, components, i, input_spec.proto_type)
                     raise AuthoringError(
                         expected=f"stage '{stage.name}' input '{input_spec.name}' to be wired",
-                        found="no entry in inputs:", where=f"stage '{stage.name}'",
+                        found=f"no entry in inputs: -- candidates considered: {candidates}",
+                        where=f"stage '{stage.name}'",
                         hint=f"add inputs: {{{input_spec.name}: source.<name> | <earlier-stage>.<port>}}",
                     )
                 continue
