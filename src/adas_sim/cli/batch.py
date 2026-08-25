@@ -20,6 +20,7 @@ from pathlib import Path
 
 from adas_sim.orchestrate.batch import expand_recordings, run_batch, write_report
 from adas_sim.orchestrate.readerror import ReadError
+from adas_sim.orchestrate.severity import EXIT_ON_CHOICES, parse_exit_on
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -51,6 +52,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--read-retry-bound-s", type=float, default=5.0,
         help="wall-clock bound on retrying a failed recording read (SW-0253)",
     )
+    parser.add_argument(
+        "--exit-on", choices=EXIT_ON_CHOICES, default=None,
+        help="stop launching further entries once one reports a SimError at or above this severity (SW-0128)",
+    )
     return parser
 
 
@@ -70,6 +75,7 @@ def run(argv: list[str] | None = None) -> int:
         recordings, args.pipeline, search=args.search, config=args.config, jobs=args.jobs,
         timeout_s=args.timeout_s, out_dir=args.out_dir, resume=args.resume, memory_limit_mb=args.memory_limit_mb,
         on_read_error=args.on_read_error, read_retry_bound_s=args.read_retry_bound_s,
+        exit_on=parse_exit_on(args.exit_on) if args.exit_on is not None else None,
     )
 
     if args.report is not None:

@@ -182,6 +182,18 @@ def test_read_error_and_reset_policy_round_trip():
     assert default.reset_when == ""
 
 
+def test_error_kind_round_trips():
+    """`IMP-0128`: one more instance of the same distinguish-by-field
+    pattern `cancelled`/`read_error`/`reset_mode` already use."""
+    manifest = build_manifest(run_kind="resim", source_kind="mcap", clock=_CLOCK, outcome="failed", error_kind="contract")
+    assert manifest.error_kind == "contract"
+    restored = manifest_from_dict(manifest_to_dict(manifest))
+    assert restored.error_kind == "contract"
+
+    default = build_manifest(run_kind="sim", source_kind="synthetic", clock=_CLOCK)
+    assert default.error_kind == ""
+
+
 # ---------------------------------------------------------------------------
 # UT-SPC-16 -- SW-0223: a run with zero exporters still writes a manifest
 # ---------------------------------------------------------------------------

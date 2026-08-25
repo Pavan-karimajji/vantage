@@ -218,6 +218,7 @@ def build_manifest(
     read_retry_attempts: int = 0,
     reset_mode: str = "",
     reset_when: str = "",
+    error_kind: str = "",
 ) -> RunManifest:
     """`run_kind` is `"sim"` or `"resim"`; `source_kind` is the `Source.name`.
 
@@ -343,6 +344,7 @@ def build_manifest(
         read_retry_attempts=read_retry_attempts,
         reset_mode=reset_mode,
         reset_when=reset_when,
+        error_kind=error_kind,
         delay_steps=delay_steps,
         grid_step_ns=grid_step_ns,
     )

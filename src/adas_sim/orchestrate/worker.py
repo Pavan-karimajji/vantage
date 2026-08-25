@@ -222,13 +222,25 @@ def main(argv: list[str] | None = None) -> int:
             tick_count = count_ticks(output_path)
             _, last_tick_ns = _checkpoint_result(args.checkpoint_json)
     except SimError as exc:
-        _write_result(args.out_json, outcome="fail", error=str(exc), tick_count=None, last_tick_ns=None)
+        # `IMP-0128`: `exc.kind` is this SimError's own closed taxonomy
+        # value ("authoring"|"environment"|"contract"|"internal") -- the
+        # real event `--exit-on` gates against (`orchestrate/severity.py::
+        # severity_for_kind`), reported as a fact here, evaluated by the
+        # parent (`orchestrate/batch.py`), same distinguish-by-field
+        # pattern `read_error`/`cancelled` already use.
+        _write_result(
+            args.out_json, outcome="fail", error=str(exc), error_kind=exc.kind, tick_count=None, last_tick_ns=None,
+        )
         return 1
     except Exception as exc:  # noqa: BLE001 -- a framework bug is still a clean "fail" report,
         # never a silent process death; only os._exit (the test hook above) or a real
-        # crash inside a C library skips this reporting path entirely.
+        # crash inside a C library skips this reporting path entirely. An uncaught
+        # non-SimError exception IS what InternalError's own docstring describes
+        # ("anything uncaught is this, by definition") -- tagged the same "internal"
+        # kind even though nothing here constructs the class itself.
         _write_result(
-            args.out_json, outcome="fail", error=f"{type(exc).__name__}: {exc}", tick_count=None, last_tick_ns=None,
+            args.out_json, outcome="fail", error=f"{type(exc).__name__}: {exc}", error_kind="internal",
+            tick_count=None, last_tick_ns=None,
         )
         return 1
 

@@ -327,6 +327,11 @@ class RunManifest:
     #: actually happened -- the policy is the real, checkable fact.
     reset_mode: str = ""
     reset_when: str = ""
+    #: `IMP-0128` (`SW-0128`): this run's own caught `SimError.kind`
+    #: (`""` for `ok`, or a failure the worker did not raise a `SimError`
+    #: for) -- `orchestrate.severity.severity_for_kind` maps it to a
+    #: `Severity` for `--exit-on`.
+    error_kind: str = ""
     #: `IMP-0402` (`SW-0402`, `CN-0154`): every wired edge's declared
     #: transport delay, in force for this run -- see `DelayStepRecord`'s own
     #: docstring for what "in force" does and does not claim yet.
@@ -430,6 +435,7 @@ def manifest_to_dict(manifest: RunManifest) -> dict:
         "read_retry_attempts": manifest.read_retry_attempts,
         "reset_mode": manifest.reset_mode,
         "reset_when": manifest.reset_when,
+        "error_kind": manifest.error_kind,
         "delay_steps": [
             {"edge": d.edge, "delay_steps": d.delay_steps} for d in manifest.delay_steps
         ],
@@ -515,6 +521,7 @@ def manifest_from_dict(data: dict) -> RunManifest:
         read_retry_attempts=data.get("read_retry_attempts", 0),
         reset_mode=data.get("reset_mode", ""),
         reset_when=data.get("reset_when", ""),
+        error_kind=data.get("error_kind", ""),
         delay_steps=delay_steps,
         grid_step_ns=data.get("grid_step_ns", 0),
     )

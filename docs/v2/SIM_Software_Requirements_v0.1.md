@@ -1509,7 +1509,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** A headless run shall accept a configured severity at which it terminates early — exception · error · alert · warning — with the threshold recorded in the run manifest.
 **Accept.** Each threshold is individually demonstrable. The run's exit code reflects the triggering severity, and the manifest states the run ended early and why.
 **Verify.** T · `UT-ERR-06`   **Trace.** SYS-0125, SYS-0193; **evidence** §2.6
-**Built.** ◐ started — `IMP-0128` in `WP-23`
+**Built.** ● done — `IMP-0128` in `WP-23`
 **Now.** `NEW`.
 
 **`SW-0129`** · `SI-07` · `P0` · `R1` — Console encoding is forced at every entry point

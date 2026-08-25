@@ -46,6 +46,32 @@ class SeverityVerdict:
     exit_code: int
 
 
+#: `IMP-0128`: the real event source, decided 2026-08-25 -- every
+#: `diagnostics.errors.SimError.kind` maps to a `Severity`, so a caught
+#: exception's own already-closed taxonomy is what `--exit-on` gates
+#: against, rather than inventing a second, parallel event vocabulary.
+#: `"authoring"` (a config mistake, usually isolated to one recording) is
+#: the mildest; `"internal"` (a framework bug, `InternalError`'s own
+#: "anything uncaught is this by definition") is the worst. Nothing maps to
+#: `WARNING` -- no `SimError` kind is ever merely a warning (a raised
+#: exception already ended that run); `--exit-on warning` still works
+#: correctly (`evaluate`/`observe`'s own `>=` comparison), it simply never
+#: sees an event AT that level from this source.
+_SEVERITY_OF_KIND = {
+    "authoring": Severity.ALERT,
+    "environment": Severity.ERROR,
+    "contract": Severity.ERROR,
+    "internal": Severity.EXCEPTION,
+}
+
+
+def severity_for_kind(kind: str) -> Severity | None:
+    """`None` for an empty or unrecognized `kind` (no error occurred, or a
+    kind outside the closed `SimError` taxonomy) -- never a guessed
+    severity (`R-SIM-25`)."""
+    return _SEVERITY_OF_KIND.get(kind)
+
+
 def parse_exit_on(value: str) -> Severity:
     """Raises `KeyError`-shaped `ValueError` naming the bad value and the
     closed set, rather than defaulting -- `SW-0128`'s "threshold... with no

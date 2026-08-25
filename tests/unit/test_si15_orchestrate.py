@@ -662,6 +662,82 @@ def test_a_cancelled_job_s_manifest_carries_cancelled_true(tmp_path):
     assert data["outcome"] == "failed"
 
 
+def _missing_library_pipeline(tmp_path: Path, filename: str = "missing_lib.yaml") -> Path:
+    """Deterministic `EnvironmentError_` trigger (kind `"environment"`,
+    `IMP-0128`'s own `ERROR` mapping) -- `impl: dll:` naming a stem no
+    directory can resolve raises from `resolve_library` itself, with no
+    real component build needed and no dependence on this environment's
+    own `simengine`/`echo_stub` state."""
+    path = tmp_path / filename
+    path.write_text(
+        "version: 1\nname: missing_lib_test\nstages:\n"
+        "  - name: sut\n    mode: simulate\n    impl: \"dll:no_such_stem_anywhere\"\n    inputs: {}\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_a_missing_library_reports_environment_error_kind(tmp_path):
+    """`IMP-0128`: `orchestrate/worker.py`'s own caught `SimError.kind`
+    reaches `RecordingOutcome.error_kind` -- a real trigger (`resolve_library`
+    raising `EnvironmentError_`), not a mocked one."""
+    pipeline = _missing_library_pipeline(tmp_path)
+    results = run_batch([_TINY], pipeline, timeout_s=15.0)
+    assert results[0].error_kind == "environment"
+    assert results[0].outcome == "fail"
+
+
+def test_exit_on_stops_a_still_running_job_when_one_entry_s_severity_meets_the_threshold(tmp_path):
+    """`IMP-0128`: `exit_on` reaches beyond the failing entry the same way
+    `on_read_error="abort_batch"` does -- reusing `IMP-0235`'s `CancelToken`
+    machinery (auto-created here since the caller supplied none), the
+    failing entry's own `error_kind` (`"environment"` -> `Severity.ERROR`)
+    meets `exit_on=Severity.ERROR` and cancels the shared token, which the
+    second entry's own poll loop picks up and terminates on."""
+    pipeline = _missing_library_pipeline(tmp_path)
+    results = run_batch(
+        [_TINY, _TINY], pipeline, exit_on=severity.Severity.ERROR, jobs=1, timeout_s=15.0,
+    )
+    assert results[0].error_kind == "environment"
+    assert results[1].cancelled is True
+
+
+def test_exit_on_does_not_fire_below_its_own_threshold(tmp_path):
+    """The mirror case: `exit_on=Severity.EXCEPTION` is ABOVE `"environment"`'s
+    own `ERROR` mapping, so an environment failure never triggers it -- the
+    second entry runs for real (never cancelled)."""
+    pipeline = _missing_library_pipeline(tmp_path)
+    results = run_batch(
+        [_TINY, _TINY], pipeline, exit_on=severity.Severity.EXCEPTION, jobs=1, timeout_s=15.0,
+    )
+    assert results[0].error_kind == "environment"
+    assert results[1].cancelled is False
+
+
+def test_a_missing_pipeline_file_reports_internal_error_kind(tmp_path):
+    """`IMP-0128`: an uncaught non-`SimError` exception (here, `Pipeline.load`
+    reading a pipeline file that does not exist) is tagged `"internal"` --
+    `InternalError`'s own docstring: "anything uncaught is this, by
+    definition" -- even though nothing here constructs that class."""
+    missing_pipeline = tmp_path / "does_not_exist.yaml"
+    results = run_batch([_TINY], missing_pipeline, timeout_s=15.0)
+    assert results[0].error_kind == "internal"
+
+
+def test_the_manifest_carries_error_kind(tmp_path):
+    from adas_sim.runspec.manifest import RUN_MANIFEST_FILENAME
+
+    out_dir = tmp_path / "artifacts"
+    out_dir.mkdir()
+    pipeline = _missing_library_pipeline(tmp_path)
+
+    run_batch([_TINY], pipeline, out_dir=out_dir, timeout_s=15.0)
+
+    manifest_path = out_dir / "manifest" / "0000_tiny" / RUN_MANIFEST_FILENAME
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert data["error_kind"] == "environment"
+
+
 def test_a_zero_threshold_watchdog_terminates_the_job_and_names_which_one(tmp_path):
     """`IMP-0246`/`IMP-0247`: a `WatchdogThresholds` with an effectively-zero
     processing threshold fires on the first poll tick (the subprocess has

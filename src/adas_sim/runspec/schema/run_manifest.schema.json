@@ -9,7 +9,7 @@
     "source_kind", "project", "components", "overrides", "record_policies",
     "faults", "bundle_overrides", "run_spec_sha256", "coherence_verdict",
     "coherence_findings", "divergence", "outcome", "last_completed_cycle", "cancelled",
-    "read_error", "read_retry_attempts", "reset_mode", "reset_when",
+    "read_error", "read_retry_attempts", "reset_mode", "reset_when", "error_kind",
     "delay_steps", "grid_step_ns", "seed", "allow_mixed_projects", "process_nonce"
   ],
   "properties": {
@@ -117,6 +117,7 @@
     "read_retry_attempts": {"type": "integer", "minimum": 0},
     "reset_mode": {"enum": ["", "none", "reset", "reset_init"]},
     "reset_when": {"enum": ["", "batch", "entry", "section"]},
+    "error_kind": {"enum": ["", "authoring", "environment", "contract", "internal"]},
     "delay_steps": {
       "type": "array",
       "items": {

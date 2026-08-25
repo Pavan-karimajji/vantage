@@ -1242,7 +1242,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The system shall return distinct, documented exit codes for at least: success, configuration error, coherence violation, module failure, input or integrity error, and infrastructure error — identical on both platforms.
 **Accept.** Each is produced by a crafted case; the set is closed and published; the same case yields the same code on both operating systems.
 **Verify.** T · `SYT-OUT-14`   **Trace.** CN-0115, CN-0202, CN-0248
-**Built.** ◐ started — 1/3 software requirements done, in `WP-03`, `WP-14`, `WP-23`
+**Built.** ◐ started — 2/3 software requirements done, in `WP-03`, `WP-14`, `WP-23`
 
 **`SYS-0126`** · `P0` · `R1` — Structured logs from a closed vocabulary
 **Shall.** The system shall emit structured logs from a closed event vocabulary, with a human-readable console option, and console encoding shall be forced at every entry point.
@@ -1656,7 +1656,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The behaviour on a read error shall be configurable as stop / skip entry / abort batch / skip the damaged package and continue; skipped packages shall be counted, reported, and shall flag the run.
 **Accept.** Each behaviour is demonstrable; a run that skipped packages cannot be mistaken for a clean one.
 **Verify.** T · `SYT-BAT-13`   **Trace.** CN-0198, CN-0199
-**Built.** ◐ started — 0/4 software requirements done, in `WP-19`, `WP-23`
+**Built.** ◐ started — 1/4 software requirements done, in `WP-19`, `WP-23`
 
 **`SYS-0194`** · `P1` · `R1` — Shared index caches
 **Shall.** Index caches shall be shared across a batch.

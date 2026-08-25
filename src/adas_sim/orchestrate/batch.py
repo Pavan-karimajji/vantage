@@ -47,6 +47,7 @@ from adas_sim.orchestrate import watchdog as _watchdog
 from adas_sim.orchestrate.progress import CancelToken, ProgressSink
 from adas_sim.orchestrate.readerror import ReadError
 from adas_sim.orchestrate.reset import DEFAULT_RESET_POLICY, ResetPolicy, should_reset_before
+from adas_sim.orchestrate.severity import Severity, severity_for_kind
 from adas_sim.plugins.registry import reader_for
 from adas_sim.resolve.probe import describe_recording
 from adas_sim.runspec.manifest import ResolvedRunConfig, build_manifest, resolve_swept_config, write_manifest
@@ -102,6 +103,12 @@ class RecordingOutcome:
     #: own invariant).
     read_error: str = ""
     read_retry_attempts: int = 0
+    #: `IMP-0128` (`SW-0128`): the worker's own caught `SimError.kind`
+    #: (`""` for `ok`, or any failure the worker did not raise a `SimError`
+    #: for -- e.g. `simengine` itself reporting a non-zero exit, which is
+    #: not a Python exception). `orchestrate/severity.py::severity_for_kind`
+    #: maps this to a `Severity` for `--exit-on`.
+    error_kind: str = ""
 
 
 def expand_recordings(args: Sequence[str]) -> list[Path]:
@@ -180,6 +187,7 @@ def _classify(
             tick_count=result.get("tick_count"), last_tick_ns=result.get("last_tick_ns"),  # type: ignore[arg-type]
             error=str(result.get("error", "")), stderr_excerpt=proc.stderr[-_STDERR_EXCERPT_BYTES:],
             read_error=str(result.get("read_error", "")), read_retry_attempts=int(result.get("read_retry_attempts", 0)),  # type: ignore[arg-type]
+            error_kind=str(result.get("error_kind", "")),
         )
 
     # No readable, self-reported outcome: the process died before it could
@@ -228,6 +236,7 @@ def _write_outcome_manifest(
         cancelled=outcome.cancelled,
         read_error=outcome.read_error, read_retry_attempts=outcome.read_retry_attempts,
         reset_mode=reset_policy.mode.value, reset_when=reset_policy.when.value,
+        error_kind=outcome.error_kind,
     )
     write_manifest(manifest, out_dir / "manifest" / f"{index:04d}_{recording.stem}")
 
@@ -253,6 +262,7 @@ def _load_completed(out_json: Path, recording: Path) -> RecordingOutcome | None:
         tick_count=data.get("tick_count"), last_tick_ns=data.get("last_tick_ns"),
         error=str(data.get("error", "")),
         read_error=str(data.get("read_error", "")), read_retry_attempts=int(data.get("read_retry_attempts", 0)),
+        error_kind=str(data.get("error_kind", "")),
     )
 
 
@@ -262,7 +272,7 @@ def _launch_worker(
     progress: ProgressSink | None = None, cancel: CancelToken | None = None,
     watchdogs: _watchdog.WatchdogThresholds | None = None,
     on_read_error: str = ReadError.SKIP_ENTRY.value, read_retry_bound_s: float = 5.0,
-    reset_policy: ResetPolicy = DEFAULT_RESET_POLICY,
+    reset_policy: ResetPolicy = DEFAULT_RESET_POLICY, exit_on: Severity | None = None,
 ) -> RecordingOutcome:
     index, recording = entry
     out_json, checkpoint_json = _entry_paths(out_dir, index, recording)
@@ -339,6 +349,19 @@ def _launch_worker(
         # so the polling path (never the `subprocess.run` fast path above)
         # is always what runs when this branch can fire.
         cancel.cancel()
+
+    if exit_on is not None and cancel is not None:
+        # `IMP-0128`: same reuse of `IMP-0235`'s cancel machinery as
+        # `abort_batch` above -- this job's own `error_kind` (its worker's
+        # caught `SimError.kind`, or `"internal"` for an uncaught one) maps
+        # to a `Severity`; at or above `exit_on`, cancel the shared token so
+        # every other in-flight/not-yet-started job stops at its own next
+        # poll tick. `run_batch` guarantees `cancel is not None` whenever a
+        # caller supplies `exit_on` (auto-created if not supplied), exactly
+        # as it does for `abort_batch`.
+        severity = severity_for_kind(result.error_kind)
+        if severity is not None and severity >= exit_on:
+            cancel.cancel()
 
     _write_outcome_manifest(out_dir, index, recording, pipeline_path, result, reset_policy=reset_policy)
     return result
@@ -500,7 +523,7 @@ def run_batch(
     watchdogs: _watchdog.WatchdogThresholds | None = None,
     recording_index_cache: dict[Path, RecordingIndex] | None = None,
     on_read_error: str = ReadError.SKIP_ENTRY.value, read_retry_bound_s: float = 5.0,
-    reset_policy: ResetPolicy = DEFAULT_RESET_POLICY,
+    reset_policy: ResetPolicy = DEFAULT_RESET_POLICY, exit_on: Severity | None = None,
 ) -> list[RecordingOutcome]:
     """Runs `pipeline_path` -- the SAME file `sim resim` would take,
     unmodified (`R-SIM-16`, `ST-D7-3`) -- against every recording in
@@ -571,6 +594,12 @@ def run_batch(
                 raise RuntimeError(f"on-read-error=stop: {recording} unreadable: {type(exc).__name__}: {exc}") from exc
     if on_read_error == ReadError.ABORT_BATCH.value and cancel is None:
         cancel = CancelToken()
+    if exit_on is not None and cancel is None:
+        # `IMP-0128`: same "force the polling path" reasoning `abort_batch`
+        # above already uses -- a caller asking for `exit_on` gets the
+        # cancel machinery even if they supplied none of `progress`/
+        # `cancel`/`watchdogs`/`memory_limit_mb` themselves.
+        cancel = CancelToken()
 
     if recording_index_cache is not None:
         for recording in recordings:
@@ -583,6 +612,7 @@ def run_batch(
             timeout_s=timeout_s, test_stub_echo=tuple(test_stub_echo), out_dir=out_dir, resume=resume,
             memory_limit_mb=memory_limit_mb, progress=progress, cancel=cancel, watchdogs=watchdogs,
             on_read_error=on_read_error, read_retry_bound_s=read_retry_bound_s, reset_policy=reset_policy,
+            exit_on=exit_on,
         )
         with ThreadPoolExecutor(max_workers=max(1, jobs)) as executor:
             return list(executor.map(worker, enumerate(recordings)))
@@ -593,6 +623,7 @@ def run_batch(
             timeout_s=timeout_s, test_stub_echo=tuple(test_stub_echo), out_dir=Path(tmp_dir), resume=False,
             memory_limit_mb=memory_limit_mb, progress=progress, cancel=cancel, watchdogs=watchdogs,
             on_read_error=on_read_error, read_retry_bound_s=read_retry_bound_s, reset_policy=reset_policy,
+            exit_on=exit_on,
         )
         with ThreadPoolExecutor(max_workers=max(1, jobs)) as executor:
             return list(executor.map(worker, enumerate(recordings)))
