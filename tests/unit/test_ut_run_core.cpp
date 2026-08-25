@@ -532,6 +532,59 @@ TEST(UtRun07Checkpoint, AnAbortedRunLeavesACheckpointAgreeingWithTheLastCycleInT
   std::filesystem::remove(progress);
 }
 
+// `IMP-0224` (`SW-0224`): the checkpoint carries the run's first
+// divergence, the same way it already carries the last completed cycle --
+// a supervisor process reads BOTH from the one file, without needing the
+// crashed child's own return value (which a real crash never produces).
+TEST(UtRun07Checkpoint, ProgressJsonCarriesTheFirstDivergenceOnceLatched) {
+  StubComponent stub("outputs");
+  ASSERT_TRUE(stub.ok());
+  // Same fixture UT-RUN-05 uses: the recording claims an output the stub
+  // never produces, from cycle 0.
+  Harness h(4, {0x01, 0x02});
+  const std::filesystem::path progress =
+      std::filesystem::temp_directory_path() / "simcore_ut_run_07_divergence_progress.json";
+  std::filesystem::remove(progress);
+
+  Checkpoint checkpoint(progress, h.spec.run_id);
+  auto constructed = Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base);
+  ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
+  Runner runner = std::move(constructed).value();
+  runner.SetCheckpoint(&checkpoint);
+  ASSERT_TRUE(runner.Run().ok());
+
+  auto record = Checkpoint::Read(progress);
+  ASSERT_TRUE(record.ok()) << record.error().Format();
+  EXPECT_TRUE(record.value().has_divergence);
+  EXPECT_EQ(record.value().divergence_tick_index, 0u);
+  EXPECT_EQ(record.value().divergence_log_time_ns, 0);
+  EXPECT_EQ(record.value().divergence_stage, "sut");
+  EXPECT_EQ(record.value().divergence_port, "outputs");
+  EXPECT_EQ(record.value().divergence_differing_bytes, 2u);
+  std::filesystem::remove(progress);
+}
+
+TEST(UtRun07Checkpoint, ProgressJsonHasNoDivergenceFieldWhenNothingEverDiverged) {
+  StubComponent stub("outputs");
+  ASSERT_TRUE(stub.ok());
+  Harness h(3);  // the default recorded payload matches the stub's own output -- no divergence
+  const std::filesystem::path progress =
+      std::filesystem::temp_directory_path() / "simcore_ut_run_07_no_divergence_progress.json";
+  std::filesystem::remove(progress);
+
+  Checkpoint checkpoint(progress, h.spec.run_id);
+  auto constructed = Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base);
+  ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
+  Runner runner = std::move(constructed).value();
+  runner.SetCheckpoint(&checkpoint);
+  ASSERT_TRUE(runner.Run().ok());
+
+  auto record = Checkpoint::Read(progress);
+  ASSERT_TRUE(record.ok()) << record.error().Format();
+  EXPECT_FALSE(record.value().has_divergence);  // R-SIM-25: absent, never a guessed zero-tick divergence
+  std::filesystem::remove(progress);
+}
+
 // `IMP-0139`: the per-port input capture `WriteReproducer`'s own
 // `ReproducerInput::input_capture` needs, persisted by the SAME
 // `Checkpoint` that already survives a crash for `progress.json` -- a

@@ -89,6 +89,73 @@ def test_sim_resim_cli_runs_a_real_stage_through_simengine(tmp_path, monkeypatch
         reader.close()
 
 
+def _write_recording_with_wrong_recorded_output(path: Path) -> None:
+    """Same three-tick heartbeat grid `_write_heartbeat_recording` writes,
+    PLUS a `/sut/outputs` topic at every tick carrying a single `0xFF`
+    byte -- a payload `echo_stub`'s own real, deterministic output
+    (`EncodeAbiTestPort`'s encoding of `ADAS_SIL_TEST_STUB_OUTPUT_VALUE`,
+    several bytes, never one raw `0xFF`) cannot coincidentally match, so a
+    real run through the real engine genuinely diverges at tick 0 --
+    `IMP-0224`'s own end-to-end fixture, not a mocked latch."""
+    writer = writer_for(path)
+    writer.open(
+        path, meta=RunManifest(),
+        topics={
+            "/dummy/heartbeat": TopicInfo(schema_name="test.Heartbeat", provenance=Provenance.MEASURED),
+            "/sut/outputs": TopicInfo(schema_name="test.Echo", provenance=Provenance.MEASURED),
+        },
+    )
+    for t_ns in (0, 10_000_000, 20_000_000):
+        writer.write("/dummy/heartbeat", t_ns, b"\x01", capture_time_ns=t_ns)
+        writer.write("/sut/outputs", t_ns, b"\xff", capture_time_ns=t_ns)
+    writer.close()
+
+
+def test_sim_resim_cli_save_carries_a_real_divergence_in_its_manifest(tmp_path, monkeypatch, capsys):
+    """`IMP-0224` (`SW-0224`): `simcore::runner::DivergenceLatch`'s first
+    observed divergence, plumbed through `checkpoint.cpp`'s `progress.json`
+    and `orchestrate.batch.read_checkpoint_divergence`, reaches the
+    `--save`'d manifest's own `divergence` field -- real, through the real
+    `simengine` executable, not a Python-side simulation of the C++ latch."""
+    stub_path = _require_engine_and_stub()
+
+    monkeypatch.setenv("ADAS_SIL_TEST_STUB_NAME", "echo_stub")
+    monkeypatch.setenv("ADAS_SIL_TEST_STUB_PERIOD_NS", "10000000")
+    monkeypatch.setenv("ADAS_SIL_TEST_STUB_OUTPUT_PORT", "outputs")
+    monkeypatch.setenv("ADAS_SIL_TEST_STUB_OUTPUT_PROTO_TYPE", "test.Echo")
+    monkeypatch.setenv("ADAS_SIL_TEST_STUB_OUTPUT_MAX_BYTES", "64")
+
+    lib_dir = tmp_path / "lib"
+    lib_dir.mkdir()
+    stub_copy = lib_dir / ("echo_stub" + stub_path.suffix)
+    stub_copy.write_bytes(stub_path.read_bytes())
+
+    pipeline_path = tmp_path / "pipeline.yaml"
+    pipeline_path.write_text(
+        "name: cli_resim_divergence_test\nstages:\n"
+        "  - name: sut\n    mode: simulate\n    impl: dll:echo_stub\n    inputs: {}\n",
+        encoding="utf-8",
+    )
+    recording_path = tmp_path / "in.mcap"
+    _write_recording_with_wrong_recorded_output(recording_path)
+    save_path = tmp_path / "out.mcap"
+
+    exit_code = resim_run([
+        str(recording_path), "--pipeline", str(pipeline_path), "--search", str(lib_dir),
+        "--save", str(save_path),
+    ])
+
+    assert exit_code == 0
+    reader = reader_for(save_path)
+    try:
+        divergence = reader.meta().divergence
+    finally:
+        reader.close()
+    assert divergence != "unknown"
+    assert "tick 0" in divergence
+    assert "'sut.outputs'" in divergence
+
+
 def test_sim_resim_cli_without_save_still_reports_ticks_and_cleans_up(tmp_path, monkeypatch, capsys):
     stub_path = _require_engine_and_stub()
 

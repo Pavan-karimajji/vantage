@@ -165,6 +165,34 @@ def read_checkpoint_tick(checkpoint_json: Path) -> tuple[int | None, int | None]
     return data.get("last_completed_tick_index"), data.get("last_completed_log_time_ns")
 
 
+def read_checkpoint_divergence(checkpoint_json: Path) -> str | None:
+    """`IMP-0224` (`SW-0224`): the same `progress.json` `read_checkpoint_tick`
+    reads, now also carrying `simcore::runner::DivergenceLatch`'s own first-
+    observed divergence (`Checkpoint::RecordDivergence`, `checkpoint.cpp`).
+    Returns `None` -- never a guessed "no divergence" -- when the file is
+    missing/unreadable/torn or simply carries no `divergence_tick_index`
+    key (a run that never diverged, or one from before this field existed);
+    the caller's own `RunManifest.divergence` default (`"unknown"`)
+    already means exactly that (`R-SIM-25`). A real divergence renders as
+    one human-readable line, the same "render once, in Python" pattern
+    `graph.coherence.render_finding` already uses for coherence findings --
+    the C++ side stays a raw-fact writer, never a text formatter."""
+    if not checkpoint_json.is_file():
+        return None
+    try:
+        data = json.loads(checkpoint_json.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    tick_index = data.get("divergence_tick_index")
+    if tick_index is None:
+        return None
+    stage = data.get("divergence_stage", "")
+    port = data.get("divergence_port", "")
+    log_time_ns = data.get("divergence_log_time_ns", 0)
+    differing_bytes = data.get("divergence_differing_bytes", 0)
+    return f"tick {tick_index} (log_time {log_time_ns}ns): '{stage}.{port}' differs by {differing_bytes} byte(s)"
+
+
 def _classify(
     recording: Path, proc: subprocess.CompletedProcess[str] | None, out_json: Path, checkpoint_json: Path,
     duration_s: float, *, timed_out: bool, timeout_stderr: str,

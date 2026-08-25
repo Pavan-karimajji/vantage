@@ -150,6 +150,17 @@ void Checkpoint::RecordCompleted(std::uint64_t tick_index, std::int64_t log_time
   }
 }
 
+void Checkpoint::RecordDivergence(const Divergence& divergence) {
+  if (pending_.has_divergence) return;  // sticky: the first one only, never replaced
+  pending_.has_divergence = true;
+  pending_.divergence_tick_index = divergence.tick_index;
+  pending_.divergence_log_time_ns = divergence.log_time_ns;
+  pending_.divergence_stage = divergence.stage;
+  pending_.divergence_port = divergence.port;
+  pending_.divergence_differing_bytes = divergence.differing_bytes;
+  Write();
+}
+
 void Checkpoint::Flush() {
   if (!pending_.completed) return;  // nothing has completed: never claim a cycle
   Write();
@@ -168,7 +179,17 @@ void Checkpoint::Write() {
     out << "  \"run_id\": \"" << JsonEscape(pending_.run_id) << "\",\n";
     out << "  \"last_completed_tick_index\": " << pending_.tick_index << ",\n";
     out << "  \"last_completed_log_time_ns\": " << pending_.log_time_ns << ",\n";
-    out << "  \"completed\": " << (pending_.completed ? "true" : "false") << "\n";
+    out << "  \"completed\": " << (pending_.completed ? "true" : "false");
+    if (pending_.has_divergence) {
+      out << ",\n";
+      out << "  \"divergence_tick_index\": " << pending_.divergence_tick_index << ",\n";
+      out << "  \"divergence_log_time_ns\": " << pending_.divergence_log_time_ns << ",\n";
+      out << "  \"divergence_stage\": \"" << JsonEscape(pending_.divergence_stage) << "\",\n";
+      out << "  \"divergence_port\": \"" << JsonEscape(pending_.divergence_port) << "\",\n";
+      out << "  \"divergence_differing_bytes\": " << pending_.divergence_differing_bytes << "\n";
+    } else {
+      out << "\n";
+    }
     out << "}\n";
     out.flush();
   }
@@ -255,6 +276,18 @@ Result<CheckpointRecord> Checkpoint::Read(const std::filesystem::path& path) {
     record.log_time_ns = static_cast<std::int64_t>(std::stoll(value));
   }
   if (FindValue(text, "completed", value)) record.completed = (value == "true");
+  if (FindValue(text, "divergence_tick_index", value)) {
+    record.has_divergence = true;
+    record.divergence_tick_index = static_cast<std::uint64_t>(std::stoull(value));
+  }
+  if (FindValue(text, "divergence_log_time_ns", value)) {
+    record.divergence_log_time_ns = static_cast<std::int64_t>(std::stoll(value));
+  }
+  if (FindValue(text, "divergence_stage", value)) record.divergence_stage = value;
+  if (FindValue(text, "divergence_port", value)) record.divergence_port = value;
+  if (FindValue(text, "divergence_differing_bytes", value)) {
+    record.divergence_differing_bytes = static_cast<std::size_t>(std::stoull(value));
+  }
   return Result<CheckpointRecord>::Ok(record);
 }
 

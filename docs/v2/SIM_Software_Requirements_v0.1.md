@@ -2273,7 +2273,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** The manifest shall carry the coherence classification and the divergence point, so a downstream consumer reading only the manifest can determine whether the run was physically valid and up to which time.
 **Accept.** Both fields are present in every manifest, each a value or explicit *unknown*.
 **Verify.** T · `UT-SPC-17`   **Trace.** SYS-0107, SYS-0092
-**Built.** ◐ started — `IMP-0224` in `WP-22`
+**Built.** ● done — `IMP-0224` in `WP-22`
 **Now.** `NEW`.
 
 **`SW-0225`** · `SI-14` · `P1` · `R1` — Recording volume is estimated before it is produced

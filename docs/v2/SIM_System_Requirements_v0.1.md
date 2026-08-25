@@ -1030,7 +1030,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** A broken chain shall be waivable only with an explicit flag *and* a written reason, and a waived run shall be permanently marked incoherent in the run manifest, in every export, and visibly in the player.
 **Accept.** No code path waives without both. The mark survives export, conversion and re-import.
 **Verify.** T · `SYT-STG-12`   **Trace.** CN-0125, CN-0126
-**Built.** ◐ started — 1/2 software requirements done, in `WP-20`, `WP-22`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0093`** · `P1` · `R1` — Waivers can be forbidden by policy
 **Shall.** A policy setting shall be able to forbid waivers entirely.
@@ -1124,7 +1124,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** The run manifest shall carry both the coherence classification and the divergence point.
 **Accept.** A downstream KPI consumer reading only the manifest can determine whether the run was physically valid and up to which time.
 **Verify.** T · `SYT-STG-26`   **Trace.** CN-0114
-**Built.** ◐ started — 1/2 software requirements done, in `WP-13`, `WP-22`
+**Built.** ● done — 2/2 software requirements done
 
 **`SYS-0108`** · `P2` · `DEF` — Ego re-integration
 **Shall.** The system shall optionally propagate ego pose from simulated actuation and transform recorded object data into the new ego frame, labelled as an approximation.

@@ -502,6 +502,14 @@ Result<bool> Runner::StepOnce() {
     for (const auto& [qualified_port, value] : delivered_req_) inputs_this_cycle[qualified_port] = value.payload;
     checkpoint_->RecordInputs(inputs_this_cycle);
     checkpoint_->RecordCompleted(tick_index, t_ns, bytes_written_this_cycle);
+    // IMP-0224: AFTER RecordCompleted, not before -- so if this is the
+    // cycle divergence first latches, the same write that carries it also
+    // carries THIS cycle's own completed tick_index/log_time_ns, not the
+    // previous cycle's (RecordDivergence's own Write() is immediate,
+    // independent of RecordCompleted's bounded flush schedule). A no-op on
+    // every cycle after the first divergence (RecordDivergence's own
+    // idempotence).
+    if (outcome_.divergence.has_value()) checkpoint_->RecordDivergence(*outcome_.divergence);
   }
 
   scheduler_->Advance();

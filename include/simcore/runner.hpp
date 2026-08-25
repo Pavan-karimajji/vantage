@@ -174,6 +174,20 @@ struct CheckpointRecord {
   std::uint64_t tick_index = 0;
   std::int64_t log_time_ns = 0;
   bool completed = false;  // false in a file written before any cycle completed
+
+  // IMP-0224 (SW-0224): the run's first observed divergence, if any --
+  // `has_divergence` is the explicit presence flag (R-SIM-25: never
+  // inferred from `divergence_tick_index == 0`, which is also tick 0's own
+  // real value). Mirrors `simcore::runner::Divergence`'s own fields; kept
+  // as plain scalars here rather than an `std::optional<Divergence>`
+  // member so this struct's shape stays exactly what the hand-rolled JSON
+  // reader/writer below can round-trip with no nested-object parsing.
+  bool has_divergence = false;
+  std::uint64_t divergence_tick_index = 0;
+  std::int64_t divergence_log_time_ns = 0;
+  std::string divergence_stage;
+  std::string divergence_port;
+  std::size_t divergence_differing_bytes = 0;
 };
 
 class Checkpoint {
@@ -209,6 +223,19 @@ class Checkpoint {
   // inside that call -- calling this afterward pairs the wrong cycle's
   // capture with `progress.json` (off by one, found live).
   void RecordInputs(const std::map<std::string, std::vector<std::uint8_t>>& delivered_this_cycle);
+
+  // IMP-0224 (SW-0224): records the run's first observed divergence into
+  // the SAME `progress.json` this class already owns -- a dedicated
+  // cross-process channel already exists (`SW-0119`'s own reason for
+  // being), so this is one more sticky field on it, not a second
+  // mechanism. Written immediately (bypasses the bounded flush schedule
+  // `RecordCompleted` uses) -- unlike a routine completed cycle, a
+  // divergence is rare and worth persisting the instant it is known.
+  // **Idempotent:** a second call is a silent no-op, matching
+  // `DivergenceLatch`'s own "latches the first, never replaces it" --
+  // the caller is expected to call this every cycle once latched (cheap,
+  // since only the first call does any work).
+  void RecordDivergence(const Divergence& divergence);
 
   // Forced write regardless of the accumulated bounds; always safe.
   void Flush();

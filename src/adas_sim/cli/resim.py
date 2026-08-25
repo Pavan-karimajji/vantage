@@ -37,6 +37,7 @@ from adas_sim.runspec.manifest import (
     verify_pinned_builds,
 )
 from adas_sim.engine.bridge import count_ticks, overwrite_manifest_meta
+from adas_sim.orchestrate.batch import read_checkpoint_divergence
 from adas_sim.orchestrate.run import invoke_engine
 
 
@@ -112,10 +113,20 @@ def run(argv: list[str] | None = None) -> int:
         os.close(fd)  # the writer (a separate simengine process) opens this path itself
         output_path = Path(tmp_name)
         cleanup_output = True
+    # `IMP-0224`: only `--save`'s own manifest reads this back
+    # (`read_checkpoint_divergence` below) -- allocated only in that case,
+    # same "an unsaved run pays for nothing extra" discipline `output_path`
+    # itself already follows.
+    checkpoint_path = None
+    if args.save:
+        checkpoint_fd, checkpoint_name = tempfile.mkstemp(suffix=".json", prefix="sim_resim_progress_")
+        os.close(checkpoint_fd)  # simengine opens this path itself, same as output_path above
+        checkpoint_path = Path(checkpoint_name)
     try:
         run_id = f"resim-{args.pipeline.stem}-{recording.stem}"
         result = invoke_engine(
             pipeline, recording, run_id=run_id, output_path=output_path, config_path=config,
+            checkpoint_path=checkpoint_path,
         )
         if not result.ok:
             raise AuthoringError(
@@ -133,11 +144,12 @@ def run(argv: list[str] | None = None) -> int:
             # overwrites the recording's meta. Only a --save'd recording
             # is patched, matching the pre-WP-15b behavior (a temp/
             # cleanup-only output is never read again).
+            divergence = read_checkpoint_divergence(checkpoint_path) if checkpoint_path is not None else None
             meta = build_manifest(
                 pipeline=pipeline, pipeline_path=args.pipeline, run_kind="resim", source_kind="mcap",
                 project=project, recording_path=recording, component_build_shas=pipeline.component_build_shas(),
                 bundle_overrides=spec.overrides, base_bundle_sha=resolved.base_bundle_sha,
-                run_spec_sha256=result.spec_sha256,
+                run_spec_sha256=result.spec_sha256, divergence=divergence if divergence is not None else "unknown",
             )
             # build_manifest's own process_nonce is a module-level constant
             # (runspec/manifest.py::_PROCESS_NONCE) scoped to the PYTHON
@@ -160,6 +172,10 @@ def run(argv: list[str] | None = None) -> int:
         if cleanup_output:
             output_path.unlink(missing_ok=True)
             output_path.with_suffix(output_path.suffix + ".spec.json").unlink(missing_ok=True)
+        if checkpoint_path is not None:
+            checkpoint_path.unlink(missing_ok=True)
+            capture_dir = checkpoint_path.parent / (checkpoint_path.name + "_input_capture")
+            shutil.rmtree(capture_dir, ignore_errors=True)
 
     print(f"resim complete: {tick_count} tick(s)")
     return 0
