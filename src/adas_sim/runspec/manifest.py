@@ -213,6 +213,7 @@ def build_manifest(
     divergence: str = "unknown",
     outcome: str = "completed",
     last_completed_cycle: int = -1,
+    cancelled: bool = False,
 ) -> RunManifest:
     """`run_kind` is `"sim"` or `"resim"`; `source_kind` is the `Source.name`.
 
@@ -247,6 +248,9 @@ def build_manifest(
         - `outcome`/`last_completed_cycle` (`IMP-0222`) let a caller writing this
           manifest from a `finally` after a crash or timeout state which of the
           four outcomes happened and how far the run actually got.
+        - `cancelled` (`IMP-0235`) states whether a `CancelToken` ended this run --
+          `outcome` still reports one of the closed four values (`"failed"` for a
+          cancelled run, `R-SIM-19`), distinguished here instead.
 
     """
     component_build_shas = component_build_shas or {}
@@ -322,6 +326,7 @@ def build_manifest(
         divergence=divergence,
         outcome=outcome,
         last_completed_cycle=last_completed_cycle,
+        cancelled=cancelled,
         delay_steps=delay_steps,
         grid_step_ns=grid_step_ns,
     )

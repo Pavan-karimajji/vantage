@@ -585,6 +585,28 @@ def test_a_pre_cancelled_token_terminates_the_job_and_is_reported_distinctly(tmp
     assert results[0].outcome == "fail"
 
 
+def test_a_cancelled_job_s_manifest_carries_cancelled_true(tmp_path):
+    """`IMP-0235`'s own manifest half: `RecordingOutcome.cancelled` reaches
+    the on-disk `run_manifest.json` through `_write_outcome_manifest` ->
+    `build_manifest(cancelled=...)` -- the same fact this test's sibling
+    above checks at the batch-report layer, checked here at the manifest
+    layer `IMP-0235`'s own "Closed by" named as the remaining gap."""
+    from adas_sim.runspec.manifest import RUN_MANIFEST_FILENAME
+
+    out_dir = tmp_path / "artifacts"
+    out_dir.mkdir()
+    missing_pipeline = tmp_path / "does_not_exist.yaml"
+    cancel = CancelToken()
+    cancel.cancel()
+
+    run_batch([_TINY], missing_pipeline, out_dir=out_dir, cancel=cancel, timeout_s=15.0)
+
+    manifest_path = out_dir / "manifest" / "0000_tiny" / RUN_MANIFEST_FILENAME
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert data["cancelled"] is True
+    assert data["outcome"] == "failed"
+
+
 def test_a_zero_threshold_watchdog_terminates_the_job_and_names_which_one(tmp_path):
     """`IMP-0246`/`IMP-0247`: a `WatchdogThresholds` with an effectively-zero
     processing threshold fires on the first poll tick (the subprocess has

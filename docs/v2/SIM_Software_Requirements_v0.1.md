@@ -2363,7 +2363,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Shall.** An operation whose duration is not bounded by a small constant shall report progress and accept cancellation, leaving a well-defined state.
 **Accept.** Cancelling leaves the artifact set at a tick boundary, never mid-tick, and the manifest records the cancellation.
 **Verify.** T · `UT-ORC-04`   **Trace.** SYS-0137, SYS-0188
-**Built.** ◐ started — `IMP-0235` in `WP-23`
+**Built.** ● done — `IMP-0235` in `WP-23`
 **Now.** `PARTIAL` — the player's advance-N is one cancellable job; headless verbs are not cancellable.
 
 **`SW-0236`** · `SI-15` · `P1` · `R1` — Artifacts are written under a per-run directory

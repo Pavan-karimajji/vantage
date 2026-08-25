@@ -208,6 +208,7 @@ def _write_outcome_manifest(out_dir: Path, index: int, recording: Path, pipeline
         pipeline_path=pipeline_path, run_kind="resim", source_kind="mcap", recording_path=recording,
         outcome=_MANIFEST_OUTCOME_OF[outcome.outcome],
         last_completed_cycle=outcome.tick_count if outcome.tick_count is not None else -1,
+        cancelled=outcome.cancelled,
     )
     write_manifest(manifest, out_dir / "manifest" / f"{index:04d}_{recording.stem}")
 

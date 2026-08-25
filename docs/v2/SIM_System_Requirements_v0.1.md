@@ -1324,7 +1324,7 @@ Superseded (`SM-04`, 2026-08-20 — sole decomposer was `SI-18`, now retired): `
 **Shall.** Advancing by a chosen number of ticks shall be one uninterruptible job with progress and cancel.
 **Accept.** Cancelling leaves the session at a well-defined tick, never mid-tick.
 **Verify.** D · `SYT-PLR-08`   **Trace.** CN-0164; v1 `FR-SIM-17`
-**Built.** ◐ started — 0/1 software requirements done, in `WP-23`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0138`** · `P1` · `R1` — Play speed, including unbounded
 **Shall.** Play speed shall be adjustable, including as fast as the machine allows, and the achieved speed shall be displayed.
@@ -1625,7 +1625,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** Every crash shall record recording, configuration, last completed cycle, captured standard error and run id; a worker shall checkpoint progress so a crashing run's last completed cycle is known.
 **Accept.** From the crash record alone, the failure is reopened in process on a developer machine.
 **Verify.** T · `SYT-BAT-08`   **Trace.** CN-0348, CN-0349, CN-0223; v1 `NR-SIM-22`
-**Built.** ◐ started — 5/6 software requirements done, in `WP-06`, `WP-13`, `WP-22`, `WP-23`, `WP-27`
+**Built.** ● done — 6/6 software requirements done
 
 **`SYS-0189`** · `P1` · `R1` — Parameter sweeps
 **Shall.** Parameter sweeps shall be supported.

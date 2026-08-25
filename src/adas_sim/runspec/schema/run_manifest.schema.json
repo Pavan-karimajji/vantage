@@ -8,7 +8,7 @@
     "manifest_version", "run_id", "run_kind", "created_utc", "host",
     "source_kind", "project", "components", "overrides", "record_policies",
     "faults", "bundle_overrides", "run_spec_sha256", "coherence_verdict",
-    "coherence_findings", "divergence", "outcome", "last_completed_cycle",
+    "coherence_findings", "divergence", "outcome", "last_completed_cycle", "cancelled",
     "delay_steps", "grid_step_ns", "seed", "allow_mixed_projects", "process_nonce"
   ],
   "properties": {
@@ -111,6 +111,7 @@
     "divergence": {"type": "string"},
     "outcome": {"enum": ["completed", "failed", "crashed", "timeout"]},
     "last_completed_cycle": {"type": "integer", "minimum": -1},
+    "cancelled": {"type": "boolean"},
     "delay_steps": {
       "type": "array",
       "items": {

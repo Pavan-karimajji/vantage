@@ -32,7 +32,7 @@ from adas_sim.runspec.manifest import (
     validate_manifest,
     write_manifest,
 )
-from adas_sim.io.base import CAPTURE_TIME_MANIFEST_VERSION, manifest_to_dict
+from adas_sim.io.base import CAPTURE_TIME_MANIFEST_VERSION, manifest_from_dict, manifest_to_dict
 
 _CLOCK = datetime(2026, 8, 24, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -132,6 +132,27 @@ def test_manifest_carries_every_outcome(tmp_path, outcome):
     data = json.loads(path.read_text(encoding="utf-8"))
     assert data["outcome"] == outcome
     assert data["last_completed_cycle"] == 7
+
+
+def test_cancelled_is_recorded_distinctly_from_outcome():
+    """`IMP-0235`: `cancelled` is a real field alongside `outcome`, never a
+    fifth `outcome` value (`R-SIM-19`) -- `outcome` stays one of the closed
+    four ("failed" for a cancelled run) and `cancelled=True` is the fact a
+    reader checks separately, same distinguish-by-field pattern
+    `orchestrate/batch.py::RecordingOutcome.cancelled`/`limit_breach`
+    already use at the batch-report layer."""
+    manifest = build_manifest(
+        run_kind="resim", source_kind="mcap", clock=_CLOCK, outcome="failed", cancelled=True,
+    )
+    assert manifest.outcome == "failed"
+    assert manifest.cancelled is True
+    data = manifest_to_dict(manifest)
+    assert data["cancelled"] is True
+    restored = manifest_from_dict(data)
+    assert restored.cancelled is True
+
+    default = build_manifest(run_kind="sim", source_kind="synthetic", clock=_CLOCK)
+    assert default.cancelled is False
 
 
 # ---------------------------------------------------------------------------

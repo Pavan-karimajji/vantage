@@ -304,6 +304,14 @@ class RunManifest:
     #: per-cycle progress pass the real count for every outcome, `completed`
     #: included).
     last_completed_cycle: int = -1
+    #: `IMP-0235` (`SW-0235`): whether a caller-supplied `CancelToken`
+    #: (`orchestrate/progress.py`) ended this run -- `outcome` stays
+    #: `"failed"` for a cancelled run (never a fifth `outcome` value,
+    #: `R-SIM-19`), distinguished here instead, same pattern
+    #: `orchestrate/batch.py::RecordingOutcome.cancelled`/`limit_breach`
+    #: already established at the batch-report layer; this is that same
+    #: fact recorded in the manifest itself.
+    cancelled: bool = False
     #: `IMP-0402` (`SW-0402`, `CN-0154`): every wired edge's declared
     #: transport delay, in force for this run -- see `DelayStepRecord`'s own
     #: docstring for what "in force" does and does not claim yet.
@@ -402,6 +410,7 @@ def manifest_to_dict(manifest: RunManifest) -> dict:
         "divergence": manifest.divergence,
         "outcome": manifest.outcome,
         "last_completed_cycle": manifest.last_completed_cycle,
+        "cancelled": manifest.cancelled,
         "delay_steps": [
             {"edge": d.edge, "delay_steps": d.delay_steps} for d in manifest.delay_steps
         ],
@@ -482,6 +491,7 @@ def manifest_from_dict(data: dict) -> RunManifest:
         divergence=data.get("divergence", "unknown"),
         outcome=data.get("outcome", "completed"),
         last_completed_cycle=data.get("last_completed_cycle", -1),
+        cancelled=data.get("cancelled", False),
         delay_steps=delay_steps,
         grid_step_ns=data.get("grid_step_ns", 0),
     )
