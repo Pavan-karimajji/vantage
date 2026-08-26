@@ -44,7 +44,11 @@ class LayerProviderEntry:
     module: str
     qualname: str
     group: str = ""
-    requires: tuple[str, ...] = ()
+    #: Each entry is one required signal: a bare ref, or a tuple of
+    #: alternative refs for a signal reachable under two different names
+    #: depending on how this run produced it (`R-SIM-21`) -- gating tries
+    #: a tuple entry's alternatives in order, first-match-wins.
+    requires: tuple[str | tuple[str, ...], ...] = ()
     #: `Interaction` fields (`sim_visualization_spec.md` §7.5) this
     #: provider's output depends on -- empty means "never re-rendered on a
     #: mouse move" (`core/runner.SceneCache`'s static tier).
@@ -58,7 +62,7 @@ _PROVIDERS: dict[str, LayerProviderEntry] = {}
 
 
 def layer_provider(
-    layer_id: str, *, group: str = "", requires: Sequence[str] = (),
+    layer_id: str, *, group: str = "", requires: Sequence[str | tuple[str, ...]] = (),
     reacts_to: Sequence[str] = (),
 ) -> Callable[[Callable[..., object]], Callable[..., object]]:
     """Register `func` under `layer_id`. A duplicate id raises naming **both**
@@ -68,7 +72,13 @@ def layer_provider(
         `requires`, when given, **gates** the call: a `Tick` lacking one of those
         ports yields no layers and raises nothing (`UT-B1-1`). The wrapped function
         is never called, so its body may assume every required port is present and
-        call `Tick.port(name)` without a guard of its own.
+        call `Tick.port(name)` without a guard of its own. An entry may itself be a
+        tuple of alternative refs for one signal reachable under two different
+        names depending on how this run produced it (`R-SIM-21`) -- tried in
+        order, first-match-wins; a provider reading such a port calls
+        `LayerCtx.port_any(*refs)` with the identical tuple, in the identical
+        order, so gating and the read never disagree about which alternative
+        this run actually has.
 
         `reacts_to` names which `Interaction` fields (`"cursor"`, `"selection"`,
         `"modifiers"`, `"toggles"`) the output depends on (viz §7.5). The provider
@@ -127,11 +137,24 @@ def layer_provider(
                 # say so instead of looking identical to "never warned".
                 resolved: list[str] = []
                 for name in requires:
-                    ref = try_resolve_component_ref(name, known_ports=ctx.known_ports, where=where)
+                    # A tuple entry names alternatives for one logical
+                    # signal reachable under two different names depending
+                    # on how this run produced it -- a `Source`'s own
+                    # native port name vs. a component's declared one,
+                    # unified only inside a `Pipeline`'s own `inputs:`
+                    # aliasing (`R-SIM-21`). First-match-wins, same order
+                    # a provider's own `LayerCtx.port_any(*refs)` call must
+                    # use so gating and the read agree.
+                    alternatives = name if isinstance(name, tuple) else (name,)
+                    ref = None
+                    for alt in alternatives:
+                        ref = try_resolve_component_ref(alt, known_ports=ctx.known_ports, where=where)
+                        if ref is not None:
+                            break
                     if ref is None:
                         return (Layer(
                             id=layer_id, group=group, prims=(),
-                            unavailable=f"requires {name!r}, which no port in this run resolves to",
+                            unavailable=f"requires {alternatives!r}, none of which any port in this run resolves to",
                         ),)
                     resolved.append(ref)
                 if not all(name in current[-1].ports for name in resolved):

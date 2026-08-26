@@ -18,7 +18,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
-from adas_sim.runspec.address import resolve_component_ref
+from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.runspec.address import resolve_component_ref, try_resolve_component_ref
 from adas_sim.session.tick import Pose2D, PortValue, Tick
 from adas_sim.config.project import ProjectModel
 
@@ -154,6 +155,29 @@ class LayerCtx:
         one tick of it."""
         resolved = resolve_component_ref(ref, known_ports=self.known_ports, where="LayerCtx.port")
         return self.now.port(resolved)
+
+    def port_any(self, *refs: str) -> PortValue:
+        """The first of `refs` that resolves against `known_ports`
+        (`try_resolve_component_ref`, tolerant), read on the current tick.
+        For a signal that is genuinely reachable under two different names
+        depending on how this run produced it -- a `Source`'s own native
+        port name (`source.<port>`) and a component's declared one
+        (`self.<port>`), unified only inside a `Pipeline`'s own `inputs:`
+        aliasing (`R-SIM-21`) -- rather than one name a caller can commit
+        to ahead of time. A provider's own `requires=` entry for the same
+        signal must list `refs` in this exact order (`layer_provider`'s
+        gating tries the same alternatives, first-match-wins, so a
+        mismatched order would let gating and this call disagree)."""
+        for ref in refs:
+            resolved = try_resolve_component_ref(ref, known_ports=self.known_ports, where="LayerCtx.port_any")
+            if resolved is not None:
+                return self.now.port(resolved)
+        raise AuthoringError(
+            expected=f"at least one of {refs!r} to resolve against this run's ports",
+            found="none resolved", where="LayerCtx.port_any",
+            hint="the caller's own requires= gate should have already refused "
+                 "this call if none of refs could ever resolve",
+        )
 
     def __repr__(self) -> str:
         return f"<LayerCtx project={self.model.project!r} history={len(self.history)}>"
