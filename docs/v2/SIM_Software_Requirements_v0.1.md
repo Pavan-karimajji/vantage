@@ -2854,7 +2854,7 @@ its design row to `WP-09` (`SI-03`'s own package) accordingly — see
 |---|---|---|
 | `SW-0317` | One token table per medium, and one place a colour exists | `VIZ:SW-0014` — real, 2026-08-26 |
 | `SW-0318` | The palette is validated by computation | `VIZ:SW-0051` — real, 2026-08-26 |
-| `SW-0319` | The rendering core is toolkit-independent and headless | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0319` | The rendering core is toolkit-independent and headless | `VIZ:SW-0022` — real, already met and tested before this disposition, 2026-08-26 |
 | `SW-0320` | A figure and a live run are the same picture | `VIZ:SW-0054` — real, 2026-08-26 |
 | `SW-0321` | A snapshot is atomic and reproducible | `VIZ:SW-nnnn` — not yet allocated |
 | `SW-0322` | A second rendering surface renders the same scene, never a second scene | `VIZ:SW-0054` — real, 2026-08-26 |
@@ -2879,8 +2879,8 @@ Superseded (`SM-01` trial), `SW-0324` — was *Display-only data is decoded only
 | `SW-0329` | Per-layer default visibility and view-scoped typed parameters | `VIZ:SW-0053` — real, 2026-08-26 |
 | `SW-0330` | Per-layer input-listening capability is declared, not global | `VIZ:SW-0053` — real, 2026-08-26 |
 | `SW-0331` | Plots address the same port space as everything else | `VIZ:SW-0055` — real, 2026-08-26 |
-| `SW-0332` | The evidence panel and the command line share one producer | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0333` | Selecting anything on screen reaches its evidence in one action | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0332` | The evidence panel and the command line share one producer | `VIZ:SW-0064` — real, 2026-08-26 |
+| `SW-0333` | Selecting anything on screen reaches its evidence in one action | `VIZ:SW-0065` — real, code path built and inspected; live on-screen demonstration still open (native-Windows verification pending), 2026-08-26 |
 | `SW-0334` | The pipeline panel offers `measured` only where the recording supports it | `VIZ:SW-nnnn` — not yet allocated |
 | `SW-0335` | An overridden or incoherent run is badged in the window | `VIZ:SW-nnnn` — not yet allocated |
 | `SW-0336` | A missing plug-in degrades, naming what was expected | `VIZ:SW-nnnn` — not yet allocated |
