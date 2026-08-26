@@ -2835,7 +2835,7 @@ its design row to `WP-09` (`SI-03`'s own package) accordingly — see
 | `SW-0307` | Layer names are namespaced per plug-in | `VIZ:SW-0052` — real, 2026-08-26 |
 | `SW-0308` | Providers are discovered by import, with no central roster | `VIZ:SW-0062` — real, 2026-08-26 |
 | `SW-0309` | Bulk geometry is referenced, under a per-layer budget | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0310` | Reconstructed geometry is marked per primitive | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0310` | Reconstructed geometry is marked per primitive | `VIZ:SW-0063` — real, 2026-08-26 |
 | `SW-0311` | A layer never estimates what nothing produced | `VIZ:SW-nnnn` — not yet allocated |
 | `SW-0312` | The scene serialises and tolerates a minor version forward | `VIZ:SW-nnnn` — not yet allocated |
 | `SW-0313` | An unknown style token raises; there is no default colour | `VIZ:SW-0050` — real, 2026-08-26 |
