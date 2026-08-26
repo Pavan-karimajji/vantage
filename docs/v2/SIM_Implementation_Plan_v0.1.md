@@ -1343,23 +1343,58 @@ same as `toolkit`'s own consumers already require.
         passes (**100% tests passed**, `EmbeddedEngine` refactor
         behavior-preserving); `vantage_app.exe` run with no arguments
         prints its usage line and exits 1, the real argv-parsing path.
-- [~] **Exit -- a real windowed run against a real plugin, closed by:**
-      running `vantage_app.exe <run_spec.json> --config <path>
-      --plugin-root <a real component's built sil_viz output dir>` on
-      native Windows and confirming, visually, that a window opens, ticks
-      advance from the real embedded engine (not a synthetic generator),
-      and a loaded plug-in's layers draw -- the same live-run discipline
-      `player_app.cpp`'s own `--recording` path was proven with. Not yet
-      attempted: no `run_spec.json`/recording fixture was built for a real
-      component in this pass (the `IT-23` fixture's own `echo_stub` stub
-      proves the engine mechanism, not a real viz plug-in draw), and
-      opening a real GL window is deliberately not exercised through WSL
-      itself (`modules/viz/CLAUDE.md`'s "never open a real GL window under
-      WSL" rule) -- it needs a human on native Windows, same as every other
-      GL/ImGui row in this codebase's own history. `vantage.bat`/
+- [~] **Exit -- a real windowed run against a real plugin, blocked by a
+      pre-existing, separate gap -- closed by:** attempted for real, on
+      native Windows (WSL2 interop launching the native `.exe`, GL windows
+      never opened through WSL itself, `modules/viz/CLAUDE.md`'s own rule).
+      A genuine end-to-end fixture was built with no prior tooling for
+      exactly this: `sim resim <a real modules/df/tests/carla_testruns/
+      aeb/*.mcap> --pipeline modules/df/sim/pipelines/df_only.yaml --search
+      <df_sil's built Release dir> --config <df_sil's config/> --save
+      vantage_e2e.mcap` (native Windows, Python 3.12 -- this repo's own
+      `adas_sim` needs 3.12+/`StrEnum`, which WSL's system `python3` (3.10)
+      cannot provide) produced a real `vantage_e2e.mcap.spec.json`
+      (`df_sil.dll` as the `sut` stage, 100 real ticks) exactly as
+      `vantage_app.exe`'s own positional argv expects.
+
+      Running `vantage_app.exe vantage_e2e.mcap.spec.json --config
+      <df_viz's own config/> --plugin-root <df_viz's own built directory,
+      carrying `df_viz.dll` + `sim/plugin.yaml` + `config/`>` crashes,
+      `0xC0000409` (a fastfail abort from an uncaught C++ exception),
+      before any window paints. **Isolated, not a WP-34 defect:** the SAME
+      crash reproduces on plain, **unmodified** `viz_player.exe` given the
+      identical real `df_viz.dll` + bundle (`viz_player.exe df_viz.dll
+      --bundle <config>`) -- proving the fault predates this pass and
+      sits entirely in `viz`'s own generic-host theming, not in
+      `RunPlayerWindow`'s extraction or `vantage_app`'s own wiring. Headless
+      `--explain 0 0` against the SAME real plugin succeeds cleanly (`layer:
+      bsd.zone`, `derived: yes`, exit 0) -- plugin load, manifest parsing,
+      `BuildScenes` and evidence resolution are all real and correct; only
+      the paint path fails. **Root cause, read from `theme_table.cpp:81`:**
+      `player_app.cpp`'s (now `player_runner.cpp`'s) `SmokeTokens()` -- its
+      own long-standing top-of-file note already named this a placeholder
+      -- registers only the throwaway smoke plugin's single `"objects.box"`
+      token; `ThemeTable::Resolve` throws `ThemeTokenError` uncaught for any
+      style token a real plugin actually uses (`bsd.zone`'s own tokens
+      among them), which is what fastfails. **Nobody had exercised this
+      path with a real plugin before** -- every prior "live" `viz_player`
+      run in this codebase's own history used only the smoke plugin.
+
+      This is real, load-bearing follow-on work belonging to `viz`'s own
+      generic-host theme vocabulary (`player_app.cpp`'s own header already
+      named it: "a real vocabulary channel over the ABI, which does not
+      exist yet"), never something WP-34's own scope stretches to fix --
+      patching `SmokeTokens()` per-component would be exactly the kind of
+      component-specific literal this generic host must never carry
+      (`R-SIM-1`). Left `[~]`, not `[x]`: WP-34's own mechanism (
+      `EmbeddedEngine`, `RunPlayerWindow`'s extraction, `vantage_app`'s
+      argv/wiring, a real run-spec reaching a real engine) is proven
+      correct end-to-end up to the paint call; the windowed draw itself
+      needs `viz`'s theme-vocabulary gap closed first, tracked as a new,
+      separate, real gap rather than folded into this row. `vantage.bat`/
       `vantage.py` are untouched by this pass (still point at the Python
-      launcher) -- repointing them is a trivial follow-up once this exit
-      criterion closes.
+      launcher) -- repointing them is a trivial follow-up once the theme
+      gap closes and this exit criterion can actually pass.
 
 ---
 
