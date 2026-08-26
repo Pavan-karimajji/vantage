@@ -1697,6 +1697,13 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Built.** ● done — `IMP-0430` in `WP-33`
 **Now.** `NEW` — nothing turned a live frame into a `Tick` before this pass; `PushSource::DeliverTick` existed with no caller (`VZ-15`/`WP-12`).
 
+**`SW-0427`** · `SI-09` · `P1` · `R1` — The bridge drives a real window, one step per frame
+**Shall.** `vantage` shall provide a real executable that drives `SW-0426`'s bridge one engine cycle per rendered frame and draws the resulting Ticks through the same window/plug-in-loading path `viz`'s own player uses, so a live embedded run is watchable, not just pullable in-process.
+**Accept.** `sim::vantage::EmbeddedEngine::StepOnce` performs exactly one engine cycle (mirroring `RunEmbedded`'s own per-cycle body) and is safe to call once per rendered frame with no background thread, since `viz::session::PushSource` carries no locking. The resulting executable (`vantage_app`) never includes an ImGui/GLFW/GL header itself and links only against `viz`'s exported window/render-loop component, never a second, vendored copy of the toolkit.
+**Verify.** T · `UT-VTG-01`; `IT-23`   **Trace.** SYS-0272 (`SW-0426`'s own parent, extended to the windowed consumer)
+**Built.** ● done — `IMP-0431` in `WP-34`
+**Now.** `NEW` — `EmbeddedEngine`/`RunPlayerWindow`/`vantage_app.cpp` build and link clean on a real `vs2026` rebuild (`modules/viz` 41/41 gtest, `modules/sim/vantage` `IT-23` unchanged); the windowed exit criterion (a real plug-in drawing from a real run, confirmed visually) is not yet exercised — `WP-34`'s own plan row has the open item.
+
 ---
 
 # PART C — THE CONFIGURATION LAYER (Python)

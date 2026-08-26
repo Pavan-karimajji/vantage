@@ -1255,6 +1255,114 @@ repo over.
 
 ---
 
+### WP-34 · `MP-6` · `SM-11` — `vantage`'s real windowed `main()`
+
+**Serves:** `SM-11` (`SYNC:SM-11`, `VIZ_Sync_Plan_v0.1.md` §2), closing the
+exit criterion `WP-33`'s own row named as still open: "the real windowed
+executable (`vantage.cpp`'s own `main()`, a GLFW loop modeled on
+`viz_player`'s own `player_app.cpp`)."
+
+**Prereq:** `WP-33` (`IMP-0430`, the `FrameBridge`/`RunEmbedded` mechanism).
+
+Tracked here, under `sim`'s own v2 plan — no separate `adas-vantage` V-model
+document set stood up for this package, same precedent `WP-33` already set
+(`vantage` is its own Conan package but not its own requirement namespace).
+
+**Two design questions settled before implementation (not `WP-33`'s to
+re-litigate):**
+1. `sim::vantage::RunEmbedded` blocks a whole run to exhaustion in one call
+   -- wrong shape for a per-frame render loop. Fixed by extracting
+   `EmbeddedEngine` (`host_loop.{hpp,cpp}`), a move-only RAII wrapper
+   exposing `StepOnce(sink)`, called once per frame on the caller's own
+   thread -- no background thread, since `viz::session::PushSource` is a
+   bare `std::deque` with no locking and nothing else in `viz`/`sim` drives
+   a `Source` from a second thread. `RunEmbedded` is now a thin loop over
+   `Create`/`StepOnce`, behavior-preserving (`IT-23`/`UT-VTG-01` unchanged).
+2. `vantage.py`'s `--pipeline`/`--search` trio drives Python-only pipeline
+   construction with no C++ equivalent -- out of scope, parsed and refused
+   with a named error rather than silently ignored or half-implemented.
+
+**Real, unanticipated finding, mid-implementation:** `viz_player` (the file
+`vantage.cpp` was meant to be "modeled directly on") is built *inside*
+`modules/viz`'s own `CMakeLists.txt`, with direct filesystem access to
+`src/third_party/imgui`/`glfw` headers. `viz`'s Conan package installs only
+`cpp/viz` headers and `df_viz_c.h` -- never the vendored ImGui/GLFW headers,
+only the compiled archives. `vantage_app` (a separate Conan package,
+`WP-33`'s own account of why) had nothing to `#include` for a GLFW/ImGui
+loop of its own, and could not be built *inside* `modules/viz` instead (a
+`viz -> sim` edge `modules/viz/CLAUDE.md` forbids as a hard cycle -- the
+exact cycle `WP-33` built `vantage` as a third package to avoid). **Fixed**
+by extracting `player_app.cpp`'s window/loop body into
+`modules/viz/cpp/viz/render_gl/player_runner.{hpp,cpp}`
+(`viz::render_gl::RunPlayerWindow`), exported as a new Conan component
+(`AdasViz::runner`) whose public header carries no ImGui/GLFW/GL type --
+only `viz::player::Player&` and a `Tick`-producing callback. `player_app.cpp`
+itself shrinks to argv/`--explain`/the `real_source`-vs-synthetic branch,
+now expressed as the same `next_tick` callback `vantage_app.cpp` supplies
+its own way. No shared byte-identical machinery (`conanfile.py`, R-BUILD-1)
+touched -- the fix stays inside `modules/viz` + `modules/sim/vantage`.
+
+**A second real defect found live, exporting `AdasViz::runner` for the
+first time:** `runner`'s `libs:` (`modules/viz/conf/build.yml`) initially
+listed only its own two object files' archive
+(`[adas-viz-runner, adas_viz_imgui, adas_viz_glfw, adas_viz_implot]`) --
+`vantage_app`'s own real link (the first real cross-package consumer of
+this component) failed with 38 unresolved externals, every symbol
+`adas-viz`/`adas-viz-player` themselves define. A component's `requires:`
+governs Conan's header-need analysis, never which `.lib` FILES a
+cross-package STATIC consumer's link line receives; `adas-viz`/
+`adas-viz-player` being PUBLIC C++ link deps in `CMakeLists.txt` does not
+make Conan add their archives to a consumer's link line -- only `libs:`
+does. Same `DF-02` lesson `toolkit`'s own component already paid for, one
+level deeper. **Fixed:** `runner`'s `libs:` flattened to the whole
+transitive archive set its `CMakeLists.txt` target actually needs --
+`[adas-viz-runner, adas-viz-player, adas-viz, adas_viz_imgui, adas_viz_glfw,
+adas_viz_implot]`. A third, smaller finding the same live link surfaced:
+`vantage_app`'s own `CMakeLists.txt` needed its own `find_package(OpenGL
+REQUIRED)` + `OpenGL::GL` link -- a system library, never Conan-packaged,
+same as `toolkit`'s own consumers already require.
+
+- [x] **Lands:** `IMP-0431` -- 1.
+  - [x] `IMP-0431` · `SW-0427` · `NEW` -- `EmbeddedEngine`
+        (`modules/sim/vantage/cpp/vantage/host_loop.{hpp,cpp}`);
+        `RunPlayerWindow`/`AdasViz::runner`
+        (`modules/viz/cpp/viz/render_gl/player_runner.{hpp,cpp}`,
+        `modules/viz/CMakeLists.txt`, `modules/viz/conf/build.yml`);
+        `vantage_app.cpp` + its `CMakeLists.txt`
+        (`modules/sim/vantage/cpp/vantage_app/`), wired into
+        `modules/sim/vantage/CMakeLists.txt` under the same `TARGET_TYPE`
+        gate `df`'s/`perception-core`'s own root `CMakeLists.txt` already
+        use. **Verified live:** real `vs2026`/MSVC rebuild (WSL2 interop) --
+        `modules/viz`'s own `sil`/`gtest` targets both build clean
+        (`viz_player.exe` links, **41/41 `viz` gtest targets pass**
+        including `viz_test_player_app_recording`, proving the
+        `player_app.cpp` extraction behavior-preserving);
+        `modules/sim/vantage`'s `gtest` target builds `vantage_app.exe`
+        clean and `It23VantageBridge.
+        EmbeddedRunDeliversTicksMatchingTheTransportsRealFrames` still
+        passes (**100% tests passed**, `EmbeddedEngine` refactor
+        behavior-preserving); `vantage_app.exe` run with no arguments
+        prints its usage line and exits 1, the real argv-parsing path.
+- [~] **Exit -- a real windowed run against a real plugin, closed by:**
+      running `vantage_app.exe <run_spec.json> --config <path>
+      --plugin-root <a real component's built sil_viz output dir>` on
+      native Windows and confirming, visually, that a window opens, ticks
+      advance from the real embedded engine (not a synthetic generator),
+      and a loaded plug-in's layers draw -- the same live-run discipline
+      `player_app.cpp`'s own `--recording` path was proven with. Not yet
+      attempted: no `run_spec.json`/recording fixture was built for a real
+      component in this pass (the `IT-23` fixture's own `echo_stub` stub
+      proves the engine mechanism, not a real viz plug-in draw), and
+      opening a real GL window is deliberately not exercised through WSL
+      itself (`modules/viz/CLAUDE.md`'s "never open a real GL window under
+      WSL" rule) -- it needs a human on native Windows, same as every other
+      GL/ImGui row in this codebase's own history. `vantage.bat`/
+      `vantage.py` are untouched by this pass (still point at the Python
+      launcher) -- repointing them is a trivial follow-up once this exit
+      criterion closes.
+
+---
+
 ### WP-33 · `MP-6` · `SM-11` — the `PortFrame`→`Tick` bridge, `vantage`'s mechanism half
 
 **Serves:** `SM-11` (`SYNC:SM-11`, `VIZ_Sync_Plan_v0.1.md` §2 — "`vantage`,

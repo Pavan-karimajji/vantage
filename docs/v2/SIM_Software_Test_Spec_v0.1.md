@@ -205,7 +205,7 @@ Each crosses one named interface. The seam (`IF-09`) and the module ABI (`IF-01`
 | `IT-19` | `SW-0298`, `SW-0352` | `IF-11` | `F-STUB`, `F-LONG` | Measure engine tick rate with no player, with one attaching mid-run, and after detach. |
 | `IT-21` | `SW-0343` | `IF-16` | `F-CHAIN4` | Make a selection in the launcher, save, launch; confirm `launch()` was reached only through the written path, and the headless re-run is identical. |
 | `IT-22` | `SW-0379` | — | `df` and `vdy` | A **second** component completes the published checklist unaided, with no SIM-team edit and no framework file changed. |
-| `IT-23` | `SW-0426` | `IF-09` | `F-SPEC`, `F-STUB` | Same embed-host shape as `IT-11`'s own `UT-ABI-04` case, extended past the transport into the player side: attach, step to exhaustion, bridge every cycle's real frames into a `viz::session::PushSource` via `FrameBridge`, then pull every delivered `Tick` back out and compare its port names/payload bytes against what the transport actually published. |
+| `IT-23` | `SW-0426`, `SW-0427` | `IF-09` | `F-SPEC`, `F-STUB` | Same embed-host shape as `IT-11`'s own `UT-ABI-04` case, extended past the transport into the player side: attach, step to exhaustion, bridge every cycle's real frames into a `viz::session::PushSource` via `FrameBridge`, then pull every delivered `Tick` back out and compare its port names/payload bytes against what the transport actually published. Since `WP-34` (`SM-11`), `RunEmbedded` is a thin loop over `EmbeddedEngine::Create`/`StepOnce` — this case is what proves that refactor behavior-preserving, exercising `SW-0427`'s own `StepOnce` half (not the windowed/link half, which this case has no window to exercise). |
 
 ---
 
@@ -423,7 +423,7 @@ Added 2026-08-25 (`SM-11`, `vantage`): `UT-ABI-04` proved the ABI's own per-tick
 
 | ID | Serves | Fixture | Steps |
 |---|---|---|---|
-| `UT-VTG-01` | `SW-0426` | `F-SPEC` | Same `simEngineCreate`/attach/step/drain loop as `UT-ABI-04`, feeding every cycle's drained frames through `FrameBridge::AddFrame`/`TakeTick` into a real `viz::session::PushSource::DeliverTick` instead of collecting raw bytes. Pulls every delivered tick back out via `PushSource::NextTick` and asserts: one `Tick` per stepped cycle, each carrying a `PortValue` named `sut.outputs` whose `payload` equals the exact bytes the transport published for that cycle, and `schema_bytes`/`schema_name` both empty (the named, undone-on-purpose limitation `SW-0426`'s own Accept states). |
+| `UT-VTG-01` | `SW-0426`, `SW-0427` | `F-SPEC` | Same `simEngineCreate`/attach/step/drain loop as `UT-ABI-04`, feeding every cycle's drained frames through `FrameBridge::AddFrame`/`TakeTick` into a real `viz::session::PushSource::DeliverTick` instead of collecting raw bytes. Pulls every delivered tick back out via `PushSource::NextTick` and asserts: one `Tick` per stepped cycle, each carrying a `PortValue` named `sut.outputs` whose `payload` equals the exact bytes the transport published for that cycle, and `schema_bytes`/`schema_name` both empty (the named, undone-on-purpose limitation `SW-0426`'s own Accept states). Since `WP-34` (`SM-11`), this case runs through `RunEmbedded`'s reimplementation over `EmbeddedEngine::Create`/`StepOnce` — proof that extraction is behavior-preserving, `SW-0427`'s own `StepOnce` half. |
 
 ### 5.10 `SI-10` `config` — `UT-CFG-01` … `UT-CFG-18`
 
