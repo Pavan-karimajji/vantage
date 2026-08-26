@@ -659,3 +659,70 @@ def overwrite_manifest_meta(output_path: Path, meta: RunManifest) -> None:
     finally:
         writer.close()
     tmp_path.replace(output_path)
+
+
+def backfill_schema_bytes(output_path: Path, pipeline: Pipeline) -> None:
+    """**Found live, fixed live, 2026-08-26 (`SM-12`'s own `E2E-07` item
+    8):** `simcore::abi::BuildOutputTopics` (`simcore.cpp`) sets every
+    topic's `schema_name` from `RunSpec`'s own `proto_type` but never its
+    `schema_bytes` — a real `FileDescriptorSet` is only available AFTER a
+    component loads, and `Writer::Open` must run before that (that
+    function's own comment states this explicitly; not an oversight).
+    `.mcap`'s `arbitrary_topics` capability degrades this to a
+    schema-less registration, so the recording is still fully readable —
+    but `PortValue.message`'s own lazy decode (`session/tick.py`) then
+    degrades too (`decode_message`'s documented `if not schema_bytes:
+    return payload`), and nothing downstream expected raw bytes back: a
+    real component's own layer providers (`warning_layer`, found live
+    against `bsd.outputs`) call `.message` assuming a parsed protobuf
+    object always comes back.
+
+    Same read-everything/rewrite pattern `overwrite_manifest_meta`
+    (immediately above) already uses, run as its own separate pass
+    (kept independent rather than folded into that function's own
+    signature, since it needs `pipeline` — a different input, for a
+    different, unrelated field): for every topic whose `TopicInfo`
+    carries a `schema_name` but empty `schema_bytes`, find which stage
+    produced it (`topic_to_port_name`'s own qualified form, split on the
+    first `.`) and patch in that stage's own already-loaded
+    `ComponentManifest.descriptor_set` — the real bytes `simcore` could
+    not reach at write time but `pipeline` (built for provenance checks,
+    never `init_components`'d or `exec()`'d, `cli/resim.py`'s own note)
+    already has, cheaply, with no engine re-run. A topic naming a stage
+    this pipeline does not declare (should not occur for anything
+    `simengine` itself wrote) is left unpatched rather than raising —
+    this function only ever adds information, never required to
+    succeed for every topic to be worth running once."""
+    reader = reader_for(output_path)
+    try:
+        meta = reader.meta()
+        topics = dict(reader.topics())
+        messages = list(reader.messages())
+    finally:
+        reader.close()
+
+    stage_names = {stage.name for stage in pipeline.stages}
+    patched = False
+    for topic, info in list(topics.items()):
+        if info.schema_bytes or not info.schema_name:
+            continue
+        stage_name, sep, _port = topic_to_port_name(topic).partition(".")
+        if not sep or stage_name not in stage_names:
+            continue
+        descriptor_set = pipeline.manifest_for(stage_name).descriptor_set
+        if not descriptor_set:
+            continue
+        topics[topic] = replace(info, schema_bytes=descriptor_set)
+        patched = True
+    if not patched:
+        return  # nothing to do -- every topic already had real bytes or none to source
+
+    tmp_path = output_path.with_name(output_path.stem + ".schematmp" + output_path.suffix)
+    writer = writer_for(tmp_path)
+    writer.open(tmp_path, meta, topics)
+    try:
+        for topic, log_time_ns, capture_time_ns, payload in messages:
+            writer.write(topic, log_time_ns, payload, capture_time_ns=capture_time_ns)
+    finally:
+        writer.close()
+    tmp_path.replace(output_path)

@@ -36,7 +36,7 @@ from adas_sim.runspec.manifest import (
     resolve_swept_config,
     verify_pinned_builds,
 )
-from adas_sim.engine.bridge import count_ticks, overwrite_manifest_meta
+from adas_sim.engine.bridge import backfill_schema_bytes, count_ticks, overwrite_manifest_meta
 from adas_sim.orchestrate.batch import read_checkpoint_divergence
 from adas_sim.orchestrate.run import invoke_engine
 
@@ -165,6 +165,14 @@ def run(argv: list[str] | None = None) -> int:
             # this specific run just launched.
             meta = replace(meta, process_nonce=uuid.uuid4().hex)
             overwrite_manifest_meta(output_path, meta)
+            # E2E-07 item 8 (SM-12): simcore's own writer cannot embed a
+            # topic's real FileDescriptorSet (BuildOutputTopics's own
+            # comment -- Writer::Open runs before any component loads);
+            # backfill it now from pipeline's own already-loaded
+            # component manifests, the same "engine writes what it can,
+            # Python patches what it couldn't reach yet" shape this row's
+            # own manifest-meta patch above already uses.
+            backfill_schema_bytes(output_path, pipeline)
             print(f"wrote {args.save}")
     finally:
         if resolved.scratch_dir is not None:

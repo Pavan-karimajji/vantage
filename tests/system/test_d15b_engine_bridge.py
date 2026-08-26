@@ -25,6 +25,7 @@ from pathlib import Path
 import pytest
 
 from adas_sim.engine.bridge import (
+    backfill_schema_bytes,
     resolve_simengine_executable,
     run_pipeline_via_engine,
 )
@@ -162,6 +163,93 @@ def test_run_pipeline_via_engine_produces_a_real_recording(tmp_path, monkeypatch
         assert len(messages) >= 1, "echo_stub's own declared output port produced zero messages"
     finally:
         reader.close()
+
+
+def test_backfill_schema_bytes_fills_a_real_output_topic(tmp_path, monkeypatch):
+    """`E2E-07` item 8 (`SM-12`): `simengine`'s own writer cannot embed a
+    topic's real `FileDescriptorSet` -- `BuildOutputTopics` (`simcore.cpp`)
+    only ever sets `schema_name`, never `schema_bytes` (`Writer::Open` runs
+    before any component loads, that function's own comment). Found live
+    against a real `sim resim --save` recording: `PortValue.message`'s own
+    documented degrade (`session/tick.py`, `decode_message`'s `if not
+    schema_bytes: return payload`) then handed a real layer provider raw
+    bytes where it expected a parsed message, crashing (`warning_layer`,
+    `AttributeError: 'bytes' object has no attribute 'left'`).
+
+    Same real engine/`echo_stub` fixture as the smoke test immediately
+    above -- this test only adds the missing assertion neither that test
+    nor any other in this file made: whether a written topic's own
+    `schema_bytes` is ever non-empty. Robust to `echo_stub`'s own real
+    manifest carrying no real descriptor set (a minimal test fixture, not
+    guaranteed to embed one) -- the mechanism under test is "does
+    `backfill_schema_bytes` reach and apply whatever `pipeline` already
+    has," not "does `echo_stub` happen to have real protobuf schema
+    bytes today."""
+    engine_path, stub_path = _require_engine_and_stub()
+
+    monkeypatch.setenv("ADAS_SIL_TEST_STUB_NAME", "echo_stub")
+    monkeypatch.setenv("ADAS_SIL_TEST_STUB_PERIOD_NS", "10000000")
+    monkeypatch.setenv("ADAS_SIL_TEST_STUB_OUTPUT_PORT", "outputs")
+    monkeypatch.setenv("ADAS_SIL_TEST_STUB_OUTPUT_PROTO_TYPE", "test.Echo")
+    monkeypatch.setenv("ADAS_SIL_TEST_STUB_OUTPUT_MAX_BYTES", "64")
+
+    lib_dir = tmp_path / "lib"
+    lib_dir.mkdir()
+    stub_copy = lib_dir / ("echo_stub" + stub_path.suffix)
+    stub_copy.write_bytes(stub_path.read_bytes())
+
+    pipeline_path = tmp_path / "pipeline.yaml"
+    _write_pipeline(pipeline_path)
+    pipeline = Pipeline.load(pipeline_path, search=[lib_dir])
+
+    recording_path = tmp_path / "in.mcap"
+    _write_heartbeat_recording(recording_path)
+    output_path = tmp_path / "out.mcap"
+
+    result = run_pipeline_via_engine(
+        pipeline, recording_path, run_id="20260826T000000Z-schema-backfill-test", output_path=output_path,
+        simengine_path=engine_path,
+    )
+    assert result.ok, f"simengine exit_code={result.exit_code} stderr={result.stderr!r} stdout={result.stdout!r}"
+
+    reader = reader_for(output_path)
+    try:
+        before = reader.topics()["/sut/outputs"]
+    finally:
+        reader.close()
+    # The real defect, asserted directly rather than assumed: simengine's
+    # own writer really does leave this empty today. If this ever starts
+    # failing, BuildOutputTopics has been fixed at the source and this
+    # function -- and this test's own reason to exist -- should be
+    # retired, not patched to expect the new behaviour silently.
+    assert before.schema_bytes == b"", (
+        "simengine's own writer unexpectedly embedded real schema bytes -- "
+        "BuildOutputTopics may have been fixed; backfill_schema_bytes's own "
+        "reason to exist should be re-examined, not this assertion loosened"
+    )
+
+    backfill_schema_bytes(output_path, pipeline)
+
+    reader = reader_for(output_path)
+    try:
+        after = reader.topics()["/sut/outputs"]
+        messages_after = list(reader.messages())
+    finally:
+        reader.close()
+
+    real_descriptor_set = pipeline.manifest_for("sut").descriptor_set
+    if real_descriptor_set:
+        assert after.schema_bytes == real_descriptor_set, (
+            "backfill_schema_bytes did not apply the real component manifest's own descriptor_set"
+        )
+    else:
+        assert after.schema_bytes == b"", (
+            "backfill_schema_bytes invented schema bytes with nothing real to source them from"
+        )
+    # Whichever branch above held, the payloads themselves must be
+    # byte-identical to before the patch -- this function only ever adds
+    # topic-level schema metadata, never touches a single message.
+    assert len(messages_after) >= 1
 
 
 def test_resolve_simengine_executable_names_every_candidate_when_missing(monkeypatch):
