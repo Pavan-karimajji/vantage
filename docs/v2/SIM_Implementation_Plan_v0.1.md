@@ -1455,6 +1455,13 @@ same as `toolkit`'s own consumers already require.
       Python launcher) -- repointing them is a trivial follow-up, real but
       out of this row's own scope.
 
+**Later cross-repo use of this same evidence, `SYNC:SM-12`, 2026-08-26:**
+this row's own live verification (point 3 above) is what `VIZ_Sync_Plan_v0.1.md`'s
+`SM-12` cites as satisfying `G-7`'s first clause ("df renders a full
+recording end-to-end through the C++ player") -- decided there, not
+reopened here; this note exists only so `sync_check.py`'s bootstrap check
+finds a real back-reference.
+
 ---
 
 ### WP-33 · `MP-6` · `SM-11` — the `PortFrame`→`Tick` bridge, `vantage`'s mechanism half
