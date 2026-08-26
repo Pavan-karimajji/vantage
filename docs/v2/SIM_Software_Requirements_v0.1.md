@@ -2826,23 +2826,23 @@ its design row to `WP-09` (`SI-03`'s own package) accordingly — see
 
 | Retired | Was | Replaced by |
 |---|---|---|
-| `SW-0301` | Geometry in metres, in a named frame, styled by token | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0302` | A layer provider imports no renderer and touches no disk | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0303` | The scene layer depends on nothing above it | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0304` | A layer reacts to interaction through state, never a callback | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0305` | A plug-in never spells a port address | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0306` | A zero-match reference is a named placeholder, never an empty layer | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0307` | Layer names are namespaced per plug-in | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0308` | Providers are discovered by import, with no central roster | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0301` | Geometry in metres, in a named frame, styled by token | `VIZ:SW-0057` — real, 2026-08-26 |
+| `SW-0302` | A layer provider imports no renderer and touches no disk | `VIZ:SW-0003` — real, 2026-08-26 |
+| `SW-0303` | The scene layer depends on nothing above it | `VIZ:SW-0002` — real, 2026-08-26 |
+| `SW-0304` | A layer reacts to interaction through state, never a callback | `VIZ:SW-0059` — real, 2026-08-26 |
+| `SW-0305` | A plug-in never spells a port address | `VIZ:SW-0049` — real, 2026-08-26 |
+| `SW-0306` | A zero-match reference is a named placeholder, never an empty layer | `VIZ:SW-0049` — real, 2026-08-26 |
+| `SW-0307` | Layer names are namespaced per plug-in | `VIZ:SW-0052` — real, 2026-08-26 |
+| `SW-0308` | Providers are discovered by import, with no central roster | `VIZ:SW-0062` — real, 2026-08-26 |
 | `SW-0309` | Bulk geometry is referenced, under a per-layer budget | `VIZ:SW-nnnn` — not yet allocated |
 | `SW-0310` | Reconstructed geometry is marked per primitive | `VIZ:SW-nnnn` — not yet allocated |
 | `SW-0311` | A layer never estimates what nothing produced | `VIZ:SW-nnnn` — not yet allocated |
 | `SW-0312` | The scene serialises and tolerates a minor version forward | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0313` | An unknown style token raises; there is no default colour | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0314` | The frame graph is declared, and an unknown frame raises | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0315` | A framework-owned default layer set exists | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0316` | A component ships a default layout, and the user's wins | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0405` | A plug-in reads data by name, never the algorithm's memory | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0313` | An unknown style token raises; there is no default colour | `VIZ:SW-0050` — real, 2026-08-26 |
+| `SW-0314` | The frame graph is declared, and an unknown frame raises | `VIZ:SW-0058` — real, 2026-08-26 |
+| `SW-0315` | A framework-owned default layer set exists | `VIZ:SW-0048` — real, 2026-08-26 |
+| `SW-0316` | A component ships a default layout, and the user's wins | `VIZ:SW-0033` — real, 2026-08-26 |
+| `SW-0405` | A plug-in reads data by name, never the algorithm's memory | `VIZ:SW-0061` — real, 2026-08-26 |
 
 ---
 
@@ -2852,12 +2852,12 @@ its design row to `WP-09` (`SI-03`'s own package) accordingly — see
 
 | Retired | Was | Replaced by |
 |---|---|---|
-| `SW-0317` | One token table per medium, and one place a colour exists | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0318` | The palette is validated by computation | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0317` | One token table per medium, and one place a colour exists | `VIZ:SW-0014` — real, 2026-08-26 |
+| `SW-0318` | The palette is validated by computation | `VIZ:SW-0051` — real, 2026-08-26 |
 | `SW-0319` | The rendering core is toolkit-independent and headless | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0320` | A figure and a live run are the same picture | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0320` | A figure and a live run are the same picture | `VIZ:SW-0054` — real, 2026-08-26 |
 | `SW-0321` | A snapshot is atomic and reproducible | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0322` | A second rendering surface renders the same scene, never a second scene | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0322` | A second rendering surface renders the same scene, never a second scene | `VIZ:SW-0054` — real, 2026-08-26 |
 | `SW-0323` | Frame time has a stated budget at a stated load | `VIZ:SW-nnnn` — not yet allocated |
 
 ---
@@ -2873,12 +2873,12 @@ Superseded (`SM-01` trial), `SW-0324` — was *Display-only data is decoded only
 | Retired | Was | Replaced by |
 |---|---|---|
 | `SW-0325` | The player names no component and no function | `VIZ:SW-0047` — real, 2026-08-26 |
-| `SW-0326` | Panel state is separable from rendering and testable with no window | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0327` | Toggling a layer re-renders without re-executing | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0328` | Layout is a file, and interactive changes save back to it | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0329` | Per-layer default visibility and view-scoped typed parameters | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0330` | Per-layer input-listening capability is declared, not global | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0331` | Plots address the same port space as everything else | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0326` | Panel state is separable from rendering and testable with no window | `VIZ:SW-0021` — real, 2026-08-26 |
+| `SW-0327` | Toggling a layer re-renders without re-executing | `VIZ:SW-0060` — real, 2026-08-26 |
+| `SW-0328` | Layout is a file, and interactive changes save back to it | `VIZ:SW-0056` — real, 2026-08-26 |
+| `SW-0329` | Per-layer default visibility and view-scoped typed parameters | `VIZ:SW-0053` — real, 2026-08-26 |
+| `SW-0330` | Per-layer input-listening capability is declared, not global | `VIZ:SW-0053` — real, 2026-08-26 |
+| `SW-0331` | Plots address the same port space as everything else | `VIZ:SW-0055` — real, 2026-08-26 |
 | `SW-0332` | The evidence panel and the command line share one producer | `VIZ:SW-nnnn` — not yet allocated |
 | `SW-0333` | Selecting anything on screen reaches its evidence in one action | `VIZ:SW-nnnn` — not yet allocated |
 | `SW-0334` | The pipeline panel offers `measured` only where the recording supports it | `VIZ:SW-nnnn` — not yet allocated |

@@ -1341,16 +1341,16 @@ deleted silently.
 
 | Retired | Was | Replaced by |
 |---|---|---|
-| `SYS-0141` | Layout is a file | `VIZ:SYS-nnnn` — not yet allocated |
-| `SYS-0142` | Layers are registered and switched by name | `VIZ:SYS-nnnn` — not yet allocated |
-| `SYS-0143` | Layer names are namespaced per plugin | `VIZ:SYS-nnnn` — not yet allocated |
-| `SYS-0144` | Per-layer default visibility, and per-view parameters | `VIZ:SYS-nnnn` — not yet allocated |
+| `SYS-0141` | Layout is a file | `VIZ:SYS-0070` — real, 2026-08-26 |
+| `SYS-0142` | Layers are registered and switched by name | `VIZ:SYS-0062` — real, 2026-08-26 |
+| `SYS-0143` | Layer names are namespaced per plugin | `VIZ:SYS-0063` — real, 2026-08-26 |
+| `SYS-0144` | Per-layer default visibility, and per-view parameters | `VIZ:SYS-0064` — real, 2026-08-26 |
 | `SYS-0145` | A component ships a default layout | `VIZ:SYS-nnnn` — not yet allocated |
-| `SYS-0146` | Geometry in metres, style by token | `VIZ:SYS-nnnn` — not yet allocated |
-| `SYS-0147` | One picture, many media | `VIZ:SYS-nnnn` — not yet allocated |
-| `SYS-0148` | Layers stay pure functions | `VIZ:SYS-nnnn` — not yet allocated |
-| `SYS-0149` | A plugin binds ports through the manifest | `VIZ:SYS-nnnn` — not yet allocated |
-| `SYS-0150` | The plugin never reads the algorithm's memory | `VIZ:SYS-nnnn` — not yet allocated |
+| `SYS-0146` | Geometry in metres, style by token | `VIZ:SYS-0065` — real, 2026-08-26 |
+| `SYS-0147` | One picture, many media | `VIZ:SYS-0066` — real, 2026-08-26 |
+| `SYS-0148` | Layers stay pure functions | `VIZ:SYS-0067` — real, 2026-08-26 |
+| `SYS-0149` | A plugin binds ports through the manifest | `VIZ:SYS-0025` — real, already existed |
+| `SYS-0150` | The plugin never reads the algorithm's memory | `VIZ:SYS-0068` — real, 2026-08-26 |
 
 ### 11.4 Panels, snapshots and evidence
 
@@ -1360,7 +1360,7 @@ per `R-REQ-2` rather than deleted silently.
 
 | Retired | Was | Replaced by |
 |---|---|---|
-| `SYS-0151` | Plots are panels over the same address space | `VIZ:SYS-nnnn` — not yet allocated |
+| `SYS-0151` | Plots are panels over the same address space | `VIZ:SYS-0069` — real, 2026-08-26 |
 
 **`SYS-0152`..`SYS-0154` — design call resolved 2026-08-20: `AMEND`, not `supersede`.** Unlike §11.1's four, these three genuinely **do** decompose in part into what just moved — but each also has a live, staying `SI-14`/`SI-17` decomposer that is not the whole requirement, which is what superseding-as-written would have orphaned. Each is a shared principle spanning both modules, not a player-only claim:
 - **`SYS-0152`** — the atomic-write-both-or-neither pattern. The frame-plus-sidecar instance (`SW-0321`) moved to `viz` (`VIZ:SW-nnnn`, this session's `SI-20` disposition). `SW-0227` (`SI-14`, stays) generalises the same pattern to the run manifest and remains this `SYS`'s live decomposer — `SW-0227`'s own `Now.` note already says as much ("the atomic both-or-neither pattern exists in `render/capture.py` and generalises directly").
