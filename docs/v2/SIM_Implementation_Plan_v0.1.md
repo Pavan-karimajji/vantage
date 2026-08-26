@@ -216,8 +216,8 @@ flowchart LR
   W21 --> W22["WP-22 run manifest"]
   W22 --> W23["WP-23 orchestrate"]
   W23 --> W24["WP-24 diagnostics"]
-  W24 --> W25["WP-25 session"]
-  W25 --> W26["WP-26 player split"]
+  W24 --> W25["WP-25 session — retired, SYNC:SM-04"]
+  W25 --> W26["WP-26 player split — retired, SYNC:SM-01/SM-05"]
   W14 --> W27["WP-27 transport"]
   W26 --> W28["WP-28 launcher"]
   W27 --> W29["WP-29 pyapi + plugins"]
@@ -1634,39 +1634,43 @@ plain, already-built Conan packages — no aggregator, no ordering tricks.
 | Phase | Packages | Ticked |
 |---|---:|---:|
 | `MP-0` Freeze the seam | 5 | 0 / 5 |
-| `MP-1` Fix the clock | 7 | 0 / 7 |
-| `MP-2` Fix the reader | 8 | 0 / 8 |
-| `MP-3` Fix coherence | 5 | 0 / 5 |
-| `MP-4` Split the process | 5 | 0 / 5 |
+| `MP-1` Fix the clock | 9 | 2 / 9 |
+| `MP-2` Fix the reader | 11 | 5 / 11 |
+| `MP-3` Fix coherence | 5 | 2 / 5 |
+| `MP-4` Split the process | 6 | 3 / 6 |
 | `MP-5` Images | 1 | 0 / 1 |
-| `MP-6` Package | 1 | 0 / 1 |
-| **Total** | **32** | **0 / 32** |
+| `MP-6` Package | 4 | 3 / 4 |
+| **Total** | **41** | **15 / 41** |
 
-Counted by `docs/v2/py/trace_check.py --progress`, which reads the checkboxes above. It counts boxes; it makes no claim about verification (§0.4). **Every count in §8 is emitted by that script, never typed** — a hand-typed total is the same second stored copy `SW-0373` forbids, one category smaller.
+Counted by `docs/v2/py/trace_check.py --progress`, which reads the checkboxes above. It counts boxes; it makes no claim about verification (§0.4). **Every count in §8 is emitted by that script, never typed** — a hand-typed total is the same second stored copy `SW-0373` forbids, one category smaller. **Regenerated 2026-08-26 (`SYNC:SM-07`)** — the phase/package counts had gone stale (32 packages, all-zero-ticked) from before `WP-06a`/`WP-06b`/`WP-11a`/`WP-14a`/`WP-15a`/`WP-15b`/`WP-26a` existed and before 15 packages had landed; `MP-4`'s own package count drops from this table's earlier 5 to 6 because `WP-26a` (`SYNC:SM-01`'s disposition-table trial slice) was never counted here despite being a real, ticked package. **Same pass, `SYNC:SM-10`:** root `.claude/rules/sim.md`'s `R-SIM-2` corrected to name this module's real C++ enforcement (`SceneBuilder::CheckInlineBudget`, `scene_builder.cpp`) instead of only the retired Python one (`Layer.__post_init__`, which has no C++ equivalent) — `modules/sim/CLAUDE.md`'s doc pointers and its `Role` line were re-audited in the same pass and needed no edit, already accurate.
 
 ### 8.2 Work by package
 
 | `WP` | Phase | `IMP` | `WP` | Phase | `IMP` |
 |---|---|---:|---|---|---:|
-| `WP-01` | `MP-0` | 18 | `WP-17` | `MP-2` | 7 |
-| `WP-02` | `MP-0` | 1 | `WP-18` | `MP-2` | 5 |
-| `WP-03` | `MP-0` | 9 | `WP-19` | `MP-2` | 14 |
-| `WP-04` | `MP-0` | 20 | `WP-20` | `MP-3` | 26 |
-| `WP-05` | `MP-0` | 13 | `WP-21` | `MP-3` | 15 |
-| `WP-06` | `MP-1` | 14 | `WP-22` | `MP-3` | 15 |
-| `WP-07` | `MP-1` | 11 | `WP-23` | `MP-3` | 26 |
+| `WP-01` | `MP-0` | 18 | `WP-15b` | `MP-2` | 1 |
+| `WP-02` | `MP-0` | 1 | `WP-16` | `MP-2` | 2  + the deletion ledger |
+| `WP-03` | `MP-0` | 9 | `WP-17` | `MP-2` | 7 |
+| `WP-04` | `MP-0` | 20 | `WP-18` | `MP-2` | 5 |
+| `WP-05` | `MP-0` | 13 | `WP-19` | `MP-2` | 14 |
+| `WP-06` | `MP-1` | 14 | `WP-20` | `MP-3` | 26 |
+| `WP-06a` | `MP-1` | 1 | `WP-21` | `MP-3` | 15 |
+| `WP-06b` | `MP-1` | 1 | `WP-22` | `MP-3` | 15 |
+| `WP-07` | `MP-1` | 12 | `WP-23` | `MP-3` | 26 |
 | `WP-08` | `MP-1` | 8 | `WP-24` | `MP-3` | 17 |
-| `WP-09` | `MP-1` | 17 | `WP-25` | `MP-4` | 15 |
-| `WP-10` | `MP-1` | 21 | `WP-26` | `MP-4` | 40 |
-| `WP-11` | `MP-1` | 12 | `WP-27` | `MP-4` | 10 |
-| `WP-12` | `MP-1` | 15 | `WP-28` | `MP-4` | 7 |
-| `WP-13` | `MP-2` | 10 | `WP-29` | `MP-4` | 9 |
-| `WP-14` | `MP-2` | 10 | `WP-30` | `MP-5` | 5 |
-| `WP-15` | `MP-2` | 11 | `WP-31` | `MP-6` | 13 |
-| `WP-15a` | `MP-2` | 1 | — | — | — |
-| `WP-16` | `MP-2` | 2  + the deletion ledger | — | — | — |
+| `WP-09` | `MP-1` | 18 | `WP-25` | `MP-4` | 0 — retired, `SYNC:SM-04` |
+| `WP-10` | `MP-1` | 21 | `WP-26` | `MP-4` | 0 — retired, `SYNC:SM-01`/`SM-05` |
+| `WP-11` | `MP-1` | 12 | `WP-26a` | `MP-4` | 0 |
+| `WP-12` | `MP-1` | 15 | `WP-27` | `MP-4` | 10 |
+| `WP-13` | `MP-2` | 10 | `WP-28` | `MP-4` | 7 |
+| `WP-14` | `MP-2` | 10 | `WP-29` | `MP-4` | 9 |
+| `WP-14a` | `MP-2` | 2 | `WP-30` | `MP-5` | 4 |
+| `WP-11a` | `MP-2` | 1 | `WP-31` | `MP-6` | 13 |
+| `WP-15` | `MP-2` | 11 | `WP-32` | `MP-6` | 1 |
+| `WP-15a` | `MP-2` | 1 | `WP-33` | `MP-6` | 1 |
+| — | — | — | `WP-34` | `MP-6` | 1 |
 
-**`WP-16`'s two is not a mistake, and neither is `WP-15a`'s one.** A deletion package lands almost no new design requirements; its content is Design §28.3's ledger and its weight is the gate in front of it — which is now `WP-15a`, a package whose single requirement is the gate itself.
+**`WP-16`'s two is not a mistake, and neither is `WP-15a`'s one — nor `WP-25`/`WP-26`/`WP-26a`'s zero.** A deletion package lands almost no new design requirements; its content is Design §28.3's ledger and its weight is the gate in front of it — which is now `WP-15a`, a package whose single requirement is the gate itself. `WP-25`/`WP-26` carry zero `IMP` because every one of their original requirements retired to `viz` rather than being decomposed here (§24 above); `WP-26a` was never a design-requirement package at all — it is the disposition table itself.
 
 ### 8.3 Where a finding goes
 
