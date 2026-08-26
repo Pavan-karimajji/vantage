@@ -2872,7 +2872,7 @@ Superseded (`SM-01` trial), `SW-0324` — was *Display-only data is decoded only
 
 | Retired | Was | Replaced by |
 |---|---|---|
-| `SW-0325` | The player names no component and no function | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0325` | The player names no component and no function | `VIZ:SW-0047` — real, 2026-08-26 |
 | `SW-0326` | Panel state is separable from rendering and testable with no window | `VIZ:SW-nnnn` — not yet allocated |
 | `SW-0327` | Toggling a layer re-renders without re-executing | `VIZ:SW-nnnn` — not yet allocated |
 | `SW-0328` | Layout is a file, and interactive changes save back to it | `VIZ:SW-nnnn` — not yet allocated |

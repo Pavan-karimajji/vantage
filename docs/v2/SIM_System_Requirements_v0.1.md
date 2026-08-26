@@ -1294,9 +1294,9 @@ to an explanation, never to nothing.
 
 | Retired | Was | Replaced by |
 |---|---|---|
-| `SYS-0132` | The player knows no module | `VIZ:SYS-nnnn` — not yet allocated |
-| `SYS-0133` | Executing and viewing are separated | `VIZ:SYS-nnnn` — not yet allocated |
-| `SYS-0134` | Stepping backwards never fabricates state | `VIZ:SYS-nnnn` — not yet allocated |
+| `SYS-0132` | The player knows no module | `VIZ:SYS-0061` — real, 2026-08-26 |
+| `SYS-0133` | Executing and viewing are separated | `VIZ:SYS-0046` — real, `VZ-12`, 2026-08-19 (already built when `SW-0288`'s own pointer landed; this SYS-level pointer had simply never been written down) |
+| `SYS-0134` | Stepping backwards never fabricates state | `VIZ:SYS-0046` — real, `VZ-12`, 2026-08-19 (same row as `SYS-0133` above — `SYS-0046` is one combined claim; see its own text) |
 
 **`SYS-0128`..`SYS-0131` — design call resolved 2026-08-20: kept, not superseded, not amended.** Read carefully, none of the four ever decomposed into a Python-player-specific `SW` in the first place — every current citer is `SI-25` (`SW-0350`, `SW-0352`, `SW-0353`, `SW-0354`) or `SI-01` (`SW-0419`), both of which stay (`SI-25` splits by end under `SM-06`, `SI-01` is core `io`). Re-reading each Accept clause confirms why: `SYS-0128`'s own Accept is *"the engine builds and runs with no GUI toolkit present"* — an **engine**-side obligation, not a player one; `SYS-0129`/`SYS-0131` are transport-boundary claims (non-perturbing attach, no format knowledge crossing the wire) that hold regardless of what language renders the pixels on the other end of that boundary; `SYS-0130` is `io`'s Conan-linkability claim, already the parent `SW-0419` cites. Their placement under "§11 Player and visualization" was **organisational, not architectural** — these four describe the engine/transport isolation boundary the player sits behind, which is exactly as true once the player is C++ as it was when it was Python. Nothing here moves to `viz`.
 
