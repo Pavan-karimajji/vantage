@@ -2884,7 +2884,7 @@ Superseded (`SM-01` trial), `SW-0324` — was *Display-only data is decoded only
 | `SW-0334` | The pipeline panel offers `measured` only where the recording supports it | `VIZ:SW-nnnn` — not yet allocated |
 | `SW-0335` | An overridden or incoherent run is badged in the window | `VIZ:SW-nnnn` — not yet allocated |
 | `SW-0336` | A missing plug-in degrades, naming what was expected | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0337` | Every action is reachable without knowing where it lives | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0337` | Every action is reachable without knowing where it lives | `VIZ:SW-0067` — real, registry/filter half built and tested; live Ctrl+K demonstration open (native-Windows verification pending), 2026-08-26 |
 | `SW-0338` | A workspace is a mode of one window, not a second application | `VIZ:SW-nnnn` — not yet allocated |
 | `SW-0339` | A scripting console is bound to the live session | `VIZ:SW-nnnn` — not yet allocated |
 | `SW-0340` | The interface surface is closed, published and counted | `VIZ:SW-nnnn` — not yet allocated |
