@@ -2856,7 +2856,7 @@ its design row to `WP-09` (`SI-03`'s own package) accordingly — see
 | `SW-0318` | The palette is validated by computation | `VIZ:SW-0051` — real, 2026-08-26 |
 | `SW-0319` | The rendering core is toolkit-independent and headless | `VIZ:SW-0022` — real, already met and tested before this disposition, 2026-08-26 |
 | `SW-0320` | A figure and a live run are the same picture | `VIZ:SW-0054` — real, 2026-08-26 |
-| `SW-0321` | A snapshot is atomic and reproducible | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0321` | A snapshot is atomic and reproducible | `VIZ:SW-0068` — real, fully tested (real temp directory, real OS rename, no GL/ImGui dependency), 2026-08-27 |
 | `SW-0322` | A second rendering surface renders the same scene, never a second scene | `VIZ:SW-0054` — real, 2026-08-26 |
 | `SW-0323` | Frame time has a stated budget at a stated load | `VIZ:SW-nnnn` — not yet allocated |
 
