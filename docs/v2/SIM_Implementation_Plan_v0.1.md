@@ -1343,8 +1343,7 @@ same as `toolkit`'s own consumers already require.
         passes (**100% tests passed**, `EmbeddedEngine` refactor
         behavior-preserving); `vantage_app.exe` run with no arguments
         prints its usage line and exits 1, the real argv-parsing path.
-- [~] **Exit -- a real windowed run against a real plugin, blocked by a
-      pre-existing, separate gap -- closed by:** attempted for real, on
+- [x] **Exit -- a real windowed run against a real plugin -- closed by:** attempted for real, on
       native Windows (WSL2 interop launching the native `.exe`, GL windows
       never opened through WSL itself, `modules/viz/CLAUDE.md`'s own rule).
       A genuine end-to-end fixture was built with no prior tooling for
@@ -1395,6 +1394,66 @@ same as `toolkit`'s own consumers already require.
       `vantage.py` are untouched by this pass (still point at the Python
       launcher) -- repointing them is a trivial follow-up once the theme
       gap closes and this exit criterion can actually pass.
+
+      **Both blocking gaps closed 2026-08-26, and the windowed run itself
+      now verified live, closing this row for real:**
+
+      1. **Theme-vocabulary gap** (`viz`/`df`): `vizManifest()`'s wire
+         format gained a `ThemeTokenEntry` section (`format_version` 2,
+         `viz/abi/manifest_format.hpp`) carrying a plugin's own style-token
+         vocabulary; `df_viz`'s `conf/viz.yaml` now declares its real R1
+         tokens as the single generated source (`scripts/gen_viz_shim.py`,
+         also read back by `r1_theme_init.cpp` instead of a second
+         hardcoded copy); `player_runner.cpp`'s `RunPlayerWindow` merges
+         every loaded plugin's parsed manifest tokens and calls `Theme
+         Table::Init` with the real union instead of `SmokeTokens()`;
+         `draw_scene.cpp`/`draw_scene_svg.cpp` catch `ThemeTokenError` per
+         prim (skip + report) instead of letting it fastfail the process.
+
+      2. **A second, deeper bug found live re-running the fixed build**
+         (`vantage_app.exe` still fastfailed, `0xC0000409`, same crash,
+         unchanged code): `viz/abi/manifest_builder.cpp`'s `BuildManifest
+         Bytes()` read `df_viz_generated::kManifestHeader`/`kLayers`/
+         `kThemeTokens` directly, but was compiled ONCE into the shared
+         `adas-viz` toolkit archive against *viz's own checked-in
+         placeholder* `generated_manifest.inc` -- while every real
+         component's generated `df_viz_c.cpp` defines the SAME `inline`
+         symbols with ITS OWN data. An ODR violation: the linker silently
+         picked one definition per symbol rather than erroring, so a real
+         component's `vizManifest()` had *never* actually returned its own
+         true layer/port/viewpoint/theme data. Confirmed live by probing
+         `df_viz.dll`'s real exported `vizManifest()` via `ctypes`: a
+         header claiming df's real counts (5 layers, 3 viewpoints) but
+         array contents from the toolkit's own placeholder, and
+         `theme_token_count` reading `0` despite 13 real tokens declared.
+         **Fixed structurally:** `BuildManifestBytes()` now takes its
+         header/layers/viewpoints/theme-tokens/string-blob as explicit
+         arguments (mirroring `ResolvePorts()`'s own established pattern)
+         instead of reading `df_viz_generated::*` internally -- zero
+         dependency on which generated file happened to be in scope when
+         it was compiled, eliminating the ODR hazard rather than choosing
+         a side of it. `RenderThread`'s own internal preview window
+         (`window.cpp`, same shared-toolkit compilation) had the identical
+         hazard; fixed by threading the caller's already-built manifest
+         bytes through `RenderThread::Start()` instead of calling
+         `BuildManifestBytes()` itself. `viz` 41/41 and `df_viz` 21/21
+         gtest green after the fix.
+
+      3. **Live verification, native Windows, `vs2026`:** a real `sim
+         resim` of the same `aeb_canonical_10mps_30m.mcap` through
+         `df_sil.dll` (100 real ticks) fed `vantage_app.exe` driving the
+         real `df_viz.dll` plugin. `Get-Process` confirmed a genuine live
+         window (`MainWindowTitle='vantage'`, non-null `MainWindowHandle`),
+         stable well past the crash's own ~0-2s window; a `PrintWindow`
+         screenshot shows the real declared layer list (`objects`/`hud`/
+         `bsd.zone`/`bsd.warning`/`bsd.sensor_fov`, not the smoke plugin's
+         placeholder) all checked, real geometry on screen (the ego box,
+         `bsd.sensor_fov`'s wedge arc), tick 96/100, zero stderr output --
+         no unresolved-token spam, no crash.
+
+      `vantage.bat`/`vantage.py` are still untouched (still point at the
+      Python launcher) -- repointing them is a trivial follow-up, real but
+      out of this row's own scope.
 
 ---
 
