@@ -673,9 +673,9 @@ def backfill_schema_bytes(output_path: Path, pipeline: Pipeline) -> None:
     but `PortValue.message`'s own lazy decode (`session/tick.py`) then
     degrades too (`decode_message`'s documented `if not schema_bytes:
     return payload`), and nothing downstream expected raw bytes back: a
-    real component's own layer providers (`warning_layer`, found live
-    against `bsd.outputs`) call `.message` assuming a parsed protobuf
-    object always comes back.
+    real component's own layer provider, found live against a real
+    output port, calls `.message` assuming a parsed protobuf object
+    always comes back.
 
     Same read-everything/rewrite pattern `overwrite_manifest_meta`
     (immediately above) already uses, run as its own separate pass
