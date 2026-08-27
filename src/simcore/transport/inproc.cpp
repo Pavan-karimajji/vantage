@@ -2,7 +2,8 @@
 // Proprietary and Confidential.
 // COMPONENT: SIM
 /// @file
-/// @brief `InProcessTransport` -- see `simcore/transport.hpp` for the
+/// @brief
+///   `InProcessTransport` -- see `simcore/transport.hpp` for the
 ///   design note.
 /// @author Pavan Karimajji
 

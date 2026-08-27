@@ -2,7 +2,8 @@
 // Proprietary and Confidential.
 // COMPONENT: SIM
 /// @file
-/// @brief `erg_wire.hpp`'s implementation.
+/// @brief
+///   `erg_wire.hpp`'s implementation.
 /// @author Pavan Karimajji
 
 #include "erg_wire.hpp"

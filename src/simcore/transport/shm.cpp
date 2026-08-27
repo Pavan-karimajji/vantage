@@ -2,7 +2,8 @@
 // Proprietary and Confidential.
 // COMPONENT: SIM
 /// @file
-/// @brief `SharedMemoryTransport` -- see `simcore/transport_shm.hpp` for
+/// @brief
+///   `SharedMemoryTransport` -- see `simcore/transport_shm.hpp` for
 ///   the design note. POSIX (shm_open/mmap) is the implementation this
 ///   module actually builds and tests against (this repo's real dev/CI
 ///   surface is `ubuntu_gcc`); the `_WIN32` branch (CreateFileMapping/

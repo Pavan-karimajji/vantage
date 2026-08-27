@@ -41,12 +41,28 @@ _SCAN_SUFFIXES = (".hpp", ".h", ".cpp")
 # the word).
 _FLOAT_TIME_MEMBER = re.compile(r"\b(?:float|double)\s+\w*(?:_s|_ms|_time)\b\s*[;=]")
 
+# SW-0046 permits float seconds "at CLI, YAML and label boundaries". That list
+# was written before the engine had either of the two boundaries it cannot
+# avoid crossing with a float, and both are fixed by contracts sim does not
+# own:
+#   * the component DLL ABI -- `exec(dtS)` and `AdasPort::ageS` are float
+#     seconds by R-ARCH-4, which predates this requirement;
+#   * a file format whose own time column is a double (`.erg`), read at the
+#     codec seam and converted to integer ns immediately.
+# A blanket allow-list keyed on path would silence those files forever,
+# including code written next year. So the exemption is per line, must state
+# a reason, and greps out in one command:
+#     grep -rn "TIME-BOUNDARY:" include/simcore src/simcore
+# Anything else -- a float second that merely travels between two interior
+# functions -- still fails, which is the whole point of SW-0046.
+_BOUNDARY_MARKER = re.compile(r"//\s*TIME-BOUNDARY:\s*\S")
+
 
 def _scan_file(path: Path) -> list[str]:
     findings: list[str] = []
     for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         code = line.split("//", 1)[0]  # a same-line trailing comment must not trigger a false positive
-        if _FLOAT_TIME_MEMBER.search(code):
+        if _FLOAT_TIME_MEMBER.search(code) and not _BOUNDARY_MARKER.search(line):
             findings.append(f"{path}:{lineno}: {line.strip()}")
     return findings
 

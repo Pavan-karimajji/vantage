@@ -777,11 +777,13 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Now.** `DONE·MOVE` — `core/tick.py`'s derived `age_s`.
 
 **`SW-0046`** · `SI-02` · `P0` · `R1` — All internal time is integer nanoseconds
-**Shall.** No time quantity inside the engine shall be a floating-point type.
-**Accept.** A type scan over the engine's time-carrying structures finds no floating-point member. A period declared in configuration is integer microseconds and a fractional value is refused.
+**Shall.** No time quantity inside the engine shall be a floating-point type, except on a line that crosses a boundary whose float-seconds shape is fixed by a contract the engine does not own, which shall be marked at the site with its reason.
+**Accept.** A type scan over the engine's time-carrying structures finds no floating-point member other than lines carrying a `TIME-BOUNDARY:` marker with a stated reason; a marker with no reason exempts nothing. A period declared in configuration is integer microseconds and a fractional value is refused.
 **Verify.** A · `ANL-SW-14` · T · `UT-BUS-04`   **Trace.** SYS-0060; CN-0139
 **Built.** ● done — `IMP-0046` in `WP-07`
 **Now.** `PARTIAL` — `sil_host` uses `int64_t` nanoseconds throughout, which is correct; `core/tick.py` exposes `age_s` and `hold_age_s` as floats, which is legitimate only because those are human-facing.
+
+*Note (2026-08-27):* the original `Shall` was unqualified and the original `Accept` listed the permitted boundaries as *"CLI, YAML and label"*. `ANL-SW-14` then reported three violations that are none of those and that the engine cannot avoid: `InputMeta::age_s` and `Component::ExecOnce`'s `dt_s`, both feeding the **component DLL ABI** — `exec(dtS)` and `AdasPort::ageS` are float seconds by `R-ARCH-4`, which predates this requirement and is not sim's to change — and `erg.cpp`'s `time_s`, reading a **file format whose own time column is a double** and converting to integer ns on the next line. The requirement was wrong, not the code, so it is corrected here rather than waived at three sites. The exemption is deliberately per line and must state a reason, so it greps out in one command (`grep -rn "TIME-BOUNDARY:" include/simcore src/simcore` — three sites today) and cannot become a path-keyed allow-list that silences code written next year. A float second merely travelling between two interior functions still fails, which is what this requirement is for. `R-REQ-9`'s planted-violation pair for the marker itself lands in `test_a1_check_time_units.py`.
 
 **`SW-0047`** · `SI-02` · `P0` · `R1` — Missing is not zero
 **Shall.** An absent or invalid field shall be represented explicitly and shall never be presented as a zero, an empty string or an empty list.

@@ -48,6 +48,44 @@ def test_check_time_units_ignores_a_float_time_member_inside_a_comment(tmp_path)
     assert check_time_units(roots=(tmp_path,)) == []
 
 
+def test_a_time_boundary_marker_exempts_the_line_but_a_bare_one_does_not(tmp_path):
+    """R-REQ-9's planted-violation pair for the `TIME-BOUNDARY:` exemption.
+
+    SW-0046 permits float seconds at a boundary. The marker is what makes a
+    boundary claim explicit and greppable; a marker with no stated reason is
+    a silencer, and must not exempt anything.
+    """
+    exempt = tmp_path / "boundary.hpp"
+    exempt.write_text(
+        "struct Meta {\n"
+        "  double age_s = 0.0;  // TIME-BOUNDARY: the component ABI takes float seconds\n"
+        "};\n",
+        encoding="utf-8",
+    )
+    assert check_time_units(roots=(tmp_path,)) == []
+
+    # A marker with no reason after the colon exempts nothing.
+    bare = tmp_path / "bare.hpp"
+    bare.write_text(
+        "struct Meta {\n"
+        "  double age_s = 0.0;  // TIME-BOUNDARY:\n"
+        "};\n",
+        encoding="utf-8",
+    )
+    exempt.unlink()
+    findings = check_time_units(roots=(tmp_path,))
+    assert findings, "a reasonless TIME-BOUNDARY marker must not exempt the line"
+    assert "age_s" in findings[0]
+
+    # And a plain interior float second is still caught with no marker at all.
+    bare.write_text(
+        "struct Meta {\n"
+        "  double age_s = 0.0;\n"
+        "};\n",
+        encoding="utf-8",
+    )
+    assert check_time_units(roots=(tmp_path,))
+
 def test_check_time_units_ignores_a_float_member_with_an_unrelated_name(tmp_path):
     planted = tmp_path / "ok.hpp"
     planted.write_text(

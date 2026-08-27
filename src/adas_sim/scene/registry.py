@@ -152,10 +152,19 @@ def layer_provider(
                         if ref is not None:
                             break
                     if ref is None:
-                        return (Layer(
-                            id=layer_id, group=group, prims=(),
-                            unavailable=f"requires {alternatives!r}, none of which any port in this run resolves to",
-                        ),)
+                        # One alternative is the ordinary case and reads as
+                        # prose; `{alternatives!r}` would print a bare Python
+                        # one-tuple, trailing comma and all, on the one surface
+                        # whose whole job is telling a developer why a layer is
+                        # empty (`N-8`, `R-SIM-25`). The single-alternative
+                        # wording is unchanged from before `requires=` accepted
+                        # tuples, so `ST-B1-1`'s golden still matches.
+                        if len(alternatives) == 1:
+                            why = f"requires {alternatives[0]!r}, which no port in this run resolves to"
+                        else:
+                            named = ", ".join(repr(a) for a in alternatives)
+                            why = f"requires one of {named}, none of which any port in this run resolves to"
+                        return (Layer(id=layer_id, group=group, prims=(), unavailable=why),)
                     resolved.append(ref)
                 if not all(name in current[-1].ports for name in resolved):
                     return ()

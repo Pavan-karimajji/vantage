@@ -2,7 +2,8 @@
 // Proprietary and Confidential.
 // COMPONENT: SIM
 /// @file
-/// @brief `PortBus` -- see `simcore/bus.hpp` for the design note. Ported
+/// @brief
+///   `PortBus` -- see `simcore/bus.hpp` for the design note. Ported
 ///   from `sil_host/src/pipeline.cpp::Pipeline::Step`'s own
 ///   `lastOutput_`/`lastDueNs_` hold pair, widened to integer-nanosecond
 ///   `hold_ns` (`SW-0046`) instead of the C++ side's `double holdAgeS`.

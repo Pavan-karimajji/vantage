@@ -44,10 +44,11 @@ MUTATE_HPP = SIM_ROOT / "include" / "simcore" / "mutate.hpp"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-# name -> ("py", module, class name, expected value set, closed-by) for a
-# Python-only enum, ("cpp", header path, C++ enum name, expected value set,
-# closed-by) for a C++-only one, or ("py_cpp", (module, class name),
-# (header path, C++ enum name), expected value set, closed-by) for a
+# name -> (kind, py_ref, cpp_ref, expected value set, closed-by). `py_ref` is
+# always `(module, class name)` and `cpp_ref` always `(header path, C++ enum
+# name)`; the one not used by `kind` is `None`. So: ("py", (module, class),
+# None, ...) for a Python-only enum, ("cpp", None, (header, enum), ...) for a
+# C++-only one, and ("py_cpp", (module, class), (header, enum), ...) for a
 # vocabulary landed on both sides -- checked against `expected` on each
 # side AND against each other, since a same-value-set Python/C++ pair that
 # quietly disagree with EACH OTHER is the drift a same-language check

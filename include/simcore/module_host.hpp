@@ -77,7 +77,7 @@ namespace simcore::module_host {
 // nothing perturbs.
 struct InputMeta {
   bool valid = true;
-  double age_s = 0.0;
+  double age_s = 0.0;  // TIME-BOUNDARY: copied straight to `AdasPort::ageS`, float seconds by R-ARCH-4's component ABI
 };
 
 using PortBytes = std::vector<std::uint8_t>;

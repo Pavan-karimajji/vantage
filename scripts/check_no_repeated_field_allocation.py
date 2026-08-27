@@ -1,7 +1,7 @@
-#!/usr/bin/env python3
 # Copyright (c) <ORG>. All Rights Reserved.
 # Proprietary and Confidential.
 # COMPONENT: SIM
+# @author Pavan Karimajji
 # @file check_no_repeated_field_allocation.py
 # @brief
 #   ANL-SW-23 (SIM_Implementation_Plan_v0.1.md WP-11, serves SW-0098) --
@@ -25,7 +25,6 @@
 #   trust (`R-REQ-9`'s planted-violation discipline one level down: this
 #   file's own `__main__` self-test proves the check still catches a real
 #   `Add`/`InsertRepeated` call when one is planted).
-# @author Pavan Karimajji <Pavan.Karimajji@larsentoubro.com>
 
 from __future__ import annotations
 

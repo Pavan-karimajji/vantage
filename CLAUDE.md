@@ -9,14 +9,31 @@ and renders them. Consumed by every component; owned by none.
 
 > ### ▶ An implementation session starts here
 >
-> **`docs/v2/SIM_Implementation_Plan_v0.1.md` §0.1 — and nothing else.** Then:
+> **`misc/START_HERE.md` — first, before anything else.** One screen. It carries
+> what no tool can derive: which movement is in progress, the single next action,
+> the decisions in force, what is parked and what unparks it, and the open risks.
+> A **specification freeze** is in force and is stated there.
+>
+> Then `docs/v2/SIM_Implementation_Plan_v0.1.md` §0.1, and:
 >
 > ```
 > python docs/v2/py/trace_check.py --status
 > ```
 >
-> It prints the next work package, progress at every layer, and — inside a
-> partly-done package — which `IMP` boxes remain. That is the resume pointer.
+> It prints the overall position first, then progress at every layer, the
+> in-flight packages closest to done, and the next untouched package — with,
+> where a package lands them, which `IMP` boxes remain. That is the resume
+> pointer.
+>
+> **It was wrong until 2026-08-27** and said `WP-01` from 20% to 79% complete;
+> if you remember that answer, it is fixed. See `misc/memory.md` §1.
+>
+> **Division of labour, so the two never drift:** `trace_check.py` is the
+> authority for *what is built* — every count is computed from the plan's
+> checkboxes. `misc/START_HERE.md` is the authority for *what we are doing and
+> why*, and **contains no counts at all**. Never put a progress list in
+> `START_HERE.md`; that is a second copy of the plan's state and it will drift
+> from it, which is the defect the 2026-08-27 reset exists to undo.
 >
 > **`docs/v1/` is not the build order.** It is the *previous* effort's plan,
 > 632 of 740 boxes ticked, and it looks convincingly resumable. Resuming it is
@@ -57,7 +74,7 @@ duplicate test identifier** (`R-REQ-2`), and **verifies every generated
 
 | Command | Answers |
 |---|---|
-| `trace_check.py --status` | *Where did I stop?* Per-layer done/started/open, and the next work package |
+| `trace_check.py --status` | *Where did I stop?* Overall position, per-layer done/started/open, in-flight packages, next untouched package |
 | `trace_check.py --write-status` | Regenerates the `**Built.**` lines after ticking boxes. Idempotent |
 | `trace_check.py --exec-rows all` | Test Execution Record skeleton, all `Not Run` |
 
@@ -68,7 +85,9 @@ for each other** (`R-REQ-6`, `R-REQ-6a`):
   from the plan's per-`IMP` checkboxes, which are the **only** hand-maintained
   progress state in the set. Never typed; verified on every run.
 - **`SIM_Test_Execution_<date>.md`** — *has it been verified?* Pass/fail, dated,
-  per campaign. Not yet created; generate its rows when the first campaign runs.
+  per campaign. **First campaign run 2026-08-27: FAIL** — 1499 passed, 12 failed,
+  plus header/time-unit/trace violations and 3 scenario failures. A later campaign
+  is a **new file**, never an edit to an existing one (`R-REQ-6`).
 
 **Tick discipline.** `[x]` only when the named test passes. `[~]` for part-done
 work and it **must** say `closed by <command or condition>` — a bare `[~]` is a

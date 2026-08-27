@@ -602,7 +602,7 @@ class ErgReader final : public Reader {
   }
 
   std::int64_t RowLogTimeNs(std::size_t row_index) const {
-    const double time_s = ReadColumnAsDouble(columns_[0], RowBase(row_index));
+    const double time_s = ReadColumnAsDouble(columns_[0], RowBase(row_index));  // TIME-BOUNDARY: `.erg`'s own time column is a double; converted to integer ns on the next line and never held
     return static_cast<std::int64_t>(time_s * 1e9 + (time_s >= 0 ? 0.5 : -0.5));
   }
 

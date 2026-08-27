@@ -44,7 +44,7 @@ def test_check_closed_sets_fails_on_a_planted_extra_verb():
     globals()["_seven_verbs_holder"] = _SevenVerbs
     findings, checked, not_yet = check_closed_sets(
         closed_sets={
-            "OverrideVerb": ("py", __name__, "_seven_verbs_holder", frozenset(
+            "OverrideVerb": ("py", (__name__, "_seven_verbs_holder"), None, frozenset(
                 {"const", "hold", "offset", "scale", "select", "drop"}
             ), "R-SIM-15"),
         }
@@ -67,7 +67,7 @@ def test_check_closed_sets_fails_on_a_planted_missing_verb():
     globals()["_five_verbs_holder"] = _FiveVerbs
     findings, checked, not_yet = check_closed_sets(
         closed_sets={
-            "OverrideVerb": ("py", __name__, "_five_verbs_holder", frozenset(
+            "OverrideVerb": ("py", (__name__, "_five_verbs_holder"), None, frozenset(
                 {"const", "hold", "offset", "scale", "select", "drop"}
             ), "R-SIM-15"),
         }
@@ -81,7 +81,7 @@ def test_check_closed_sets_fails_on_a_planted_missing_verb():
 def test_check_closed_sets_reports_unimportable_module():
     findings, checked, not_yet = check_closed_sets(
         closed_sets={
-            "Nonexistent": ("py", "adas_sim.does_not_exist", "Whatever", frozenset(), "N/A"),
+            "Nonexistent": ("py", ("adas_sim.does_not_exist", "Whatever"), None, frozenset(), "N/A"),
         }
     )
     assert checked == 1
@@ -99,7 +99,7 @@ def test_check_closed_sets_fails_on_a_planted_cpp_origin_extra_value(tmp_path):
     )
     findings, checked, not_yet = check_closed_sets(
         closed_sets={
-            "Origin": ("cpp", planted, "Origin", frozenset(
+            "Origin": ("cpp", None, (planted, "Origin"), frozenset(
                 {"measured", "truth", "mocked", "simulated", "overridden", "unknown"}
             ), "SW-0048"),
         }
@@ -121,7 +121,7 @@ def test_check_closed_sets_passes_on_the_real_cpp_origin_enum():
 def test_check_closed_sets_reports_unreadable_cpp_header(tmp_path):
     findings, checked, not_yet = check_closed_sets(
         closed_sets={
-            "Origin": ("cpp", tmp_path / "does_not_exist.hpp", "Origin", frozenset(), "SW-0048"),
+            "Origin": ("cpp", None, (tmp_path / "does_not_exist.hpp", "Origin"), frozenset(), "SW-0048"),
         }
     )
     assert checked == 1

@@ -11,7 +11,7 @@
 
 ### 0.1 ▶ START HERE
 
-> **The next work package is the lowest-numbered `WP` whose checkbox is unticked and whose prerequisites are all ticked.** Do not scan for something that looks unfinished, and do not start a package out of order because it looks easy: §1.2's ordering constraints are load-bearing and three of them are the difference between a reversible migration and a rewrite.
+> **A package is *closed* when every box under it is ticked, *in flight* when some are, and *untouched* when none are.** Resume by finishing what is in flight before opening anything untouched, and do not start an untouched package out of order because it looks easy: §1.2's ordering constraints are load-bearing and three of them are the difference between a reversible migration and a rewrite.
 
 **Ask the document rather than reading it:**
 
@@ -19,12 +19,25 @@
 python docs/v2/py/trace_check.py --status
 ```
 
-It prints the next work package, what is done, partially done and not started at
-every layer, and — inside a partially-done package — **which `IMP` boxes remain**.
-That is the resume pointer; §0.5 explains where each number comes from. Nothing
-in it is typed by hand except the checkboxes in this document.
+It prints **the overall position first**, then the in-flight packages with the
+fewest boxes left, then the next untouched package and — where the package lands
+them — **which `IMP` boxes remain**. That is the resume pointer; §0.5 explains
+where each number comes from. Nothing in it is typed by hand except the
+checkboxes in this document.
 
-At the time of writing the next package is **`WP-01`**, and `WP-01` is CI and the check harness — not code. `CN-0351`: *CI shall be established at the start of the build order, not the end. Manual verification is the mechanism that fails first.*
+> **Corrected 2026-08-27.** This section used to read *"the next work package is
+> the lowest-numbered `WP` whose checkbox is unticked"*, and the tool implemented
+> it literally. One `[~]` box is enough to leave a package unticked, so the
+> pointer named **`WP-01` continuously while the set went from 20% to 79%
+> complete** — every session was told to start at the beginning, and the work
+> correctly felt endless. A pointer that always gives the same answer is a
+> constant, not a pointer. Two further faults were fixed with it: the headline
+> position was not printed at all, and package state was tallied only from boxes
+> naming an `IMP` id, so a package whose work sits in exit-gate and task boxes
+> (`WP-02`) reported as untouched with its section all but finished. Rationale and
+> the wider diagnosis: `misc/memory.md` §1.
+
+The first untouched package is **`WP-17`** — the `io` index. `WP-01` is CI and the check harness — not code — and finishing it is the first action of the 2026-08-27 reset. `CN-0351`: *CI shall be established at the start of the build order, not the end. Manual verification is the mechanism that fails first.*
 
 **Ticking as you go.** A landed design requirement is `- [x]` on its own box
 under its package's `Lands:` line, ticked when its named test passes — not when
@@ -92,7 +105,7 @@ Design's assignments diverge.
 | Prefix | Means | Allocated by |
 |---|---|---|
 | `MP-0`…`MP-6` | Migration phase, from concept §23 unchanged | Concept |
-| `WP-01`…`WP-31` | Work package. Stable; a dissolved package's number is retired. A package inserted after numbering is **lettered** (`WP-15a`) rather than renumbered, so §0.1's *lowest-numbered unticked package* rule keeps pointing at the right work | This document |
+| `WP-01`…`WP-31` | Work package. Stable; a dissolved package's number is retired. A package inserted after numbering is **lettered** (`WP-15a`) rather than renumbered, so it sorts beside the work it belongs to and §0.1's resume order stays meaningful | This document |
 | `IMP-nnnn` | Implementation design requirement | Implementation Design |
 | `SW-nnnn` / `SYS-nnnn` / `CN-nnnn` | Requirement UIDs | Their own documents |
 
@@ -141,7 +154,7 @@ plan checkboxes (here)   ← the only stored progress state, per IMP
 
 | Command | What it does |
 |---|---|
-| `python docs/v2/py/trace_check.py --status` | Per-layer done / partial / not-started, and **the next work package** |
+| `python docs/v2/py/trace_check.py --status` | **The overall position**, per-layer done / partial / not-started, the in-flight packages closest to done, and the next untouched package |
 | `python docs/v2/py/trace_check.py --write-status` | Regenerates every `**Built.**` line from these boxes. Idempotent |
 | `python docs/v2/py/trace_check.py` | Ordinary run — **verifies** every written `**Built.**` line against these boxes and fails on disagreement |
 
@@ -662,7 +675,7 @@ flowchart LR
 - [x] **Files:** `scripts/prove_equal.py` · `scripts/check_coverage_delta.py` · `tests/integration/test_wp15a_row1_recording_read.cpp` (row 1's assembly, `IMP-0019`'s own closing evidence) — all landed, `prove_equal.py`/`check_coverage_delta.py` each with a planted-violation test (`tests/unit/test_a1_prove_equal.py`, `tests/unit/test_a1_check_coverage_delta.py`, `IMP-0370`'s pattern); the assembly's own test carries a dedicated case (`IncompleteTickNeverDrainsUnlikeSilHostsTolerantGrouping`) planting the one real, permanent divergence from `recording_reader.cpp` (completeness — see below) so a future change that silently makes the two "more equal" than they should be is caught.
 - [x] **Exit:** **7 of 7 rows of Design §28.3 proven equal, zero unexplained failures, zero PENDING** — `scripts/prove_equal.py`, run fresh this session against a rebuilt `sil_host/build-gtest-vs2026/tests/Release/sil_tests.exe` and a rebuilt `modules/sim/build-gtest-vs2026/tests/Release/simcore_tests.exe`, both on `vs2026`/MSVC (WSL2 `cmd.exe` interop), plus `modules/sim/build-gtest-ubuntu_gcc` rebuilt and run natively (`simcore_tests`: 197/197 green, including the 3 tests previously reported as pre-existing failures — `UtExe05ExitCodes`/`UtEdg08Reproducer` — which are green under `ubuntu_gcc`; on `vs2026` 4 tests fail for reasons confirmed pre-existing and unrelated to this session's change — `It11EmbedHost.ConstructsRunsAndDestroysThroughTheCAbiAlone`/`UtExe04Restart.EnabledRunThatSucceedsRecordsExactlyOneOkAttempt`/`UtExe05ExitCodes.OkOnARealSuccessfulRun` (a JSON-escaping defect in a Windows temp path fed to `LoadRunSpec`) and `UtEdg08Reproducer.WritesARealPackageWithEveryDeclaredPiece` (a Windows temp-dir file lock) — reproduced identically with this session's row-1 files removed via `git stash`, confirming they predate this change and lie outside every one of the seven rows' corpus): row 1 (recording read and cycle grouping — assembled this session, see above, PASS with two stated scope boundaries — cycle-key equivalence holds while no header field is decoded, `WP-08`'s own first-slice scope, and completeness is a real, permanent, deliberately-planted divergence scoped to well-formed/R-SIM-6 recordings, never claimed equal in general), row 2 (pipeline load/validate), row 3 (ingest map), row 4 (component host), row 5 (base-grid, same adversarial numbers 7000000/10000000/"df" on both sides), row 6 (library resolution, same-input case since no dedicated C++ test file exists) and row 7 (codec — **Design §28.3's own snapshot is stale here**: `WP-06` landed `simcore/io` + `simcore/io/codecs/mcap.cpp` for real after that table was written, so the "survivor not yet built" premise no longer holds; `scripts/check_no_duplication.py` updated in an earlier pass to move `codec` into `KNOWN_PENDING_DUPLICATION`, closed by `WP-16`). `ANL-SW-09`'s baseline mechanism (`scripts/check_coverage_delta.py --write-baseline`) is real and run (`scripts/coverage_baseline.json` committed); its `--check` mode is what `WP-16` invokes after deleting `sil_host` — verified in an earlier pass to correctly fail on a planted coverage drop and pass clean against the just-written baseline. **`WP-16`'s `WP-15a` prereq is now satisfied — all seven rows PASS.**
 
-> **Why this is a package and not a line inside `WP-16`.** It gates the removal of ~2,500 lines and a whole module, and risk `R-2` is that it gets started before the gate is clean *because the deletions look obvious*. A gate written inside the package it guards is opened by whoever opens the package. As its own `WP` it is a **ticked prerequisite**, which is the only mechanism this plan trusts anywhere else. It is lettered rather than numbered so that §0.1's *"lowest-numbered unticked package"* rule keeps pointing at the right work.
+> **Why this is a package and not a line inside `WP-16`.** It gates the removal of ~2,500 lines and a whole module, and risk `R-2` is that it gets started before the gate is clean *because the deletions look obvious*. A gate written inside the package it guards is opened by whoever opens the package. As its own `WP` it is a **ticked prerequisite**, which is the only mechanism this plan trusts anywhere else. It is lettered rather than numbered so that it sorts beside the work it gates and §0.1's resume order stays meaningful.
 
 ### WP-15b · `MP-2` · rewire the live callers of the retiring implementation onto `simengine`
 

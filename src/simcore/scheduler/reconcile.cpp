@@ -2,7 +2,8 @@
 // Proprietary and Confidential.
 // COMPONENT: SIM
 /// @file
-/// @brief `Scheduler::ReconcileModuleFlag` (`SW-0066`, `WP-09`) -- ported
+/// @brief
+///   `Scheduler::ReconcileModuleFlag` (`SW-0066`, `WP-09`) -- ported
 ///   from `contracts/pipeline.py`'s `ProvenanceWarning` (naming stage,
 ///   port, declared period, predicted due-ness and reported flag), scoped
 ///   here to the stage-level disagreement this class can see without a

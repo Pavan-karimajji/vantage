@@ -1,61 +1,60 @@
-/* Copyright (c) <ORG>. All Rights Reserved.
- * Proprietary and Confidential.
- * COMPONENT: SIM
- * @file
- * @brief
- *   `SI-09`/`D-5` (`IMP-0144`, `WP-14`): `simcore`'s own embeddable C ABI --
- *   what a HOST (`simengine`, or any other host, `SW-0144`/`IT-11`) links
- *   against to construct and drive the engine. Plain C, `extern "C"`, so
- *   the boundary is loader/linker-stable the same way `abi/module_abi.h`
- *   is -- but the two headers are DIFFERENT ABIs, in opposite directions:
- *   `module_abi.h` (`adas_sil_abi.h`) is what a COMPONENT DLL exposes TO
- *   `module_host`; this header is what `simcore` itself exposes TO a host
- *   that embeds it. Do not conflate the two.
- *
- *   `D-1`: this ABI's only input is a Resolved Run Spec (`IF-09`) already
- *   on disk -- no configuration parser, no path search, no inference on
- *   this side of the boundary (that already happened in the Python
- *   emitter that produced the spec, `runspec/emit.py`). `sources[0].path`
- *   in that spec names the recording; nothing here takes a second path
- *   argument for it.
- *
- *   `IT-11` proves `SW-0144` by linking a test harness -- not `simengine`
- *   -- against exactly this header and this library, with no privileged
- *   access `simengine` itself does not also have.
- *
- *   `ABI_VERSION 2` (`SM-11`, `vantage`): two additions, both optional --
- *   a caller ignoring them gets `ABI_VERSION 1`'s exact behaviour
- *   (`simEngineRun`'s one-call run-to-completion is unchanged). `simEngine
- *   AttachTransport` and `simEngineStepOnce` exist for exactly one real
- *   need neither `simengine` nor `IT-11`'s own host had: an IN-PROCESS
- *   host that renders every tick AS it computes (`D-5`: "the engine hosts
- *   the player, never the reverse") needs a per-tick hook to pump a
- *   renderer between cycles, which `simEngineRun`'s single blocking call
- *   structurally cannot give it. `transport_publisher` is `void*` rather
- *   than a typed pointer because `simcore::transport::TransportPublisher`
- *   is a C++ type this plain-C header cannot name -- the same "opaque
- *   pointer, cast internally" shape `SimEngine*` itself already uses one
- *   level up; a caller constructs the real transport object in C++ (this
- *   header is included from a `.cpp`, same as every other user of it) and
- *   passes it straight through uninterpreted.
- *
- *   **Caller MUST convert to `simcore::transport::TransportPublisher*`
- *   BEFORE erasing to `void*`.** Both real transport classes
- *   (`InProcessTransport`, `SharedMemoryTransport`) multiply-inherit
- *   `adas::transport::ITransport` AND `TransportPublisher`, so the two
- *   base subobjects sit at different addresses whenever `TransportPublisher`
- *   is not literally the first base listed (it is not, in either class).
- *   The compiler applies that offset adjustment only while it still has
- *   both types in view -- erasing straight from the derived pointer skips
- *   it, and this function's own internal `static_cast<TransportPublisher*>
- *   (void*)` cannot recover it from a bare `void*` (no type information
- *   survives the erasure to correct it). Found live: doing this wrong
- *   does not crash -- it silently attaches to the wrong subobject and
- *   delivers no real frames. Correct: `TransportPublisher* p = &transport;
- *   simEngineAttachTransport(engine, p);` (the implicit derived-to-base
- *   conversion happens on the FIRST line, while both types are visible).
- * @author Pavan Karimajji
- */
+// Copyright (c) <ORG>. All Rights Reserved.
+// Proprietary and Confidential.
+// COMPONENT: SIM
+/// @file
+/// @brief
+///   `SI-09`/`D-5` (`IMP-0144`, `WP-14`): `simcore`'s own embeddable C ABI --
+///   what a HOST (`simengine`, or any other host, `SW-0144`/`IT-11`) links
+///   against to construct and drive the engine. Plain C, `extern "C"`, so
+///   the boundary is loader/linker-stable the same way `abi/module_abi.h`
+///   is -- but the two headers are DIFFERENT ABIs, in opposite directions:
+///   `module_abi.h` (`adas_sil_abi.h`) is what a COMPONENT DLL exposes TO
+///   `module_host`; this header is what `simcore` itself exposes TO a host
+///   that embeds it. Do not conflate the two.
+///
+///   `D-1`: this ABI's only input is a Resolved Run Spec (`IF-09`) already
+///   on disk -- no configuration parser, no path search, no inference on
+///   this side of the boundary (that already happened in the Python
+///   emitter that produced the spec, `runspec/emit.py`). `sources[0].path`
+///   in that spec names the recording; nothing here takes a second path
+///   argument for it.
+///
+///   `IT-11` proves `SW-0144` by linking a test harness -- not `simengine`
+///   -- against exactly this header and this library, with no privileged
+///   access `simengine` itself does not also have.
+///
+///   `ABI_VERSION 2` (`SM-11`, `vantage`): two additions, both optional --
+///   a caller ignoring them gets `ABI_VERSION 1`'s exact behaviour
+///   (`simEngineRun`'s one-call run-to-completion is unchanged). `simEngine
+///   AttachTransport` and `simEngineStepOnce` exist for exactly one real
+///   need neither `simengine` nor `IT-11`'s own host had: an IN-PROCESS
+///   host that renders every tick AS it computes (`D-5`: "the engine hosts
+///   the player, never the reverse") needs a per-tick hook to pump a
+///   renderer between cycles, which `simEngineRun`'s single blocking call
+///   structurally cannot give it. `transport_publisher` is `void*` rather
+///   than a typed pointer because `simcore::transport::TransportPublisher`
+///   is a C++ type this plain-C header cannot name -- the same "opaque
+///   pointer, cast internally" shape `SimEngine*` itself already uses one
+///   level up; a caller constructs the real transport object in C++ (this
+///   header is included from a `.cpp`, same as every other user of it) and
+///   passes it straight through uninterpreted.
+///
+///   **Caller MUST convert to `simcore::transport::TransportPublisher*`
+///   BEFORE erasing to `void*`.** Both real transport classes
+///   (`InProcessTransport`, `SharedMemoryTransport`) multiply-inherit
+///   `adas::transport::ITransport` AND `TransportPublisher`, so the two
+///   base subobjects sit at different addresses whenever `TransportPublisher`
+///   is not literally the first base listed (it is not, in either class).
+///   The compiler applies that offset adjustment only while it still has
+///   both types in view -- erasing straight from the derived pointer skips
+///   it, and this function's own internal `static_cast<TransportPublisher*>
+///   (void*)` cannot recover it from a bare `void*` (no type information
+///   survives the erasure to correct it). Found live: doing this wrong
+///   does not crash -- it silently attaches to the wrong subobject and
+///   delivers no real frames. Correct: `TransportPublisher* p = &transport;
+///   simEngineAttachTransport(engine, p);` (the implicit derived-to-base
+///   conversion happens on the FIRST line, while both types are visible).
+/// @author Pavan Karimajji
 
 #ifndef SIMCORE_ABI_SIMCORE_H_
 #define SIMCORE_ABI_SIMCORE_H_

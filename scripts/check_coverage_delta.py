@@ -1,7 +1,7 @@
-#!/usr/bin/env python3
 # Copyright (c) <ORG>. All Rights Reserved.
 # Proprietary and Confidential.
 # COMPONENT: SIM
+# @author Pavan Karimajji
 # @file check_coverage_delta.py
 # @brief
 #   ANL-SW-09 (docs/v2/SIM_Software_Test_Spec_v0.1.md, serves SW-0019;
@@ -35,7 +35,6 @@
 #       This is the call `WP-16` makes after deleting `sil_host`: the
 #       retiring implementation's tests are gone by then, so only the
 #       survivor side is comparable, and it must not have shrunk.
-# @author Pavan Karimajji <Pavan.Karimajji@larsentoubro.com>
 
 from __future__ import annotations
 

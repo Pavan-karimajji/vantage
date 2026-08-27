@@ -1,7 +1,7 @@
-#!/usr/bin/env python3
 # Copyright (c) <ORG>. All Rights Reserved.
 # Proprietary and Confidential.
 # COMPONENT: SIM
+# @author Pavan Karimajji
 # @file check_engine_boundary.py
 # @brief
 #   ANL-SW-80 (SIM_Software_Test_Spec_v0.1.md, serves SW-0419) --
@@ -20,7 +20,6 @@
 #   set transitively -- there is no separate "engine" package to check
 #   against yet, and the escape hatch (splitting `io` into its own Conan
 #   package) is written into SM-02's own box for the day that stops holding.
-# @author Pavan Karimajji <Pavan.Karimajji@larsentoubro.com>
 
 import argparse
 import json

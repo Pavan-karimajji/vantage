@@ -65,7 +65,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -373,19 +373,33 @@ _STATE = {"x": DONE, "~": PARTIAL, " ": OPEN}
 
 def parse_plan(
     text: str,
-) -> tuple[dict[str, set[str]], dict[str, bool], dict[str, str], list[str]]:
-    """Return (wp -> IMP ids claimed, wp -> all-ticked, IMP -> state, findings).
+) -> tuple[
+    dict[str, set[str]],
+    dict[str, bool],
+    dict[str, str],
+    list[str],
+    dict[str, Counter],
+]:
+    """Return (wp -> IMP ids claimed, wp -> all-ticked, IMP -> state, findings,
+    wp -> box tally).
 
     The third value is the **only** hand-maintained progress state in the
     document set (Plan 0.5); `SW`, `SYS` and `CN` marks are rolled up from it and
     never typed. The fourth is the caveat check: a `[~]` whose text says nothing
     beyond the identifier records that somebody was unsure, not where to resume,
     so it is a finding rather than a state.
+
+    The fifth counts **every** box under a package, not only the ones naming an
+    `IMP` id. A package whose work is carried in exit-gate and task boxes lands
+    few or no `IMP` rows, so an `imp_state` tally alone reports it untouched
+    while its section is all but finished -- which is the same class of wrong
+    answer the resume pointer used to give.
     """
     lands: dict[str, set[str]] = defaultdict(set)
     ticked: dict[str, bool] = {}
     imp_state: dict[str, str] = {}
     findings: list[str] = []
+    boxes: dict[str, Counter] = defaultdict(Counter)
     current = ""
     for line in text.split("\n"):
         h = re.match(r"^### (" + WP_ID + r") ", line)
@@ -399,6 +413,7 @@ def parse_plan(
         if not box:
             continue
         mark, body = box.group(2), box.group(3)
+        boxes[current][_STATE[mark]] += 1
         if mark != "x":
             ticked[current] = False
         ib = IMP_BOX.match(line)
@@ -426,7 +441,7 @@ def parse_plan(
             for a, b in re.findall(r"`(IMP-\d+)`…`(IMP-\d+)`", line):
                 for n in range(int(a[4:]), int(b[4:]) + 1):
                     lands[current].add(f"IMP-{n:04d}")
-    return lands, ticked, imp_state, findings
+    return lands, ticked, imp_state, findings, boxes
 
 
 def roll_up(
@@ -633,7 +648,11 @@ def main() -> int:
         choices=("system", "concept", "software", "all"),
         help="emit Test Execution Record rows for a level, all Not Run",
     )
-    ap.add_argument("--status", action="store_true", help="progress per layer, and the next work package")
+    ap.add_argument(
+        "--status",
+        action="store_true",
+        help="overall position, progress per layer, in-flight packages, next untouched package",
+    )
     ap.add_argument(
         "--write-status",
         action="store_true",
@@ -651,7 +670,7 @@ def main() -> int:
     sysreqs = parse_sys(sys_text)
     sw = parse_sw(sw_text)
     imp = parse_imp(imp_text)
-    lands, ticked, imp_boxes, box_findings = parse_plan(plan_text)
+    lands, ticked, imp_boxes, box_findings, wp_boxes = parse_plan(plan_text)
     spec_tests = parse_testspec(test_text)
     sys_spec_tests = parse_spec_ids(systest_text, SYS_TEST_ID)
     cn_spec_tests = parse_spec_ids(cntest_text, CN_TEST_ID)
@@ -971,21 +990,59 @@ def main() -> int:
         layer("SW software", sw_st)
         layer("IMP design", imp_st)
         print()
-        nxt = [w for w in sorted(plan_wps) if not ticked[w]]
-        if not nxt:
-            print("  next work package    every package is ticked")
-        else:
-            w = nxt[0]
+        # The resume pointer. Plan 0.1 asked for "the lowest-numbered package not
+        # yet done", and the obvious reading -- lowest package whose boxes are not
+        # all `x` -- answered `WP-01` continuously while the set went from 20% to
+        # 79% complete: two of its eighteen boxes are `~`, and one `~` is enough
+        # to pin the pointer to the first package forever. A pointer that always
+        # says "the beginning" is not a resume pointer, it is a constant, and a
+        # session that runs this daily correctly concludes the work never ends.
+        # So: three questions, answered separately -- how far along am I, what did
+        # I leave dangling, and what is the next untouched thing.
+        closed: list[str] = []
+        inflight: list[tuple[int, str, int, int]] = []
+        untouched: list[str] = []
+        for w in sorted(plan_wps):
+            c = wp_boxes.get(w, Counter())
+            d, rem = c[DONE], c[PARTIAL] + c[OPEN]
+            n = d + rem
+            if n == 0 or rem == 0:
+                closed.append(w)
+            elif d == 0 and c[PARTIAL] == 0:
+                untouched.append(w)
+            else:
+                inflight.append((rem, w, d, n))
+
+        imp_done = sum(1 for v in imp_st.values() if v == DONE)
+        pct = round(100 * imp_done / len(imp_st)) if imp_st else 0
+        print(
+            f"  ▶ OVERALL   {imp_done}/{len(imp_st)} design items ({pct}%)   ·   "
+            f"packages: {len(closed)} closed · {len(inflight)} in flight · "
+            f"{len(untouched)} untouched"
+        )
+
+        if inflight:
+            print()
+            print("  ▶ finish these first -- fewest items left")
+            for rem, w, d, n in sorted(inflight)[:5]:
+                print(f"      {w:<8s} {d:3d}/{n:<3d} boxes   {rem} left")
+
+        if untouched:
+            print()
+            w = untouched[0]
+            c = wp_boxes.get(w, Counter())
             mine = sorted(u for u, o in imp.items() if o.wp == w)
-            left = [u for u in mine if imp_st[u] != DONE]
-            print(f"  ▶ next work package  {w}   ({len(mine) - len(left)}/{len(mine)} IMP done)")
-            for u in left[:12]:
+            print(f"  ▶ next untouched package  {w}   (0/{c[DONE] + c[PARTIAL] + c[OPEN]} boxes)")
+            for u in mine[:8]:
                 print(f"      {GLYPH[imp_st[u]]} {u}  {imp[u].serves}")
-            if len(left) > 12:
-                print(f"      … and {len(left) - 12} more")
-            started = [w2 for w2 in nxt if any(imp_st[u] == PARTIAL for u, o in imp.items() if o.wp == w2)]
-            if started:
-                print(f"  packages with started-but-unfinished work: {', '.join(started)}")
+            if len(mine) > 8:
+                print(f"      … and {len(mine) - 8} more")
+            if len(untouched) > 1:
+                print(f"  other untouched: {', '.join(untouched[1:])}")
+
+        if inflight:
+            print()
+            print(f"  in flight ({len(inflight)}): {', '.join(w for _, w, _, _ in sorted(inflight))}")
 
     if args.progress:
         print()

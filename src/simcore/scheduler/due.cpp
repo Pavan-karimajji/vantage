@@ -2,7 +2,8 @@
 // Proprietary and Confidential.
 // COMPONENT: SIM
 /// @file
-/// @brief `Scheduler`'s core -- see `simcore/scheduler.hpp` for the design
+/// @brief
+///   `Scheduler`'s core -- see `simcore/scheduler.hpp` for the design
 ///   note. Due-ness and the tick clock are ported from
 ///   `sil_host/src/pipeline.cpp::Pipeline::Step`'s own
 ///   `elapsedNs_ % periodNs == 0` (confirmed by reading that file

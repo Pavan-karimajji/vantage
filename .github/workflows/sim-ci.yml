@@ -35,9 +35,20 @@
 
 name: sim-ci
 
+# Trigger corrected 2026-08-27. This read `branches: [feat/sim-platform]`, and
+# that branch is 98 commits behind `main` with nothing `main` lacks -- abandoned.
+# So the job existed from 2026-08-13 and could never once have fired, which is
+# the mechanical reason the repository had no CI while `WP-01` reported 16/18
+# done. It is the same failure this package's own Exit gate names -- a green
+# check that scanned nothing is indistinguishable from a green check that
+# scanned everything -- arriving one level up, at the trigger rather than the
+# check. `main` is where the work lands (R-GIT-1: submodule first, pointer
+# after), so `main` is what the gate must watch.
 on:
   push:
-    branches: [feat/sim-platform]
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch: {}
 
 jobs:

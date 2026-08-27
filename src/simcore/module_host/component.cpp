@@ -143,7 +143,7 @@ Result<bool> Component::Reset() {
 }
 
 Result<PortMap> Component::ExecOnce(std::int64_t dt_ns, const PortMap& inputs, const InputMetaMap& input_meta) {
-  const double dt_s = static_cast<double>(dt_ns) / 1'000'000'000.0;
+  const double dt_s = static_cast<double>(dt_ns) / 1'000'000'000.0;  // TIME-BOUNDARY: the component ABI's `exec(dtS)` takes float seconds (R-ARCH-4)
 
   std::vector<std::string> in_names;
   std::vector<AdasPort> in_ports;

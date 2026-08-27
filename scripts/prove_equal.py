@@ -1,7 +1,7 @@
-#!/usr/bin/env python3
 # Copyright (c) <ORG>. All Rights Reserved.
 # Proprietary and Confidential.
 # COMPONENT: SIM
+# @author Pavan Karimajji
 # @file prove_equal.py
 # @brief
 #   IMP-0019 / SW-0019 / IT-04 / ANL-SW-09 (docs/v2/SIM_Implementation_Plan_v0.1.md
@@ -49,7 +49,6 @@
 #   build scope. It is reported PENDING-BUILD with the exact command to
 #   produce it, and the row's contribution to the overall gate is held open
 #   rather than silently passed.
-# @author Pavan Karimajji <Pavan.Karimajji@larsentoubro.com>
 
 from __future__ import annotations
 

@@ -1,7 +1,7 @@
-#!/usr/bin/env python3
 # Copyright (c) <ORG>. All Rights Reserved.
 # Proprietary and Confidential.
 # COMPONENT: SIM
+# @author Pavan Karimajji
 # @file check_anl_sw36.py
 # @brief
 #   ANL-SW-36 (SIM_Implementation_Plan_v0.1.md WP-12, serves SW-0202) --
@@ -19,7 +19,6 @@
 #   never an OP token, and is never flagged -- a naive `[+\-*/%]` grep
 #   across this codebase's comment-heavy style would be red everywhere and
 #   nowhere useful. Only a real arithmetic OP token in live code counts.
-# @author Pavan Karimajji <Pavan.Karimajji@larsentoubro.com>
 
 from __future__ import annotations
 

@@ -10,7 +10,7 @@ reimplementation of it. `sim resim --pipeline <manifest.yaml>` alone (no
 recording positional, no `--config`, no `--project`) must resolve exactly
 the `recording:`/`project:`/`config:` the manifest carries.
 
-`Pipeline.load`/`run_pipeline_via_engine` themselves are mocked here on
+`Pipeline.load`/`invoke_engine` themselves are mocked here on
 purpose: the real CLI entry point resolves `impl:` through `dll:`/
 `stubdll:` only (no `components=` injection seam -- `test_c2_record_resim.
 py`'s own documented limitation), so exercising a REAL resim through it
@@ -89,7 +89,7 @@ def test_sim_resim_reads_recording_project_config_from_the_manifest_alone(tmp_pa
     fake_pipeline = MagicMock()
     fake_pipeline.stages = ()
     with patch("adas_sim.cli.resim.Pipeline.load", return_value=fake_pipeline) as mock_load, \
-         patch("adas_sim.cli.resim.run_pipeline_via_engine", side_effect=_fake_engine_run) as mock_engine:
+         patch("adas_sim.cli.resim.invoke_engine", side_effect=_fake_engine_run) as mock_engine:
         exit_code = resim_run(["--pipeline", str(manifest_path)])
 
     assert exit_code == 0
@@ -115,7 +115,7 @@ def test_an_explicit_cli_flag_wins_over_the_manifests_own_value(tmp_path):
     fake_pipeline = MagicMock()
     fake_pipeline.stages = ()
     with patch("adas_sim.cli.resim.Pipeline.load", return_value=fake_pipeline), \
-         patch("adas_sim.cli.resim.run_pipeline_via_engine", side_effect=_fake_engine_run) as mock_engine:
+         patch("adas_sim.cli.resim.invoke_engine", side_effect=_fake_engine_run) as mock_engine:
         exit_code = resim_run(["--pipeline", str(manifest_path), str(override_recording), "--project", "base"])
 
     assert exit_code == 0
