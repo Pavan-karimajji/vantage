@@ -1519,6 +1519,83 @@ finds a real back-reference.
 
 ---
 
+### WP-34a · `MP-6` · `SM-11` — the launcher itself, and `AR-61` re-verified
+
+**Serves:** `SM-11`, closing the "trivial follow-up" `WP-34` named three
+times and never did: `vantage.bat`/`scripts/vantage.py` still launched the
+retiring Python scene/render/player unconditionally, so the real, proven-live
+`vantage_app.exe` this package exists to ship was unreachable from the actual
+entry point a person runs. Lettered, not renumbered -- the same precedent
+`WP-06a`/`WP-11a`/`WP-14a`/`WP-15a`/`WP-26a`/`SM-05a` already set for a real,
+externally-discovered follow-on found closing the row before it.
+
+**Prereq:** `WP-34` (`vantage_app.exe`, proven live).
+
+- [x] **Lands:** `IMP-0432` -- 1.
+  - [x] `IMP-0432` · `SW-0428` · `NEW` -- full account in `SIM_Implementation_Design_v0.1.md`'s
+      own `IMP-0432` row, not repeated here.
+  Design calls made, stated plainly rather than guessed: (1) a full default switch, not a silent
+      fallback -- `vantage.bat` drives the native path unconditionally now,
+      `--legacy` is the explicit opt-out, because leaving Python as the
+      default would perpetuate exactly the problem `SM-12` exists to fix;
+      (2) `--pipeline` on the wrapper is served by running a real, hidden
+      `sim resim --save` step, not a re-litigation of `vantage_app.exe`'s
+      own argv-level refusal of `--pipeline`/`--search` directly (`WP-34`'s
+      own already-decided gap); (3) a bare recording with no `--pipeline`
+      and no matching `.spec.json` sidecar -- `vantage.py`'s own "bare
+      replay", `R-SIM-5` -- has no native equivalent at all today, a real
+      finding beyond `WP-34`'s own named gap, and refuses by name pointing
+      at `--legacy` rather than being silently unreachable.
+- [x] **`AR-61` re-verified, real evidence, both paths -- closed by:** this
+      row's own real, unanticipated discovery while verifying the launcher
+      against a genuinely deployed plugin root (`vantage.bat`'s own usage
+      text names `AR-61` as still "open": a deployed copy beside a built DLL
+      crashes `bsd.zone` with a swallowed error, empty layer tree, no
+      message). Read in full at its only two live citations
+      (`docs/v1/sim_implementation_plan.md` lines ~3796-3835, `S-C8`'s Gate,
+      and the `§9a` correction at ~5850-5857) -- **`AR-61` was fixed once,
+      pre-`v2`**: `MainWindow._resolve_project_model` called
+      `ProjectModel.resolve(...)` with no `library_dir=`, so a deployed root
+      fell through a checkout-relative fallback that doesn't exist there,
+      raising in the calibration reader on the first tick -- symptom: an
+      empty scene with no message. Fixed by threading `library_dir=` through
+      (now `qt_window.py:1312`, confirmed still present); real regression
+      test `tests/system/test_c8_deployed_root_render_wiring.py` (installs
+      `df_sil` via a real `cmake --install`, relocates the result with the
+      build tree deleted, asserts `bsd.zone` renders real prims). **Never
+      carried into the `v2` tracked set** -- which is why it still reads
+      "open" in a live-cited comment with no current identity -- until now.
+      **Fresh repro, this pass, both paths, neither reproduces:**
+      *Python path* -- `pytest tests/system/test_c8_deployed_root_render_wiring.py`:
+      **1 passed** (the existing regression guard, run directly rather than
+      hand-driven, lower effort and more authoritative for this exact wiring
+      path). *C++ path (the one that matters going forward)* -- a genuinely
+      deployed `df_viz` root (`build-sil_viz-vs2026/src/platform/df_viz/Release/`,
+      confirmed carrying `config/`+`sim/plugin.yaml` beside `df_viz.dll` and
+      **no** `src/project/`, the exact discriminator `AR-61` names) fed a
+      real `sim resim`'d `bsd_curve_r172_passby` recording through both
+      `viz_player.exe --export-ndjson` (exit 0, 2912 prims, **416 real
+      `bsd.zone` prims**, real polygon geometry, all 208 ticks) and
+      `vantage_app.exe` itself (live window confirmed -- `Get-Process`
+      stable across two checks, zero stderr, a real `PrintWindow` screenshot
+      showing `bsd.zone`/`bsd.warning`/`bsd.sensor_fov` all checked with
+      real geometry on screen, tick at head). **Disposition: fixed, not
+      moot** -- the pre-`v2` fix was never regressed by the C++ migration;
+      it simply never had a `v2` identity to close against. Given one here:
+      `AR-61` == `SW-0428`'s own `Now.` line + this bullet, `Verify.` `UT-VTG-02`
+      (the plugin-root classifier this same pass added specifically catches
+      the *adjacent* SIL-vs-VIZ-directory mistake a real user could still
+      make, named there, not a re-opening of `AR-61` itself). `vantage.bat`'s
+      own stale usage-text claim (still asserting a crash that no longer
+      happens) is corrected in this same pass, `IMP-0432`.
+- [x] **Exit -- the real entry point drives the real executable by default,
+      re-verified independently -- closed by:** the live E2E run above,
+      confirmed a second time in an independent pass with the same result
+      (real window, real layers, tick at head, clean exit) -- not a single
+      unrepeated observation. `python docs/v2/py/trace_check.py` PASS after.
+
+---
+
 ### WP-33 · `MP-6` · `SM-11` — the `PortFrame`→`Tick` bridge, `vantage`'s mechanism half
 
 **Serves:** `SM-11` (`SYNC:SM-11`, `VIZ_Sync_Plan_v0.1.md` §2 — "`vantage`,

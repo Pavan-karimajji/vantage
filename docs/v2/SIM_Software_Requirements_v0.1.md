@@ -1704,6 +1704,13 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Built.** ● done — `IMP-0431` in `WP-34`
 **Now.** `NEW` — `EmbeddedEngine`/`RunPlayerWindow`/`vantage_app.cpp` build and link clean on a real `vs2026` rebuild (`modules/viz` 41/41 gtest, `modules/sim/vantage` `IT-23` unchanged); the windowed exit criterion (a real plug-in drawing from a real run, confirmed visually) is not yet exercised — `WP-34`'s own plan row has the open item.
 
+**`SW-0428`** · `SI-09` · `P1` · `R1` — The default launcher drives the real windowed executable, never a second implementation
+**Shall.** `vantage`'s own launcher (`vantage.bat`) shall drive `SW-0427`'s real windowed executable by default; an argument or mode the executable's own argv cannot serve shall refuse by name, naming the escape hatch, never be silently dropped or re-implemented a second way.
+**Accept.** `vantage.bat` with no args or with a recording argument reaches `vantage_app.exe`, not the retiring Python scene/render/player. The wrapper contains no configuration parser, no validation and no inference of its own beyond argv-to-argv mapping — it reuses `vantage.py`'s own `build_parser()` (one CLI-grammar definition) and `adas_sim.cli.resim.run` (one `sim resim` implementation) rather than re-parsing or re-driving either. Every `vantage.py` flag with no real `vantage_app.exe` equivalent (`--workspace`/`--preset`/`--at`/`--version`, and a bare recording with no `--pipeline`/no matching `.spec.json` sidecar, `R-SIM-5`'s own "replay" case) exits non-zero naming the flag/mode and `--legacy`.
+**Verify.** T · `UT-VTG-02`   **Trace.** SYS-0272 (`SW-0427`'s own parent, extended to the default launch path)
+**Built.** ● done — `IMP-0432` in `WP-34a`
+**Now.** `NEW` — `scripts/vantage_native.py` (new), `vantage.bat`/`scripts/gui.py` repointed, `--legacy` preserves the retiring path unchanged until `SM-12`'s own separately-gated deletion. A real, unanticipated finding along the way: a component's deployed **SIL** build directory (`df_sil.dll`, no viz ABI) is a plausible-looking but wrong `--plugin-root` — `vantage_app.exe` loads it and exits with no window ever painting, no error. Not this row's own scope to fix in the executable; the launcher's plug-in-root classifier now catches it by name before launch (a `ctypes` export-table probe for `vizManifest`/`vizAbiVersion`, not a directory-shape guess).
+
 ---
 
 # PART C — THE CONFIGURATION LAYER (Python)
