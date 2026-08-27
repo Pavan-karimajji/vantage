@@ -2836,7 +2836,7 @@ its design row to `WP-09` (`SI-03`'s own package) accordingly — see
 | `SW-0308` | Providers are discovered by import, with no central roster | `VIZ:SW-0062` — real, 2026-08-26 |
 | `SW-0309` | Bulk geometry is referenced, under a per-layer budget | `VIZ:SW-0066` — real, already met and tested before this disposition, 2026-08-26 |
 | `SW-0310` | Reconstructed geometry is marked per primitive | `VIZ:SW-0063` — real, 2026-08-26 |
-| `SW-0311` | A layer never estimates what nothing produced | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0311` | A layer never estimates what nothing produced | **no successor, rescoped 2026-08-27 (`SYNC:SM-05`)** — the original Accept ("a static check finds no state retained") is falsified by `df`'s own `layers/bsd.cpp:151-169` (`cached_bundle_dir`/`cached`, invalidated only on bundle change), a legitimate deterministic-transform-of-a-fixed-constant cache `R-SIM-7` already permits — the wording was wrong, not the code. The real property (never integrate a time-varying signal into information nobody produced) is `R-SIM-7`'s own text verbatim; this is component layer-authoring discipline that lives with `df`'s own code, not `viz`'s framework (`viz` has no per-component state of any kind to check), so no `VIZ:SW-nnnn` is allocated. An automated static check was considered and rejected here: distinguishing a legitimate config-keyed cache from a real violation needs semantic judgement a grep cannot make safely, so this stays `R-REQ-8`'s `I` (inspection) against `R-SIM-7`'s own text — a check nobody could write without false positives on every legitimate calibration cache in the codebase. |
 | `SW-0312` | The scene serialises and tolerates a minor version forward | `VIZ:SW-0069` — real, 2026-08-27 |
 | `SW-0313` | An unknown style token raises; there is no default colour | `VIZ:SW-0050` — real, 2026-08-26 |
 | `SW-0314` | The frame graph is declared, and an unknown frame raises | `VIZ:SW-0058` — real, 2026-08-26 |
@@ -2858,7 +2858,7 @@ its design row to `WP-09` (`SI-03`'s own package) accordingly — see
 | `SW-0320` | A figure and a live run are the same picture | `VIZ:SW-0054` — real, 2026-08-26 |
 | `SW-0321` | A snapshot is atomic and reproducible | `VIZ:SW-0068` — real, fully tested (real temp directory, real OS rename, no GL/ImGui dependency), 2026-08-27 |
 | `SW-0322` | A second rendering surface renders the same scene, never a second scene | `VIZ:SW-0054` — real, 2026-08-26 |
-| `SW-0323` | Frame time has a stated budget at a stated load | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0323` | Frame time has a stated budget at a stated load | **blocked, not attempted** — `VIZ:SW-nnnn` still not yet allocated. Traced 2026-08-27 (`SYNC:SM-05`) to its real blocker: `SIM_Open_Question_Answers_v0.1.md` §5.1/§8.2 seeds the absolute number from the first real measurement, but holds it on `OQ-15` (the reference *host* — the CI system hasn't been chosen). An infra/ownership decision outside engineering scope, not an implementation gap; stays `⊘` (`R-REQ-10`) until `OQ-15` answers. |
 
 ---
 
@@ -2888,7 +2888,7 @@ Superseded (`SM-01` trial), `SW-0324` — was *Display-only data is decoded only
 | `SW-0336` | A missing plug-in degrades, naming what was expected | `VIZ:SW-0071` — real, 2026-08-27 |
 | `SW-0337` | Every action is reachable without knowing where it lives | `VIZ:SW-0067` — real, registry/filter half built and tested; live Ctrl+K demonstration open (native-Windows verification pending), 2026-08-26 |
 | `SW-0338` | A workspace is a mode of one window, not a second application | `VIZ:SW-0072` — real, mechanism only, 2026-08-27; one process-wide `WorkspaceMode` value gates `SW-0067`'s per-preset command-palette actions (the one real live-view-toggle this player has today) — the full Bench/Campaign title-bar UI `sim_player.md` describes has no engine or window chrome to build it against yet, so gating a second capability is future work once one exists |
-| `SW-0339` | A scripting console is bound to the live session | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0339` | A scripting console is bound to the live session | **not a supersession, closed by a different design, 2026-08-27 (`SYNC:SM-05`)** — the literal ask (an embedded-interpreter scripting console) would violate `R-SIM-15`'s own closed-verb-list discipline and was not built. The real underlying need — a live, in-window way to ask the questions `--explain`/the evidence panel already answer offline — is met by `VIZ:SW-0076`, a closed six-verb read-only query console (`viz::player::Console`) tracing to the existing `CN-0109`, not a new capability class. Same disposition shape `SW-0290` (lazy-decode) already uses for a genuine non-match: the retired row stays retired-with-no-replacement, and the real work is cited by its own real ID rather than pretending to be this row's successor. |
 | `SW-0340` | The interface surface is closed, published and counted | `VIZ:SW-0074` — real, panel-type half only, 2026-08-27; traces to `VIZ:SYS-0081`, the cross-module sibling of this row's own parent `SYS-0268`, narrowed to the player's `render_gl/` panel-type surface — the CLI-verb half stays `SW-0232`'s own, still `PARTIAL`, here in `sim` |
 
 ### 26.1 `SW-0334` — reinstated, `SM-05` correction (see §26's own note above)

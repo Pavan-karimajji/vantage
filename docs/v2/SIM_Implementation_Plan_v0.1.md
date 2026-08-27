@@ -930,6 +930,24 @@ flowchart LR
       own disposition tables, not repeated here. None had gone past
       `KEEP`/`EXTEND` design; no code is deleted by this box (that is
       `SM-12`). Recorded per `R-REQ-2` rather than deleted silently.
+- [x] **The `IMP`-level mapping decision, closed 2026-08-27 (`SYNC:SM-05`).**
+      Whether these 40 retired `IMP` rows need a formal `VIZ:IMP-nnnn`
+      backfill for each of the 34 `SW` items `SM-05` closed real: **no.**
+      `sim`'s Design doc is organised per-`SW`-item; `viz`'s
+      (`VIZ_Implementation_Design_v0.1.md`) is organised per-artifact (file
+      `MOVE`/`NEW`/`EXTEND`) — two different, equally valid shapes for the
+      same obligation, not a gap in the newer one. Confirmed against `viz`'s
+      own `trace_check.py` (`docs/py/trace_check.py`): it checks a
+      requirement traces *up* to a parent (`ORPHAN`) in both directions
+      (`R-REQ-11`), never that an `SW` has an `IMP` *child* — `R-REQ-1`'s own
+      words, "the layer below is discovered by inverting those links... never
+      a hand-kept child list," which is exactly what a mandatory backfill
+      would become. `viz`'s real, closed `SW-0047`..`0074` items already
+      carry direct `SW -> UT/SYT` test citations (real file, real test name)
+      — the file-level "which symbol, what changes" question `IMP` exists to
+      answer is answered by that citation for these, so a design-level `IMP`
+      row is optional decomposition, not a missing mandatory one. No backfill
+      performed; none needed.
 
 ### WP-26a · `SYNC:SM-01` · The disposition table, trial slice
 
