@@ -5,10 +5,15 @@ cd /d "%~dp0"
 set "PYCMD="
 where py >nul 2>&1
 if not errorlevel 1 (
-  set "PYCMD=py"
-) else (
+  py -c "" >nul 2>&1
+  if not errorlevel 1 set "PYCMD=py"
+)
+if not defined PYCMD (
   where python >nul 2>&1
-  if not errorlevel 1 set "PYCMD=python"
+  if not errorlevel 1 (
+    python -c "" >nul 2>&1
+    if not errorlevel 1 set "PYCMD=python"
+  )
 )
 if not defined PYCMD (
   echo ERROR: Python was not found in PATH.

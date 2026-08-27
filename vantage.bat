@@ -21,10 +21,15 @@ if exist "%~dp0.venv\Scripts\python.exe" (
 ) else (
   where py >nul 2>&1
   if not errorlevel 1 (
-    set "PYCMD=py"
-  ) else (
+    py -c "" >nul 2>&1
+    if not errorlevel 1 set "PYCMD=py"
+  )
+  if not defined PYCMD (
     where python >nul 2>&1
-    if not errorlevel 1 set "PYCMD=python"
+    if not errorlevel 1 (
+      python -c "" >nul 2>&1
+      if not errorlevel 1 set "PYCMD=python"
+    )
   )
 )
 if not defined PYCMD (
