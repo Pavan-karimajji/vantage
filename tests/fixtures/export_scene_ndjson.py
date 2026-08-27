@@ -21,6 +21,82 @@ per-kind fields at all -- everything is a resolved point list):
               load-bearing cross-language gap, not solved here. The lost
               fields are still exported under `_py_extra` for a human
               comparing a divergence, never compared by the shared schema.
+
+              **Confirmed live, not just from the ABI signature, this session
+              (2026-08-27): this is not merely a comparator blind spot, it is
+              a real rendering defect.** `df_viz`'s own C++ `BuildObjectsLayer`
+              (`modules/df/src/platform/df_viz/layers/common.cpp:130-138`)
+              calls `SceneBuilder::AppendBox(cx_m, cy_m, style, ...)` with no
+              size/heading parameter to pass even if the ABI had one -- there
+              is no second, size-carrying draw call standing in for it (no
+              `AppendPolygon` with real corners anywhere in that function).
+              The renderer then draws every box at a **hardcoded, pixel-space
+              fixed size**: `kHalfSizePx = 6.0f; // scene carries no
+              width/height for kBox` in both `render_gl/draw_scene.cpp:52`
+              and `render_svg/draw_scene_svg.cpp:80`. So today, on the C++
+              side, a real 4.5x1.8m car and the smallest object in the
+              corpus draw as the *same* 12x12px square, at a size that does
+              not even scale with zoom -- and never rotates with `yaw_rad`.
+              This is arguably a live `R-SIM-2` violation in its own right
+              ("a provider... never computes a pixel... one `width_px`
+              exception exists for line weight and label offset -- legibility
+              is not physical", and a whole box's on-screen extent is not
+              a line-weight exception). Declaring the gap merely
+              comparator-exempt would leave this defect unfixed and
+              undocumented as a defect; it would only silence the one check
+              positioned to catch it.
+
+              **What "extend the ABI" would actually cost, checked against
+              the real code, not assumed:** `SceneImpl::point_count` is
+              already a **per-prim** `std::vector<uint32_t>` (`scene_impl.hpp`
+              `point_offset`/`point_count`), not a fixed count per `PrimKind`
+              -- `circle` already smuggles a scalar (radius) through a second
+              point `(r_m, 0.0)`, and `grid` smuggles `(spacing_m, 0)` the
+              same way (this file's own comments above). `AppendBox` gaining
+              two more optional points -- `(length_m, width_m)` and
+              `(yaw_rad, 0.0)`, defaulted so every existing call site
+              (including `bsd.cpp`'s callers, if any) stays untouched -- is
+              mechanically the same shape as the `pick_id`/`derived` optional
+              parameters just added additively to every `Append*`
+              (`scene_builder.cpp`'s recent fix, this same session, zero
+              existing call sites changed). No new `PrimKind` (the 9-kind set
+              stays closed, `ANL-VZ-06`/`VZ-10` untouched), no new
+              `SceneImpl` field, just `point_count` going from 1 to 3 for a
+              box that has real dimensions (2 for a box that only has
+              length/width and no yaw, if that split is preferred) with a
+              documented convention alongside `circle`/`grid`'s. This is the
+              recommendation: it is additive, has a working precedent in this
+              exact codebase, and fixes a real rendering defect, not just a
+              check's blind spot.
+
+              **Why "declare exempt" is the wrong-shaped answer here, unlike
+              `style`:** the sync plan's own text refused a `style` exemption
+              because "an architectural incompatibility isn't the same class
+              of thing as a missing ABI parameter" -- `style` genuinely
+              cannot vary the way Python wants it to, full stop, no
+              implementation closes that gap. `box`'s missing size/heading is
+              exactly the opposite case: nothing architectural forbids
+              carrying it, the storage is already per-prim-variable, and a
+              working precedent for additive `Append*` parameters shipped
+              this same session. Exempting it would encode "we chose not to"
+              as if it read "we structurally cannot" -- the same
+              category error the `style` decision was written to avoid, just
+              in the other direction.
+
+              **This is still not decided or implemented here, on purpose**
+              -- `PrimKind`/`SceneImpl` is a versioned cross-team ABI
+              (`modules/viz/CLAUDE.md`: "Eight kinds today, closed by
+              design... adding one is a semver event"); extending an
+              existing kind's stored fields is the same class of decision
+              even though it adds no kind, because it changes what every
+              consumer of a `box` prim across the DLL boundary can assume is
+              in `points`. That sign-off belongs to whoever owns the `viz`
+              ABI/semver policy, not to this exporter. If approved: widen
+              `AppendBox`'s signature with the two optional points above,
+              update `objects_layer`'s C++ call site to pass them, extend
+              this exporter and `compare_scene_parity.py` to read and compare
+              them for real (not exempt them), and retire the `_py_extra`
+              sidecar this box's data currently lives in.
   * `circle` -- C++ stores 2 points: centre, then `(r_m, 0.0)`. Mirrored
               exactly.
   * `text`  -- C++ stores 1 point (the anchor); the string itself travels in

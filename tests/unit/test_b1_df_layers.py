@@ -200,6 +200,37 @@ def test_warning_layer_binds_correctly_under_a_renamed_stage():
     assert left_circle.style == "status.warning"
 
 
+def test_objects_and_hud_layers_bind_via_self_port_under_a_pipeline_stage():
+    """R-SIM-21's `port_any`/tuple-`requires=` alternation (`modules/sim`
+    commit `09669cb`, `modules/df` commit `a1e4ade`). Unlike
+    `test_warning_layer_binds_correctly_under_a_renamed_stage` above --
+    whose port never had a bare-Source-native form to begin with --
+    `objects_layer`/`hud_layer` must resolve under BOTH a `Pipeline`'s own
+    stage-qualified aliasing (`self.objects`/`self.egoDyn`, exercised here)
+    and a bare Source replay (`source.gen_object_list`/`source.veh_dyn`,
+    already covered by every other test in this file via `_make_tick`) --
+    the exact gap this rule's history records the naive self.<port>-only
+    migration as having broken. Ports here deliberately carry a stage
+    prefix, never `source.*`, so only the `self.<port>` half of each
+    `requires=` tuple can match."""
+    tick = Tick(
+        index=0, t_ns=0, dt_ns=0, pose=_POSE,
+        ports={
+            "driving_functions.objects": PortValue(
+                name="driving_functions.objects",
+                message=_gen_object_list([(1, 10.0, -3.0, 1)]),
+                origin="simulated",
+            ),
+            "driving_functions.egoDyn": PortValue(
+                name="driving_functions.egoDyn", message=_veh_dyn(vx=15.0), origin="simulated",
+            ),
+        },
+    )
+    ctx = _ctx((tick,))
+    assert len(common.objects_layer(ctx)[0].prims) > 0
+    assert len(common.hud_layer(ctx)[0].prims) > 0
+
+
 def test_warning_layer_is_named_unavailable_when_the_run_never_produced_bsd_outputs():
     """`AR-53`, supersedes this test's own original reading:
     the port genuinely isn't part of this run -- `bsd.warning`'s own
