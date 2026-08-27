@@ -2837,7 +2837,7 @@ its design row to `WP-09` (`SI-03`'s own package) accordingly — see
 | `SW-0309` | Bulk geometry is referenced, under a per-layer budget | `VIZ:SW-0066` — real, already met and tested before this disposition, 2026-08-26 |
 | `SW-0310` | Reconstructed geometry is marked per primitive | `VIZ:SW-0063` — real, 2026-08-26 |
 | `SW-0311` | A layer never estimates what nothing produced | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0312` | The scene serialises and tolerates a minor version forward | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0312` | The scene serialises and tolerates a minor version forward | `VIZ:SW-0069` — real, 2026-08-27 |
 | `SW-0313` | An unknown style token raises; there is no default colour | `VIZ:SW-0050` — real, 2026-08-26 |
 | `SW-0314` | The frame graph is declared, and an unknown frame raises | `VIZ:SW-0058` — real, 2026-08-26 |
 | `SW-0315` | A framework-owned default layer set exists | `VIZ:SW-0048` — real, 2026-08-26 |
@@ -2868,7 +2868,9 @@ Superseded (`SM-01` trial), `SW-0324` — was *Display-only data is decoded only
 
 ## 26. `SI-21` — panels, layout, evidence — superseded (`SM-01`, 2026-08-20)
 
-`SI-21` moved to `viz` with the rest of the player/scene toolkit. Every one of these 16 items is cited only by requirements in this same supersede set. Recorded per `R-REQ-2` rather than deleted silently.
+`SI-21` moved to `viz` with the rest of the player/scene toolkit. Every one of these items is cited only by requirements in this same supersede set. Recorded per `R-REQ-2` rather than deleted silently.
+
+**Correction, 2026-08-27 (`SM-05`): `SW-0334` was never actually superseded and is reinstated below, unchanged UID.** The `SM-01` pass listed it as "moved to viz, not yet allocated" without checking whether `viz`'s player could even host it — it cannot: a per-stage `mode:`/`impl:` selector is a pipeline-*authoring* concern (`R-SIM-16`), and `viz`'s player is a pure `Session` renderer that never talks to a world model, a DLL or a pipeline file (`R-SIM-13`). The real, tested implementation — `adas_sim/player/panels/pipeline_panel.py`'s `PipelinePanelState` — already existed in `sim` *before* the `SM-01` retirement and was simply never touched by it; the retirement was a bookkeeping error, not a design decision to actually move this capability. 15 of the original 16 items in this table are unaffected — each of those really did move, and really does now live in `viz`'s C++ player.
 
 | Retired | Was | Replaced by |
 |---|---|---|
@@ -2881,13 +2883,22 @@ Superseded (`SM-01` trial), `SW-0324` — was *Display-only data is decoded only
 | `SW-0331` | Plots address the same port space as everything else | `VIZ:SW-0055` — real, 2026-08-26 |
 | `SW-0332` | The evidence panel and the command line share one producer | `VIZ:SW-0064` — real, 2026-08-26 |
 | `SW-0333` | Selecting anything on screen reaches its evidence in one action | `VIZ:SW-0065` — real, code path built and inspected; live on-screen demonstration still open (native-Windows verification pending), 2026-08-26 |
-| `SW-0334` | The pipeline panel offers `measured` only where the recording supports it | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0335` | An overridden or incoherent run is badged in the window | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0336` | A missing plug-in degrades, naming what was expected | `VIZ:SW-nnnn` — not yet allocated |
+| ~~`SW-0334`~~ | ~~The pipeline panel offers `measured` only where the recording supports it~~ | **Correction, 2026-08-27: not superseded — reinstated below**, real, unaffected by this table |
+| `SW-0335` | An overridden or incoherent run is badged in the window | `VIZ:SW-0073` — real, `overridden` half only, 2026-08-27; the `incoherent` half (`R-SIM-3a` project/ego-param mismatch) has no data path in viz's C++ yet and stays unclaimed here |
+| `SW-0336` | A missing plug-in degrades, naming what was expected | `VIZ:SW-0071` — real, 2026-08-27 |
 | `SW-0337` | Every action is reachable without knowing where it lives | `VIZ:SW-0067` — real, registry/filter half built and tested; live Ctrl+K demonstration open (native-Windows verification pending), 2026-08-26 |
-| `SW-0338` | A workspace is a mode of one window, not a second application | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0338` | A workspace is a mode of one window, not a second application | `VIZ:SW-0072` — real, mechanism only, 2026-08-27; one process-wide `WorkspaceMode` value gates `SW-0067`'s per-preset command-palette actions (the one real live-view-toggle this player has today) — the full Bench/Campaign title-bar UI `sim_player.md` describes has no engine or window chrome to build it against yet, so gating a second capability is future work once one exists |
 | `SW-0339` | A scripting console is bound to the live session | `VIZ:SW-nnnn` — not yet allocated |
-| `SW-0340` | The interface surface is closed, published and counted | `VIZ:SW-nnnn` — not yet allocated |
+| `SW-0340` | The interface surface is closed, published and counted | `VIZ:SW-0074` — real, panel-type half only, 2026-08-27; traces to `VIZ:SYS-0081`, the cross-module sibling of this row's own parent `SYS-0268`, narrowed to the player's `render_gl/` panel-type surface — the CLI-verb half stays `SW-0232`'s own, still `PARTIAL`, here in `sim` |
+
+### 26.1 `SW-0334` — reinstated, `SM-05` correction (see §26's own note above)
+
+**`SW-0334`** · `SI-21` · `P1` · `R1` — The pipeline panel offers `measured` only where the recording supports it
+**Shall.** The pipeline panel shall present each stage's mode and implementation against the run's actual known ports, offering `measured` only where the recording carries that stage's declared outputs.
+**Accept.** A stage whose outputs are absent cannot be set to `measured` from the panel. The set offered equals what the headless feasible-cut computation reports.
+**Verify.** T · `UT-PLR-10`   **Trace.** SYS-0163, SYS-0022
+**Built.** ● done — `IMP-0334` in `WP-26b`
+**Now.** `DONE` — `player/panels/pipeline_panel.py`'s `PipelinePanelState._measured_availability` computes exactly this per stage (missing-port reasons named, per `_view`'s `StageView.measured_unavailable_reason`), `set_mode` refuses to enable `measured` where unavailable. Re-verified 2026-08-27: `tests/unit/test_d3_pipeline_panel_state.py`, `tests/system/test_d3_pipeline_panel_widget.py`, `tests/system/test_d3_mainwindow_pipeline_panel.py` — 14/14 pass. These are `docs/v1`-era test identifiers (`UT-D3-1`/`UT-D3-2`/`UT-D3-3`/`UT-D3-7`, cited inside the test files themselves per `R-REQ-9`) predating this row's `v2` `UT-PLR-10` citation; both name the same real, passing evidence and `UT-PLR-10`'s own Software Test Spec row is corrected below to say so rather than pretending a `v2`-native test was written for this pass.
 
 ---
 

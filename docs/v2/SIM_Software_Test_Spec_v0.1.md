@@ -621,7 +621,13 @@ Twelve session tests retired along with the software items they served (12 of `S
 
 ### 5.19–5.21 `SI-19`/`SI-20`/`SI-21` — superseded (`SM-01`, 2026-08-20)
 
-15 scene tests, 5 render tests and 15 player tests retired along with the software items they served — see the Software Requirements document's own disposition tables for `SI-19`/`SI-20`/`SI-21`. The render item's already-superseded trial-slice test row (`SM-01` trial) is included in this same retirement. Recorded per `R-REQ-2` rather than deleted silently.
+15 scene tests, 5 render tests and 14 player tests retired along with the software items they served — see the Software Requirements document's own disposition tables for `SI-19`/`SI-20`/`SI-21`. The render item's already-superseded trial-slice test row (`SM-01` trial) is included in this same retirement. Recorded per `R-REQ-2` rather than deleted silently.
+
+**`UT-PLR-10` reinstated (`SM-05`, 2026-08-27) — one of the original 15, corrected out of this retirement.** `SW-0334` was never actually superseded (see the Software Requirements document's own §26 correction note) — the real implementation predates `WP-26`'s retirement pass and was simply never touched by it.
+
+| ID | Serves | Fixture | Steps |
+|---|---|---|---|
+| `UT-PLR-10` | `SW-0334` | — | Load a two-stage `Pipeline` (a hand-built `ComponentManifest` per stage, not a shared fixture — `test_d3_pipeline_panel_state.py`'s own construction) against a `known_ports` set that carries only one stage's declared outputs; read `PipelinePanelState.stages()`'s `measured_available`/`measured_unavailable_reason` for both; attempt `set_mode(..., "measured")` on the unavailable one. | `.c1` PASS the stage with every output present reports `measured_available=True` · FAIL it reports unavailable<br>`.c2` PASS the stage missing an output reports `measured_available=False`, naming the missing port · FAIL it reports available or names nothing<br>`.c3` PASS `set_mode` to `measured` on the unavailable stage raises, naming the reason · FAIL it silently succeeds — **already implemented, green**: `tests/unit/test_d3_pipeline_panel_state.py`, `tests/system/test_d3_pipeline_panel_widget.py`, `tests/system/test_d3_mainwindow_pipeline_panel.py`, 14/14 pass (re-run 2026-08-27); cited inside those files under their own `docs/v1`-era ids (`UT-D3-1`/`UT-D3-2`/`UT-D3-3`/`UT-D3-7`, `R-REQ-9`) predating this row's `v2` id |
 
 ### 5.22 `SI-22` `launcher` — `UT-LNC-01` … `UT-LNC-07`
 

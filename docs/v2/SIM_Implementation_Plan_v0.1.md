@@ -979,6 +979,43 @@ fraction (1 `SW` + 2 `SYS` of ~130 total UIDs the full table names).
       makes the rest of `SM-01` safe to do carefully rather than needing
       a redesign first.
 
+### WP-26b · `SYNC:SM-05` · `SW-0334` reinstated — a `WP-26`/`SM-01` bookkeeping error, corrected
+
+**Serves:** `SM-05`'s closeout pass. `WP-26`'s retirement (above) claimed
+all 40 `SI-19`/`20`/`21` items moved to `viz`, without checking whether
+`viz`'s player could host each one. `SW-0334` cannot: a per-stage
+`mode:`/`impl:` selector is a pipeline-*authoring* concern (`R-SIM-16`),
+and `viz`'s player only ever renders a `Session` (`R-SIM-13`) — it never
+touches a pipeline file or a DLL. The real implementation,
+`adas_sim/player/panels/pipeline_panel.py`'s `PipelinePanelState`,
+predates `WP-26`'s retirement and was never touched by it — this is a
+disposition-table correction, not new engineering.
+
+- [x] **Lands:** `IMP-0334` — 1. Already real before this package opened;
+      nothing here changes code, only corrects three documents' own
+      bookkeeping.
+  - [x] `IMP-0334` · `SW-0334` · `KEEP` — `player/panels/pipeline_panel.py::PipelinePanelState`. Already correct, no change needed: renders `IMP-0185`'s `feasible_cuts` answer per stage against the loaded pipeline's `known_ports`, refusing `measured` where unavailable and naming why. `tests/unit/test_d3_pipeline_panel_state.py`, `tests/system/test_d3_pipeline_panel_widget.py`, `tests/system/test_d3_mainwindow_pipeline_panel.py` — 14/14 pass, re-run 2026-08-27.
+- [x] `SIM_Software_Requirements_v0.1.md` §26 — `SW-0334`'s disposition
+      row struck through with a correction note; the full requirement
+      block reinstated verbatim (unchanged UID, `R-REQ-2`) in a new §26.1,
+      `Trace`/`Verify` unchanged (`SYS-0163`, `SYS-0022`, `UT-PLR-10`),
+      `Built.`/`Now.` updated to the real, re-verified state.
+- [x] `SIM_Software_Test_Spec_v0.1.md` — `UT-PLR-10`'s own row reinstated
+      (removed by the same `WP-26` retirement), its `Now.`-equivalent note
+      updated to cite the real `docs/v1`-era evidence (`tests/unit/
+      test_d3_pipeline_panel_state.py`, `tests/system/
+      test_d3_pipeline_panel_widget.py`, `tests/system/
+      test_d3_mainwindow_pipeline_panel.py` — 14/14 pass, re-run
+      2026-08-27) rather than inventing a new `v2`-native test for
+      already-working code.
+- [x] `SIM_Implementation_Design_v0.1.md` — `IMP-0334` added, `KEEP`
+      (the code already exists and needed no change), serving `SW-0334`,
+      packaged here rather than in the fully-retired `WP-26`.
+- [x] **Exit — closed by:** `python docs/v2/py/trace_check.py` exits 0
+      with this slice applied; `pytest tests/unit/test_d3_pipeline_panel_state.py
+      tests/system/test_d3_pipeline_panel_widget.py
+      tests/system/test_d3_mainwindow_pipeline_panel.py` — 14/14 pass.
+
 ### WP-27 · `MP-4` · `SI-25` `transport`
 - [ ] **Prereq:** `WP-14`.
 - [x] **Retargeted (`SYNC:SM-06`, `D-5`, 2026-08-21) — the `SI-25` split by

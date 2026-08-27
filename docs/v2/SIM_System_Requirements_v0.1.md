@@ -539,7 +539,7 @@ These are the sequences the system exists to support, end to end. Each becomes o
 **Shall.** Given a recording and the manifests present, the system shall compute the set of feasible cuts before any run.
 **Accept.** `probe` reports the feasible set; every cut it reports runs, and every cut it excludes is refused at load with a reason.
 **Verify.** T · `SYT-INP-22`   **Trace.** CN-0344; v1 `CR-SIM-21`
-**Built.** ● done — 2/2 software requirements done
+**Built.** ● done — 3/3 software requirements done
 
 ---
 
@@ -1441,7 +1441,7 @@ link must resolve to an explanation, never to nothing.
 **Shall.** The launcher shall show, per recording, which modules could be set to `measured` given what that file actually carries.
 **Accept.** The set shown equals the set `probe` computes headlessly.
 **Verify.** T · `SYT-CFG-06`   **Trace.** CN-0344; v1 `CR-SIM-21`
-**Built.** ● done — 2/2 software requirements done
+**Built.** ● done — 3/3 software requirements done
 
 ---
 
