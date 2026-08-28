@@ -1644,7 +1644,7 @@ could not be re-simulated at all.
       name — and an unresolvable `dll:` stage was reported as an error even when
       no mode had been asked for.
 - [x] **Files:** `scripts/gui.py` · `tests/system/test_lnc_gui_mode_control.py`.
-- [~] **Exit — the demo, run end to end, watched and recorded.** Not "the toggle
+- [x] **Exit — the demo, run end to end, watched and recorded.** Not "the toggle
       appears in the GUI": the launcher opened, a self-produced recording picked,
       `df` set to MEASURED and then SIMULATED, both pictures seen to agree, an
       object clicked and its provenance read — screenshotted both directions and
@@ -1654,20 +1654,21 @@ could not be re-simulated at all.
       values behind the claim are already asserted byte-identical (the
       2026-08-28 step-zero fixes campaign), so what the screenshots add is that
       the same equality is visible to a person, through the face.
-      — **closed by:** `F-8`. Four of §1's five clauses are demonstrated and
-      screenshotted (launcher opened, self-produced recording picked, both modes
-      set, both pictures agree — same nine prims, same layer tree, same tick).
-      The fifth — *"see which signal, tick, file **and build** produced it"* — is
-      three-quarters answered: `sim explain` gives signal, tick, topic, origin
-      and `run_id`, but reports `component_build_id` as `unknown` even though
-      the recording's own manifest carries
-      `ComponentBuildInfo(name='df', library_sha256='b3524ca8…')`. The evidence
-      record does not join `run_id` → `components[]`, which is the one join
-      `R-SIM-25` says needs no new capture and no new index. Closes when that
-      join is made and `sim explain` prints a real build identity for a port
-      whose recording carries one. **Not fixed here** — it is in `diagnostics`,
-      not the launcher, and this package is scoped to §1's wiring and nothing
-      else.
+      **Closed 2026-08-28** by `F-8` (`SIM_Test_Execution_2026-08-28_f8.md`),
+      which was open when this box was first written and is the reason it stood
+      at `[~]`: `sim explain` reported `component_build_id` as `unknown` even
+      though the recording's manifest carried
+      `ComponentBuildInfo(name='df', library_sha256='b3524ca8…')` — the one join
+      `R-SIM-25` says needs no new capture. Fixed in `diagnostics/evidence.py`
+      by carrying `library_sha256` as its **own** field,
+      `component_library_sha256`, never as a fallback rendered under the
+      build-id label: a library hash and a build id are two different facts and
+      one of them is genuinely absent, so substituting would have been exactly
+      the plausible-looking default `NR-SIM-4` forbids. `component_build_id`
+      still reads `unknown` on these recordings, correctly. Both surfaces show
+      it because both render `EVIDENCE_FIELDS` through the one formatter
+      (`GT-9`), asserted field-by-field by `UT-D3-8`. All five §1 clauses
+      demonstrated and screenshotted; the demo runs.
 
 ---
 

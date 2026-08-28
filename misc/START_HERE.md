@@ -1,6 +1,6 @@
 # START HERE
 
-**Updated:** 2026-08-27 · **Read this first, then run the status command below.**
+**Updated:** 2026-08-28 · **Read this first, then run the status command below.**
 
 > **No derived progress state in this file, ever** — no "N of M done", no
 > per-item status, no checklist. That is what goes stale: this module already
@@ -22,41 +22,39 @@
 
 **Movement A** ✅ done, except one item blocked on the author (a push).
 **Movement B** ⏸ planned, deliberately **not** started — it is no longer the gate.
-**Movement C** ← **we are here. The demo runs, watched; one clause of it is
-still answered `unknown`.**
+**Movement C** ← **the POC demo runs, all five clauses, watched. The freeze
+ends by its own terms.**
 
 The 2026-08-27 reset re-scoped this module around one watchable demo instead of a
 completion percentage. Read `memory.md` for why, `DEMO_AND_SCOPE.md` for the
 demo and the finite list, `MOVEMENT_B_PLAN.md` for the deletion work.
 
-**The demo runs.** `WP-35` was opened for it (authorised 2026-08-28, scoped
-verbatim to `DEMO_AND_SCOPE.md` §1) and the launcher now carries the
-measured/simulated control. Four of §1's five clauses are demonstrated and
-screenshotted; the fifth is three-quarters answered. Records:
-**`…_2026-08-28.md`** (the fixes), **`…_2026-08-28_wp28.md`** (`F-7`),
-**`…_2026-08-28_wp35.md`** (the demo, its screenshots and `F-8`).
+**`DEMO_AND_SCOPE.md` §1 runs, end to end, all five clauses** — launcher,
+self-produced recording, both modes, both pictures agreeing, and an object's
+provenance answered down to the build. `WP-35` closed. Records, newest first:
+**`…_2026-08-28_f8.md`** (the fifth clause), **`…_wp35.md`** (the demo and its
+screenshots), **`…_wp28.md`** (`F-7`), **`…_2026-08-28.md`** (the step-zero
+fixes).
 
 ## The next action — exactly one
 
-> **`F-8` — make `sim explain` join `run_id` → the manifest's `components[]`,
-> so a port's **build** is answered instead of read `unknown`.**
+> **Author's call: the POC is delivered, so the scope conversation
+> `DEMO_AND_SCOPE.md` §1 defers to *"may begin. Not before."* is now open.**
 
-It is the only clause of §1 the demo cannot yet satisfy, and the last box of
-`WP-35`. The data is already in the recording
-(`ComponentBuildInfo(name='df', library_sha256='b3524ca8…')`); `R-SIM-25` says
-this join needs no new capture and no new index. It lives in `diagnostics`, not
-the launcher — which is why `WP-35` recorded it rather than absorbing it.
-
-When that closes, the POC demo is complete and the freeze ends by its own
-terms.
+Nothing is blocked. What the demo did **not** prove is written down and is the
+honest input to that conversation: one module demonstrates the *mechanism*, not
+the *chain* (that needs vdy); the scenario corpus is thin with one false green;
+`F-6` and `WP-12`'s ingest map are still open; and the gate still exits 1 on two
+parked items, which is a decision nobody has taken yet.
 
 ## Do not
 
 - **Do not propose a sim v3.** Two rewrites already happened. A third would repeat
   a failure this module has documented twice.
-- **The specification freeze is in force.** No new requirements, no new work
-  packages, no new design documents until the demo runs. Corrections are allowed;
-  new scope goes to the parked list in `DEMO_AND_SCOPE.md` §4.2.
+- **The specification freeze has ended by its own terms** (2026-08-28 — it ran
+  *"until the demo runs"*, and it does). That is not licence to resume writing:
+  what it outgrew the product by is in `memory.md` §4. New scope is now the
+  author's call, from `DEMO_AND_SCOPE.md` §4.2's parked list.
 - **Do not start Movement B to feel productive.** It is real debt, but it does not
   gate the POC.
 - **Do not resume `docs/v1/`.** It is evidence, never a build order.
@@ -76,7 +74,7 @@ terms.
 | Parked | Why | Unpark when |
 |---|---|---|
 | ERG · `WP-17` · `WP-18` | No ERG measurement exists or can be obtained | Real data arrives in a format sim cannot read |
-| `WP-19` `WP-30` `WP-31` | No demo dependency | The demo runs — **`F-8` is the last clause**; unpark then |
+| `WP-19` `WP-30` `WP-31` | No demo dependency | **Condition met 2026-08-28 — the demo runs.** Unparking them is now a scope decision, not a wait |
 | The scenario finding — **now only its corpus half** (4 of 18 runnable, one vacuous pass). The three *"never became"* failures were `F-1` and are fixed | Author's call, 2026-08-27 | Before `B3` deletes `tools/carla/`, or when coverage rather than the warning path matters |
 | 155 `R-REQ-9` citations | Bookkeeping, not code | `WP-31` |
 | Conan editable test | `WP-31` scope | `WP-31` |
@@ -122,10 +120,14 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-08-28** — `F-8` fixed: a port's build is answered, as
+  `component_library_sha256` under its own name — never the library hash shown
+  where a build id was asked for. `WP-35` closed; the demo runs, all five
+  clauses. Record: `…_2026-08-28_f8.md`.
 - **2026-08-28** — `WP-35` opened (the demo, §1 verbatim) and the launcher wired
   to `adas_sim.launcher`. Demo run for real: both modes, both pictures agree,
   screenshotted. `F-8` found — build reads `unknown` though the recording
-  carries it. Record: `…_2026-08-28_wp35.md`. **Not committed.**
+  carries it. Record: `…_2026-08-28_wp35.md`.
 - **2026-08-28** — `WP-28` driven against the real demo through its own API:
   both toggle directions launch. Found and fixed `F-7` (every cut reported
   infeasible against a real recording — an untested join). The visible half has
@@ -137,5 +139,3 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 - **2026-08-27** — Findings from the step-zero run verified and written up as a
   Test Execution Record (`_step_zero`); this file trimmed back and its no-counts
   rule sharpened to *no derived progress state* (dated evidence is fine).
-- **2026-08-27** — Step zero run for real. Toggle confirmed byte-identical on
-  firing AEB data; five findings, `F-3` blocks the demo's shape.

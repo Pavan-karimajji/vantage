@@ -57,6 +57,19 @@ class Evidence:
     #: `RunManifest` entry (a manifestless recording, `manifest_version=0`).
     config_bundle_sha256: str | None = None
     component_build_id: str | None = None
+    #: `F-8` (2026-08-28): the owning stage's `library_sha256`, under its own
+    #: name. **Not a fallback for `component_build_id` and never rendered as
+    #: one.** A recording written by this framework populates
+    #: `library_sha256` and leaves `build_id` empty — nothing sets a build id
+    #: today — so before this field existed, *"which build produced it"*
+    #: (`DEMO_AND_SCOPE.md` §1) read `unknown` while the answer sat one
+    #: dereference away in the same manifest. Showing that hash under the
+    #: `component_build_id` label would have been the plausible-looking
+    #: default `R-SIM-25`/`NR-SIM-4` forbid — two different facts, one of
+    #: them absent. So both are carried, each says which it is, and
+    #: `component_build_id` still reads `unknown` when no build id was
+    #: recorded, because it genuinely was not.
+    component_library_sha256: str | None = None
     #: `ST-D6-3`, `kind="prim"` only: the `Layer.id` the selected prim came
     #: from, and `Prim.derived` (`R-SIM-7`'s published-vs-reconstructed
     #: marker) -- both `None` for every other `kind`.
@@ -79,15 +92,29 @@ class Evidence:
         return f"<Evidence {self.address!r} kind={self.kind} tick={self.tick}>"
 
 
-def _component_provenance(port_address: str, session: Session) -> tuple[str | None, str | None]:
-    """`port_address`'s owning stage's build provenance, or `(None, None)`
-    when that stage has no `RunManifest` entry -- never a guess across
-    stages (`R-SIM-25`, `NR-SIM-4`)."""
+def _component_provenance(port_address: str, session: Session) -> tuple[str | None, str | None, str | None]:
+    """`port_address`'s owning stage's build provenance as
+    `(config_bundle_sha256, build_id, library_sha256)`, or `(None, None,
+    None)` when that stage has no `RunManifest` entry -- never a guess
+    across stages (`R-SIM-25`, `NR-SIM-4`).
+
+    **The three are returned separately and stay separate** (`F-8`). Every
+    recording this framework writes fills `library_sha256` and leaves
+    `build_id` empty, so collapsing them would make the answer to *"which
+    build?"* silently mean *"which library file"* on most recordings and
+    genuinely mean *"which build id"* on the rest -- one label, two facts,
+    which is the substitution `R-SIM-25` exists to prevent. Each travels
+    under its own name and each is `None` when truly absent.
+    """
     stage_name = port_address.split(".", 1)[0]
     for component in session.meta.components:
         if component.name == stage_name:
-            return (component.config_bundle_sha256 or None, component.build_id or None)
-    return (None, None)
+            return (
+                component.config_bundle_sha256 or None,
+                component.build_id or None,
+                component.library_sha256 or None,
+            )
+    return (None, None, None)
 
 
 def _resolve_prim(address: str, session: Session, tick: int) -> Evidence | None:
@@ -137,13 +164,15 @@ def _resolve_prim(address: str, session: Session, tick: int) -> Evidence | None:
             topic = resolved_ports[0] if resolved_ports else None
             value = str(current.ports[topic].message) if topic in current.ports else prim.kind
             origin = current.ports[topic].origin if topic in current.ports else None
-            config_bundle_sha256 = component_build_id = None
+            config_bundle_sha256 = component_build_id = component_library_sha256 = None
             if topic is not None:
-                config_bundle_sha256, component_build_id = _component_provenance(topic, session)
+                config_bundle_sha256, component_build_id, component_library_sha256 = _component_provenance(
+                    topic, session)
             return Evidence(
                 address=address, kind="prim", value=value,
                 tick=tick, t_ns=current.t_ns, topic=topic, origin=origin, run_id=session.run_id,
                 config_bundle_sha256=config_bundle_sha256, component_build_id=component_build_id,
+                component_library_sha256=component_library_sha256,
                 layer_id=layer.id, derived=prim.derived,
             )
     return None
@@ -167,12 +196,14 @@ def evidence(address: str, session: Session, tick: int) -> Evidence:
 
     if address in current.ports:
         port_value = current.ports[address]
-        config_bundle_sha256, component_build_id = _component_provenance(address, session)
+        config_bundle_sha256, component_build_id, component_library_sha256 = _component_provenance(
+            address, session)
         return Evidence(
             address=address, kind="port", value=str(port_value.message),
             tick=tick, t_ns=current.t_ns, topic=address, origin=port_value.origin,
             run_id=session.run_id, config_bundle_sha256=config_bundle_sha256,
             component_build_id=component_build_id,
+            component_library_sha256=component_library_sha256,
         )
 
     prim_record = _resolve_prim(address, session, tick)
@@ -189,9 +220,19 @@ def evidence(address: str, session: Session, tick: int) -> Evidence:
 #: evidence panel (`UT-D3-8`, `view/evidence_panel.py`) render.
 EVIDENCE_FIELDS = (
     "address", "kind", "value", "tick", "t_ns", "topic", "origin", "run_id",
-    "config_bundle_sha256", "component_build_id", "layer_id", "derived",
-    "rung", "quality",
+    "config_bundle_sha256", "component_build_id", "component_library_sha256",
+    "layer_id", "derived", "rung", "quality",
 )
+
+
+#: The label column width `cli/explain.py` prints with, **derived from the
+#: field names rather than typed** (`F-8`, 2026-08-28). It used to be a
+#: literal `20` in the CLI and a matching literal `20` in `UT-D3-8`'s own
+#: parser -- two copies of one number, so adding a field whose name exceeded
+#: it split the CLI's own output in the wrong place and made the two surfaces
+#: appear to disagree when they did not. One definition, so a longer field
+#: name can never silently misalign them again.
+EVIDENCE_LABEL_WIDTH = max(len(field) for field in EVIDENCE_FIELDS) + 1
 
 
 def format_evidence(record: Evidence) -> tuple[tuple[str, str], ...]:

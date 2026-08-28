@@ -22,7 +22,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from adas_sim.diagnostics.evidence import evidence, format_evidence
+from adas_sim.diagnostics.evidence import EVIDENCE_LABEL_WIDTH, evidence, format_evidence
 from adas_sim.diagnostics.explain import explain, known_names
 from adas_sim.diagnostics.suggest import near_matches
 from adas_sim.core.runner import build_session_from_recording
@@ -65,10 +65,13 @@ def run(argv: list[str] | None = None) -> int:
     if args.at is not None:
         record = evidence(args.name, session, args.at)
         for field, text in format_evidence(record):  # UT-D3-8: the GUI evidence panel shares this formatter
-            print(f"{field:<20} {text}")
+            # Width derived from the field names, never typed -- see
+            # `EVIDENCE_LABEL_WIDTH`.
+            print(f"{field:<{EVIDENCE_LABEL_WIDTH}} {text}")
         return 0 if record.kind != "unknown" else 1
 
     facts = _explain_with_style_tokens(args.name, session)
+    width = max((len(key) for key in facts), default=0) + 1
     for key, value in facts.items():
-        print(f"{key:<20} {value}")
+        print(f"{key:<{width}} {value}")
     return 0 if facts["kind"] != "unknown" else 1

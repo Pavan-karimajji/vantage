@@ -35,7 +35,7 @@ from adas_sim.graph.build import Pipeline  # noqa: E402
 from adas_sim.config.scenario import (  # noqa: E402
     EgoScenario, RoadHint, RunControl, Scenario, ScenarioContent, SensorModelRef, SutRef,
 )
-from adas_sim.diagnostics.evidence import evidence, format_evidence  # noqa: E402
+from adas_sim.diagnostics.evidence import EVIDENCE_LABEL_WIDTH, evidence, format_evidence  # noqa: E402
 from adas_sim.runspec.manifest import build_manifest  # noqa: E402
 from adas_sim.core.runner import build_session_from_recording  # noqa: E402
 from adas_sim.player.shell.qt_window import EvidencePanel  # noqa: E402
@@ -84,7 +84,13 @@ def _record(tmp_path: Path) -> Path:
 def _cli_rows(recording_path: Path, address: str, tick: int, capsys) -> list[tuple[str, str]]:
     exit_code = explain_cli.run([address, "--session", str(recording_path), "--at", str(tick)])
     lines = capsys.readouterr().out.splitlines()
-    return exit_code, [(line[:20].strip(), line[20:].strip()) for line in lines]
+    # Split at the width the CLI actually printed with, read from the one
+    # place that defines it -- a literal here was a second copy of the CLI's
+    # own literal, and the two silently disagreed the moment a field name
+    # outgrew them (`F-8`).
+    return exit_code, [
+        (line[:EVIDENCE_LABEL_WIDTH].strip(), line[EVIDENCE_LABEL_WIDTH:].strip()) for line in lines
+    ]
 
 
 def _panel_rows(session, address: str, tick: int) -> list[tuple[str, str]]:

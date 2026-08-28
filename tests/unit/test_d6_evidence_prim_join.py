@@ -71,6 +71,43 @@ def test_evidence_prim_join_reports_component_build_provenance():
     record = evidence("echo-prim-1", session, 0)
     assert record.config_bundle_sha256 == "bundle-sha-9"
     assert record.component_build_id == "build-7"
+    # Both are carried, each under its own name -- never one standing in for
+    # the other (`F-8`).
+    assert record.component_library_sha256 == "abc123"
+
+
+def test_a_library_hash_is_never_reported_as_a_build_id():
+    """`F-8`, and the substitution `R-SIM-25`/`NR-SIM-4` forbid.
+
+    Every recording this framework writes fills `library_sha256` and leaves
+    `build_id` empty. The library hash must therefore be *shown* -- it is the
+    honest answer to "which build produced this" -- but shown under its own
+    name, with `component_build_id` still reading unknown, because no build id
+    was recorded. Showing the hash under the build-id label would be exactly
+    the plausible-looking default the rule exists to prevent.
+    """
+    build = ComponentBuildInfo(name="echo_stub_with_output", library_sha256="lib-sha-42", build_id="")
+    session = _session_with_port(component_build=build)
+    record = evidence(_PORT, session, 0)
+
+    assert record.component_library_sha256 == "lib-sha-42"
+    assert record.component_build_id is None, "the library hash leaked into the build-id field"
+
+    rendered = dict(format_evidence(record))
+    assert rendered["component_library_sha256"] == "lib-sha-42"
+    assert rendered["component_build_id"] == "unknown"
+
+
+def test_a_missing_library_hash_reads_unknown_rather_than_borrowing_the_build_id():
+    """The planted violation, mirrored: the substitution must be impossible in
+    BOTH directions, or one of them is only accidentally absent."""
+    build = ComponentBuildInfo(name="echo_stub_with_output", library_sha256="", build_id="build-7")
+    session = _session_with_port(component_build=build)
+    record = evidence(_PORT, session, 0)
+
+    assert record.component_build_id == "build-7"
+    assert record.component_library_sha256 is None
+    assert dict(format_evidence(record))["component_library_sha256"] == "unknown"
 
 
 def test_evidence_prim_join_matches_direct_port_lookup_provenance():
