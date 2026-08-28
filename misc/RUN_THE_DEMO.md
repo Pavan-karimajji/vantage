@@ -185,20 +185,14 @@ Anything the launcher does, this does — it is the command the launcher builds.
 
 Stated so you do not spend time on them:
 
-- **The `plug-in root` tooltip is stale.** It says to use the source checkout
-  `..\df` and to avoid the built directory. That was true of the legacy Python
-  viewer; the native app refuses a bare checkout and needs the built `df_viz`
-  directory, which is what the coloured status line under the box correctly
-  tells you. Trust the status line, not the tooltip.
-- **A recording in someone else's topic vocabulary feeds the module nothing** —
-  silently, exit 0. The ingest map that would translate it exists but nothing
-  calls it (`WP-12`). Use recordings this framework produced.
-- **`sim probe` reports `provides (0)`** on a perfectly good recording, for the
-  same reason. The launcher's own feasibility line does work.
+- **`sim probe` reports `provides (0)`** on a perfectly good recording. It reads
+  a different path from the engine's, and that path is still ingest-gated. The
+  launcher's own feasibility line does work — use that.
 - **`config_bundle_sha256` reads `unknown`** — the calibration hash is not
   recorded yet, only the build.
 - **`aeb.compState` is empty.** Deliberate: AEB's heartbeat is not implemented
   yet in `df`, and this is not a sim defect.
-- **`bsd_curve_r172_passby` passes `sim check` for the wrong reason** — it
-  asserts a warning stays `OFF`, and nothing reaches the module. Do not read it
-  as coverage.
+- **`bsd_curve_r172_passby` passes honestly since 2026-08-28**, but is
+  **under-asserted**: its BSD warning genuinely fires from t≈7.4 s to t≈9.6 s
+  and no expectation covers that — `EXP-1` checks only the first 5 s of an
+  ~11 s recording. A green here is real now, but it is not coverage.

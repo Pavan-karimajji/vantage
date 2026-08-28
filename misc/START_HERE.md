@@ -44,9 +44,9 @@ fixes).
 
 Nothing is blocked. What the demo did **not** prove is written down and is the
 honest input to that conversation: one module demonstrates the *mechanism*, not
-the *chain* (that needs vdy); the scenario corpus is thin with one false green;
-`F-6` and `WP-12`'s ingest map are still open; and the gate still exits 1 on two
-parked items, which is a decision nobody has taken yet.
+the *chain* (that needs vdy); the scenario corpus is thin and now visibly
+under-asserted; `F-6` is still open; and the gate still exits 1 on two parked
+items, which is a decision nobody has taken yet.
 
 ## Do not
 
@@ -76,7 +76,7 @@ parked items, which is a decision nobody has taken yet.
 |---|---|---|
 | ERG · `WP-17` · `WP-18` | No ERG measurement exists or can be obtained | Real data arrives in a format sim cannot read |
 | `WP-19` `WP-30` `WP-31` | No demo dependency | **Condition met 2026-08-28 — the demo runs.** Unparking them is now a scope decision, not a wait |
-| The scenario finding — **now only its corpus half** (4 of 18 runnable, one vacuous pass). The three *"never became"* failures were `F-1` and are fixed | Author's call, 2026-08-27 | Before `B3` deletes `tools/carla/`, or when coverage rather than the warning path matters |
+| The scenario finding — **now only its corpus half** (4 of 18 runnable, and those four under-asserted). Every *"never became"* and every vacuous pass is fixed | Author's call, 2026-08-27 | Before `B3` deletes `tools/carla/`, or when coverage rather than the warning path matters |
 | 155 `R-REQ-9` citations | Bookkeeping, not code | `WP-31` |
 | Conan editable test | `WP-31` scope | `WP-31` |
 
@@ -90,10 +90,10 @@ parked items, which is a decision nobody has taken yet.
    The trigger was fixed 2026-08-27 and the push it was waiting on happened
    **2026-08-28** — so a run may now exist, unobserved: `gh` is not installed
    here. Someone must look. The gate itself still exits 1 on two parked items.
-3. **The scenario corpus is thin, and one green is false.** Only 4 of 18
-   scenarios can run. Three now assert real firing behaviour; the fourth
-   (`bsd_curve_r172_passby`) passes only because nothing reaches the component —
-   it needs `WP-12`'s ingest map. Do not mistake a green `sim check` for coverage.
+3. **The scenario corpus is thin and under-asserted.** Only 4 of 18 scenarios
+   can run. All four now assert real computed behaviour (`bsd_curve_r172_passby`
+   stopped being a false green 2026-08-28) — but its BSD warning fires at
+   t≈7.4–9.6 s with no expectation covering it. Green is not coverage.
 
 ## How Movement C gets tracked when it grows
 
@@ -121,6 +121,10 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-08-28** — Ingest map wired end to end (`#5` red → green): the emitter,
+  the engine's spec parser, and a `Translator` that had no caller. A legacy
+  recording went from 218 empty ticks to real data; `bsd_curve_r172_passby`
+  stayed green but stopped being false. Record: `…_2026-08-28_ingest.md`.
 - **2026-08-28** — `F-8` fixed: a port's build is answered, as
   `component_library_sha256` under its own name — never the library hash shown
   where a build id was asked for. `WP-35` closed; the demo runs, all five
@@ -137,6 +141,3 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   plan; rebuilt and verified on both platforms. `sim check` 3 failed → 0, no
   regressions, one new finding (`F-6`). Record:
   `docs/v2/SIM_Test_Execution_2026-08-28.md`.
-- **2026-08-27** — Findings from the step-zero run verified and written up as a
-  Test Execution Record (`_step_zero`); this file trimmed back and its no-counts
-  rule sharpened to *no derived progress state* (dated evidence is fine).

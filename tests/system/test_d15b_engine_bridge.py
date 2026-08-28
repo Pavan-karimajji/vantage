@@ -261,3 +261,57 @@ def test_resolve_simengine_executable_names_every_candidate_when_missing(monkeyp
     with pytest.raises(EnvironmentError_) as exc_info:
         resolve_simengine_executable(search=[Path("/also/does/not/exist")])
     assert "does" in str(exc_info.value)
+
+
+# ---------------------------------------------------------------------------
+# `#5` / `F-4` (2026-08-28): the ingest map, wired. `WP-12`'s parser and
+# `simcore/io/translate.cpp`'s apply half were both real and both tested for
+# months; nothing joined them, and `pipeline_to_run_spec` emitted a hardcoded
+# `{"ingest": [], "absent": []}` under a comment claiming the parser had not
+# landed. A foreign-vocabulary recording therefore resimmed to completion,
+# exit 0, feeding its module an empty payload on every one of 218 ticks.
+# ---------------------------------------------------------------------------
+
+_LEGACY = Path(__file__).resolve().parents[3] / "df" / "tests" / "carla_testruns" / "bsd" / "bsd_curve_r172_passby.mcap"
+_NATIVE = Path(__file__).resolve().parents[3] / "df" / "tests" / "carla_testruns" / "aeb" / "aeb_canonical_10mps_30m.mcap"
+
+
+def test_a_foreign_vocabulary_recording_resolves_a_real_ingest_table():
+    """The recording carries `df/gen_object_list`; the pipeline wires
+    `source.gen_object_list`. Without a table those never meet."""
+    from adas_sim.engine.bridge import _ingest_for
+
+    if not _LEGACY.exists():
+        pytest.skip(f"not present in this checkout: {_LEGACY}")
+
+    resolved = _ingest_for(_LEGACY)
+
+    assert resolved["ingest"], "no ingest rows resolved -- the map was not applied"
+    by_raw = {row["raw_topic"]: row for row in resolved["ingest"]}
+    assert "/df/gen_object_list" in by_raw, sorted(by_raw)
+    assert by_raw["/df/gen_object_list"]["port"] == "/source/gen_object_list"
+
+    # A Resolved Run Spec carries NO reference grammar (`ANL-SW-01`): both
+    # sides of a row are topics, never `source.`-prefixed port references.
+    # `unresolved()` refuses that outright, and caught it on the first run.
+    for row in resolved["ingest"]:
+        assert not row["raw_topic"].startswith(("source.", "self."))
+        assert not row["port"].startswith(("source.", "self."))
+    for row in resolved["absent"]:
+        assert not row["port"].startswith(("source.", "self."))
+
+
+def test_a_recording_this_framework_produced_resolves_no_table(tmp_path):
+    """The planted violation. A native recording's topics already ARE port
+    names, so it must match no map and take the identical un-decorated path
+    it always did -- if this returned rows, the check above would pass for
+    any file at all and prove nothing."""
+    from adas_sim.engine.bridge import _ingest_for
+
+    if not _NATIVE.exists():
+        pytest.skip(f"not present in this checkout: {_NATIVE}")
+
+    resolved = _ingest_for(_NATIVE)
+
+    assert resolved["ingest"] == []
+    assert resolved["absent"] == []

@@ -23,9 +23,11 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "simcore/errors.hpp"
+#include "simcore/io.hpp"
 
 namespace simcore {
 
@@ -100,14 +102,30 @@ struct SpecMutation {
   std::optional<std::int64_t> window_ns_end;
 };
 
-// design §3.1 -- sources[]. `ingest`/`absent` are not yet represented here
-// (WP-12's own ingest-map parser has not landed -- the Python emitter
-// writes them as empty arrays today, IMP-0011's documented scope for this
-// pass); adding them is an additive struct change, not a reversal.
+// design §3.1 -- sources[]. `ingest`/`absent` are represented and parsed
+// since 2026-08-28; this comment previously said they were not, which was
+// true when written and stopped being true the day `WP-12`'s parser landed
+// on the Python side while nothing here read what it emitted.
 struct SpecSource {
   std::string path;
   std::string sha256;
   std::string codec;
+  //: `WP-12`'s resolved ingest table for THIS source, as the Python side
+  //: picked it (`IngestMap.matches(topics)`) -- the bridge from *"what is
+  //: in the file"* to *"which port does this satisfy"* (`R-SIM-23`).
+  //: Empty for a recording this framework produced, whose topics already
+  //: equal port names; non-empty for a foreign vocabulary.
+  //:
+  //: **Read here, applied in `io`** -- `runspec` parses, `io::Translator`
+  //: transforms, and neither knows about the other's job. Until 2026-08-28
+  //: this field was emitted by the Python side and parsed by nobody, so a
+  //: foreign-vocabulary recording ran to completion feeding its module
+  //: nothing at all, silently (`F-4`).
+  std::vector<io::IngestRow> ingest;
+  //: `absent:` -- a port this recording family never carries, with the
+  //: reason. Carried so a caller can say *"declared absent because …"*
+  //: rather than *"missing"* (`R-SIM-23`'s own two-reason distinction).
+  std::vector<std::pair<std::string, std::string>> absent;
 };
 
 // design §3.1 -- the top-level `outputs` key. `emit.py::emit_run_spec`

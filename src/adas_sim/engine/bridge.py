@@ -303,6 +303,70 @@ def _fault_mutations(faults: Sequence, *, grid_step_ns: int) -> list[dict]:
     return mutations
 
 
+def _ingest_for(recording_path: Path) -> dict[str, list]:
+    """The `ingest`/`absent` half of a `sources[]` entry, resolved for THIS
+    recording (`R-SIM-23`, `WP-12`).
+
+    **This function is the join `WP-12` was missing.** `ingest/map.py`'s
+    parser has been real and tested since that package landed, and
+    `simcore/io/translate.cpp`'s apply half since `IMP-0032` — but nothing
+    connected them: this dict was hard-coded to `{"ingest": [], "absent": []}`
+    with a comment saying the parser had not landed, long after it had. The
+    consequence was not a missing feature but a wrong answer: a recording in
+    a foreign topic vocabulary resimmed to completion, exit 0, feeding its
+    module an empty payload on every tick, silently (`F-4`, measured
+    2026-08-27 at 218 ticks).
+
+    Which map applies is decided the way `IngestMap.matches` decides it —
+    by the recording's own topics — never by filename or convention. A
+    recording this framework produced matches no map and gets two empty
+    lists, i.e. exactly the previous behaviour.
+
+    Discovery failing is **not** this run's failure: a checkout with no
+    `modules/*/sim/ingest` at all is the ordinary case for a deployed
+    install, so it degrades to "no map" rather than raising. A map that
+    exists but is malformed still raises out of `_parse_ingest_map`, which
+    is where that error belongs.
+    """
+    from adas_sim.ingest.map import discover_ingest_maps
+
+    try:
+        reader = reader_for(recording_path)
+    except Exception:  # noqa: BLE001 -- an unreadable recording fails later, with a better message
+        return {"ingest": [], "absent": []}
+    try:
+        topics = list(reader.topics())
+    finally:
+        reader.close()
+
+    applicable = [m for m in discover_ingest_maps() if m.matches(topics)]
+    ingest: list[dict] = []
+    absent: list[dict] = []
+    for ingest_map in applicable:
+        for provided in ingest_map.provides:
+            ingest.append({
+                # BOTH sides are topics, and that is the point. An ingest map
+                # is authored in port-reference form (`source.gen_object_list`)
+                # because that is what a pipeline wires; but a Resolved Run
+                # Spec carries **no reference grammar** (`ANL-SW-01`,
+                # design §3.2) and `unresolved()` refuses a `source.`-prefixed
+                # string outright -- correctly, and it caught this on the
+                # first real run. So the row is emitted topic -> topic, and
+                # the engine derives the port name with the one transform it
+                # already uses for every other topic (`TopicToPortName`).
+                # Nothing new learns the reference grammar.
+                "raw_topic": _port_name_to_topic(provided.topic),
+                "port": _port_name_to_topic(provided.port),
+                "origin": provided.origin.value,
+                "proto_type": provided.proto_type,
+                "factor": provided.factor,
+                "offset": provided.offset,
+            })
+        for missing in ingest_map.absent:
+            absent.append({"port": _port_name_to_topic(missing.port), "reason": missing.reason})
+    return {"ingest": ingest, "absent": absent}
+
+
 def pipeline_to_run_spec(
     pipeline: Pipeline, *, run_id: str, recording_path: Path, recording_sha256: str = "",
     output_path: Path | None = None, exec_timeout_ms: int = 250, checkpoint_path: Path | None = None,
@@ -383,7 +447,7 @@ def pipeline_to_run_spec(
         "grid": {"step_ns": grid_step_ns},
         "sources": [{
             "path": str(recording_path), "sha256": recording_sha256, "codec": "mcap",
-            "ingest": [], "absent": [],  # WP-12's ingest-map parser not landed yet, same as emit_run_spec's own
+            **_ingest_for(recording_path),
         }],
         "stages": stages,
         "mutations": mutations,

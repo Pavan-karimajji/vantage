@@ -331,6 +331,14 @@ SimEngine* simEngineCreate(const char* run_spec_json_path, const char* config_pa
     return nullptr;
   }
   engine->reader = std::move(reader_result).value();
+  // `WP-12`'s ingest table, applied (2026-08-28, `F-4`/`#5`). Wrapped ONLY
+  // when the spec actually carries rows, so a recording this framework
+  // produced -- whose topics already are port names -- takes the identical
+  // path it always did, with no decorator in it at all.
+  if (!engine->spec.sources.front().ingest.empty()) {
+    engine->reader = std::make_unique<simcore::io::TranslatingReader>(
+        std::move(engine->reader), simcore::io::Translator(engine->spec.sources.front().ingest));
+  }
   const Result<bool> open_result = engine->reader->Open(engine->spec.sources.front().path);
   if (!open_result.ok()) {
     WriteErr(err_buf, err_buf_cap, open_result.error().Format());

@@ -139,6 +139,33 @@ SpecSource ParseSource(const Json& node) {
   source.path = node.at("path").get<std::string>();
   source.sha256 = node.at("sha256").get<std::string>();
   source.codec = node.at("codec").get<std::string>();
+  // `ingest`/`absent`: optional on read, exactly like `outputs`/`checkpoint`
+  // above -- every spec written before 2026-08-28 emitted them as empty
+  // arrays and every spec written before THAT omitted them entirely, so a
+  // missing key and an empty array must parse the same way (no ingest
+  // table, i.e. the recording's topics already are port names).
+  //
+  // No validation here beyond shape. `SW-0032` puts the parser, the schema
+  // and the vocabulary in `WP-12`'s Python side; this reads an
+  // already-resolved table, and inventing a second validator here would be
+  // the second copy that rule exists to prevent.
+  if (node.contains("ingest")) {
+    for (const auto& row : node.at("ingest")) {
+      io::IngestRow parsed;
+      parsed.raw_topic = row.value("raw_topic", std::string());
+      parsed.port = row.value("port", std::string());
+      parsed.origin = row.value("origin", std::string());
+      parsed.proto_type = row.value("proto_type", std::string());
+      parsed.factor = row.value("factor", 1.0);
+      parsed.offset = row.value("offset", 0.0);
+      source.ingest.push_back(std::move(parsed));
+    }
+  }
+  if (node.contains("absent")) {
+    for (const auto& row : node.at("absent")) {
+      source.absent.emplace_back(row.value("port", std::string()), row.value("reason", std::string()));
+    }
+  }
   return source;
 }
 

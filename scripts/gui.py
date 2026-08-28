@@ -237,12 +237,17 @@ FIELD_HELP: dict[str, tuple[str, str]] = {
         "modules/*/tests/**, newest first.",
     ),
     "plugin_root": (
-        "..\\df                                   (a component checkout)",
+        "..\\df\\build-sil_viz-vs2026\\src\\platform\\df_viz\\Release",
         "Where a component's LAYERS come from -- the picture of that component's "
         "own function.\n\n"
-        "Use the SOURCE CHECKOUT: ..\\df\n"
-        "Not the built directory yet -- the deployed copy crashes bsd.zone with a "
-        "swallowed error and leaves an EMPTY layer tree (AR-61, open).\n\n"
+        "Use the component's own DEPLOYED VIZ BUILD:\n"
+        "  ..\\df\\build-sil_viz-vs2026\\src\\platform\\df_viz\\Release\n\n"
+        "This used to say the opposite -- 'use the source checkout, not the built "
+        "directory, AR-61 is open'. AR-61 was closed and re-verified at WP-34a, "
+        "and the native host cannot load a bare source checkout at all: it needs "
+        "a real df_viz.dll. Corrected 2026-08-28.\n\n"
+        "The coloured line under this box is the authority -- it probes whatever "
+        "you pick and says which kind it is, before you launch.\n\n"
         "LEAVE EMPTY and you still get the framework's own layers (ego, frame) -- "
         "just nothing function-specific.",
     ),

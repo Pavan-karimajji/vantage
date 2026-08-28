@@ -346,8 +346,50 @@ class Translator {
   // resolve a `TopicInfo` without also transforming a message).
   Provenance OriginFor(const std::string& raw_topic) const;
 
+  // The port a raw topic is renamed to, or empty when this table has no row
+  // for it. `TranslatingReader` needs this to rewrite the topic INDEX, not
+  // just the message stream -- a reader that renamed messages while
+  // `Describe()` still reported the file's own vocabulary would satisfy the
+  // payload lookup and fail every index lookup, which is `F-1`'s defect
+  // wearing a different hat.
+  std::string PortFor(const std::string& raw_topic) const;
+
+  bool empty() const { return by_topic_.empty(); }
+
  private:
   std::map<std::string, IngestRow> by_topic_;
+};
+
+// `WP-12`'s missing leg, added 2026-08-28 (`F-4`/`#5`). `Translator` has
+// existed since `IMP-0032` and had **no caller anywhere in `src/`** -- the
+// parse half lived in Python, the apply half lived here, and nothing joined
+// them, so a recording in a foreign topic vocabulary ran to completion
+// feeding its module an empty payload on every tick, exit 0, no warning.
+//
+// This is that join, and deliberately the smallest possible one: a `Reader`
+// decorator. It owns no parsing (`SW-0032`), invents no vocabulary
+// (`R-SIM-23`'s closed list: renaming and tagging only, never a computed
+// value), and changes nothing for a recording whose topics already are port
+// names -- `simEngineCreate` only wraps when the spec actually carries rows.
+//
+// **Both halves or neither.** `Describe()` and the message stream are
+// translated together: renaming messages while the index still reported the
+// file's own names would make payloads resolve and provenance miss, which is
+// exactly the split `F-1` cost this project a silent week of neutral runs.
+class TranslatingReader final : public Reader {
+ public:
+  TranslatingReader(std::unique_ptr<Reader> inner, Translator translator);
+
+  Result<bool> Open(const std::filesystem::path& path) override;
+  std::map<std::string, TopicInfo> Describe() const override;
+  void Seek(std::int64_t log_time_ns) override;
+  Batch ReadRange(const ReadBounds& bounds) override;
+  void Close() override;
+  std::optional<std::vector<std::uint8_t>> GetMeta(const std::string& kind_name) const override;
+
+ private:
+  std::unique_ptr<Reader> inner_;
+  Translator translator_;
 };
 
 // Forward-declared so `LazyPayload<T>::Get` below can call it unqualified:

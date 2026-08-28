@@ -31,7 +31,7 @@ touched — no requirement was added, removed or reworded otherwise.
 | # | In one sentence | Status |
 |---|---|---|
 | **4** | Read many recording formats — mcap, ERG, MDF, rosbag and more later — and adding a new format means writing one small reader, never changing the engine. | 🟡 mcap + ERG real; MDF/rosbag absent |
-| **5** | Read recordings **we did not produce** — another team's, a supplier's, a foreign simulator's — by writing a mapping file that says *"this topic in the file feeds this input"*. Declared as data, never as code. | 🔴 parser real, **nothing calls it** — a foreign-vocabulary recording runs to completion feeding the module nothing (`F-4`) |
+| **5** | Read recordings **we did not produce** — another team's, a supplier's, a foreign simulator's — by writing a mapping file that says *"this topic in the file feeds this input"*. Declared as data, never as code. | 🟢 wired 2026-08-28 — a legacy-vocabulary recording went from 218 empty ticks to 174 distinct object payloads |
 | **6** | Before a run starts, the tool says what this recording **can and cannot** do — which modules it can feed, which it can't, and why. You never discover it by watching a run fail. | 🟡 the launcher answers, naming the missing ports (`F-7`); `sim probe` still reports nothing |
 
 ## C. Running our software (engine)
@@ -93,17 +93,17 @@ Recorded so it cannot quietly reappear.
 **1. Is the concept right?** The lines above are the concept. If they are all
 `AGREE`, then the design is not the problem and never was.
 
-**2. Where is it?** 23 of 25 are green or amber. **The red ones are now #5 (read
-a recording we did not produce) and #20 (everything past BEV).** #8 — choose
-measured/simulated in the launcher — went red → green on 2026-08-28 and was the
-POC demo's last piece. #5 went amber → red in the same pass: not a regression,
-a correction. Its parser is real and tested, nothing calls it, and a
-foreign-vocabulary recording therefore runs to completion feeding the module
-nothing at all — which is worse than "partly", and had been sitting behind an
-amber mark.
+**2. Where is it?** 24 of 25 are green or amber. **The only red left is #20
+(everything past BEV)** — and it is the one the author described first and most
+often when asked what this is for.
 
-Of the two remaining reds, **#20 is the one the author described first and most
-often** when asked what this is for.
+Two moved on 2026-08-28. **#8** — choose measured/simulated in the launcher —
+went red → green and was the POC demo's last piece. **#5** went amber → red →
+green in the same day: amber → red was a correction (its parser was real,
+nothing called it, and a foreign-vocabulary recording fed the module nothing at
+all, which is worse than "partly"), and red → green was the fix. Wiring it took
+three legs, not the one the amber mark implied: the emitter, the engine's spec
+parser, and a `Translator` that had existed for months with no caller anywhere.
 
 **3. Why does it feel endless?** Not because the concept is wrong or the work is
 behind. See `memory.md` in this folder — it is a tracking and proportion failure,
