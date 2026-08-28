@@ -22,32 +22,33 @@
 
 **Movement A** ✅ done, except one item blocked on the author (a push).
 **Movement B** ⏸ planned, deliberately **not** started — it is no longer the gate.
-**Movement C** ← **we are here. The demo's gesture works end to end; the GUI is
-what is left.**
+**Movement C** ← **we are here. The demo runs, watched; one clause of it is
+still answered `unknown`.**
 
 The 2026-08-27 reset re-scoped this module around one watchable demo instead of a
 completion percentage. Read `memory.md` for why, `DEMO_AND_SCOPE.md` for the
 demo and the finite list, `MOVEMENT_B_PLAN.md` for the deletion work.
 
-**Step zero's defects are fixed** and the demo's gesture is demonstrated
-headlessly end to end: one self-produced recording, `mode:` the only thing that
-differs, both directions byte-identical on data where AEB actually fires, driven
-through the launcher's own API. Records:
-**`docs/v2/SIM_Test_Execution_2026-08-28.md`** (the fixes) and
-**`…_2026-08-28_wp28.md`** (the launcher campaign, and `F-7`).
+**The demo runs.** `WP-35` was opened for it (authorised 2026-08-28, scoped
+verbatim to `DEMO_AND_SCOPE.md` §1) and the launcher now carries the
+measured/simulated control. Four of §1's five clauses are demonstrated and
+screenshotted; the fifth is three-quarters answered. Records:
+**`…_2026-08-28.md`** (the fixes), **`…_2026-08-28_wp28.md`** (`F-7`),
+**`…_2026-08-28_wp35.md`** (the demo, its screenshots and `F-8`).
 
 ## The next action — exactly one
 
-> **Author's decision: the demo's visible half has no work-package box, and the
-> freeze forbids creating one.**
+> **`F-8` — make `sim explain` join `run_id` → the manifest's `components[]`,
+> so a port's **build** is answered instead of read `unknown`.**
 
-`WP-28` is the **headless** launcher model, complete (Exit `[x]`; its one open
-box blocked on untouched `WP-21`). `WP-34a` owns the **face** and is closed —
-but that GUI has no mode control and never imports `adas_sim.launcher`. So
-*"flip `df` in the face"* belongs to neither. Pick one: extend `WP-34a` as a
-correction, open one `WP` for the face, or accept a scripted headless demo plus
-`vantage_app.exe` opened by hand. Nothing else in Movement C is blocked
-meanwhile.
+It is the only clause of §1 the demo cannot yet satisfy, and the last box of
+`WP-35`. The data is already in the recording
+(`ComponentBuildInfo(name='df', library_sha256='b3524ca8…')`); `R-SIM-25` says
+this join needs no new capture and no new index. It lives in `diagnostics`, not
+the launcher — which is why `WP-35` recorded it rather than absorbing it.
+
+When that closes, the POC demo is complete and the freeze ends by its own
+terms.
 
 ## Do not
 
@@ -75,7 +76,7 @@ meanwhile.
 | Parked | Why | Unpark when |
 |---|---|---|
 | ERG · `WP-17` · `WP-18` | No ERG measurement exists or can be obtained | Real data arrives in a format sim cannot read |
-| `WP-19` `WP-30` `WP-31` | No demo dependency | The demo runs |
+| `WP-19` `WP-30` `WP-31` | No demo dependency | The demo runs — **`F-8` is the last clause**; unpark then |
 | The scenario finding — **now only its corpus half** (4 of 18 runnable, one vacuous pass). The three *"never became"* failures were `F-1` and are fixed | Author's call, 2026-08-27 | Before `B3` deletes `tools/carla/`, or when coverage rather than the warning path matters |
 | 155 `R-REQ-9` citations | Bookkeeping, not code | `WP-31` |
 | Conan editable test | `WP-31` scope | `WP-31` |
@@ -121,6 +122,10 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-08-28** — `WP-35` opened (the demo, §1 verbatim) and the launcher wired
+  to `adas_sim.launcher`. Demo run for real: both modes, both pictures agree,
+  screenshotted. `F-8` found — build reads `unknown` though the recording
+  carries it. Record: `…_2026-08-28_wp35.md`. **Not committed.**
 - **2026-08-28** — `WP-28` driven against the real demo through its own API:
   both toggle directions launch. Found and fixed `F-7` (every cut reported
   infeasible against a real recording — an untested join). The visible half has
@@ -134,6 +139,3 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   rule sharpened to *no derived progress state* (dated evidence is fine).
 - **2026-08-27** — Step zero run for real. Toggle confirmed byte-identical on
   firing AEB data; five findings, `F-3` blocks the demo's shape.
-- **2026-08-27** — Reset session: resume pointer fixed, dead CI trigger
-  repointed, first Test Execution Record written, ERG found unobtainable and the
-  demo rewritten around a self-produced recording (`memory.md` has the why).

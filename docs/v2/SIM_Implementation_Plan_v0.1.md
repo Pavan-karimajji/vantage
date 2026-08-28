@@ -1608,6 +1608,69 @@ externally-discovered follow-on found closing the row before it.
 
 ---
 
+### WP-35 · `MP-6` · the demo — the launcher's measured/simulated toggle
+
+**Opened 2026-08-28, by the author, on the record.** The specification freeze
+(`misc/START_HERE.md`) forbids new work packages *until the demo runs* — and
+this package **is** the demo, which is the freeze's own defined end. It is
+scoped verbatim to `misc/DEMO_AND_SCOPE.md` §1 and to nothing else:
+
+> Open the launcher. Pick a recording the system itself produced. Set df to
+> MEASURED — the picture comes from the file. Set df to SIMULATED — the same
+> picture is computed live by the real DLL. The two match. Click an object and
+> see which signal, tick, file and build produced it.
+
+**Why a package at all, when two exist either side of it.** `WP-28` is the
+headless launcher model and is complete; `WP-34a` is the face and is closed.
+The demo's gesture belonged to neither: `scripts/gui.py` had no mode control
+and never imported `adas_sim.launcher`, so a complete model sat behind a
+complete face with no wire between them. That gap is this package, and
+nothing else goes in it — no launcher redesign, no new capability.
+
+**Prereq:** `WP-28` (the model), `WP-34a` (the face), and the 2026-08-28
+step-zero fixes (`F-1`/`F-2`/`F-3`) without which a self-produced recording
+could not be re-simulated at all.
+
+- [x] **Lands:** `IMP-0433` — 1.
+  - [x] `IMP-0433` · `SW-0429` · `EXTEND` — `scripts/gui.py`'s stage/mode row and
+      `_resolve_mode()`; full account in `SIM_Implementation_Design_v0.1.md`'s own
+      `IMP-0433` row, not repeated here. `UT-VTG-03`
+      (`tests/system/test_lnc_gui_mode_control.py`, 5 cases): **5/5 green**,
+      including the planted violation (`measured` against a stimulus-only
+      recording writes no config, names the missing ports, and does not let the
+      command look as though the mode applied). Two real defects found while
+      writing it and fixed here: a typo'd stage name was silently replaced with
+      the pipeline's only stage — applying the mode to a stage the user did not
+      name — and an unresolvable `dll:` stage was reported as an error even when
+      no mode had been asked for.
+- [x] **Files:** `scripts/gui.py` · `tests/system/test_lnc_gui_mode_control.py`.
+- [~] **Exit — the demo, run end to end, watched and recorded.** Not "the toggle
+      appears in the GUI": the launcher opened, a self-produced recording picked,
+      `df` set to MEASURED and then SIMULATED, both pictures seen to agree, an
+      object clicked and its provenance read — screenshotted both directions and
+      recorded in `docs/v2/SIM_Test_Execution_2026-08-28_wp35.md`. *"The two
+      pictures agree"* is **watched**, never asserted: `vantage_app.exe` has no
+      snapshot flag and adding one is out of this package's scope. The port
+      values behind the claim are already asserted byte-identical (the
+      2026-08-28 step-zero fixes campaign), so what the screenshots add is that
+      the same equality is visible to a person, through the face.
+      — **closed by:** `F-8`. Four of §1's five clauses are demonstrated and
+      screenshotted (launcher opened, self-produced recording picked, both modes
+      set, both pictures agree — same nine prims, same layer tree, same tick).
+      The fifth — *"see which signal, tick, file **and build** produced it"* — is
+      three-quarters answered: `sim explain` gives signal, tick, topic, origin
+      and `run_id`, but reports `component_build_id` as `unknown` even though
+      the recording's own manifest carries
+      `ComponentBuildInfo(name='df', library_sha256='b3524ca8…')`. The evidence
+      record does not join `run_id` → `components[]`, which is the one join
+      `R-SIM-25` says needs no new capture and no new index. Closes when that
+      join is made and `sim explain` prints a real build identity for a port
+      whose recording carries one. **Not fixed here** — it is in `diagnostics`,
+      not the launcher, and this package is scoped to §1's wiring and nothing
+      else.
+
+---
+
 ### WP-33 · `MP-6` · `SM-11` — the `PortFrame`→`Tick` bridge, `vantage`'s mechanism half
 
 **Serves:** `SM-11` (`SYNC:SM-11`, `VIZ_Sync_Plan_v0.1.md` §2 — "`vantage`,

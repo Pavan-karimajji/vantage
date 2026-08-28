@@ -78,6 +78,16 @@ CONFIG_PATH = SIM_DIR / "scripts" / "gui_config.json"
 #: Where a component's plug-ins live inside whichever root you point at.
 PLUGIN_MARKER = Path("sim") / "plugin.yaml"
 
+#: The mode dropdown's own "leave the file alone" value. Selecting it writes
+#: no derived config and passes the authored `pipeline.yaml` through
+#: untouched -- so this screen behaves exactly as it did before the control
+#: existed unless a mode is actually chosen.
+MODE_AS_AUTHORED = "(as authored)"
+
+#: Derived run configs land here rather than beside the authored pipeline:
+#: they are a build output of a selection, not something to edit or commit.
+DERIVED_DIR = SIM_DIR / "logs" / "_launcher"
+
 
 # --------------------------------------------------------------------------
 # discovery -- what exists on THIS machine, so the screen offers real choices
@@ -449,9 +459,23 @@ class LauncherApp:
         # Default OFF (native, `vantage_app.exe`, `WP-34`) unless the config
         # already had it on, or `vantage.bat --legacy` asked for it.
         self.legacy = tk.BooleanVar(value=bool(cfg.get("legacy", False)) or legacy_default)
+        #: The measured/simulated toggle. Deliberately NOT persisted to
+        #: `gui_config.json`: which module you injected last time is not a
+        #: preference, and silently reopening in `measured` would be exactly
+        #: the "why am I not seeing the algorithm run?" confusion this screen
+        #: exists to prevent.
+        self.stage = tk.StringVar(value="")
+        self.mode = tk.StringVar(value=MODE_AS_AUTHORED)
+        #: `(pipeline, stage, mode, recording, config, project)` -> written
+        #: path, so `_refresh` (which fires on every keystroke) rewrites the
+        #: derived config only when one of its inputs actually changed.
+        self._derived_memo: tuple | None = None
+        self._derived_path: Path | None = None
+        self._derived_note: str = ""
 
         for var in (self.recording, self.plugin_root, self.project, self.preset,
-                    self.at_s, self.pipeline, self.search, self.config_path, self.legacy):
+                    self.at_s, self.pipeline, self.search, self.config_path, self.legacy,
+                    self.stage, self.mode):
             var.trace_add("write", lambda *_: self._refresh())
 
         self._build()
@@ -535,6 +559,24 @@ class LauncherApp:
                   "to compute them."),
         ).pack(fill="x", padx=8, pady=(0, 6))
 
+        # --- the measured/simulated toggle ----------------------------------
+        # Every decision below belongs to `adas_sim.launcher` (`WP-28`), which
+        # is complete: this row chooses a stage and a mode, and that package
+        # classifies the result, answers whether the recording can actually
+        # drive the cut, and writes the run config. Nothing here re-derives
+        # any of it -- the screen stays a front door.
+        row = ttk.Frame(adv); row.pack(fill="x")
+        ttk.Label(row, text="stage / mode", width=18).pack(side="left", padx=6, pady=3)
+        self.stage_combo = ttk.Combobox(row, textvariable=self.stage, width=18, values=[])
+        self.stage_combo.pack(side="left", pady=3)
+        self.mode_combo = ttk.Combobox(
+            row, textvariable=self.mode, width=16, state="readonly",
+            values=[MODE_AS_AUTHORED, "measured", "simulate", "off"],
+        )
+        self.mode_combo.pack(side="left", padx=(6, 0), pady=3)
+        self.mode_status = ttk.Label(row, text="", wraplength=560, justify="left")
+        self.mode_status.pack(side="left", padx=10, pady=3)
+
         # --- the command --------------------------------------------------
         box = ttk.LabelFrame(outer, text="Command that will run")
         box.pack(fill="x", **pad)
@@ -593,6 +635,136 @@ class LauncherApp:
         if p:
             self.config_path.set(p)
 
+    # -- the measured/simulated toggle --------------------------------------
+
+    def _launcher_inputs(self) -> tuple:
+        return (
+            self.pipeline.get().strip(), self.stage.get().strip(), self.mode.get(),
+            self.recording.get().strip(), self.config_path.get().strip(),
+            self.project.get().strip(), self.search.get().strip(),
+        )
+
+    def _resolve_mode(self) -> None:
+        """Turn the stage/mode choice into a derived run config, through
+        `adas_sim.launcher` and nothing else.
+
+        Sets `self._derived_path` (what `--pipeline` should point at) and
+        `self._derived_note` (what the status line says). Every failure is
+        reported in words rather than raised: this screen's whole purpose is
+        to say what is wrong *before* a launch, and a Tkinter traceback into
+        stderr nobody reads is the opposite of that.
+        """
+        inputs = self._launcher_inputs()
+        if inputs == self._derived_memo:
+            return
+        self._derived_memo = inputs
+        self._derived_path = None
+        self._derived_note = ""
+
+        pipeline_text = self.pipeline.get().strip()
+        if not pipeline_text:
+            self.stage_combo.configure(values=[])
+            if self.mode.get() != MODE_AS_AUTHORED:
+                self._derived_note = "a mode needs a pipeline.yaml — pick one above"
+            return
+
+        try:
+            # Imported here, not at module scope: this launcher must start on
+            # an install where `adas_sim` is not importable so that it can SAY
+            # so (this file's own rule 1). An ImportError becomes a sentence.
+            from adas_sim.graph.build import Pipeline
+            from adas_sim.launcher.classify import classify
+            from adas_sim.launcher.cuts import cuts_for_recording
+            from adas_sim.launcher.model import Selection
+            from adas_sim.launcher.write import to_run_config
+            from adas_sim.resolve.probe import describe_recording
+        except Exception as exc:  # noqa: BLE001 -- reported, never raised
+            self._derived_note = f"adas_sim is not importable here: {exc}"
+            return
+
+        search = tuple(Path(s) for s in [self.search.get().strip()] if s)
+        try:
+            base = Pipeline.load(Path(pipeline_text), search=list(search))
+        except Exception as exc:  # noqa: BLE001
+            # `Pipeline.load` resolves every `dll:` stage, so it genuinely
+            # needs `--search` before it can even name the stages. With no
+            # mode chosen nothing is being asked for, so that is not an error
+            # to shout about -- the screen stays as it was. Ask for a mode and
+            # the same failure becomes the answer to why you cannot have one.
+            self.stage_combo.configure(values=[])
+            if self.mode.get() != MODE_AS_AUTHORED:
+                self._derived_note = f"cannot load that pipeline: {exc}"
+            return
+
+        names = [s.name for s in base.stages]
+        self.stage_combo.configure(values=names)
+        stage = self.stage.get().strip()
+        if not stage and len(names) == 1:
+            # One stage is the unambiguous case (`df_only.yaml`, the POC's own
+            # pipeline): fill it in rather than making the user restate it.
+            # Only ever fills a BLANK field -- silently replacing a name the
+            # user actually typed would apply the mode to a different stage
+            # than the one they named, which is the whole class of failure
+            # this screen exists to prevent.
+            self.stage.set(names[0])
+            stage = names[0]
+        mode = self.mode.get()
+        if stage and stage not in names:
+            self._derived_note = f"'{stage}' is not a stage in this pipeline — it declares: {', '.join(names)}"
+            return
+        if mode == MODE_AS_AUTHORED:
+            self._derived_note = f"authored modes: " + ", ".join(f"{s.name}={s.mode}" for s in base.stages)
+            return
+        if not stage:
+            self._derived_note = "pick which stage the mode applies to"
+            return
+
+        selection = Selection(
+            base_pipeline=base, search=search,
+            config=Path(self.config_path.get().strip()) if self.config_path.get().strip() else None,
+            project=self.project.get().strip() or "base",
+        )
+        recording_text = self.recording.get().strip()
+        if recording_text:
+            recording = Path(recording_text)
+            selection = selection.add_recording(recording).select_recording(recording)
+        try:
+            selection = selection.set_mode(stage, mode)
+        except Exception as exc:  # noqa: BLE001
+            self._derived_note = str(exc)
+            return
+
+        notes: list[str] = []
+        # Can this recording actually drive the cut? `R-SIM-23`'s own
+        # "computed before the run, not discovered by failing one".
+        if recording_text and mode == "measured":
+            try:
+                cuts = {c.stage: c for c in cuts_for_recording(selection, describe_recording(Path(recording_text)))}
+                cut = cuts.get(stage)
+                if cut is not None and not cut.feasible:
+                    self._derived_note = (
+                        f"this recording cannot drive '{stage}' as measured — " + "; ".join(cut.missing)
+                    )
+                    return
+                notes.append("recording provides this cut")
+            except Exception as exc:  # noqa: BLE001
+                notes.append(f"feasibility unknown ({exc})")
+
+        verdict = classify(selection.working_pipeline)
+        if not verdict.can_launch:
+            self._derived_note = "blocked: " + "; ".join(str(f) for f in verdict.blocking)
+            return
+
+        try:
+            DERIVED_DIR.mkdir(parents=True, exist_ok=True)
+            self._derived_path = to_run_config(
+                selection, DERIVED_DIR / f"{Path(pipeline_text).stem}__{stage}_{mode}.yaml")
+        except Exception as exc:  # noqa: BLE001
+            self._derived_note = f"could not write the run config: {exc}"
+            return
+        notes.append(f"{stage} = {mode}")
+        self._derived_note = " · ".join(notes)
+
     # -- command building ---------------------------------------------------
 
     def build_argv(self) -> list[str]:
@@ -608,14 +780,22 @@ class LauncherApp:
         flags = [("--plugin-root", self.plugin_root), ("--project", self.project)]
         if legacy:
             flags += [("--preset", self.preset), ("--at", self.at_s)]
-        flags += [("--pipeline", self.pipeline), ("--search", self.search), ("--config", self.config_path)]
+        flags += [("--search", self.search), ("--config", self.config_path)]
         for flag, var in flags:
             value = var.get().strip()
             if value:
                 argv += [flag, value]
+        # The derived config REPLACES the authored one when a mode is chosen
+        # -- it is the same file with one `mode:` changed, written by
+        # `launcher.write.to_run_config`, so what runs is a real pipeline file
+        # a person can read and re-run headlessly (`CN-0175`).
+        pipeline_arg = self._derived_path or (self.pipeline.get().strip() or None)
+        if pipeline_arg:
+            argv += ["--pipeline", str(pipeline_arg)]
         return argv
 
     def _refresh(self) -> None:
+        self._resolve_mode()
         state, message = classify_plugin_root(self.plugin_root.get(), native=not self.legacy.get())
         colour = {"ok": "#1a7f37", "warn": "#9a6700", "bad": "#b3261e"}[state]
         prefix = {"ok": "OK", "warn": "WARNING", "bad": "ERROR"}[state]
@@ -623,6 +803,15 @@ class LauncherApp:
             message += (' Note: --preset/--at have no native equivalent and are dropped from this '
                         'command -- check "Legacy Python viewer" to use them.')
         self.root_status.configure(text=f"{prefix}:  {message}", foreground=colour)
+        # Green only when a mode is actually in force and wrote a config;
+        # amber for anything that stopped it, so a mode that did NOT take
+        # effect can never look the same as one that did.
+        if self._derived_path is not None:
+            self.mode_status.configure(text=f"OK: {self._derived_note}", foreground="#1a7f37")
+        elif self._derived_note:
+            self.mode_status.configure(text=self._derived_note, foreground="#9a6700")
+        else:
+            self.mode_status.configure(text="", foreground="#9a6700")
         self.cmd_text.delete("1.0", "end")
         self.cmd_text.insert("1.0", " ".join(self.build_argv()))
 

@@ -1715,6 +1715,15 @@ Everything in this part exists to make one sentence true in code rather than in 
 
 ---
 
+**`SW-0429`** · `SI-22` · `P0` · `R1` — A module's mode is chosen in the launcher, and what runs is the file that choice wrote
+**Shall.** The launcher shall let a person choose, per declared stage, whether that stage is `measured`, `simulate` or `off`, and shall run the pipeline file `SI-22`'s own writer produced from that choice — never a mode applied in memory, never the authored file mutated in place.
+**Accept.** Choosing a stage and a mode writes a run configuration through `launcher.write.to_run_config` and the launched command names **that** file; the authored `pipeline.yaml`'s bytes are unchanged. A mode that could not be applied — the recording cannot drive the requested cut (`SW-0345`), the chain would be broken (`SW-0342`), the stage is not declared, or the pipeline cannot be loaded — is reported in words naming the cause, and the command falls back to the authored pipeline rather than appearing to have applied it. No decision is re-derived in the launcher: classification, feasibility and writing are `SI-22`'s, unmodified.
+**Verify.** T · `UT-VTG-03`; D · the demonstration recorded in `SIM_Test_Execution_2026-08-28_wp35.md`   **Trace.** SYS-0272 (`SW-0428`'s own parent, extended from *which executable the launcher drives* to *what the launcher hands it*)
+**Built.** ● done — `IMP-0433` in `WP-35`
+**Now.** `NEW` — `scripts/gui.py` had no mode control at all and never imported `adas_sim.launcher`, so `WP-28`'s complete headless model was unreachable from the face `WP-34a` shipped. This row is the wire between them and nothing else: the demo of `DEMO_AND_SCOPE.md` §1, and no other scope.
+
+---
+
 # PART C — THE CONFIGURATION LAYER (Python)
 
 ## 14. `SI-10` — `config`: parse, validate, merge
