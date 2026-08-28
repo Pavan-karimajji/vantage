@@ -28,6 +28,7 @@ ends by its own terms.**
 The 2026-08-27 reset re-scoped this module around one watchable demo instead of a
 completion percentage. Read `memory.md` for why, `DEMO_AND_SCOPE.md` for the
 demo and the finite list, `MOVEMENT_B_PLAN.md` for the deletion work.
+**To actually run the demo: `RUN_THE_DEMO.md` in this folder.**
 
 **`DEMO_AND_SCOPE.md` §1 runs, end to end, all five clauses** — launcher,
 self-produced recording, both modes, both pictures agreeing, and an object's

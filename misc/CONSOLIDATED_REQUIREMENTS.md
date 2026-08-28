@@ -11,8 +11,10 @@ what the author said out loud on 2026-08-27.
 Anything marked `WRONG` or `NOT MINE` is a scope error that has been sitting
 inside 41,000 lines of specification without being visible.
 
-Status column is what exists **today**, measured 2026-08-27:
-🟢 works · 🟡 partly · 🔴 not built
+Status column is what exists **today**: 🟢 works · 🟡 partly · 🔴 not built.
+First measured 2026-08-27; **re-measured 2026-08-28** after the step-zero fixes
+(`F-1`…`F-4`), `F-7` and `F-8`. Only the marks and lines that became false were
+touched — no requirement was added, removed or reworded otherwise.
 
 ---
 
@@ -29,15 +31,15 @@ Status column is what exists **today**, measured 2026-08-27:
 | # | In one sentence | Status |
 |---|---|---|
 | **4** | Read many recording formats — mcap, ERG, MDF, rosbag and more later — and adding a new format means writing one small reader, never changing the engine. | 🟡 mcap + ERG real; MDF/rosbag absent |
-| **5** | Read recordings **we did not produce** — another team's, a supplier's, a foreign simulator's — by writing a mapping file that says *"this topic in the file feeds this input"*. Declared as data, never as code. | 🟡 |
-| **6** | Before a run starts, the tool says what this recording **can and cannot** do — which modules it can feed, which it can't, and why. You never discover it by watching a run fail. | 🟡 |
+| **5** | Read recordings **we did not produce** — another team's, a supplier's, a foreign simulator's — by writing a mapping file that says *"this topic in the file feeds this input"*. Declared as data, never as code. | 🔴 parser real, **nothing calls it** — a foreign-vocabulary recording runs to completion feeding the module nothing (`F-4`) |
+| **6** | Before a run starts, the tool says what this recording **can and cannot** do — which modules it can feed, which it can't, and why. You never discover it by watching a run fail. | 🟡 the launcher answers, naming the missing ports (`F-7`); `sim probe` still reports nothing |
 
 ## C. Running our software (engine)
 
 | # | In one sentence | Status |
 |---|---|---|
 | **7** | Per run, **every module is set to MEASURED (replayed from the file), SIMULATED (executed now), or OFF** — and a module downstream cannot tell which one it got. | 🟡 logic real, only one module to switch |
-| **8** | You choose that **in the launcher when you open the tool** — not by hand-editing a YAML file beforehand. | 🔴 |
+| **8** | You choose that **in the launcher when you open the tool** — not by hand-editing a YAML file beforehand. | 🟢 `WP-35`, 2026-08-28 — stage/mode row, both directions run and screenshotted |
 | **9** | Modules are **discovered, not hard-coded**. A new component or a new function adds a line of configuration; the tool itself never changes. | 🟢 |
 | **10** | Each module declares its own cycle rate. The tool schedules them, and an input that is being held between updates is *shown* as held and ageing — exactly what the real vehicle sees. | 🟢 |
 | **11** | If your measured/simulated mix is **incoherent** — e.g. recorded perception fed into a live function after the ego motion has changed — the tool refuses and tells you what to fix, **before** it runs. | 🟢 |
@@ -50,7 +52,7 @@ Status column is what exists **today**, measured 2026-08-27:
 | # | In one sentence | Status |
 |---|---|---|
 | **15** | Record **every module's inputs *and* outputs**, so a later run can be started from any point in the chain instead of only from the front. | 🟢 |
-| **16** | A recording carries its own **provenance** — which build, which calibration, which scenario — and every signal is tagged as measured, simulated, or mocked, so a report can never quietly claim a mock was a measurement. | 🟢 |
+| **16** | A recording carries its own **provenance** — which build, which calibration, which scenario — and every signal is tagged as measured, simulated, or mocked, so a report can never quietly claim a mock was a measurement. | 🟡 build and tags real (`F-2`, `F-8`); **calibration hash is empty**, so "which calibration" reads unknown |
 | **17** | Exports (CSV, video, plots) are **one-way and lossy**, clearly a different kind of artifact from a recording, and never accepted back as a run input. | 🟡 |
 
 ## E. Seeing it (viz)
@@ -61,7 +63,7 @@ Status column is what exists **today**, measured 2026-08-27:
 | **19** | A component says **what** to draw, in metres and in meaning (*"this is a warning zone"*). The toolkit alone decides pixels and colour — which is what keeps the 2D BEV identical across components. | 🟢 |
 | **20** | **It must not end at BEV** — driver view, lane and pedestrian markings, free space, semantic segmentation, and video feed publishing. Probably a different approach for each. | 🔴 **none built** |
 | **21** | Step, scrub and rewind freely — and stepping backwards **never invents** a state the software did not actually produce. | 🟢 |
-| **22** | Click anything on screen and it tells you which signal, which tick, which file and which build produced it — and whether the software **published** that value or the drawing code **reconstructed** it. | 🟢 |
+| **22** | Click anything on screen and it tells you which signal, which tick, which file and which build produced it — and whether the software **published** that value or the drawing code **reconstructed** it. | 🟢 build answered since `F-8`; before it, this line was marked green while the build read `unknown` |
 
 ## F. How it is put together
 
@@ -69,7 +71,7 @@ Status column is what exists **today**, measured 2026-08-27:
 |---|---|---|
 | **23** | **Skeleton in code, behaviour in configuration.** A new setup is a config file, not a code change. | 🟢 |
 | **24** | Vehicle geometry, sensor poses and footprints come from the **project's own calibration**, never from constants inside the tool. Switching project must change the picture. | 🟡 |
-| **25** | Anything the GUI can do, a **script can do headlessly** — same engine, for CI and for overnight batches. | 🟡 no CI exists |
+| **25** | Anything the GUI can do, a **script can do headlessly** — same engine, for CI and for overnight batches. | 🟡 headless parity real (`GT-9`); the CI workflow exists and was pushed 2026-08-28, **no run observed yet** |
 
 ---
 
@@ -91,10 +93,17 @@ Recorded so it cannot quietly reappear.
 **1. Is the concept right?** The lines above are the concept. If they are all
 `AGREE`, then the design is not the problem and never was.
 
-**2. Where is it?** 20 of 25 are green or amber. **The red ones are #8 (choose
-measured/simulated in the launcher) and #20 (everything past BEV)** — and those
-two are the two things the author described first and most often when asked what
-this is for.
+**2. Where is it?** 23 of 25 are green or amber. **The red ones are now #5 (read
+a recording we did not produce) and #20 (everything past BEV).** #8 — choose
+measured/simulated in the launcher — went red → green on 2026-08-28 and was the
+POC demo's last piece. #5 went amber → red in the same pass: not a regression,
+a correction. Its parser is real and tested, nothing calls it, and a
+foreign-vocabulary recording therefore runs to completion feeding the module
+nothing at all — which is worse than "partly", and had been sitting behind an
+amber mark.
+
+Of the two remaining reds, **#20 is the one the author described first and most
+often** when asked what this is for.
 
 **3. Why does it feel endless?** Not because the concept is wrong or the work is
 behind. See `memory.md` in this folder — it is a tracking and proportion failure,
