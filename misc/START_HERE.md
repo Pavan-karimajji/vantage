@@ -29,25 +29,25 @@ The 2026-08-27 reset re-scoped this module around one watchable demo instead of 
 completion percentage. Read `memory.md` for why, `DEMO_AND_SCOPE.md` for the
 demo and the finite list, `MOVEMENT_B_PLAN.md` for the deletion work.
 
-**Step zero's defects are fixed.** One self-produced recording, `mode:` the only
-thing that differs, both directions byte-identical, on data where AEB actually
-fires — real DLL, real engine, demonstrated on `vs2026`; both platforms build and
-pass their suites. `sim check` went 3 failed → 0. Findings, evidence and what did
-*not* close: **`docs/v2/SIM_Test_Execution_2026-08-28.md`**.
+**Step zero's defects are fixed** and the demo's gesture is demonstrated
+headlessly end to end: one self-produced recording, `mode:` the only thing that
+differs, both directions byte-identical on data where AEB actually fires, driven
+through the launcher's own API. Records:
+**`docs/v2/SIM_Test_Execution_2026-08-28.md`** (the fixes) and
+**`…_2026-08-28_wp28.md`** (the launcher campaign, and `F-7`).
 
 ## The next action — exactly one
 
-> **`WP-28` — the launcher, and the measured/simulated toggle. Red item #8.**
+> **Author's decision: the demo's visible half has no work-package box, and the
+> freeze forbids creating one.**
 
-Everything under it now exists: the toggle is real, the recording it toggles is
-producible by the system itself, and the provenance the click-to-evidence answer
-reads is carried rather than guessed. What is missing is the face — pick the
-recording, flip the stage, see the two pictures agree, click an object.
-
-Two things to know before starting, both in the record: a legacy-vocabulary
-recording still feeds the component nothing (that is `WP-12`'s ingest map, not a
-demo dependency), and `bsd_curve_r172_passby`'s green `sim check` is still a
-false green for that same reason.
+`WP-28` is the **headless** launcher model, complete (Exit `[x]`; its one open
+box blocked on untouched `WP-21`). `WP-34a` owns the **face** and is closed —
+but that GUI has no mode control and never imports `adas_sim.launcher`. So
+*"flip `df` in the face"* belongs to neither. Pick one: extend `WP-34a` as a
+correction, open one `WP` for the face, or accept a scripted headless demo plus
+`vantage_app.exe` opened by hand. Nothing else in Movement C is blocked
+meanwhile.
 
 ## Do not
 
@@ -87,8 +87,9 @@ false green for that same reason.
    supplier file has every input flagged invalid — `F-1`'s symptom by a second
    route. Not on the demo path; does not report itself.
 2. **`WP-01` cannot close** until a real GitHub Actions run is observed passing.
-   The workflow trigger was fixed on 2026-08-27; it needs a push. `gh` is not
-   installed on this machine.
+   The trigger was fixed 2026-08-27 and the push it was waiting on happened
+   **2026-08-28** — so a run may now exist, unobserved: `gh` is not installed
+   here. Someone must look. The gate itself still exits 1 on two parked items.
 3. **The scenario corpus is thin, and one green is false.** Only 4 of 18
    scenarios can run. Three now assert real firing behaviour; the fourth
    (`bsd_curve_r172_passby`) passes only because nothing reaches the component —
@@ -120,6 +121,10 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-08-28** — `WP-28` driven against the real demo through its own API:
+  both toggle directions launch. Found and fixed `F-7` (every cut reported
+  infeasible against a real recording — an untested join). The visible half has
+  no box; that is the open decision. Record: `…_2026-08-28_wp28.md`.
 - **2026-08-28** — `F-1`/`F-2`/`F-3` fixed in `simcore`, `F-4` corrected in the
   plan; rebuilt and verified on both platforms. `sim check` 3 failed → 0, no
   regressions, one new finding (`F-6`). Record:
@@ -129,10 +134,6 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   rule sharpened to *no derived progress state* (dated evidence is fine).
 - **2026-08-27** — Step zero run for real. Toggle confirmed byte-identical on
   firing AEB data; five findings, `F-3` blocks the demo's shape.
-- **2026-08-27** — Reset session. Diagnosed why the work felt endless (resume
-  pointer always said `WP-01`; nothing ever deleted after replacement;
-  specification outgrew the product). Movement A: pointer fixed, CI trigger found
-  dead and repointed, first Test Execution Record written. Gate went 12 failures →
-  1 (parked). ERG found unobtainable → demo rewritten around a self-produced
-  recording. **26 files uncommitted in `modules/sim` — reviewed, green, not
-  committed.**
+- **2026-08-27** — Reset session: resume pointer fixed, dead CI trigger
+  repointed, first Test Execution Record written, ERG found unobtainable and the
+  demo rewritten around a self-produced recording (`memory.md` has the why).
