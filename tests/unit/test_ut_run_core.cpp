@@ -746,11 +746,22 @@ TEST(UtRun14RecordPolicy, EveryDeclaredPortOfANonOffStageBecomesATopicAndCarries
   ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
   Runner runner = std::move(constructed).value();
   // meas: objects (pro) + stimulus (req); sut: objects (req) + outputs (pro).
-  ASSERT_EQ(runner.RecordedTopics().size(), 4u);
+  //
+  // Four declared ports, THREE topics (F-3): a `req` port is recorded under
+  // its PRODUCING address, so `sut.objects` -- wired to `meas.objects` --
+  // resolves onto the topic `meas` already owns as its own `pro` output.
+  // One signal, one topic, one value; which port received it stays
+  // answerable from the spec's own wiring.
+  std::map<std::string, std::string> topic_by_port;
   for (const RecordedTopic& topic : runner.RecordedTopics()) {
     EXPECT_EQ(topic.policy.verb, RecordVerb::kFull);
-    EXPECT_EQ(topic.topic, PortNameToTopic(topic.qualified_port));
+    topic_by_port[topic.qualified_port] = topic.topic;
   }
+  ASSERT_EQ(runner.RecordedTopics().size(), 3u);
+  EXPECT_EQ(topic_by_port["meas.objects"], "/meas/objects");   // pro: its own address
+  EXPECT_EQ(topic_by_port["meas.stimulus"], "/source/stimulus");  // req: its producer's
+  EXPECT_EQ(topic_by_port["sut.outputs"], "/sut/outputs");
+  EXPECT_EQ(topic_by_port.count("sut.objects"), 0u);  // deduped onto /meas/objects
 }
 
 TEST(UtRun14RecordPolicy, AnExcludedPortIsNeverWrittenAndADecimatedOneIsWrittenEveryNthCycle) {
@@ -816,16 +827,22 @@ TEST(UtRun14RecordPolicy, EveryDeclaredInputPortIsAlsoWritten) {
   };
 
   // "meas" is a `measured` stage; its own declared `req` port ("stimulus")
-  // resolves to producer "source" and is read straight off the bus.
-  const RawMessage* meas_stimulus = find("/meas/stimulus", 0);
+  // resolves to producer "source" and is read straight off the bus -- and
+  // since F-3 it is recorded under that PRODUCING address, which is the
+  // name a later run would have to wire to in order to re-simulate this
+  // recording rather than only replay it.
+  const RawMessage* meas_stimulus = find("/source/stimulus", 0);
   ASSERT_NE(meas_stimulus, nullptr);
   EXPECT_EQ(meas_stimulus->payload, (std::vector<std::uint8_t>{0}));
+  EXPECT_EQ(find("/meas/stimulus", 0), nullptr);  // the consuming address is not used
 
-  // "sut" is a `simulate` stage; its own declared `req` port ("objects")
-  // is the exact bytes delivered to `Component::Exec` this cycle.
-  const RawMessage* sut_objects = find("/sut/objects", kDtNs);
-  ASSERT_NE(sut_objects, nullptr);
-  EXPECT_EQ(sut_objects->payload, (std::vector<std::uint8_t>{1, 0x01}));
+  // "sut" is a `simulate` stage; its own declared `req` port ("objects") is
+  // wired to `meas.objects` and is carried by that topic. With no override
+  // declared, the delivered bytes and the producer's bytes are the same
+  // value, so a second topic would be a byte-identical duplicate.
+  const RawMessage* sut_input = find("/meas/objects", kDtNs);
+  ASSERT_NE(sut_input, nullptr);
+  EXPECT_EQ(find("/sut/objects", kDtNs), nullptr);
 }
 
 TEST(UtRun14RecordPolicy, TopicAndPortNameRoundTrip) {

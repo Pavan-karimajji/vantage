@@ -55,6 +55,27 @@ std::string ToString(MetaKind kind);
 // codec/recording carries no provenance metadata for this topic at all).
 Provenance OriginOrUnknown(const std::optional<std::string>& raw);
 
+// The ONE canonical spelling of a topic: `"/<producer>/<port>"`. Idempotent,
+// and the single definition every reader index, every written message and
+// every port-address lookup agrees on -- `runner::PortNameToTopic` is this
+// function (it delegates), so the two can no longer drift.
+//
+// **Why this exists** (found live 2026-08-27, step-zero campaign): recordings
+// written before 2026-08-23 spell their topics WITHOUT a leading slash
+// (`source/gen_object_list`), because that is what the writers emitted back
+// then. The payload path already tolerated both forms -- it strips slashes
+// before splitting -- but the topic INDEX was matched by exact string, so a
+// legacy recording's payloads resolved while its provenance did not. Every
+// input port of every stage was then flagged invalid every tick and the
+// component under test published neutral output, with a clean exit and no
+// warning. Normalising the index once, at load, fixes every consumer at one
+// point rather than the one that happened to be reported.
+//
+// This is a spelling normaliser, not an ingest map: it renames nothing and
+// resolves no vocabulary (`R-SIM-23` -- that is `WP-12`'s job, and it stays
+// declared data). It only makes one topic's two spellings compare equal.
+std::string CanonicalTopic(const std::string& raw_topic);
+
 // SW-0022: six `bool`s, a value the registry reads without opening a file --
 // never a method a codec instance could answer differently per file.
 struct Capabilities {

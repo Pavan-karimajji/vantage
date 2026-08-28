@@ -100,10 +100,15 @@ TEST(UtIo19NoProvenanceBlock, ForeignRecordingWithNoProvenanceYieldsUnknown) {
   ASSERT_TRUE(reader.ok());
   ASSERT_TRUE(reader.value()->Open(path).ok());
 
+  // The index is canonicalised at load (`io::CanonicalTopic`), so a file
+  // written with the older slash-less spelling is found under the canonical
+  // one -- the literal is spelled out rather than computed, so this also
+  // pins WHICH form the index uses.
   const std::map<std::string, TopicInfo> topics = reader.value()->Describe();
-  const auto it = topics.find("foreign/topic");
+  const auto it = topics.find("/foreign/topic");
   ASSERT_NE(it, topics.end());
   EXPECT_EQ(it->second.provenance, Provenance::kUnknown);
+  EXPECT_EQ(topics.count("foreign/topic"), 0u);  // never both spellings
 }
 
 }  // namespace

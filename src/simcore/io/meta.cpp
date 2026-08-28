@@ -10,6 +10,8 @@
 
 #include "simcore/io.hpp"
 
+#include <algorithm>
+
 namespace simcore::io {
 
 std::string ToString(Provenance provenance) {
@@ -62,6 +64,29 @@ Provenance OriginOrUnknown(const std::optional<std::string>& raw) {
   // degrade visibly to `kUnknown` rather than raise for a forward-compatible
   // provenance value this build does not yet know about.
   return Provenance::kUnknown;
+}
+
+// See `io.hpp` for why this exists. Two steps, in this order:
+//   1. reduce to the bare port address -- strip surrounding slashes, then
+//      every remaining '/' becomes '.'  (so "/p/fn.out" and "p/fn.out" both
+//      reduce to "p.fn.out");
+//   2. re-spell it as a topic -- prepend '/', and turn only the FIRST '.'
+//      back into '/', because a port name may itself contain dots
+//      (`<function>.<port>`, R-SIM-4) and those must survive: "p.fn.out"
+//      becomes "/p/fn.out", never "/p/fn/out".
+// Idempotent by construction: step 2's output fed back through step 1 is
+// step 1's own output.
+std::string CanonicalTopic(const std::string& raw_topic) {
+  std::size_t begin = 0;
+  std::size_t end = raw_topic.size();
+  while (begin < end && raw_topic[begin] == '/') ++begin;
+  while (end > begin && raw_topic[end - 1] == '/') --end;
+  std::string out = raw_topic.substr(begin, end - begin);
+  std::replace(out.begin(), out.end(), '/', '.');
+  out.insert(out.begin(), '/');
+  const std::size_t dot = out.find('.');
+  if (dot != std::string::npos) out[dot] = '/';
+  return out;
 }
 
 }  // namespace simcore::io

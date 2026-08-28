@@ -366,12 +366,16 @@ TEST(ItTrn01Transport, InProcessAndSharedMemoryConsumersObserveTheIdenticalStrea
     EXPECT_EQ(std::get<2>(frames_inproc[i]), std::get<2>(frames_shm[i])) << "frame " << i << " payload";
   }
 
-  // All three declared, full-policy ports (meas.objects, sut.objects req,
-  // sut.outputs) crossed every cycle.
+  // Every declared, full-policy port crossed every cycle. TWO names, not
+  // three (F-3): `sut.objects` is wired to `meas.objects`, and a `req` port
+  // now takes its producing identity, so both the recorded topic and the
+  // published frame carry that one name -- publishing the identical bytes a
+  // second time under the consuming name would put two identities on one
+  // signal, which is what F-3 removed.
   std::set<std::string> ports_seen;
   for (const Frame& f : frames_inproc) ports_seen.insert(std::get<1>(f));
-  EXPECT_EQ(ports_seen, (std::set<std::string>{"meas.objects", "sut.objects", "sut.outputs"}));
-  EXPECT_EQ(frames_inproc.size(), kCycles * 3);
+  EXPECT_EQ(ports_seen, (std::set<std::string>{"meas.objects", "sut.outputs"}));
+  EXPECT_EQ(frames_inproc.size(), kCycles * 2);
 }
 
 TEST(ItTrn01Transport, AbsentPublisherLeavesTheRunUnaffected) {
@@ -397,7 +401,8 @@ TEST(ItTrn01Transport, AbsentPublisherLeavesTheRunUnaffected) {
 TEST(ItTrn03SlowReader, EngineWallTimeIsUnaffectedAndDropCountIsExact) {
   constexpr std::size_t kCycles = 300;  // F-LONG's own "long enough to sample" spirit
   constexpr std::size_t kDepth = 4;     // small and deliberate -- most frames must drop
-  constexpr std::size_t kPortsPerCycle = 3;  // meas.objects, sut.objects, sut.outputs
+  // meas.objects (also carries sut's `objects` input, F-3) and sut.outputs.
+  constexpr std::size_t kPortsPerCycle = 2;
 
   // -- Baseline: no publisher attached at all.
   StubComponent stub_baseline("it_trn03_baseline");

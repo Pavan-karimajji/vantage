@@ -167,26 +167,18 @@ class McapReader final : public Reader {
     }
     ReadTopicProvenance();
     ReadInformationalOnly();
+    BuildTopicIndex();
     ResetView(0);
     return Result<bool>::Ok(true);
   }
 
-  std::map<std::string, TopicInfo> Describe() const override {
-    std::map<std::string, TopicInfo> result;
-    for (const auto& [channel_id, channel] : reader_.channels()) {
-      const mcap::SchemaPtr schema = reader_.schema(channel->schemaId);
-      const auto provenance_it = provenance_by_topic_.find(channel->topic);
-      const std::optional<std::string> raw =
-          provenance_it != provenance_by_topic_.end() ? std::optional<std::string>(provenance_it->second)
-                                                        : std::nullopt;
-      TopicInfo info;
-      info.schema_name = schema ? schema->name : "";
-      info.provenance = OriginOrUnknown(raw);
-      info.schema_bytes = schema ? ToBytes(schema->data) : std::vector<std::uint8_t>{};
-      result[channel->topic] = std::move(info);
-    }
-    return result;
-  }
+  // The index is normalised and cached ONCE, here, rather than rebuilt per
+  // call: `Describe()` is called from inside the per-cycle loop
+  // (`cycle_loop.cpp`'s `StepOnce`), and canonicalising there would pay for
+  // the whole map on every tick. `readSummary(AllowFallbackScan)` in `Open`
+  // has already established the full channel set, so there is nothing left
+  // to discover later.
+  std::map<std::string, TopicInfo> Describe() const override { return topics_; }
 
   void Seek(std::int64_t log_time_ns) override { ResetView(static_cast<mcap::Timestamp>(log_time_ns)); }
 
@@ -217,6 +209,33 @@ class McapReader final : public Reader {
   }
 
  private:
+  // `CanonicalTopic` is applied HERE, at the reader boundary, so nothing
+  // above `io` ever sees a recording's own historical spelling. Provenance
+  // is looked up under the file's raw topic (that is how it was written)
+  // and stored under the canonical one.
+  //
+  // A collision -- two raw spellings of one canonical topic in a single
+  // file -- keeps the FIRST entry rather than letting the later one win
+  // silently; the map is ordered, so "first" is deterministic. Such a file
+  // would be malformed (the same port recorded twice under two spellings),
+  // and this layer is not the right place to raise on it, but it must not
+  // depend on iteration luck either.
+  void BuildTopicIndex() {
+    topics_.clear();
+    for (const auto& [channel_id, channel] : reader_.channels()) {
+      const mcap::SchemaPtr schema = reader_.schema(channel->schemaId);
+      const auto provenance_it = provenance_by_topic_.find(channel->topic);
+      const std::optional<std::string> raw =
+          provenance_it != provenance_by_topic_.end() ? std::optional<std::string>(provenance_it->second)
+                                                        : std::nullopt;
+      TopicInfo info;
+      info.schema_name = schema ? schema->name : "";
+      info.provenance = OriginOrUnknown(raw);
+      info.schema_bytes = schema ? ToBytes(schema->data) : std::vector<std::uint8_t>{};
+      topics_.emplace(CanonicalTopic(channel->topic), std::move(info));
+    }
+  }
+
   void ReadTopicProvenance() {
     const auto range = reader_.metadataIndexes().equal_range(kTopicProvenanceMetaName);
     if (range.first == range.second) return;
@@ -239,7 +258,10 @@ class McapReader final : public Reader {
       const auto topic_it = metadata.metadata.find("topic");
       const auto time_it = metadata.metadata.find("log_time_ns");
       if (topic_it == metadata.metadata.end() || time_it == metadata.metadata.end()) continue;
-      informational_only_.emplace(topic_it->second, std::stoll(time_it->second));
+      // Canonical key, because `Pull()` canonicalises the topic it looks up
+      // with -- the two halves of this pair must be spelled the same way or
+      // the flag silently never matches (F-1's own defect, one scale down).
+      informational_only_.emplace(CanonicalTopic(topic_it->second), std::stoll(time_it->second));
     }
   }
 
@@ -267,7 +289,10 @@ class McapReader final : public Reader {
     if (!iterator_.has_value() || !view_.has_value() || *iterator_ == view_->end()) return std::nullopt;
     const mcap::MessageView& mv = **iterator_;
     RawMessage msg;
-    msg.topic = mv.channel->topic;
+    // Canonical here too, not just in the index: a raw spelling that leaks
+    // above `io` is exactly what let the index and the payload path disagree
+    // (F-1). Everything downstream sees one form.
+    msg.topic = CanonicalTopic(mv.channel->topic);
     msg.log_time_ns = static_cast<std::int64_t>(mv.message.logTime);
     msg.capture_time_ns = static_cast<std::int64_t>(mv.message.publishTime);
     const auto* byte_ptr = reinterpret_cast<const std::uint8_t*>(mv.message.data);
@@ -285,6 +310,8 @@ class McapReader final : public Reader {
   std::optional<RawMessage> lookahead_;
   std::map<std::string, std::string> provenance_by_topic_;
   std::set<std::pair<std::string, std::int64_t>> informational_only_;
+  // Canonicalised once in `Open`; see `BuildTopicIndex`.
+  std::map<std::string, TopicInfo> topics_;
 };
 
 }  // namespace

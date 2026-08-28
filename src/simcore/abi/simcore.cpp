@@ -103,22 +103,68 @@ Result<std::string> ReadFile(const std::filesystem::path& path) {
 // capability (`R-SIM-14`) registers an unknown topic schema-less on first
 // `Write`, so this is a completeness/labelling improvement, not a
 // correctness dependency.
-std::map<std::string, simcore::io::TopicInfo> BuildOutputTopics(const simcore::RunSpec& spec) {
+// `source_topics` is the INPUT recording's own index (`Reader::Describe()`),
+// so a fed port's evidence grade can be carried forward rather than guessed
+// -- see the `F-2` note inside.
+std::map<std::string, simcore::io::TopicInfo> BuildOutputTopics(
+    const simcore::RunSpec& spec, const std::map<std::string, simcore::io::TopicInfo>& source_topics) {
   std::map<std::string, simcore::io::TopicInfo> topics;
+  const auto carried_provenance = [&source_topics](const std::string& producing_topic) {
+    // F-2: carry the source topic's OWN grade. Absent from the index means
+    // nobody established one, which is `kUnknown` -- never `kMeasured`
+    // (`SW-0039`, and `OriginOrUnknown`'s own rule one layer down).
+    const auto it = source_topics.find(producing_topic);
+    if (it == source_topics.end()) return simcore::io::Provenance::kUnknown;
+    return it->second.provenance;
+  };
+
+  // `pro` before `req`, for the reason `Runner::Construct` states at length:
+  // a `req` port recorded under its producing address can resolve onto a
+  // topic a `pro` port owns, and the producer must claim it first.
+  for (const std::string& want_dir : {std::string("pro"), std::string("req")}) {
   for (const simcore::SpecStage& stage : spec.stages) {
     if (stage.mode == "off") continue;
     for (const simcore::SpecPort& port : stage.ports) {
+      if (port.dir != want_dir) continue;
       const std::string qualified = stage.name + "." + port.name;
+      // The SAME derivation `Runner::Construct` uses to name the messages it
+      // writes (`RecordedTopicFor`) -- index and stream cannot disagree.
+      const std::string topic = simcore::runner::RecordedTopicFor(spec, stage.name, port.name, port.dir);
       simcore::io::TopicInfo info;
       info.schema_name = port.proto_type;
-      // A `pro` port of a `simulate` stage is this run's own computed
-      // output; everything else (a `measured` stage's own ports, and any
-      // `req` port -- fed from a producer, never computed by the stage
-      // that consumes it) is fed data (`R-SIM-12`'s provenance tags).
-      info.provenance = (port.dir == "pro" && stage.mode == "simulate") ? simcore::io::Provenance::kSimulated
-                                                                        : simcore::io::Provenance::kMeasured;
-      topics[simcore::runner::PortNameToTopic(qualified)] = info;
+      if (port.dir == "pro" && stage.mode == "simulate") {
+        // Freshly computed by this run -- the one grade this engine is
+        // entitled to assert on its own authority.
+        info.provenance = simcore::io::Provenance::kSimulated;
+      } else {
+        // F-2: everything else is FED, and "fed" is a direction, not an
+        // evidence grade. Tagging it `kMeasured` unconditionally -- what
+        // this did until 2026-08-28 -- reports mocked CARLA stimulus as a
+        // measurement, which is exactly what `R-SIM-12` exists to forbid:
+        // *"a report must never let 'perception was measured' mean
+        // 'perception was a mock'."* The closed set has four values; the
+        // old expression could only ever emit two.
+        info.provenance = carried_provenance(topic);
+      }
+      // First writer wins, mirroring `Runner::Construct`'s own claim rule:
+      // a `pro` port owns its topic, and a `req` port that resolves onto it
+      // must not overwrite the producer's grade with a carried one.
+      topics.emplace(topic, info);
+
+      // The post-mutation twin (`R-SIM-15`), declared here so the index says
+      // `overridden` rather than leaving a reader to infer it.
+      if (port.dir != "req") continue;
+      const std::optional<std::string> producer =
+          simcore::runner::ProducerAddressOf(spec, stage.name, port.name);
+      if (!producer.has_value()) continue;
+      const std::size_t dot = producer->find('.');
+      if (dot == std::string::npos) continue;
+      if (!simcore::runner::MutationTouches(spec, producer->substr(0, dot), producer->substr(dot + 1))) continue;
+      simcore::io::TopicInfo overridden = info;
+      overridden.provenance = simcore::io::Provenance::kOverridden;
+      topics.emplace(simcore::runner::PortNameToTopic(qualified), overridden);
     }
+  }
   }
   return topics;
 }
@@ -326,8 +372,11 @@ SimEngine* simEngineCreate(const char* run_spec_json_path, const char* config_pa
       return nullptr;
     }
     engine->writer_impl = std::move(writer_result).value();
-    const Result<bool> writer_open_result =
-        engine->writer_impl->Open(engine->spec.outputs.path, BuildOutputTopics(engine->spec));
+    // The input recording's own index is already available (the reader was
+    // opened above), which is what lets a fed topic carry its real grade
+    // forward instead of being labelled `measured` by direction (F-2).
+    const Result<bool> writer_open_result = engine->writer_impl->Open(
+        engine->spec.outputs.path, BuildOutputTopics(engine->spec, engine->reader->Describe()));
     if (!writer_open_result.ok()) {
       WriteErr(err_buf, err_buf_cap, writer_open_result.error().Format());
       if (out_exit_code != nullptr) *out_exit_code = ToC(simcore::DefaultExitCode(writer_open_result.error().kind));

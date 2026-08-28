@@ -558,7 +558,11 @@ class ErgReader final : public Reader {
       // closure, already computed once at Open() -- reused here, not
       // re-derived narrower.
       info.schema_bytes.assign(descriptor_set_bytes_.begin(), descriptor_set_bytes_.end());
-      result[port.group.port_name] = std::move(info);
+      // Canonical, like every other codec's index (F-1): this reader's keys
+      // are port names rather than file topics, so without this the same
+      // exact-match miss applies here too. `Pull()` below emits the same
+      // spelling.
+      result[CanonicalTopic(port.group.port_name)] = std::move(info);
     }
     return result;
   }
@@ -642,7 +646,7 @@ class ErgReader final : public Reader {
     }
 
     RawMessage out;
-    out.topic = port.group.port_name;
+    out.topic = CanonicalTopic(port.group.port_name);  // one spelling above `io` (F-1)
     out.log_time_ns = RowLogTimeNs(row_index_);
     out.capture_time_ns = std::nullopt;  // R-SIM-14: never defaulted to reception
     out.payload.resize(message->ByteSizeLong());

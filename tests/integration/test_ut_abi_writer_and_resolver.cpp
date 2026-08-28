@@ -172,6 +172,14 @@ std::filesystem::path WriteAbiPortRecording(const std::filesystem::path& path, d
   EXPECT_TRUE(writer.ok());
   simcore::io::TopicInfo info;
   info.schema_name = "abi_test.AbiPort";
+  // Declared, not defaulted. `TopicInfo::provenance` defaults to `kUnknown`,
+  // and a value whose grade is unknown is currently indistinguishable from a
+  // port nothing ever published (`Origin::Unknown` carries both meanings), so
+  // a provenance-less fixture makes the producing stage's own topic drop out
+  // of the recording. Every real recording declares a grade; this one now
+  // does too. The conflation itself is a separate finding -- see `F-6` in
+  // `docs/v2/SIM_Test_Execution_2026-08-28.md`.
+  info.provenance = simcore::io::Provenance::kMeasured;
   EXPECT_TRUE(writer.value()->Open(path, {{"/meas/objects", info}}).ok());
   for (std::int64_t t_ns : {0, 10'000'000, 20'000'000}) {
     simcore::io::RawMessage msg;
@@ -295,7 +303,11 @@ void RunToCompletion(const std::filesystem::path& spec_path) {
 // The value actually delivered to `sut`'s own `objects` req port this
 // run, decoded back out of the written recording's `/sut/objects` topic
 // (`IMP-0114`'s "every declared input is recorded too", `R-SIM-6`).
-std::optional<double> ReadDeliveredValue(const std::filesystem::path& output_path) {
+// `topic` is explicit since F-3: with no override declared, `sut`'s `objects`
+// input is carried by its producer's topic (`/meas/objects`); a declared
+// override adds `/sut/objects` alongside it, carrying the post-mutation
+// bytes. Which topic a caller reads is therefore the assertion.
+std::optional<double> ReadDeliveredValue(const std::filesystem::path& output_path, const std::string& topic) {
   simcore::io::CodecRegistry registry;
   EXPECT_TRUE(simcore::io::codecs::RegisterMcap(registry).ok());
   auto reader = registry.OpenRead(output_path);
@@ -304,7 +316,7 @@ std::optional<double> ReadDeliveredValue(const std::filesystem::path& output_pat
   const simcore::io::Batch batch = reader.value()->ReadRange(simcore::io::ReadBounds{});
   reader.value()->Close();
   for (const auto& message : batch.messages) {
-    if (message.topic != "/sut/objects") continue;
+    if (message.topic != topic) continue;
     return DecodeAbiPortDouble(message.payload);
   }
   return std::nullopt;
@@ -364,9 +376,13 @@ TEST(UtAbi02Resolver, ZeroMutationsBehavesAsBefore) {
 
   RunToCompletion(spec_path);
 
-  const std::optional<double> delivered = ReadDeliveredValue(output_path);
-  ASSERT_TRUE(delivered.has_value()) << "no /sut/objects message in the written recording";
+  // No override declared, so `sut`'s input is the producer's own value on
+  // the producer's own topic, and no second post-mutation topic exists.
+  const std::optional<double> delivered = ReadDeliveredValue(output_path, "/meas/objects");
+  ASSERT_TRUE(delivered.has_value()) << "no /meas/objects message in the written recording";
   EXPECT_DOUBLE_EQ(*delivered, kRecordedValue);
+  EXPECT_FALSE(ReadDeliveredValue(output_path, "/sut/objects").has_value())
+      << "an un-overridden input must not be duplicated under the consuming address";
 }
 
 // `SW-0423`'s first Accept clause: "applied for real". This file's own top
@@ -392,7 +408,14 @@ TEST(UtAbi02Resolver, ADeclaredOverrideIsApplied) {
 
   RunToCompletion(spec_path);
 
-  const std::optional<double> delivered = ReadDeliveredValue(output_path);
+  // An override IS declared, so both halves are kept and neither is lost:
+  // the post-mutation bytes the component actually received, under the
+  // consuming address...
+  const std::optional<double> delivered = ReadDeliveredValue(output_path, "/sut/objects");
   ASSERT_TRUE(delivered.has_value()) << "no /sut/objects message in the written recording";
   EXPECT_DOUBLE_EQ(*delivered, kOverrideValue);
+  // ...and the producer's own true value, untouched, on its own topic.
+  const std::optional<double> upstream = ReadDeliveredValue(output_path, "/meas/objects");
+  ASSERT_TRUE(upstream.has_value()) << "the overridden run lost the producer's own bytes";
+  EXPECT_DOUBLE_EQ(*upstream, kRecordedValue);
 }

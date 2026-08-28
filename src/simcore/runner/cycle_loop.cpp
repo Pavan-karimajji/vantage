@@ -99,15 +99,50 @@ std::string TopicToPortName(const std::string& topic) {
   return out;
 }
 
+// Delegates rather than re-implementing: `io::CanonicalTopic` is the single
+// definition of the canonical spelling, and it is what the reader now
+// normalises its own index to. Two independent copies of this transform --
+// one used to build the index, one used to look it up -- is precisely how
+// the index and the lookup drifted apart in the first place (F-1,
+// step-zero campaign 2026-08-27). One definition, so they cannot.
+//
+// Behaviour is unchanged for a qualified port name: `CanonicalTopic` strips
+// nothing (there are no slashes), replaces nothing, prepends '/' and turns
+// only the FIRST dot into a slash -- a port name may itself contain dots
+// ("<fn>.outputs", R-SIM-4) and those survive.
 std::string PortNameToTopic(const std::string& qualified_port) {
-  std::string out = "/" + qualified_port;
-  // Only the FIRST dot separates producer from port: a port name may itself
-  // contain dots ("<fn>.outputs", R-SIM-4), and `_topic_to_port_name`'s own
-  // inverse in Python has the identical property for the topics this
-  // framework writes ("/df/<fn>.outputs").
-  const std::size_t dot = out.find('.');
-  if (dot != std::string::npos) out[dot] = '/';
-  return out;
+  return io::CanonicalTopic(qualified_port);
+}
+
+std::optional<std::string> ProducerAddressOf(
+    const RunSpec& spec, const std::string& stage, const std::string& port) {
+  for (const SpecStage& candidate : spec.stages) {
+    if (candidate.name != stage) continue;
+    for (const SpecInput& input : candidate.inputs) {
+      if (input.port == port) return input.producer + "." + input.producer_port;
+    }
+    return std::nullopt;  // the stage exists and simply does not wire this port
+  }
+  return std::nullopt;
+}
+
+bool MutationTouches(const RunSpec& spec, const std::string& stage, const std::string& port) {
+  for (const SpecMutation& mutation : spec.mutations) {
+    if (mutation.address.stage == stage && mutation.address.port == port) return true;
+  }
+  return false;
+}
+
+std::string RecordedTopicFor(
+    const RunSpec& spec, const std::string& stage, const std::string& port, const std::string& dir) {
+  if (dir == "req") {
+    const std::optional<std::string> producer = ProducerAddressOf(spec, stage, port);
+    // An unwired input has no producing identity to borrow, so it stays under
+    // the consuming address -- honest: those bytes are what this stage
+    // received, attributable to nobody.
+    if (producer.has_value()) return PortNameToTopic(*producer);
+  }
+  return PortNameToTopic(stage + "." + port);
 }
 
 // ---------------------------------------------------------------------------
@@ -164,6 +199,9 @@ Result<Runner> Runner::Construct(const RunSpec& spec, scheduler::Scheduler& sche
   runner.components_ = std::move(components);
   runner.latch_ = DivergenceLatch(options.grace_ticks);
 
+  // Every topic already spoken for this run -- see the two-pass note below.
+  std::set<std::string> claimed_topics;
+
   for (const auto& stage : spec.stages) {
     const bool has_component = runner.components_.count(stage.name) != 0 &&
                                runner.components_.at(stage.name) != nullptr;
@@ -189,24 +227,72 @@ Result<Runner> Runner::Construct(const RunSpec& spec, scheduler::Scheduler& sche
       return Result<Runner>::Fail(Error{Kind::Authoring, "one of: simulate, measured, off",
                                         "'" + stage.mode + "'", "stage '" + stage.name + "'", ""});
     }
-    if (stage.mode == "off") continue;
-
-    // IMP-0114: derived from the spec's own declared ports -- inputs AND
-    // outputs -- never a hand-maintained list.
-    for (const auto& port : stage.ports) {
-      const std::string qualified = stage.name + "." + port.name;
-      Result<RecordPolicy> policy = ParseRecordPolicy(port.record, "port '" + qualified + "'");
-      if (!policy.ok()) return Result<Runner>::Fail(policy.error());
-      RecordedTopic topic;
-      topic.topic = PortNameToTopic(qualified);
-      topic.qualified_port = qualified;
-      topic.stage = stage.name;
-      topic.port = port.name;
-      topic.dir = port.dir;
-      topic.policy = policy.value();
-      runner.recorded_topics_.push_back(topic);
-    }
   }
+
+  // IMP-0114: derived from the spec's own declared ports -- inputs AND
+  // outputs -- never a hand-maintained list.
+  //
+  // **Two passes, `pro` before `req`, and the order matters** (F-3). Since a
+  // `req` port is now recorded under its PRODUCING address, a consumer of
+  // another stage's output derives the very topic that stage already records
+  // as its own. Only one entry may own a topic, and it must be the producing
+  // `pro` port: that port's own `record:` policy is the declaration that
+  // governs this signal, and letting a consumer's entry claim it first would
+  // let a `req` port marked `excluded` suppress a `pro` port marked `full`.
+  // Claiming every `pro` topic before any `req` one removes that ordering
+  // hazard rather than relying on `spec.order` happening to be topological.
+  const auto build_topics = [&](const std::string& want_dir) -> Result<bool> {
+    for (const SpecStage& stage : spec.stages) {
+      if (stage.mode == "off") continue;
+      for (const SpecPort& port : stage.ports) {
+        if (port.dir != want_dir) continue;
+        const std::string qualified = stage.name + "." + port.name;
+        Result<RecordPolicy> policy = ParseRecordPolicy(port.record, "port '" + qualified + "'");
+        if (!policy.ok()) return Result<bool>::Fail(policy.error());
+        RecordedTopic topic;
+        topic.topic = RecordedTopicFor(spec, stage.name, port.name, port.dir);
+        topic.qualified_port = qualified;
+        topic.stage = stage.name;
+        topic.port = port.name;
+        topic.dir = port.dir;
+        topic.policy = policy.value();
+        // Two consumers of one producer also collapse here, to one topic
+        // carrying one value -- they read the same bus entry in the same
+        // cycle, so the second entry would be a byte-identical duplicate.
+        // Which port received it stays answerable from the spec's own
+        // wiring, exactly as `df_only.yaml` already resolves
+        // `objects: source.gen_object_list`.
+        if (claimed_topics.insert(topic.topic).second) {
+          runner.recorded_topics_.push_back(topic);
+        }
+
+        // R-SIM-15: an override may not masquerade as the source's own
+        // bytes. Where a declared mutation touches this input, the producing
+        // topic above keeps the TRUE upstream value and this extra entry
+        // carries what the component was actually handed -- a second topic,
+        // not a rename, so neither half is lost and the run stays
+        // re-simulable.
+        if (port.dir != "req") continue;
+        const std::optional<std::string> producer = ProducerAddressOf(spec, stage.name, port.name);
+        if (!producer.has_value()) continue;
+        const std::size_t dot = producer->find('.');
+        if (dot == std::string::npos) continue;
+        if (!MutationTouches(spec, producer->substr(0, dot), producer->substr(dot + 1))) continue;
+        RecordedTopic delivered = topic;
+        delivered.topic = PortNameToTopic(qualified);
+        delivered.post_mutation = true;
+        if (claimed_topics.insert(delivered.topic).second) {
+          runner.recorded_topics_.push_back(delivered);
+        }
+      }
+    }
+    return Result<bool>::Ok(true);
+  };
+  const Result<bool> pro_topics = build_topics("pro");
+  if (!pro_topics.ok()) return Result<Runner>::Fail(pro_topics.error());
+  const Result<bool> req_topics = build_topics("req");
+  if (!req_topics.ok()) return Result<Runner>::Fail(req_topics.error());
+
   return Result<Runner>::Ok(std::move(runner));
 }
 
@@ -450,11 +536,35 @@ Result<bool> Runner::StepOnce() {
       if (!topic.policy.WritesAt(tick_index)) continue;
       bus::PortValue value;
       if (topic.dir == "req") {
+        const std::optional<std::string> producer_qualified = resolve_producer_qualified(topic.stage, topic.port);
+        // F-3: the two `req` entries read DIFFERENT values on purpose.
+        //   - the producing-name entry takes the upstream value straight off
+        //     the bus: the true bytes the producer published, before any
+        //     override, so this topic means what its name says;
+        //   - the `post_mutation` entry (emitted only when an override is
+        //     declared) takes `delivered_req_` -- the exact bytes handed to
+        //     the component, which is the thing an override exists to change.
+        // With no override declared the two are the same value, and only the
+        // producing-name entry is ever emitted.
+        const bool prefer_upstream = !topic.post_mutation && producer_qualified.has_value();
         const auto delivered_it = delivered_req_.find(topic.qualified_port);
-        if (delivered_it != delivered_req_.end()) {
+        if (prefer_upstream) {
+          value = bus_->Get(*producer_qualified, now_ns);
+          // A stage that executed has a delivered value even when the bus
+          // has nothing under the producing address (an injected `measured`
+          // producer that published nothing this cycle); fall back to it
+          // rather than dropping the input topic entirely.
+          if (value.origin == bus::Origin::Unknown) {
+            if (delivered_it == delivered_req_.end()) continue;
+            value = delivered_it->second;
+          }
+        } else if (delivered_it != delivered_req_.end()) {
+          // Unchanged from before F-3, `Origin::Unknown` included: an
+          // unwired declared input still records what the stage was handed
+          // (an empty, invalid port), because "this stage received nothing
+          // on vehSig" is itself the fact `R-SIM-6` wants in the file.
           value = delivered_it->second;
         } else {
-          const std::optional<std::string> producer_qualified = resolve_producer_qualified(topic.stage, topic.port);
           if (!producer_qualified.has_value()) continue;  // an unwired input has nothing to record
           value = bus_->Get(*producer_qualified, now_ns);
           if (value.origin == bus::Origin::Unknown) continue;
@@ -478,7 +588,13 @@ Result<bool> Runner::StepOnce() {
       // independent of whether a writer exists at all (a resim with no
       // writer can still be watched live).
       if (transport_publisher_ != nullptr) {
-        transport_publisher_->Publish(tick_index, topic.qualified_port, value.payload.data(), value.payload.size());
+        // Named from the TOPIC, not from `qualified_port` (F-3): after a
+        // `req` port started borrowing its producing address, publishing
+        // the same bytes under the consuming address would put two names on
+        // one signal again -- and a deduped `req` entry would publish under
+        // a name whose topic nobody wrote. One identity, both channels.
+        transport_publisher_->Publish(
+            tick_index, TopicToPortName(topic.topic), value.payload.data(), value.payload.size());
       }
     }
   }

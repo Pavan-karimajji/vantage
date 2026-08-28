@@ -627,6 +627,12 @@ TEST_F(MutateFixture, UtMut11ADeclaredOverrideAppliesThroughARealRunnerCycleWith
   // The declared override: `meas.objects.x := 42.0` -- the same address
   // shape a real Resolved Run Spec's `mutations[]` carries.
   std::vector<SpecMutation> mutations{MakeMutation("const", AddressAt("meas", "objects", {"x"}), {42.0})};
+  // ...and carried ON the spec, which is where a real run declares them
+  // (`simcore.cpp` builds its `Mutator` from `spec.mutations`). The recorder
+  // reads the same field to decide that this port needs a post-mutation
+  // topic of its own (`R-SIM-15`), so leaving the spec empty here made the
+  // engine and the Mutator disagree about whether an override exists.
+  spec.mutations = mutations;
   Mutator mutator(mutations, Resolver());
 
   const std::string topic = runner::PortNameToTopic("meas.objects");

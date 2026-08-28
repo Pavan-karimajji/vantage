@@ -22,38 +22,32 @@
 
 **Movement A** ✅ done, except one item blocked on the author (a push).
 **Movement B** ⏸ planned, deliberately **not** started — it is no longer the gate.
-**Movement C** ← **we are here. Step zero is done; it found one real defect.**
+**Movement C** ← **we are here. The demo's gesture works end to end; the GUI is
+what is left.**
 
 The 2026-08-27 reset re-scoped this module around one watchable demo instead of a
 completion percentage. Read `memory.md` for why, `DEMO_AND_SCOPE.md` for the
 demo and the finite list, `MOVEMENT_B_PLAN.md` for the deletion work.
 
-**Step zero is answered: the mechanism works, the demo's shape does not.**
-`mode: measured` injects a self-produced recording's outputs byte-identically on
-real data — `R-SIM-10` holds. But a self-produced recording **cannot be
-re-simulated**, so one file cannot be toggled both ways, and three other defects
-sit in front of the demo. Five findings, four independently re-verified:
-**`docs/v2/SIM_Test_Execution_2026-08-27_step_zero.md`** — read it before fixing
-anything.
+**Step zero's defects are fixed.** One self-produced recording, `mode:` the only
+thing that differs, both directions byte-identical, on data where AEB actually
+fires — real DLL, real engine, demonstrated on `vs2026`; both platforms build and
+pass their suites. `sim check` went 3 failed → 0. Findings, evidence and what did
+*not* close: **`docs/v2/SIM_Test_Execution_2026-08-28.md`**.
 
 ## The next action — exactly one
 
-> **Work the fix order in
-> `docs/v2/SIM_Test_Execution_2026-08-27_step_zero.md`, starting with `F-1`.**
+> **`WP-28` — the launcher, and the measured/simulated toggle. Red item #8.**
 
-`F-1` first because nothing else can be judged until resim actually computes:
-topic lookup is strict on one side and tolerant on the other, so every resim of a
-pre-2026-08-23 recording flags all inputs invalid and publishes neutral output,
-exits 0, and warns about nothing.
+Everything under it now exists: the toggle is real, the recording it toggles is
+producible by the system itself, and the provenance the click-to-evidence answer
+reads is carried rather than guessed. What is missing is the face — pick the
+recording, flip the stage, see the two pictures agree, click an object.
 
-Then `F-3` — **a design decision before any code.** A self-produced recording
-names its input topics after the consuming stage, so it can be replayed but not
-re-simulated, and the demo's "one recording, both directions" shape is not
-expressible. Choose: record `req` topics under their producing identity, or
-rewrite the demo around two recordings. The record recommends the first.
-
-All three of `F-1`/`F-2`/`F-3` are in `simcore` and need a `vs2026` rebuild.
-Afterwards `WP-28` (the launcher toggle) is the remaining demo work.
+Two things to know before starting, both in the record: a legacy-vocabulary
+recording still feeds the component nothing (that is `WP-12`'s ingest map, not a
+demo dependency), and `bsd_curve_r172_passby`'s green `sim check` is still a
+false green for that same reason.
 
 ## Do not
 
@@ -82,21 +76,23 @@ Afterwards `WP-28` (the launcher toggle) is the remaining demo work.
 |---|---|---|
 | ERG · `WP-17` · `WP-18` | No ERG measurement exists or can be obtained | Real data arrives in a format sim cannot read |
 | `WP-19` `WP-30` `WP-31` | No demo dependency | The demo runs |
-| The scenario finding | Author's call, 2026-08-27 | Before `B3` deletes `tools/carla/`, or when the warning path matters to the demo |
+| The scenario finding — **now only its corpus half** (4 of 18 runnable, one vacuous pass). The three *"never became"* failures were `F-1` and are fixed | Author's call, 2026-08-27 | Before `B3` deletes `tools/carla/`, or when coverage rather than the warning path matters |
 | 155 `R-REQ-9` citations | Bookkeeping, not code | `WP-31` |
 | Conan editable test | `WP-31` scope | `WP-31` |
 
 ## Open risks
 
-1. **The demo's shape is not expressible today** (`F-3`), and every resim of a
-   pre-2026-08-23 recording is silently neutral (`F-1`). Both in the step-zero
-   record. Top risks, because neither reports itself.
+1. **A recording carrying no provenance grade still computes nothing** (`F-6`,
+   2026-08-28 record). Validity is inferred from evidence grade, so a foreign or
+   supplier file has every input flagged invalid — `F-1`'s symptom by a second
+   route. Not on the demo path; does not report itself.
 2. **`WP-01` cannot close** until a real GitHub Actions run is observed passing.
    The workflow trigger was fixed on 2026-08-27; it needs a push. `gh` is not
    installed on this machine.
-3. **The scenario corpus is thin and mostly negative.** Only 4 of 18 scenarios can
-   run; the one that passes asserts a warning *never* fires. Parked, but do not
-   mistake a green `sim check` for coverage.
+3. **The scenario corpus is thin, and one green is false.** Only 4 of 18
+   scenarios can run. Three now assert real firing behaviour; the fourth
+   (`bsd_curve_r172_passby`) passes only because nothing reaches the component —
+   it needs `WP-12`'s ingest map. Do not mistake a green `sim check` for coverage.
 
 ## How Movement C gets tracked when it grows
 
@@ -124,6 +120,10 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-08-28** — `F-1`/`F-2`/`F-3` fixed in `simcore`, `F-4` corrected in the
+  plan; rebuilt and verified on both platforms. `sim check` 3 failed → 0, no
+  regressions, one new finding (`F-6`). Record:
+  `docs/v2/SIM_Test_Execution_2026-08-28.md`.
 - **2026-08-27** — Findings from the step-zero run verified and written up as a
   Test Execution Record (`_step_zero`); this file trimmed back and its no-counts
   rule sharpened to *no derived progress state* (dated evidence is fine).

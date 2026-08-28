@@ -119,11 +119,11 @@ TEST(UtIoErg01, ReconstructsRealSingleRowFixture) {
 
   const std::map<std::string, TopicInfo> topics = reader->Describe();
   ASSERT_EQ(topics.size(), 2u);
-  ASSERT_TRUE(topics.count("bsd.outputs"));
-  ASSERT_TRUE(topics.count("bsd.compState"));
-  EXPECT_EQ(topics.at("bsd.outputs").schema_name, "adas.df.BsdOutputs");
-  EXPECT_EQ(topics.at("bsd.compState").schema_name, "adas.df.CompState");
-  EXPECT_EQ(topics.at("bsd.outputs").provenance, Provenance::kMeasured);
+  ASSERT_TRUE(topics.count("/bsd/outputs"));
+  ASSERT_TRUE(topics.count("/bsd/compState"));
+  EXPECT_EQ(topics.at("/bsd/outputs").schema_name, "adas.df.BsdOutputs");
+  EXPECT_EQ(topics.at("/bsd/compState").schema_name, "adas.df.CompState");
+  EXPECT_EQ(topics.at("/bsd/outputs").provenance, Provenance::kMeasured);
 
   ReadBounds bounds;
   bounds.max_messages = 100;
@@ -136,8 +136,8 @@ TEST(UtIoErg01, ReconstructsRealSingleRowFixture) {
   for (const RawMessage& m : batch.messages) {
     EXPECT_EQ(m.log_time_ns, 0);                    // row 0's own Time == 0.0s
     EXPECT_FALSE(m.capture_time_ns.has_value());     // R-SIM-14: never defaulted
-    if (m.topic == "bsd.outputs") bsd_outputs_msg = &m;
-    if (m.topic == "bsd.compState") bsd_compstate_msg = &m;
+    if (m.topic == "/bsd/outputs") bsd_outputs_msg = &m;
+    if (m.topic == "/bsd/compState") bsd_compstate_msg = &m;
   }
   ASSERT_NE(bsd_outputs_msg, nullptr);
   ASSERT_NE(bsd_compstate_msg, nullptr);

@@ -333,12 +333,24 @@ Result<RecordPolicy> ParseRecordPolicy(const std::string& raw, const std::string
 // which is what makes *"did we record everything the SUT reads?"* true by
 // construction rather than by review.
 struct RecordedTopic {
-  std::string topic;           // "/<stage>/<port>"
-  std::string qualified_port;  // "<stage>.<port>"
+  // The topic actually written. For a `pro` port this is the producing
+  // stage's own address. For a WIRED `req` port it is the **producing**
+  // address (`/source/gen_object_list`), not the consuming one
+  // (`/df/objects`) -- see `RecordedTopicFor` for why. An unwired `req`
+  // port has no producer to name and keeps the consuming address.
+  std::string topic;
+  std::string qualified_port;  // "<stage>.<port>" -- always the CONSUMING address; the value-lookup key
   std::string stage;
   std::string port;
   std::string dir;  // "pro" | "req"
   RecordPolicy policy;
+  // `true` only for the extra `req` entry emitted when a declared mutation
+  // touches this port (`R-SIM-15`). It carries the POST-mutation bytes
+  // actually delivered to the component, under the consuming address, and
+  // is tagged `overridden` in the topic index -- so the producing topic
+  // above keeps the source's own true bytes and neither is lost. Never
+  // emitted when nothing overrides the port.
+  bool post_mutation = false;
 };
 
 // One recorded port's bytes for one cycle, as pulled off the reader --
@@ -358,6 +370,34 @@ struct RecordedMessage {
 // one-liners there, for the same reason they are free functions here).
 std::string TopicToPortName(const std::string& topic);
 std::string PortNameToTopic(const std::string& qualified_port);
+
+// `"<producer>.<producer_port>"` for a stage's declared input, read off
+// `RunSpec::stages[].inputs`; `std::nullopt` when that input is unwired
+// (a declared-optional port nobody connected, e.g. df's `vehSig`).
+std::optional<std::string> ProducerAddressOf(
+    const RunSpec& spec, const std::string& stage, const std::string& port);
+
+// True when some declared `RunSpec::mutations` entry addresses exactly this
+// producing port. Deliberately reads the SPEC rather than a live `Mutator`,
+// so the recorder's topic index (built before any component loads) and the
+// cycle loop (which has a `Mutator`) cannot answer it differently.
+bool MutationTouches(const RunSpec& spec, const std::string& stage, const std::string& port);
+
+// **The one derivation of "which topic does this declared port get recorded
+// under"**, shared by `Runner::Construct` (which writes the messages) and
+// `BuildOutputTopics` (which writes the index). They used to derive it
+// separately; an index and a message stream that disagree about a topic's
+// name is F-1's defect one level up, so there is now a single answer.
+//
+// A `req` port is recorded under its PRODUCING address. Recording it under
+// the consuming stage's name -- what this did until 2026-08-28 -- means the
+// producing names are absent from the result, so the recording can be
+// replayed but never re-simulated: a `simulate` stage's inputs would have to
+// name `df.objects`, and `df -> df` is rejected as a zero-delay cycle. That
+// is one cut point, from a file `R-SIM-6` says exists precisely so that
+// "a recording containing every stage's outputs supports any cut point".
+std::string RecordedTopicFor(
+    const RunSpec& spec, const std::string& stage, const std::string& port, const std::string& dir);
 
 // Declared OUTSIDE `Runner` (and aliased back in as `Runner::Options`)
 // because a nested class's default member initialisers are not complete
