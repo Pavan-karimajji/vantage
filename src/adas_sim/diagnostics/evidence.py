@@ -6,27 +6,18 @@
 """The `Evidence` record and `evidence(address, session, tick)` (`OD-6`,
 `R-SIM-25`, arch §5.19) -- "what was this value, and where did it come from".
 
-**One producer, two formatters.** `cli/explain.py --at` and the GUI evidence
-panel both call `evidence()` and format its result; neither re-derives it.
-That is what makes "GUI and headless answer identically" structural rather
-than a discipline (`GT-9`).
+**`cli/explain.py --at` is this framework's own headless caller.** The
+Python-side GUI evidence panel this docstring used to describe as the other
+formatter retired with the rest of the Python scene/render/player tree
+(`SM-12`); `viz`'s own C++ evidence chain (`BuildEvidence`) is the live
+"two formatters, one producer" the retired panel used to be (`GT-9`'s
+principle, now spanning languages rather than one Python process).
 
 **It grows; it is not re-designed.** Arch §5.19 sketches the destination
 fields -- `port`, `stage`, `overrides`, `faults`, `config_bundle`,
 `component`, `plugin` -- to be added as those concepts come to exist. Adding
 one is additive to the dataclass. `R-SIM-25`'s "a field it cannot fill reads
 `unknown`" applies from the day a field exists, not before.
-
-**The `Prim.pick_id` -> port join** reuses two things that already existed:
-a provider's declared `requires` (`R-SIM-21`) and
-`contracts.binding.try_resolve_component_ref`. `Layer.id` -> the registered
-provider's `requires` -> resolved address is a static lookup -- no new
-registry, no interception of a live provider call.
-
-**Honest limit:** `requires` is the provider's *own declaration*, not a
-compiler-verified list of every port its body reads. A provider calling
-`ctx.port(...)` on a port it never declared resolves to `topic=None` here --
-never a guess, same as any address matching nothing.
 """
 
 from __future__ import annotations
@@ -44,7 +35,7 @@ class Evidence:
     (`R-SIM-25`, `NR-SIM-4`)."""
 
     address: str  # what was asked about, as typed
-    kind: str  # "run_id" | "port" | "prim" | "unknown" -- grows at S-C1c (field/layer/signal)
+    kind: str  # "run_id" | "port" | "unknown" -- grows at S-C1c (field/layer/signal)
     value: str  # formatted value, at this tick
     tick: int
     t_ns: int
@@ -53,7 +44,7 @@ class Evidence:
     run_id: str
     #: `ST-D6-3`: the owning stage's config bundle and build id, from
     #: `session.meta.components` -- `None` when the address resolved to no
-    #: port (`kind` other than `port`/`prim`) or that stage carries no
+    #: port (`kind` other than `port`) or that stage carries no
     #: `RunManifest` entry (a manifestless recording, `manifest_version=0`).
     config_bundle_sha256: str | None = None
     component_build_id: str | None = None
@@ -70,11 +61,6 @@ class Evidence:
     #: `component_build_id` still reads `unknown` when no build id was
     #: recorded, because it genuinely was not.
     component_library_sha256: str | None = None
-    #: `ST-D6-3`, `kind="prim"` only: the `Layer.id` the selected prim came
-    #: from, and `Prim.derived` (`R-SIM-7`'s published-vs-reconstructed
-    #: marker) -- both `None` for every other `kind`.
-    layer_id: str | None = None
-    derived: bool | None = None
     #: `IMP-0274`, from `IMP-0050`/`IMP-0052` (`simcore/bus`'s `Rung`/
     #: `Quality`, `WP-08`): how the timing this value carries was recovered.
     #: `None` today for every `kind` -- `WP-08`'s own explicit scope
@@ -117,74 +103,19 @@ def _component_provenance(port_address: str, session: Session) -> tuple[str | No
     return (None, None, None)
 
 
-def _resolve_prim(address: str, session: Session, tick: int) -> Evidence | None:
-    """Resolve `address` as a rendered `Prim.pick_id` at `tick`; `None` when no
-        registered provider's scene contains it -- unresolvable, not an error.
-
-        **Guarded by `registered_providers()` before anything else.** With no layer
-        plug-in imported into this process, no `Prim` can exist, so returning early
-        skips `build_scene`'s real disk I/O for the ordinary "not a prim" case.
-
-        **Every other registered provider runs too, and its failure is not this
-        address's failure.** The registry is process-global (`R-VAR-2`), shared by
-        every component's layers and every fixture imported this process, and
-        `build_scene` calls all of them. A provider crashing on a session it was
-        never designed for -- seen for real, dereferencing a port's decoded message
-        on a recording that carries it undecoded -- must not be reported as *this*
-        address failing. Caught and treated as "no matching prim", which is what it
-        honestly is from here.
-
-    """
-    from adas_sim.scene.registry import registered_providers
-    if not registered_providers():
-        return None
-
-    from adas_sim.runspec.address import try_resolve_component_ref
-    from adas_sim.core.runner import build_scene
-
-    current = session.at(tick)
-    try:
-        scene = build_scene(session, tick, project=session.meta.project or "base")
-    except Exception:
-        return None
-    for layer in scene.layers:
-        for prim in layer.prims:
-            if prim.pick_id != address:
-                continue
-            entry = registered_providers().get(layer.id)
-            resolved_ports: list[str] = []
-            if entry is not None:
-                for ref in entry.requires:
-                    resolved = try_resolve_component_ref(
-                        ref, known_ports=session.known_ports,
-                        where="adas_sim.diagnostics.evidence.evidence",
-                    )
-                    if resolved is not None:
-                        resolved_ports.append(resolved)
-            topic = resolved_ports[0] if resolved_ports else None
-            value = str(current.ports[topic].message) if topic in current.ports else prim.kind
-            origin = current.ports[topic].origin if topic in current.ports else None
-            config_bundle_sha256 = component_build_id = component_library_sha256 = None
-            if topic is not None:
-                config_bundle_sha256, component_build_id, component_library_sha256 = _component_provenance(
-                    topic, session)
-            return Evidence(
-                address=address, kind="prim", value=value,
-                tick=tick, t_ns=current.t_ns, topic=topic, origin=origin, run_id=session.run_id,
-                config_bundle_sha256=config_bundle_sha256, component_build_id=component_build_id,
-                component_library_sha256=component_library_sha256,
-                layer_id=layer.id, derived=prim.derived,
-            )
-    return None
-
-
 def evidence(address: str, session: Session, tick: int) -> Evidence:
     """`address`'s evidence at `tick` -- a run_id, a port (present in that
-    tick's own `ports`), a rendered prim's `pick_id` (`kind="prim"`,
-    `ST-D6-3`), or `kind="unknown"`. Raises the same way `Session.at` does
-    for an out-of-range `tick` (`AuthoringError`); an unresolvable `address`
-    is not an error here, only `kind="unknown"`, mirroring
-    `core/explain.explain`'s own degrade.
+    tick's own `ports`), or `kind="unknown"`. Raises the same way
+    `Session.at` does for an out-of-range `tick` (`AuthoringError`); an
+    unresolvable `address` is not an error here, only `kind="unknown"`,
+    mirroring `core/explain.explain`'s own degrade.
+
+    **No `kind="prim"` any more.** Resolving a rendered `Prim.pick_id` back
+    to a port retired with the rest of the Python scene/render/player tree
+    (`SM-12`, `docs/VIZ_Sync_Plan_v0.1.md`) -- `viz`'s own C++ evidence
+    chain (`BuildEvidence`, `cpp/viz/player/evidence.hpp`) is the live
+    equivalent for anything rendered as a `Prim` today, since no Python
+    layer provider can register one any more.
     """
     current = session.at(tick)
 
@@ -206,22 +137,17 @@ def evidence(address: str, session: Session, tick: int) -> Evidence:
             component_library_sha256=component_library_sha256,
         )
 
-    prim_record = _resolve_prim(address, session, tick)
-    if prim_record is not None:
-        return prim_record
-
     return Evidence(
         address=address, kind="unknown", value="",
         tick=tick, t_ns=current.t_ns, topic=None, origin=None, run_id=session.run_id,
     )
 
 
-#: The one fixed field order both `cli/explain.py --at` and the GUI
-#: evidence panel (`UT-D3-8`, `view/evidence_panel.py`) render.
+#: The one fixed field order `cli/explain.py --at` renders.
 EVIDENCE_FIELDS = (
     "address", "kind", "value", "tick", "t_ns", "topic", "origin", "run_id",
     "config_bundle_sha256", "component_build_id", "component_library_sha256",
-    "layer_id", "derived", "rung", "quality",
+    "rung", "quality",
 )
 
 

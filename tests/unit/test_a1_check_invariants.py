@@ -111,24 +111,18 @@ def test_check_ut_d8_9_passes_on_an_empty_tree(tmp_path):
 
 
 def test_check_ut_d8_9_passes_on_the_current_skeleton():
-    """`S-D8`: no `Vantage`/`Bench`/`Campaign` token in `adas_sim/` outside `player/shell/`."""
+    """`S-D8`: no `Vantage`/`Bench`/`Campaign` token anywhere in `adas_sim/`
+    -- unconditional since `SM-12` deleted `player/shell/`, the one place
+    these tokens used to be the whole point."""
     assert check_ut_d8_9() == []
 
 
-def test_check_ut_d8_9_fails_on_a_workspace_token_outside_app(tmp_path):
-    (tmp_path / "player" / "shell").mkdir(parents=True)
+def test_check_ut_d8_9_fails_on_a_workspace_token_anywhere(tmp_path):
     (tmp_path / "core").mkdir()
     (tmp_path / "core" / "session.py").write_text('# only in the Bench workspace\n', encoding="utf-8")
     findings = check_ut_d8_9(src_root=tmp_path)
     assert findings
     assert "UT-D8-9" in findings[0]
-
-
-def test_check_ut_d8_9_allows_the_token_inside_app(tmp_path):
-    app_dir = tmp_path / "player" / "shell"
-    app_dir.mkdir(parents=True)
-    (app_dir / "window.py").write_text('WORKSPACE_NAME = "Bench"\n', encoding="utf-8")
-    assert check_ut_d8_9(src_root=tmp_path) == []
 
 
 def test_check_codec_scope_reports_clean_when_simcore_io_codecs_does_not_exist_yet():

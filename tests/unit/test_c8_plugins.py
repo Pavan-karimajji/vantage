@@ -4,9 +4,13 @@
 # @author Pavan Karimajji <Pavan.Karimajji@larsentoubro.com>
 
 """S-C8 (R-SIM-20, FR-SIM-64) unit tests: `PluginBundle` resolution
-(`UT-C8-2`, `UT-C8-5`), the build-side packer (`UT-C8-1`), cross-component
-layer-id collision through the real import mechanism (`UT-C8-3`), and the
-recorder's identity-only embedding (`UT-C8-4`)."""
+(`UT-C8-2`, `UT-C8-5`), the build-side packer (`UT-C8-1`), and the
+recorder's identity-only embedding (`UT-C8-4`).
+
+**`UT-C8-3` (cross-component layer-id collision through the real import
+mechanism) retired with it** (`SM-12`, `docs/VIZ_Sync_Plan_v0.1.md`):
+`adas_sim.scene.registry` -- the Python layer-provider registry that
+collision was about -- no longer exists."""
 
 from __future__ import annotations
 
@@ -20,10 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "interfaces" / "scr
 import pack_plugin_bundle  # noqa: E402
 
 from adas_sim.diagnostics.errors import AuthoringError
-from adas_sim.diagnostics.explain import explain
-from adas_sim.session.session import Session
 from adas_sim.resolve.plugins import PluginBundle
-from adas_sim.scene.registry import registered_providers
 
 
 def _write(path: Path, text: str) -> None:
@@ -150,120 +151,6 @@ def test_missing_required_key_is_an_authoring_error(tmp_path):
     with pytest.raises(AuthoringError) as excinfo:
         PluginBundle.resolve(library_dir=root)
     assert "provides" in str(excinfo.value)
-
-
-# ---------------------------------------------------------------------------
-# UT-C8-3 -- two libraries on the plug-in path, each contributing layers,
-# both register; a duplicate layer id across two components raises naming
-# both -- exercised through the REAL import mechanism (collision-free private
-# module names), not asserted about in the abstract.
-# ---------------------------------------------------------------------------
-
-
-def _plugin_with_layer_module(tmp_path: Path, *, name: str, dotted: str, source: str) -> PluginBundle:
-    root = tmp_path / name
-    # `dotted`'s leading "sim" segment names `root` itself (same convention
-    # `PluginBundle.import_modules` strips) -- the file lives under root
-    # without that first segment.
-    parts = dotted.split(".")
-    rel = Path(*parts[1:]) if parts and parts[0] == "sim" else Path(*parts)
-    _write(root / rel.with_suffix(".py"), source)
-    _write(root / "plugin.yaml", yaml.safe_dump({"api": 1, "component": name, "provides": [dotted]}))
-    bundle = PluginBundle.resolve(library_dir=root)
-    assert bundle is not None
-    return bundle
-
-
-def test_sim_explain_reports_the_owning_component_and_real_file_path_for_a_plugin_layer(tmp_path):
-    """S-C8's own remaining item ("sim explain and sim doctor both report
-    the plug-in path"): a layer imported through the real plug-in
-    mechanism carries `_adas_plugin.<component>.<dotted>` as its module
-    name (`PluginBundle.import_modules`'s own docstring) -- `explain()`
-    parses the component out of that name and reports the module's own
-    real, resolved `__file__` (set by `importlib.util.
-    spec_from_file_location` at import time) as `plugin_path`."""
-    bundle = _plugin_with_layer_module(
-        tmp_path, name="explainComp", dotted="sim.layers.explained",
-        source=(
-            "from adas_sim.scene.registry import layer_provider\n"
-            "@layer_provider('sim.test.c8.explained')\n"
-            "def provide(ctx):\n    return ()\n"
-        ),
-    )
-    bundle.import_modules()
-
-    facts = explain("sim.test.c8.explained", Session(run_id="run-explain", name="s", ticks=()))
-
-    assert facts["kind"] == "layer"
-    assert facts["plugin_component"] == "explainComp"
-    assert facts["plugin_path"] == str(bundle.root / "layers" / "explained.py")
-
-
-def test_sim_explain_reports_no_plugin_fields_for_a_first_party_layer():
-    """A layer registered by the framework's own code (this test file
-    itself, `test.d6.explain.probe` in `test_d6_explain.py`) has no
-    plug-in bundle -- both fields must be absent, never guessed
-    (`R-SIM-25`, `NR-SIM-4`)."""
-    from adas_sim.scene.registry import layer_provider
-
-    @layer_provider("test.c8.first_party_probe")
-    def _probe(ctx):  # pragma: no cover -- never called, only registered
-        return ()
-
-    facts = explain("test.c8.first_party_probe", Session(run_id="run-explain", name="s", ticks=()))
-    assert facts["kind"] == "layer"
-    assert "plugin_component" not in facts
-    assert "plugin_path" not in facts
-
-
-def test_two_components_each_contributing_a_layer_both_register(tmp_path):
-    """UT-D5-3."""
-    a = _plugin_with_layer_module(
-        tmp_path, name="compA", dotted="sim.layers.a",
-        source=(
-            "from adas_sim.scene.registry import layer_provider\n"
-            "@layer_provider('sim.test.c8.unique_a')\n"
-            "def provide(ctx):\n    return ()\n"
-        ),
-    )
-    b = _plugin_with_layer_module(
-        tmp_path, name="compB", dotted="sim.layers.b",
-        source=(
-            "from adas_sim.scene.registry import layer_provider\n"
-            "@layer_provider('sim.test.c8.unique_b')\n"
-            "def provide(ctx):\n    return ()\n"
-        ),
-    )
-    a.import_modules()
-    b.import_modules()
-
-    assert "sim.test.c8.unique_a" in registered_providers()
-    assert "sim.test.c8.unique_b" in registered_providers()
-
-
-def test_duplicate_layer_id_across_two_components_raises_naming_both(tmp_path):
-    a = _plugin_with_layer_module(
-        tmp_path, name="dupA", dotted="sim.layers.dup",
-        source=(
-            "from adas_sim.scene.registry import layer_provider\n"
-            "@layer_provider('sim.test.c8.dup')\n"
-            "def provide(ctx):\n    return ()\n"
-        ),
-    )
-    b = _plugin_with_layer_module(
-        tmp_path, name="dupB", dotted="sim.layers.dup",
-        source=(
-            "from adas_sim.scene.registry import layer_provider\n"
-            "@layer_provider('sim.test.c8.dup')\n"
-            "def provide(ctx):\n    return ()\n"
-        ),
-    )
-    a.import_modules()
-    with pytest.raises(AuthoringError) as excinfo:
-        b.import_modules()
-
-    message = str(excinfo.value)
-    assert "dupA" in message and "dupB" in message
 
 
 # ---------------------------------------------------------------------------

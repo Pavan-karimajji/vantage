@@ -56,23 +56,6 @@ def test_list_topics_reads_the_recordings_own_topic_index(capsys):
     assert "/source/gen_object_list" in out
 
 
-def test_list_layers_builds_a_real_scene():
-    """A fresh interpreter, deliberately -- same reasoning as
-    test_c8_relocatability_installed.py's own: `scene.registry`'s provider
-    table is process-global, so whether `df`'s real layer providers are
-    already registered (and therefore run against `tiny.mcap`'s synthetic,
-    non-protobuf payload, which they cannot decode) depends on whatever else
-    THIS pytest session happened to import first -- order-dependent in a way
-    that has nothing to do with `cli/list.py`'s own correctness."""
-    script = (
-        "from adas_sim.cli.list_cmd import run\n"
-        f"run(['layers', {str(_TINY)!r}])\n"
-    )
-    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
-    assert result.returncode == 0, result.stderr
-    assert "layers (" in result.stdout
-
-
 def test_list_signals_is_the_port_level_address_space(capsys):
     exit_code = run(["signals", str(_TINY)])
     out = capsys.readouterr().out

@@ -25,8 +25,6 @@ def main(argv: list[str] | None = None) -> int:
     subparsers.add_parser("doctor", help="report the environment (DG-3)")
     subparsers.add_parser("explain", help="explain any name in the system (DG-2)", add_help=False)
     subparsers.add_parser("probe", help="what a recording provides, and what it doesn't (S-C9)", add_help=False)
-    subparsers.add_parser("view", help="open the GUI viewer on a recording (S-B3)", add_help=False)
-    subparsers.add_parser("render", help="headless snapshot to a PNG (S-B3)", add_help=False)
     subparsers.add_parser("convert", help="recording -> recording (S-D7)", add_help=False)
     subparsers.add_parser("export", help="recording -> CSV, port-selectable (S-D7)", add_help=False)
     subparsers.add_parser("record", help="drive a source, execute nothing (S-C2)", add_help=False)
@@ -35,7 +33,7 @@ def main(argv: list[str] | None = None) -> int:
     subparsers.add_parser("check", help="evaluate expect: against a scenario set, headless (S-C3)", add_help=False)
     subparsers.add_parser("determinism", help="compare two recordings, axis derived not flagged (S-C6)", add_help=False)
     subparsers.add_parser("batch", help="run a pipeline over a recording set, isolated per recording (S-D7)", add_help=False)
-    subparsers.add_parser("list", help="list ports|topics|layers|signals for a lib/recording/session (S-D6, DG-1)", add_help=False)
+    subparsers.add_parser("list", help="list ports|topics|signals for a lib/recording/session (S-D6, DG-1)", add_help=False)
     subparsers.add_parser("validate", help="lint a project's config, no recording or binary needed (IMP-0165)", add_help=False)
 
     args, remainder = parser.parse_known_args(argv)
@@ -48,17 +46,6 @@ def main(argv: list[str] | None = None) -> int:
         # same reasoning as convert/export below.
         from adas_sim.cli import probe
         return probe.run(remainder)
-    if args.verb == "view":
-        # Deferred: `cli.view` pulls in PySide6 (the "viewer" extra) --
-        # `sim doctor`/`sim explain`/`sim render` must stay usable with
-        # neither Qt nor matplotlib installed (`UT-A1-2`'s own discipline).
-        from adas_sim.cli import view
-        return view.run(remainder)
-    if args.verb == "render":
-        # Deferred: `cli.render` pulls in matplotlib (the "figures" extra),
-        # same reasoning.
-        from adas_sim.cli import render
-        return render.run(remainder)
     if args.verb == "convert":
         # Deferred: mcap is a hard dependency of `adas_sim.io.mcap`, not of
         # `adas_sim.io`/`adas_sim.cli` themselves (`UT-A1-2`).

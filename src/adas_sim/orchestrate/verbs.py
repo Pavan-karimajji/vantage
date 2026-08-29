@@ -19,12 +19,17 @@ it loads no module and decodes no message by construction (`SW-0234`'s own
 Accept clause), for any verb, with no per-verb authoring burden.
 
 **Every entry is built lazily** (`_lazy(module_name)`), matching
-`cli/__init__.py`'s own deferred-import discipline: `cli.view` pulls in
-`PySide6`, `cli.render` pulls in `matplotlib`, `cli.convert`/`cli.export`
-pull in `mcap` (`UT-A1-2` -- `sim doctor`/`sim explain` must stay usable
-with neither installed). Importing `adas_sim.orchestrate.verbs` itself must
-therefore never import a single `cli.*` submodule eagerly; each is imported
-only inside the closure the caller actually invokes.
+`cli/__init__.py`'s own deferred-import discipline: `cli.convert`/
+`cli.export` pull in `mcap` (`UT-A1-2` -- `sim doctor`/`sim explain` must
+stay usable with it not installed). Importing `adas_sim.orchestrate.verbs`
+itself must therefore never import a single `cli.*` submodule eagerly; each
+is imported only inside the closure the caller actually invokes.
+
+**`view`/`render` retired 2026-08-29** (`SM-12`, `docs/VIZ_Sync_Plan_v0.1.md`,
+`SW-0232`'s own updated count): both launched or produced pixels from the
+Python scene/render/player tree, which no longer exists -- `vantage`/
+`viz_player.exe` (viewing) and `viz`'s own C++ `render_svg` (headless
+rendering) are the live equivalents.
 
 `VERBS`'s own callables reach the CLI module's `run(argv) -> int`, not a
 `pyapi` function. **`adas_sim.pyapi` landed at `WP-29`** (`IMP-0230`/
@@ -83,7 +88,7 @@ def _lazy_dry_run(name: str) -> Runner:
     return lambda argv=None: _generic_dry_run(name, argv)
 
 
-#: `SW-0232`'s own closed, published set -- 15 verbs today, one row each.
+#: `SW-0232`'s own closed, published set -- 13 verbs today, one row each.
 #: A verb added here without an `IMP`/`SW` row backing it is exactly the
 #: growth `ANL-SW-40` refuses. Module names match `adas_sim/cli/<name>.py`
 #: exactly, except `"list"` -> `list_cmd` (`cli/__init__.py`'s own
@@ -91,7 +96,7 @@ def _lazy_dry_run(name: str) -> Runner:
 #: submodule, unambiguous here since this module never binds a bare `run`
 #: name at module scope).
 _MODULE_OF = {
-    "doctor": "doctor", "explain": "explain", "probe": "probe", "view": "view", "render": "render",
+    "doctor": "doctor", "explain": "explain", "probe": "probe",
     "convert": "convert", "export": "export", "record": "record", "run": "run", "resim": "resim",
     "check": "check", "determinism": "determinism", "batch": "batch", "list": "list_cmd", "validate": "validate",
 }

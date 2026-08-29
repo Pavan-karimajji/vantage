@@ -16,13 +16,14 @@ from pathlib import Path
 
 SRC_ROOT = Path(__file__).resolve().parent.parent.parent / "src" / "adas_sim"
 
-_LOWER_LAYER = ("core", "model", "scene", "contracts", "io", "check")
+_LOWER_LAYER = ("core", "model", "contracts", "io", "check")
 _QT_PACKAGES = ("PySide6", "PyQt5", "PyQt6")
 
 
 def test_no_qt_module_imported_by_any_lower_layer_file():
     """UT-B3-17: no Qt module is imported by anything under core/, model/,
-    scene/, contracts/, io/ or check/ (Qt starts at render/viewer.py)."""
+    contracts/ or io/ or check/ -- Qt retired from this framework entirely
+    with the rest of the Python scene/render/player tree (`SM-12`)."""
     violations = []
     for sub in _LOWER_LAYER:
         for path in sorted((SRC_ROOT / sub).rglob("*.py")):

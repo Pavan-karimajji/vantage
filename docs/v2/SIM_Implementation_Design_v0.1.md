@@ -1665,7 +1665,7 @@ def render_text (e: Evidence) -> str: ...         # `sim explain <signal> --at <
 |---|---|---|---|---|---|
 | `IMP-0271` | `SW-0271` | `WP-24` | `EXTEND` | `diagnostics/explain.py` — adds the schedule, the injection boundary and the duration estimate to today's output, and executes nothing (`UT-DIA-01`). `SW-0164`'s `ANL-SW-34` covers "opens nothing", and `SW-0131`'s `IT-10` is what diffs this output against the engine-side dump. | `UT-DIA-01` |
 | `IMP-0272` | `SW-0272` | `WP-24` | `NEW` | `diagnostics/estimate.py` — returns `(estimate, accuracy_band)` and the band is measured from prior runs of the same shape, not asserted. **`OQ-14` closed 2026-08-13**: the band is declared from the first campaign on SysReq §18.0's reference configuration, so this is failable from the second. | `ANL-SW-43` |
-| `IMP-0273` | `SW-0273` | `WP-24` | `KEEP` | `diagnostics/evidence.py::evidence` — one producer, `render_panel` and `render_text` the two formatters. Already true and structural: `GT-9`'s shape. Recorded because a second producer is the easiest regression to introduce. | `UT-DIA-02`, `ANL-SW-44` |
+| `IMP-0273` | `SW-0273` | `WP-24` | `KEEP` | `diagnostics/evidence.py::evidence` — one producer, formatted headlessly by `cli/explain.py --at` (the graphical-panel formatter retired with the rest of the Python scene/render/player tree, `SM-12`). Already true and structural: `GT-9`'s shape. Recorded because a second producer is the easiest regression to introduce. | `ANL-SW-44` |
 | `IMP-0274` | `SW-0274` | `WP-24` | `EXTEND` | `evidence.py::Evidence` gains `rung` and `quality` from `IMP-0050`/`IMP-0052`, so an answer reaches the bytes *and* says how the timing was recovered. Extends today's record, which stops at origin. | `UT-DIA-03` |
 | `IMP-0275` | `SW-0275` | `WP-24` | `KEEP` | The join is `run_id` → manifest, `Layer.id` → resolved `requires` → ports → topics → origin, `pick_id` → entity. No new capture, no new index (`R-SIM-25`, `OD-6`). Already true. | `UT-DIA-04` |
 | `IMP-0276` | `SW-0276` | `WP-24` | `KEEP` | `evidence.py` answers *where a value came from*, never *why the algorithm produced it*. The chain stops at the module boundary; there is no hook into module internals to add later. | `INSP-SW-05` |
@@ -1704,36 +1704,45 @@ Recorded per `R-REQ-2` rather than deleted silently.
 |---|---|---|---|---|---|
 | `IMP-0298` | `SW-0298` | `WP-27` | `NEW` | `session/attach.py` — attach and detach through `SI-25`; the engine's tick rate is unchanged across both, which `IT-19` measures rather than assumes. **Not superseded** — it already lands in `WP-27` (`SI-25` transport), not this item's now-retired `WP-25`, and needed no textual change. | `IT-19` |
 
-## 22. `SI-19` — `scene` — superseded (`SM-01`, 2026-08-20)
+## 22. `SI-19` — `scene` — superseded (`SM-01`, 2026-08-20), deleted (`SM-12`, 2026-08-29)
 
 `SI-19` moved to `viz` with the rest of the player/scene toolkit
 (`adas_sim/scene/**`). All 17 design rows this item landed are retired with
 pointers to `VIZ:` (not yet allocated) — the exact identifier pairs are the
 Software Requirements document's own disposition table for this item, not
 repeated here per `R-REQ-1` (a fact stated once). None had gone past
-`KEEP`/`EXTEND` design; no code is deleted by this box (that is `SM-12`).
-Recorded per `R-REQ-2` rather than deleted silently.
+`KEEP`/`EXTEND` design. **`adas_sim/scene/**` itself deleted 2026-08-29**
+(`SM-12`, `modules/viz/docs/VIZ_Sync_Plan_v0.1.md`), gated on `G-7` and
+`ANL-SM-03`, both verified real that day. Recorded per `R-REQ-2` rather than
+deleted silently.
 
 ---
 
-## 23. `SI-20` — `render` — superseded (`SM-01`, 2026-08-20; the trial slice's own row already retired one item here)
+## 23. `SI-20` — `render` — superseded (`SM-01`, 2026-08-20; the trial slice's own row already retired one item here), deleted (`SM-12`, 2026-08-29)
 
 `SI-20` moved to `viz` with the rest of the player/scene toolkit
 (`adas_sim/render/**`). The 7 remaining design rows this item landed are
 retired with pointers to `VIZ:` (not yet allocated) — the exact identifier
 pairs are the Software Requirements document's own disposition table for
-this item. Recorded per `R-REQ-2` rather than deleted silently.
+this item. **`adas_sim/render/**` itself deleted 2026-08-29** (`SM-12`,
+`modules/viz/docs/VIZ_Sync_Plan_v0.1.md`). Recorded per `R-REQ-2` rather
+than deleted silently.
 
 ---
 
-## 24. `SI-21` — `player` — superseded (`SM-01`, 2026-08-20)
+## 24. `SI-21` — `player` — superseded (`SM-01`, 2026-08-20), deleted (`SM-12`, 2026-08-29)
 
 `SI-21` moved to `viz` with the rest of the player/scene toolkit
 (`adas_sim/player/**`, formerly `render/viewer.py` + `view/**` + `app/**`).
 All 16 design rows this item landed are retired with pointers to `VIZ:`
 (not yet allocated) — the exact identifier pairs are the Software
-Requirements document's own disposition table for this item. Recorded per
-`R-REQ-2` rather than deleted silently.
+Requirements document's own disposition table for this item. **The retiring
+GUI half of `adas_sim/player/**` deleted 2026-08-29** (`SM-12`,
+`modules/viz/docs/VIZ_Sync_Plan_v0.1.md`): `shell/` in full, `panels/` down
+to `pipeline_panel.py` (`SI-22`'s own `KEEP`, `IMP-0334` — a pipeline-
+authoring concern this item never actually owned, corrected back to `sim`
+by `SM-05`'s own disposition pass). Recorded per `R-REQ-2` rather than
+deleted silently.
 
 ---
 

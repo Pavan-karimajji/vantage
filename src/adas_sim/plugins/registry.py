@@ -9,19 +9,27 @@ changes, and no layer provider, renderer or expectation ever learns a format
 exists (R-SIM-14).
 
 **`EXTENSION_POINTS`** (`SW-0358`/`SW-0359`, `IMP-0358`/`IMP-0359`): this
-module's codec registry is one of exactly four public extension points --
-`reader`, `exporter`, `visualization`, `module` -- each discovered by
-registration, never by editing a core list (`SW-0359`). A fifth requires a
-requirement change (`SW-0358`'s own Accept clause), so the tuple's length is
-what a conformance kit and `ANL-SW-*` both assert against, not a comment.
+module's codec registry is one of exactly three public extension points --
+`reader`, `exporter`, `module` -- each discovered by registration, never by
+editing a core list (`SW-0359`). A fourth requires a requirement change
+(`SW-0358`'s own Accept clause), so the tuple's length is what a conformance
+kit and `ANL-SW-*` both assert against, not a comment.
 `extension_point_home()` names where each point's own registration function
-lives, so a script does not need to know four import paths to find out.
+lives, so a script does not need to know three import paths to find out.
+
+**`"visualization"` was the fourth point, retired 2026-08-29** (`SW-0358`'s
+own amendment, `SM-12`, `docs/VIZ_Sync_Plan_v0.1.md`): it pointed at
+`adas_sim.scene.registry.layer_provider`, which retired with the rest of the
+Python scene/render/player tree (Decision B -- the player lives permanently
+in `viz`, as C++). Python plug-ins no longer have a layer-provider hook;
+`viz`'s own C++ plug-in path (`R-SIM-20`) is unaffected, since it was never
+this registry's concern.
 
 The **codec** registry above is `"reader"`'s home (a codec is a reader
 *and* a writer registered together, but "reader" is the extension point's
 published name -- a recording that can only be written, e.g. today's CSV,
 registers a writer here and is still exercised by `"exporter"`'s own kit,
-never `"reader"`'s, since `SW-0358`'s four points are about *what a plug-in
+never `"reader"`'s, since `SW-0358`'s three points are about *what a plug-in
 does*, not which of `register()`'s two keyword arguments it used).
 
 The **exporter** registry below is new (`IMP-0358`'s own `EXTEND`): unlike a
@@ -39,18 +47,17 @@ from typing import Callable, Final, Mapping
 from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.io.base import RecordingReader, RecordingWriter
 
-#: `SW-0358`'s four public extension points, asserted by length. Adding a
-#: fifth here with no requirement change is exactly the growth `UT-PLG-02`'s
-#: own "attempt to add a fifth" case refuses.
-EXTENSION_POINTS: Final[tuple[str, ...]] = ("reader", "exporter", "visualization", "module")
+#: `SW-0358`'s three public extension points, asserted by length. Adding a
+#: fourth here with no requirement change is exactly the growth `UT-PLG-02`'s
+#: own "attempt to add a fourth" case refuses.
+EXTENSION_POINTS: Final[tuple[str, ...]] = ("reader", "exporter", "module")
 
 #: Where each extension point's own registration function lives -- one
-#: place a script or a new component's author finds all four without
-#: knowing four import paths in advance.
+#: place a script or a new component's author finds all three without
+#: knowing three import paths in advance.
 _EXTENSION_POINT_HOMES: Final[Mapping[str, str]] = {
     "reader": "adas_sim.plugins.registry.register(ext, reader=...)",
     "exporter": "adas_sim.plugins.registry.register_exporter(name, factory)",
-    "visualization": "adas_sim.scene.registry.layer_provider(layer_id)",
     "module": "adas_sim.resolve.plugins.PluginBundle.resolve(...)",
 }
 
@@ -164,13 +171,13 @@ def writer_for(path: Path) -> RecordingWriter:
 
 def extension_point_home(point: str) -> str:
     """`SW-0358`: where `point`'s own registration function lives. Raises
-    naming the closed set for anything outside it -- a fifth extension
+    naming the closed set for anything outside it -- a fourth extension
     point is a requirement change, never a new entry here."""
     if point not in _EXTENSION_POINT_HOMES:
         raise AuthoringError(
-            expected=f"one of the four extension points: {EXTENSION_POINTS}", found=repr(point),
+            expected=f"one of the three extension points: {EXTENSION_POINTS}", found=repr(point),
             where="adas_sim.plugins.registry.extension_point_home",
-            hint="SW-0358: a fifth extension point needs a requirement change, not a new registry entry",
+            hint="SW-0358: a fourth extension point needs a requirement change, not a new registry entry",
         )
     return _EXTENSION_POINT_HOMES[point]
 

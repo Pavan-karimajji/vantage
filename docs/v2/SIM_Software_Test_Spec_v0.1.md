@@ -63,11 +63,12 @@ rather than given a plausible number.
 **Seeded is not unsupplied.** A seeded row has a number the next run can exceed,
 a written reason and printed headroom; an unsupplied row has none of those. What
 a seeded row does not answer is *"is it fast enough?"* — an absolute, and it
-stays with whoever owns throughput expectations. `UT-DIA-02` carried `⊘` for a
-different reason (it awaited an implementation, not a number) until `WP-24`
-landed `diagnostics/evidence.py`'s `ANL-SW-44` static check and its own test;
-the mark is removed, not reused, now that the implementation it was waiting
-on exists.
+stays with whoever owns throughput expectations. `SI-17`'s own retired
+GUI/CLI comparison row (§5.17's own note) carried `⊘` for a different reason
+(it awaited an implementation, not a number) until `WP-24` landed
+`diagnostics/evidence.py`'s `ANL-SW-44` static check; the mark was removed,
+not reused, once that implementation existed, and the row itself retired
+later still (`SM-12`, 2026-08-29) once its own graphical half was deleted.
 
 ---
 
@@ -602,7 +603,6 @@ Added 2026-08-25 (`SM-11`, `vantage`): `UT-ABI-04` proved the ABI's own per-tick
 | ID | Serves | Fixture | Steps |
 |---|---|---|---|
 | `UT-DIA-01` | `SW-0271` | `F-CHAIN4` | Run the dry run; enumerate what it reported; count ticks executed and libraries loaded. |
-| `UT-DIA-02` | `SW-0273` | `F-CHAIN4` | Format a sampled set of addresses through both formatters; compare field for field; search for a second code path producing an evidence answer. |
 | `UT-DIA-03` | `SW-0274` | `F-LADDER` | Ask for evidence where several fields are unfillable; inspect each for `unknown` versus a plausible default. |
 | `UT-DIA-04` | `SW-0275` | `F-CHAIN4` | Run with evidence enabled and disabled; compare port values and per-tick cost against measurement noise. |
 | `UT-DIA-05` | `SW-0277` | — | Run the environment report against a missing library, a corrupt bundle, an unreadable recording and an incompatible plug-in. |
@@ -615,7 +615,20 @@ Added 2026-08-25 (`SM-11`, `vantage`): `UT-ABI-04` proved the ABI's own per-tick
 | `UT-DIA-12` | `SW-0284` | `F-RUNPAIR` | Declare a tolerance row with no `why:`; then a tolerance on an integer field. |
 | `UT-DIA-13` | `SW-0285` | `F-CHAIN4` | Name an internal port as a tap; read it in the output with its provenance; remove the tap and compare the run byte for byte. |
 | `UT-DIA-14` | `SW-0286` | `F-CHAIN4` | Call each diagnostic from a script; consume its structured result without parsing text. |
-| `UT-DIA-15` | `SW-0403` | `F-CHAIN4` | Ask the provenance question from a script and from the command line; compare field for field; search for a third derivation. |
+| `UT-DIA-15` | `SW-0403` | `F-CHAIN4` | Ask the provenance question from a script and from the command line; compare field for field; search for a second derivation. |
+
+**The second `SI-17` row this section used to carry between `UT-DIA-01` and
+`UT-DIA-03` retired 2026-08-29, no successor in this module** (`SM-12`,
+`modules/viz/docs/VIZ_Sync_Plan_v0.1.md`, `SW-0273`'s own amended row): its
+Steps compared the CLI and the graphical evidence panel field for field --
+`view/evidence_panel.py` retired with the rest of the Python scene/render/
+player tree, so the second formatter it compared against no longer exists
+in this module. `SYS-0153`/`SYS-0154`'s own 2026-08-20 `AMEND` disposition
+already recorded that the graphical formatter is `viz`'s, cross-module --
+a cross-language field-for-field comparison is `E2E-07`'s own job
+(`modules/viz/docs/VIZ_Sync_Plan_v0.1.md`'s `SM-12` row), not a `sim`-local
+unit test. `ANL-SW-44` (the single-producer static check, unaffected)
+still covers `SW-0273`'s remaining half.
 
 ### 5.18 `SI-18` `session` — superseded (`SM-04`, 2026-08-20)
 

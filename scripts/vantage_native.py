@@ -3,18 +3,17 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""Native Vantage launcher -- what `vantage.bat` now drives by default,
-in place of the retiring Python scene/render/player implementation
-`scripts/vantage.py` used to launch unconditionally (`SM-12`,
-`modules/viz/docs/VIZ_Sync_Plan_v0.1.md`). Drives the real, proven-live
-`vantage_app.exe` (`WP-34`, `docs/v2/SIM_Implementation_Plan_v0.1.md`) --
-a genuine GLFW/ImGui window over the real `viz`/`df_viz` C++ scene/render
-stack, not a second implementation of it.
+"""Native Vantage launcher -- what `vantage.bat` drives. Drives the real,
+proven-live `vantage_app.exe` (`WP-34`,
+`docs/v2/SIM_Implementation_Plan_v0.1.md`) -- a genuine GLFW/ImGui window
+over the real `viz`/`df_viz` C++ scene/render stack, not a second
+implementation of it.
 
-Reuses `vantage.py`'s own `build_parser()` for the argument grammar -- one
-definition of vantage's CLI surface, never a second copy free to drift from
-it (R-BUILD's no-second-implementation principle, applied at CLI-grammar
-granularity).
+`build_parser()` below is this module's own, since `scripts/vantage.py` --
+the retiring Python scene/render/player implementation's launcher, which
+used to own the one CLI-grammar definition this module reused -- is deleted
+(`SM-12`, `modules/viz/docs/VIZ_Sync_Plan_v0.1.md`). This is the one
+grammar definition now; there is no second to drift from it.
 
 **The real, load-bearing gap this file encodes, never silently drops:**
 `vantage_app.exe`'s own positional argument is a *Resolved Run Spec* JSON
@@ -27,27 +26,29 @@ today is `sim resim <recording> --pipeline <p.yaml> [--search ...]
 `adas_sim.cli.resim`), whose `<out.mcap>.spec.json` sidecar is exactly what
 `vantage_app.exe` expects. So:
 
-  - `vantage.py --pipeline ...` (a real RESIM) is served here: this module
-    runs that `sim resim` step for you (reusing `adas_sim.cli.resim.run`,
-    not a second implementation of it), then hands `vantage_app.exe` the
+  - `--pipeline ...` (a real RESIM) is served here: this module runs that
+    `sim resim` step for you (reusing `adas_sim.cli.resim.run`, not a
+    second implementation of it), then hands `vantage_app.exe` the
     resulting spec.json.
-  - `vantage.py`'s *bare replay* (a recording opened with **no**
-    `--pipeline` -- read only what the file already contains, `R-SIM-5`'s
-    own `replay`) has **no native equivalent at all** today:
-    `vantage_app.exe` cannot open a raw recording, full stop. This is a
-    real, structural finding beyond `WP-34`'s own named `--pipeline`/
-    `--search` gap (which is the exe's own argv refusal above, a different
-    thing) -- a bare recording with no matching `.spec.json` sidecar next
-    to it gets a clear, named refusal here, pointing at `--legacy`.
+  - A *bare replay* (a recording opened with **no** `--pipeline` -- read
+    only what the file already contains, `R-SIM-5`'s own `replay`) has **no
+    native equivalent at all** today, now that the Python viewer that used
+    to serve it is deleted: `vantage_app.exe` cannot open a raw recording,
+    full stop. This is a real, structural finding beyond `WP-34`'s own
+    named `--pipeline`/`--search` gap (which is the exe's own argv refusal
+    above, a different thing) -- a bare recording with no matching
+    `.spec.json` sidecar next to it gets a clear, named, permanent refusal
+    here.
 
-`--preset`/`--at`/`--workspace`/`--version` are Python-viewer-only concepts:
-`vantage_app.exe`'s own argv has no flag for any of them (same full read of
-its parsing loop) -- each refuses by name here rather than being silently
-dropped or half-implemented.
+`--preset`/`--at`/`--workspace`/`--version` were Python-viewer-only
+concepts, now gone with it: `vantage_app.exe`'s own argv has no flag for
+any of them (same full read of its parsing loop) -- each refuses by name
+here rather than being silently dropped or half-implemented.
 """
 
 from __future__ import annotations
 
+import argparse
 import os
 import subprocess
 import sys
@@ -63,13 +64,48 @@ for _p in (_SCRIPTS, _SRC):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from vantage import build_parser  # noqa: E402 -- the one CLI-grammar definition
+
+def build_parser() -> argparse.ArgumentParser:
+    """The Vantage CLI grammar -- formerly `scripts/vantage.py`'s own,
+    moved here whole (unchanged) when that file was deleted (`SM-12`).
+    `--preset`/`--at`/`--workspace`/`--version` are still accepted here,
+    not dropped from the grammar, so `build_native_argv` below can name
+    them in a real refusal rather than argparse rejecting them opaquely as
+    unknown flags."""
+    parser = argparse.ArgumentParser(prog="vantage", description=__doc__)
+    parser.add_argument(
+        "--version", action="store_true",
+        help="print the player version and its compatibility statement (S-D5, UT-D5-2), then exit",
+    )
+    parser.add_argument("recording", type=Path, nargs="?")
+    parser.add_argument(
+        "--plugin-root", type=Path, action="append", default=[],
+        help="a component's built library directory (carries sim/plugin.yaml, packed by the build); repeatable",
+    )
+    parser.add_argument("--project", default="base")
+    parser.add_argument("--workspace", type=Path, default=None)
+    parser.add_argument("--preset", default=None)
+    parser.add_argument("--at", type=float, default=None)
+    parser.add_argument(
+        "--pipeline", type=Path, default=None,
+        help="S-D3: shows the pipeline panel and its Run button (sim_implementation_plan.md ST-D3-1)",
+    )
+    parser.add_argument(
+        "--search", type=Path, action="append", default=[],
+        help="a directory to search for --pipeline's dll:/stubdll: stages (repeatable)",
+    )
+    parser.add_argument(
+        "--config", type=Path, default=None,
+        help="config path forwarded to --pipeline's adasInit for a real Run -- same 'adasInit(NULL) bundle "
+             "auto-resolution is not built yet' caveat as sim resim --config",
+    )
+    return parser
 
 
 class NativeUnsupported(RuntimeError):
-    """A real `vantage.py` argument or mode `vantage_app.exe` cannot serve.
-    Always carries a named fix (`--pipeline`, or `--legacy`) -- never a bare
-    refusal."""
+    """A real argument or mode `vantage_app.exe` cannot serve. Always
+    carries a named fix (`--pipeline`) or a plain statement that none
+    exists -- never a bare refusal."""
 
 
 def find_vantage_app_exe() -> Path:
@@ -77,7 +113,7 @@ def find_vantage_app_exe() -> Path:
     `python vantage/scripts/build.py -t sil -p vs2026`) first, `gtest` (the
     shape `WP-33`/`WP-34`'s own verification passes used, and the one that
     also runs `vantage_tests.exe`) second -- the same "check a known build
-    output path first" resolution `vantage.py`/`gui.py` already use for a
+    output path first" resolution `gui.py` already uses for a
     COMPONENT's plug-ins (`_register_plugin_root`), applied here to
     vantage's own binary. TARGET_TYPE defaults to `sil` regardless of which
     of these two Conan targets is built (`vantage/CMakeLists.txt`'s own top
@@ -134,9 +170,9 @@ def _resim_to_spec_json(args, tmp_dir: Path) -> Path:
 
 
 def build_native_argv(args) -> list[str]:
-    """Maps `vantage.py`'s own parsed args onto `vantage_app.exe`'s real
-    argv (`vantage_app.cpp`'s own parsing loop, read in full -- never a
-    guess at its shape)."""
+    """Maps `build_parser()`'s own parsed args onto `vantage_app.exe`'s
+    real argv (`vantage_app.cpp`'s own parsing loop, read in full -- never
+    a guess at its shape)."""
     unsupported = [
         name for name, val in (
             ("--workspace", args.workspace), ("--preset", args.preset), ("--at", args.at),
@@ -147,14 +183,13 @@ def build_native_argv(args) -> list[str]:
     if unsupported:
         raise NativeUnsupported(
             f"{', '.join(unsupported)}: not supported by the native host -- vantage_app.exe's own argv "
-            "has no such flag (confirmed by reading its parsing loop in full). Use --legacy for the "
-            "Python viewer, which still supports it."
+            "has no such flag (confirmed by reading its parsing loop in full), and the Python viewer "
+            "that used to support it is deleted (SM-12) -- no fallback exists."
         )
     if args.recording is None:
         raise NativeUnsupported(
-            "no recording given: vantage_app.exe has no start page (that is a Python-viewer-only "
-            "concept, S-D8) -- pass a recording, or use --legacy to open Vantage's interactive start "
-            "page (recent files, Open Recording..., Probe a Library...)."
+            "no recording given: vantage_app.exe has no start page (that was a Python-viewer-only "
+            "concept, S-D8, deleted with it -- SM-12) -- pass a recording."
         )
     if not args.recording.is_file():
         raise NativeUnsupported(f"no such recording: {args.recording}")
@@ -172,9 +207,9 @@ def build_native_argv(args) -> list[str]:
                 "vantage_app.exe cannot open a bare recording (R-SIM-5's own 'replay', reading only what "
                 "the file already contains) -- its positional argument is always a Resolved Run Spec "
                 "(simEngineCreate's run_spec_json_path), never a raw .mcap, and its own argv refuses "
-                "--pipeline/--search directly (see this module's own top note). Either pass --pipeline "
-                "(and usually --search/--config) so this wrapper can resim it for you, or use --legacy "
-                "for a bare Python replay."
+                "--pipeline/--search directly (see this module's own top note). Pass --pipeline (and "
+                "usually --search/--config) so this wrapper can resim it for you -- the Python viewer "
+                "that used to serve a bare replay is deleted (SM-12), with no native equivalent yet."
             )
 
     exe = find_vantage_app_exe()

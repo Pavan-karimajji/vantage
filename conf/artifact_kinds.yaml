@@ -16,16 +16,17 @@
 # `writers` names the function(s) that produce this kind today, as
 # `path::function`, checked to still exist by `check_artifact_kinds.py`.
 
+# `export` (video clip, `render/clip.py::export_clip`) and `snapshot`
+# (PNG capture, `render/capture.py::snapshot`/`write_pair`) retired
+# 2026-08-29 (`SM-12`, `docs/VIZ_Sync_Plan_v0.1.md`): both kinds' sole
+# writers lived in the Python scene/render/player tree, deleted along with
+# it -- no successor writer exists in this module for either kind.
+
 kinds:
   - name: recording
     cited: false
     writers:
       - src/adas_sim/sources/recorder.py::Recorder
-
-  - name: export
-    cited: false
-    writers:
-      - src/adas_sim/render/clip.py::export_clip
 
   - name: run_manifest
     cited: false
@@ -37,9 +38,3 @@ kinds:
     writers:
       - src/adas_sim/check/report.py::write_report
       - src/adas_sim/orchestrate/batch.py::write_report
-
-  - name: snapshot
-    cited: false
-    writers:
-      - src/adas_sim/render/capture.py::snapshot
-      - src/adas_sim/render/capture.py::write_pair

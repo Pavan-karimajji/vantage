@@ -70,7 +70,7 @@ def test_it15_player_points_at_a_folder_of_libraries_with_no_sibling_checkout(tm
     assert module.REGISTERED is True
     assert sys.path == path_before  # no PYTHONPATH mutation
 
-    # `register_plugin_root` is the same entry point `scripts/vantage.py`/
-    # `cli/render.py` use -- confirms the config/ sibling is returned too.
+    # `register_plugin_root` is the same entry point `scripts/vantage.py`
+    # uses -- confirms the config/ sibling is returned too.
     config_dir = register_plugin_root(library_dir)
     assert config_dir == library_dir / "config"

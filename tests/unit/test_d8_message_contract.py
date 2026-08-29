@@ -17,7 +17,6 @@ from pathlib import Path
 
 import pytest
 
-from adas_sim.player.shell.shell.workspace import CAMPAIGN, WorkspacePermissionError
 from adas_sim.resolve.component import CtypesSilComponent
 from adas_sim.graph.build import Pipeline
 from adas_sim.diagnostics.errors import SimError
@@ -71,16 +70,3 @@ def test_every_induced_failure_names_expected_found_and_where(name, induce, tmp_
     message = str(error)
     assert "expected" in message and "found" in message and "where" in message
     assert len(message.split()) > 5, f"{name}: message reads as a naked identifier: {message!r}"
-
-
-def test_workspace_permission_error_names_the_action_and_the_workspace_not_a_bare_identifier():
-    """`WorkspacePermissionError` is deliberately not a `SimError`
-    (`app/shell/workspace.py`'s own docstring), but the SAME "no naked
-    identifiers" ban applies -- `UT-D8-2` already covers the structured
-    fields; this confirms the FORMATTED message is not just one word."""
-    with pytest.raises(WorkspacePermissionError) as exc_info:
-        CAMPAIGN.require("override a port", allowed=False)
-    message = str(exc_info.value)
-    assert len(message.split()) > 5
-    assert "override a port" in message
-    assert "campaign" in message

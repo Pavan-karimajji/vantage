@@ -211,22 +211,20 @@ def check_gt11(superproject_root: Path = SUPERPROJECT_ROOT) -> list[str]:
 
 def check_ut_d8_9(src_root: Path = SRC_ROOT) -> list[str]:
     """`UT-D8-9` (`S-D8`) -- no `Vantage`/`Bench`/`Campaign` token anywhere
-    in `adas_sim/` outside `player/shell/` (`sim_player.md`'s own naming
-    rule: "no workspace name appears in `adas_sim/` outside `app/`" -- the
-    engine must not know which workspace is open, same discipline `GT-1`
-    applies to a driving function's name). `app/` became `player/shell/` at
-    `WP-02`'s rename (Design §2.3); the exemption moved with it. Scoped
-    exactly like `GT-2`/`GT-3` scope to their own subtrees -- everything
-    under `src_root` except `player/shell/` itself, which is the one place
-    these tokens are the whole point."""
+    in `adas_sim/` (`sim_player.md`'s own naming rule: "no workspace name
+    appears in `adas_sim/` outside `app/`" -- the engine must not know
+    which workspace is open, same discipline `GT-1` applies to a driving
+    function's name). **The `player/shell/` exemption retired with it**
+    (`SM-12`, `docs/VIZ_Sync_Plan_v0.1.md`): the Python workspace concept
+    (`Workspace`/`BENCH`/`CAMPAIGN`) no longer exists in this tree at all --
+    `viz`'s own C++ `WorkspaceMode` is the live equivalent, in a different
+    repo this check does not scan -- so the rule is now unconditional over
+    every file `src_root` names."""
     findings = []
-    app_dir = (src_root / "player" / "shell").resolve()
     for path in _iter_py_files(src_root):
-        if app_dir in path.resolve().parents or path.resolve() == app_dir:
-            continue
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             if _WORKSPACE_TOKENS.search(line):
-                findings.append(f"UT-D8-9 {path}:{lineno}: workspace/product token outside app/: {line.strip()!r}")
+                findings.append(f"UT-D8-9 {path}:{lineno}: workspace/product token found: {line.strip()!r}")
     return findings
 
 

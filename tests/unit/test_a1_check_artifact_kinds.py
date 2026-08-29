@@ -27,7 +27,10 @@ def _write(root: Path, rel: str, text: str) -> None:
 def test_check_artifact_kinds_passes_on_the_real_conf_file():
     findings, checked = check_artifact_kinds()
     assert findings == []
-    assert checked == 5
+    # 3 kinds, down from 5 (was recording/export/run_manifest/report/snapshot;
+    # export/snapshot retired 2026-08-29 with the Python scene/render/player
+    # tree that wrote them, SM-12) -> recording/run_manifest/report.
+    assert checked == 3
 
 
 def test_check_artifact_kinds_reports_missing_yaml(tmp_path):

@@ -21,7 +21,6 @@ import pytest
 
 from adas_sim.pyapi import API_VERSION, Api, ArrayView, StaleViewError
 from adas_sim.diagnostics.evidence import evidence, format_evidence
-from adas_sim.player.panels.evidence_panel import EvidencePanelState
 from adas_sim.resolve.component import ADAS_SIL_ABI_VERSION
 from adas_sim.resolve.plugins import SUPPORTED_PLUGIN_API_MAX
 from adas_sim.session.session import Session
@@ -234,18 +233,21 @@ def test_every_diagnostic_is_callable_from_the_api_with_a_structured_result():
 # ---------------------------------------------------------------------------
 
 
-def test_explain_signal_matches_the_cli_and_gui_answers_field_for_field():
+def test_explain_signal_matches_the_cli_answer_field_for_field():
+    """`UT-DIA-15`'s own graphical-panel leg retired with the rest of the
+    Python scene/render/player tree (`SM-12`,
+    `modules/viz/docs/VIZ_Sync_Plan_v0.1.md`) -- the CLI comparison and the
+    "no third derivation" proof below are what remain of it."""
     session = _session_with_port()
     api = Api()
 
     for address in (session.run_id, _PORT, "no-such-address"):
         scripted = api.explain_signal(address, session, 0)
         cli_record = evidence(address, session, 0)
-        panel_rows = EvidencePanelState(session).view_for(address, 0).rows
 
         assert scripted == cli_record
-        assert format_evidence(scripted) == format_evidence(cli_record) == panel_rows
+        assert format_evidence(scripted) == format_evidence(cli_record)
 
-    # No third derivation: `explain_signal` is `evidence()` itself.
+    # No second derivation: `explain_signal` is `evidence()` itself.
     src = inspect.getsource(Api.explain_signal)
     assert "return evidence(address, session, tick)" in src

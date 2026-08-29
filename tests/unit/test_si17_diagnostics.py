@@ -34,7 +34,6 @@ from adas_sim.diagnostics.explain import DryRun, dry_run, explain, injection_bou
 from adas_sim.diagnostics.summary import format_summary, reconciles, summarize
 from adas_sim.diagnostics.tap import Tap, parse_taps, resolve_taps
 from adas_sim.diagnostics.tolerance import ToleranceRow, ToleranceSet
-from adas_sim.player.panels.evidence_panel import EvidencePanelState
 from adas_sim.resolve.component import ComponentManifest, PortSpec
 from adas_sim.session.session import Session
 from adas_sim.session.tick import Pose2D, PortValue, Tick
@@ -110,15 +109,6 @@ def _session_with_port() -> Session:
         pose=_POSE,
     )
     return Session(run_id="run-si17", name="s", ticks=(tick,), meta=RunManifest(), known_ports=frozenset({_PORT}))
-
-
-def test_gui_panel_and_cli_formatter_produce_field_for_field_identical_output():
-    session = _session_with_port()
-    for address in (session.run_id, _PORT, "no-such-address"):
-        panel = EvidencePanelState(session)
-        gui_rows = panel.view_for(address, 0).rows
-        cli_rows = format_evidence(evidence(address, session, 0))
-        assert gui_rows == cli_rows
 
 
 def _load_check_evidence_single_producer():

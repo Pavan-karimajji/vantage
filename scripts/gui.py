@@ -4,15 +4,17 @@
 # @author Pavan Karimajji
 
 """Vantage launcher -- the front door to `scripts/vantage_native.py` (real
-`vantage_app.exe`, `WP-34`) and, via the "Legacy Python viewer" checkbox,
-`scripts/vantage.py` / the `sim` CLI (the retiring Python scene/render/
-player implementation, `SM-12`, gated separately -- see `modules/sim/CLAUDE.md`).
+`vantage_app.exe`, `WP-34`).
 
-`vantage.bat` with no arguments opens this (`vantage.bat --legacy` opens it
-with the checkbox pre-checked); with direct arguments it goes straight
-through to `vantage_native.py` (or, with `--legacy`, `vantage.py`), so every
-script, CI job and documented command line keeps working exactly as before
-this pass -- this screen's own default just changed to match.
+`vantage.bat` with no arguments opens this; with direct arguments it goes
+straight through to `vantage_native.py`.
+
+**No "Legacy Python viewer" checkbox any more** (`SM-12`,
+`docs/VIZ_Sync_Plan_v0.1.md`): `scripts/vantage.py` and the Python scene/
+render/player implementation it launched are deleted. A bare replay (no
+`--pipeline`) and `--preset`/`--at`/`--workspace`/`--version` have no
+native equivalent yet -- `vantage_native.py`'s own docstring names this gap
+plainly rather than a fallback pretending to cover it.
 
 **Why a launcher exists at all.** Vantage has a real argument surface --
 recording, plug-in root, project, preset, start time, pipeline, search path,
@@ -34,27 +36,21 @@ This can.
    a GUI that builds an invocation you cannot see or reproduce is a GUI you
    have to trust. This one you can paste into a terminal.
 
-3. **It never re-implements a verb.** Every button spawns `vantage.py` or
-   `sim <verb>` as a subprocess. There is no second code path that could
+3. **It never re-implements a verb.** Every button spawns `vantage_native.py`
+   or `sim <verb>` as a subprocess. There is no second code path that could
    disagree with the CLI (`GT-9` -- `app/`/`cli/` hold no logic; this is
    dev tooling one level further out, and the same rule applies harder).
 
-**The plug-in-root validator is the point of the whole screen** (`AR-61`). A
-component's plug-ins can be loaded from two places and they are *not*
-equivalent today:
-
-  - a **source checkout** (`modules/df`) -- works;
-  - a **deployed copy** beside the built DLL -- **crashes** `bsd.zone` with a
-    `FileNotFoundError` on `<root>/src/project/<project>/default.yaml`, because
-    `ctx.model.bundle_dir` resolves to `None` there and the layer falls back to
-    a source-tree-shaped path that cannot exist under a deployed root. The
-    exception is swallowed on the render thread, so the symptom is an **empty
-    layer tree and no error**.
-
-`R-SIM-20` says the deployed copy is the one that should work, and one day it
-will. Until `AR-61` closes, this screen refuses to let you discover that at
-tick 0: it inspects whatever you pick and says which kind it is, in words,
-before you launch.
+**The plug-in-root validator is the point of the whole screen.** The native
+host (`vantage_app.exe`) never had `AR-61`'s own source-checkout-vs-deployed
+failure mode -- that was a Python-viewer-only bug (`ctx.model.bundle_dir`
+falling back to a source-tree-shaped path that does not exist under a
+deployed root, `df/sim/layers/bsd.py`), retired along with the Python viewer
+(`SM-12`). What this screen validates now is `classify_plugin_root`'s own
+real, still-live distinction: a component's DEPLOYED tree carries two
+different built libraries side by side (SIL compute vs. VIZ), and only one
+of them is what `vantage_app.exe` can actually load -- it inspects whatever
+you pick and says which kind it is, in words, before you launch.
 """
 
 from __future__ import annotations
@@ -71,7 +67,6 @@ from tkinter.scrolledtext import ScrolledText
 
 SIM_DIR = Path(__file__).resolve().parent.parent
 MODULES_DIR = SIM_DIR.parent
-VANTAGE_PY = SIM_DIR / "scripts" / "vantage.py"
 VANTAGE_NATIVE_PY = SIM_DIR / "scripts" / "vantage_native.py"
 CONFIG_PATH = SIM_DIR / "scripts" / "gui_config.json"
 
@@ -143,31 +138,25 @@ def _exports_viz_abi(dll_path: Path) -> bool:
         return False
 
 
-def classify_plugin_root(root: str | Path, *, native: bool = False) -> tuple[str, str]:
-    """`(state, message)` for a chosen plug-in root -- `ok` / `warn` / `bad`.
+def classify_plugin_root(root: str | Path) -> tuple[str, str]:
+    """`(state, message)` for a chosen plug-in root -- `ok` / `warn` / `bad`,
+    against `vantage_app.exe` (`WP-34`), the only host left since the
+    Python viewer's own `AR-61` plug-in-root check retired with it (`SM-12`,
+    `docs/VIZ_Sync_Plan_v0.1.md`).
 
-    Two different questions depending on which host will load it:
-
-    `native=False` (the Python viewer, `vantage.py`/`--legacy`): encodes
-    `AR-61` so it cannot be tripped over. The distinguishing fact is not the
-    path's shape but whether `src/project/` is reachable from it, because
-    that is exactly what `df/sim/layers/bsd.py` falls back to reading when
-    `ctx.model.bundle_dir` is `None`.
-
-    `native=True` (`vantage_app.exe`, `WP-34`): `AR-61` does not apply --
-    the C++ host has no such fallback path at all. But a component's
-    DEPLOYED tree carries *two* different built libraries side by side
-    (e.g. `df_sil.dll`, the SUT compute engine, and `df_viz.dll`, the real
-    viz plugin) and `sim/plugin.yaml` sits beside BOTH of them (it is the
-    Python-plugin descriptor, unrelated to the native ABI) -- so "does this
-    directory have a `.dll`" is not enough to tell them apart. Verified
-    live: pointing `vantage_app.exe --plugin-root` at an SUT-only directory
-    (`df_sil`'s own) loads, never paints a window and exits -- the exact
-    silent-looking failure a good check exists to catch before launch. The
-    real distinguishing fact, also verified live: only the real viz plugin
-    exports `vizManifest`/`vizAbiVersion` -- a `ctypes` probe of the DLL's
-    own export table, generic across any component (no name in this check),
-    not a guess from the directory's shape.
+    A component's DEPLOYED tree carries *two* different built libraries
+    side by side (e.g. `df_sil.dll`, the SUT compute engine, and
+    `df_viz.dll`, the real viz plugin) and `sim/plugin.yaml` sits beside
+    BOTH of them (it is the Python-plugin descriptor, unrelated to the
+    native ABI) -- so "does this directory have a `.dll`" is not enough to
+    tell them apart. Verified live: pointing `vantage_app.exe --plugin-root`
+    at an SUT-only directory (`df_sil`'s own) loads, never paints a window
+    and exits -- the exact silent-looking failure a good check exists to
+    catch before launch. The real distinguishing fact, also verified live:
+    only the real viz plugin exports `vizManifest`/`vizAbiVersion` -- a
+    `ctypes` probe of the DLL's own export table, generic across any
+    component (no name in this check), not a guess from the directory's
+    shape.
 
     Takes `str | Path` and tests emptiness on the **string**: `Path("")` is
     `Path(".")`, which is a real, existing directory, so a `Path`-only
@@ -183,36 +172,27 @@ def classify_plugin_root(root: str | Path, *, native: bool = False) -> tuple[str
         return "bad", f"Not a directory: {root}"
     if not (root / PLUGIN_MARKER).is_file():
         return "bad", f"No {PLUGIN_MARKER.as_posix()} here -- this is not a plug-in root."
-    if native:
-        libs = sorted(root.glob("*.dll")) + sorted(root.glob("*.so"))
-        if not libs:
-            return (
-                "bad",
-                "No built library (.dll/.so) here -- the native host cannot load a bare source "
-                "checkout. Point it at the DEPLOYED build directory of the component's OWN VIZ "
-                "target (e.g. ..\\df\\build-sil_viz-vs2026\\src\\platform\\df_viz\\Release).",
-            )
-        viz_libs = [lib for lib in libs if _exports_viz_abi(lib)]
-        if viz_libs:
-            return (
-                "ok",
-                f"Deployed build directory carrying a real viz plugin ({viz_libs[0].name}) -- the "
-                "form vantage_app.exe needs, verified live (WP-34).",
-            )
+    libs = sorted(root.glob("*.dll")) + sorted(root.glob("*.so"))
+    if not libs:
         return (
             "bad",
-            f"{libs[0].name} does not export vizManifest/vizAbiVersion -- this looks like a compute "
-            "(SIL) build, not the component's VIZ build. Verified live: pointing the native host at "
-            "an SUT-only directory loads, never paints a window, and exits. Point it at the "
-            "component's own <name>_viz build directory instead.",
+            "No built library (.dll/.so) here -- the native host cannot load a bare source "
+            "checkout. Point it at the DEPLOYED build directory of the component's OWN VIZ "
+            "target (e.g. ..\\df\\build-sil_viz-vs2026\\src\\platform\\df_viz\\Release).",
         )
-    if (root / "src" / "project").is_dir():
-        return "ok", f"Source checkout -- verified working. Layers load from {root.name}/sim/."
+    viz_libs = [lib for lib in libs if _exports_viz_abi(lib)]
+    if viz_libs:
+        return (
+            "ok",
+            f"Deployed build directory carrying a real viz plugin ({viz_libs[0].name}) -- the "
+            "form vantage_app.exe needs, verified live (WP-34).",
+        )
     return (
-        "warn",
-        "DEPLOYED copy (no src/project/). Known to crash bsd.zone with a swallowed "
-        "FileNotFoundError -- you get an EMPTY layer tree and no message (AR-61). "
-        "Prefer the source checkout until that closes.",
+        "bad",
+        f"{libs[0].name} does not export vizManifest/vizAbiVersion -- this looks like a compute "
+        "(SIL) build, not the component's VIZ build. Verified live: pointing the native host at "
+        "an SUT-only directory loads, never paints a window, and exits. Point it at the "
+        "component's own <name>_viz build directory instead.",
     )
 
 
@@ -229,10 +209,13 @@ def classify_plugin_root(root: str | Path, *, native: bool = False) -> tuple[str
 #: pipeline `sut.pipeline: df_only` names.
 FIELD_HELP: dict[str, tuple[str, str]] = {
     "recording": (
-        "…/df/tests/carla_testruns/bsd/bsd_ego_lane_exit.mcap    (optional)",
+        "…/df/tests/carla_testruns/bsd/bsd_ego_lane_exit.mcap",
         "The .mcap to open.\n\n"
-        "LEAVE EMPTY to get Vantage's start page (recent files, Open Recording…, "
-        "Probe a Library…) instead of a recording.\n\n"
+        "vantage_app.exe (the only host left since SM-12 deleted the Python "
+        "viewer) has no start page and no bare-replay mode -- it needs a "
+        "--pipeline too (this screen runs sim resim for you and hands it the "
+        "result). LEAVING THIS EMPTY refuses with a named error rather than "
+        "opening onto a Python-viewer start page that no longer exists.\n\n"
         "The dropdown lists your recent files first, then every .mcap under "
         "modules/*/tests/**, newest first.",
     ),
@@ -261,26 +244,29 @@ FIELD_HELP: dict[str, tuple[str, str]] = {
     ),
     "preset": (
         "close                                     (or: wide)",
-        "Starting viewport zoom. Exactly two exist:\n\n"
+        "NO LONGER FUNCTIONAL: vantage_app.exe (the only host left since "
+        "SM-12 deleted the Python viewer) has no --preset flag and refuses "
+        "it by name, so this field is dropped from the command below.\n\n"
+        "Starting viewport zoom, when it worked. Exactly two existed:\n\n"
         "  close  -- tight around the ego, for zone/warning work\n"
-        "  wide   -- more of the road, for approach and cut-in\n\n"
-        "LEAVE EMPTY for the default. You can pan and zoom once it is open, so "
-        "this only sets where you start.",
+        "  wide   -- more of the road, for approach and cut-in",
     ),
     "at_s": (
         "0                                          (seconds)",
-        "Seconds into the recording to open at -- NOT a tick number.\n\n"
-        "LEAVE EMPTY to start at 0. Useful when you already know roughly when "
-        "the interesting thing happens (e.g. 5 for bsd_ego_lane_exit).",
+        "NO LONGER FUNCTIONAL: vantage_app.exe (the only host left since "
+        "SM-12 deleted the Python viewer) has no --at flag and refuses it "
+        "by name, so this field is dropped from the command below.\n\n"
+        "Seconds into the recording to open at, when it worked -- NOT a "
+        "tick number.",
     ),
     "pipeline": (
-        "..\\df\\sim\\pipelines\\df_only.yaml      (only to RESIM)",
+        "..\\df\\sim\\pipelines\\df_only.yaml      (required, native host)",
         "A pipeline makes this a RESIM -- the component's DLL is re-executed "
         "against the recording, so its outputs (and its layers) actually exist.\n\n"
         "Real one here: ..\\df\\sim\\pipelines\\df_only.yaml\n\n"
-        "LEAVE EMPTY to REPLAY: you see only what the file already contains. A "
-        "stimulus-only recording then shows bsd.warning as (unavailable) -- that "
-        "is correct, not a bug.\n\n"
+        "REQUIRED for vantage_app.exe: it takes a Resolved Run Spec, not a raw "
+        ".mcap, so this screen runs sim resim for you first -- a bare REPLAY "
+        "(no pipeline) has no native equivalent and refuses with a named error.\n\n"
         "If you set this, you almost certainly need --search and --config too.",
     ),
     "search": (
@@ -374,21 +360,16 @@ def save_cfg(**updates) -> None:
 
 
 def vantage_recent_files() -> list[Path]:
-    """Vantage's OWN recent-file list, when it is readable.
+    """The Python viewer's own recent-file list -- always empty now.
 
-    Read through `app.shell.startpage.load_recent_files` rather than
-    reconstructing its path: that store lives under
-    `render.viewer._config_root()`, which is `QStandardPaths`-derived (`P-7`),
-    and hand-rolling the same path here would be the drifting second copy this
-    project refuses everywhere. It needs Qt, so it is **best effort** -- the
-    launcher's whole point is working without it.
+    `app.shell.startpage.load_recent_files` retired with the rest of the
+    Python scene/render/player tree (`SM-12`, `docs/VIZ_Sync_Plan_v0.1.md`);
+    `vantage_app.exe` (the only host left) keeps no such list today. Kept as
+    a function, not inlined to `[]`, so the one call site below need not
+    change if a native recent-files store ever exists -- **best effort**,
+    same discipline as before.
     """
-    try:
-        sys.path.insert(0, str(SIM_DIR / "src"))
-        from adas_sim.player.shell.shell.startpage import load_recent_files
-        return list(load_recent_files())
-    except Exception:                                        # noqa: BLE001
-        return []
+    return []
 
 
 # --------------------------------------------------------------------------
@@ -443,7 +424,7 @@ class ProcessRunner:
 # --------------------------------------------------------------------------
 
 class LauncherApp:
-    def __init__(self, root: tk.Tk, legacy_default: bool = False):
+    def __init__(self, root: tk.Tk):
         self.root = root
         root.title("Vantage launcher")
         root.geometry("1000x760")
@@ -461,9 +442,6 @@ class LauncherApp:
         self.pipeline = tk.StringVar(value=cfg.get("pipeline", ""))
         self.search = tk.StringVar(value=cfg.get("search", ""))
         self.config_path = tk.StringVar(value=cfg.get("config_path", ""))
-        # Default OFF (native, `vantage_app.exe`, `WP-34`) unless the config
-        # already had it on, or `vantage.bat --legacy` asked for it.
-        self.legacy = tk.BooleanVar(value=bool(cfg.get("legacy", False)) or legacy_default)
         #: The measured/simulated toggle. Deliberately NOT persisted to
         #: `gui_config.json`: which module you injected last time is not a
         #: preference, and silently reopening in `measured` would be exactly
@@ -479,7 +457,7 @@ class LauncherApp:
         self._derived_note: str = ""
 
         for var in (self.recording, self.plugin_root, self.project, self.preset,
-                    self.at_s, self.pipeline, self.search, self.config_path, self.legacy,
+                    self.at_s, self.pipeline, self.search, self.config_path,
                     self.stage, self.mode):
             var.trace_add("write", lambda *_: self._refresh())
 
@@ -538,9 +516,6 @@ class LauncherApp:
                 widget = ttk.Combobox(box, textvariable=var, width=width, values=choices)
             widget.pack(side="left", pady=6)
             self._help(widget, key)
-        ttk.Checkbutton(
-            box, text="Legacy Python viewer (--legacy)", variable=self.legacy,
-        ).pack(side="left", padx=(16, 6), pady=6)
 
         # --- advanced ------------------------------------------------------
         adv = ttk.LabelFrame(outer, text="Pipeline  —  only needed to RESIM (compute stage outputs)")
@@ -774,18 +749,15 @@ class LauncherApp:
 
     def build_argv(self) -> list[str]:
         # `vantage_native.py` refuses `--preset`/`--at` by name (no native
-        # equivalent, `vantage_native.py`'s own top note) -- omitted from
-        # the native command entirely rather than built and then rejected,
-        # since a field this screen still shows for the legacy case would
-        # otherwise silently produce a doomed command by default.
-        legacy = self.legacy.get()
-        argv = [sys.executable, str(VANTAGE_PY if legacy else VANTAGE_NATIVE_PY)]
+        # equivalent, `vantage_native.py`'s own top note, permanent since
+        # `SM-12` deleted the Python viewer that used to serve them) --
+        # omitted from the command entirely rather than built and then
+        # rejected.
+        argv = [sys.executable, str(VANTAGE_NATIVE_PY)]
         if self.recording.get().strip():
             argv.append(self.recording.get().strip())
-        flags = [("--plugin-root", self.plugin_root), ("--project", self.project)]
-        if legacy:
-            flags += [("--preset", self.preset), ("--at", self.at_s)]
-        flags += [("--search", self.search), ("--config", self.config_path)]
+        flags = [("--plugin-root", self.plugin_root), ("--project", self.project),
+                  ("--search", self.search), ("--config", self.config_path)]
         for flag, var in flags:
             value = var.get().strip()
             if value:
@@ -801,12 +773,12 @@ class LauncherApp:
 
     def _refresh(self) -> None:
         self._resolve_mode()
-        state, message = classify_plugin_root(self.plugin_root.get(), native=not self.legacy.get())
+        state, message = classify_plugin_root(self.plugin_root.get())
         colour = {"ok": "#1a7f37", "warn": "#9a6700", "bad": "#b3261e"}[state]
         prefix = {"ok": "OK", "warn": "WARNING", "bad": "ERROR"}[state]
-        if not self.legacy.get() and (self.preset.get().strip() or self.at_s.get().strip()):
-            message += (' Note: --preset/--at have no native equivalent and are dropped from this '
-                        'command -- check "Legacy Python viewer" to use them.')
+        if self.preset.get().strip() or self.at_s.get().strip():
+            message += (' Note: --preset/--at have no native equivalent (vantage_app.exe refuses '
+                        'them by name) and are dropped from this command.')
         self.root_status.configure(text=f"{prefix}:  {message}", foreground=colour)
         # Green only when a mode is actually in force and wrote a config;
         # amber for anything that stopped it, so a mode that did NOT take
@@ -831,11 +803,11 @@ class LauncherApp:
         save_cfg(recording=self.recording.get(), plugin_root=self.plugin_root.get(),
                  project=self.project.get(), preset=self.preset.get(), at_s=self.at_s.get(),
                  pipeline=self.pipeline.get(), search=self.search.get(),
-                 config_path=self.config_path.get(), legacy=self.legacy.get())
+                 config_path=self.config_path.get())
 
     def launch_vantage(self) -> None:
         self._persist()
-        state, message = classify_plugin_root(self.plugin_root.get(), native=not self.legacy.get())
+        state, message = classify_plugin_root(self.plugin_root.get())
         if state == "bad":
             self._log(f"Refusing to launch -- {message}\n")
             return
@@ -894,17 +866,12 @@ class LauncherApp:
 
 
 def main() -> int:
-    # `vantage.bat --legacy` (no further args) forwards this one flag so
-    # the picker opens with "Legacy Python viewer" pre-checked -- the same
-    # opt-in this launcher's own direct-args path honours (vantage.bat's
-    # own docstring).
-    legacy_default = "--legacy" in sys.argv[1:]
     root = tk.Tk()
     try:
         ttk.Style().theme_use("vista" if sys.platform == "win32" else "clam")
     except tk.TclError:
         pass
-    LauncherApp(root, legacy_default=legacy_default)
+    LauncherApp(root)
     root.mainloop()
     return 0
 

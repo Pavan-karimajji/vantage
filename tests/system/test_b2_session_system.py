@@ -3,7 +3,13 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""S-B2 system tests: ST-B2-1, ST-B2-2, ST-B2-3 (docs/sim_implementation_plan.md)."""
+"""S-B2 system tests: ST-B2-1, ST-B2-2 (docs/sim_implementation_plan.md).
+
+**`ST-B2-3` (rewind/recompute-from-zero, exercised through
+`player.panels.transport.Transport`) retired with it** (`SM-12`,
+`docs/VIZ_Sync_Plan_v0.1.md`): that panel-state module was part of the
+Python scene/render/player tree. `R-SIM-17`'s own rewind/recompute rule is
+`viz`'s own C++ player's concern now, not this module's."""
 
 from __future__ import annotations
 
@@ -16,7 +22,6 @@ import pytest
 from adas_sim.core.runner import build_session_from_recording
 from adas_sim.session.session import Session
 from adas_sim.session.tick import Pose2D, PortValue, Tick
-from adas_sim.player.panels.transport import ResumeOption, Transport
 
 SIM_ROOT = Path(__file__).resolve().parent.parent.parent
 MODULES_ROOT = SIM_ROOT.parent
@@ -63,49 +68,3 @@ def test_pass_1_over_the_largest_existing_recording_is_timed_not_asserted():
 
     print(f"\nST-B2-2: pass 1 over {largest.name} ({len(session)} ticks) took {elapsed_s:.3f}s")
     assert len(session) > 0
-
-
-def test_rewind_then_recompute_from_zero_is_exact():
-    """ST-B2-3: recomputing to tick N reproduces the original tick N
-    byte-for-byte on a deterministic resim.
-
-    **Scoping note.** In Phase B there is no real SUT execution yet (no C++,
-    no DLL) -- `Session.ticks` is pre-built once from the recording and never
-    mutated, so `session.at(150) == session.at(150)` would hold trivially
-    even with a broken `Transport`. What is genuinely testable now is that
-    `resume(RECOMPUTE_FROM_ZERO)` drives a **deterministic re-execution
-    sequence**: the exact same positions, in the exact same order, on the
-    second pass as the first. The stronger claim -- that re-*computed* tick
-    data is byte-identical -- needs a real pipeline that can produce new
-    data on each run, which does not exist until `S-C1+`.
-    """
-    session = _make_session(200)
-    visited: list[int] = []
-
-    class RecordingExec:
-        def __init__(self) -> None:
-            self.position = 0
-
-        def __call__(self, n, on_progress, cancel) -> int:
-            target = min(self.position + n, len(session) - 1)
-            while self.position < target and not cancel.cancelled:
-                self.position += 1
-                visited.append(self.position)
-                on_progress(self.position, target)
-            return self.position
-
-    exec_fn = RecordingExec()
-    transport = Transport(session, exec_fn)
-    transport.advance(150)
-    first_pass_sequence = list(visited)
-
-    transport.step_back(50)
-    transport.resume(ResumeOption.RECOMPUTE_FROM_ZERO)
-    assert transport.head_tick == 0 and transport.cursor == 0
-    exec_fn.position = 0  # a real SUT resets its own state on recompute
-    visited.clear()
-    transport.advance(150)
-    second_pass_sequence = list(visited)
-
-    assert second_pass_sequence == first_pass_sequence
-    assert transport.head_tick == 150

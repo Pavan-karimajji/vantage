@@ -4,12 +4,12 @@
 # @author Pavan Karimajji
 
 """`scripts/vantage_native.py`'s real refusal discipline (`SW-0428`,
-`WP-34a`) -- every `vantage.py` argument or mode `vantage_app.exe` cannot
-serve refuses by name, pointing at `--legacy`, never silently dropped or
-half-implemented. Subprocess, the real entry point, same reasoning
-`test_d5_vantage_cli.py`'s own top note gives for `vantage.py` itself
-(`sys.path` mutation at import time makes an in-process import leak
-across tests in one file).
+`WP-34a`) -- every argument or mode `vantage_app.exe` cannot serve refuses
+by name, never silently dropped or half-implemented (no `--legacy` fallback
+exists any more -- `scripts/vantage.py`, the retiring Python scene/render/
+player launcher, is deleted, `SM-12`). Subprocess, the real entry point:
+`sys.path` mutation at import time makes an in-process import leak across
+tests in one file.
 
 These are the pure-argv-mapping paths -- no `vantage_app.exe` build, no
 window, no `sim resim` subprocess -- so they run in this WSL sandbox with
@@ -39,11 +39,10 @@ def _run(*args: str) -> subprocess.CompletedProcess:
     )
 
 
-def test_workspace_flag_refuses_by_name_pointing_at_legacy():
+def test_workspace_flag_refuses_by_name():
     result = _run(str(_FIXTURE_MCAP), "--workspace", "bench")
     assert result.returncode == 1
     assert "--workspace" in result.stderr
-    assert "--legacy" in result.stderr
 
 
 def test_preset_and_at_flags_both_named_in_one_refusal():
@@ -51,21 +50,18 @@ def test_preset_and_at_flags_both_named_in_one_refusal():
     assert result.returncode == 1
     assert "--preset" in result.stderr
     assert "--at" in result.stderr
-    assert "--legacy" in result.stderr
 
 
 def test_version_flag_refuses_by_name():
     result = _run("--version")
     assert result.returncode == 1
     assert "--version" in result.stderr
-    assert "--legacy" in result.stderr
 
 
 def test_no_recording_refuses_naming_the_start_page_concept():
     result = _run()
     assert result.returncode == 1
     assert "no recording" in result.stderr.lower()
-    assert "--legacy" in result.stderr
 
 
 def test_nonexistent_recording_refuses_with_the_real_path():
@@ -80,7 +76,6 @@ def test_bare_recording_with_no_pipeline_and_no_sidecar_refuses_naming_r_sim_5(t
     result = _run(str(recording))
     assert result.returncode == 1
     assert "--pipeline" in result.stderr
-    assert "--legacy" in result.stderr
 
 
 def test_find_vantage_app_exe_prefers_sil_over_gtest_build(tmp_path, monkeypatch):

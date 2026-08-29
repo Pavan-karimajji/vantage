@@ -6,18 +6,18 @@
 """The facts behind `sim explain` (`DG-2`), kept out of `cli/` (`GT-9`) so they
 are reachable from a plain script.
 
-Resolves a `run_id`, topic, layer id, codec name or error code, with fuzzy
-"did you mean" on a miss (`N-8`, `UT-D6-7`).
+Resolves a `run_id`, topic, codec name or error code, with fuzzy "did you
+mean" on a miss (`N-8`, `UT-D6-7`).
 
-**A style token is deliberately not resolved here.** `render/theme.py` sits
-above `core/` in the package map (enforced by `UT-A1-6`'s import-direction
-test), so this module cannot import it. `cli/explain.py`, which may import
-`render/`, checks style tokens and extends the "did you mean" list with them.
+**No `"layer"` kind any more.** Resolving a registered layer id retired with
+`adas_sim.scene.registry` (`SM-12`, `docs/VIZ_Sync_Plan_v0.1.md`) -- no
+Python layer provider can register one any more. **No style-token
+resolution either** -- `render/theme.py`, the module `cli/explain.py` used
+to import for it, retired the same way.
 """
 
 from __future__ import annotations
 
-import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,7 +28,6 @@ from adas_sim.diagnostics.estimate import DurationEstimate, Shape, estimate_dura
 from adas_sim.diagnostics.suggest import near_matches
 from adas_sim.session.session import Session
 from adas_sim.plugins.registry import codec_info, registered_extensions
-from adas_sim.scene.registry import registered_providers
 
 #: DG-5's closed error taxonomy (`sim_naming_and_diagnostics.md`), matched
 #: by taxonomy name (`"authoring"`), class name with or without the
@@ -66,16 +65,11 @@ def _match_error_kind(name: str) -> str | None:
 
 def known_names(session: Session, *, config: ResolvedConfig | None = None) -> list[str]:
     """Every core-level name `explain` can resolve, for the fuzzy "did you
-    mean" when nothing matches exactly. Public: `cli/explain.py` extends
-    this with style-token names and re-runs `difflib` over the COMBINED
-    list for its own "did you mean" -- ranking two separately-truncated
-    match lists by merging and re-sorting them alphabetically would throw
-    away `difflib`'s own similarity order (found the hard way, see that
-    module's own comment)."""
+    mean" when nothing matches exactly. Public: `cli/explain.py` re-runs
+    `difflib` over this list for its own "did you mean"."""
     topics = list(session.ticks[0].ports) if session.ticks else []
-    layers = list(registered_providers())
     config_leaves = [leaf for leaves in (config.resolved.values() if config else ()) for leaf in leaves]
-    return [session.run_id, *topics, *layers, *registered_extensions(), *_ERROR_TAXONOMY, *config_leaves]
+    return [session.run_id, *topics, *registered_extensions(), *_ERROR_TAXONOMY, *config_leaves]
 
 
 def explain(name: str, session: Session, *, config: ResolvedConfig | None = None) -> dict[str, object]:
@@ -106,33 +100,6 @@ def explain(name: str, session: Session, *, config: ResolvedConfig | None = None
             "origin": port_value.origin,
         }
 
-    providers = registered_providers()
-    if name in providers:
-        entry = providers[name]
-        result: dict[str, object] = {
-            "kind": "layer",
-            "name": name,
-            "module": entry.module,
-            "qualname": entry.qualname,
-        }
-        # S-C8's own remaining item: report the plug-in PATH a layer's
-        # module actually loaded from. `PluginBundle.import_modules()`
-        # names every plug-in module `_adas_plugin.<component>.<dotted>`
-        # (its own docstring on why, R-SIM-1's collision-free-import
-        # discipline) -- that module is already in sys.modules by the time
-        # it could register a provider at all, and importlib set its real
-        # resolved __file__ at import time (spec_from_file_location).
-        # A layer registered by the framework's own first-party code
-        # (module not under _adas_plugin, e.g. a test fixture) has no
-        # plug-in bundle to report -- both fields stay absent rather than
-        # guessed (R-SIM-25, NR-SIM-4).
-        module_parts = entry.module.split(".")
-        if len(module_parts) >= 2 and module_parts[0] == "_adas_plugin":
-            result["plugin_component"] = module_parts[1]
-            loaded_module = sys.modules.get(entry.module)
-            result["plugin_path"] = getattr(loaded_module, "__file__", None) or "unknown"
-        return result
-
     ext = name if name.startswith(".") else f".{name}"
     info = codec_info(ext)
     if info is not None:
@@ -156,7 +123,7 @@ def explain(name: str, session: Session, *, config: ResolvedConfig | None = None
     return {
         "kind": "unknown",
         "name": name,
-        "searched": ["run_id", "topics", "registered layers", "codecs", "error codes"],
+        "searched": ["run_id", "topics", "codecs", "error codes"],
         "did_you_mean": matches,
     }
 

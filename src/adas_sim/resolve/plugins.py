@@ -205,10 +205,10 @@ def register_plugin_root(library_dir: Path) -> Path:
     packed by the build) -- imports its plug-in half and returns
     `library_dir/config`, the SAME directory the build packed this
     component's config bundle into, beside `sim/` (`R-SIM-3a`). Every
-    caller that loads a plug-in from a directory (`scripts/vantage.py`,
-    `cli/render.py`) shares this one function so "point a caller at a
-    folder of libraries and it draws them" (`R-SIM-20`) has one
-    implementation, not one per entry point that could drift.
+    caller that loads a plug-in from a directory (`scripts/vantage.py`)
+    shares this one function so "point a caller at a folder of libraries
+    and it draws them" (`R-SIM-20`) has one implementation, not one per
+    entry point that could drift.
 
     The returned `config/` directory must be threaded into
     `ProjectModel.resolve(library_dir=...)` by the caller -- without it, a

@@ -7,27 +7,20 @@ REM   vantage.bat                -> the LAUNCHER GUI (scripts\gui.py), which
 REM                                 picks the recording and the plug-in root,
 REM                                 validates them, and shows the command it
 REM                                 will run before running it. Builds a
-REM                                 NATIVE (scripts\vantage_native.py) command
-REM                                 by default; a checkbox switches it to the
-REM                                 legacy Python viewer.
+REM                                 scripts\vantage_native.py command.
 REM   vantage.bat <args...>      -> scripts\vantage_native.py -- the real
-REM                                 vantage_app.exe (WP-34, SM-11), not the
-REM                                 retiring Python scene/render/player
-REM                                 (SM-12). Same argument grammar as before
-REM                                 (vantage_native.py reuses vantage.py's own
-REM                                 build_parser()); an arg/mode the native
-REM                                 host genuinely cannot serve refuses with a
-REM                                 named error, never a silent drop.
-REM   vantage.bat --legacy [args...] -> straight through to scripts\gui.py /
-REM                                 scripts\vantage.py, exactly as before this
-REM                                 pass. SM-12's deletion of the Python
-REM                                 scene/render/player implementation is a
-REM                                 separate, later, separately-gated decision
-REM                                 -- this flag is what keeps it reachable
-REM                                 until then.
+REM                                 vantage_app.exe (WP-34, SM-11).
 REM
-REM The launcher is Tkinter (stdlib) on purpose -- it must start on an install
-REM with no "viewer" extra so it can SAY so, instead of dying with an
+REM No "--legacy" mode any more. The retiring Python scene/render/player
+REM implementation it used to route to (scripts\vantage.py, scripts\gui.py's
+REM own Qt-based viewer) is deleted (SM-12, modules/viz/docs/
+REM VIZ_Sync_Plan_v0.1.md). A bare replay (no --pipeline) and
+REM --preset/--at/--workspace/--version have no native equivalent yet --
+REM scripts\vantage_native.py's own top note names this gap plainly rather
+REM than a fallback pretending to cover it.
+REM
+REM The launcher is Tkinter (stdlib) on purpose -- it must start on any
+REM install with no extra installed at all, instead of dying with an
 REM ImportError on the one screen whose job is getting you running.
 
 set "PYCMD="
@@ -49,54 +42,26 @@ if exist "%~dp0.venv\Scripts\python.exe" (
 )
 if not defined PYCMD (
   echo ERROR: no Python found -- neither .venv\Scripts\python.exe nor py/python on PATH.
-  echo Vantage needs Python to run its launcher. --legacy additionally needs PySide6
-  echo ^(the "viewer" extra^): pip install -e ".[viewer,figures]"
+  echo Vantage needs Python to run its launcher.
   exit /b 1
 )
 
-REM `shift` does NOT remove an argument from `%*` in this cmd.exe (verified
-REM live) -- so `--legacy` is stripped out of a %*-derived REST string
-REM instead. Delayed expansion (!REST!, not %REST%) is required here: a
-REM `%REST:~...%` substring op on an UNDEFINED variable inside a chained
-REM `if ... if ... set` errors at PARSE time regardless of which branch
-REM would actually run (verified live, the "syntax of the command is
-REM incorrect" failure) -- delayed expansion defers the substitution to
-REM execution time, after the guarding `if`s have already short-circuited.
-set "REST=%*"
-set "LEGACY="
-if /i "%~1"=="--legacy" (
-  set "LEGACY=1"
-  set "REST=!REST:*--legacy=!"
-)
-
-if "!REST!"=="" (
-  if defined LEGACY (
-    "%PYCMD%" "%~dp0scripts\gui.py" --legacy
-  ) else (
-    "%PYCMD%" "%~dp0scripts\gui.py"
-  )
+if "%*"=="" (
+  "%PYCMD%" "%~dp0scripts\gui.py"
   exit /b !errorlevel!
 )
 
-if defined LEGACY (set "FIRSTREAL=%~2") else (set "FIRSTREAL=%~1")
-if /i "!FIRSTREAL!"=="--help" goto :usage
-if /i "!FIRSTREAL!"=="-h"     goto :usage
-if /i "!FIRSTREAL!"=="/?"     goto :usage
+if /i "%~1"=="--help" goto :usage
+if /i "%~1"=="-h"     goto :usage
+if /i "%~1"=="/?"     goto :usage
 
-if defined LEGACY (
-  "%PYCMD%" "%~dp0scripts\vantage.py" !REST!
-) else (
-  "%PYCMD%" "%~dp0scripts\vantage_native.py" !REST!
-)
+"%PYCMD%" "%~dp0scripts\vantage_native.py" %*
 exit /b %errorlevel%
 
 :usage
 echo Usage: vantage.bat                      ^(no arguments^) open the launcher GUI
 echo        vantage.bat [recording.mcap] [--plugin-root ^<root^>] [--project NAME]
 echo                    [--pipeline ^<pipeline.yaml^> --search ^<dll dir^> --config ^<config path^>]
-echo        vantage.bat --legacy [args...]    same grammar, routed to the retiring
-echo                                           Python viewer instead ^(SM-12, gated
-echo                                           separately -- see modules/sim/CLAUDE.md^)
 echo.
 echo   e.g. vantage.bat ..\df\tests\carla_testruns\aeb\aeb_canonical_10mps_30m.mcap
 echo          --pipeline ..\df\sim\pipelines\df_only.yaml
@@ -104,13 +69,13 @@ echo          --search ..\df\build-sil-vs2026\src\platform\df_sil\Release
 echo          --config ..\df\build-sil-vs2026\src\platform\df_sil\Release\config
 echo          --plugin-root ..\df\build-sil_viz-vs2026\src\platform\df_viz\Release
 echo.
-echo   By default this drives the real vantage_app.exe ^(WP-34^), not the Python
-echo   scene/render/player. --plugin-root wants a component's own DEPLOYED VIZ
-echo   build directory here ^(e.g. ..\df\build-sil_viz-vs2026\src\platform\df_viz\
-echo   Release, carrying df_viz.dll^) -- NOT the SIL/compute build ^(df_sil.dll
-echo   has no viz ABI to load and the window never paints^). The launcher GUI's
-echo   own plug-in-root check tells you which kind you picked before you launch.
+echo   This drives the real vantage_app.exe ^(WP-34^). --plugin-root wants a
+echo   component's own DEPLOYED VIZ build directory here ^(e.g.
+echo   ..\df\build-sil_viz-vs2026\src\platform\df_viz\Release, carrying
+echo   df_viz.dll^) -- NOT the SIL/compute build ^(df_sil.dll has no viz ABI to
+echo   load and the window never paints^). The launcher GUI's own plug-in-root
+echo   check tells you which kind you picked before you launch.
 echo   --preset/--at/--workspace/--version and a bare recording with no
-echo   --pipeline have no native equivalent yet and refuse with a named error
-echo   pointing at --legacy; see scripts\vantage_native.py's own top note.
+echo   --pipeline have no native equivalent yet and refuse with a named
+echo   error; see scripts\vantage_native.py's own top note.
 exit /b 0

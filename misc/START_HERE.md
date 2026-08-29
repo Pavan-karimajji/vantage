@@ -1,6 +1,6 @@
 # START HERE
 
-**Updated:** 2026-08-28 · **Read this first, then run the status command below.**
+**Updated:** 2026-08-29 · **Read this first, then run the status command below.**
 
 > **No derived progress state in this file, ever** — no "N of M done", no
 > per-item status, no checklist. That is what goes stale: this module already
@@ -21,7 +21,8 @@
 ## Where we are
 
 **Movement A** ✅ done, except one item blocked on the author (a push).
-**Movement B** ⏸ planned, deliberately **not** started — it is no longer the gate.
+**Movement B** — `B1` (the viz sync plan) done bar `SM-08`: the Python
+scene/render/player implementation is deleted (`SM-12`, 2026-08-29).
 **Movement C** ← **the POC demo runs, all five clauses, watched. The freeze
 ends by its own terms.**
 
@@ -39,14 +40,8 @@ fixes).
 
 ## The next action — exactly one
 
-> **Author's call: the POC is delivered, so the scope conversation
-> `DEMO_AND_SCOPE.md` §1 defers to *"may begin. Not before."* is now open.**
-
-Nothing is blocked. What the demo did **not** prove is written down and is the
-honest input to that conversation: one module demonstrates the *mechanism*, not
-the *chain* (that needs vdy); the scenario corpus is thin and now visibly
-under-asserted; `F-6` is still open; and the gate still exits 1 on two parked
-items, which is a decision nobody has taken yet.
+> **`SM-08`** (`modules/viz/docs/VIZ_Sync_Plan_v0.1.md`) — Qt out of `modules/sim`
+> entirely. Then the sync plan self-deletes, per its own §6.6.
 
 ## Do not
 
@@ -94,6 +89,10 @@ items, which is a decision nobody has taken yet.
    can run. All four now assert real computed behaviour (`bsd_curve_r172_passby`
    stopped being a false green 2026-08-28) — but its BSD warning fires at
    t≈7.4–9.6 s with no expectation covering it. Green is not coverage.
+4. **A real capability loss, not silently dropped** (`SM-12`, 2026-08-29):
+   `vantage_app.exe` has no bare-replay mode (no `--pipeline`) and no
+   `--preset`/`--at`/`--workspace`/`--version` — the Python viewer that used
+   to serve them is deleted, and there is no native equivalent yet.
 
 ## How Movement C gets tracked when it grows
 
@@ -121,6 +120,10 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-08-29** — `B1` (viz sync plan) closed bar `SM-08`: `SM-10`/`SM-05`/
+  `SM-07`/`SM-12` done, the Python scene/render/player tree deleted, `ANL-SM-03`
+  real and green (exactly one layer-provider implementation left). Record:
+  `modules/viz/docs/VIZ_Sync_Plan_v0.1.md`'s own `SM-12` row.
 - **2026-08-28** — Ingest map wired end to end (`#5` red → green): the emitter,
   the engine's spec parser, and a `Translator` that had no caller. A legacy
   recording went from 218 empty ticks to real data; `bsd_curve_r172_passby`

@@ -4,28 +4,24 @@
 # @author Pavan Karimajji
 
 """S-D6 `UT-D6-7` (`docs/sim_implementation_plan.md`): `sim explain` resolves
-each of the six accepted name kinds -- run id, topic, layer, style token,
-codec name, error code -- and suggests a fuzzy match on an unknown name
-rather than failing bare (`DG-2`, `N-8`). `core.explain.explain` covers five
-of the six directly; the style-token branch is `cli/explain.py`'s own (see
-that module's docstring for why), so `test_style_token_*` below drives it
-through `cli.explain._explain_with_style_tokens` instead.
+each of the four accepted name kinds -- run id, topic, codec name, error
+code -- and suggests a fuzzy match on an unknown name rather than failing
+bare (`DG-2`, `N-8`).
+
+**`layer` and `style_token` kinds retired** (`SM-12`,
+`docs/VIZ_Sync_Plan_v0.1.md`): both depended on the Python scene/render/
+player tree -- `adas_sim.scene.registry` (layer ids) and `render/theme.py`
+(style tokens, `cli/explain.py`'s own former branch) -- neither of which
+exists any more.
 """
 
 from __future__ import annotations
 
-from adas_sim.cli.explain import _explain_with_style_tokens
 from adas_sim.diagnostics.explain import explain
 from adas_sim.session.session import Session
 from adas_sim.session.tick import Pose2D, PortValue, Tick
-from adas_sim.scene.registry import layer_provider
 
 _POSE = Pose2D(x_m=0.0, y_m=0.0, yaw_rad=0.0)
-
-
-@layer_provider("test.d6.explain.probe")
-def _probe_layer(ctx):  # pragma: no cover -- never actually called, only registered
-    return []
 
 
 def _session() -> Session:
@@ -46,12 +42,6 @@ def test_explain_resolves_a_topic():
     facts = explain("sim.test.port", _session())
     assert facts["kind"] == "topic"
     assert facts["origin"] == "measured"
-
-
-def test_explain_resolves_a_registered_layer():
-    facts = explain("test.d6.explain.probe", _session())
-    assert facts["kind"] == "layer"
-    assert facts["qualname"] == "_probe_layer"
 
 
 def test_explain_resolves_a_codec_name_with_or_without_the_dot():
@@ -98,30 +88,3 @@ def test_explain_reports_unknown_with_no_suggestion_when_nothing_is_close():
     facts = explain("completely-unrelated-garbage-xyz", _session())
     assert facts["kind"] == "unknown"
     assert facts["did_you_mean"] == []
-
-
-# ---------------------------------------------------------------------------
-# style token -- cli/explain.py's own branch, not core.explain.explain's
-# ---------------------------------------------------------------------------
-
-
-def test_style_token_resolves_with_a_colour_per_theme():
-    facts = _explain_with_style_tokens("status.warning", _session())
-    assert facts["kind"] == "style_token"
-    assert set(facts["colors"]) == {"dark", "light", "print", "forced"}
-    for color in facts["colors"].values():
-        assert color.startswith("#")
-
-
-def test_style_token_extends_the_fuzzy_suggestion_on_an_unknown_name():
-    facts = _explain_with_style_tokens("status.warnin", _session())  # one char short
-    assert facts["kind"] == "unknown"
-    assert "status.warning" in facts["did_you_mean"]
-
-
-def test_style_token_check_does_not_shadow_a_real_topic_or_layer():
-    """A style token and a topic/layer/codec/error name occupy disjoint
-    namespaces in practice, but the check order (token first) must never
-    hide a real resolution -- proven directly rather than assumed."""
-    facts = _explain_with_style_tokens("sim.test.port", _session())
-    assert facts["kind"] == "topic"

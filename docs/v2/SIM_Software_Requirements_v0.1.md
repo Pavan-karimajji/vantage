@@ -2382,7 +2382,7 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Accept.** Membership is enumerable. A verb added without a requirement fails a static check.
 **Verify.** A · `ANL-SW-40`   **Trace.** SYS-0268
 **Built.** ● done — `IMP-0232` in `WP-23`
-**Now.** `PARTIAL` — the set is enumerable from one dispatch table (15 verbs today); nothing counts it or gates growth.
+**Now.** `PARTIAL` — the set is enumerable from one dispatch table (13 verbs today, down from 15 -- `view`/`render` retired with the rest of the Python scene/render/player tree, `SM-12`, 2026-08-29); nothing counts it or gates growth.
 
 **`SW-0233`** · `SI-15` · `P0` · `R1` — Producing and executing are different verbs
 **Shall.** The verb that produces a recording and executes nothing, the verb that does both, and the verb that executes an existing recording shall be three distinct verbs.
@@ -2681,12 +2681,12 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Built.** ● done — `IMP-0272` in `WP-24`
 **Now.** `NEW` — **`OQ-14` closed 2026-08-13**; baseline-seeded, failable from the second campaign.
 
-**`SW-0273`** · `SI-17` · `P0` · `R1` — One evidence producer, two formatters
-**Shall.** There shall be exactly one function producing an evidence record for an address at a tick, and both the graphical panel and the command-line query shall format its output.
-**Accept.** For a sampled set of addresses the two outputs are field-for-field identical. A static check finds no second code path capable of producing an evidence answer.
-**Verify.** T · `UT-DIA-02` · A · `ANL-SW-44`   **Trace.** SYS-0154, SYS-0153
+**`SW-0273`** · `SI-17` · `P0` · `R1` — One evidence producer, formatted headlessly
+**Shall.** There shall be exactly one function producing an evidence record for an address at a tick, and the command-line query shall format its output.
+**Accept.** A static check finds no second code path in this module capable of producing an evidence answer.
+**Verify.** A · `ANL-SW-44`   **Trace.** SYS-0154, SYS-0153
 **Built.** ● done — `IMP-0273` in `WP-24`
-**Now.** `DONE` — `core/evidence.py::evidence` with `format_evidence`, consumed by `cli/explain.py --at` and `view/evidence_panel.py`. Structurally identical by construction, not by discipline.
+**Now.** `DONE` — `diagnostics/evidence.py::evidence` with `format_evidence`, consumed by `cli/explain.py --at`. **Amended 2026-08-29** (`SM-12`, `docs/VIZ_Sync_Plan_v0.1.md`): the graphical-panel half of the original Shall/Accept (`UT-DIA-02`'s own "compare the two outputs field for field") retired with `view/evidence_panel.py` and the rest of the Python scene/render/player tree -- `SYS-0153`/`SYS-0154`'s own 2026-08-20 `AMEND` disposition already recorded that the graphical formatter is `viz`'s, cross-module, not sim's; this row's text had not yet caught up. `UT-DIA-02` is retired with no successor in this module (a cross-language field-for-field comparison is `E2E-07`'s own job, `modules/viz/docs/VIZ_Sync_Plan_v0.1.md`'s `SM-12` row, not a `sim`-local unit test); `ANL-SW-44` (`scripts/check_evidence_single_producer.py`) is unaffected and still the real, live verification.
 
 **`SW-0274`** · `SI-17` · `P0` · `R1` — An evidence answer reaches the bytes
 **Shall.** For any primitive, layer or plotted sample the evidence record shall carry port, topic, tick, origin tag, source timestamp, configuration bundle, module build, and whether the value was published by a module or reconstructed by a layer.
@@ -2781,10 +2781,10 @@ Everything in this part exists to make one sentence true in code rather than in 
 
 **`SW-0403`** · `SI-17` · `P0` · `R1` — The provenance query is the evidence producer, reached from a script
 **Shall.** The question *where did this value come from* shall be answerable for any value from the scripting API, returning the same record `SW-0273`'s producer returns.
-**Accept.** The scripted answer and the command-line answer are field-for-field identical, checked automatically. No third derivation exists.
+**Accept.** The scripted answer and the command-line answer are field-for-field identical, checked automatically. No second derivation exists.
 **Verify.** T · `UT-DIA-15`   **Trace.** SYS-0210, SYS-0154
 **Built.** ● done — `IMP-0403` in `WP-24`
-**Now.** `DONE` — `core.evidence.evidence` is a plain function; the command line is one caller and the panel is another.
+**Now.** `DONE` — `diagnostics.evidence.evidence` is a plain function; the command line and the scripting API are its two callers. **Amended 2026-08-29** (`SM-12`): a third caller, the graphical panel, existed until the Python scene/render/player tree retired with it -- the comparison this row's own `UT-DIA-15` makes is narrower than before (two callers, not three) but still real and still checked.
 
 ---
 

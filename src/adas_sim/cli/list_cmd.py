@@ -3,11 +3,16 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`sim list ports|topics|layers|signals <path>` -- enumerate one kind of name.
+"""`sim list ports|topics|signals <path>` -- enumerate one kind of name.
 
 Takes a component library, a recording or a session, and prints the names of
 the requested kind. The companion to `sim explain`, which describes one name;
 this prints all of them.
+
+**No `layers` kind.** Python layer providers retired with the rest of the
+Python scene/render/player tree (`SM-12`, `docs/VIZ_Sync_Plan_v0.1.md`) --
+`viz`'s own C++ `Console` (`list layers <scene_index>`) is the live
+equivalent (`SM-05`'s narrative in that same document).
 """
 
 # Design refs: `GT-9` · `DG-1`
@@ -18,14 +23,13 @@ import argparse
 from pathlib import Path
 
 from adas_sim.resolve.probe import probe_manifest
-from adas_sim.core.runner import build_static_scene
 from adas_sim.session.session import Session
 from adas_sim.plugins.registry import reader_for
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="sim list", description=__doc__)
-    parser.add_argument("what", choices=("ports", "topics", "layers", "signals"))
+    parser.add_argument("what", choices=("ports", "topics", "signals"))
     parser.add_argument("path", type=Path)
     return parser
 
@@ -56,16 +60,6 @@ def _list_topics(recording_path: Path) -> int:
         reader.close()
 
 
-def _list_layers(session_path: Path) -> int:
-    session = Session.open(session_path)
-    scene = build_static_scene(session, 0)
-    print(f"layers ({len(scene.layers)}):")
-    for layer in scene.layers:
-        default = "on" if layer.default_on else "off"
-        print(f"  {layer.id:<28} group={layer.group:<16} prims={len(layer.prims):<4} default={default}")
-    return 0
-
-
 def _list_signals(session_path: Path) -> int:
     session = Session.open(session_path)
     print(f"signals, port-level ({len(session.known_ports)}) -- see this module's own docstring:")
@@ -80,6 +74,4 @@ def run(argv: list[str] | None = None) -> int:
         return _list_ports(args.path)
     if args.what == "topics":
         return _list_topics(args.path)
-    if args.what == "layers":
-        return _list_layers(args.path)
     return _list_signals(args.path)

@@ -36,21 +36,20 @@ the demo is close or blocked.
 
 ---
 
-## B1 — Close the viz sync plan · **10 boxes**
+## B1 — Close the viz sync plan · **10 boxes, 7 closed 2026-08-29**
 
 The whole remainder of a 43-item plan. All of it is deletion or truth-telling.
 
 | Item | Work | Gate |
 |---|---|---|
-| `SM-10` (1 started) | `modules/viz/CLAUDE.md` still opens *"this module does not exist yet — there is no source here."* There are 111 files and 11,226 lines. | The file describes what is actually on disk |
-| `SM-05` (1 open) | supersession bookkeeping | trace check clean |
-| `SM-07` (1 started) | `MP-4` re-cut | trace check clean |
-| `SM-08` (3 open) | Qt out, headless in | suite green with Qt absent |
-| `SM-12` (4 open) | **Delete the Python scene** — the `D-6` box. This *is* Decision B. | Scene parity passes on both platforms **before** the delete |
+| `SM-10` — **done** | The real finding wasn't `modules/sim/CLAUDE.md` (already correct) but `modules/viz`'s own `CLAUDE.md`, still opening *"this module does not exist yet — there is no source here"* over 112 files / ~11,300 lines. Fixed. | The file describes what is actually on disk |
+| `SM-05` — **done** | supersession bookkeeping, closed once `SM-12`'s dual-run window closed | trace check clean |
+| `SM-07` — **done** | `MP-4` re-cut | trace check clean |
+| `SM-08` (3 open) | Qt out, headless in — **deliberately not attempted this pass**, scoped as its own separately-gated piece | suite green with Qt absent |
+| `SM-12` — **done** | **Deleted the Python scene** — the `D-6` box. This *is* Decision B: `scene/`, `render/`, `player/shell/` gone, `player/panels/` down to `pipeline_panel.py` (`SI-22`'s own `KEEP`); ~20 dependent files individually triaged and fixed (`core/runner.py` split, `cli/render.py`/`cli/view.py` deleted, `plugins/registry.py`'s `EXTENSION_POINTS` amended, `scripts/vantage.py` deleted, `vantage.bat`/`gui.py`/`vantage_native.py` lost their `--legacy` fallback — a real, named capability loss, not silently dropped). `df`'s own `sim/layers/{bsd,common}.py` confirmed orphaned-but-harmless, not touched (separate submodule, separate finding). | `ANL-SM-03` real and green: exactly one layer-provider implementation remains |
 
-**Exit:** the sync plan self-deletes, per its own §6.6. Do the `SM-10` fix
-first — it costs minutes and stops every future session being misinformed on
-its first read.
+**Exit:** the sync plan self-deletes, per its own §6.6 — not yet, `SM-08`
+remains, its own separately-gated pass.
 
 ## B2 — Delete the `df_viz` remnant · **~4,900 lines**
 

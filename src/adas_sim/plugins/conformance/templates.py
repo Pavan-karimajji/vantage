@@ -4,7 +4,7 @@
 # @author Pavan Karimajji
 
 """Shipped template plug-ins -- one per extension point (`SW-0358`'s own
-Accept clause: *"each of the four is exercised by a shipped template
+Accept clause: *"each of the three is exercised by a shipped template
 plug-in that passes its own conformance kit"*).
 
 `"reader"`/`"exporter"` need no template of their own: `io.jsonl.
@@ -13,39 +13,21 @@ codecs (`DD-04`'s one-implementation rule -- a second, parallel
 "just for conformance" reader/writer would be exactly the duplication that
 rule forbids), so `reader_kit`/`exporter_kit` exercise those directly.
 
-`"visualization"`/`"module"` have no existing component-free equivalent --
-every real layer/plug-in belongs to a component, and this framework's own
-`src/` may never name one (`R-SIM-1`). The two functions below are that
-template: minimal, real, registered by import alone, carrying no component
-name anywhere in this file."""
+`"module"` has no existing component-free equivalent -- every real plug-in
+belongs to a component, and this framework's own `src/` may never name one
+(`R-SIM-1`). The function below is that template: minimal, real,
+registered by import alone, carrying no component name anywhere in this
+file.
+
+**The `"visualization"` extension point retired with the rest of the
+Python scene/render/player tree** (`SW-0358`'s 2026-08-29 amendment,
+`SM-12`) -- this file's own former template layer provider went with it."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 import yaml
-
-from adas_sim.scene.registry import layer_provider, registered_providers
-from adas_sim.scene.types import Layer
-from adas_sim.session.history import LayerCtx
-
-#: `SW-0359`: registered by import alone, the moment this module is first
-#: imported -- no roster anywhere lists it. Guarded so importing this
-#: module twice in one process (every test that needs the template) does
-#: not hit `layer_provider`'s own duplicate-id refusal.
-TEMPLATE_LAYER_ID = "conformance.template.marker"
-
-if TEMPLATE_LAYER_ID not in registered_providers():
-
-    @layer_provider(TEMPLATE_LAYER_ID, group="conformance")
-    def _template_layer(ctx: LayerCtx) -> tuple[Layer, ...]:
-        """The shipped template for the `"visualization"` extension point --
-        needs no port (`requires=` empty), draws nothing (`Layer` with zero
-        prims is legitimate: `"the algorithm did not fire"` vs `"nothing to
-        draw"` is `Prim`-count's own distinction, not this template's job to
-        demonstrate). A real component's own layer follows this same shape:
-        one `@layer_provider`-decorated function, imported once."""
-        return (Layer(id=TEMPLATE_LAYER_ID, group="conformance", prims=()),)
 
 
 def write_template_plugin_dir(root: Path, *, component: str = "conformance_template") -> Path:
