@@ -1,6 +1,6 @@
 # START HERE
 
-**Updated:** 2026-08-30 · **Read this first, then run the status command below.**
+**Updated:** 2026-08-31 · **Read this first, then run the status command below.**
 
 > **No derived progress state in this file, ever** — no "N of M done", no
 > per-item status, no checklist. That is what goes stale: this module already
@@ -110,6 +110,39 @@ of fix (stale test fixtures asserting an un-canonicalized topic spelling),
 not this pass's to close. Record:
 `docs/v2/SIM_Test_Execution_2026-08-30_legacy_objects_ingest.md`.
 
+**2026-08-31 — the three pre-existing `viz` unit tests fixed, `SYS-0089`'s
+`camera.chase` golden test added, `CONSOLIDATED_REQUIREMENTS.md` re-marked.**
+`viz_test_session`/`viz_test_pull_source`/`viz_test_erg_pull_integration`
+were asserting a pre-`450031e` topic spelling (`"df.a"` instead of the
+codec's real `"/df/a"`); each fixed by updating the assertion to the real,
+current canonical form, no production code touched. `viz` `gtest` is back to
+**49/49**. `SYS-0089`'s own "known gap" note (`camera.chase` has no
+golden-Scene test) closed: new `SW-0077`/`UT-layers-13`
+(`test_layers.cpp`), plus three stale "five layers" mentions fixed in the
+same table (`UT-layers-11`, `SYT-HST-02`, `SYT-SCP-16`/`17`) — direct,
+never-cascaded fallout of `SW-0021`/`SYS-0088`'s own `WP-22` amendment to
+six. `df_viz_test_layers` **13/13**, full `df` suite **311/312** (same
+already-dispositioned failure). `misc/CONSOLIDATED_REQUIREMENTS.md`
+re-marked against reality per the author's own instruction (status marks
+and false lines only, nothing added or restructured): item #20's row
+rewritten — three of its five original items are out of scope entirely
+(author's call), video feed publishing is built (`WP-22`), and driver view
+is stated plainly as unverified (mechanism exists, no recording on hand
+carries a driver-view camera topic) rather than guessed green or red;
+§2's "24 of 25, only red is #20" corrected to "25 of 25, #20 no longer
+red" as the direct consequence. **A pattern named, not fixed:** two
+independent incidents this week (`cm_viz` stale since 2026-08-21, missing
+`9ca1324`'s `Span<T>` fix; `sim`'s `sil` library stale since 2026-08-25,
+missing `450031e`'s canonicalization) both let a real regression ship
+unnoticed because an editable Conan dependency's build artifact can sit
+stale across a behaviour-changing commit with nothing in the ordinary
+build/test loop noticing — both found by accident. Named as a candidate for
+a mechanical freshness check; **not built this pass**, since it is
+cross-submodule build machinery (`R-BUILD-6`) and deserves its own scoped
+design. Record:
+`docs/v2/SIM_Test_Execution_2026-08-31_test_fixes_and_remark.md`. **Not yet
+committed — reported and awaiting the author's go-ahead.**
+
 **`misc/memory.md` §3 no longer contradicts itself.** Its closing line used
 to say *"deletion has never once been executed"* directly under this same
 session's own correction that `B1` deleted the Python scene/render/player
@@ -167,20 +200,41 @@ fixes).
 > `--recording` path, plus a bare-legacy-name fallback for the two ports
 > that need one (not `R-SIM-21`'s `source.<port>` spelling, which does not
 > survive this player's own topic stripping). **The camera-panel regression
-> that same pass surfaced is fixed too** (`SessionImageResolver::Resolve`
-> now canonicalizes its lookup key, symmetric with the codec's own write
-> side) — scoped entirely to `viz`'s player-side code, `df` needed no
-> rebuild. Record:
-> `docs/v2/SIM_Test_Execution_2026-08-30_legacy_objects_ingest.md`. **Not
-> yet committed — the camera fix landed after the ingest-map commit above;
-> the next action is committing and pushing it** (same `modules/viz` files
-> only, `docs`/`START_HERE` in `sim`). **Three pre-existing `viz` unit tests
-> share the canonicalization regression's root cause and remain open**
-> (`viz_test_session`, `viz_test_pull_source`,
-> `viz_test_erg_pull_integration`) — a different, stale-fixture-shaped fix,
-> not yet started. `SYS-0089`'s missing golden-Scene test for
-> `camera.chase` is still open, untouched. The other four `#20` pieces are
-> still untouched, per instruction.
+> that same pass surfaced is fixed, committed and pushed too** (`viz`
+> `598ed2b`, `sim` `e316220`, superproject `03d8d21`) —
+> `SessionImageResolver::Resolve` now canonicalizes its lookup key,
+> symmetric with the codec's own write side; scoped entirely to `viz`'s
+> player-side code, `df` needed no rebuild. **2026-08-31: the three
+> pre-existing `viz` unit tests sharing that regression's root cause are
+> fixed** (`viz_test_session`, `viz_test_pull_source`,
+> `viz_test_erg_pull_integration` — stale fixtures asserting a
+> pre-canonicalization topic spelling, no production code touched; `viz`
+> `gtest` back to `49/49`), **and `SYS-0089`'s missing `camera.chase`
+> golden-Scene test is added** (`SW-0077`/`UT-layers-13`, plus three
+> never-cascaded stale "five layers" mentions fixed alongside it —
+> `UT-layers-11`, `SYT-HST-02`, `SYT-SCP-16`/`17`; `df_viz_test_layers`
+> `13/13`, full `df` suite `311/312`, same already-dispositioned failure).
+> **`misc/CONSOLIDATED_REQUIREMENTS.md` re-marked against reality**
+> (status marks and false lines only): item #20's row now names only what
+> it still covers (driver view, video feed publishing — three items moved
+> out of scope entirely, author's call), video feed marked built, driver
+> view stated plainly as unverified (mechanism exists, no recording on
+> hand carries the right camera topic) rather than guessed; §2's "only red
+> is #20" corrected to "25 of 25 green or amber" as the direct consequence.
+> **The stale-build pattern this week exposed twice — `cm_viz` stale since
+> 2026-08-21 missing `9ca1324`'s `Span<T>` fix, `sim`'s `sil` library stale
+> since 2026-08-25 missing `450031e`'s canonicalization, both found by
+> accident — is named as a candidate for a mechanical freshness check, not
+> built this pass** (cross-submodule build machinery, `R-BUILD-6`,
+> deserves its own scoped design). Record:
+> `docs/v2/SIM_Test_Execution_2026-08-31_test_fixes_and_remark.md`. **Not
+> yet committed — the next action is that commit decision** (`viz`:
+> three test files; `df`: `test_layers.cpp` plus four `docs/viz/*.md`
+> files; `sim`: `misc/CONSOLIDATED_REQUIREMENTS.md`, this file, and the new
+> record). The other four `#20` pieces (driver view itself, lane/pedestrian
+> markings, free space, semantic segmentation) stay untouched — the last
+> three now explicitly out of scope, driver view still blocked on a
+> recording nobody has yet.
 
 ## Do not
 
@@ -259,6 +313,26 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-08-31** — Three pre-existing `viz` unit tests fixed
+  (`viz_test_session`/`viz_test_pull_source`/`viz_test_erg_pull_integration`
+  — stale fixtures asserting a pre-`450031e` topic spelling, no production
+  code touched; `viz` `gtest` back to 49/49). `SYS-0089`'s missing
+  `camera.chase` golden-Scene test added (`SW-0077`/`UT-layers-13`), plus
+  three never-cascaded stale "five layers" mentions fixed alongside it
+  (`UT-layers-11`, `SYT-HST-02`, `SYT-SCP-16`/`17`); `df_viz_test_layers`
+  13/13, full `df` suite 311/312 (same already-dispositioned failure).
+  `misc/CONSOLIDATED_REQUIREMENTS.md` re-marked against reality (status
+  marks and false lines only): item #20 now names only driver
+  view/video feed (three items moved out of scope entirely, author's
+  call), video feed marked built, driver view stated plainly as unverified
+  (no recording on hand carries the right camera topic) rather than
+  guessed; §2 corrected from "only red is #20" to "25 of 25 green or
+  amber". The stale-build pattern this week exposed twice (`cm_viz` since
+  2026-08-21 missing `9ca1324`'s `Span<T>` fix; `sim`'s `sil` lib since
+  2026-08-25 missing `450031e`'s canonicalization, both found by accident)
+  named as a candidate for a mechanical freshness check, not built.
+  **Uncommitted — reported, awaiting go-ahead.** Record:
+  `docs/v2/SIM_Test_Execution_2026-08-31_test_fixes_and_remark.md`.
 - **2026-08-30** — `WP-22` reviewed and pushed (`viz` `0f67af6`, `df`
   `b9ceba1`, `sim` `6495ab8`, superproject `c231337`). Then the
   legacy-recording `objects` gap it left open, closed and pushed (`viz`
@@ -341,19 +415,3 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   `MOVEMENT_B_PLAN.md`'s "findings to decide on separately" (now three items),
   not acted on. Record:
   `docs/v2/SIM_Test_Execution_2026-08-30_memory_close_session_note.md`.
-- **2026-08-30** — Prior pass's `B2`/CarMaker work committed/pushed
-  (R-GIT-1: `df` `b980fd9`, `sim` `a551d37`, superproject `a63ee3a`). Then:
-  (1) `df_viz_test_render_svg` recorded as a **known, understood, not-open**
-  failure in `df_viz_Software_Test_Spec_v0.1.md` §8 (the one-line fix named,
-  test left unchanged, per instruction). (2) `misc/memory.md` §3 corrected —
-  its "~6,300 lines of superseded tooling, all still present" claim (and the
-  adjacent df_viz-as-old-toolkit claim) were both wrong, disproved by this
-  week's `B2`/`B3` audits; replaced with what was actually found plus why
-  (a day-one line-count sweep, never the build or `git log`). (3) `B4`
-  re-measured per-item, not just re-sized: only `io` is a genuine overlap
-  (and its own C++ code admits it isn't at parity); `runspec` is a
-  producer/consumer pair, `abi` is C++-only by design, `diagnostics` is two
-  different concerns, `session`'s real duplicate is cross-module
-  (`sim` Python vs `viz` C++, outside `B4`'s scope). `B4` rewritten to one
-  item; Movement B is not fully done. Nothing deleted. Record:
-  `docs/v2/SIM_Test_Execution_2026-08-30_b4_remeasure.md`.

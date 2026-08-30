@@ -12,9 +12,11 @@ Anything marked `WRONG` or `NOT MINE` is a scope error that has been sitting
 inside 41,000 lines of specification without being visible.
 
 Status column is what exists **today**: 🟢 works · 🟡 partly · 🔴 not built.
-First measured 2026-08-27; **re-measured 2026-08-28** after the step-zero fixes
-(`F-1`…`F-4`), `F-7` and `F-8`. Only the marks and lines that became false were
-touched — no requirement was added, removed or reworded otherwise.
+First measured 2026-08-27; re-measured 2026-08-28 after the step-zero fixes
+(`F-1`…`F-4`), `F-7` and `F-8`; **re-measured again 2026-08-31** after `WP-22`
+(video feed publishing shipped), the legacy-recording ingest fix, and the
+author's scope change narrowing #20. Only the marks and lines that became false
+were touched — no requirement was added, removed or reworded otherwise.
 
 ---
 
@@ -61,7 +63,7 @@ touched — no requirement was added, removed or reworded otherwise.
 |---|---|---|
 | **18** | **One shared drawing toolkit** that every component pulls in to draw itself, and the simulator shows all the components' pictures merged in a single window. | 🟢 |
 | **19** | A component says **what** to draw, in metres and in meaning (*"this is a warning zone"*). The toolkit alone decides pixels and colour — which is what keeps the 2D BEV identical across components. | 🟢 |
-| **20** | **It must not end at BEV** — driver view, lane and pedestrian markings, free space, semantic segmentation, and video feed publishing. Probably a different approach for each. | 🔴 **none built** |
+| **20** | **It must not end at BEV** — driver view and video feed publishing. (Lane/pedestrian markings, free space and semantic segmentation moved out of #20 entirely — author's call, 2026-08-30.) | 🟡 video feed 🟢 built and screenshotted (`WP-22`, 2026-08-30, a real frame decodes and draws live); driver view's mechanism is the same one and exists, but no recording on hand carries a driver-view camera topic to feed it — only `carla/chase_camera` (the chase camera). Unverified either way; not marked green or red on assumption, author's call |
 | **21** | Step, scrub and rewind freely — and stepping backwards **never invents** a state the software did not actually produce. | 🟢 |
 | **22** | Click anything on screen and it tells you which signal, which tick, which file and which build produced it — and whether the software **published** that value or the drawing code **reconstructed** it. | 🟢 build answered since `F-8`; before it, this line was marked green while the build read `unknown` |
 
@@ -93,9 +95,12 @@ Recorded so it cannot quietly reappear.
 **1. Is the concept right?** The lines above are the concept. If they are all
 `AGREE`, then the design is not the problem and never was.
 
-**2. Where is it?** 24 of 25 are green or amber. **The only red left is #20
-(everything past BEV)** — and it is the one the author described first and most
-often when asked what this is for.
+**2. Where is it?** 25 of 25 are green or amber — **#20 (everything past BEV) is
+no longer red.** Video feed publishing shipped (`WP-22`, 2026-08-30) and three of
+its five original items were removed from scope entirely (author's call). What
+remains open is driver view, unverified for lack of a recording that carries the
+right camera topic — not the one the author described first and most often when
+asked what this is for, which is the part that just shipped.
 
 Two moved on 2026-08-28. **#8** — choose measured/simulated in the launcher —
 went red → green and was the POC demo's last piece. **#5** went amber → red →
