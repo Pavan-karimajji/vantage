@@ -21,47 +21,29 @@
 ## Where we are
 
 **Movement A** ✅ done, except one item blocked on the author (a push).
-**Movement B** ✅ `B1` fully closed (2026-08-29), and both of its own named
-exceptions closed 2026-08-30: `sync_check.py` deleted, `next.py` rewritten
-"minus its gate table", `check_cross_module_trace.py`'s 60 findings triaged
-(56 parser gap, fixed; 3 real, in df's design doc, left for df to fix). See
-`MOVEMENT_B_PLAN.md`'s own updated B1 row and
-`docs/v2/SIM_Test_Execution_2026-08-30_sync_check_retire.md`.
+**Movement B** — `B1` closed 2026-08-29. `B2` corrected, re-scoped and
+executed 2026-08-30 (388 lines, `modules/df`, committed/pushed). `B3`
+re-scoped 2026-08-30 to empty — none of its four rows were real (see
+`MOVEMENT_B_PLAN.md`). `B4` re-measured 2026-08-30 to one real item (`io`'s
+Python/C++ parity gap, not yet actionable) — the other four claimed overlaps
+were never overlaps. **Movement B is therefore not fully done** (that one
+`io` item remains), but every row in `MOVEMENT_B_PLAN.md` now rests on
+verified code, not a stale claim. `misc/memory.md` §3 corrected to match
+(it was written from a day-one line-count/directory sweep, never the build
+or `git log`). Records: `docs/v2/SIM_Test_Execution_2026-08-30_movement_b_plan_audit.md`,
+`..._b2_execute_b3_rescope.md`, `..._b4_remeasure.md`.
 **Movement C** ← **the POC demo runs, all five clauses, watched. The freeze
 ends by its own terms.**
-`MOVEMENT_B_PLAN.md`'s `B2` was corrected 2026-08-30 — it would have deleted
-`df`'s real CarMaker viz plug-in on a 2026-08-27 misreading — then
-**executed and committed/pushed the same day**, re-scoped to its real
-content: 3 duplicate test files (388 lines), removed from `modules/df` behind
-a real vs2026 build (314/315 → 311/312 tests, exactly 3 fewer test binaries,
-one pre-existing unrelated failure unchanged). `B3` was fully re-scoped the
-same day: all four rows failed verification against the code — `tools/carla/`
-and `replay/viz.py` are both active (not legacy), `df_sim_gui.py` is retired
-as a deletion target (its CarMaker section is current, real work), `bsdviz/`'s
-"gate" doesn't hold (8 files still import it). **Zero `B3` rows are ready to
-execute.** All three commits landed R-GIT-1 order (`df` `6be858e` → `sim`
-`bc49152` → superproject `19211b2`). See
-`docs/v2/SIM_Test_Execution_2026-08-30_movement_b_plan_audit.md` (the
-correction) and
-`docs/v2/SIM_Test_Execution_2026-08-30_b2_execute_b3_rescope.md` (execution +
-re-scope).
 
-**Author priority, same day, after the above landed: de-risk the CarMaker
-visualization pipeline for a near-term demo — done, no risk found.** Clean
-`cm_viz` rebuild on vs2026 (two pre-existing environment breaks fixed first —
-a stale `adas-mathlib` Conan editable and the known `adas-local` auth gap);
-`df_sil.dll`/`df_viz.dll` both confirmed freshly deployed into
-`src/platform/cm/bin/`; a real BSD TestRun run both headless (clean,
-`nWarnings=1`) and live, with the `df_viz` window screenshotted showing
-`bsd.zone`/`bsd.warning`/`bsd.sensor_fov` registered and rendering.
-Separately, `df_viz_test_render_svg`'s failure was root-caused (via `git log`,
-not guessed): a stale `"bsd.zone"` token in one test file, missed by a
-2026-08-26 rename sweep (`fc85db9`) that correctly updated the two sibling
-tests and the real layer provider. **SVG-test-only — confirmed zero impact on
-the live picture**, not fixed (one-line fix identified, not applied, per
-instruction). Full account, filed **on the `df` side**
-(`modules/df/docs/viz/df_viz_Test_Execution_2026-08-30.md`) since nothing in
-this pass touched `modules/sim`.
+**CarMaker viz pipeline de-risked for a near-term demo, 2026-08-30 — no risk
+found.** Clean `cm_viz` rebuild, both DLLs confirmed freshly deployed, a real
+BSD TestRun run headless and live with the `df_viz` window screenshotted
+showing `bsd.zone`/`bsd.warning`/`bsd.sensor_fov` registered and rendering.
+`df_viz_test_render_svg`'s failure is root-caused, recorded as a known,
+understood, author-decided-not-to-fix issue (SVG-test-only, zero live-picture
+impact — `df_viz_Software_Test_Spec_v0.1.md` §8's own disposition note now
+carries the one-line fix, so nobody re-investigates it), **not open.** Filed
+on the `df` side: `modules/df/docs/viz/df_viz_Test_Execution_2026-08-30.md`.
 
 The 2026-08-27 reset re-scoped this module around one watchable demo instead of a
 completion percentage. Read `memory.md` for why, `DEMO_AND_SCOPE.md` for the
@@ -77,20 +59,16 @@ fixes).
 
 ## The next action — exactly one
 
-> **`B2` is done and committed/pushed** (388 lines, `df` `6be858e`/`sim`
-> `bc49152`/superproject `19211b2`) and **`B3` is re-scoped to empty** — all
-> four of its rows turned out to name active or non-superseded code, not
-> legacy; none are ready to execute, and it needs its targets re-identified
-> before it can be planned again, not just re-gated. **The CarMaker viz
-> pipeline is de-risked for the demo** (clean `cm_viz` build, both DLLs
-> deployed, a real TestRun run and screenshotted live —
-> `modules/df/docs/viz/df_viz_Test_Execution_2026-08-30.md`); nothing there
-> was committed (a records-only pass, plus a root-caused-but-unfixed SVG-test
-> regression, deliberately left unfixed per instruction). The Movement C scope
-> conversation this file named before `B1` started (`DEMO_AND_SCOPE.md` §1's
-> *"may begin. Not before"*) is still the standing open question and this
-> session did not touch it. `B4` and item `#20` were explicitly withheld
-> again this pass.
+> **`B1`/`B2`/`B3` are settled** (`B1` closed, `B2` done and pushed, `B3`
+> empty). **`B4` is re-scoped to one real, named, not-yet-actionable item**
+> (`io`'s `mcap.py`/`mcap.cpp` parity gap) — `Movement B` is not fully done,
+> but nothing in it rests on an unverified claim any more. The CarMaker viz
+> pipeline is de-risked for the demo, and `df_viz_test_render_svg` is now a
+> closed, understood, deliberately-not-fixed question — neither needs
+> re-investigating. The Movement C scope conversation this file named before
+> `B1` started (`DEMO_AND_SCOPE.md` §1's *"may begin. Not before"*) is still
+> the standing open question and this session did not touch it. Item `#20`
+> was explicitly withheld again this pass.
 
 ## Do not
 
@@ -169,6 +147,22 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-08-30** — Prior pass's `B2`/CarMaker work committed/pushed
+  (R-GIT-1: `df` `b980fd9`, `sim` `a551d37`, superproject `a63ee3a`). Then:
+  (1) `df_viz_test_render_svg` recorded as a **known, understood, not-open**
+  failure in `df_viz_Software_Test_Spec_v0.1.md` §8 (the one-line fix named,
+  test left unchanged, per instruction). (2) `misc/memory.md` §3 corrected —
+  its "~6,300 lines of superseded tooling, all still present" claim (and the
+  adjacent df_viz-as-old-toolkit claim) were both wrong, disproved by this
+  week's `B2`/`B3` audits; replaced with what was actually found plus why
+  (a day-one line-count sweep, never the build or `git log`). (3) `B4`
+  re-measured per-item, not just re-sized: only `io` is a genuine overlap
+  (and its own C++ code admits it isn't at parity); `runspec` is a
+  producer/consumer pair, `abi` is C++-only by design, `diagnostics` is two
+  different concerns, `session`'s real duplicate is cross-module
+  (`sim` Python vs `viz` C++, outside `B4`'s scope). `B4` rewritten to one
+  item; Movement B is not fully done. Nothing deleted. Record:
+  `docs/v2/SIM_Test_Execution_2026-08-30_b4_remeasure.md`.
 - **2026-08-30** — Author priority: de-risk CarMaker viz for a near-term demo.
   `B2`/`B3` work from earlier today committed/pushed first, R-GIT-1 order
   (`df` `6be858e`, `sim` `bc49152`, superproject `19211b2`). Then a clean
@@ -216,9 +210,3 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   UIDs), fixed; 3 (`VIZ:IMP-0036`/`0064`/`0065`, in df's design doc) are real
   dangling links, left for df. Record:
   `docs/v2/SIM_Test_Execution_2026-08-30_sync_check_retire.md`.
-- **2026-08-29** — `B1` (viz sync plan) fully closed: `SM-10`/`SM-05`/`SM-07`/
-  `SM-12`/`SM-08` all done, the Python scene/render/player tree deleted,
-  `ANL-SM-03`/`ANL-SM-02` both real and green. Sync plan retired its own §2/§3
-  per §6.6. `E2E-VZ-01`'s `PASS` now means C++-vs-frozen-snapshot, not two
-  live implementations — stated explicitly so it isn't over-read later.
-  Record: `docs/v2/SIM_Test_Execution_2026-08-29_b1_close.md`.

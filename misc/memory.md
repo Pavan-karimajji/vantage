@@ -89,13 +89,21 @@ was the proof.** Two stacks coexisted forever.
 sub-packages — `io`, `runspec`, `diagnostics`, `session`, `abi` exist in both.
 Mid-migration, both halves live, neither deletable.
 
-**viz.** `modules/df/src/platform/df_viz/` still holds ~4,900 lines of the old
-toolkit. Its `viz/` folder has been emptied down to two directories; everything
-else was copied to `modules/viz` and the original left standing.
-
-**And around all of it**, ~6,300 lines of superseded tooling that the R-SIM rules
-were written to replace — `df/tools/carla/`, `replay/viz.py`, `df_sim_gui.py`,
-`bsdviz/` — all still present.
+**viz — corrected 2026-08-30, both claims below were wrong.** `modules/df/src/platform/df_viz/`
+is not old toolkit; it's df's real CarMaker viz plug-in (`sil_viz`/`cm_viz`
+build and deploy it, `PushHost` loads it) — verified against a real build,
+not the line count that originally called it "~4,900 lines of the old
+toolkit." The "~6,300 lines of superseded tooling `df/tools/carla/`,
+`replay/viz.py`, `df_sim_gui.py`, `bsdviz/` — all still present" claim was
+also wrong: all four are active (recent commits, or live imports through the
+current GUI, or both), not leftovers the R-SIM rules were written to replace.
+**Why:** this section was written from a day-one measurement sweep — line
+counts and directory listings — without reading the build config or the git
+log. The pattern this section names *is* real, just not here: sim's own
+Python scene/render/player stack really was a superseded copy left standing
+for months, and really was deleted, 2026-08-29 (`B1`/`SM-12`). Full audit:
+`docs/v2/SIM_Test_Execution_2026-08-30_movement_b_plan_audit.md` and
+`..._b2_execute_b3_rescope.md`.
 
 Every migration in this project has been a **copy**, never a **move**. Nothing has
 ever been finished, because finishing means deleting, and deletion has never once

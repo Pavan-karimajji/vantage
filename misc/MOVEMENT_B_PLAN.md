@@ -1,19 +1,26 @@
 # Movement B — finish what exists
 
-**Written:** 2026-08-27 · **Status:** `B2` corrected and executed 2026-08-30
-(388 lines, three duplicate test files, in `modules/df`). `B3` re-scoped the
-same day — zero of its four rows are ready to execute; nothing deleted. `B1`
-closed 2026-08-29. `B4` not started.
+**Written:** 2026-08-27 · **Status:** `B1` closed 2026-08-29. `B2` corrected
+and executed 2026-08-30 (388 lines, three duplicate test files, in
+`modules/df`). `B3` re-scoped the same day — zero of its four rows are ready
+to execute; nothing deleted. `B4` re-measured 2026-08-30 — re-scoped to one
+real item (`io`), not actionable yet (parity gap); nothing deleted.
+**`B1`–`B4` are all now either closed or re-scoped to their real remaining
+content — no row in this plan still rests on an unverified claim.**
 **Corrected 2026-08-30:** `B2` was a misreading (deletion would have broken
 CarMaker viz) — rewritten, re-scoped to 388 real duplicate lines, and executed
 (gated on a real vs2026 build, 314/315 → 311/312 tests, exactly 3 fewer test
 binaries, one pre-existing unrelated failure unchanged). `B3` re-scoped in
 full: all four rows failed verification against the code (not legacy, not
 orphaned, or not superseded by what the row claimed) — none executed. `B4`
-sizes re-measured, not executed. See
-`docs/v2/SIM_Test_Execution_2026-08-30_movement_b_plan_audit.md` (the
-correction) and `docs/v2/SIM_Test_Execution_2026-08-30_b2_execute_b3_rescope.md`
-(execution + re-scope).
+re-measured per-item (not just re-sized): 4 of its 5 claimed overlaps were
+never overlaps (asymmetric by design, or a producer/consumer pair, or
+cross-module) — only `io` is real, and its own C++ code admits it isn't at
+parity yet. See
+`docs/v2/SIM_Test_Execution_2026-08-30_movement_b_plan_audit.md` (the `B2`
+correction), `docs/v2/SIM_Test_Execution_2026-08-30_b2_execute_b3_rescope.md`
+(`B2` execution + `B3` re-scope) and
+`docs/v2/SIM_Test_Execution_2026-08-30_b4_remeasure.md` (`B4` re-measure).
 **Reads with:** `memory.md` (why), `DEMO_AND_SCOPE.md` (the finite list),
 `CONSOLIDATED_REQUIREMENTS.md` (the 25 lines).
 
@@ -185,34 +192,47 @@ targets re-identified, not just its gates re-checked.
 > this corpus entirely, before touching row 1 — which, independently, is not
 > legacy tooling anyway per the finding above.**
 
-## B4 — Resolve the Python/C++ overlap · Decision A
+## B4 — Resolve the Python/C++ overlap · Decision A · **re-measured 2026-08-30, re-scoped to one item, nothing deleted**
 
-**Sizes re-measured 2026-08-30 — stale, not wrong; expected drift from `B1`
-closing since this plan was written.** `adas_sim` is now 18,560 lines, not
-26,272 — `B1`/`SM-12` deleted the Python scene/render/player tree on
-2026-08-29, after this row's number was written. `simcore` is 31,406, close to
-the original 31,064. Re-checking the five named overlaps: `io`, `runspec` and
-`diagnostics` still exist on both sides as claimed; **`session` is Python-only
-today (no `simcore/session`) and `abi` is C++-only (no `adas_sim/abi`)** — so
-only 3 of the 5 are a live overlap right now, not 5. Not re-scoped this pass
-(unlike `B2`/`B3` row 3, this reads as the overlap having partly resolved
-itself already rather than as a misreading of what exists) — worth a fresh
-look before starting `B4` rather than trusting this paragraph's original count.
+`adas_sim` is 18,560 lines today, not the original 26,272 (`B1`/`SM-12`
+deleted the Python scene/render/player tree 2026-08-29, after this row was
+written — drift, not a misreading). `simcore` is 31,406, close to the
+original 31,064.
 
-`modules/sim/src` carries two stacks: `adas_sim` (Python) and `simcore` (C++).
+**Each of the five named overlaps checked individually — by reading the
+code and its own header comments, not by re-running the earlier line-count
+sweep** (the method `MOVEMENT_B_PLAN.md`'s own audit note above says this
+file must stop trusting):
 
-| Item | Work |
-|---|---|
-| `WP-16` (1 open) | **DELETION** — retire `sil_host`, end seven duplications |
-| `WP-02` (11 started, 1 open) | Python restructure, world-model removal, archive |
+| Item | Python (`adas_sim`) | C++ (`simcore`) | Verdict |
+|---|---|---|---|
+| `io` | `io/` — 5 files, 1,266 lines. Format codecs (`base`/`csv`/`jsonl`/`mcap.py`) | `io/` — 10 files, 1,673 lines | **Genuine second implementation.** `simcore/io/registry.cpp`'s own header: *"Ports `io/registry.py`'s `register`/`reader_for`/`writer_for` behaviour."* `codecs/mcap.cpp`'s own header: *"the C++ twin of `io/mcap.py`... ported"* — and **honestly documents its own gap**: it does not yet replicate `io/mcap.py`'s `manifest_version >= CAPTURE_TIME_MANIFEST_VERSION` gate. Real overlap, but the C++ side's own comment says it is not yet at parity — not safe to act on this pass regardless |
+| `runspec` | `runspec/` — 6 files, 1,614 lines. `emit.py`: *"the seam's own producer"* | `runspec/` — 1 file, `load.cpp`, 255 lines | **Not a duplicate.** `load.cpp`'s own header: *"parses the JSON text `emit_run_spec`/`write_run_spec` produced"* — a consumer of Python's output, never a competing builder. Producer and consumer sharing a folder name, exactly the documented `WP-05` seam. Nothing to resolve |
+| `session` | `session/` — 4 files, 749 lines, actively imported by 11 real source files (`check/`, `cli/`, `config/`, `core/runner.py`, `diagnostics/`×3, `graph/build.py`, `pyapi/api.py`) + 14 test files | none in `simcore` | **Real duplicate — but not here.** `modules/viz/cpp/viz/session/session.hpp`'s own header: *"the C++ rewrite of `adas_sim.session.session.Session`, living in `adas-viz-player`."* Both sides are live and used today. This is a genuine cross-**module** overlap (`sim` vs `viz`), outside `B4`'s own stated scope (*"`modules/sim/src` carries two stacks"*) — a `sim`-internal deletion pass cannot resolve it. Its own initiative, not a `B4` line item |
+| `abi` | none in `adas_sim` | `abi/simcore.cpp` — 514 lines. `simEngineCreate`/`Run`/`Destroy`, the engine's own generic ABI | **Not an overlap at all.** This is the per-tick engine's own entry point — C++-only by design, the whole point of Decision A. Python has no equivalent because Python no longer hosts a per-tick engine. Asymmetric on purpose, nothing missing |
+| `diagnostics` | `diagnostics/` — 13 files, 1,724 lines: `determinism` (cross-run comparison), `explain`/`evidence` (`sim explain` CLI facts), `tolerance`, `suggest`, `console` — reporting/CLI, once-per-run | `diagnostics/` — 6 files, 470 lines: `breakpoints`, `reproducer` (crash-dump writer hooked into the engine's own crash detection), `trace` (per-cycle hook inside the execution loop) — runtime engine instrumentation | **Not a duplicate.** Different concerns sharing a directory name: Python is offline reporting/tooling, C++ is in-loop engine instrumentation. `evidence.py`'s own header even names the split explicitly: *"viz's own C++ evidence chain (`BuildEvidence`) is the live [formatter]"* for the runtime half; this file stays the headless `--at` half |
 
-**Method, per overlapping sub-package:** name the winner (C++, per Decision A),
-prove parity, delete the loser, verify.
+**Net: 1 of 5 rows is real** (`io`), and even that one is not actionable this
+pass — the C++ side's own comment documents an unresolved capability gap, so
+"prove parity, delete the loser" cannot run yet. `runspec`, `abi` and
+`diagnostics` were never overlaps; `session` is a real overlap but belongs to
+a `sim`/`viz` cross-module initiative `B4` was never scoped to reach.
 
-**Do not over-delete.** Python still legitimately owns the once-per-run half —
-resim, config resolution, the run spec. The engine split is a stated rule:
+**`B4` is re-scoped, not retired** — unlike `B3`, it is not empty: `io` is a
+real, named, tracked gap. Retained as a single item (close the
+`manifest_version`/capture-time parity gap in `simcore/io/codecs/mcap.cpp`,
+then delete `adas_sim/io/`'s overlapping half) rather than the original
+five-row table. `WP-16` (10/11 boxes, 1 left, unchanged — `sil_host`
+retirement) and `WP-02`'s "seven duplications"/restructure claims were **not
+independently re-verified this pass** — out of the five-overlap scope this
+session was asked to re-measure; flagged so a future pass does not assume
+they were.
+
+**Do not over-delete.** Python still legitimately owns the once-per-run half
+— resim, config resolution, the run spec. The engine split is a stated rule:
 *per tick is C++, once per run is Python*, joined by the Resolved Run Spec
 (`WP-05`, the seam). Python that has no C++ replacement is not dead code.
+Full account: `docs/v2/SIM_Test_Execution_2026-08-30_b4_remeasure.md`.
 
 ## ~~B5 — Readers and writers~~ · **PARKED 2026-08-27**
 
@@ -229,15 +249,17 @@ ERG, MDF4, rosbag. The `.erg` codec is already written, so that day starts from
 ## Order, and why
 
 ```
-B1 (viz, 10 boxes)  ──►  B2 (388-line test dedup)  ──►  B4 (py/c++ overlap)
+B1 (viz, 10 boxes)  ──►  B2 (388-line test dedup)  ──►  B4 (io parity gap, 1 item)
                                 │
           B3 (legacy tooling)  ◄┘   only after the parked scenario
                                     finding is resolved, or ruled irrelevant
 ```
 
 B1 first: small, finishes a whole 43-item plan, and one of its boxes stops every
-future session being misinformed on its first read. B4 last of the three, because
-it is the largest and the least urgent now that ERG is parked.
+future session being misinformed on its first read. B4 last — **re-scoped
+2026-08-30 from a five-row Python/C++ overlap sweep to one item** (`io`'s
+`mcap.py`/`mcap.cpp` parity gap), smaller than originally thought and still not
+urgent now that ERG is parked.
 
 **Movement B no longer blocks the demo.** With ERG gone, the demo's critical path
 (`DEMO_AND_SCOPE.md` §5) runs entirely through already-part-built packages —
@@ -250,7 +272,15 @@ the debt that makes the next six months cheap; it is not the gate on the POC.
 1. The viz sync plan has deleted itself.
 2. `modules/df/src/platform/df_viz/` **stays** — it is `df`'s real viz plug-in
    (corrected 2026-08-30). Its 3 duplicate toolkit tests (388 lines) are gone.
-3. Exactly one implementation of io, session, abi, runspec and diagnostics.
+3. ~~Exactly one implementation of io, session, abi, runspec and diagnostics.~~
+   **Corrected 2026-08-30** — only `io` is a genuine second implementation;
+   `runspec`/`abi`/`diagnostics` are asymmetric by design (producer/consumer,
+   engine-only, and different concerns sharing a name, respectively) and were
+   never meant to converge. `session`'s real duplicate is cross-module
+   (`sim` Python vs `viz` C++), outside this movement's own scope. Revised:
+   `io`'s C++ codec reaches parity with `io/mcap.py` (the documented
+   `manifest_version`/capture-time gap closes), then `adas_sim/io/`'s
+   overlapping half is deleted.
 4. The gate is green with no parked-failure exceptions other than WP-31 scope.
 5. ~~`sim` can read a real ERG measurement end to end.~~ *Parked with ERG.*
 
