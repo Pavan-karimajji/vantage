@@ -71,6 +71,36 @@ already-dispositioned `render_svg` stale-token finding, untouched). Record:
 `docs/v2/SIM_Test_Execution_2026-08-30_wp22_camera_feed.md`. **Not yet
 committed — reported and awaiting the author's go-ahead.**
 
+**`WP-22`'s own commit was reviewed and pushed 2026-08-30** (`viz` `0f67af6`,
+`df` `b9ceba1`, `sim` `6495ab8`, superproject `c231337`) — the ABI bump and
+frozen-requirement amendment both already asked about mid-session. Then the
+legacy-recording finding that same record left open (`objects`/`hud`/
+`bsd.warning` render nothing against `bsd_curve_r172_passby.mcap`) was
+closed for `objects`: the player now applies the same `R-SIM-23` ingest map
+the engine does (`viz/session/ingest_loader.{hpp,cpp}`, `Session::Open`'s
+new `plugin_dirs` parameter), plus a real, previously-unexercised porting
+gap this exposed and closed (`viz::player::TopicToPortName` drops a
+topic's first segment unconditionally, so an ingest-mapped
+`source.<port>` reaches `PortBytes` as the bare suffix, never `R-SIM-21`'s
+`source.<port>` spelling — `conf/viz.yaml`'s `objects`/`hud` layers gained
+a second required-port entry for the bare legacy name,
+`layers/common.cpp`'s new `FindEither` tries both). Exit gate met: the same
+screenshot now shows a real object box. **`bsd.warning` was never fixable
+here** — the recording carries no `bsd.compState`/`bsd.outputs` topic at
+all (genuinely absent data, confirmed directly against the mcap). **A real,
+separate, pre-existing regression was found in the same pass, not caused by
+it and not fixed:** rebuilding `sim`'s three-day-stale `sil` library (needed
+just to link this feature) first exercised `450031e`'s 2026-08-28 topic-
+canonicalization change for real, which breaks three `viz` unit tests
+*and* silently blacks out `WP-22`'s own just-pushed camera panel
+(`SessionImageResolver::Resolve`'s exact-string topic lookup no longer
+matches the codec's now-canonical `"/carla/chase_camera"`) — verified
+independent of this pass's own ingest-map work (reproduces identically
+with `--plugin-path` omitted). Record:
+`docs/v2/SIM_Test_Execution_2026-08-30_legacy_objects_ingest.md`. **Not yet
+committed — reported and awaiting the author's go-ahead**, same as `WP-22`
+was.
+
 **`misc/memory.md` §3 no longer contradicts itself.** Its closing line used
 to say *"deletion has never once been executed"* directly under this same
 session's own correction that `B1` deleted the Python scene/render/player
@@ -120,20 +150,29 @@ fixes).
 > sub-task. The Movement C scope conversation this file named before `B1`
 > started (`DEMO_AND_SCOPE.md` §1's *"may begin. Not before"*) is still the
 > standing open question and this session did not touch it. **Item `#20`'s
-> video-feed entry is implemented and exit-gated** — real frame,
-> screenshotted, `viz` `WP-22` — **but sitting uncommitted in `modules/viz`
-> and `modules/df`, awaiting the author's go-ahead** (record:
-> `docs/v2/SIM_Test_Execution_2026-08-30_wp22_camera_feed.md`). **The next
-> action is that commit decision, not new work:** review the diff (an ABI
-> bump + a frozen-requirement amendment both landed along the way, both
-> already asked about and approved mid-session, both explained in the
-> record) and say go/no-go. Once committed, two real, separate, un-owned
-> gaps the same pass surfaced are the next candidates, neither started:
-> `objects`/`hud`/`bsd.warning` render nothing against a legacy-topic-named
-> recording via bare `--recording` replay (found empirically, not
-> theorized), and `SYS-0089`'s missing golden-Scene test for
-> `camera.chase`. The other four `#20` pieces are still untouched, per
-> instruction.
+> video-feed entry (`WP-22`) is committed and pushed** (`viz` `0f67af6`,
+> `df` `b9ceba1`, `sim` `6495ab8`, superproject `c231337`). **The
+> legacy-recording `objects` gap that record left open is now closed too**
+> (ingest map applied on the player's own `--recording` path, plus a
+> bare-legacy-name fallback for the two ports that need one — not
+> `R-SIM-21`'s `source.<port>` spelling, which does not survive this
+> player's own topic stripping) — **sitting uncommitted in `modules/viz`
+> and `modules/df`, awaiting the
+> author's go-ahead**, same review shape as `WP-22` itself (record:
+> `docs/v2/SIM_Test_Execution_2026-08-30_legacy_objects_ingest.md`). **The
+> next action is that commit decision, plus a priority call on the
+> regression this pass surfaced**, not new feature work: a fresh rebuild of
+> `sim`'s previously-stale `sil` library exposed that `WP-22`'s own
+> camera panel has been silently rendering black since `450031e` landed
+> (2026-08-28, two days before `WP-22` shipped) — confirmed independent of
+> this pass's own ingest-map change, confirmed not `bsd.warning`-recoverable
+> (this recording never carries `bsd.compState`/`bsd.outputs` at all). The
+> fix is small and named in the record (`SessionImageResolver::Resolve`
+> needs to canonicalize its lookup key) but is a separate initiative from
+> everything committed so far, and three `viz` unit tests share the same
+> root cause. `SYS-0089`'s missing golden-Scene test for `camera.chase` is
+> still open, untouched. The other four `#20` pieces are still untouched,
+> per instruction.
 
 ## Do not
 
@@ -212,6 +251,25 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-08-30** — `WP-22` reviewed and pushed (`viz` `0f67af6`, `df`
+  `b9ceba1`, `sim` `6495ab8`, superproject `c231337`). Then the
+  legacy-recording `objects` gap it left open, closed: player applies the
+  same `R-SIM-23` ingest map the engine does (`viz/session/ingest_loader.
+  {hpp,cpp}`, `Session::Open`'s new `plugin_dirs`), plus a real porting gap
+  found and closed (`viz::player::TopicToPortName` drops "source" like any
+  other producer prefix, so an ingest-mapped port reaches `PortBytes` as its
+  bare legacy name, never `R-SIM-21`'s `source.<port>` spelling —
+  `conf/viz.yaml`/`layers/common.cpp`'s new `FindEither` try both).
+  **Verdict:** the same screenshot now shows a real object box; `bsd.warning`
+  stays unfixable here (the recording carries no `bsd.compState` at all).
+  **Real, separate, pre-existing regression found, not caused, not fixed:**
+  rebuilding `sim`'s three-day-stale `sil` lib (needed to link this) first
+  exercised `450031e`'s 2026-08-28 topic-canonicalization change for real —
+  it blacks out `WP-22`'s own just-pushed camera panel (confirmed
+  independent of this pass's own change) and breaks 3 `viz` unit tests.
+  `viz` `gtest` 46/49, `df` `gtest` 311/312 (same baseline as `WP-22`).
+  **Uncommitted — reported, awaiting go-ahead.** Record:
+  `docs/v2/SIM_Test_Execution_2026-08-30_legacy_objects_ingest.md`.
 - **2026-08-30** — Item `#20`'s video-feed entry implemented: `WP-22`'s
   three pieces (camera layer in `df`'s real C++ plug-in, `SessionImageResolver`
   in `viz`, a second player panel) plus two things found live and not
@@ -283,16 +341,3 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   (`sim` Python vs `viz` C++, outside `B4`'s scope). `B4` rewritten to one
   item; Movement B is not fully done. Nothing deleted. Record:
   `docs/v2/SIM_Test_Execution_2026-08-30_b4_remeasure.md`.
-- **2026-08-30** — Author priority: de-risk CarMaker viz for a near-term demo.
-  `B2`/`B3` work from earlier today committed/pushed first, R-GIT-1 order
-  (`df` `6be858e`, `sim` `bc49152`, superproject `19211b2`). Then a clean
-  `cm_viz` rebuild on vs2026 (two pre-existing env breaks fixed: stale
-  `adas-mathlib` Conan editable, `adas-local` auth), `df_sil.dll`/`df_viz.dll`
-  confirmed freshly deployed, a real BSD TestRun run both headless (clean) and
-  live with the `df_viz` window screenshotted showing `bsd.zone`/
-  `bsd.warning`/`bsd.sensor_fov` registered and rendering. No risk found.
-  Separately root-caused `df_viz_test_render_svg`'s failure via `git log`: a
-  stale token in one test file, missed by a 2026-08-26 rename sweep that fixed
-  its two sibling tests — confirmed SVG-only, zero live-picture impact, not
-  fixed per instruction. Filed on the `df` side (nothing here touched
-  `modules/sim`): `modules/df/docs/viz/df_viz_Test_Execution_2026-08-30.md`.
