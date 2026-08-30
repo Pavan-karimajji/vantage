@@ -46,6 +46,31 @@ hardcoded to `VIZ_SPACE_EGO_BEV` only), and a layer provider that calls
 sufficient with no regeneration. Record:
 `docs/v2/SIM_Test_Execution_2026-08-30_item20_video_feed_scoping.md`.
 
+**`WP-22` (the scoped three-piece gap) implemented and exit-gated 2026-08-30
+— a real frame from `bsd_curve_r172_passby.mcap`'s `carla/chase_camera`
+decodes and draws live in `viz_player.exe`'s own "Camera" panel, beside the
+BEV, screenshotted.** Not `vantage_app.exe` — asked and answered mid-session
+(`frame_bridge.cpp` never fills `schema_bytes`, no `--recording` path exists
+there at all; `vantage_app.exe` untouched). Needed more than the three named
+pieces, found live, not planned: a genuine `VizTickView`/`PortBytes`
+`log_time_ns` field (`DF_VIZ_ABI_VERSION` bumped 1→2, additive, 12 call
+sites checked, none broke) so a layer has a real tick time to stamp a
+reference with at all; `SW-0021`/`SYS-0088` ("exactly five layers")
+amended to six after asking the author (piggyback-on-an-existing-layer was
+the smaller alternative, declined) — a real build-time gate
+(`gen_viz_shim.py`) as well as a test, both fixed, cascading count
+assertions fixed with it. `stb_image.h` vendored (public domain, pinned,
+`STBI_ONLY_JPEG`) for the JPEG decode, named per instruction. **Real,
+pre-existing, separate gap found, not caused:** `objects`/`hud`/
+`bsd.warning` emit nothing against this specific legacy-topic-named
+recording (`TopicToPortName`'s stage-stripping expects a self-produced
+recording's own naming) — the BEV beside the camera is real (zone/
+sensor-FOV/frame geometry) but has no object boxes; named, not fixed.
+`viz` `gtest` 49/49, `df` `gtest` 311/312 (the one failure is the
+already-dispositioned `render_svg` stale-token finding, untouched). Record:
+`docs/v2/SIM_Test_Execution_2026-08-30_wp22_camera_feed.md`. **Not yet
+committed — reported and awaiting the author's go-ahead.**
+
 **`misc/memory.md` §3 no longer contradicts itself.** Its closing line used
 to say *"deletion has never once been executed"* directly under this same
 session's own correction that `B1` deleted the Python scene/render/player
@@ -94,15 +119,21 @@ fixes).
 > acted on; needs its own initiative before anyone touches it, not a `B4`
 > sub-task. The Movement C scope conversation this file named before `B1`
 > started (`DEMO_AND_SCOPE.md` §1's *"may begin. Not before"*) is still the
-> standing open question and this session did not touch it. **Item `#20` is
-> now scoped, not started** — `WP-30` correctly stays parked (it doesn't
-> reach a frame on screen); the smallest first step is a `viz`-side harness
-> (concrete `ImageResolver` + a second, currently-nonexistent image-space
-> panel) plus one `df`-side layer provider in the real C++ plug-in
-> (`src/platform/df_viz/layers/`, never the Python `sim/layers/`, which is
-> prototyping-only). No `WP`/`VZ` row opened for it yet — that, and whether
-> to open one in `viz`'s plan or `df`'s, is the author's call. **Do not start
-> writing it without that decision.**
+> standing open question and this session did not touch it. **Item `#20`'s
+> video-feed entry is implemented and exit-gated** — real frame,
+> screenshotted, `viz` `WP-22` — **but sitting uncommitted in `modules/viz`
+> and `modules/df`, awaiting the author's go-ahead** (record:
+> `docs/v2/SIM_Test_Execution_2026-08-30_wp22_camera_feed.md`). **The next
+> action is that commit decision, not new work:** review the diff (an ABI
+> bump + a frozen-requirement amendment both landed along the way, both
+> already asked about and approved mid-session, both explained in the
+> record) and say go/no-go. Once committed, two real, separate, un-owned
+> gaps the same pass surfaced are the next candidates, neither started:
+> `objects`/`hud`/`bsd.warning` render nothing against a legacy-topic-named
+> recording via bare `--recording` replay (found empirically, not
+> theorized), and `SYS-0089`'s missing golden-Scene test for
+> `camera.chase`. The other four `#20` pieces are still untouched, per
+> instruction.
 
 ## Do not
 
@@ -181,6 +212,27 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-08-30** — Item `#20`'s video-feed entry implemented: `WP-22`'s
+  three pieces (camera layer in `df`'s real C++ plug-in, `SessionImageResolver`
+  in `viz`, a second player panel) plus two things found live and not
+  planned — a `VizTickView`/`PortBytes` `log_time_ns` field
+  (`DF_VIZ_ABI_VERSION` 1→2, additive, checked against all 12 call sites)
+  and `SW-0021`/`SYS-0088`'s "exactly five layers" amended to six (asked the
+  author mid-session: amend vs. piggyback on an existing layer — amend
+  chosen; a real `gen_viz_shim.py` build gate and cascading test counts
+  fixed with it). `stb_image.h` vendored (public domain, pinned,
+  `STBI_ONLY_JPEG`) for the JPEG decode. **Verdict:** a real frame from
+  `bsd_curve_r172_passby.mcap` decodes and draws live in `viz_player.exe`'s
+  "Camera" panel beside the BEV, screenshotted
+  (`modules/sim/logs/wp22_camera_feed/`). `vantage_app.exe` untouched — its
+  own tick path (`frame_bridge.cpp`) never fills `schema_bytes`, asked and
+  resolved mid-session. Real, pre-existing, separate gap found (not
+  caused): `objects`/`hud`/`bsd.warning` render nothing against this
+  legacy-topic-named recording via bare replay — `TopicToPortName` expects
+  a self-produced recording's own naming convention. `viz` gtest 49/49,
+  `df` gtest 311/312 (the one failure is the already-dispositioned
+  `render_svg` stale-token finding, untouched). **Uncommitted — reported,
+  awaiting go-ahead.** Record: `docs/v2/SIM_Test_Execution_2026-08-30_wp22_camera_feed.md`.
 - **2026-08-30** — Prior pass's `memory.md`/`Session`-finding work
   committed/pushed (R-GIT-1: `sim` `ad4abb9`, superproject `361992c`; `df`
   had nothing pending). Then item `#20`'s video-feed entry scoped against
@@ -244,17 +296,3 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   its two sibling tests — confirmed SVG-only, zero live-picture impact, not
   fixed per instruction. Filed on the `df` side (nothing here touched
   `modules/sim`): `modules/df/docs/viz/df_viz_Test_Execution_2026-08-30.md`.
-- **2026-08-30** — `B2` executed for real in `modules/df`: gated on a live
-  vs2026 build (recovered two pre-existing environment breaks first — a
-  stale `adas-mathlib` Conan editable pointing at a different checkout on
-  this machine, and the known `adas-local` auth gap), baseline 314/315 tests
-  green, deleted the 3 duplicate test files + their CMake blocks, rebuilt
-  green at 311/312 (exactly 3 fewer test binaries, same 1 pre-existing
-  unrelated failure). Then `B3` fully re-scoped against the build and `git
-  log`: all four rows turned out to name active or non-superseded code, not
-  legacy — `tools/carla/` and `replay/viz.py` both have recent real activity
-  and `replay/viz.py` is actively imported through the current GUI;
-  `df_sim_gui.py` retired as a deletion target; `bsdviz/`'s gate fails
-  (8 figure-generator files still import it). Zero `B3` rows ready to
-  execute. Staged in `modules/df`, not committed. Record:
-  `docs/v2/SIM_Test_Execution_2026-08-30_b2_execute_b3_rescope.md`.
