@@ -154,6 +154,26 @@ the regression above, visible in the same shot) and
 `--plugin-path`, camera panel still black, confirming the regression is
 independent of this session's own feature).
 
+## Update, same day: the camera regression fixed
+
+Author's call: fix it in this same pass rather than defer it.
+`SessionImageResolver::Resolve` (`modules/viz/cpp/viz/render_gl/
+session_image_resolver.cpp`) now canonicalizes its lookup key
+(`simcore::io::CanonicalTopic(key.topic)`) before calling `tick.Port(...)`
+— symmetric with the write side the mcap codec already applies
+unconditionally since `450031e`. Scoped entirely to `modules/viz`'s
+player-side code (`adas-viz-runner`, linked only by `viz_player.exe`/
+`vantage_app.exe`, never by a component's own DLL) — `modules/df`'s own
+build and test suite need no change and were re-verified unchanged
+(`311/312`, same baseline). Live-GUI re-verified: the Camera panel shows
+the decoded road scene again (car, road, guardrail, trees, sky), sampled 3
+times over ~10s, no flicker. Screenshot:
+`modules/sim/logs/wp22_camera_feed/viz_player_camera_fixed_2026-08-30.png`.
+`viz` `gtest` re-run after the fix: still **46/49** — the 3 pre-existing,
+orthogonal canonicalization-regression failures (`viz_test_session`,
+`viz_test_pull_source`, `viz_test_erg_pull_integration`) are untouched by
+this fix and remain open, named above, not this pass's to close.
+
 ## Build/test state
 
 - `modules/sim`: `sil` (`vs2026`) rebuilt clean from the 2026-08-25 stale

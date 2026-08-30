@@ -87,19 +87,28 @@ a second required-port entry for the bare legacy name,
 `layers/common.cpp`'s new `FindEither` tries both). Exit gate met: the same
 screenshot now shows a real object box. **`bsd.warning` was never fixable
 here** — the recording carries no `bsd.compState`/`bsd.outputs` topic at
-all (genuinely absent data, confirmed directly against the mcap). **A real,
-separate, pre-existing regression was found in the same pass, not caused by
-it and not fixed:** rebuilding `sim`'s three-day-stale `sil` library (needed
-just to link this feature) first exercised `450031e`'s 2026-08-28 topic-
-canonicalization change for real, which breaks three `viz` unit tests
-*and* silently blacks out `WP-22`'s own just-pushed camera panel
-(`SessionImageResolver::Resolve`'s exact-string topic lookup no longer
-matches the codec's now-canonical `"/carla/chase_camera"`) — verified
-independent of this pass's own ingest-map work (reproduces identically
-with `--plugin-path` omitted). Record:
-`docs/v2/SIM_Test_Execution_2026-08-30_legacy_objects_ingest.md`. **Not yet
-committed — reported and awaiting the author's go-ahead**, same as `WP-22`
-was.
+all (genuinely absent data, confirmed directly against the mcap). This
+work committed and pushed (`viz` `82da36b`, `df` `1e2c01d`, `sim`
+`b40bcf3`, superproject `e91db63`).
+
+**A real, separate, pre-existing regression was found in the same pass, not
+caused by it — and fixed, author's call, same session.** Rebuilding
+`sim`'s three-day-stale `sil` library (needed just to link the ingest-map
+feature above) first exercised `450031e`'s 2026-08-28 topic-canonicalization
+change for real, which silently blacked out `WP-22`'s own just-pushed
+camera panel (`SessionImageResolver::Resolve`'s exact-string topic lookup no
+longer matched the codec's now-canonical `"/carla/chase_camera"`) — verified
+independent of the ingest-map work (reproduced identically with
+`--plugin-path` omitted). Fixed by canonicalizing `Resolve`'s own lookup key
+— scoped entirely to `viz`'s player-side code (`adas-viz-runner`, never
+linked by a component's own DLL), so `df`'s build/tests needed no change
+(re-verified unchanged, `311/312`). Live-GUI re-verified: the camera panel
+decodes again. **The three pre-existing `viz` unit-test failures sharing
+this same root cause remain open** (`viz_test_session`,
+`viz_test_pull_source`, `viz_test_erg_pull_integration`) — a different class
+of fix (stale test fixtures asserting an un-canonicalized topic spelling),
+not this pass's to close. Record:
+`docs/v2/SIM_Test_Execution_2026-08-30_legacy_objects_ingest.md`.
 
 **`misc/memory.md` §3 no longer contradicts itself.** Its closing line used
 to say *"deletion has never once been executed"* directly under this same
@@ -151,28 +160,27 @@ fixes).
 > started (`DEMO_AND_SCOPE.md` §1's *"may begin. Not before"*) is still the
 > standing open question and this session did not touch it. **Item `#20`'s
 > video-feed entry (`WP-22`) is committed and pushed** (`viz` `0f67af6`,
-> `df` `b9ceba1`, `sim` `6495ab8`, superproject `c231337`). **The
-> legacy-recording `objects` gap that record left open is now closed too**
-> (ingest map applied on the player's own `--recording` path, plus a
-> bare-legacy-name fallback for the two ports that need one — not
-> `R-SIM-21`'s `source.<port>` spelling, which does not survive this
-> player's own topic stripping) — **sitting uncommitted in `modules/viz`
-> and `modules/df`, awaiting the
-> author's go-ahead**, same review shape as `WP-22` itself (record:
-> `docs/v2/SIM_Test_Execution_2026-08-30_legacy_objects_ingest.md`). **The
-> next action is that commit decision, plus a priority call on the
-> regression this pass surfaced**, not new feature work: a fresh rebuild of
-> `sim`'s previously-stale `sil` library exposed that `WP-22`'s own
-> camera panel has been silently rendering black since `450031e` landed
-> (2026-08-28, two days before `WP-22` shipped) — confirmed independent of
-> this pass's own ingest-map change, confirmed not `bsd.warning`-recoverable
-> (this recording never carries `bsd.compState`/`bsd.outputs` at all). The
-> fix is small and named in the record (`SessionImageResolver::Resolve`
-> needs to canonicalize its lookup key) but is a separate initiative from
-> everything committed so far, and three `viz` unit tests share the same
-> root cause. `SYS-0089`'s missing golden-Scene test for `camera.chase` is
-> still open, untouched. The other four `#20` pieces are still untouched,
-> per instruction.
+> `df` `b9ceba1`, `sim` `6495ab8`, superproject `c231337`), **and the
+> legacy-recording `objects` gap that record left open is closed, committed
+> and pushed too** (`viz` `82da36b`, `df` `1e2c01d`, `sim` `b40bcf3`,
+> superproject `e91db63`) — ingest map applied on the player's own
+> `--recording` path, plus a bare-legacy-name fallback for the two ports
+> that need one (not `R-SIM-21`'s `source.<port>` spelling, which does not
+> survive this player's own topic stripping). **The camera-panel regression
+> that same pass surfaced is fixed too** (`SessionImageResolver::Resolve`
+> now canonicalizes its lookup key, symmetric with the codec's own write
+> side) — scoped entirely to `viz`'s player-side code, `df` needed no
+> rebuild. Record:
+> `docs/v2/SIM_Test_Execution_2026-08-30_legacy_objects_ingest.md`. **Not
+> yet committed — the camera fix landed after the ingest-map commit above;
+> the next action is committing and pushing it** (same `modules/viz` files
+> only, `docs`/`START_HERE` in `sim`). **Three pre-existing `viz` unit tests
+> share the canonicalization regression's root cause and remain open**
+> (`viz_test_session`, `viz_test_pull_source`,
+> `viz_test_erg_pull_integration`) — a different, stale-fixture-shaped fix,
+> not yet started. `SYS-0089`'s missing golden-Scene test for
+> `camera.chase` is still open, untouched. The other four `#20` pieces are
+> still untouched, per instruction.
 
 ## Do not
 
@@ -253,22 +261,30 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 - **2026-08-30** — `WP-22` reviewed and pushed (`viz` `0f67af6`, `df`
   `b9ceba1`, `sim` `6495ab8`, superproject `c231337`). Then the
-  legacy-recording `objects` gap it left open, closed: player applies the
-  same `R-SIM-23` ingest map the engine does (`viz/session/ingest_loader.
-  {hpp,cpp}`, `Session::Open`'s new `plugin_dirs`), plus a real porting gap
-  found and closed (`viz::player::TopicToPortName` drops "source" like any
-  other producer prefix, so an ingest-mapped port reaches `PortBytes` as its
-  bare legacy name, never `R-SIM-21`'s `source.<port>` spelling —
+  legacy-recording `objects` gap it left open, closed and pushed (`viz`
+  `82da36b`, `df` `1e2c01d`, `sim` `b40bcf3`, superproject `e91db63`):
+  player applies the same `R-SIM-23` ingest map the engine does
+  (`viz/session/ingest_loader.{hpp,cpp}`, `Session::Open`'s new
+  `plugin_dirs`), plus a real porting gap found and closed
+  (`viz::player::TopicToPortName` drops "source" like any other producer
+  prefix, so an ingest-mapped port reaches `PortBytes` as its bare legacy
+  name, never `R-SIM-21`'s `source.<port>` spelling —
   `conf/viz.yaml`/`layers/common.cpp`'s new `FindEither` try both).
   **Verdict:** the same screenshot now shows a real object box; `bsd.warning`
   stays unfixable here (the recording carries no `bsd.compState` at all).
-  **Real, separate, pre-existing regression found, not caused, not fixed:**
-  rebuilding `sim`'s three-day-stale `sil` lib (needed to link this) first
-  exercised `450031e`'s 2026-08-28 topic-canonicalization change for real —
-  it blacks out `WP-22`'s own just-pushed camera panel (confirmed
-  independent of this pass's own change) and breaks 3 `viz` unit tests.
-  `viz` `gtest` 46/49, `df` `gtest` 311/312 (same baseline as `WP-22`).
-  **Uncommitted — reported, awaiting go-ahead.** Record:
+  **Real, separate, pre-existing regression found in the same pass (not
+  caused by it) and fixed, author's call:** rebuilding `sim`'s three-day-
+  stale `sil` lib (needed to link the ingest-map feature) first exercised
+  `450031e`'s 2026-08-28 topic-canonicalization change for real, which
+  blacked out `WP-22`'s own just-pushed camera panel (confirmed independent
+  of the ingest-map change itself) — fixed by canonicalizing
+  `SessionImageResolver::Resolve`'s own lookup key, scoped entirely to
+  `viz`'s player-side code (`df` needed no rebuild, re-verified unchanged at
+  `311/312`). `viz` `gtest` 46/49 both before and after this fix — the 3
+  failures share the same canonicalization root cause but are a different,
+  stale-fixture-shaped repair, left open. **Camera fix uncommitted —
+  reported, awaiting go-ahead** (the ingest-map work above is already
+  pushed). Record:
   `docs/v2/SIM_Test_Execution_2026-08-30_legacy_objects_ingest.md`.
 - **2026-08-30** — Item `#20`'s video-feed entry implemented: `WP-22`'s
   three pieces (camera layer in `df`'s real C++ plug-in, `SessionImageResolver`
