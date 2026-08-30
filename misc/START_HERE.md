@@ -21,10 +21,12 @@
 ## Where we are
 
 **Movement A** ✅ done, except one item blocked on the author (a push).
-**Movement B** ✅ `B1` fully closed (2026-08-29): all 43 sync-plan rows
-`DONE`, `SM-08` (Qt out) closed the set, the sync plan retired its own §2/§3
-per §6.6. Two honest exceptions, not swept in — see
-`MOVEMENT_B_PLAN.md`'s own updated B1 row.
+**Movement B** ✅ `B1` fully closed (2026-08-29), and both of its own named
+exceptions closed 2026-08-30: `sync_check.py` deleted, `next.py` rewritten
+"minus its gate table", `check_cross_module_trace.py`'s 60 findings triaged
+(56 parser gap, fixed; 3 real, in df's design doc, left for df to fix). See
+`MOVEMENT_B_PLAN.md`'s own updated B1 row and
+`docs/v2/SIM_Test_Execution_2026-08-30_sync_check_retire.md`.
 **Movement C** ← **the POC demo runs, all five clauses, watched. The freeze
 ends by its own terms.**
 
@@ -125,16 +127,21 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-08-30** — Both exceptions `B1`'s closing record named are closed:
+  `sync_check.py` deleted, `scripts/next.py` rewritten "minus its gate table"
+  (runs each module's own `trace_check.py` instead of parsing the retired
+  sync plan §2/§3). `check_cross_module_trace.py`'s 60 `BROKEN` findings
+  triaged: 56 were a real parser gap (a third disposition-table definition
+  shape sim uses, now recognized — also fixed sim showing 0 defined `IMP`
+  UIDs), fixed; 3 (`VIZ:IMP-0036`/`0064`/`0065`, in df's design doc) are real
+  dangling links, left for df. Record:
+  `docs/v2/SIM_Test_Execution_2026-08-30_sync_check_retire.md`.
 - **2026-08-29** — `B1` (viz sync plan) fully closed: `SM-10`/`SM-05`/`SM-07`/
   `SM-12`/`SM-08` all done, the Python scene/render/player tree deleted,
   `ANL-SM-03`/`ANL-SM-02` both real and green. Sync plan retired its own §2/§3
-  per §6.6 — `sync_check.py` stays (breaks `scripts/next.py`'s import
-  otherwise), and `next.py`'s own checker list fixed so a retired
-  `sync_check.py` no longer blocks every module. `E2E-VZ-01`'s `PASS` now
-  means C++-vs-frozen-snapshot, not two live implementations — stated
-  explicitly so it isn't over-read later. `check_cross_module_trace.py` found
-  red (60 `BROKEN`, likely a parser gap, not fixed). Record:
-  `docs/v2/SIM_Test_Execution_2026-08-29_b1_close.md`.
+  per §6.6. `E2E-VZ-01`'s `PASS` now means C++-vs-frozen-snapshot, not two
+  live implementations — stated explicitly so it isn't over-read later.
+  Record: `docs/v2/SIM_Test_Execution_2026-08-29_b1_close.md`.
 - **2026-08-28** — Ingest map wired end to end (`#5` red → green): the emitter,
   the engine's spec parser, and a `Translator` that had no caller. A legacy
   recording went from 218 empty ticks to real data; `bsd_curve_r172_passby`
@@ -147,11 +154,3 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   to `adas_sim.launcher`. Demo run for real: both modes, both pictures agree,
   screenshotted. `F-8` found — build reads `unknown` though the recording
   carries it. Record: `…_2026-08-28_wp35.md`.
-- **2026-08-28** — `WP-28` driven against the real demo through its own API:
-  both toggle directions launch. Found and fixed `F-7` (every cut reported
-  infeasible against a real recording — an untested join). The visible half has
-  no box; that is the open decision. Record: `…_2026-08-28_wp28.md`.
-- **2026-08-28** — `F-1`/`F-2`/`F-3` fixed in `simcore`, `F-4` corrected in the
-  plan; rebuilt and verified on both platforms. `sim check` 3 failed → 0, no
-  regressions, one new finding (`F-6`). Record:
-  `docs/v2/SIM_Test_Execution_2026-08-28.md`.

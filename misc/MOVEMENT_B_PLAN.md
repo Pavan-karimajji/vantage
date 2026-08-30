@@ -49,16 +49,18 @@ The whole remainder of a 43-item plan. All of it was deletion or truth-telling.
 | `SM-12` — **done** | **Deleted the Python scene** — the `D-6` box. This *is* Decision B: `scene/`, `render/`, `player/shell/` gone, `player/panels/` down to `pipeline_panel.py` (`SI-22`'s own `KEEP`); ~20 dependent files individually triaged and fixed (`core/runner.py` split, `cli/render.py`/`cli/view.py` deleted, `plugins/registry.py`'s `EXTENSION_POINTS` amended, `scripts/vantage.py` deleted, `vantage.bat`/`gui.py`/`vantage_native.py` lost their `--legacy` fallback — a real, named capability loss, not silently dropped). `df`'s own `sim/layers/{bsd,common}.py` confirmed orphaned-but-harmless, not touched (separate submodule, separate finding). | `ANL-SM-03` real and green: exactly one layer-provider implementation remains |
 
 **Exit:** the sync plan self-deleted, per its own §6.6 — §2/§3 removed,
-2026-08-29. **Two honest exceptions, not swept in:** `sync_check.py` itself
-survives (`scripts/next.py`, superproject root, hard-imports it with no
-fallback and has not been rewritten to drop that dependency — deleting the
-script today would break `next.py` outright; `next.py`'s own checker list was
-fixed instead so a retired `sync_check.py` no longer blocks every module's
-work order). `scripts/check_cross_module_trace.py` (the one piece meant to
-permanently outlive this plan) is not clean — 60 `BROKEN` findings, likely a
-pre-existing parser gap rather than 60 real dangling links, named and left for
-whoever owns that next. Full account:
-`docs/v2/SIM_Test_Execution_2026-08-29_b1_close.md`.
+2026-08-29. **Both honest exceptions named at the time are now closed
+(2026-08-30):** `sync_check.py` is deleted — `scripts/next.py` was rewritten
+to drop the hard import, per the sync plan's own "minus its gate table"
+(§6.6), and now runs each of the three modules' own `trace_check.py` instead.
+`scripts/check_cross_module_trace.py`'s 60 `BROKEN` findings were triaged:
+56 (every `SIM:SW-*`/`SIM:SYS-*` one) were exactly the suspected parser gap
+— a third disposition-table definition shape the checker didn't recognize —
+fixed; the remaining 3 (`VIZ:IMP-0036`/`0064`/`0065`) are real dangling links
+in `df_viz_Implementation_Design_v0.1.md`, left unfixed and named for whoever
+owns df's design doc next. Full account:
+`docs/v2/SIM_Test_Execution_2026-08-29_b1_close.md` (the original close) and
+`docs/v2/SIM_Test_Execution_2026-08-30_sync_check_retire.md` (this pass).
 
 **`E2E-VZ-01`'s `PASS`, from here on, means C++-vs-frozen-snapshot, not
 two live implementations agreeing** — the Python side that used to be the
