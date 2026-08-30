@@ -1,6 +1,6 @@
 # START HERE
 
-**Updated:** 2026-08-29 · **Read this first, then run the status command below.**
+**Updated:** 2026-08-30 · **Read this first, then run the status command below.**
 
 > **No derived progress state in this file, ever** — no "N of M done", no
 > per-item status, no checklist. That is what goes stale: this module already
@@ -29,6 +29,20 @@ exceptions closed 2026-08-30: `sync_check.py` deleted, `next.py` rewritten
 `docs/v2/SIM_Test_Execution_2026-08-30_sync_check_retire.md`.
 **Movement C** ← **the POC demo runs, all five clauses, watched. The freeze
 ends by its own terms.**
+`MOVEMENT_B_PLAN.md`'s `B2` was corrected 2026-08-30 — it would have deleted
+`df`'s real CarMaker viz plug-in on a 2026-08-27 misreading — and then
+**executed** the same day, re-scoped to its real content: 3 duplicate test
+files (388 lines), removed from `modules/df` behind a real vs2026 build
+(314/315 → 311/312 tests, exactly 3 fewer test binaries, one pre-existing
+unrelated failure unchanged). `B3` was fully re-scoped the same day: all four
+rows failed verification against the code — `tools/carla/` and `replay/viz.py`
+are both active (not legacy), `df_sim_gui.py` is retired as a deletion target
+(its CarMaker section is current, real work), `bsdviz/`'s "gate" doesn't hold
+(8 files still import it). **Zero `B3` rows are ready to execute.** See
+`docs/v2/SIM_Test_Execution_2026-08-30_movement_b_plan_audit.md` (the
+correction) and
+`docs/v2/SIM_Test_Execution_2026-08-30_b2_execute_b3_rescope.md` (execution +
+re-scope). Not yet committed — `modules/df`'s change is staged only.
 
 The 2026-08-27 reset re-scoped this module around one watchable demo instead of a
 completion percentage. Read `memory.md` for why, `DEMO_AND_SCOPE.md` for the
@@ -44,11 +58,16 @@ fixes).
 
 ## The next action — exactly one
 
-> **Author's call: `B1` is closed, so `MOVEMENT_B_PLAN.md`'s `B2` (delete the
-> `df_viz` remnant) is next in that plan — deliberately not started.** The
-> Movement C scope conversation this file named before `B1` started
-> (`DEMO_AND_SCOPE.md` §1's *"may begin. Not before"*) is still the standing
-> open question and this session did not touch it.
+> **`B2` is done** (388 lines, executed 2026-08-30, staged not committed in
+> `modules/df`) and **`B3` is re-scoped to empty** — all four of its rows
+> turned out to name active or non-superseded code, not legacy; none are
+> ready to execute, and it needs its targets re-identified before it can be
+> planned again, not just re-gated. Neither commit has happened yet — ask
+> before committing (`R-GIT-1`: `df` first, then this pointer). The Movement C
+> scope conversation this file named before `B1` started (`DEMO_AND_SCOPE.md`
+> §1's *"may begin. Not before"*) is still the standing open question and this
+> session did not touch it. `B4` and item `#20` were explicitly withheld this
+> pass.
 
 ## Do not
 
@@ -127,6 +146,31 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-08-30** — `B2` executed for real in `modules/df`: gated on a live
+  vs2026 build (recovered two pre-existing environment breaks first — a
+  stale `adas-mathlib` Conan editable pointing at a different checkout on
+  this machine, and the known `adas-local` auth gap), baseline 314/315 tests
+  green, deleted the 3 duplicate test files + their CMake blocks, rebuilt
+  green at 311/312 (exactly 3 fewer test binaries, same 1 pre-existing
+  unrelated failure). Then `B3` fully re-scoped against the build and `git
+  log`: all four rows turned out to name active or non-superseded code, not
+  legacy — `tools/carla/` and `replay/viz.py` both have recent real activity
+  and `replay/viz.py` is actively imported through the current GUI;
+  `df_sim_gui.py` retired as a deletion target; `bsdviz/`'s gate fails
+  (8 figure-generator files still import it). Zero `B3` rows ready to
+  execute. Staged in `modules/df`, not committed. Record:
+  `docs/v2/SIM_Test_Execution_2026-08-30_b2_execute_b3_rescope.md`.
+- **2026-08-30** — `MOVEMENT_B_PLAN.md` audited against the code, not its own
+  prose. `B2`'s "delete `df_viz`, ~4,900-line half-finished extraction" was
+  wrong — it is `df`'s real CarMaker viz plug-in (`sil_viz`/`cm_viz` build it,
+  `PushHost` loads it); deleting it would have broken CarMaker visualization.
+  Rewritten and re-scoped to the 388 lines of genuine duplicate toolkit tests
+  it actually has (`test_furniture`/`test_history`/`test_pick.cpp`, byte-
+  identical to `modules/viz`'s own copies). `B3` row 3 (`df_sim_gui.py`) was
+  heading the same way — extended with real CarMaker functionality one day
+  after the plan was written — flagged, not yet re-scoped. `B4`'s sizes were
+  stale from `B1` closing, not a misreading. Nothing executed. Record:
+  `docs/v2/SIM_Test_Execution_2026-08-30_movement_b_plan_audit.md`.
 - **2026-08-30** — Both exceptions `B1`'s closing record named are closed:
   `sync_check.py` deleted, `scripts/next.py` rewritten "minus its gate table"
   (runs each module's own `trace_check.py` instead of parsing the retired
@@ -146,11 +190,3 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   the engine's spec parser, and a `Translator` that had no caller. A legacy
   recording went from 218 empty ticks to real data; `bsd_curve_r172_passby`
   stayed green but stopped being false. Record: `…_2026-08-28_ingest.md`.
-- **2026-08-28** — `F-8` fixed: a port's build is answered, as
-  `component_library_sha256` under its own name — never the library hash shown
-  where a build id was asked for. `WP-35` closed; the demo runs, all five
-  clauses. Record: `…_2026-08-28_f8.md`.
-- **2026-08-28** — `WP-35` opened (the demo, §1 verbatim) and the launcher wired
-  to `adas_sim.launcher`. Demo run for real: both modes, both pictures agree,
-  screenshotted. `F-8` found — build reads `unknown` though the recording
-  carries it. Record: `…_2026-08-28_wp35.md`.

@@ -1,6 +1,19 @@
 # Movement B — finish what exists
 
-**Written:** 2026-08-27 · **Status:** plan only, nothing executed.
+**Written:** 2026-08-27 · **Status:** `B2` corrected and executed 2026-08-30
+(388 lines, three duplicate test files, in `modules/df`). `B3` re-scoped the
+same day — zero of its four rows are ready to execute; nothing deleted. `B1`
+closed 2026-08-29. `B4` not started.
+**Corrected 2026-08-30:** `B2` was a misreading (deletion would have broken
+CarMaker viz) — rewritten, re-scoped to 388 real duplicate lines, and executed
+(gated on a real vs2026 build, 314/315 → 311/312 tests, exactly 3 fewer test
+binaries, one pre-existing unrelated failure unchanged). `B3` re-scoped in
+full: all four rows failed verification against the code (not legacy, not
+orphaned, or not superseded by what the row claimed) — none executed. `B4`
+sizes re-measured, not executed. See
+`docs/v2/SIM_Test_Execution_2026-08-30_movement_b_plan_audit.md` (the
+correction) and `docs/v2/SIM_Test_Execution_2026-08-30_b2_execute_b3_rescope.md`
+(execution + re-scope).
 **Reads with:** `memory.md` (why), `DEMO_AND_SCOPE.md` (the finite list),
 `CONSOLIDATED_REQUIREMENTS.md` (the 25 lines).
 
@@ -67,40 +80,126 @@ two live implementations agreeing** — the Python side that used to be the
 second half of that comparison no longer exists. Stated explicitly in the
 closing Test Execution record so it is never over-read later.
 
-## B2 — Delete the `df_viz` remnant · **~4,900 lines**
+## B2 — Corrected 2026-08-30: not a remnant, do not delete · **388 lines, not ~4,900**
 
-`modules/df/src/platform/df_viz/` is a half-finished extraction: its `viz/`
-subfolder is emptied to two directories, everything else was copied to
-`modules/viz` and the original left standing.
+**This row was wrong** (a 2026-08-27 misreading) and is corrected in place so no
+future session repeats it, per this row's own `Do not` in `START_HERE.md`.
 
-1. **Gate:** df builds and its tests pass linking `modules/viz` only.
-2. Delete `modules/df/src/platform/df_viz/`.
-3. **Verify:** df build green; no reference to the old path survives a grep.
+`modules/df/src/platform/df_viz/` is **not** a half-finished extraction. It is
+`df`'s viz plug-in — real, load-bearing, and current:
 
-## B3 — Delete legacy tooling · **~6,300 lines**
+- `df_viz_c.cpp`/`.h` (202 lines) — the `df_viz.dll` **composition root**
+  (`R-SIM-20`'s "authored in the component, deployed beside its library").
+- `layers/` (892 lines) — `df`'s own layer providers (`bsd.cpp`, `common.cpp`,
+  `port_tree.cpp`) — component content that belongs in the component by
+  `R-SIM-1`, never in `modules/viz`.
+- `viz/theme/r1_theme_init.{cpp,hpp}` + `viz/viewport/r1_viewport_init.{cpp,hpp}`
+  (211 lines) — `df`'s own R1 theme-token/viewport registration. **Not
+  duplicated toolkit**: the shared toolkit (`modules/viz`) ships no component
+  style tokens by design (`R-SIM-1`), so every component registers its own.
+- The rest of the tree (scripts/, most of tests/, tools/) is component-scoped
+  build-invariant checks and unit tests exercising `df`'s own generated data —
+  see the audit below for the one place this is not true.
 
-The tooling the `R-SIM` rules were written to replace, still present.
+**Verified against the build, not just the plan's prose (2026-08-30):** both
+`sil_viz` and `cm_viz` targets build `df_viz.dll` and deploy it beside
+`df_sil.dll` (`modules/df/conf/build.yml`); `viz::host::PushHost`
+(`modules/viz/cpp/viz/host/push_host.{cpp,hpp}`) loads it at run time from
+`modules/df/src/platform/cm/src/user_hooks.cpp`. **Deleting this directory
+would break CarMaker visualization outright.**
 
-| Target | Size | Gate before deleting |
-|---|---|---|
-| `modules/df/tools/carla/` | ~3,200 | ⚠ **see the caution below** |
-| `replay/viz.py` | 561 | the viz player renders the same recordings |
-| `scripts/df_sim_gui.py` | 658 | `vantage.bat` covers what it did |
-| `docs/bsd/py/bsdviz/` | 1,878 | the layer plug-ins cover it |
+### Audit — is anything here genuinely duplicated in `modules/viz`?
 
-> ⚠ **Caution — do not delete blind.** `carla_bridge.py` inside `tools/carla/`
-> is what **generates the recordings**. The parked scenario finding (only 4 of
-> 18 recordings exist; the warning never fires in any that run) is entangled
-> with it: it was fixed on 2026-08-16 by a commit saying *"live bridge was
-> broken since S-C3"*. Deleting the recording generator before that is
-> understood would remove the ability to regenerate the corpus. **Resolve the
-> parked finding, or confirm ERG replaces this corpus entirely, before B3 row 1.**
+Checked `tools/`, `scripts/`, `tests/` against their `modules/viz` counterparts
+by diff, not by name-matching:
+
+- **`scripts/check_dependency_graph.py`, `check_toolkit_isolation.py`** — same
+  *pattern* as `modules/viz/scripts/`'s own copies, but genuinely different
+  content (df's own `SI-01..10` item map vs. viz's `FS_DIRS`/`INCLUDE_DIRS`,
+  different `ALLOWED_DIRS`). Each checks its own tree. Not duplicates — keep.
+- **`tests/unit/test_theme.cpp`, `test_render_gl.cpp`, `test_render_svg.cpp`,
+  `test_scene.cpp`, `test_scene_history.cpp`, `test_viewport.cpp`,
+  `test_manifest_no_protobuf.cpp`** — same filenames as `modules/viz/tests/`,
+  substantially different content. `test_theme.cpp` is the clearest case:
+  `modules/viz`'s own copy tests generic `ThemeTable` machinery against a
+  *synthetic* vocabulary, by design ("the toolkit's own tests carry no
+  component name either" — its own comment); `df`'s copy is `df`'s **real
+  coverage test** ("every R1 token resolves in every theme") using `df`'s
+  real R1 vocabulary, which the toolkit test's own comment says belongs with
+  the component. Not duplicates — keep.
+- **`tests/unit/test_furniture.cpp`, `test_history.cpp`, `test_pick.cpp`
+  (388 lines) — genuine duplicates.** Byte-identical to
+  `modules/viz/tests/unit/`'s own copies except the `COMPONENT:` header line
+  (`diff` confirms). Each is compiled and run as its own gtest binary in both
+  `df_viz`'s `CMakeLists.txt` and `modules/viz`'s, testing the shared
+  `AdasViz::toolkit` code (`furniture.hpp`, `history.hpp`, pick-testing via
+  `SceneBuilder`) — not anything `df`-specific, despite using `bsd.*` token
+  strings as test data (permitted under the `tests/` carve-out, `R-SIM-1`).
+  This is real, scoped B2 content.
+- `tests/combined_dll/`, `tests/scene_only_host/`, `tools/demo_viewer.cpp`,
+  `scripts/check_layers_toolkit_boundary.py`, `check_no_intree_toolkit.py`,
+  `gen_viz_shim.py` — no same-named counterpart in `modules/viz` at all. Not
+  duplicates.
+
+**Revised B2, scoped to what is actually redundant:**
+
+1. **Gate:** confirm `df_viz_test_furniture`/`df_viz_test_history`/
+   `df_viz_test_pick` assert nothing `df`-specific (re-read alongside
+   `modules/viz`'s copies — done above) and that `modules/viz`'s own test
+   suite already covers the same assertions (it does; it is the same file).
+2. Delete `modules/df/src/platform/df_viz/tests/unit/test_furniture.cpp`,
+   `test_history.cpp`, `test_pick.cpp` and their three `add_executable`/
+   `add_test` blocks in `df_viz/CMakeLists.txt`.
+3. **Verify:** `df_viz` still builds and its remaining tests pass; no
+   coverage is lost (the deleted assertions still run under
+   `modules/viz`'s own suite).
+
+**Not executed this pass** — corrected and scoped only, per the ask.
+
+## B3 — Delete legacy tooling · **re-scoped against code + git log, 2026-08-30. Nothing deleted this pass.**
+
+The tooling the `R-SIM` rules were written to replace, still present — but
+"still present" turned out to mean different things per row. Checked each
+row's build and `git log`, not the plan's prose, the same way `B2` was
+verified, per the standing instruction to never trust a size/staleness claim
+in this file without re-measuring it.
+
+| Target | Plan said | Found | Verdict |
+|---|---|---|---|
+| `modules/df/tools/carla/` | ~3,200 lines, legacy | 2,787 (excl. `__pycache__`); **last commit 2026-08-20** (`ff27fd0`) and, four days before that, real feature work (`56c87f3`, "`--step` gets a paced Play/Pause/Step/speed/fast-forward panel") | **Not legacy — active.** Caution stands as written (see below). Not deleted |
+| `modules/df/tools/carla/replay/viz.py` | 561 lines, sibling target, gate: "the viz player renders the same recordings" | 561 confirmed, nested inside row 1 (unchanged finding). **Actively imported**: `df_dll_sim_mcap.py:450` does `import viz as viz_module`, and `df_dll_sim_mcap.py` is exactly what `df_sim_gui.py`'s REPLAY & FOXGLOVE section launches (`df_sim_gui.py:675`). Not orphaned by any measure | **Not orphaned — in active use through the current GUI.** Gate still unmet regardless (`vantage_app.exe` has no bare-replay mode, `START_HERE.md` open risk 4). Not deleted |
+| ~~`scripts/df_sim_gui.py`~~ → **`modules/df/scripts/df_sim_gui.py`** | 658 lines, gate: `vantage.bat` covers what it did | 863 lines. Extended **2026-08-29** (`250be04`, one day after this plan was written) with a whole new CarMaker section; the file's own header states extending it — rather than adding a fourth `sim_gui`-shaped launcher — was a **deliberate call against R-SIM-1's "don't extend the old structure"**, because that section reuses `run_bsd_straight_suite.bat` as its one entry point and is not part of the CARLA/MCAP world R-SIM-1 targets. `vantage.bat` has no CarMaker capability and cannot cover that section, ever | **Row retired as written; re-scoped.** This file does not get deleted as a unit. Its CARLA + REPLAY sections (the two `_ProcessRunner` blocks launching `carla_bridge.py`/`df_dll_sim_mcap.py`) are the only part `vantage.bat` could ever supersede, and only once rows 1/2 above close their own gates — neither has. The CARMAKER section is current, real, load-bearing, and is **never** in scope for this row. Not deleted |
+| `modules/df/docs/bsd/py/bsdviz/` | 1,878 lines, gate: "the layer plug-ins cover it" | 1,878 confirmed (excl. `__pycache__`). `bsdviz` itself dormant since 2026-07-29 — **but actively imported by 8 files that are not dormant**: every file under `docs/bsd/py/figures/` (`a_convention.py` through `v_vehicledynamics.py`) does `from bsdviz import ...`, driven by `df_bsd_image_creation.py`. These are documentation-figure generators (`df_bsd_image_creation.md`), a different purpose from the live C++ layer plug-ins entirely — one draws teaching diagrams for docs, the other draws the live BEV. "The layer plug-ins cover it" does not hold; nothing about live rendering supersedes a figure generator | **Gate does not hold — this was heading toward a third `B2`-shaped mistake.** Not orphaned, not superseded by anything named in this plan. Not deleted |
+
+**Net effect of this pass: zero rows are ready to execute.** Every row's
+premise (legacy, orphaned, or superseded by a named replacement) failed
+verification against the code. `B3` is not close to done; it needs its
+targets re-identified, not just its gates re-checked.
+
+> ⚠ **Caution — unchanged, still binding.** `carla_bridge.py` inside
+> `tools/carla/` is what **generates the recordings**. The parked scenario
+> finding (only 4 of 18 recordings exist; the warning never fires in any that
+> run) is entangled with it and is confirmed still parked as of this pass
+> (`START_HERE.md`'s parked table, unpark condition: *"Before `B3` deletes
+> `tools/carla/`"*). **Resolve the parked finding, or confirm ERG replaces
+> this corpus entirely, before touching row 1 — which, independently, is not
+> legacy tooling anyway per the finding above.**
 
 ## B4 — Resolve the Python/C++ overlap · Decision A
 
-`modules/sim/src` carries two stacks: `adas_sim` (Python, 26,272 lines) and
-`simcore` (C++, 31,064). `io`, `runspec`, `session`, `abi` and `diagnostics`
-exist in both.
+**Sizes re-measured 2026-08-30 — stale, not wrong; expected drift from `B1`
+closing since this plan was written.** `adas_sim` is now 18,560 lines, not
+26,272 — `B1`/`SM-12` deleted the Python scene/render/player tree on
+2026-08-29, after this row's number was written. `simcore` is 31,406, close to
+the original 31,064. Re-checking the five named overlaps: `io`, `runspec` and
+`diagnostics` still exist on both sides as claimed; **`session` is Python-only
+today (no `simcore/session`) and `abi` is C++-only (no `adas_sim/abi`)** — so
+only 3 of the 5 are a live overlap right now, not 5. Not re-scoped this pass
+(unlike `B2`/`B3` row 3, this reads as the overlap having partly resolved
+itself already rather than as a misreading of what exists) — worth a fresh
+look before starting `B4` rather than trusting this paragraph's original count.
+
+`modules/sim/src` carries two stacks: `adas_sim` (Python) and `simcore` (C++).
 
 | Item | Work |
 |---|---|
@@ -130,7 +229,7 @@ ERG, MDF4, rosbag. The `.erg` codec is already written, so that day starts from
 ## Order, and why
 
 ```
-B1 (viz, 10 boxes)  ──►  B2 (df_viz remnant)  ──►  B4 (py/c++ overlap)
+B1 (viz, 10 boxes)  ──►  B2 (388-line test dedup)  ──►  B4 (py/c++ overlap)
                                 │
           B3 (legacy tooling)  ◄┘   only after the parked scenario
                                     finding is resolved, or ruled irrelevant
@@ -149,7 +248,8 @@ the debt that makes the next six months cheap; it is not the gate on the POC.
 ## Definition of done for Movement B
 
 1. The viz sync plan has deleted itself.
-2. `modules/df/src/platform/df_viz/` does not exist.
+2. `modules/df/src/platform/df_viz/` **stays** — it is `df`'s real viz plug-in
+   (corrected 2026-08-30). Its 3 duplicate toolkit tests (388 lines) are gone.
 3. Exactly one implementation of io, session, abi, runspec and diagnostics.
 4. The gate is green with no parked-failure exceptions other than WP-31 scope.
 5. ~~`sim` can read a real ERG measurement end to end.~~ *Parked with ERG.*
