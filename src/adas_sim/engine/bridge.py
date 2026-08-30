@@ -664,8 +664,10 @@ def run_pipeline_merged_via_engine(
     config_path: Path | None = None, exec_timeout_ms: int = 250, simengine_path: Path | None = None,
     search: Sequence[Path] = (),
 ) -> EngineRunResult:
-    """`player/shell/qt_window.py`'s GUI "Run" button rewired onto this
-    (`WP-15b`): runs `pipeline` through `simengine`, then merges the fresh
+    """The retiring Python GUI's "Run" button was rewired onto this
+    (`WP-15b`; the GUI itself, `player/shell/qt_window.py`, is deleted --
+    `SM-12`, `modules/viz/docs/VIZ_Sync_Plan_v0.1.md`): runs `pipeline`
+    through `simengine`, then merges the fresh
     output back into a full copy of `recording_path` at `out_path` --
     the out-of-process twin of `core.resim.resim_pipeline_merged`, same
     contract, same caller-visible result (a complete `out_path` recording,

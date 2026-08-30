@@ -21,8 +21,10 @@
 ## Where we are
 
 **Movement A** ✅ done, except one item blocked on the author (a push).
-**Movement B** — `B1` (the viz sync plan) done bar `SM-08`: the Python
-scene/render/player implementation is deleted (`SM-12`, 2026-08-29).
+**Movement B** ✅ `B1` fully closed (2026-08-29): all 43 sync-plan rows
+`DONE`, `SM-08` (Qt out) closed the set, the sync plan retired its own §2/§3
+per §6.6. Two honest exceptions, not swept in — see
+`MOVEMENT_B_PLAN.md`'s own updated B1 row.
 **Movement C** ← **the POC demo runs, all five clauses, watched. The freeze
 ends by its own terms.**
 
@@ -40,8 +42,11 @@ fixes).
 
 ## The next action — exactly one
 
-> **`SM-08`** (`modules/viz/docs/VIZ_Sync_Plan_v0.1.md`) — Qt out of `modules/sim`
-> entirely. Then the sync plan self-deletes, per its own §6.6.
+> **Author's call: `B1` is closed, so `MOVEMENT_B_PLAN.md`'s `B2` (delete the
+> `df_viz` remnant) is next in that plan — deliberately not started.** The
+> Movement C scope conversation this file named before `B1` started
+> (`DEMO_AND_SCOPE.md` §1's *"may begin. Not before"*) is still the standing
+> open question and this session did not touch it.
 
 ## Do not
 
@@ -120,10 +125,16 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
-- **2026-08-29** — `B1` (viz sync plan) closed bar `SM-08`: `SM-10`/`SM-05`/
-  `SM-07`/`SM-12` done, the Python scene/render/player tree deleted, `ANL-SM-03`
-  real and green (exactly one layer-provider implementation left). Record:
-  `modules/viz/docs/VIZ_Sync_Plan_v0.1.md`'s own `SM-12` row.
+- **2026-08-29** — `B1` (viz sync plan) fully closed: `SM-10`/`SM-05`/`SM-07`/
+  `SM-12`/`SM-08` all done, the Python scene/render/player tree deleted,
+  `ANL-SM-03`/`ANL-SM-02` both real and green. Sync plan retired its own §2/§3
+  per §6.6 — `sync_check.py` stays (breaks `scripts/next.py`'s import
+  otherwise), and `next.py`'s own checker list fixed so a retired
+  `sync_check.py` no longer blocks every module. `E2E-VZ-01`'s `PASS` now
+  means C++-vs-frozen-snapshot, not two live implementations — stated
+  explicitly so it isn't over-read later. `check_cross_module_trace.py` found
+  red (60 `BROKEN`, likely a parser gap, not fixed). Record:
+  `docs/v2/SIM_Test_Execution_2026-08-29_b1_close.md`.
 - **2026-08-28** — Ingest map wired end to end (`#5` red → green): the emitter,
   the engine's spec parser, and a `Translator` that had no caller. A legacy
   recording went from 218 empty ticks to real data; `bsd_curve_r172_passby`

@@ -109,3 +109,10 @@ docs/py/comparable_tool_path.txt
 docs/py/comparable_tool_schema.json
 docs/py/comparable_tool_concept_map.json
 scripts/gui_config.json
+
+# Machine-local field notes from tearing down the comparable tool installed on
+# this machine -- same reasoning as comparable_tool_* above, one level up: the
+# notes quote that tool's real config files, component inventory and desktop
+# screenshots, so they are study material only and never ship. Design authority
+# stays in docs/v2/. See misc/mts_bench/README.md.
+/misc/mts_bench/

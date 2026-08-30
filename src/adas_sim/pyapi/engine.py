@@ -18,9 +18,10 @@ what `ANL-SW-41`'s "one invocation shape" check (`test_engine_bridge_
 run_engine_has_exactly_one_call_site`) polices -- under a name a script
 imports through `pyapi` rather than reaching into `adas_sim.engine`
 directly. One process per invocation, exactly what every existing rewired
-call site (`cli/resim.py`, `orchestrate/worker.py`, `check/runner.py`,
-`player/shell/qt_window.py`'s Run button) already pays (`WP-15b`,
-`IMP-0422`). The day a shared-library target exists, `engine.bridge.
+call site (`cli/resim.py`, `orchestrate/worker.py`, `check/runner.py`, and
+-- until the retiring Python GUI's own `player/shell/qt_window.py` was
+deleted, `SM-12` -- its Run button) already pays (`WP-15b`, `IMP-0422`).
+The day a shared-library target exists, `engine.bridge.
 run_engine` itself gains the in-process implementation; `pyapi.engine.run`
 stays the same alias and every script already importing it is unaffected.
 

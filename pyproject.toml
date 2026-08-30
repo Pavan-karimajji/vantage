@@ -21,7 +21,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-viewer = ["PySide6>=6.6"]
 figures = ["matplotlib>=3.8"]
 video = ["imageio[ffmpeg]>=2.34"]
 foxglove = ["foxglove-sdk>=0.25"]

@@ -36,20 +36,34 @@ the demo is close or blocked.
 
 ---
 
-## B1 — Close the viz sync plan · **10 boxes, 7 closed 2026-08-29**
+## B1 — Close the viz sync plan · **10 boxes, all closed 2026-08-29**
 
-The whole remainder of a 43-item plan. All of it is deletion or truth-telling.
+The whole remainder of a 43-item plan. All of it was deletion or truth-telling.
 
 | Item | Work | Gate |
 |---|---|---|
 | `SM-10` — **done** | The real finding wasn't `modules/sim/CLAUDE.md` (already correct) but `modules/viz`'s own `CLAUDE.md`, still opening *"this module does not exist yet — there is no source here"* over 112 files / ~11,300 lines. Fixed. | The file describes what is actually on disk |
 | `SM-05` — **done** | supersession bookkeeping, closed once `SM-12`'s dual-run window closed | trace check clean |
 | `SM-07` — **done** | `MP-4` re-cut | trace check clean |
-| `SM-08` (3 open) | Qt out, headless in — **deliberately not attempted this pass**, scoped as its own separately-gated piece | suite green with Qt absent |
+| `SM-08` — **done** | Qt out, headless in — turned out to already be true (`SM-12` deleted the last Python `PySide6` importer as a side effect). Real remaining work: `pyproject.toml`'s `viewer` extra dropped, two stale docstrings fixed, `sim-ci.yml`'s three install lines corrected (would have failed outright on the now-unknown `viewer` extra), `ANL-SM-02` built for real and wired into `ci_gate.py`. `figures`/`foxglove` extras also now dead in source — found, not touched, separate finding. | `ANL-SM-02` real and green: no CI image installs a graphical toolkit |
 | `SM-12` — **done** | **Deleted the Python scene** — the `D-6` box. This *is* Decision B: `scene/`, `render/`, `player/shell/` gone, `player/panels/` down to `pipeline_panel.py` (`SI-22`'s own `KEEP`); ~20 dependent files individually triaged and fixed (`core/runner.py` split, `cli/render.py`/`cli/view.py` deleted, `plugins/registry.py`'s `EXTENSION_POINTS` amended, `scripts/vantage.py` deleted, `vantage.bat`/`gui.py`/`vantage_native.py` lost their `--legacy` fallback — a real, named capability loss, not silently dropped). `df`'s own `sim/layers/{bsd,common}.py` confirmed orphaned-but-harmless, not touched (separate submodule, separate finding). | `ANL-SM-03` real and green: exactly one layer-provider implementation remains |
 
-**Exit:** the sync plan self-deletes, per its own §6.6 — not yet, `SM-08`
-remains, its own separately-gated pass.
+**Exit:** the sync plan self-deleted, per its own §6.6 — §2/§3 removed,
+2026-08-29. **Two honest exceptions, not swept in:** `sync_check.py` itself
+survives (`scripts/next.py`, superproject root, hard-imports it with no
+fallback and has not been rewritten to drop that dependency — deleting the
+script today would break `next.py` outright; `next.py`'s own checker list was
+fixed instead so a retired `sync_check.py` no longer blocks every module's
+work order). `scripts/check_cross_module_trace.py` (the one piece meant to
+permanently outlive this plan) is not clean — 60 `BROKEN` findings, likely a
+pre-existing parser gap rather than 60 real dangling links, named and left for
+whoever owns that next. Full account:
+`docs/v2/SIM_Test_Execution_2026-08-29_b1_close.md`.
+
+**`E2E-VZ-01`'s `PASS`, from here on, means C++-vs-frozen-snapshot, not
+two live implementations agreeing** — the Python side that used to be the
+second half of that comparison no longer exists. Stated explicitly in the
+closing Test Execution record so it is never over-read later.
 
 ## B2 — Delete the `df_viz` remnant · **~4,900 lines**
 

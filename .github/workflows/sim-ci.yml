@@ -64,8 +64,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install (core + dev + viewer + figures)
-        run: python -m pip install -e ".[dev,viewer,figures]"
+      - name: Install (core + dev + figures)
+        run: python -m pip install -e ".[dev,figures]"
 
       - name: Resolve docs-only skip decision
         id: since
@@ -105,9 +105,9 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install (core + dev + viewer + figures)
+      - name: Install (core + dev + figures)
         shell: bash
-        run: python -m pip install -e ".[dev,viewer,figures]"
+        run: python -m pip install -e ".[dev,figures]"
 
       - name: Resolve docs-only skip decision
         id: since
@@ -152,5 +152,14 @@ jobs:
       - name: Install (core + dev only, no extras)
         run: python -m pip install -e ".[dev]"
 
-      - name: Suite must still pass with the extras split real -- Qt/matplotlib/foxglove tests skip, nothing else does
+      # Premise changed 2026-08-29 (SM-08, modules/viz/docs/VIZ_Sync_Plan_v0.1.md):
+      # this job used to prove "Qt/matplotlib/foxglove tests skip, nothing else
+      # does" -- there is no longer a single Qt/matplotlib/foxglove test to skip,
+      # since SM-12 deleted the Python scene/render/player tree that carried them
+      # all. The suite is now identical whether or not those extras are
+      # installed; this job's real remaining claim is the stronger one UT-A1-2
+      # always meant -- the package imports and the whole suite passes with NONE
+      # of the optional extras present, so nothing has silently grown a hard
+      # dependency on one.
+      - name: Suite passes with no optional extras installed at all (UT-A1-2)
         run: python -m pytest tests -q
