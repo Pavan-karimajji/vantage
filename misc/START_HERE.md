@@ -33,7 +33,18 @@ verified code, not a stale claim. `misc/memory.md` §3 corrected to match
 or `git log`). Records: `docs/v2/SIM_Test_Execution_2026-08-30_movement_b_plan_audit.md`,
 `..._b2_execute_b3_rescope.md`, `..._b4_remeasure.md`.
 **Movement C** ← **the POC demo runs, all five clauses, watched. The freeze
-ends by its own terms.**
+ends by its own terms.** Item `#20`'s video-feed entry scoped 2026-08-30
+(author's chosen entry point, unblocked from "do not start"): **`WP-30` is
+the wrong anchor and stays parked, correctly** — its 8 boxes are io-side
+multi-camera codec/merge work the two candidate recordings don't need. The
+real gap is three unclaimed pieces in `viz`/`df` — a concrete `ImageResolver`
+(the seam has existed since `VZ-09`, closed 2026-08-19, deliberately unfilled
+until `VZ-12`'s `Session`, also closed), a second player panel (today
+hardcoded to `VIZ_SPACE_EGO_BEV` only), and a layer provider that calls
+`AppendReference` (nothing does, anywhere, today). No new `Prim` kind needed
+(`kReference`/`kImage` already shipped under `VZ-09`). Both recordings verified
+sufficient with no regeneration. Record:
+`docs/v2/SIM_Test_Execution_2026-08-30_item20_video_feed_scoping.md`.
 
 **`misc/memory.md` §3 no longer contradicts itself.** Its closing line used
 to say *"deletion has never once been executed"* directly under this same
@@ -84,7 +95,14 @@ fixes).
 > sub-task. The Movement C scope conversation this file named before `B1`
 > started (`DEMO_AND_SCOPE.md` §1's *"may begin. Not before"*) is still the
 > standing open question and this session did not touch it. **Item `#20` is
-> blocked on the author for a scoping decision — do not start it.**
+> now scoped, not started** — `WP-30` correctly stays parked (it doesn't
+> reach a frame on screen); the smallest first step is a `viz`-side harness
+> (concrete `ImageResolver` + a second, currently-nonexistent image-space
+> panel) plus one `df`-side layer provider in the real C++ plug-in
+> (`src/platform/df_viz/layers/`, never the Python `sim/layers/`, which is
+> prototyping-only). No `WP`/`VZ` row opened for it yet — that, and whether
+> to open one in `viz`'s plan or `df`'s, is the author's call. **Do not start
+> writing it without that decision.**
 
 ## Do not
 
@@ -163,6 +181,26 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-08-30** — Prior pass's `memory.md`/`Session`-finding work
+  committed/pushed (R-GIT-1: `sim` `ad4abb9`, superproject `361992c`; `df`
+  had nothing pending). Then item `#20`'s video-feed entry scoped against
+  `WP-30` per the author's ask: **`WP-30` is the wrong anchor** — its 8
+  boxes are io-side multi-camera codec/merge work (`SM-01`, 2026-08-20
+  re-scope moved the display half to `viz`), and both candidate recordings
+  (`bsd_curve_r172_passby.mcap`, `canonical_10mps_30m_20260714_174456.mcap`)
+  already carry `carla/chase_camera` as `foxglove.CompressedImage`, verified
+  readable with no regeneration and no `foxglove` package (schema decoded
+  from the recording's own embedded `FileDescriptorSet`, `R-SIM-11`'s
+  pattern). The real gap: `viz`'s `kReference`/`kImage` `Prim` kind and
+  `Session` both already shipped (`VZ-09`/`VZ-12`, closed 2026-08-19) but the
+  `ImageResolver` seam was deliberately left unfilled and is still wired to
+  `nullptr` (`player_runner.cpp:317`) — no image has ever been drawn by this
+  codebase; the player also has exactly one panel, hardcoded to
+  `VIZ_SPACE_EGO_BEV`; and no layer provider anywhere calls
+  `AppendReference`. No new `Prim` kind needed, no `sim` package opened.
+  Not started — the author decides where the three-piece fix lands (`viz`
+  vs. `df` plan) before anyone writes it. Record:
+  `docs/v2/SIM_Test_Execution_2026-08-30_item20_video_feed_scoping.md`.
 - **2026-08-30** — Prior pass's `B4`/CarMaker/render_svg work committed/pushed
   (R-GIT-1: `df` `817c529`, `sim` `d9c3956`, superproject `37eded7`). Then two
   fixes: (1) `memory.md` §3's closing line ("deletion has never once been
@@ -220,14 +258,3 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   (8 figure-generator files still import it). Zero `B3` rows ready to
   execute. Staged in `modules/df`, not committed. Record:
   `docs/v2/SIM_Test_Execution_2026-08-30_b2_execute_b3_rescope.md`.
-- **2026-08-30** — `MOVEMENT_B_PLAN.md` audited against the code, not its own
-  prose. `B2`'s "delete `df_viz`, ~4,900-line half-finished extraction" was
-  wrong — it is `df`'s real CarMaker viz plug-in (`sil_viz`/`cm_viz` build it,
-  `PushHost` loads it); deleting it would have broken CarMaker visualization.
-  Rewritten and re-scoped to the 388 lines of genuine duplicate toolkit tests
-  it actually has (`test_furniture`/`test_history`/`test_pick.cpp`, byte-
-  identical to `modules/viz`'s own copies). `B3` row 3 (`df_sim_gui.py`) was
-  heading the same way — extended with real CarMaker functionality one day
-  after the plan was written — flagged, not yet re-scoped. `B4`'s sizes were
-  stale from `B1` closing, not a misreading. Nothing executed. Record:
-  `docs/v2/SIM_Test_Execution_2026-08-30_movement_b_plan_audit.md`.
