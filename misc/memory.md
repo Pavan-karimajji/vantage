@@ -105,9 +105,17 @@ for months, and really was deleted, 2026-08-29 (`B1`/`SM-12`). Full audit:
 `docs/v2/SIM_Test_Execution_2026-08-30_movement_b_plan_audit.md` and
 `..._b2_execute_b3_rescope.md`.
 
-Every migration in this project has been a **copy**, never a **move**. Nothing has
-ever been finished, because finishing means deleting, and deletion has never once
-been executed.
+**Corrected 2026-08-30 — this used to say deletion had never once been executed.
+It has now been, once.** Every migration in this project was a **copy**, never
+a **move**, for three attempts running: v1's retirement stalled at 7 of 49
+boxes, v2's two stacks still coexist, and sim's own Python scene/render/player
+stack — the pattern's real instance in "viz," above — sat undeleted for months.
+**`B1` broke the pattern, 2026-08-29: the first executed deletion in this
+project's history**, not a copy left standing beside its replacement. The
+warning still holds for everything not yet deleted — v1's private tooling,
+v2's real remaining overlap (one item, `io`; see `B4`'s re-measure), the
+cross-module Session duplication `MOVEMENT_B_PLAN.md` now tracks — one
+deletion is a proof of capability, not yet a habit.
 
 ---
 

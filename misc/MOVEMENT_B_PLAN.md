@@ -286,7 +286,7 @@ the debt that makes the next six months cheap; it is not the gate on the POC.
 
 ---
 
-## Two findings to decide on separately
+## Three findings to decide on separately
 
 **1. The parked scenario finding.** Only 4 of 18 scenarios can run; of those, the
 single passing one asserts `warning == 'OFF' always` — it passes by asserting
@@ -299,3 +299,19 @@ Writing the organisation as **L&T EPS** is approved, so the 419 files are not a
 confidentiality problem and no scrub is required. If the spelling is ever
 normalised, `docs/file_header_template.md` is the one file that matters — every
 new file inherits from it, which is why the string spread this far.
+
+**3. The cross-repo `Session` duplication — real, no owner, not a `B4` row.**
+`B4`'s re-measure (2026-08-30) correctly ruled this out of its own scope
+(`modules/sim/src`'s two stacks), but ruling it out of `B4` doesn't make it not
+real: `modules/sim/src/adas_sim/session/` (Python, 4 files, 749 lines, actively
+imported by 11 real source files and 14 tests today) and
+`modules/viz/cpp/viz/session/session.hpp` (C++, whose own header says *"the
+C++ rewrite of `adas_sim.session.session.Session`, living in
+`adas-viz-player`"*) are **two live implementations of the same thing, in two
+different repos.** A direct consequence of Decision B (the player moved
+permanently into `viz`, as C++) — the Python `Session` was never retired once
+its C++ replacement existed, because nothing in either module's own plan
+tracks a cross-module deletion. Neither `sim`'s `B4` nor any `viz` plan item
+currently owns closing this gap. **Not acted on this pass** — noted here so it
+is findable rather than rediscovered from scratch, same reason item 1 above is
+still on this list. Full detail: `docs/v2/SIM_Test_Execution_2026-08-30_b4_remeasure.md`.

@@ -35,6 +35,19 @@ or `git log`). Records: `docs/v2/SIM_Test_Execution_2026-08-30_movement_b_plan_a
 **Movement C** ← **the POC demo runs, all five clauses, watched. The freeze
 ends by its own terms.**
 
+**`misc/memory.md` §3 no longer contradicts itself.** Its closing line used
+to say *"deletion has never once been executed"* directly under this same
+session's own correction that `B1` deleted the Python scene/render/player
+stack — fixed: the pattern held for three attempts and `B1` broke it, the
+first executed deletion in this project's history; the warning stays, aimed
+at what is genuinely still undeleted. **A real, unowned finding recorded
+alongside it:** `adas_sim/session/` (Python) and `viz::session::Session`
+(C++, its own header: *"the C++ rewrite of `adas_sim.session.session.Session`"*)
+are two live implementations in two repos, a direct consequence of Decision
+B, correctly outside `B4`'s own scope but not thereby resolved —
+`MOVEMENT_B_PLAN.md`'s *"findings to decide on separately,"* item 3. Not
+acted on. Record: `docs/v2/SIM_Test_Execution_2026-08-30_memory_close_session_note.md`.
+
 **CarMaker viz pipeline de-risked for a near-term demo, 2026-08-30 — no risk
 found.** Clean `cm_viz` rebuild, both DLLs confirmed freshly deployed, a real
 BSD TestRun run headless and live with the `df_viz` window screenshotted
@@ -62,13 +75,16 @@ fixes).
 > **`B1`/`B2`/`B3` are settled** (`B1` closed, `B2` done and pushed, `B3`
 > empty). **`B4` is re-scoped to one real, named, not-yet-actionable item**
 > (`io`'s `mcap.py`/`mcap.cpp` parity gap) — `Movement B` is not fully done,
-> but nothing in it rests on an unverified claim any more. The CarMaker viz
-> pipeline is de-risked for the demo, and `df_viz_test_render_svg` is now a
-> closed, understood, deliberately-not-fixed question — neither needs
-> re-investigating. The Movement C scope conversation this file named before
-> `B1` started (`DEMO_AND_SCOPE.md` §1's *"may begin. Not before"*) is still
-> the standing open question and this session did not touch it. Item `#20`
-> was explicitly withheld again this pass.
+> but nothing in it rests on an unverified claim any more, and `memory.md` no
+> longer asserts something now false. The CarMaker viz pipeline is de-risked
+> for the demo, and `df_viz_test_render_svg` is now a closed, understood,
+> deliberately-not-fixed question — neither needs re-investigating. **The
+> cross-repo `Session` duplication is real and has no owner** — recorded, not
+> acted on; needs its own initiative before anyone touches it, not a `B4`
+> sub-task. The Movement C scope conversation this file named before `B1`
+> started (`DEMO_AND_SCOPE.md` §1's *"may begin. Not before"*) is still the
+> standing open question and this session did not touch it. **Item `#20` is
+> blocked on the author for a scoping decision — do not start it.**
 
 ## Do not
 
@@ -147,6 +163,20 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-08-30** — Prior pass's `B4`/CarMaker/render_svg work committed/pushed
+  (R-GIT-1: `df` `817c529`, `sim` `d9c3956`, superproject `37eded7`). Then two
+  fixes: (1) `memory.md` §3's closing line ("deletion has never once been
+  executed") directly contradicted its own paragraph above it, added earlier
+  the same day, saying `B1` deleted the Python scene/render/player stack —
+  rewritten to say the pattern held for three attempts and `B1` broke it, the
+  first executed deletion in this project's history; the warning is kept, not
+  the false claim. (2) The cross-repo `Session` duplication `B4`'s re-measure
+  found and correctly ruled out of its own scope — `adas_sim/session/`
+  (Python) and `viz::session::Session` (C++, self-documented as "the C++
+  rewrite" of the former) — recorded as a known, unowned finding in
+  `MOVEMENT_B_PLAN.md`'s "findings to decide on separately" (now three items),
+  not acted on. Record:
+  `docs/v2/SIM_Test_Execution_2026-08-30_memory_close_session_note.md`.
 - **2026-08-30** — Prior pass's `B2`/CarMaker work committed/pushed
   (R-GIT-1: `df` `b980fd9`, `sim` `a551d37`, superproject `a63ee3a`). Then:
   (1) `df_viz_test_render_svg` recorded as a **known, understood, not-open**
@@ -201,12 +231,3 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   after the plan was written — flagged, not yet re-scoped. `B4`'s sizes were
   stale from `B1` closing, not a misreading. Nothing executed. Record:
   `docs/v2/SIM_Test_Execution_2026-08-30_movement_b_plan_audit.md`.
-- **2026-08-30** — Both exceptions `B1`'s closing record named are closed:
-  `sync_check.py` deleted, `scripts/next.py` rewritten "minus its gate table"
-  (runs each module's own `trace_check.py` instead of parsing the retired
-  sync plan §2/§3). `check_cross_module_trace.py`'s 60 `BROKEN` findings
-  triaged: 56 were a real parser gap (a third disposition-table definition
-  shape sim uses, now recognized — also fixed sim showing 0 defined `IMP`
-  UIDs), fixed; 3 (`VIZ:IMP-0036`/`0064`/`0065`, in df's design doc) are real
-  dangling links, left for df. Record:
-  `docs/v2/SIM_Test_Execution_2026-08-30_sync_check_retire.md`.
