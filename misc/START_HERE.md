@@ -30,19 +30,38 @@ exceptions closed 2026-08-30: `sync_check.py` deleted, `next.py` rewritten
 **Movement C** ← **the POC demo runs, all five clauses, watched. The freeze
 ends by its own terms.**
 `MOVEMENT_B_PLAN.md`'s `B2` was corrected 2026-08-30 — it would have deleted
-`df`'s real CarMaker viz plug-in on a 2026-08-27 misreading — and then
-**executed** the same day, re-scoped to its real content: 3 duplicate test
-files (388 lines), removed from `modules/df` behind a real vs2026 build
-(314/315 → 311/312 tests, exactly 3 fewer test binaries, one pre-existing
-unrelated failure unchanged). `B3` was fully re-scoped the same day: all four
-rows failed verification against the code — `tools/carla/` and `replay/viz.py`
-are both active (not legacy), `df_sim_gui.py` is retired as a deletion target
-(its CarMaker section is current, real work), `bsdviz/`'s "gate" doesn't hold
-(8 files still import it). **Zero `B3` rows are ready to execute.** See
+`df`'s real CarMaker viz plug-in on a 2026-08-27 misreading — then
+**executed and committed/pushed the same day**, re-scoped to its real
+content: 3 duplicate test files (388 lines), removed from `modules/df` behind
+a real vs2026 build (314/315 → 311/312 tests, exactly 3 fewer test binaries,
+one pre-existing unrelated failure unchanged). `B3` was fully re-scoped the
+same day: all four rows failed verification against the code — `tools/carla/`
+and `replay/viz.py` are both active (not legacy), `df_sim_gui.py` is retired
+as a deletion target (its CarMaker section is current, real work), `bsdviz/`'s
+"gate" doesn't hold (8 files still import it). **Zero `B3` rows are ready to
+execute.** All three commits landed R-GIT-1 order (`df` `6be858e` → `sim`
+`bc49152` → superproject `19211b2`). See
 `docs/v2/SIM_Test_Execution_2026-08-30_movement_b_plan_audit.md` (the
 correction) and
 `docs/v2/SIM_Test_Execution_2026-08-30_b2_execute_b3_rescope.md` (execution +
-re-scope). Not yet committed — `modules/df`'s change is staged only.
+re-scope).
+
+**Author priority, same day, after the above landed: de-risk the CarMaker
+visualization pipeline for a near-term demo — done, no risk found.** Clean
+`cm_viz` rebuild on vs2026 (two pre-existing environment breaks fixed first —
+a stale `adas-mathlib` Conan editable and the known `adas-local` auth gap);
+`df_sil.dll`/`df_viz.dll` both confirmed freshly deployed into
+`src/platform/cm/bin/`; a real BSD TestRun run both headless (clean,
+`nWarnings=1`) and live, with the `df_viz` window screenshotted showing
+`bsd.zone`/`bsd.warning`/`bsd.sensor_fov` registered and rendering.
+Separately, `df_viz_test_render_svg`'s failure was root-caused (via `git log`,
+not guessed): a stale `"bsd.zone"` token in one test file, missed by a
+2026-08-26 rename sweep (`fc85db9`) that correctly updated the two sibling
+tests and the real layer provider. **SVG-test-only — confirmed zero impact on
+the live picture**, not fixed (one-line fix identified, not applied, per
+instruction). Full account, filed **on the `df` side**
+(`modules/df/docs/viz/df_viz_Test_Execution_2026-08-30.md`) since nothing in
+this pass touched `modules/sim`.
 
 The 2026-08-27 reset re-scoped this module around one watchable demo instead of a
 completion percentage. Read `memory.md` for why, `DEMO_AND_SCOPE.md` for the
@@ -58,16 +77,20 @@ fixes).
 
 ## The next action — exactly one
 
-> **`B2` is done** (388 lines, executed 2026-08-30, staged not committed in
-> `modules/df`) and **`B3` is re-scoped to empty** — all four of its rows
-> turned out to name active or non-superseded code, not legacy; none are
-> ready to execute, and it needs its targets re-identified before it can be
-> planned again, not just re-gated. Neither commit has happened yet — ask
-> before committing (`R-GIT-1`: `df` first, then this pointer). The Movement C
-> scope conversation this file named before `B1` started (`DEMO_AND_SCOPE.md`
-> §1's *"may begin. Not before"*) is still the standing open question and this
-> session did not touch it. `B4` and item `#20` were explicitly withheld this
-> pass.
+> **`B2` is done and committed/pushed** (388 lines, `df` `6be858e`/`sim`
+> `bc49152`/superproject `19211b2`) and **`B3` is re-scoped to empty** — all
+> four of its rows turned out to name active or non-superseded code, not
+> legacy; none are ready to execute, and it needs its targets re-identified
+> before it can be planned again, not just re-gated. **The CarMaker viz
+> pipeline is de-risked for the demo** (clean `cm_viz` build, both DLLs
+> deployed, a real TestRun run and screenshotted live —
+> `modules/df/docs/viz/df_viz_Test_Execution_2026-08-30.md`); nothing there
+> was committed (a records-only pass, plus a root-caused-but-unfixed SVG-test
+> regression, deliberately left unfixed per instruction). The Movement C scope
+> conversation this file named before `B1` started (`DEMO_AND_SCOPE.md` §1's
+> *"may begin. Not before"*) is still the standing open question and this
+> session did not touch it. `B4` and item `#20` were explicitly withheld
+> again this pass.
 
 ## Do not
 
@@ -146,6 +169,19 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-08-30** — Author priority: de-risk CarMaker viz for a near-term demo.
+  `B2`/`B3` work from earlier today committed/pushed first, R-GIT-1 order
+  (`df` `6be858e`, `sim` `bc49152`, superproject `19211b2`). Then a clean
+  `cm_viz` rebuild on vs2026 (two pre-existing env breaks fixed: stale
+  `adas-mathlib` Conan editable, `adas-local` auth), `df_sil.dll`/`df_viz.dll`
+  confirmed freshly deployed, a real BSD TestRun run both headless (clean) and
+  live with the `df_viz` window screenshotted showing `bsd.zone`/
+  `bsd.warning`/`bsd.sensor_fov` registered and rendering. No risk found.
+  Separately root-caused `df_viz_test_render_svg`'s failure via `git log`: a
+  stale token in one test file, missed by a 2026-08-26 rename sweep that fixed
+  its two sibling tests — confirmed SVG-only, zero live-picture impact, not
+  fixed per instruction. Filed on the `df` side (nothing here touched
+  `modules/sim`): `modules/df/docs/viz/df_viz_Test_Execution_2026-08-30.md`.
 - **2026-08-30** — `B2` executed for real in `modules/df`: gated on a live
   vs2026 build (recovered two pre-existing environment breaks first — a
   stale `adas-mathlib` Conan editable pointing at a different checkout on
@@ -186,7 +222,3 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   per §6.6. `E2E-VZ-01`'s `PASS` now means C++-vs-frozen-snapshot, not two
   live implementations — stated explicitly so it isn't over-read later.
   Record: `docs/v2/SIM_Test_Execution_2026-08-29_b1_close.md`.
-- **2026-08-28** — Ingest map wired end to end (`#5` red → green): the emitter,
-  the engine's spec parser, and a `Translator` that had no caller. A legacy
-  recording went from 218 empty ticks to real data; `bsd_curve_r172_passby`
-  stayed green but stopped being false. Record: `…_2026-08-28_ingest.md`.
