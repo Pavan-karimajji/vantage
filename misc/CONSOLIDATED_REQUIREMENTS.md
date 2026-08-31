@@ -73,7 +73,7 @@ were touched — no requirement was added, removed or reworded otherwise.
 |---|---|---|
 | **23** | **Skeleton in code, behaviour in configuration.** A new setup is a config file, not a code change. | 🟢 |
 | **24** | Vehicle geometry, sensor poses and footprints come from the **project's own calibration**, never from constants inside the tool. Switching project must change the picture. | 🟡 |
-| **25** | Anything the GUI can do, a **script can do headlessly** — same engine, for CI and for overnight batches. | 🟡 headless parity real (`GT-9`); the CI workflow exists and was pushed 2026-08-28, **no run observed yet** |
+| **25** | Anything the GUI can do, a **script can do headlessly** — same engine, for CI and for overnight batches. | 🟢 headless parity is real and proven (`GT-9`, `scripts/ci_gate.py` green by hand on both platforms). **"For CI"** names the engine property this row actually requires — one engine, scriptable, no GUI needed — not a hosted job watching it; hosted CI is out of scope by decision 2026-08-31 (`misc/START_HERE.md` Decision F). `.github/workflows/sim-ci.yml` exists, unmaintained and unobserved by that same decision, and was never the requirement — it was evidence this row no longer needs to wait for |
 
 ---
 

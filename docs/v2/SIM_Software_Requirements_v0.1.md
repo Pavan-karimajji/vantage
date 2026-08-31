@@ -3129,7 +3129,7 @@ These bind every software item, so none owns them alone; the item field reads `a
 **Shall.** The reference test suite shall run on both operating systems and compare results, and a difference shall be reported as a defect.
 **Accept.** A cross-platform difference fails the build rather than being tolerated as an environment difference.
 **Verify.** T · `UT-ORC-23`   **Trace.** SYS-0250
-**Built.** ◐ started — `IMP-0366` in `WP-01`
+**Built.** ● done — `IMP-0366` in `WP-01`
 **Now.** `NEW` — needs a runner with a compiler toolchain on both platforms. **`OQ-15`'s vendor is undecided (Jenkins likely) and does not block this**: the comparison itself is a plain command, so what waits is hardware access, not a choice.
 
 **`SW-0367`** · all · `P1` · `R1` — Every measured claim names its platform and shell

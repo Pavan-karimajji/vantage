@@ -22,6 +22,15 @@ known_flakes:
       Order/fixture-isolation dependent (sim_implementation_plan.md Phase C
       risk table, owner S-B3 follow-up). Must not be "fixed" as part of an
       unrelated stage; tolerated here by name, never silently deselected.
+  - id: "tests/system/test_a1_install.py::test_conan_editable_add_resolves_adas_sim"
+    note: >
+      WP-01's "Conan editable test" -- decided not-doing 2026-08-31 alongside
+      the hosted-CI descope (misc/START_HERE.md Decisions), not a pending
+      fix. It fails wherever the `adas-local` Conan remote has no
+      non-interactive credentials (`conan graph info` prompts for a
+      username and gets EOF) -- an environment-credential gap, not a code
+      regression, and one hosted CI would have had to solve anyway. Tolerated
+      here by name, never silently deselected.
 
 # S-C6: same discipline as known_flakes, applied to `sim check`'s scenario
 # set -- a scenario id here is tolerated (reported, never hidden) by name;

@@ -204,6 +204,24 @@ provenance answered down to the build. `WP-35` closed. Records, newest first:
 screenshots), **`…_wp28.md`** (`F-7`), **`…_2026-08-28.md`** (the step-zero
 fixes).
 
+**2026-08-31 — hosted CI closed out entirely, author's decision.** Not fixed,
+not observed, not abandoned — descoped: `scripts/ci_gate.py` stays as the real
+local gate; `.github/workflows/sim-ci.yml` kept with a header stating it is
+unobserved and unmaintained by decision, so its presence is never mistaken for
+a passing run. `WP-01`'s two items that used to wait on this — the 154
+`R-REQ-9` citations and the Conan-editable-install system test (the latter
+was actually failing here on a Conan-remote credential prompt, not skipping)
+— are now-**decided not-doing**, not pending-on-`WP-31`; `IMP-0366` closed
+against the decision (17/18 `Lands`). `IMP-0417` stays open — real, unrelated,
+`WP-31`-scoped content gap, left untouched. Board `#25` re-marked 🟢: headless
+parity (`GT-9`) already proved the requirement; CI was only ever evidence for
+it. `misc/memory.md` §6 corrected in place: "no CI anywhere" is now a closed
+decision, and "no dated evidence it passes" was answered separately, by the
+eighteen (now nineteen) `docs/v2/SIM_Test_Execution_*.md` records this module
+has produced since 2026-08-27. Record:
+`docs/v2/SIM_Test_Execution_2026-08-31_ci_descope.md`. **Not yet committed —
+reported, awaiting go-ahead.**
+
 ## The next action — exactly one
 
 > **`B1`/`B2`/`B3` are settled** (`B1` closed, `B2` done and pushed, `B3`
@@ -298,6 +316,7 @@ fixes).
 | **C** | ~~ERG is the format~~ → **parked**, no measurement exists. POC runs on `mcap` | 2026-08-27 |
 | **D** | vdy is the second module, but months away — nothing may depend on it | 2026-08-27 |
 | **E** | The demo *is* the definition of done, explicitly as a POC | 2026-08-27 |
+| **F** | Hosted CI is out of scope. `scripts/ci_gate.py` (run by hand, both platforms) is the real gate; `.github/workflows/sim-ci.yml` stays as an explicitly unobserved, unmaintained artifact. `WP-01`'s two items that were waiting on this (the stale `R-REQ-9` test-id citations, the Conan-editable-install system test) are **not-doing**, not pending — recorded, not silently dropped | 2026-08-31 |
 
 ## Parked — and what unparks each
 
@@ -306,8 +325,11 @@ fixes).
 | ERG · `WP-17` · `WP-18` | No ERG measurement exists or can be obtained | Real data arrives in a format sim cannot read |
 | `WP-19` `WP-30` `WP-31` | No demo dependency | **Condition met 2026-08-28 — the demo runs.** Unparking them is now a scope decision, not a wait |
 | The scenario finding — **now only its corpus half** (4 of 18 runnable, and those four under-asserted). Every *"never became"* and every vacuous pass is fixed | Author's call, 2026-08-27 | Before `B3` deletes `tools/carla/`, or when coverage rather than the warning path matters |
-| 155 `R-REQ-9` citations | Bookkeeping, not code | `WP-31` |
-| Conan editable test | `WP-31` scope | `WP-31` |
+
+**Removed 2026-08-31, not unparked:** the 155 `R-REQ-9` citations and the Conan
+editable-install system test are **not-doing** (Decision F) — they no longer
+wait on `WP-31` or anything else. See the log entry below and
+`docs/v2/SIM_Test_Execution_2026-08-31_ci_descope.md`.
 
 ## Open risks
 
@@ -315,15 +337,11 @@ fixes).
    2026-08-28 record). Validity is inferred from evidence grade, so a foreign or
    supplier file has every input flagged invalid — `F-1`'s symptom by a second
    route. Not on the demo path; does not report itself.
-2. **`WP-01` cannot close** until a real GitHub Actions run is observed passing.
-   The trigger was fixed 2026-08-27 and the push it was waiting on happened
-   **2026-08-28** — so a run may now exist, unobserved: `gh` is not installed
-   here. Someone must look. The gate itself still exits 1 on two parked items.
-3. **The scenario corpus is thin and under-asserted.** Only 4 of 18 scenarios
+2. **The scenario corpus is thin and under-asserted.** Only 4 of 18 scenarios
    can run. All four now assert real computed behaviour (`bsd_curve_r172_passby`
    stopped being a false green 2026-08-28) — but its BSD warning fires at
    t≈7.4–9.6 s with no expectation covering it. Green is not coverage.
-4. **A real capability loss, not silently dropped** (`SM-12`, 2026-08-29):
+3. **A real capability loss, not silently dropped** (`SM-12`, 2026-08-29):
    `vantage_app.exe` has no bare-replay mode (no `--pipeline`) and no
    `--preset`/`--at`/`--workspace`/`--version` — the Python viewer that used
    to serve them is deleted, and there is no native equivalent yet.
@@ -354,6 +372,19 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-08-31** — Hosted CI closed out entirely, author's decision: not
+  fixed, not observed, descoped. `scripts/ci_gate.py` stays as the real local
+  gate (now verified `status=pass` end to end); `.github/workflows/sim-ci.yml`
+  kept with a header naming the decision, never implying anyone is watching
+  it. `WP-01`'s two items that were waiting on this — 154 `R-REQ-9` citations,
+  the Conan-editable system test (found actually failing here on a Conan-
+  remote credential prompt, now a named `known_flake`) — reclassified
+  not-doing, not pending; `IMP-0366` closed against the decision (`WP-01`
+  17/18; `IMP-0417` stays open, separate, `WP-31`-scoped). Board `#25`
+  re-marked 🟢 (headless parity already proved it; CI was evidence, not the
+  requirement). `memory.md` §6 corrected in place rather than rewritten.
+  **Uncommitted — reported, awaiting go-ahead.** Record:
+  `docs/v2/SIM_Test_Execution_2026-08-31_ci_descope.md`.
 - **2026-08-31** — Three pre-existing `viz` unit tests fixed
   (`viz_test_session`/`viz_test_pull_source`/`viz_test_erg_pull_integration`
   — stale fixtures asserting a pre-`450031e` topic spelling, no production
@@ -448,23 +479,5 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   `df` gtest 311/312 (the one failure is the already-dispositioned
   `render_svg` stale-token finding, untouched). **Uncommitted — reported,
   awaiting go-ahead.** Record: `docs/v2/SIM_Test_Execution_2026-08-30_wp22_camera_feed.md`.
-- **2026-08-30** — Prior pass's `memory.md`/`Session`-finding work
-  committed/pushed (R-GIT-1: `sim` `ad4abb9`, superproject `361992c`; `df`
-  had nothing pending). Then item `#20`'s video-feed entry scoped against
-  `WP-30` per the author's ask: **`WP-30` is the wrong anchor** — its 8
-  boxes are io-side multi-camera codec/merge work (`SM-01`, 2026-08-20
-  re-scope moved the display half to `viz`), and both candidate recordings
-  (`bsd_curve_r172_passby.mcap`, `canonical_10mps_30m_20260714_174456.mcap`)
-  already carry `carla/chase_camera` as `foxglove.CompressedImage`, verified
-  readable with no regeneration and no `foxglove` package (schema decoded
-  from the recording's own embedded `FileDescriptorSet`, `R-SIM-11`'s
-  pattern). The real gap: `viz`'s `kReference`/`kImage` `Prim` kind and
-  `Session` both already shipped (`VZ-09`/`VZ-12`, closed 2026-08-19) but the
-  `ImageResolver` seam was deliberately left unfilled and is still wired to
-  `nullptr` (`player_runner.cpp:317`) — no image has ever been drawn by this
-  codebase; the player also has exactly one panel, hardcoded to
-  `VIZ_SPACE_EGO_BEV`; and no layer provider anywhere calls
-  `AppendReference`. No new `Prim` kind needed, no `sim` package opened.
-  Not started — the author decides where the three-piece fix lands (`viz`
-  vs. `df` plan) before anyone writes it. Record:
-  `docs/v2/SIM_Test_Execution_2026-08-30_item20_video_feed_scoping.md`.
+  (older entries trimmed per this section's own "keep about five" rule —
+  see git history on this file for anything earlier.)

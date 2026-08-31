@@ -1,3 +1,17 @@
+# DECISION 2026-08-31 (author's call, recorded in misc/START_HERE.md):
+# hosted CI is OUT OF SCOPE for this project. This file is kept, unmaintained
+# and UNOBSERVED -- no push/PR has ever triggered a real run of it through GH
+# Actions infrastructure (see IMP-0366's closure note, WP-01), and none is
+# being sought. It is not wired to anything watching it; nobody is alerted if
+# it breaks, rot, or drifts from `scripts/ci_gate.py`. Reason: the commands it
+# would run are already the ones run by hand, locally, on every platform that
+# matters to this project (`scripts/ci_gate.py`, S-C0) -- a hosted runner adds
+# an observation channel this project has decided not to build or maintain,
+# not a capability the local gate lacks. Kept rather than deleted only so a
+# future session that *does* want hosting has a written starting point; it
+# carries no obligation and nobody should read its presence as evidence that
+# a run has ever passed.
+#
 # S-C0 -- the automatic gate (docs/sim_implementation_plan.md). `ST-C0-1`: this
 # job runs green on the current tree, with `ci_gate_config.yaml`'s pytest_floor
 # equal to the number actually observed the day it was set -- no aspirational

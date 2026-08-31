@@ -2096,7 +2096,7 @@ Superseded (`SM-04`, 2026-08-20 — sole decomposer was `SI-18`'s scene-cache-bu
 **Shall.** The reference test suite shall run on both operating systems and compare results.
 **Accept.** A difference between platforms is a defect and is reported as such, not tolerated as an environment difference.
 **Verify.** T · `SYT-NFR-18`   **Trace.** CN-0247, CN-0043
-**Built.** ◐ started — 0/1 software requirements done, in `WP-01`
+**Built.** ● done — 1/1 software requirements done
 
 **`SYS-0251`** · `P1` · `R1` — A measured claim names its platform
 **Shall.** Every measured claim — performance, throughput, reproducibility — shall name the platform and the shell that produced it.

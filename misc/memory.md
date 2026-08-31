@@ -177,7 +177,7 @@ decision as v1→v2, one layer down.
 
 ---
 
-## 6. Nothing tells you it is alive
+## 6. Nothing tells you it is alive — *as written 2026-08-27. Answered since, by two different means, and this section is corrected rather than left standing.*
 
 - **There is no CI anywhere** in the project. WP-01, the CI package, is the
   perpetual "next work package" from §1.
@@ -190,6 +190,33 @@ decision as v1→v2, one layer down.
 
 A project with 1,520 tests, no CI, and no dated evidence of them passing cannot
 tell its author that it works. So it doesn't feel like it works.
+
+**Corrected 2026-08-31.** The two bullets above were one diagnosis wearing two
+symptoms, and they were answered by two different, unrelated fixes — neither of
+which was "get hosted CI running":
+
+- **"No dated evidence it passes"** was answered by the *records*, not by CI.
+  Starting 2026-08-27 this module began writing a
+  `docs/v2/SIM_Test_Execution_<date>[_<campaign>].md` per real campaign;
+  eighteen exist as of this section's own edit (eighteen dated files under
+  `docs/v2/`, this session's own CI-descope record making nineteen), each
+  naming its pass/fail counts, the date and the commit they were run against.
+  That is what makes *"is it alive"* answerable today: read the newest record,
+  not the absence of a hosted job.
+- **"No CI anywhere"** is, as of 2026-08-31, a closed question rather than an
+  open one: hosted CI is **out of scope by decision** (`misc/START_HERE.md`
+  Decision F), not missing for lack of time. The thing CI was actually standing
+  in for — *a check harness that runs the same way every time, on both
+  platforms sim ships for* — exists and runs green by hand
+  (`scripts/ci_gate.py`, `WP-01`, `IMP-0366` closed against this same decision).
+  What a hosted runner would have added on top — an unattended trigger and an
+  audit trail nobody here was going to watch — was never the part of "alive"
+  this section was actually measuring; the records above are.
+
+Net: the felt absence this section named was real, and is gone — answered by a
+habit of writing records, plus a decision that stopped treating an unbuilt
+hosted job as the thing standing between this project and being verifiably
+alive.
 
 ---
 
