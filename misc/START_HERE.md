@@ -1,6 +1,6 @@
 # START HERE
 
-**Updated:** 2026-09-01 (Step 7 executed) · **Read this first, then run the status command below.**
+**Updated:** 2026-09-01 (Step 7 fully closed; next action reframed) · **Read this first, then run the status command below.**
 
 > **No derived progress state in this file, ever** — no "N of M done", no
 > per-item status, no checklist. That is what goes stale: this module already
@@ -343,10 +343,46 @@ itself predicted, byte weight −~18%; total tracked set ~35,894→~22,195
 lines (−38%), not the plan's own "~4,000–4,500" headline, which its own
 §2 could not have reached given `docs/v2/` was never going to shrink in
 line count — named as the plan's own arithmetic inconsistency, not an
-execution shortfall.** Two `.claude/rules/sim.md` edits (the dangling
-`R-SIM-1` "Full map: §5.8" pointer; the `sim_api_reference.md` claim)
-collected and presented, held for separate approval. Record:
+execution shortfall.** Record:
 `docs/v2/SIM_Test_Execution_2026-09-01_step7_execution.md`.
+
+**2026-09-01, same day — pushed, and the two rule-file items closed to
+one.** All four repos (`sim`/`df`/`viz`/superproject) pushed to origin,
+R-GIT-1 order. Of the two `.claude/rules/sim.md` edits collected above,
+the mechanical one is **applied**: `R-SIM-1`'s dangling "Full map: §5.8"
+pointer dropped, and every stale v1-doc description in the normative-index
+preamble (`sim_requirements.md`, `sim_architecture.md`,
+`sim_sil_contract.md`, `sim_resim_and_recording.md`,
+`sim_scenarios_and_expectations.md`, `sim_player.md`,
+`sim_visualization_spec.md`, `sim_portability.md`, `sim_learn.md`)
+corrected to say what each file actually holds now — its **`sim_api_reference.md`
+clause left byte-for-byte untouched**, since narrowing or softening that
+one claim is the substantive decision, not bookkeeping. That decision was
+presented with three options and their costs (retire with the claim
+dropped, like its nine siblings; keep the file and narrow the claim to the
+parts spot-checked as still true — CLI verbs, the closed error taxonomy,
+now relocated to `diagnostics/errors.py` — at the cost of a maintenance
+burden that recurs every time more logic moves to C++; or mark it
+superseded-in-part and change nothing else, which fixes nothing a reader
+still has to verify every claim). Recommendation given: retire it like the
+other nine — not decided here. `misc/memory.md` gained a closing §10
+against its own 2026-08-27 findings, stating what closed (`§1`, `§3` twice
+now, `§4` including the shrink plan's own caught counting error, `§6`) and
+what is still open (`§2`'s zero-progress packages, six amber board items,
+`sim_api_reference.md` itself) rather than declaring the module done.
+
+**2026-09-01, same day, closing pass — the author accepted the
+recommendation.** `sim_api_reference.md` retired to a stub, same pattern as
+its nine siblings, naming both what was wholesale wrong (§1/§1a's
+`scene`/`render`/`app` rows, §5 — deleted by `7d4c626`) and what had merely
+moved (§9's error taxonomy to `diagnostics/errors.py`, §10's CLI table
+~80% still accurate) so a later reader knows what was lost versus relocated.
+`.claude/rules/sim.md`'s "a signature there is a contract" clause removed,
+not reworded. `misc/memory.md` §10 updated to close that item rather than
+list it as open. **This closes Step 7 in full** — nothing from
+`STEP_7_SHRINK_PLAN.md` remains undecided. **The next action** below is
+rewritten to match: Movements A/B/C are complete, and what is left is
+named as remaining capability against a working demo, not a task list.
 
 **2026-08-31, Step 7 — document-set shrink plan written, not executed.**
 `memory.md`'s last untreated root cause (§4/§7: 41,341 lines / 3.3 MB of spec
@@ -374,31 +410,35 @@ only, awaiting the author's go-ahead to execute.
 
 ## The next action — exactly one
 
-> **Everything through 2026-08-31 is committed and pushed** — `sim`, `df` and
-> the superproject pointer are all in sync with origin as of this session
-> (the several "not yet committed" flags in the paragraphs above are now
-> stale; superseded here rather than hand-edited in place, per this file's
-> own no-second-copy rule). The two findings from `check_build_freshness.py`'s
-> first real run are resolved: `mathlib`'s `build-sil-vs2026` lib was stale
-> behind its own `conanfile.py` (real MSVC rebuild, native `vs2026`);
-> `interfaces`' flagged artifact was a dead pre-`WP-33` `build/` leftover
-> superseded by its already-fresh `build-sil-vs2026` — deleted, not rebuilt.
-> `df`'s CarMaker stray (`.IPGControl.conf`) is now gitignored. **Step 7 is
-> executed** (2026-09-01, both phases, committed in `sim`/`df`/`viz` and the
-> superproject) — see the paragraph above and
-> `docs/v2/SIM_Test_Execution_2026-09-01_step7_execution.md` for the full
-> record. **The pending decision is the two `.claude/rules/sim.md` edits**
-> that retirement made necessary (the dangling `R-SIM-1` "Full map: §5.8"
-> pointer; the `sim_api_reference.md` claim, now known stale) — collected
-> and presented, not applied, per the author's own instruction to keep a
-> normative-rule edit at a separate governance level from a document
-> retirement. `sim_api_reference.md` itself also awaits the author's call
-> on its own remediation (it was excluded from retirement on a real
-> finding, not assumed clean — see the same record). Everything named in
-> earlier paragraphs above (`B1`–`B4`, item `#20`, item `#16`, the three
-> `viz` test fixes, the `A-15`/`io` fixes, the freshness check itself) is
-> settled and unchanged; read them there if the history is wanted, this row
-> only tracks what changed since.
+> **Movements A, B and C are complete. The demo works.** `DEMO_AND_SCOPE.md`
+> §1 runs end to end, all five clauses, watched and screenshotted (`WP-35`,
+> closed). That is the baseline every item below is measured against — not
+> a task list with a broken core, a working system with named gaps in
+> breadth.
+>
+> **What remains is remaining capability, not unfinished work:**
+>
+> - **Six board items are amber, not red** (`CONSOLIDATED_REQUIREMENTS.md`
+>   — `#2`/`#3` the three-pillar/two-face architecture, `#12`/`#13` crash
+>   isolation and determinism, `#17` export one-way-ness, `#24` geometry
+>   from calibration). Each already does its job for the one case the demo
+>   exercises; each is amber because it does not yet do it for every case
+>   the concept promises.
+> - **Five work packages are at zero boxes** (`misc/memory.md` §2 —
+>   `WP-17`/`18`/`19`/`30`/`31`: the io codecs/export, images, packaging).
+>   Named honestly as not started, not guessed at as partial.
+> - **`sim_api_reference.md`'s own disposition is closed** (retired
+>   2026-09-01, `.claude/rules/sim.md`'s stale claim removed with it) — not
+>   a remaining item, listed here only so the next reader doesn't go
+>   looking for it as one.
+>
+> **Pick one board amber or one zero-progress package.** Nothing here
+> gates anything else — that is what "the demo works" means. `trace_check.py
+> --status` names the next untouched package by number if a default is
+> wanted (`WP-17` as of 2026-09-01); it is not a priority order, only the
+> lowest-numbered gap. History for how each of the above got here lives in
+> **Where we are**, above, and in `docs/v2/SIM_Test_Execution_*.md`; this
+> field states only where things stand today.
 
 ## Do not
 
@@ -484,16 +524,20 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
-- **2026-09-01** — Step 7 executed, two phases: `docs/v1/` 9 files retired
-  to stubs + `FROZEN_DESIGN_ORIGINS.md` extraction + `sim_requirements.md`
-  compact register (17,681→2,078 lines); `sim_api_reference.md` excluded on
-  a real conditional-check finding (describes deleted `scene`/`render`/
-  `app` packages), left unretired. `SIM_Implementation_Plan_v0.1.md`'s 85
-  essay checkbox rows compressed, pointed at closing commits (no matching
-  Test Execution record existed for any of them — raised and decided
-  mid-session). Two `.claude/rules/sim.md` edits collected, held for
-  separate approval. `trace_check.py`/`check_invariants.py` clean after
-  each phase. Committed across `sim`/`df`/`viz`/superproject, not pushed.
+- **2026-09-01** — Step 7 fully closed. `docs/v1/` all 10 files retired
+  (9 to stubs + `sim_requirements.md`'s compact register, 17,681→2,078
+  lines), including `sim_api_reference.md` — held back pending a
+  conditional check, found to describe `scene`/`render`/`app` packages
+  `7d4c626` deleted, three options presented, author accepted retiring it
+  like its siblings, its stub naming both what was wrong and what merely
+  moved. 85 essay checkbox rows compressed to closing-commit pointers.
+  `.claude/rules/sim.md`'s two mechanical repoints applied and its stale
+  "signature is a contract" clause removed outright. `misc/memory.md` §10
+  closed against `sim_api_reference.md` too — only `§2`'s zero-progress
+  packages and six amber board items remain open, reframed as remaining
+  capability against a working demo, not unfinished work. **The next
+  action** rewritten to match. Pushed across `sim`/`df`/`viz`/superproject,
+  R-GIT-1 order. `trace_check.py`/`check_invariants.py` clean throughout.
   Record: `docs/v2/SIM_Test_Execution_2026-09-01_step7_execution.md`.
 - **2026-08-31** — Everything pushed (sim, df, superproject). Two freshness-
   check findings resolved (`mathlib` rebuilt on real `vs2026`; `interfaces`'

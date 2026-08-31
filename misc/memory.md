@@ -267,3 +267,74 @@ Do not throw these away. They are the real output of two months:
 > replaced, and the writing about the work grew until it outweighed the work.
 
 Nothing here requires re-designing the system. It requires being able to *see* it.
+
+---
+
+## 10. Closed, 2026-09-01 — what actually happened to each finding
+
+Written 2026-08-27 as a diagnosis with no recorded outcome. Movements A, B
+and C are done; this closes the loop the same way `§6` insisted on for
+itself — a dated record, not a feeling.
+
+**§1 (the resume pointer) — fixed.** `trace_check.py --status` reports real
+per-layer progress and the actual next untouched package (`WP-17`), not a
+lowest-numbered-box rule that pins the answer to "the beginning" forever.
+Confirmed live, 2026-09-01: 297/376 design items (79%), 18 packages closed,
+21 in flight, 5 untouched — a number that moves session to session, which
+is the whole fix.
+
+**§3 (copy-never-move) — broken twice, not once.** `B1` deleted the Python
+scene/render/player stack, 2026-08-29 — the first executed deletion this
+project's history recorded. Step 7 (2026-09-01) did it again, to documents
+rather than code: nine `docs/v1/` files replaced with stubs and a tenth
+(`sim_requirements.md`) with a compact register, net **−15,603 lines**
+(17,681 → 2,078) with git history, not a second live copy, holding the
+full text. The pattern is no longer "never," but it is not yet "always"
+either — `v2`'s Python/C++ `io` overlap (`B4`'s one remaining item) and the
+cross-language `Session` duplication are both still live, undeleted, named
+as open risks in `START_HERE.md`. Two proofs of capability now, still not
+a habit.
+
+**§4 (specification became the deliverable) — cut, and the cut caught its
+own error.** `docs/v1` fell 88% (17,681 → 2,078 lines, 1.1 MB → 120 KB);
+the essay-checkbox defect (85 rows, 79,512 characters of investigation
+narrative masquerading as `R-REQ-6a` closure clauses) is compressed to
+short clauses pointing at the commits that actually closed each item. The
+honest ending: the shrink plan's own headline target — "~4,000–4,500 lines
+total" — was arithmetically impossible given its own §2, which left
+`docs/v2`'s ~18,200 lines structurally unchanged. Executing the plan caught
+the plan's own counting error, the same way `check_requirement_coverage.py`
+was built to catch a register's; a re-derived number, checked, beat a
+carried-forward one. Total tracked set: ~35,894 → ~22,195 lines (−38%),
+the real result, not the guessed one.
+
+**`sim_api_reference.md`'s disposition — closed 2026-09-01, not open.**
+Held back from the first pass on a real finding (it described `scene`/
+`render`/`app` packages `7d4c626` deleted); presented as a three-option
+decision with costs; the author accepted retiring it like its nine
+siblings. Now a stub, same pattern as the rest, naming what was wrong
+(§1/§1a/§5, wholesale) and what had merely moved (§9's error taxonomy to
+`diagnostics/errors.py`, §10's CLI table ~80% still accurate) so nothing
+found true was thrown away with what was found false. `.claude/rules/sim.md`'s
+own "a signature there is a contract" citation is removed, not reworded.
+
+**§6 (nothing tells you it is alive) — already answered, before this
+close, and unchanged by it.** Restated here only because closing the loop
+means confirming it held: dated `SIM_Test_Execution_*.md` records (twenty
+and counting) are the answer, not hosted CI, which is closed as **out of
+scope by decision** (`START_HERE.md` Decision F) rather than missing. Read
+the newest record; that is what "alive" means here now.
+
+**What is not closed, stated plainly rather than folded into a victory
+lap.** `§2`'s finding stands unchanged: `WP-17`/`18`/`19`/`30`/`31` are
+still at zero boxes — the io codecs/export, images and packaging work this
+document called "the part that makes it useful" has not moved. Six board
+items are still amber, not green: **`#2`/`#3`** (the three-pillar/two-face
+architecture, partial), **`#12`/`#13`** (crash isolation and determinism,
+partial), **`#17`** (export one-way-ness, partial), **`#24`** (geometry
+from calibration, partial) — see `CONSOLIDATED_REQUIREMENTS.md`. These are
+**remaining capability, not unfinished work** — the demo runs end to end
+today; what is missing is breadth (more formats, more crash paths proven,
+more geometry sources), not a broken core. A diagnosis with no recorded
+outcome was the defect `§0` opened with; declaring more done than is true
+would be the same defect wearing this section's clothes instead.
