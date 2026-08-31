@@ -292,7 +292,30 @@ once (`SessionImageResolver::Resolve`'s topic-canonicalization regression,
 found and fixed 2026-08-30) — is named as a new open risk, not fixed this
 pass. No code touched in either `sim` or `viz`. Record:
 `docs/v2/SIM_Test_Execution_2026-08-31_session_duplication_disposition.md`.
-**Not yet committed — reported, awaiting go-ahead.**
+**Committed, not pushed** (`sim` `0a5732a`, superproject `6e6e7a2`).
+
+**2026-08-31, same day — the stale-build pattern named twice this week
+(Open Risk, below) is answered with a real, mechanical check, not just
+named again.** `scripts/check_build_freshness.py`, superproject root
+(cross-submodule, so it cannot live inside this module alone) — for every
+Conan-editable-registered package, every binary under its own `build*/`
+dirs is compared against the newest file in what actually feeds that
+package's build (`src/`/`include/`/`conf/`/recipe files, never the whole
+tree). Run by hand before trusting a build, same discipline as
+`check_invariants.py`/`setup.py`; deliberately not wired into any
+automated gate (hosted CI out of scope, Decision F) or into any
+component's byte-identical `build.py`/`build.bat` (`R-BUILD-6`, too big for
+this item). **A real bug found and fixed before this shipped:** the first
+version walked each package's whole root as "source," producing 26 mostly-
+false findings on this machine's real registry — one build tree's own
+`ALL_BUILD.lastbuildstate` bookkeeping read as "the source changed" against
+a *different* build tree's artifact, `CompilerIdC.exe` treated as a real
+deliverable, `mathlib/gui.bat` counted as C++ source. Narrowed and fixed;
+re-run, **2 real, plausible findings** (`interfaces`/`mathlib`'s own
+`build/`/`build-sil-vs2026` `.lib`s, both genuinely behind their own
+`conanfile.py`), neither rebuilt here. 10/10 new unit tests. Record:
+`docs/v2/SIM_Test_Execution_2026-08-31_build_freshness_check.md`. **Not yet
+committed — reported, awaiting go-ahead.**
 
 ## The next action — exactly one
 
@@ -455,6 +478,19 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-08-31** — Build-artifact freshness check built
+  (`scripts/check_build_freshness.py`, superproject root, cross-submodule):
+  for every Conan-editable package, its own `build*/` binaries vs. the
+  newest file in what actually feeds its build (`src`/`include`/`conf`/
+  recipe files). Run by hand, not wired into any gate. **A real bug found
+  and fixed before shipping:** the first version scanned each package's
+  whole tree as "source," producing 26 mostly-false findings (one build
+  tree's own bookkeeping read as source, `CompilerIdC.exe` treated as a
+  deliverable, a dev launcher `.bat` counted as C++ source) — narrowed;
+  re-run, 2 real findings (`interfaces`/`mathlib`, both behind their own
+  `conanfile.py`), neither rebuilt. 10/10 new unit tests. **Uncommitted —
+  reported, awaiting go-ahead.** Record:
+  `docs/v2/SIM_Test_Execution_2026-08-31_build_freshness_check.md`.
 - **2026-08-31** — Cross-repo `Session` duplication disposition closed:
   re-measured from the build graph and git log (not carried over), both
   Python `adas_sim/session/` and C++ `viz::session::Session` are genuinely
@@ -462,7 +498,8 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   `viz_player.exe`). Reframed as a cross-language twin (`io/mcap.py`↔
   `mcap.cpp`'s pattern), not copy-never-move debt — no deletion. Drift risk
   (already manifested once) named as a new open risk. No code touched.
-  **Uncommitted — reported, awaiting go-ahead.** Record:
+  **Committed, not pushed** (`sim` `0a5732a`, superproject `6e6e7a2`).
+  Record:
   `docs/v2/SIM_Test_Execution_2026-08-31_session_duplication_disposition.md`.
 - **2026-08-31** — `mcap.cpp`'s own named `capture_time_ns` gap closed: a
   narrow scalar read of `manifest_version:` (not a full `RunManifest` port)
@@ -492,18 +529,5 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   `G`. No code change. **Committed, not pushed** (`sim` `ca30250`,
   superproject `4c64285`). Record:
   `docs/v2/SIM_Test_Execution_2026-08-31_item20_close.md`.
-- **2026-08-31** — Hosted CI closed out entirely, author's decision: not
-  fixed, not observed, descoped. `scripts/ci_gate.py` stays as the real local
-  gate (now verified `status=pass` end to end); `.github/workflows/sim-ci.yml`
-  kept with a header naming the decision, never implying anyone is watching
-  it. `WP-01`'s two items that were waiting on this — 154 `R-REQ-9` citations,
-  the Conan-editable system test (found actually failing here on a Conan-
-  remote credential prompt, now a named `known_flake`) — reclassified
-  not-doing, not pending; `IMP-0366` closed against the decision (`WP-01`
-  17/18; `IMP-0417` stays open, separate, `WP-31`-scoped). Board `#25`
-  re-marked 🟢 (headless parity already proved it; CI was evidence, not the
-  requirement). `memory.md` §6 corrected in place rather than rewritten.
-  **Committed, not pushed** (`sim` `8b3f4de`, superproject `6cc0642`).
-  Record: `docs/v2/SIM_Test_Execution_2026-08-31_ci_descope.md`.
 - (older entries trimmed per this section's own "keep about five" rule — see
   git history on this file for anything earlier.)
