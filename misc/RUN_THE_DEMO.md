@@ -188,8 +188,11 @@ Stated so you do not spend time on them:
 - **`sim probe` reports `provides (0)`** on a perfectly good recording. It reads
   a different path from the engine's, and that path is still ingest-gated. The
   launcher's own feasibility line does work — use that.
-- **`config_bundle_sha256` reads `unknown`** — the calibration hash is not
-  recorded yet, only the build.
+- **`config_bundle_sha256` now reads a real hash** (fixed `A-15`, proven on
+  the real path `2026-08-31` — see
+  `docs/v2/SIM_Test_Execution_2026-08-31_a15_real_path_proof.md`). If you see
+  `unknown` instead, your `df_sil.dll` predates that fix or was not rebuilt
+  after it — rebuild `df` (`build.bat -t sil -p vs2026`) and re-run the resim.
 - **`aeb.compState` is empty.** Deliberate: AEB's heartbeat is not implemented
   yet in `df`, and this is not a sim defect.
 - **`bsd_curve_r172_passby` passes honestly since 2026-08-28**, but is

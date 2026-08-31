@@ -54,7 +54,7 @@ were touched — no requirement was added, removed or reworded otherwise.
 | # | In one sentence | Status |
 |---|---|---|
 | **15** | Record **every module's inputs *and* outputs**, so a later run can be started from any point in the chain instead of only from the front. | 🟢 |
-| **16** | A recording carries its own **provenance** — which build, which calibration, which scenario — and every signal is tagged as measured, simulated, or mocked, so a report can never quietly claim a mock was a measurement. | 🟡 build and tags real (`F-2`, `F-8`); **calibration hash is empty**, so "which calibration" reads unknown |
+| **16** | A recording carries its own **provenance** — which build, which calibration, which scenario — and every signal is tagged as measured, simulated, or mocked, so a report can never quietly claim a mock was a measurement. | 🟢 build and tags real (`F-2`, `F-8`); **calibration hash proven on the real path 2026-08-31** — a real `df_sil.dll` built for `vs2026` with its packed `config/bundle.sha256`, resim'd with `--save`, reads back a real, matching `config_bundle_sha256` both in the recording's own manifest and through `sim explain`'s evidence chain (the same formatter the player's evidence panel uses) — no longer `unknown` |
 | **17** | Exports (CSV, video, plots) are **one-way and lossy**, clearly a different kind of artifact from a recording, and never accepted back as a run input. | 🟡 |
 
 ## E. Seeing it (viz)

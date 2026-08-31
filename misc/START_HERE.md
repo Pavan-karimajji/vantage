@@ -219,8 +219,9 @@ it. `misc/memory.md` §6 corrected in place: "no CI anywhere" is now a closed
 decision, and "no dated evidence it passes" was answered separately, by the
 eighteen (now nineteen) `docs/v2/SIM_Test_Execution_*.md` records this module
 has produced since 2026-08-27. Record:
-`docs/v2/SIM_Test_Execution_2026-08-31_ci_descope.md`. **Committed and
-pushed** (`sim` `8b3f4de`, superproject `6cc0642`).
+`docs/v2/SIM_Test_Execution_2026-08-31_ci_descope.md`. **Committed, not
+pushed** (`sim` `8b3f4de`, superproject `6cc0642`) — push was not asked for
+this pass (`R-GIT-2`).
 
 **2026-08-31, same day — board `#20` closed green.** Author's decision: the
 chase camera (`WP-22`, shipped 2026-08-30) is sufficient; driver view is not
@@ -230,8 +231,25 @@ built) with driver view joining the other three already-out-of-scope items;
 unverified" to **25 of 25 green or amber, none red, none unverified**. New
 Decision `G`. No code changed — a scope decision against an already-shipped
 capability, not a build. Record:
-`docs/v2/SIM_Test_Execution_2026-08-31_item20_close.md`. **Not yet committed
-— reported, awaiting go-ahead.**
+`docs/v2/SIM_Test_Execution_2026-08-31_item20_close.md`. **Committed, not
+pushed** (`sim` `ca30250`, superproject `4c64285`).
+
+**2026-08-31, same day — item `#16`'s `A-15` config-bundle-hash fix proven on
+the real path.** Yesterday's fix was Python-only (`Pipeline` unit test). This
+session built `df_sil` for `vs2026` (Conan's full install path still blocked
+by the same credential gap as `WP-01`'s Conan-editable test; worked around
+with a direct `cmake --build` against the already-resolved dependency graph
+on disk — a real relink, bundle genuinely repacked,
+`bundle.sha256=966f0e30...`), ran the demo's own `sim resim --save`, and read
+back that exact hash as `config_bundle_sha256` both from the recording's own
+manifest and through `sim explain`'s evidence chain (the same formatter the
+player's evidence panel calls, `R-SIM-25`). Board `#16` re-marked 🟢. **One
+real, separate gap found and named, not fixed:** the config bundle's actual
+*bytes* are still not embedded in the recording (`R-SIM-3a`'s other half) —
+`simengine`'s own writer embeds no run manifest at all, a different, larger
+mechanism `A-15` never touched. Record:
+`docs/v2/SIM_Test_Execution_2026-08-31_a15_real_path_proof.md`. **Not yet
+committed — reported, awaiting go-ahead.**
 
 ## The next action — exactly one
 
@@ -384,11 +402,21 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-08-31** — `A-15`'s config-bundle-hash fix proven on the real path:
+  real `vs2026` `df_sil` build (Conan blocked by the known credential gap,
+  worked around with a direct `cmake --build` against the already-resolved
+  graph), demo's own `sim resim --save`, real `config_bundle_sha256`
+  (`966f0e30...`) read back from both the recording's manifest and `sim
+  explain`'s evidence chain. Board `#16` re-marked 🟢. Separate gap named,
+  not fixed: the bundle's actual bytes still are not embedded in the
+  recording. **Uncommitted — reported, awaiting go-ahead.** Record:
+  `docs/v2/SIM_Test_Execution_2026-08-31_a15_real_path_proof.md`.
 - **2026-08-31** — Board `#20` closed green: author's decision, the chase
   camera (`WP-22`) is sufficient, driver view not wanted. Joins the other
   three already-out-of-scope items; `CONSOLIDATED_REQUIREMENTS.md` §2 now
   reads **25 of 25 green or amber, none red, none unverified**. New Decision
-  `G`. No code change. **Uncommitted — reported, awaiting go-ahead.** Record:
+  `G`. No code change. **Committed, not pushed** (`sim` `ca30250`,
+  superproject `4c64285`). Record:
   `docs/v2/SIM_Test_Execution_2026-08-31_item20_close.md`.
 - **2026-08-31** — Hosted CI closed out entirely, author's decision: not
   fixed, not observed, descoped. `scripts/ci_gate.py` stays as the real local
@@ -401,8 +429,8 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   17/18; `IMP-0417` stays open, separate, `WP-31`-scoped). Board `#25`
   re-marked 🟢 (headless parity already proved it; CI was evidence, not the
   requirement). `memory.md` §6 corrected in place rather than rewritten.
-  **Committed and pushed** (`sim` `8b3f4de`, superproject `6cc0642`). Record:
-  `docs/v2/SIM_Test_Execution_2026-08-31_ci_descope.md`.
+  **Committed, not pushed** (`sim` `8b3f4de`, superproject `6cc0642`).
+  Record: `docs/v2/SIM_Test_Execution_2026-08-31_ci_descope.md`.
 - **2026-08-31** — Three pre-existing `viz` unit tests fixed
   (`viz_test_session`/`viz_test_pull_source`/`viz_test_erg_pull_integration`
   — stale fixtures asserting a pre-`450031e` topic spelling, no production
@@ -449,53 +477,5 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   claim), stated as out of scope rather than forced. **Uncommitted —
   reported, awaiting go-ahead.** Record:
   `docs/v2/SIM_Test_Execution_2026-08-31_a15_bundle_hash_and_copy_drift.md`.
-- **2026-08-30** — `WP-22` reviewed and pushed (`viz` `0f67af6`, `df`
-  `b9ceba1`, `sim` `6495ab8`, superproject `c231337`). Then the
-  legacy-recording `objects` gap it left open, closed and pushed (`viz`
-  `82da36b`, `df` `1e2c01d`, `sim` `b40bcf3`, superproject `e91db63`):
-  player applies the same `R-SIM-23` ingest map the engine does
-  (`viz/session/ingest_loader.{hpp,cpp}`, `Session::Open`'s new
-  `plugin_dirs`), plus a real porting gap found and closed
-  (`viz::player::TopicToPortName` drops "source" like any other producer
-  prefix, so an ingest-mapped port reaches `PortBytes` as its bare legacy
-  name, never `R-SIM-21`'s `source.<port>` spelling —
-  `conf/viz.yaml`/`layers/common.cpp`'s new `FindEither` try both).
-  **Verdict:** the same screenshot now shows a real object box; `bsd.warning`
-  stays unfixable here (the recording carries no `bsd.compState` at all).
-  **Real, separate, pre-existing regression found in the same pass (not
-  caused by it) and fixed, author's call:** rebuilding `sim`'s three-day-
-  stale `sil` lib (needed to link the ingest-map feature) first exercised
-  `450031e`'s 2026-08-28 topic-canonicalization change for real, which
-  blacked out `WP-22`'s own just-pushed camera panel (confirmed independent
-  of the ingest-map change itself) — fixed by canonicalizing
-  `SessionImageResolver::Resolve`'s own lookup key, scoped entirely to
-  `viz`'s player-side code (`df` needed no rebuild, re-verified unchanged at
-  `311/312`). `viz` `gtest` 46/49 both before and after this fix — the 3
-  failures share the same canonicalization root cause but are a different,
-  stale-fixture-shaped repair, left open. **Camera fix uncommitted —
-  reported, awaiting go-ahead** (the ingest-map work above is already
-  pushed). Record:
-  `docs/v2/SIM_Test_Execution_2026-08-30_legacy_objects_ingest.md`.
-- **2026-08-30** — Item `#20`'s video-feed entry implemented: `WP-22`'s
-  three pieces (camera layer in `df`'s real C++ plug-in, `SessionImageResolver`
-  in `viz`, a second player panel) plus two things found live and not
-  planned — a `VizTickView`/`PortBytes` `log_time_ns` field
-  (`DF_VIZ_ABI_VERSION` 1→2, additive, checked against all 12 call sites)
-  and `SW-0021`/`SYS-0088`'s "exactly five layers" amended to six (asked the
-  author mid-session: amend vs. piggyback on an existing layer — amend
-  chosen; a real `gen_viz_shim.py` build gate and cascading test counts
-  fixed with it). `stb_image.h` vendored (public domain, pinned,
-  `STBI_ONLY_JPEG`) for the JPEG decode. **Verdict:** a real frame from
-  `bsd_curve_r172_passby.mcap` decodes and draws live in `viz_player.exe`'s
-  "Camera" panel beside the BEV, screenshotted
-  (`modules/sim/logs/wp22_camera_feed/`). `vantage_app.exe` untouched — its
-  own tick path (`frame_bridge.cpp`) never fills `schema_bytes`, asked and
-  resolved mid-session. Real, pre-existing, separate gap found (not
-  caused): `objects`/`hud`/`bsd.warning` render nothing against this
-  legacy-topic-named recording via bare replay — `TopicToPortName` expects
-  a self-produced recording's own naming convention. `viz` gtest 49/49,
-  `df` gtest 311/312 (the one failure is the already-dispositioned
-  `render_svg` stale-token finding, untouched). **Uncommitted — reported,
-  awaiting go-ahead.** Record: `docs/v2/SIM_Test_Execution_2026-08-30_wp22_camera_feed.md`.
-  (older entries trimmed per this section's own "keep about five" rule —
-  see git history on this file for anything earlier.)
+- (older entries trimmed per this section's own "keep about five" rule — see
+  git history on this file for anything earlier.)
