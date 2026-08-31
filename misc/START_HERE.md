@@ -248,7 +248,31 @@ real, separate gap found and named, not fixed:** the config bundle's actual
 *bytes* are still not embedded in the recording (`R-SIM-3a`'s other half) —
 `simengine`'s own writer embeds no run manifest at all, a different, larger
 mechanism `A-15` never touched. Record:
-`docs/v2/SIM_Test_Execution_2026-08-31_a15_real_path_proof.md`. **Not yet
+`docs/v2/SIM_Test_Execution_2026-08-31_a15_real_path_proof.md`. **Committed,
+not pushed** (`sim` `f81de52`, superproject `802801a`).
+
+**2026-08-31, same day — `simcore/io/codecs/mcap.cpp`'s own named
+`capture_time_ns` gap closed.** That file's top note said the reader trusted
+`publishTime` unconditionally, never replicating `io/mcap.py`'s
+`manifest_version >= CAPTURE_TIME_MANIFEST_VERSION` gate (`R-SIM-14`),
+because `simcore` has no structured `RunManifest` C++ type. Fixed without
+building that type: a narrow, targeted scalar read of the one
+`manifest_version:` line the opaque `manifest` meta block's bytes carry
+(`ParseManifestVersion`, explicitly documented as not a YAML parser),
+computed once per `Open()` (`DetermineCaptureTimeAwareness`) and gating
+`Pull()`'s `capture_time_ns` — `nullopt` for any file with no manifest or a
+pre-two-clock one, never a filled-in value. **A second, dormant bug found
+while tracing this and fixed alongside it:** `ToString(MetaKind::
+kRunManifest)` returned `"run_manifest"`, not the `"manifest"` string
+Python's writer actually uses — never exercised before (nothing called it),
+but would have silently defeated this very fix. Three new regression cases
+in `test_ut_io_mcap_roundtrip.cpp` (no new `UT-IO-nn` id — those numbers are
+already spoken for by unrelated requirements; same "regression coverage, not
+a new requirement" shape `test_ut_io_erg_negative.cpp` already uses).
+`simcore_tests`: 6/6 on the affected suite, 215/218 on the full suite — the
+one failure is the already-documented, pre-existing Windows temp-dir flake
+(`UtEdg08Reproducer`, verified 2026-08-28), confirmed unrelated. Record:
+`docs/v2/SIM_Test_Execution_2026-08-31_io_capture_time_gap.md`. **Not yet
 committed — reported, awaiting go-ahead.**
 
 ## The next action — exactly one
@@ -402,6 +426,16 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-08-31** — `mcap.cpp`'s own named `capture_time_ns` gap closed: a
+  narrow scalar read of `manifest_version:` (not a full `RunManifest` port)
+  gates `Pull()`'s `capture_time_ns`, mirroring `io/mcap.py`'s
+  `CAPTURE_TIME_MANIFEST_VERSION` check — `nullopt` for no manifest or a
+  pre-two-clock one, never defaulted. Dormant `MetaKind::kRunManifest`
+  string-mismatch bug (`"run_manifest"` vs. Python's real `"manifest"`)
+  found and fixed alongside it. Three new regression cases,
+  `simcore_tests` 215/218 (1 pre-existing, unrelated Windows temp-dir
+  flake). **Uncommitted — reported, awaiting go-ahead.** Record:
+  `docs/v2/SIM_Test_Execution_2026-08-31_io_capture_time_gap.md`.
 - **2026-08-31** — `A-15`'s config-bundle-hash fix proven on the real path:
   real `vs2026` `df_sil` build (Conan blocked by the known credential gap,
   worked around with a direct `cmake --build` against the already-resolved
@@ -409,7 +443,8 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   (`966f0e30...`) read back from both the recording's manifest and `sim
   explain`'s evidence chain. Board `#16` re-marked 🟢. Separate gap named,
   not fixed: the bundle's actual bytes still are not embedded in the
-  recording. **Uncommitted — reported, awaiting go-ahead.** Record:
+  recording. **Committed, not pushed** (`sim` `f81de52`, superproject
+  `802801a`). Record:
   `docs/v2/SIM_Test_Execution_2026-08-31_a15_real_path_proof.md`.
 - **2026-08-31** — Board `#20` closed green: author's decision, the chase
   camera (`WP-22`) is sufficient, driver view not wanted. Joins the other
@@ -451,31 +486,5 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   named as a candidate for a mechanical freshness check, not built.
   **Uncommitted — reported, awaiting go-ahead.** Record:
   `docs/v2/SIM_Test_Execution_2026-08-31_test_fixes_and_remark.md`.
-- **2026-08-31** — Item #16's amber cause fixed: `Pipeline.load` computed
-  each `dll:`/`stubdll:` stage's bundle directory (`_resolve_components`'s
-  `bundle_dirs`, needed by the cross-component agreement check) and then
-  discarded it instead of storing it, so `component_bundle_shas()` never
-  existed and `cli/run.py`/`cli/resim.py` had nothing to pass `build_
-  manifest`'s `component_bundle_shas`/`component_bundle_paths` kwargs —
-  every recording's `config_bundle_sha256` has been empty since the field
-  was added. Fixed (`graph/build.py`, `graph/modes.py`'s two `with_mode`/
-  `with_port_mode` reconstructions, `cli/run.py`, `cli/resim.py`); proven
-  end-to-end with a new `tests/unit/test_a15_config_bundle_hash.py`
-  (`Pipeline.component_bundle_shas()` → `build_manifest` →
-  `RunManifest.components[].config_bundle_sha256` → `evidence()` →
-  `format_evidence()`, the same chain `sim explain`/the evidence panel use)
-  — 69/69 relevant unit tests pass, full unit suite 973 passed/1 skipped
-  (unchanged), system suite 96 passed/9 skipped/1 failed (pre-existing
-  Conan-credentials failure, unrelated). Not run against a real `df_sil.dll`
-  + packed bundle (needs a `vs2026` `df` build not present this pass) —
-  named as a follow-on, not fabricated around. Also proposed, **not
-  built**: a mechanical layer-count/port-name-spelling check for the
-  copy-drift family (`F-1`, `F-7`, `F-8`, `#5`, and the "five layers in
-  four documents" trigger) — would have caught 3 of 5 (the "five layers"
-  case, `F-1`'s stale-fixture half, `F-7`); would not have caught `F-8`
-  (a numeric literal, not a count or spelling) or `#5` (a wiring/dead-code
-  claim), stated as out of scope rather than forced. **Uncommitted —
-  reported, awaiting go-ahead.** Record:
-  `docs/v2/SIM_Test_Execution_2026-08-31_a15_bundle_hash_and_copy_drift.md`.
 - (older entries trimmed per this section's own "keep about five" rule — see
   git history on this file for anything earlier.)

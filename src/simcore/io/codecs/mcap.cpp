@@ -10,25 +10,40 @@
 ///   capture time, arbitrary topics, meta blocks) -- `io/mcap.py`'s own
 ///   `CAPABILITIES` value, ported.
 ///
-///   **Scoping note (honest, not silent):** the *content* of the
-///   `run_manifest` meta block is opaque bytes to this codec (`GetMeta`/
-///   `WriteMeta`, keyed by `MetaKind`) -- `simcore` does not yet carry a
-///   structured `RunManifest` type (that is a later `WP`'s artifact, once
-///   something in C++ actually constructs one). One consequence: this
-///   reader does not replicate `io/mcap.py`'s `manifest_version >=
-///   CAPTURE_TIME_MANIFEST_VERSION` gate for whether `publishTime` is a
-///   real capture stamp or an old writer's meaningless `publishTime ==
-///   logTime` -- no `WP-06` test (`UT-IO-*`) exercises that gate, and this
-///   codec's own writer always sets `publishTime` deliberately, so every
-///   recording round-tripped through this codec alone is capture-time-aware
-///   by construction. Reading a *legacy* pre-two-clock `.mcap` file through
-///   this reader and trusting its `capture_time_ns` is the known gap;
-///   revisit once `RunManifest` has a C++ home to read the version from.
+///   **`capture_time_ns` gap closed (2026-08-31).** `simcore` still does not
+///   carry a structured `RunManifest` type -- the *content* of the
+///   `manifest` meta block (`MetaKind::kRunManifest`) stays opaque bytes to
+///   this codec, same as `config_bundle`/`plugin_identity` -- but
+///   `io/mcap.py`'s own `manifest_version >= CAPTURE_TIME_MANIFEST_VERSION`
+///   gate (`R-SIM-14`: a file whose manifest predates the two-clock model
+///   wrote `publishTime == logTime` unconditionally, so trusting it as a
+///   real capture stamp would fabricate information the writer never had)
+///   did not need a full `RunManifest` port to close -- only the one
+///   integer field that gate reads. `DetermineCaptureTimeAwareness` (below)
+///   does a narrow, targeted scalar read of `manifest_version:` out of the
+///   same opaque bytes, mirroring the Python gate's *decision* exactly
+///   without building the type Python decides it from. No manifest block at
+///   all (this codec's own `UT-IO-22` fixtures, most ad-hoc test files) is
+///   read the same way Python reads it: not capture-time-aware, `R-SIM-14`'s
+///   "never defaulted to reception" default. This codec's own writer still
+///   always sets `publishTime` deliberately (`McapWriter::Write`), so a
+///   recording round-tripped through `--save`'s `overwrite_manifest_meta`
+///   patch (which writes `manifest_version=2`, `io/base.py`) reads back
+///   capture-time-aware by construction; one written and read by this
+///   codec's *test* fixtures with no manifest patch reads back `nullopt`,
+///   honestly, rather than a value nobody certified. Proven by three new
+///   cases in `UtIo22McapRoundtrip` (`test_ut_io_mcap_roundtrip.cpp`) --
+///   no new `UT-IO-nn` id allocated: nothing's `Verify` clause cites this
+///   fix (`R-REQ-9` only mechanises a *cited* id), the same "regression
+///   coverage, not a new requirement" shape `test_ut_io_erg_negative.cpp`'s
+///   own top note already uses for a defect found outside the `WP` that
+///   built the code it fixes.
 /// @author Pavan Karimajji
 
 #define MCAP_IMPLEMENTATION
 #include <mcap/mcap.hpp>
 
+#include <cctype>
 #include <set>
 #include <utility>
 
@@ -40,6 +55,41 @@ namespace {
 
 Error MakeError(Kind kind, std::string expected, std::string found, std::string where, std::string hint = "") {
   return Error{kind, std::move(expected), std::move(found), std::move(where), std::move(hint)};
+}
+
+// Mirrors `io/mcap.py`'s own `CAPTURE_TIME_MANIFEST_VERSION = 2`
+// (`io/base.py`) exactly -- the two must move together. No shared header
+// exists between the Python and C++ sides (`simcore` links nothing
+// first-party that could carry it), so this is a second, deliberately
+// named copy of one integer, not an attempt to silently stay in sync.
+constexpr int kCaptureTimeManifestVersion = 2;
+
+// A narrow, targeted read of ONE scalar out of a `manifest` meta block's
+// YAML bytes -- not a YAML parser, and not the `RunManifest` port this
+// file's own top note says does not exist yet. Safe because the producer
+// side is controlled: `io/base.py::manifest_to_dict` always emits
+// `manifest_version` as a bare, unquoted top-level integer
+// (`yaml.safe_dump(..., sort_keys=True)`), so a line matching
+// `^manifest_version:\s*(\d+)` is exactly what every real file contains --
+// this is not a general-purpose YAML scalar reader and must not be reused
+// as one.
+std::optional<int> ParseManifestVersion(const std::vector<std::uint8_t>& yaml_bytes) {
+  static const char kKey[] = "manifest_version:";
+  const std::string text(reinterpret_cast<const char*>(yaml_bytes.data()), yaml_bytes.size());
+  std::size_t line_start = 0;
+  while (line_start < text.size()) {
+    const std::size_t line_end = text.find('\n', line_start);
+    const std::string line = text.substr(line_start, (line_end == std::string::npos ? text.size() : line_end) - line_start);
+    line_start = (line_end == std::string::npos) ? text.size() : line_end + 1;
+    if (line.rfind(kKey, 0) != 0) continue;  // must be a top-level key, not indented/nested
+    std::size_t digits_start = sizeof(kKey) - 1;  // -1 for the trailing NUL
+    while (digits_start < line.size() && std::isspace(static_cast<unsigned char>(line[digits_start]))) ++digits_start;
+    std::size_t digits_end = digits_start;
+    while (digits_end < line.size() && std::isdigit(static_cast<unsigned char>(line[digits_end]))) ++digits_end;
+    if (digits_end == digits_start) return std::nullopt;  // key present, value not a bare integer
+    return std::stoi(line.substr(digits_start, digits_end - digits_start));
+  }
+  return std::nullopt;
 }
 
 const char kTopicProvenanceMetaName[] = "topic_provenance";
@@ -167,6 +217,7 @@ class McapReader final : public Reader {
     }
     ReadTopicProvenance();
     ReadInformationalOnly();
+    DetermineCaptureTimeAwareness();
     BuildTopicIndex();
     ResetView(0);
     return Result<bool>::Ok(true);
@@ -265,6 +316,21 @@ class McapReader final : public Reader {
     }
   }
 
+  // `R-SIM-14`: whether `publishTime` means anything is a property of the
+  // FILE (which writer produced it, and whether anything ever certified
+  // it), not of any one message -- mirrors `io/mcap.py::RecordingReader.
+  // messages`'s own `capture_aware` computation, once per `Open()`, read
+  // by every `Pull()` rather than re-derived per message.
+  void DetermineCaptureTimeAwareness() {
+    const auto manifest_bytes = GetMeta(ToString(MetaKind::kRunManifest));
+    if (!manifest_bytes.has_value()) {
+      capture_time_aware_ = false;  // no manifest at all -- nothing certified publishTime
+      return;
+    }
+    const std::optional<int> version = ParseManifestVersion(*manifest_bytes);
+    capture_time_aware_ = version.has_value() && *version >= kCaptureTimeManifestVersion;
+  }
+
   void ResetView(mcap::Timestamp start_time) {
     lookahead_.reset();
     mcap::ReadMessageOptions options(start_time, mcap::MaxTime);
@@ -294,7 +360,14 @@ class McapReader final : public Reader {
     // (F-1). Everything downstream sees one form.
     msg.topic = CanonicalTopic(mv.channel->topic);
     msg.log_time_ns = static_cast<std::int64_t>(mv.message.logTime);
-    msg.capture_time_ns = static_cast<std::int64_t>(mv.message.publishTime);
+    // R-SIM-14: `publishTime` is trusted as a real capture stamp only for a
+    // file this gate has certified capture-time-aware (`DetermineCapture
+    // TimeAwareness`, once per `Open()`) -- never defaulted to reception,
+    // which would manufacture an `age_s` of exactly `0.0` indistinguishable
+    // from a true one.
+    msg.capture_time_ns = capture_time_aware_
+        ? std::optional<std::int64_t>(static_cast<std::int64_t>(mv.message.publishTime))
+        : std::nullopt;
     const auto* byte_ptr = reinterpret_cast<const std::uint8_t*>(mv.message.data);
     msg.payload.assign(byte_ptr, byte_ptr + mv.message.dataSize);
     msg.informational_only = informational_only_.count({msg.topic, msg.log_time_ns}) > 0;
@@ -312,6 +385,10 @@ class McapReader final : public Reader {
   std::set<std::pair<std::string, std::int64_t>> informational_only_;
   // Canonicalised once in `Open`; see `BuildTopicIndex`.
   std::map<std::string, TopicInfo> topics_;
+  // Set once in `Open` by `DetermineCaptureTimeAwareness`; read by every
+  // `Pull()`. Defaults false -- the same "unknown until certified
+  // otherwise" posture `R-SIM-14` requires of every reader.
+  bool capture_time_aware_ = false;
 };
 
 }  // namespace

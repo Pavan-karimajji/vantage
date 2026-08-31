@@ -35,7 +35,16 @@ std::string ToString(Provenance provenance) {
 std::string ToString(MetaKind kind) {
   switch (kind) {
     case MetaKind::kRunManifest:
-      return "run_manifest";
+      // Matches `io/mcap.py`'s own `_MANIFEST_META = "manifest"` exactly --
+      // this is the literal on-disk metadata-record name a Python-written
+      // or `overwrite_manifest_meta`-patched recording uses, not a
+      // C++-side invention. Nothing read this mapping before
+      // `mcap.cpp::DetermineCaptureTimeAwareness` (the `manifest_version`/
+      // `CAPTURE_TIME_MANIFEST_VERSION` gate) started to; had anything
+      // relied on the previous, unmatched `"run_manifest"` string it would
+      // have silently found no block, ever -- the failure mode this whole
+      // fix closes one level up.
+      return "manifest";
     case MetaKind::kConfigBundle:
       return "config_bundle";
     case MetaKind::kPluginIdentity:

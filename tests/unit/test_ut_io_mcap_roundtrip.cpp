@@ -141,5 +141,112 @@ TEST(UtIo22McapRoundtrip, InformationalOnlyRoundTripsPerMessage) {
   EXPECT_FALSE(batch.messages[2].informational_only);
 }
 
+std::vector<std::uint8_t> ManifestBytes(int version) {
+  const std::string yaml = "manifest_version: " + std::to_string(version) + "\nrun_id: fx\n";
+  return std::vector<std::uint8_t>(yaml.begin(), yaml.end());
+}
+
+// `R-SIM-14` / `mcap.cpp`'s own top note (2026-08-31): `capture_time_ns` is
+// trusted from `publishTime` only for a file this codec has certified
+// capture-time-aware -- never defaulted to reception. Regression coverage
+// for the gap that note named, not a new `UT-IO-nn` requirement (see the
+// note for why).
+TEST(UtIo22McapRoundtrip, CaptureTimeReadsUnknownWithNoManifestBlock) {
+  CodecRegistry registry;
+  ASSERT_TRUE(codecs::RegisterMcap(registry).ok());
+
+  const std::filesystem::path path = TempPath("ut_io_capture_time_no_manifest.mcap");
+  auto writer = registry.OpenWrite(path);
+  ASSERT_TRUE(writer.ok());
+  ASSERT_TRUE(writer.value()->Open(path, {}).ok());
+
+  RawMessage message;
+  message.topic = "df.a";
+  message.log_time_ns = 1000;
+  message.capture_time_ns = 5000;  // the writer sets publishTime deliberately...
+  message.payload = {1};
+  writer.value()->Write(message);
+  writer.value()->Close();
+
+  auto reader = registry.OpenRead(path);
+  ASSERT_TRUE(reader.ok());
+  ASSERT_TRUE(reader.value()->Open(path).ok());
+  ReadBounds bounds;
+  bounds.max_messages = 100;
+  const Batch batch = reader.value()->ReadRange(bounds);
+
+  ASSERT_EQ(batch.messages.size(), 1u);
+  // ...but no `manifest` meta block exists to certify it, so the reader
+  // must not trust it -- exactly the "no manifest at all" case `io/mcap.py`
+  // also treats as not capture-time-aware (`manifest_version` defaults to
+  // `0`, which fails `>= CAPTURE_TIME_MANIFEST_VERSION`).
+  EXPECT_FALSE(batch.messages[0].capture_time_ns.has_value());
+}
+
+TEST(UtIo22McapRoundtrip, CaptureTimeReadsRealValueWhenManifestIsCaptureTimeAware) {
+  CodecRegistry registry;
+  ASSERT_TRUE(codecs::RegisterMcap(registry).ok());
+
+  const std::filesystem::path path = TempPath("ut_io_capture_time_aware.mcap");
+  auto writer = registry.OpenWrite(path);
+  ASSERT_TRUE(writer.ok());
+  ASSERT_TRUE(writer.value()->Open(path, {}).ok());
+  writer.value()->WriteMeta(ToString(MetaKind::kRunManifest), ManifestBytes(2));
+
+  RawMessage message;
+  message.topic = "df.a";
+  message.log_time_ns = 1000;
+  message.capture_time_ns = 5000;
+  message.payload = {1};
+  writer.value()->Write(message);
+  writer.value()->Close();
+
+  auto reader = registry.OpenRead(path);
+  ASSERT_TRUE(reader.ok());
+  ASSERT_TRUE(reader.value()->Open(path).ok());
+  ReadBounds bounds;
+  bounds.max_messages = 100;
+  const Batch batch = reader.value()->ReadRange(bounds);
+
+  ASSERT_EQ(batch.messages.size(), 1u);
+  ASSERT_TRUE(batch.messages[0].capture_time_ns.has_value());
+  EXPECT_EQ(*batch.messages[0].capture_time_ns, 5000);
+}
+
+// Planted violation (`R-REQ-9`): a manifest block genuinely exists, but its
+// version predates the two-clock model -- `publishTime` on a file like this
+// means nothing (an old writer set `publishTime == logTime` unconditionally),
+// so trusting it here would be exactly the fabrication `R-SIM-14` forbids.
+TEST(UtIo22McapRoundtrip, CaptureTimeReadsUnknownWhenManifestPredatesTwoClockModel) {
+  CodecRegistry registry;
+  ASSERT_TRUE(codecs::RegisterMcap(registry).ok());
+
+  const std::filesystem::path path = TempPath("ut_io_capture_time_legacy_manifest.mcap");
+  auto writer = registry.OpenWrite(path);
+  ASSERT_TRUE(writer.ok());
+  ASSERT_TRUE(writer.value()->Open(path, {}).ok());
+  writer.value()->WriteMeta(ToString(MetaKind::kRunManifest), ManifestBytes(1));
+
+  RawMessage message;
+  message.topic = "df.a";
+  message.log_time_ns = 1000;
+  message.payload = {1};
+  // No explicit capture_time_ns -- the writer falls back to log_time_ns for
+  // `publishTime` (`McapWriter::Write`'s own `value_or`), the real shape of
+  // a pre-two-clock file.
+  writer.value()->Write(message);
+  writer.value()->Close();
+
+  auto reader = registry.OpenRead(path);
+  ASSERT_TRUE(reader.ok());
+  ASSERT_TRUE(reader.value()->Open(path).ok());
+  ReadBounds bounds;
+  bounds.max_messages = 100;
+  const Batch batch = reader.value()->ReadRange(bounds);
+
+  ASSERT_EQ(batch.messages.size(), 1u);
+  EXPECT_FALSE(batch.messages[0].capture_time_ns.has_value());
+}
+
 }  // namespace
 }  // namespace simcore::io
