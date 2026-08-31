@@ -1,6 +1,6 @@
 # START HERE
 
-**Updated:** 2026-08-31 (Step 7) · **Read this first, then run the status command below.**
+**Updated:** 2026-09-01 (Step 7 executed) · **Read this first, then run the status command below.**
 
 > **No derived progress state in this file, ever** — no "N of M done", no
 > per-item status, no checklist. That is what goes stale: this module already
@@ -317,6 +317,37 @@ re-run, **2 real, plausible findings** (`interfaces`/`mathlib`'s own
 `docs/v2/SIM_Test_Execution_2026-08-31_build_freshness_check.md`. **Not yet
 committed — reported, awaiting go-ahead.**
 
+**2026-09-01 — Step 7 executed, two phases, both committed.** Author
+approved execution with two amendments (run the `sim_api_reference.md`
+conditional check first; don't touch `.claude/rules/sim.md`, collect its
+edits for separate approval). The conditional check found a real, separate
+finding: `sim_api_reference.md` describes `scene`/`render`/`app` Python
+packages deleted wholesale by `7d4c626` (2026-08-29, Decision B) — excluded
+from retirement, left as full text, unremediated. Phase 1: 9 `docs/v1/`
+files retired to stubs naming their successor and commit `1e2bb5b`;
+`FROZEN_DESIGN_ORIGINS.md` created holding the two externally-cited
+fragments (Scene primitive catalogue/style tokens, Vantage naming/what-
+shipped) verbatim; `sim_requirements.md` superseded with an `R-REQ-2`
+compact disposition table built from `SIM_System_Requirements_v0.1.md`
+§25's own existing crosswalk; `sim_naming_and_diagnostics.md` inspected,
+left untouched (almost nothing to cut, confirmed). 5 cross-repo citing
+files repointed in `df`/`viz`. Phase 2: `SIM_Implementation_Plan_v0.1.md`'s
+85 essay-length checkbox rows compressed — none already cited a Test
+Execution record (all pre-date the 2026-08-27 dated-record discipline), so
+each was pointed at its closing git commit instead, per the author's
+decision when this scope mismatch was raised mid-session; 70,504→33,343
+characters (~53% cut). `trace_check.py`/`check_invariants.py` verified
+clean after each phase, zero derived-mark drift. **Net: `docs/v1/`
+17,681→2,078 lines (−88%); `docs/v2/` line count unchanged as the plan
+itself predicted, byte weight −~18%; total tracked set ~35,894→~22,195
+lines (−38%), not the plan's own "~4,000–4,500" headline, which its own
+§2 could not have reached given `docs/v2/` was never going to shrink in
+line count — named as the plan's own arithmetic inconsistency, not an
+execution shortfall.** Two `.claude/rules/sim.md` edits (the dangling
+`R-SIM-1` "Full map: §5.8" pointer; the `sim_api_reference.md` claim)
+collected and presented, held for separate approval. Record:
+`docs/v2/SIM_Test_Execution_2026-09-01_step7_execution.md`.
+
 **2026-08-31, Step 7 — document-set shrink plan written, not executed.**
 `memory.md`'s last untreated root cause (§4/§7: 41,341 lines / 3.3 MB of spec
 for a concept an external reference expresses in 5 KB) now has a scoped
@@ -352,10 +383,18 @@ only, awaiting the author's go-ahead to execute.
 > behind its own `conanfile.py` (real MSVC rebuild, native `vs2026`);
 > `interfaces`' flagged artifact was a dead pre-`WP-33` `build/` leftover
 > superseded by its already-fresh `build-sil-vs2026` — deleted, not rebuilt.
-> `df`'s CarMaker stray (`.IPGControl.conf`) is now gitignored. **The pending
-> decision is Step 7**: `misc/STEP_7_SHRINK_PLAN.md` proposes cutting the
-> tracked `docs/v1`+`docs/v2`+`misc` set from ~35,894 to ~4,000–4,500 lines —
-> nothing executed, awaiting the author's go-ahead. Everything named in
+> `df`'s CarMaker stray (`.IPGControl.conf`) is now gitignored. **Step 7 is
+> executed** (2026-09-01, both phases, committed in `sim`/`df`/`viz` and the
+> superproject) — see the paragraph above and
+> `docs/v2/SIM_Test_Execution_2026-09-01_step7_execution.md` for the full
+> record. **The pending decision is the two `.claude/rules/sim.md` edits**
+> that retirement made necessary (the dangling `R-SIM-1` "Full map: §5.8"
+> pointer; the `sim_api_reference.md` claim, now known stale) — collected
+> and presented, not applied, per the author's own instruction to keep a
+> normative-rule edit at a separate governance level from a document
+> retirement. `sim_api_reference.md` itself also awaits the author's call
+> on its own remediation (it was excluded from retirement on a real
+> finding, not assumed clean — see the same record). Everything named in
 > earlier paragraphs above (`B1`–`B4`, item `#20`, item `#16`, the three
 > `viz` test fixes, the `A-15`/`io` fixes, the freshness check itself) is
 > settled and unchanged; read them there if the history is wanted, this row
@@ -445,6 +484,17 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-09-01** — Step 7 executed, two phases: `docs/v1/` 9 files retired
+  to stubs + `FROZEN_DESIGN_ORIGINS.md` extraction + `sim_requirements.md`
+  compact register (17,681→2,078 lines); `sim_api_reference.md` excluded on
+  a real conditional-check finding (describes deleted `scene`/`render`/
+  `app` packages), left unretired. `SIM_Implementation_Plan_v0.1.md`'s 85
+  essay checkbox rows compressed, pointed at closing commits (no matching
+  Test Execution record existed for any of them — raised and decided
+  mid-session). Two `.claude/rules/sim.md` edits collected, held for
+  separate approval. `trace_check.py`/`check_invariants.py` clean after
+  each phase. Committed across `sim`/`df`/`viz`/superproject, not pushed.
+  Record: `docs/v2/SIM_Test_Execution_2026-09-01_step7_execution.md`.
 - **2026-08-31** — Everything pushed (sim, df, superproject). Two freshness-
   check findings resolved (`mathlib` rebuilt on real `vs2026`; `interfaces`'
   flagged artifact was a dead pre-`WP-33` leftover, deleted). `df`'s
@@ -496,12 +546,6 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   recording. **Committed, not pushed** (`sim` `f81de52`, superproject
   `802801a`). Record:
   `docs/v2/SIM_Test_Execution_2026-08-31_a15_real_path_proof.md`.
-- **2026-08-31** — Board `#20` closed green: author's decision, the chase
-  camera (`WP-22`) is sufficient, driver view not wanted. Joins the other
-  three already-out-of-scope items; `CONSOLIDATED_REQUIREMENTS.md` §2 now
-  reads **25 of 25 green or amber, none red, none unverified**. New Decision
-  `G`. No code change. **Committed, not pushed** (`sim` `ca30250`,
-  superproject `4c64285`). Record:
-  `docs/v2/SIM_Test_Execution_2026-08-31_item20_close.md`.
-- (older entries trimmed per this section's own "keep about five" rule — see
-  git history on this file for anything earlier.)
+- (older entries trimmed per this section's own "keep about five" rule —
+  see git history on this file for anything earlier, including Board `#20`
+  closing green 2026-08-31.)
