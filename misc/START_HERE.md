@@ -1,6 +1,6 @@
 # START HERE
 
-**Updated:** 2026-08-31 · **Read this first, then run the status command below.**
+**Updated:** 2026-08-31 (Step 7) · **Read this first, then run the status command below.**
 
 > **No derived progress state in this file, ever** — no "N of M done", no
 > per-item status, no checklist. That is what goes stale: this module already
@@ -317,82 +317,49 @@ re-run, **2 real, plausible findings** (`interfaces`/`mathlib`'s own
 `docs/v2/SIM_Test_Execution_2026-08-31_build_freshness_check.md`. **Not yet
 committed — reported, awaiting go-ahead.**
 
+**2026-08-31, Step 7 — document-set shrink plan written, not executed.**
+`memory.md`'s last untreated root cause (§4/§7: 41,341 lines / 3.3 MB of spec
+for a concept an external reference expresses in 5 KB) now has a scoped
+answer: `misc/STEP_7_SHRINK_PLAN.md`. Target: `docs/v1`+`docs/v2`+`misc`
+tracked `.md` from ~35,894 lines to ~4,000–4,500. Read-before-cut discipline
+applied per-file (`git log` + repo-wide grep + a v2 `Trace`-field scan for
+`R-REQ-2` exposure) rather than the line-count sweep that mis-scoped `viz`
+last time (`memory.md` §3): **9 of 12 `docs/v1/` files have zero live
+external readers and are safe to retire to a stub; 2 (`sim_visualization_
+spec.md`, `sim_player.md`) are cited from real, live `df`/`viz` requirement
+docs and one C++ header (`workspace_mode.hpp`) and must be extracted, not
+deleted; `sim_requirements.md` carries 49 IDs live in v2 `Trace` fields and
+is governed by `R-REQ-2` — superseded with a compact register, never
+dropped; `sim_naming_and_diagnostics.md` turned out to already be mostly
+the cited content (260 of 440 lines) and stays.** A separate, real defect
+found in the same pass: `SIM_Implementation_Plan_v0.1.md` has 85 checkbox
+rows over 300 characters (79,512 total), essay narrative that belongs in a
+Test Execution record per `R-REQ-6a`'s own "closed by \<clause\>" discipline
+— proposed for compression, not structural change. All ten of `memory.md`
+§8's "genuinely good" ideas confirmed already anchored in a root rule +
+a v2 requirement, independent of anything v1 retirement would remove.
+**Nothing deleted or edited in `docs/v1`/`docs/v2` this pass** — proposal
+only, awaiting the author's go-ahead to execute.
+
 ## The next action — exactly one
 
-> **`B1`/`B2`/`B3` are settled** (`B1` closed, `B2` done and pushed, `B3`
-> empty). **`B4` is re-scoped to one real, named, not-yet-actionable item**
-> (`io`'s `mcap.py`/`mcap.cpp` parity gap) — `Movement B` is not fully done,
-> but nothing in it rests on an unverified claim any more, and `memory.md` no
-> longer asserts something now false. The CarMaker viz pipeline is de-risked
-> for the demo, and `df_viz_test_render_svg` is now a closed, understood,
-> deliberately-not-fixed question — neither needs re-investigating. **The
-> cross-repo `Session` duplication is closed, 2026-08-31** — re-measured from
-> the build graph and git log, both genuinely live for different consumers
-> (Python backs every headless CLI verb, C++ is compiled into the real
-> `viz_player.exe`), reframed as a cross-language twin (same pattern as
-> `io/mcap.py`↔`mcap.cpp`) rather than copy-never-move debt; the real
-> remaining risk (drift between the two, already manifested once) is named
-> as an open risk, not fixed this pass. The Movement C scope conversation this file named before `B1`
-> started (`DEMO_AND_SCOPE.md` §1's *"may begin. Not before"*) is still the
-> standing open question and this session did not touch it. **Item `#20`'s
-> video-feed entry (`WP-22`) is committed and pushed** (`viz` `0f67af6`,
-> `df` `b9ceba1`, `sim` `6495ab8`, superproject `c231337`), **and the
-> legacy-recording `objects` gap that record left open is closed, committed
-> and pushed too** (`viz` `82da36b`, `df` `1e2c01d`, `sim` `b40bcf3`,
-> superproject `e91db63`) — ingest map applied on the player's own
-> `--recording` path, plus a bare-legacy-name fallback for the two ports
-> that need one (not `R-SIM-21`'s `source.<port>` spelling, which does not
-> survive this player's own topic stripping). **The camera-panel regression
-> that same pass surfaced is fixed, committed and pushed too** (`viz`
-> `598ed2b`, `sim` `e316220`, superproject `03d8d21`) —
-> `SessionImageResolver::Resolve` now canonicalizes its lookup key,
-> symmetric with the codec's own write side; scoped entirely to `viz`'s
-> player-side code, `df` needed no rebuild. **2026-08-31: the three
-> pre-existing `viz` unit tests sharing that regression's root cause are
-> fixed** (`viz_test_session`, `viz_test_pull_source`,
-> `viz_test_erg_pull_integration` — stale fixtures asserting a
-> pre-canonicalization topic spelling, no production code touched; `viz`
-> `gtest` back to `49/49`), **and `SYS-0089`'s missing `camera.chase`
-> golden-Scene test is added** (`SW-0077`/`UT-layers-13`, plus three
-> never-cascaded stale "five layers" mentions fixed alongside it —
-> `UT-layers-11`, `SYT-HST-02`, `SYT-SCP-16`/`17`; `df_viz_test_layers`
-> `13/13`, full `df` suite `311/312`, same already-dispositioned failure).
-> **`misc/CONSOLIDATED_REQUIREMENTS.md` re-marked against reality**
-> (status marks and false lines only): item #20's row now names only what
-> it still covers (driver view, video feed publishing — three items moved
-> out of scope entirely, author's call), video feed marked built, driver
-> view stated plainly as unverified (mechanism exists, no recording on
-> hand carries the right camera topic) rather than guessed; §2's "only red
-> is #20" corrected to "25 of 25 green or amber" as the direct consequence.
-> **The stale-build pattern this week exposed twice — `cm_viz` stale since
-> 2026-08-21 missing `9ca1324`'s `Span<T>` fix, `sim`'s `sil` library stale
-> since 2026-08-25 missing `450031e`'s canonicalization, both found by
-> accident — is named as a candidate for a mechanical freshness check, not
-> built this pass** (cross-submodule build machinery, `R-BUILD-6`,
-> deserves its own scoped design). Record:
-> `docs/v2/SIM_Test_Execution_2026-08-31_test_fixes_and_remark.md`. The other
-> four `#20` pieces (driver view itself, lane/pedestrian markings, free
-> space, semantic segmentation) stay untouched — the last three now
-> explicitly out of scope, driver view still blocked on a recording nobody
-> has yet. **Same day, a second pass:** item #16's amber cause (empty
-> config-bundle hash) fixed — `Pipeline` now keeps the `bundle_dirs`
-> `_resolve_components` already computed instead of discarding it, exposing
-> `component_bundle_shas()`/`component_bundle_paths()` (mirroring `component_
-> build_shas()`), wired into `cli/run.py`/`cli/resim.py`'s `build_manifest`
-> calls and `graph/modes.py`'s two `Pipeline` reconstructions; proven
-> end-to-end (`Pipeline` → `build_manifest` → `RunManifest` → `evidence()` →
-> `format_evidence()`, `tests/unit/test_a15_config_bundle_hash.py`, 69/69
-> relevant tests pass, full suite unaffected). Not yet run against a real
-> `df_sil.dll` (no `vs2026` `df` build this pass) — named as a follow-on.
-> Also proposed, **not built**: a mechanical layer-count/port-name-spelling
-> check for the `F-1`/`F-7`/`F-8`/`#5`/"five layers" copy-drift family —
-> would catch 3 of 5, not `F-8` or `#5`, each for a stated reason. **Not yet
-> committed — the next action is one combined commit decision covering
-> both of today's passes.** `sim`: `graph/build.py`, `graph/modes.py`,
-> `cli/run.py`, `cli/resim.py`, the new `tests/unit/test_a15_config_bundle_
-> hash.py`, `misc/CONSOLIDATED_REQUIREMENTS.md`, this file, and both new
-> records. `viz`: the three stale-topic-spelling test files. `df`:
-> `test_layers.cpp` plus four `docs/viz/*.md` files.
+> **Everything through 2026-08-31 is committed and pushed** — `sim`, `df` and
+> the superproject pointer are all in sync with origin as of this session
+> (the several "not yet committed" flags in the paragraphs above are now
+> stale; superseded here rather than hand-edited in place, per this file's
+> own no-second-copy rule). The two findings from `check_build_freshness.py`'s
+> first real run are resolved: `mathlib`'s `build-sil-vs2026` lib was stale
+> behind its own `conanfile.py` (real MSVC rebuild, native `vs2026`);
+> `interfaces`' flagged artifact was a dead pre-`WP-33` `build/` leftover
+> superseded by its already-fresh `build-sil-vs2026` — deleted, not rebuilt.
+> `df`'s CarMaker stray (`.IPGControl.conf`) is now gitignored. **The pending
+> decision is Step 7**: `misc/STEP_7_SHRINK_PLAN.md` proposes cutting the
+> tracked `docs/v1`+`docs/v2`+`misc` set from ~35,894 to ~4,000–4,500 lines —
+> nothing executed, awaiting the author's go-ahead. Everything named in
+> earlier paragraphs above (`B1`–`B4`, item `#20`, item `#16`, the three
+> `viz` test fixes, the `A-15`/`io` fixes, the freshness check itself) is
+> settled and unchanged; read them there if the history is wanted, this row
+> only tracks what changed since.
 
 ## Do not
 
@@ -478,6 +445,13 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-08-31** — Everything pushed (sim, df, superproject). Two freshness-
+  check findings resolved (`mathlib` rebuilt on real `vs2026`; `interfaces`'
+  flagged artifact was a dead pre-`WP-33` leftover, deleted). `df`'s
+  `.IPGControl.conf` gitignored. Step 7 document-set shrink plan written
+  (not executed): `misc/STEP_7_SHRINK_PLAN.md`, target ~35,894 → ~4,000–4,500
+  tracked lines, read-before-cut per file, `R-REQ-2` respected for
+  `sim_requirements.md`'s 49 live trace citations.
 - **2026-08-31** — Build-artifact freshness check built
   (`scripts/check_build_freshness.py`, superproject root, cross-submodule):
   for every Conan-editable package, its own `build*/` binaries vs. the
