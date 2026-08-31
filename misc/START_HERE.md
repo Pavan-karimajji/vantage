@@ -219,8 +219,19 @@ it. `misc/memory.md` §6 corrected in place: "no CI anywhere" is now a closed
 decision, and "no dated evidence it passes" was answered separately, by the
 eighteen (now nineteen) `docs/v2/SIM_Test_Execution_*.md` records this module
 has produced since 2026-08-27. Record:
-`docs/v2/SIM_Test_Execution_2026-08-31_ci_descope.md`. **Not yet committed —
-reported, awaiting go-ahead.**
+`docs/v2/SIM_Test_Execution_2026-08-31_ci_descope.md`. **Committed and
+pushed** (`sim` `8b3f4de`, superproject `6cc0642`).
+
+**2026-08-31, same day — board `#20` closed green.** Author's decision: the
+chase camera (`WP-22`, shipped 2026-08-30) is sufficient; driver view is not
+wanted. `#20`'s row narrowed to what it still covers (video feed publishing,
+built) with driver view joining the other three already-out-of-scope items;
+`misc/CONSOLIDATED_REQUIREMENTS.md` §2 rewritten from "driver view...
+unverified" to **25 of 25 green or amber, none red, none unverified**. New
+Decision `G`. No code changed — a scope decision against an already-shipped
+capability, not a build. Record:
+`docs/v2/SIM_Test_Execution_2026-08-31_item20_close.md`. **Not yet committed
+— reported, awaiting go-ahead.**
 
 ## The next action — exactly one
 
@@ -317,6 +328,7 @@ reported, awaiting go-ahead.**
 | **D** | vdy is the second module, but months away — nothing may depend on it | 2026-08-27 |
 | **E** | The demo *is* the definition of done, explicitly as a POC | 2026-08-27 |
 | **F** | Hosted CI is out of scope. `scripts/ci_gate.py` (run by hand, both platforms) is the real gate; `.github/workflows/sim-ci.yml` stays as an explicitly unobserved, unmaintained artifact. `WP-01`'s two items that were waiting on this (the stale `R-REQ-9` test-id citations, the Conan-editable-install system test) are **not-doing**, not pending — recorded, not silently dropped | 2026-08-31 |
+| **G** | **No driver view.** The chase camera (`#20`, `WP-22`) is sufficient; a driver-view camera feed is not wanted. Board `#20` closes green with nothing left open in it — stated explicitly so it cannot quietly reopen as a "gap" | 2026-08-31 |
 
 ## Parked — and what unparks each
 
@@ -372,6 +384,12 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-08-31** — Board `#20` closed green: author's decision, the chase
+  camera (`WP-22`) is sufficient, driver view not wanted. Joins the other
+  three already-out-of-scope items; `CONSOLIDATED_REQUIREMENTS.md` §2 now
+  reads **25 of 25 green or amber, none red, none unverified**. New Decision
+  `G`. No code change. **Uncommitted — reported, awaiting go-ahead.** Record:
+  `docs/v2/SIM_Test_Execution_2026-08-31_item20_close.md`.
 - **2026-08-31** — Hosted CI closed out entirely, author's decision: not
   fixed, not observed, descoped. `scripts/ci_gate.py` stays as the real local
   gate (now verified `status=pass` end to end); `.github/workflows/sim-ci.yml`
@@ -383,7 +401,7 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   17/18; `IMP-0417` stays open, separate, `WP-31`-scoped). Board `#25`
   re-marked 🟢 (headless parity already proved it; CI was evidence, not the
   requirement). `memory.md` §6 corrected in place rather than rewritten.
-  **Uncommitted — reported, awaiting go-ahead.** Record:
+  **Committed and pushed** (`sim` `8b3f4de`, superproject `6cc0642`). Record:
   `docs/v2/SIM_Test_Execution_2026-08-31_ci_descope.md`.
 - **2026-08-31** — Three pre-existing `viz` unit tests fixed
   (`viz_test_session`/`viz_test_pull_source`/`viz_test_erg_pull_integration`

@@ -63,7 +63,7 @@ were touched — no requirement was added, removed or reworded otherwise.
 |---|---|---|
 | **18** | **One shared drawing toolkit** that every component pulls in to draw itself, and the simulator shows all the components' pictures merged in a single window. | 🟢 |
 | **19** | A component says **what** to draw, in metres and in meaning (*"this is a warning zone"*). The toolkit alone decides pixels and colour — which is what keeps the 2D BEV identical across components. | 🟢 |
-| **20** | **It must not end at BEV** — driver view and video feed publishing. (Lane/pedestrian markings, free space and semantic segmentation moved out of #20 entirely — author's call, 2026-08-30.) | 🟡 video feed 🟢 built and screenshotted (`WP-22`, 2026-08-30, a real frame decodes and draws live); driver view's mechanism is the same one and exists, but no recording on hand carries a driver-view camera topic to feed it — only `carla/chase_camera` (the chase camera). Unverified either way; not marked green or red on assumption, author's call |
+| **20** | **It must not end at BEV** — video feed publishing, beside the BEV. (Driver view, lane/pedestrian markings, free space and semantic segmentation are out of #20 entirely — author's call: driver view 2026-08-31 (the chase camera is sufficient; driver view is not wanted), the other three 2026-08-30.) | 🟢 built and screenshotted (`WP-22`, 2026-08-30) — a real frame from `bsd_curve_r172_passby.mcap`'s `carla/chase_camera` decodes and draws live in `viz_player.exe`'s own "Camera" panel beside the BEV. Nothing left in this row to verify |
 | **21** | Step, scrub and rewind freely — and stepping backwards **never invents** a state the software did not actually produce. | 🟢 |
 | **22** | Click anything on screen and it tells you which signal, which tick, which file and which build produced it — and whether the software **published** that value or the drawing code **reconstructed** it. | 🟢 build answered since `F-8`; before it, this line was marked green while the build read `unknown` |
 
@@ -87,6 +87,10 @@ Recorded so it cannot quietly reappear.
 - **No expression language, scripting hook or user callable** inside any config file.
 - **No second copy of anything** — one codec stack, one session model, one port
   resolver. (Today this is violated; see `memory.md`.)
+- **No driver view.** Decided 2026-08-31, author's call: the chase camera
+  (`#20`, shipped `WP-22`) is sufficient; a driver-view camera feed is not
+  wanted. Recorded explicitly so this does not quietly reopen as a "gap"
+  the next time someone reads `#20`'s row.
 
 ---
 
@@ -95,12 +99,17 @@ Recorded so it cannot quietly reappear.
 **1. Is the concept right?** The lines above are the concept. If they are all
 `AGREE`, then the design is not the problem and never was.
 
-**2. Where is it?** 25 of 25 are green or amber — **#20 (everything past BEV) is
-no longer red.** Video feed publishing shipped (`WP-22`, 2026-08-30) and three of
-its five original items were removed from scope entirely (author's call). What
-remains open is driver view, unverified for lack of a recording that carries the
-right camera topic — not the one the author described first and most often when
-asked what this is for, which is the part that just shipped.
+**2. Where is it?** **25 of 25 are green or amber, none red, none unverified.**
+`#20` (everything past BEV) closed green 2026-08-31: video feed publishing
+shipped (`WP-22`, 2026-08-30, a real frame decodes and draws live beside the
+BEV), and all four of its other original items — driver view, lane/pedestrian
+markings, free space, semantic segmentation — are out of scope entirely,
+author's call (driver view 2026-08-31: the chase camera is sufficient and a
+driver-view feed is not wanted; the other three, 2026-08-30). Nothing in `#20`
+is left open to verify. `#25` closed green the same day for an unrelated
+reason: headless parity (`GT-9`) was already real and proven, and hosted CI —
+now explicitly out of scope — was only ever evidence for that, never the
+requirement itself.
 
 Two moved on 2026-08-28. **#8** — choose measured/simulated in the launcher —
 went red → green and was the POC demo's last piece. **#5** went amber → red →
