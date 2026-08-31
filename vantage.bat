@@ -25,12 +25,31 @@ REM ImportError on the one screen whose job is getting you running.
 
 set "PYCMD="
 if exist "%~dp0.venv\Scripts\python.exe" (
-  set "PYCMD=%~dp0.venv\Scripts\python.exe"
+  REM Quotes embedded IN the value (not wrapped around %PYCMD% at the call
+  REM site below) -- a bare command name like `py` must reach CreateProcess
+  REM unquoted (quoting a bare, PATH-resolved name like "py" makes PowerShell's
+  REM own child-process invocation fail to create the process, verified live;
+  REM cmd.exe alone tolerates it, PowerShell does not), while a real path
+  REM that might contain spaces (this venv one) still needs its own quotes.
+  set "PYCMD="%~dp0.venv\Scripts\python.exe""
 ) else (
   where py >nul 2>&1
   if not errorlevel 1 (
-    py -c "" >nul 2>&1
-    if not errorlevel 1 set "PYCMD=py"
+    py -3 -c "" >nul 2>&1
+    if not errorlevel 1 set "PYCMD=py -3"
+  )
+  REM Fallback to unversioned py/python only if -3 isn't resolvable -- prefer
+  REM -3 because PowerShell's own child-process invocation of a bare,
+  REM unversioned `py <script>.py` can fail (CreateProcess error) on machines
+  REM where it works fine from a real cmd.exe window; `py -3` sidesteps
+  REM py.exe's own auto-select path entirely and has been verified to work
+  REM from both.
+  if not defined PYCMD (
+    where py >nul 2>&1
+    if not errorlevel 1 (
+      py -c "" >nul 2>&1
+      if not errorlevel 1 set "PYCMD=py"
+    )
   )
   if not defined PYCMD (
     where python >nul 2>&1
@@ -46,8 +65,10 @@ if not defined PYCMD (
   exit /b 1
 )
 
+REM A bare command name must reach CreateProcess UNQUOTED -- see the comment
+REM on PYCMD above. `%PYCMD%` is deliberately not wrapped in quotes here.
 if "%*"=="" (
-  "%PYCMD%" "%~dp0scripts\gui.py"
+  %PYCMD% "%~dp0scripts\gui.py"
   exit /b !errorlevel!
 )
 
@@ -55,7 +76,7 @@ if /i "%~1"=="--help" goto :usage
 if /i "%~1"=="-h"     goto :usage
 if /i "%~1"=="/?"     goto :usage
 
-"%PYCMD%" "%~dp0scripts\vantage_native.py" %*
+%PYCMD% "%~dp0scripts\vantage_native.py" %*
 exit /b %errorlevel%
 
 :usage
