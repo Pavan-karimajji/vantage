@@ -48,6 +48,7 @@ from adas_sim.resolve.component import (
     ComponentManifest, CtypesSilComponent, InputMeta, PortSpec, SilComponent, resolve_message_classes,
 )
 from adas_sim.config.bundle import check_cross_component_agreement
+from adas_sim.config.project import _bundle_sha256
 from adas_sim.config.fault import Fault, FaultVerb, apply_fault
 from adas_sim.resolve.library import resolve_library
 from adas_sim.config.override import Override, OverrideVerb, parse_override_verb
@@ -524,6 +525,7 @@ class Pipeline:
         self, *, name: str, stages: tuple[Stage, ...], version: int, components: Mapping[str, SilComponent],
         faults: Sequence[Fault] = (), allow_mixed_projects: bool = False, mixed_projects: bool = False,
         library_paths: Mapping[str, Path | None] | None = None, taps: tuple[Tap, ...] = (),
+        bundle_dirs: Mapping[str, Path | None] | None = None,
     ) -> None:
         self.name = name
         self.stages = stages
@@ -541,6 +543,13 @@ class Pipeline:
         #: as `bundle_dirs` in `_resolve_components`. `component_build_shas`
         #: is the only consumer (`UT-D7-9`, `NR-SIM-24`).
         self.library_paths: dict[str, Path | None] = dict(library_paths or {})
+        #: `<library_dir>/config` per `dll:`/`stubdll:` stage (`R-SIM-3a`),
+        #: `None` for a `components=`-supplied stage -- same shape as
+        #: `library_paths`. `component_bundle_shas`/`component_bundle_paths`
+        #: are the only consumers; `_validate_cross_component_agreement`
+        #: (load-time only) used to be this data's only reader, which is why
+        #: it was computed and then dropped instead of kept on the instance.
+        self.bundle_dirs: dict[str, Path | None] = dict(bundle_dirs or {})
         #: `OD-11`: `allow_mixed_projects` is what the pipeline file
         #: *requested*; `mixed_projects` is what `_validate_cross_component_
         #: agreement` actually *found*. Independent facts -- a pipeline can
@@ -620,6 +629,30 @@ class Pipeline:
         return {
             name: hashlib.sha256(path.read_bytes()).hexdigest()
             for name, path in self.library_paths.items() if path is not None
+        }
+
+    def component_bundle_paths(self) -> dict[str, str]:
+        """The resolved `<library_dir>/config` directory per `dll:`/
+        `stubdll:` stage, as a display string (`core.manifest.build_manifest`'s
+        `component_bundle_paths` kwarg, `R-SIM-3a`) -- "the path a reader
+        would check", never bundle bytes. A `components=`-supplied stage has
+        no such directory and is simply absent, same convention as
+        `component_build_shas`."""
+        return {name: str(path) for name, path in self.bundle_dirs.items() if path is not None}
+
+    def component_bundle_shas(self) -> dict[str, str]:
+        """`sha256` of each `dll:`/`stubdll:` stage's resolved config bundle
+        (`_bundle_sha256`, the same algorithm `ProjectModel.resolve` hashes
+        with), keyed by stage name -- the real value `core.manifest.
+        build_manifest`'s `component_bundle_shas` kwarg needs to stop
+        `RunManifest.components[*].config_bundle_sha256` reading empty
+        (`R-SIM-3a`, `R-SIM-6`). A stage whose bundle directory does not
+        exist on disk yet is simply absent from the result, same "nothing to
+        hash, not an empty string standing in for a real one" reasoning as
+        `component_build_shas`."""
+        return {
+            name: _bundle_sha256(path)
+            for name, path in self.bundle_dirs.items() if path is not None and path.is_dir()
         }
 
     @property
@@ -718,7 +751,7 @@ class Pipeline:
         return cls(
             name=name, stages=stages, version=version, components=resolved, faults=faults,
             allow_mixed_projects=allow_mixed_projects, mixed_projects=mixed_projects, library_paths=library_paths,
-            taps=taps,
+            taps=taps, bundle_dirs=bundle_dirs,
         )
 
     def _message_classes_for(self, stage_name: str) -> Mapping[str, type]:

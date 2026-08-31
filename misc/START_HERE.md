@@ -143,6 +143,32 @@ design. Record:
 `docs/v2/SIM_Test_Execution_2026-08-31_test_fixes_and_remark.md`. **Not yet
 committed — reported and awaiting the author's go-ahead.**
 
+**2026-08-31, same day — item #16's amber cause (empty config-bundle hash)
+fixed.** Root cause: `Pipeline.load` computed each `dll:`/`stubdll:` stage's
+bundle directory for the cross-component agreement check and then discarded
+it, so no method existed to turn it into a hash the way `component_build_
+shas()` already does for the library file — every recording's `config_
+bundle_sha256` has been empty since the field existed. Fixed: `Pipeline`
+keeps `bundle_dirs`; new `component_bundle_shas()`/`component_bundle_paths()`
+wired into `cli/run.py`/`cli/resim.py`'s `build_manifest` calls and
+`graph/modes.py`'s two `Pipeline` reconstructions (which had the same drop).
+Proven end-to-end with a new `tests/unit/test_a15_config_bundle_hash.py` —
+`Pipeline.component_bundle_shas()` → `build_manifest` →
+`RunManifest.components[].config_bundle_sha256` → `evidence()` →
+`format_evidence()`, the same producer/formatter chain `sim explain`/the
+evidence panel use — 69/69 relevant tests pass, full unit suite unaffected
+(973 passed/1 skipped), system suite unaffected (96 passed/9 skipped, 1
+pre-existing unrelated Conan-credentials failure). **Not run against a real
+`df_sil.dll` + packed bundle** (no `vs2026` `df` build this pass) — named as
+a follow-on, not assumed. Also proposed, **not built**: a mechanical
+layer-count/port-name-spelling check for the copy-drift family this week's
+own "five layers in four documents" finding belongs to (`F-1`, `F-7`, `F-8`,
+`#5`) — would catch 3 of 5 (the layer-count case, `F-1`'s stale-fixture half,
+`F-7`), not `F-8` (a numeric literal) or `#5` (a wiring claim), each for a
+stated reason. Record:
+`docs/v2/SIM_Test_Execution_2026-08-31_a15_bundle_hash_and_copy_drift.md`.
+**Not yet committed — reported and awaiting the author's go-ahead.**
+
 **`misc/memory.md` §3 no longer contradicts itself.** Its closing line used
 to say *"deletion has never once been executed"* directly under this same
 session's own correction that `B1` deleted the Python scene/render/player
@@ -227,14 +253,29 @@ fixes).
 > accident — is named as a candidate for a mechanical freshness check, not
 > built this pass** (cross-submodule build machinery, `R-BUILD-6`,
 > deserves its own scoped design). Record:
-> `docs/v2/SIM_Test_Execution_2026-08-31_test_fixes_and_remark.md`. **Not
-> yet committed — the next action is that commit decision** (`viz`:
-> three test files; `df`: `test_layers.cpp` plus four `docs/viz/*.md`
-> files; `sim`: `misc/CONSOLIDATED_REQUIREMENTS.md`, this file, and the new
-> record). The other four `#20` pieces (driver view itself, lane/pedestrian
-> markings, free space, semantic segmentation) stay untouched — the last
-> three now explicitly out of scope, driver view still blocked on a
-> recording nobody has yet.
+> `docs/v2/SIM_Test_Execution_2026-08-31_test_fixes_and_remark.md`. The other
+> four `#20` pieces (driver view itself, lane/pedestrian markings, free
+> space, semantic segmentation) stay untouched — the last three now
+> explicitly out of scope, driver view still blocked on a recording nobody
+> has yet. **Same day, a second pass:** item #16's amber cause (empty
+> config-bundle hash) fixed — `Pipeline` now keeps the `bundle_dirs`
+> `_resolve_components` already computed instead of discarding it, exposing
+> `component_bundle_shas()`/`component_bundle_paths()` (mirroring `component_
+> build_shas()`), wired into `cli/run.py`/`cli/resim.py`'s `build_manifest`
+> calls and `graph/modes.py`'s two `Pipeline` reconstructions; proven
+> end-to-end (`Pipeline` → `build_manifest` → `RunManifest` → `evidence()` →
+> `format_evidence()`, `tests/unit/test_a15_config_bundle_hash.py`, 69/69
+> relevant tests pass, full suite unaffected). Not yet run against a real
+> `df_sil.dll` (no `vs2026` `df` build this pass) — named as a follow-on.
+> Also proposed, **not built**: a mechanical layer-count/port-name-spelling
+> check for the `F-1`/`F-7`/`F-8`/`#5`/"five layers" copy-drift family —
+> would catch 3 of 5, not `F-8` or `#5`, each for a stated reason. **Not yet
+> committed — the next action is one combined commit decision covering
+> both of today's passes.** `sim`: `graph/build.py`, `graph/modes.py`,
+> `cli/run.py`, `cli/resim.py`, the new `tests/unit/test_a15_config_bundle_
+> hash.py`, `misc/CONSOLIDATED_REQUIREMENTS.md`, this file, and both new
+> records. `viz`: the three stale-topic-spelling test files. `df`:
+> `test_layers.cpp` plus four `docs/viz/*.md` files.
 
 ## Do not
 
@@ -333,6 +374,32 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   named as a candidate for a mechanical freshness check, not built.
   **Uncommitted — reported, awaiting go-ahead.** Record:
   `docs/v2/SIM_Test_Execution_2026-08-31_test_fixes_and_remark.md`.
+- **2026-08-31** — Item #16's amber cause fixed: `Pipeline.load` computed
+  each `dll:`/`stubdll:` stage's bundle directory (`_resolve_components`'s
+  `bundle_dirs`, needed by the cross-component agreement check) and then
+  discarded it instead of storing it, so `component_bundle_shas()` never
+  existed and `cli/run.py`/`cli/resim.py` had nothing to pass `build_
+  manifest`'s `component_bundle_shas`/`component_bundle_paths` kwargs —
+  every recording's `config_bundle_sha256` has been empty since the field
+  was added. Fixed (`graph/build.py`, `graph/modes.py`'s two `with_mode`/
+  `with_port_mode` reconstructions, `cli/run.py`, `cli/resim.py`); proven
+  end-to-end with a new `tests/unit/test_a15_config_bundle_hash.py`
+  (`Pipeline.component_bundle_shas()` → `build_manifest` →
+  `RunManifest.components[].config_bundle_sha256` → `evidence()` →
+  `format_evidence()`, the same chain `sim explain`/the evidence panel use)
+  — 69/69 relevant unit tests pass, full unit suite 973 passed/1 skipped
+  (unchanged), system suite 96 passed/9 skipped/1 failed (pre-existing
+  Conan-credentials failure, unrelated). Not run against a real `df_sil.dll`
+  + packed bundle (needs a `vs2026` `df` build not present this pass) —
+  named as a follow-on, not fabricated around. Also proposed, **not
+  built**: a mechanical layer-count/port-name-spelling check for the
+  copy-drift family (`F-1`, `F-7`, `F-8`, `#5`, and the "five layers in
+  four documents" trigger) — would have caught 3 of 5 (the "five layers"
+  case, `F-1`'s stale-fixture half, `F-7`); would not have caught `F-8`
+  (a numeric literal, not a count or spelling) or `#5` (a wiring/dead-code
+  claim), stated as out of scope rather than forced. **Uncommitted —
+  reported, awaiting go-ahead.** Record:
+  `docs/v2/SIM_Test_Execution_2026-08-31_a15_bundle_hash_and_copy_drift.md`.
 - **2026-08-30** — `WP-22` reviewed and pushed (`viz` `0f67af6`, `df`
   `b9ceba1`, `sim` `6495ab8`, superproject `c231337`). Then the
   legacy-recording `objects` gap it left open, closed and pushed (`viz`
@@ -401,17 +468,3 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   Not started — the author decides where the three-piece fix lands (`viz`
   vs. `df` plan) before anyone writes it. Record:
   `docs/v2/SIM_Test_Execution_2026-08-30_item20_video_feed_scoping.md`.
-- **2026-08-30** — Prior pass's `B4`/CarMaker/render_svg work committed/pushed
-  (R-GIT-1: `df` `817c529`, `sim` `d9c3956`, superproject `37eded7`). Then two
-  fixes: (1) `memory.md` §3's closing line ("deletion has never once been
-  executed") directly contradicted its own paragraph above it, added earlier
-  the same day, saying `B1` deleted the Python scene/render/player stack —
-  rewritten to say the pattern held for three attempts and `B1` broke it, the
-  first executed deletion in this project's history; the warning is kept, not
-  the false claim. (2) The cross-repo `Session` duplication `B4`'s re-measure
-  found and correctly ruled out of its own scope — `adas_sim/session/`
-  (Python) and `viz::session::Session` (C++, self-documented as "the C++
-  rewrite" of the former) — recorded as a known, unowned finding in
-  `MOVEMENT_B_PLAN.md`'s "findings to decide on separately" (now three items),
-  not acted on. Record:
-  `docs/v2/SIM_Test_Execution_2026-08-30_memory_close_session_note.md`.

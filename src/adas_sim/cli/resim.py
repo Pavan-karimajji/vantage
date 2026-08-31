@@ -148,6 +148,8 @@ def run(argv: list[str] | None = None) -> int:
             meta = build_manifest(
                 pipeline=pipeline, pipeline_path=args.pipeline, run_kind="resim", source_kind="mcap",
                 project=project, recording_path=recording, component_build_shas=pipeline.component_build_shas(),
+                component_bundle_paths=pipeline.component_bundle_paths(),
+                component_bundle_shas=pipeline.component_bundle_shas(),
                 bundle_overrides=spec.overrides, base_bundle_sha=resolved.base_bundle_sha,
                 run_spec_sha256=result.spec_sha256, divergence=divergence if divergence is not None else "unknown",
             )

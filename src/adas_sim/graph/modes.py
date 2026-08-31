@@ -61,7 +61,7 @@ def with_mode(pipeline: "Pipeline", stage: str, mode: "Mode", *, close_gaps: boo
     )
     result = Pipeline(
         name=pipeline.name, stages=new_stages, version=pipeline.version, components=pipeline._components,
-        faults=pipeline._faults, library_paths=pipeline.library_paths,
+        faults=pipeline._faults, library_paths=pipeline.library_paths, bundle_dirs=pipeline.bundle_dirs,
     )
     to_close: set[str] = set()
     for finding in coherence.classify(result):
@@ -82,7 +82,7 @@ def with_mode(pipeline: "Pipeline", stage: str, mode: "Mode", *, close_gaps: boo
     )
     return Pipeline(
         name=pipeline.name, stages=closed_stages, version=pipeline.version, components=pipeline._components,
-        library_paths=pipeline.library_paths,
+        library_paths=pipeline.library_paths, bundle_dirs=pipeline.bundle_dirs,
     )
 
 
@@ -114,5 +114,5 @@ def with_port_mode(pipeline: "Pipeline", stage: str, port: str, mode: "Mode") ->
     )
     return Pipeline(
         name=pipeline.name, stages=new_stages, version=pipeline.version, components=pipeline._components,
-        faults=pipeline._faults, library_paths=pipeline.library_paths,
+        faults=pipeline._faults, library_paths=pipeline.library_paths, bundle_dirs=pipeline.bundle_dirs,
     )

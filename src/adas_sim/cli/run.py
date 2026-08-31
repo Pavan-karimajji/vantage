@@ -59,6 +59,8 @@ def run(argv: list[str] | None = None) -> int:
                 pipeline=pipeline, pipeline_path=args.pipeline, run_kind="sim", source_kind=source.name,
                 project=args.project, scenario_name=scenario.id, scenario_path=args.scenario,
                 component_build_shas=pipeline.component_build_shas(),
+                component_bundle_paths=pipeline.component_bundle_paths(),
+                component_bundle_shas=pipeline.component_bundle_shas(),
             )
             recorder = Recorder(pipeline, source, args.record, meta=meta)
             recorder.open(scenario)
