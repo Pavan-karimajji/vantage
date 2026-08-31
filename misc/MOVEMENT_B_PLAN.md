@@ -300,18 +300,25 @@ confidentiality problem and no scrub is required. If the spelling is ever
 normalised, `docs/file_header_template.md` is the one file that matters — every
 new file inherits from it, which is why the string spread this far.
 
-**3. The cross-repo `Session` duplication — real, no owner, not a `B4` row.**
-`B4`'s re-measure (2026-08-30) correctly ruled this out of its own scope
-(`modules/sim/src`'s two stacks), but ruling it out of `B4` doesn't make it not
-real: `modules/sim/src/adas_sim/session/` (Python, 4 files, 749 lines, actively
-imported by 11 real source files and 14 tests today) and
-`modules/viz/cpp/viz/session/session.hpp` (C++, whose own header says *"the
-C++ rewrite of `adas_sim.session.session.Session`, living in
-`adas-viz-player`"*) are **two live implementations of the same thing, in two
-different repos.** A direct consequence of Decision B (the player moved
-permanently into `viz`, as C++) — the Python `Session` was never retired once
-its C++ replacement existed, because nothing in either module's own plan
-tracks a cross-module deletion. Neither `sim`'s `B4` nor any `viz` plan item
-currently owns closing this gap. **Not acted on this pass** — noted here so it
-is findable rather than rediscovered from scratch, same reason item 1 above is
-still on this list. Full detail: `docs/v2/SIM_Test_Execution_2026-08-30_b4_remeasure.md`.
+**3. The cross-repo `Session` duplication — closed 2026-08-31, both live, no
+deletion.** Re-measured from the build graph and git log, not carried over
+from the 2026-08-30 note (the same discipline this project's own `df`
+CarMaker-plugin false-dead-code incident demands, `misc/memory.md` §3):
+`modules/sim/src/adas_sim/session/` (Python, 4 files, 749 lines, 13
+production callers + 14 tests, the exact `Session` behind every headless CLI
+verb — `sim explain`/`check`/`probe`/`list`, `R-SIM-16`'s library-first
+face) and `modules/viz/cpp/viz/session/session.hpp` (C++, compiled into
+`adas-viz-player` → `adas-viz-runner` → the real, shipped `viz_player.exe`)
+are **both genuinely live, each for a different consumer that cannot share
+the other's runtime** (a script needs no C++ toolchain; a shipped GUI
+cannot assume a Python install, `R-SIM-11`). **Reframed, not just
+confirmed:** this is not `B1`'s superseded-vs-leftover shape — it is the
+same deliberate cross-language-twin pattern `io/mcap.py` ↔
+`simcore/io/codecs/mcap.cpp` already uses, "copy-never-move" mislabeling a
+port that keeps two real jobs. The real remaining risk is drift between the
+two implementations (already manifested once, `SessionImageResolver::
+Resolve`'s topic-canonicalization regression), named as the actual follow-on
+a cross-language parity/invariant check would close — not a deletion.
+Full detail: `docs/v2/SIM_Test_Execution_2026-08-31_session_duplication_disposition.md`
+(supersedes `docs/v2/SIM_Test_Execution_2026-08-30_b4_remeasure.md`'s framing
+of this one item, not its other findings).

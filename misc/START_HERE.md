@@ -272,8 +272,27 @@ a new requirement" shape `test_ut_io_erg_negative.cpp` already uses).
 `simcore_tests`: 6/6 on the affected suite, 215/218 on the full suite — the
 one failure is the already-documented, pre-existing Windows temp-dir flake
 (`UtEdg08Reproducer`, verified 2026-08-28), confirmed unrelated. Record:
-`docs/v2/SIM_Test_Execution_2026-08-31_io_capture_time_gap.md`. **Not yet
-committed — reported, awaiting go-ahead.**
+`docs/v2/SIM_Test_Execution_2026-08-31_io_capture_time_gap.md`. **Committed,
+not pushed** (`sim` `c5a095e`, superproject `f848ea5`).
+
+**2026-08-31, same day — cross-repo `Session` duplication disposition
+closed: both live, nothing deleted.** `MOVEMENT_B_PLAN.md`'s "findings to
+decide on separately" item 3 (recorded 2026-08-30, never acted on)
+re-measured from the build graph and git log, not carried over —
+`adas_sim/session/` (Python, unchanged 749 lines, 13 real callers + 14
+tests, the `Session` behind every headless CLI verb) and `viz::session::
+Session` (C++, compiled into `adas-viz-player` → `adas-viz-runner` → the
+real, shipped `viz_player.exe`) are **both genuinely live**, each for a
+consumer that cannot share the other's runtime. **Reframed, not just
+confirmed:** this is the same deliberate cross-language-twin pattern
+`io/mcap.py` ↔ `mcap.cpp` already uses, not `B1`'s superseded-vs-leftover
+shape — "copy-never-move" was the wrong label. **No deletion.** The real
+remaining risk — drift between the two implementations, already manifested
+once (`SessionImageResolver::Resolve`'s topic-canonicalization regression,
+found and fixed 2026-08-30) — is named as a new open risk, not fixed this
+pass. No code touched in either `sim` or `viz`. Record:
+`docs/v2/SIM_Test_Execution_2026-08-31_session_duplication_disposition.md`.
+**Not yet committed — reported, awaiting go-ahead.**
 
 ## The next action — exactly one
 
@@ -284,9 +303,13 @@ committed — reported, awaiting go-ahead.**
 > longer asserts something now false. The CarMaker viz pipeline is de-risked
 > for the demo, and `df_viz_test_render_svg` is now a closed, understood,
 > deliberately-not-fixed question — neither needs re-investigating. **The
-> cross-repo `Session` duplication is real and has no owner** — recorded, not
-> acted on; needs its own initiative before anyone touches it, not a `B4`
-> sub-task. The Movement C scope conversation this file named before `B1`
+> cross-repo `Session` duplication is closed, 2026-08-31** — re-measured from
+> the build graph and git log, both genuinely live for different consumers
+> (Python backs every headless CLI verb, C++ is compiled into the real
+> `viz_player.exe`), reframed as a cross-language twin (same pattern as
+> `io/mcap.py`↔`mcap.cpp`) rather than copy-never-move debt; the real
+> remaining risk (drift between the two, already manifested once) is named
+> as an open risk, not fixed this pass. The Movement C scope conversation this file named before `B1`
 > started (`DEMO_AND_SCOPE.md` §1's *"may begin. Not before"*) is still the
 > standing open question and this session did not touch it. **Item `#20`'s
 > video-feed entry (`WP-22`) is committed and pushed** (`viz` `0f67af6`,
@@ -399,6 +422,12 @@ wait on `WP-31` or anything else. See the log entry below and
    `vantage_app.exe` has no bare-replay mode (no `--pipeline`) and no
    `--preset`/`--at`/`--workspace`/`--version` — the Python viewer that used
    to serve them is deleted, and there is no native equivalent yet.
+4. **The Python and C++ `Session` twins can drift, and already have once**
+   (2026-08-31 disposition, `docs/v2/SIM_Test_Execution_2026-08-31_session_
+   duplication_disposition.md`). No test asserts the two agree on anything
+   across the language boundary — each side's unit tests cover only its own
+   implementation. Unparks with a cross-language parity/invariant check,
+   not a deletion (the two are not redundant, see the disposition record).
 
 ## How Movement C gets tracked when it grows
 
@@ -426,6 +455,15 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
 
+- **2026-08-31** — Cross-repo `Session` duplication disposition closed:
+  re-measured from the build graph and git log (not carried over), both
+  Python `adas_sim/session/` and C++ `viz::session::Session` are genuinely
+  live for different consumers (every headless CLI verb; the real shipped
+  `viz_player.exe`). Reframed as a cross-language twin (`io/mcap.py`↔
+  `mcap.cpp`'s pattern), not copy-never-move debt — no deletion. Drift risk
+  (already manifested once) named as a new open risk. No code touched.
+  **Uncommitted — reported, awaiting go-ahead.** Record:
+  `docs/v2/SIM_Test_Execution_2026-08-31_session_duplication_disposition.md`.
 - **2026-08-31** — `mcap.cpp`'s own named `capture_time_ns` gap closed: a
   narrow scalar read of `manifest_version:` (not a full `RunManifest` port)
   gates `Pull()`'s `capture_time_ns`, mirroring `io/mcap.py`'s
@@ -434,7 +472,8 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   string-mismatch bug (`"run_manifest"` vs. Python's real `"manifest"`)
   found and fixed alongside it. Three new regression cases,
   `simcore_tests` 215/218 (1 pre-existing, unrelated Windows temp-dir
-  flake). **Uncommitted — reported, awaiting go-ahead.** Record:
+  flake). **Committed, not pushed** (`sim` `c5a095e`, superproject
+  `f848ea5`). Record:
   `docs/v2/SIM_Test_Execution_2026-08-31_io_capture_time_gap.md`.
 - **2026-08-31** — `A-15`'s config-bundle-hash fix proven on the real path:
   real `vs2026` `df_sil` build (Conan blocked by the known credential gap,
@@ -466,25 +505,5 @@ line. That is what keeps this file one screen — **if it grew, it has failed.**
   requirement). `memory.md` §6 corrected in place rather than rewritten.
   **Committed, not pushed** (`sim` `8b3f4de`, superproject `6cc0642`).
   Record: `docs/v2/SIM_Test_Execution_2026-08-31_ci_descope.md`.
-- **2026-08-31** — Three pre-existing `viz` unit tests fixed
-  (`viz_test_session`/`viz_test_pull_source`/`viz_test_erg_pull_integration`
-  — stale fixtures asserting a pre-`450031e` topic spelling, no production
-  code touched; `viz` `gtest` back to 49/49). `SYS-0089`'s missing
-  `camera.chase` golden-Scene test added (`SW-0077`/`UT-layers-13`), plus
-  three never-cascaded stale "five layers" mentions fixed alongside it
-  (`UT-layers-11`, `SYT-HST-02`, `SYT-SCP-16`/`17`); `df_viz_test_layers`
-  13/13, full `df` suite 311/312 (same already-dispositioned failure).
-  `misc/CONSOLIDATED_REQUIREMENTS.md` re-marked against reality (status
-  marks and false lines only): item #20 now names only driver
-  view/video feed (three items moved out of scope entirely, author's
-  call), video feed marked built, driver view stated plainly as unverified
-  (no recording on hand carries the right camera topic) rather than
-  guessed; §2 corrected from "only red is #20" to "25 of 25 green or
-  amber". The stale-build pattern this week exposed twice (`cm_viz` since
-  2026-08-21 missing `9ca1324`'s `Span<T>` fix; `sim`'s `sil` lib since
-  2026-08-25 missing `450031e`'s canonicalization, both found by accident)
-  named as a candidate for a mechanical freshness check, not built.
-  **Uncommitted — reported, awaiting go-ahead.** Record:
-  `docs/v2/SIM_Test_Execution_2026-08-31_test_fixes_and_remark.md`.
 - (older entries trimmed per this section's own "keep about five" rule — see
   git history on this file for anything earlier.)
