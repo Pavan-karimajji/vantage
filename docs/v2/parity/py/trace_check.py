@@ -56,6 +56,16 @@ RE_UID = re.compile(r"\b[A-Z]+-\d{4}\b")
 RE_TID = re.compile(r"\b[A-Z]{2,4}(?:-[A-Za-z]+)?-\d{2}\b")
 RE_TICKED = re.compile(r"`([^`]+)`")
 RE_FIXROW = re.compile(r"^\|\s*`(?P<fix>F-[A-Z0-9-]+)`\s*\|")
+# R-REQ-17. Closed vocabulary for supporting documents. Closed for the same
+# reason every other list in this repo is: an open one becomes a junk drawer,
+# and "which document do I read first" stops having an answer.
+CONTEXT_KINDS = {
+    "concept",       # the problem, the domain, the mathematics -- why the numbers are what they are
+    "architecture",  # ports, interfaces, structure -- how it is built
+    "register",      # a change register: the thinking, in plain English, before any UID exists
+    "reference",     # retrieved external material (standards, regulations, datasheets)
+}
+
 RE_STATUS = re.compile(r"^\s*\*\*Status\.\*\*|^\|\s*Status\s*\|", re.MULTILINE)
 
 
@@ -653,6 +663,61 @@ def run_checks(root: Path) -> tuple[list[Finding], list[str], dict]:
         if hcap and len(r.headline) > hcap:
             findings.append(Finding("C-HEADLINE", r.uid, f"headline is {len(r.headline)} chars over the cap of {hcap}"))
 
+    # --- C-CONTEXT-* : supporting documents (R-REQ-17) ----------------------
+    # A context document is where the THINKING lives, so the specification can
+    # carry only the result. It is declared, not scattered; it allocates no UID
+    # and carries no obligation; and it is exempt from the commentary cap,
+    # because commentary is the whole point of it.
+    context_docs: list[dict] = []
+    for entry in spec.get("context") or []:
+        kind, docname = entry.get("kind"), entry.get("doc")
+        if kind not in CONTEXT_KINDS:
+            findings.append(
+                Finding("C-CONTEXT-KIND", str(docname or kind),
+                        f"kind {kind!r} is not one of {', '.join(sorted(CONTEXT_KINDS))} (R-REQ-17)")
+            )
+        cdoc = root / str(docname)
+        if not cdoc.is_file():
+            findings.append(
+                Finding("C-CONTEXT-MISSING", str(docname),
+                        f"declared {kind} document not found (R-REQ-17)")
+            )
+            continue
+        body = cdoc.read_text(encoding="utf-8")
+        # It must not become a second place an obligation lives (R-REQ-1).
+        owned = {lid for lid in order}
+        stray = sorted({m.group(0) for m in RE_UID.finditer(body)
+                        if m.group(0).split("-")[0] in owned})
+        if stray:
+            findings.append(
+                Finding("C-CONTEXT-UID", str(docname),
+                        f"allocates requirement UIDs ({', '.join(stray[:4])}"
+                        f"{', ...' if len(stray) > 4 else ''}) -- an obligation lives in "
+                        f"exactly one place, and it is not here (R-REQ-1, R-REQ-17)")
+            )
+        context_docs.append({"kind": kind, "doc": str(docname), "lines": len(body.splitlines())})
+
+    # A context document nothing refers to is the stale-contract failure: it
+    # keeps being true-looking long after the set stopped agreeing with it.
+    if context_docs:
+        referring = ""
+        for ly in layers:
+            f = root / ly["doc"]
+            if f.is_file():
+                referring += f.read_text(encoding="utf-8")
+        for extra in (spec.get("test_spec"), spec.get("plan")):
+            if extra:
+                f = root / str(extra)
+                if f.is_file():
+                    referring += f.read_text(encoding="utf-8")
+        for cd in context_docs:
+            if cd["doc"] not in referring:
+                findings.append(
+                    Finding("C-CONTEXT-UNREF", cd["doc"],
+                            "no requirement document, test spec or plan refers to it -- "
+                            "a supporting document nothing cites goes stale unnoticed (R-REQ-17)")
+                )
+
     # --- port grades (a note, not a finding) -------------------------------
     used = {p for r in reqs.values() for p in r.binds}
     proposed = sorted(p for p in used if ports.get(p) == "PROPOSED")
@@ -673,6 +738,7 @@ def run_checks(root: Path) -> tuple[list[Finding], list[str], dict]:
         "ports": ports,
     }
     stats["commentary"] = commentary
+    stats["context"] = context_docs
     stats["plan"] = packages
     return findings, notes, stats
 
@@ -751,6 +817,12 @@ def print_stats(stats: dict) -> None:
                     counts[r.category] += 1
             split = " \u00b7 ".join(f"{c}: {n}" for c, n in counts.items())
             print(f"\n  {lid} categories -- {split}")
+    ctx = stats.get("context") or []
+    if ctx:
+        print("\n  Supporting documents (R-REQ-17) -- no UIDs, no commentary cap:")
+        for cd in ctx:
+            print(f"    {cd['kind']:<13}{cd['doc']:<34}{cd['lines']:>6} lines")
+
     ncases = sum(len(t.cases) for t in stats["tests"].values())
     print(f"  Test cases: {ncases}. Ports bound: {len({p for r in stats['reqs'].values() for p in r.binds})}.")
 

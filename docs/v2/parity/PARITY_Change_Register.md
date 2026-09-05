@@ -83,8 +83,11 @@ producer keeps writing into something legal and the graph never tears.
 **Why.** Leaving them unbound makes the situation harmless but silent. We want
 harmless **and** visible — the sink keeps the graph whole, our existing orphan
 badge keeps it honest.
-**Disposition.** An acceptance clause on the existing *off needs no special
-case* requirement. No new id.
+**Disposition.** Blocked at stage 7 on a real conflict, not deferred.
+`SIM:SYS-0084` says an unused stage's ports **shall simply be absent**; this
+row wants them **bound to a typed sink**. Both keep the graph whole and only
+one can be the convention, so the choice is the author's. See
+`PARITY_Handoff.md` section 1.1.
 **Touches.** `engine`
 
 ### C-28 · Feasible cuts are reported per named source — **AMEND**
@@ -251,8 +254,11 @@ batch · before each entry · before each played section).
 **Why.** They are genuinely independent axes, and merging them produces a list
 where most entries are unreachable. Nine combinations, seven of them
 meaningful once *nothing* collapses across the timing axis.
-**Disposition.** The reset-policy requirement already exists and is
-unimplemented. It gains this vocabulary and the two-control shape. No new id.
+**Disposition.** Re-marked at stage 7 after reading the target. `SIM:SYS-0192`
+**already carries both axes in full** -- this row said it "gains this
+vocabulary", which was written from the study's summary rather than from the
+requirement. What is left is presentation, which is a `viz` player item. See
+`PARITY_Handoff.md` section 1.2. No clause on the system layer.
 **Touches.** `player`
 
 ### C-18 · Layers default to off, are named by producer, and scale — **ALLOCATE (viz)**

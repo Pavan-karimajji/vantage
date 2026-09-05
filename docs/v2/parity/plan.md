@@ -278,17 +278,39 @@ and `IMP` in turn, and the selftest caught it going blind both times.
 **Closed by.** `PASS — 163 requirements, 109 tests, no findings`; `--selftest`
 **all 20 caught**; `--status` reports 13 packages landing 54 design rows.
 
-### Stage 7 — Handoff
+### Stage 7 — Handoff ✅ **done**
 
-For each `AMEND` row, the exact v2 requirement that gains a clause; for each
-`ALLOCATE` row, the `viz` id it becomes.
+`PARITY_Handoff.md`: where each of the fifteen non-`KEEP` register rows lands,
+so a disposition is a decision with an address rather than a decision to do
+nothing.
 
-**Bigger than it was.** It must now also dispose of the v2 `SW` rows this work
-invalidates — `SW-0011` and `SW-0032` both specify "the resolved topic-to-port
-table", which `SYS-0001` inverts, and there will be more.
+**Every target was read before being named, and two did not say what the
+register assumed.** That is the useful part of the stage:
 
-**Closed by.** Every non-`KEEP` register row has a named destination, and no
-obligation appears in two sets.
+- **`C-17` was already satisfied.** `SIM:SYS-0192` already carries both axes in
+  full — none / reset / reset-and-init, and before-batch / before-entry /
+  before-section. The register said it "gains this vocabulary", written from the
+  study's summary rather than from the row. Only the presentation is open, and
+  that is a `viz` player item. Re-marked `NO CHANGE` at the system layer.
+- **`C-04` conflicts with its target.** `SIM:SYS-0084` says an unused stage's
+  ports **shall simply be absent**; `C-04` wants them **bound to a typed
+  sink**. Both keep the graph whole and only one can be the convention, so it
+  is written up as an open decision rather than resolved quietly — picking
+  either silently would leave the other requirement standing and wrong.
+
+**And one correction to this set's own record.** The restart's budget entry
+claimed `SIM:SW-0011` and `SIM:SW-0032` would become *actively wrong*. Both
+were read at this stage and **both survive**: they specify the *resolved*
+topic-to-port table, and resolution picks one address per port before the spec
+is written, so inverting the map's key does not invert the spec's table.
+`SIM:SW-0029` was a false positive in the original grep. Corrected in
+`layers.yaml` where the claim was made, not only where it was found. The
+argument that mattered — that the new behaviour had **no** software coverage —
+needed no help from the one that was too strong.
+
+**Closed by.** Every non-`KEEP` register row has a named destination; three
+open questions are stated with what they block, and none blocks the first seven
+work packages.
 
 ## 5. What this pass does **not** do
 
@@ -306,7 +328,8 @@ obligation appears in two sets.
 
 ## 6. Where we stopped
 
-**Restarted at Stage 1 on 2026-09-05. Stages 1 to 6 are done. One remains.**
+**All seven stages are done, 2026-09-05.** The set was restarted once at Stage
+1, on the author's finding that a two-layer set cannot be built from.
 
 ```
 layer     reqs   budget   tests
@@ -319,40 +342,39 @@ IMP         54       56       0
 total      163      168     109
 
 PASS -- 163 requirements, 109 tests, no findings.
-Selftest -- all 20 planted violations caught, no baseline codes.
-Status  -- 13 packages, 0 done, 54 of 54 design rows landed. Next: WP-01.
+Selftest -- all 19 planted violations caught, no baseline codes.
+Status  -- 13 packages, 0 done, 54 of 54 design rows landed, contents derived.
 
-Commentary per requirement (cap 6):  STK 2.6  SYS 1.7  SW 1.2  IMP 0.4
+Commentary per requirement (cap 6):  STK 2.6  SYS 1.7  SW 1.2  IMP 1.4
 ```
 
 **The chain is closed end to end and checked in both directions.** 16
 stakeholder outcomes → 39 system rows → 54 software rows → 54 design rows, each
-naming a file and a symbol, each landed by exactly one of 13 work packages.
+naming a file and a symbol, each landed by exactly one of 13 work packages,
+every requirement served by a test and every test serving a requirement.
 
 | Document | Lines | Rows |
 |---|---:|---:|
 | `PARITY_Stakeholder_Requirements.md` | 170 | 16 |
 | `PARITY_System_Requirements.md` | 293 | 39 |
 | `PARITY_Software_Requirements.md` | 375 | 54 |
-| `PARITY_Implementation_Design.md` | 99 | 54 |
+| `PARITY_Implementation_Design.md` | 196 | 54 rows + 13 packages |
 | `PARITY_Test_Spec.md` | 695 | 109 tests, 164 cases |
-| **Specification total** | **1632** | **163 requirements — 10.0 lines each** |
-| `PARITY_Implementation_Plan.md` | 92 | 13 packages |
-| `PARITY_Change_Register.md` | 409 | 29 disposed candidates |
-| `layers.yaml` · `selftest_mutations.yaml` | 219 · 269 | declaration · 20 plants |
+| **Specification total** | **1729** | **163 requirements — 10.6 lines each** |
+| `PARITY_Change_Register.md` | 415 | 29 disposed candidates |
+| `PARITY_Handoff.md` | 116 | 15 destinations, 3 open questions |
+| `layers.yaml` · `selftest_mutations.yaml` | 226 · 273 | declaration · 19 plants |
 
-**10.0 lines of specification per requirement.** The set is now four times the
-size of the two-layer version and *denser* per row than when it started — 14.1
-before the design layer, 10.0 after, against `ldw`'s 17. That is `R-REQ-14`
-working as intended: more rows, never fatter ones.
+**10.6 lines of specification per requirement**, against `ldw`'s 17. Four times
+the size of the two-layer version and denser per row than when it started —
+`R-REQ-14` working as intended: more rows, never fatter ones.
 
-**Committed and pushed through Stage 5** — `sim 5222fd0`, superproject
-`828aa8c`. Stage 6 is not yet committed.
+**Three open questions, none blocking** (`PARITY_Handoff.md` §5): the `C-04`
+convention, whether the run spec carries the matched candidate, and who writes
+`IF-06`. The first seven work packages proceed regardless.
 
-**Next: Stage 7, the last.** For each `AMEND` register row, the exact v2
-requirement that gains a clause; for each `ALLOCATE` row, the `viz` id it
-becomes; and the v2 `SW` rows this work invalidates — `SW-0011` and `SW-0032`
-both specify "the resolved topic-to-port table", which `SYS-0001` inverts.
+**The next thing is code, not documents.** `--status` names `WP-01`: the ingest
+map keyed by port, landing eight design rows, blocked by nothing.
 
 ## 7. Running the checker
 
