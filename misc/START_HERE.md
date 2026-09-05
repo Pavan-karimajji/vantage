@@ -22,23 +22,6 @@ doing and why*, and **contains no counts at all**.
 
 ---
 
-## Where we are
-
-**Movements A, B and C are complete and the demo works** — `DEMO_AND_SCOPE.md`
-§1 runs end to end, all five clauses, watched and screenshotted (`WP-35`). A
-working system with named gaps in breadth, not a task list with a broken core.
-
-**One item of Movement B remains** — `io`'s Python/C++ parity gap, not yet
-actionable. Every other row in `MOVEMENT_B_PLAN.md` rests on verified code.
-
-**The PARITY requirement set is written** — `docs/v2/parity/`, four layers down
-to file-and-symbol design rows. It **amends** the v2 set; there is no sim v3
-here or proposed.
-
-**History lives in `git log` and in `docs/v2/SIM_Test_Execution_*.md`** — one
-dated record per campaign since 2026-08-27. This file used to restate them; that
-was execution narration (`R-REQ-14`) and it was cut on 2026-09-05.
-
 ## The next action — exactly one
 
 > **Write `WP-01` of the PARITY set: the ingest map keyed by port, with an
@@ -55,6 +38,23 @@ was execution narration (`R-REQ-14`) and it was cut on 2026-09-05.
 gates anything else — that is what *"the demo works"* means. `--status` names
 the lowest-numbered untouched package if a default is wanted; that is a number,
 not a recommendation.
+
+## Where we are — context for the above, not a to-do list
+
+**Movements A, B and C are complete and the demo works** — `DEMO_AND_SCOPE.md`
+§1 runs end to end, all five clauses, watched and screenshotted (`WP-35`). A
+working system with named gaps in breadth, not a task list with a broken core.
+
+**One item of Movement B remains** — `io`'s Python/C++ parity gap, not yet
+actionable. Every other row in `MOVEMENT_B_PLAN.md` rests on verified code.
+
+**The PARITY requirement set is written** — `docs/v2/parity/`, four layers down
+to file-and-symbol design rows. It **amends** the v2 set; there is no sim v3
+here or proposed.
+
+**History lives in `git log` and in `docs/v2/SIM_Test_Execution_*.md`** — one
+dated record per campaign since 2026-08-27. This file used to restate them; that
+was execution narration (`R-REQ-14`) and it was cut on 2026-09-05.
 
 ## Do not
 
@@ -143,13 +143,8 @@ wait on `WP-31` or anything else. See the log entry below and
 ## Ending a session
 
 Leave this file true. That means: a **decision** you took, an **open risk** you
-found, a **trigger** for something you parked. Nothing else — what you built is
-in `--status`, and what you did is in the commit message.
+found, a **trigger** for something you parked. Nothing else.
 
-## Log — newest first, one line each, keep five
-
-- **2026-09-05** — PARITY requirement set written (`docs/v2/parity/`); three rules came out of it and now bind every module (`R-REQ-13`, `R-REQ-14`, `R-REQ-6a`'s plan checks).
-- **2026-09-05** — `START_HERE.md` cut from 635 lines to this; the 390-line narrative was already held in dated Test Execution records.
-- **2026-09-01** — Step 7 closed. `docs/v1/` retired (17,681 → 2,078 lines), implementation plan's essay rows compressed to commit pointers.
-- **2026-08-31** — Hosted CI descoped (Decision F); board `#20` closed green (Decision G); config-bundle hash proven on the real path.
-- **2026-08-28** — The demo runs, all five clauses, watched. `WP-35` closed and the freeze ended by its own terms.
+What you *built* is in `--status`. What you *did* is in the commit message, and
+`git log --oneline -5` is the recent history — this file carried a Log until
+2026-09-05 and it was five lines a tool already derives.
