@@ -677,6 +677,19 @@ def run_checks(root: Path) -> tuple[list[Finding], list[str], dict]:
                         f"kind {kind!r} is not one of {', '.join(sorted(CONTEXT_KINDS))} (R-REQ-17)")
             )
         cdoc = root / str(docname)
+        # `reference` may point at a directory of retrieved material (a folder
+        # of standards is one artifact, not twenty declarations).
+        if cdoc.is_dir():
+            n = sum(1 for f in cdoc.rglob("*") if f.is_file())
+            if n == 0:
+                findings.append(
+                    Finding("C-CONTEXT-MISSING", str(docname),
+                            f"declared {kind} directory is empty (R-REQ-17)")
+                )
+                continue
+            context_docs.append({"kind": kind, "doc": str(docname),
+                                 "lines": n, "unit": "files"})
+            continue
         if not cdoc.is_file():
             findings.append(
                 Finding("C-CONTEXT-MISSING", str(docname),
@@ -685,17 +698,23 @@ def run_checks(root: Path) -> tuple[list[Finding], list[str], dict]:
             continue
         body = cdoc.read_text(encoding="utf-8")
         # It must not become a second place an obligation lives (R-REQ-1).
+        # CITING a UID is fine and is how this document connects to the set --
+        # what is forbidden is ALLOCATING one, i.e. carrying the requirement
+        # anatomy itself. So look for a definition line, never for a mention.
         owned = {lid for lid in order}
-        stray = sorted({m.group(0) for m in RE_UID.finditer(body)
-                        if m.group(0).split("-")[0] in owned})
-        if stray:
+        defined = sorted({m.group("uid") for m in
+                          (RE_REQ.match(ln) for ln in body.splitlines()) if m
+                          and m.group("uid").split("-")[0] in owned})
+        if defined:
             findings.append(
                 Finding("C-CONTEXT-UID", str(docname),
-                        f"allocates requirement UIDs ({', '.join(stray[:4])}"
-                        f"{', ...' if len(stray) > 4 else ''}) -- an obligation lives in "
-                        f"exactly one place, and it is not here (R-REQ-1, R-REQ-17)")
+                        f"defines requirement rows ({', '.join(defined[:4])}"
+                        f"{', ...' if len(defined) > 4 else ''}) -- citing a UID here is "
+                        f"fine, allocating one is not: an obligation lives in exactly one "
+                        f"place and it is a requirement document (R-REQ-1, R-REQ-17)")
             )
-        context_docs.append({"kind": kind, "doc": str(docname), "lines": len(body.splitlines())})
+        context_docs.append({"kind": kind, "doc": str(docname),
+                             "lines": len(body.splitlines()), "unit": "lines"})
 
     # A context document nothing refers to is the stale-contract failure: it
     # keeps being true-looking long after the set stopped agreeing with it.
@@ -821,7 +840,7 @@ def print_stats(stats: dict) -> None:
     if ctx:
         print("\n  Supporting documents (R-REQ-17) -- no UIDs, no commentary cap:")
         for cd in ctx:
-            print(f"    {cd['kind']:<13}{cd['doc']:<34}{cd['lines']:>6} lines")
+            print(f"    {cd['kind']:<13}{cd['doc']:<34}{cd['lines']:>6} {cd.get('unit', 'lines')}")
 
     ncases = sum(len(t.cases) for t in stats["tests"].values())
     print(f"  Test cases: {ncases}. Ports bound: {len({p for r in stats['reqs'].values() for p in r.binds})}.")
