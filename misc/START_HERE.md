@@ -410,6 +410,23 @@ only, awaiting the author's go-ahead to execute.
 
 ## The next action — exactly one
 
+> **Write `WP-01` of the PARITY set: the ingest map keyed by port, with an
+> ordered address list.** Eight design rows, each naming a file and a symbol,
+> blocked by nothing. **`docs/v2/parity/README.md` first**, then run its
+> checker — that is what answers "where do I start", not a written-down list.
+>
+> That set is the requirement work for bringing this module and *Vantage* up to
+> the behaviour of a production-grade developer bench. It **amends** the v2 set;
+> it does not replace it, and there is no sim v3 here or proposed. Its reasoning
+> lives in its change register, its build order and file-level design in one
+> document beside it.
+>
+> **The next thing is code, not documents.**
+
+---
+
+**Everything below this line is the pre-PARITY position, unchanged.**
+
 > **Movements A, B and C are complete. The demo works.** `DEMO_AND_SCOPE.md`
 > §1 runs end to end, all five clauses, watched and screenshotted (`WP-35`,
 > closed). That is the baseline every item below is measured against — not
@@ -463,6 +480,17 @@ only, awaiting the author's go-ahead to execute.
 | **E** | The demo *is* the definition of done, explicitly as a POC | 2026-08-27 |
 | **F** | Hosted CI is out of scope. `scripts/ci_gate.py` (run by hand, both platforms) is the real gate; `.github/workflows/sim-ci.yml` stays as an explicitly unobserved, unmaintained artifact. `WP-01`'s two items that were waiting on this (the stale `R-REQ-9` test-id citations, the Conan-editable-install system test) are **not-doing**, not pending — recorded, not silently dropped | 2026-08-31 |
 | **G** | **No driver view.** The chase camera (`#20`, `WP-22`) is sufficient; a driver-view camera feed is not wanted. Board `#20` closes green with nothing left open in it — stated explicitly so it cannot quietly reopen as a "gap" | 2026-08-31 |
+
+## Open — PARITY's three, none blocking
+
+Raised by writing the set, and none of them stops the first seven work
+packages. Each is a decision no tool can make.
+
+| # | Question | Blocks |
+|---|---|---|
+| 1 | **The absent-port convention.** `SYS-0084` says an unused stage's ports *shall simply be absent*. The bench study's `C-04` wants them *bound to a typed, inert sink* so an upstream producer keeps writing somewhere legal. Both keep the graph whole; only one can be the convention. | Nothing — `WP-02` proceeds either way |
+| 2 | **Does the resolved run spec carry which candidate address matched**, or does the run manifest alone carry it? | Nothing — the manifest already does |
+| 3 | **Who writes `IF-06`** (`Source`/`Feed`) in `modules/viz`, and when? It is unwritten, and every transport control is a call on it. | `WP-08` and `WP-09` only |
 
 ## Parked — and what unparks each
 
@@ -523,6 +551,18 @@ untouched.
 line. That is what keeps this file one screen — **if it grew, it has failed.**
 
 ## Log — newest first, one line each, keep about five
+
+- **2026-09-05** — PARITY requirement set written, `docs/v2/parity/`. Four
+  layers down to file-and-symbol design rows, landed by work packages whose
+  contents are derived rather than listed. Restarted once at stage 1 on the
+  author's finding that a two-layer set cannot be built from — correct, and the
+  reason is dated in its `layers.yaml`. Three rules came out of it and now bind
+  every module: `R-REQ-13`/`R-REQ-14` (cap the commentary, never the count or
+  the length) and `R-REQ-6a`'s plan checks, mechanised in the shared checker.
+  Two corrections to its own record are on the record rather than quietly
+  fixed: `SYS-0004` retired the day it was written as a duplicate of
+  `SYS-0022`, and the claim that `SW-0011`/`SW-0032` would become "actively
+  wrong" was too strong — both survive.
 
 - **2026-09-01** — Step 7 fully closed. `docs/v1/` all 10 files retired
   (9 to stubs + `sim_requirements.md`'s compact register, 17,681→2,078

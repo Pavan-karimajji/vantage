@@ -162,8 +162,9 @@ budget_history:
       afterwards and both survive -- they specify the RESOLVED topic-to-port
       table, and resolution picks one address per port before the spec is
       written, so inverting the map's key does not invert the spec's table. See
-      PARITY_Handoff.md section 4. The claim that mattered -- no coverage --
-      needed no help from the one that was too strong.) Concretely, WP-01 gave a developer two rows and
+      the change register's "does not invalidate" section. The claim that
+      mattered -- no coverage -- needed no help from the one that was too
+      strong.) Concretely, WP-01 gave a developer two rows and
       answered none of these: the schema shape, what happens when zero
       candidates match, a matched topic whose type disagrees with the port, how
       `absent:` interacts with a candidate list, or where the match is

@@ -72,8 +72,11 @@ recording-to-port reader anywhere.
 **Why.** Without the sentence, a plausible implementation grows a separate
 injection reader, and the two then disagree about which fallback name matched
 — which is precisely the bug `C-01` is about to make possible.
-**Disposition.** A clause on the existing measured-mode requirement, plus a
-test that fails if a second reader appears. No new id.
+**Disposition.** **AMEND `SIM:SYS-0081`** — *"executed and injected are
+indistinguishable to a consumer"*. It gains one clause: a `measured` stage
+resolves its ports through the same ingest map a source uses, and there is no
+second recording-to-port reader. Plus a test that fails if one appears. No new
+id.
 **Touches.** `ingest`, `engine`
 
 ### C-04 · An injected stage's unread inputs end on a declared sink — **AMEND**
@@ -83,11 +86,19 @@ producer keeps writing into something legal and the graph never tears.
 **Why.** Leaving them unbound makes the situation harmless but silent. We want
 harmless **and** visible — the sink keeps the graph whole, our existing orphan
 badge keeps it honest.
-**Disposition.** Blocked at stage 7 on a real conflict, not deferred.
-`SIM:SYS-0084` says an unused stage's ports **shall simply be absent**; this
-row wants them **bound to a typed sink**. Both keep the graph whole and only
-one can be the convention, so the choice is the author's. See
-`PARITY_Handoff.md` section 1.1.
+**Disposition.** **Blocked on a real conflict, not deferred.** Its intended
+target, `SIM:SYS-0084` (*"`off` needs no special case"*), says an unused
+stage's ports **shall simply be absent**, and that no code path may distinguish
+*absent because off* from *absent because unmapped*. This row wants the
+opposite mechanism: request ports **bound to a declared, typed, inert sink**.
+
+Both keep the graph whole. Only one can be the convention, and picking either
+silently would leave the other requirement standing and wrong — so it is the
+author's call, recorded in `misc/START_HERE.md` as open question 1.
+
+- **Keep absence** — this row becomes `NO CHANGE`.
+- **Adopt the sink** — `SIM:SYS-0084` is amended and stops being the answer
+  for a replayed stage's inputs.
 **Touches.** `engine`
 
 ### C-28 · Feasible cuts are reported per named source — **AMEND**
@@ -102,8 +113,9 @@ free to drift (`R-REQ-1`). **Caught late, 2026-09-05:** it was written as a new
 row at the system layer before this register had disposed of it at all, which is
 exactly how scope creeps in — a system row with no register entry behind it. The
 row was retired to that document's disposition table the same day.
-**Disposition.** A clause on the existing feasible-cuts requirement in the v2
-set. No new id.
+**Disposition.** **AMEND `SIM:SYS-0022`** — *"feasible cuts are computed, not
+discovered"*, which is marked done. It gains one clause: feasibility is
+computed per named source, once a run can name more than one. No new id.
 **Touches.** `ingest`, `runspec`
 
 ### C-05 · Executing on a recorded cycle boundary — **PARK**
@@ -242,9 +254,10 @@ cycle"*, not only *"advance by one message"*.
 **Why it is listed here.** It is unwritten today, and `C-12`..`C-15` are all
 calls on it. If it ships offering message granularity only, the fifth step kind
 in `C-13` becomes impossible to add later without changing the interface.
-**Disposition.** Written in `modules/viz`, tracing up to this set's
-stakeholder row for stepping. This is the one hard ordering constraint in the
-whole pass.
+**Disposition.** **ALLOCATE to `modules/viz`, `IF-06`.** Written there,
+tracing up to this set's stepping outcome. **The one hard ordering constraint
+in the whole pass** — it blocks `WP-08` and `WP-09`, and nothing else. Who
+writes it, and when, is open question 3 in `misc/START_HERE.md`.
 **Touches.** `player`
 
 ### C-17 · Reset action and reset timing as two controls — **AMEND**
@@ -254,11 +267,16 @@ batch · before each entry · before each played section).
 **Why.** They are genuinely independent axes, and merging them produces a list
 where most entries are unreachable. Nine combinations, seven of them
 meaningful once *nothing* collapses across the timing axis.
-**Disposition.** Re-marked at stage 7 after reading the target. `SIM:SYS-0192`
-**already carries both axes in full** -- this row said it "gains this
-vocabulary", which was written from the study's summary rather than from the
-requirement. What is left is presentation, which is a `viz` player item. See
-`PARITY_Handoff.md` section 1.2. No clause on the system layer.
+**Disposition.** **Already satisfied at the system layer — no clause.**
+`SIM:SYS-0192` reads: *"Reset mode shall be configurable as none / reset /
+reset-and-init, and reset timing as before the whole batch / before each entry
+/ before each section."* That is both axes in full.
+
+This row originally said the requirement *"gains this vocabulary"* — written
+from the study's summary rather than from the requirement itself, and wrong.
+Corrected after reading the target. What is genuinely open is the
+**presentation** — two independent controls rather than one merged list — and
+that is a `viz` player item, not a system one.
 **Touches.** `player`
 
 ### C-18 · Layers default to off, are named by producer, and scale — **ALLOCATE (viz)**
@@ -269,8 +287,10 @@ layout, not a runtime-only toggle; and **the default default is off**.
 across three components is a panel with a hundred rows, and everything-on is
 unreadable on the first frame. The searchable-list requirement is the right
 answer to the scale and should say explicitly that it covers the layer list.
-**Disposition.** Clauses on `viz`'s existing per-layer-visibility and
-searchable-list requirements. Written there.
+**Disposition.** **ALLOCATE to `modules/viz`** — clauses on `VIZ:SYS-0064`
+(per-layer default visibility, which should say the default default is *off*)
+and `VIZ:SYS-0075` (the searchable list, which should say explicitly that it
+covers the layer list). Written there.
 **Touches.** `player`
 
 ---
@@ -291,8 +311,9 @@ component, leaf — so you can go from any message straight to the configuration
 that produced it.
 **Today.** The module and the cycle are required. This is one level more
 precise.
-**Disposition.** An acceptance clause on the existing diagnostic-content
-requirement. No new id.
+**Disposition.** **AMEND `SIM:SYS-0049`** — *"failures name the module and
+the cycle"*. It gains one clause: the report also carries the fully-qualified
+instance path of the reporter. No new id.
 **Touches.** `diag`
 
 ### C-21 · Every plug-in carries an identity block — **KEEP**
@@ -401,6 +422,29 @@ than as a surprise mid-integration.
   single place this design is ahead. Never trade it away to make a port easier.
 
 ---
+
+## What this work does *not* invalidate — a correction
+
+The restart's budget entry claimed `SIM:SW-0011` and `SIM:SW-0032` would become
+*actively wrong*. Both were read afterwards and **that claim is too strong**.
+It is corrected here and in `layers.yaml` rather than left standing.
+
+Both specify the *"resolved topic-to-port table"*, and the word doing the work
+is **resolved**. Resolution happens before the spec is written: the resolver
+picks **one** address per port, so what the spec carries downstream is still a
+topic-to-port table, for the chosen topics. Inverting the *map*'s key does not
+invert the *spec*'s table.
+
+| Row | Verdict | Why |
+|---|---|---|
+| `SIM:SW-0011` | **Survives, wants one addition** | The spec should also carry which candidate matched, so a reader answers `SYS-0002` without re-resolving. Open question 2. |
+| `SIM:SW-0032` | **Survives unchanged** | A reader applies a resolved table and interprets nothing. Unaffected by how the table was produced. |
+| `SIM:SW-0029` | **Unaffected** | *"The index is keyed by topic"* is the recording's own index in its own vocabulary. A false positive in the original grep. |
+
+**What remains true, and is the whole reason for the restart:** the new
+behaviour had **no software coverage at all**. That was never about existing
+rows being wrong; it was about rows that did not exist. The corrected claim is
+weaker and still sufficient.
 
 ## What the register does not contain
 
