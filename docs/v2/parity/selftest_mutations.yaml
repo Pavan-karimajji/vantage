@@ -1,0 +1,255 @@
+# Planted violations for `trace_check.py --selftest` (R-REQ-9).
+#
+# Declared here, beside layers.yaml, never inside trace_check.py -- the checker
+# carries no module's document names, which is what makes "copy it to any
+# module" true. Each entry makes one edit to a throwaway copy of this directory
+# and asserts the named check catches it.
+#
+# A check nobody has seen fail is a check nobody should believe.
+#
+# Two checks are deliberately NOT planted here, because this set cannot express
+# them and a plant that can never fire is worse than none:
+#   C-BINDS            SYS declares requires_item, not requires_binds -- sim is
+#                      not a component and has no conf/ports.yaml (R-REQ-15).
+#                      C-ITEM below is the check that applies instead.
+#   C-KPI-UNMEASURED   STK declares [feature] alone -- the bench is a tool, not
+#                      a vehicle feature, so it has no KPI row to break.
+# Both are planted in .claude/templates/requirements/example, which declares
+# them, so neither check is unproven anywhere.
+
+mutations:
+  - expect: C-DANGLING
+    file: PARITY_System_Requirements.md
+    why: a trace to a UID that does not exist
+    find: |-
+      **Verify.** T · `SYT-ING-01`   **Trace.** `STK-0001`
+    replace: |-
+      **Verify.** T · `SYT-ING-01`   **Trace.** `STK-9999`
+
+  - expect: C-TWOWAY
+    file: PARITY_Test_Spec.md
+    why: the two halves of a link disagreeing
+    find: |-
+      **Serves.** `SYS-0022`
+    replace: |-
+      **Serves.** `SYS-0023`
+
+  - expect: C-STATUS
+    file: PARITY_Stakeholder_Requirements.md
+    why: a Status field smuggled into a specification
+    find: |-
+      **Shall.** The bench shall feed a port from a recording
+    replace: |-
+      **Status.** frozen
+      **Shall.** The bench shall feed a port from a recording
+
+  - expect: C-ITEM
+    file: PARITY_System_Requirements.md
+    why: a surface invented at the point of use instead of declared
+    find: |-
+      **Item.** `diag`
+    replace: |-
+      **Item.** `not_a_surface`
+
+  - expect: C-HEADLINE
+    file: PARITY_System_Requirements.md
+    why: a headline over the character cap
+    find: |-
+      — The chosen cycle is identified
+    replace: |-
+      — The chosen cycle is identified, and also a great deal more is said here than any headline has business saying
+
+  - expect: C-WORDS
+    file: PARITY_System_Requirements.md
+    why: Shall plus Accept over the word cap, which means more than one obligation
+    find: |-
+      **Shall.** A set of recordings shall be selectable by classification alone.
+    replace: |-
+      **Shall.** A set of recordings shall be selectable by classification alone, and shall also be selectable by author, and by duration, and by the vehicle that produced them, and by the weather at the time, and by whether anyone has looked at them before, and by every other field the recording happens to carry anywhere in its manifest.
+
+  - expect: C-ORPHAN
+    file: PARITY_System_Requirements.md
+    why: a requirement with no test -- unverifiable as written
+    find: |-
+      **Verify.** T · `SYT-DIA-01`   **Trace.** `STK-0007`
+    replace: |-
+      **Trace.** `STK-0007`
+
+  - expect: C-NOPLANT
+    file: PARITY_Test_Spec.md
+    why: an A-method check with no planted-violation case
+    find: |-
+      - `.c2` **PASS:** the planted violation is reported
+    replace: |-
+      - `.cX` **PASS:** the planted violation is reported
+
+  - expect: C-CATEGORY
+    file: PARITY_Stakeholder_Requirements.md
+    why: a category the module does not declare
+    find: |-
+      **Category.** `feature`
+      **Verify.** T · `STT-02`
+    replace: |-
+      **Category.** `kpi`
+      **Verify.** T · `STT-02`
+
+  - expect: C-CATEGORY-EMPTY
+    file: layers.yaml
+    why: a category declared but populated by nothing
+    find: |-
+        categories: [feature]
+    replace: |-
+        categories: [feature, kpi]
+
+  - expect: C-FIXTURE
+    file: PARITY_Test_Spec.md
+    why: a fixture cited but absent from the catalogue
+    find: |-
+      **`SYT-PLY-02`** · T · fixture `F-PLAY`
+    replace: |-
+      **`SYT-PLY-02`** · T · fixture `F-NOT-CATALOGUED`
+
+  - expect: C-TESTLAYER
+    file: PARITY_Test_Spec.md
+    why: a stakeholder test serving a system requirement
+    find: |-
+      **`STT-07`** · T · fixture `F-FLOOD` — The log survives a repeating message
+      **Serves.** `STK-0007`
+    replace: |-
+      **`STT-07`** · T · fixture `F-FLOOD` — The log survives a repeating message
+      **Serves.** `SYS-0024`
+
+  - expect: C-UNDECOMP
+    file: PARITY_System_Requirements.md
+    why: >-
+      a stakeholder requirement nothing below decomposes. STK-0004 has exactly
+      one child, so re-pointing it leaves that row unparented from beneath --
+      the shape a layer written half-way always has.
+    find: |-
+      **Verify.** T · `SYT-LNC-01`   **Trace.** `STK-0004`
+    replace: |-
+      **Verify.** T · `SYT-LNC-01`   **Trace.** `STK-0001`
+
+  - expect: C-LAYER-EMPTY
+    file: layers.yaml
+    why: >-
+      a layer declared but never populated -- you said you would write it and
+      did not. Planted by pointing the layer at a document that exists but
+      holds no requirements: a requirement UID is four digits and a test id
+      two, so the test spec parses as zero requirements for this layer.
+    find: |-
+      doc: PARITY_System_Requirements.md
+    replace: |-
+      doc: PARITY_Test_Spec.md
+
+  - expect: C-COMMENTARY
+    file: PARITY_Stakeholder_Requirements.md
+    why: >-
+      commentary swamping the requirements -- the one size R-REQ-14 caps.
+      Fourteen requirements at a cap of 6 allow 84 commentary lines; this
+      document uses 36, so 60 more takes it well over. It is the shape that
+      made two sim v2 documents unreadable at 81 and 990 lines per
+      requirement, and no length cap could see it.
+    find: |-
+      ## Anatomy
+    replace: |-
+      Background line 1 -- prose that belongs in the change register, not here.
+      Background line 2 -- prose that belongs in the change register, not here.
+      Background line 3 -- prose that belongs in the change register, not here.
+      Background line 4 -- prose that belongs in the change register, not here.
+      Background line 5 -- prose that belongs in the change register, not here.
+      Background line 6 -- prose that belongs in the change register, not here.
+      Background line 7 -- prose that belongs in the change register, not here.
+      Background line 8 -- prose that belongs in the change register, not here.
+      Background line 9 -- prose that belongs in the change register, not here.
+      Background line 10 -- prose that belongs in the change register, not here.
+      Background line 11 -- prose that belongs in the change register, not here.
+      Background line 12 -- prose that belongs in the change register, not here.
+      Background line 13 -- prose that belongs in the change register, not here.
+      Background line 14 -- prose that belongs in the change register, not here.
+      Background line 15 -- prose that belongs in the change register, not here.
+      Background line 16 -- prose that belongs in the change register, not here.
+      Background line 17 -- prose that belongs in the change register, not here.
+      Background line 18 -- prose that belongs in the change register, not here.
+      Background line 19 -- prose that belongs in the change register, not here.
+      Background line 20 -- prose that belongs in the change register, not here.
+      Background line 21 -- prose that belongs in the change register, not here.
+      Background line 22 -- prose that belongs in the change register, not here.
+      Background line 23 -- prose that belongs in the change register, not here.
+      Background line 24 -- prose that belongs in the change register, not here.
+      Background line 25 -- prose that belongs in the change register, not here.
+      Background line 26 -- prose that belongs in the change register, not here.
+      Background line 27 -- prose that belongs in the change register, not here.
+      Background line 28 -- prose that belongs in the change register, not here.
+      Background line 29 -- prose that belongs in the change register, not here.
+      Background line 30 -- prose that belongs in the change register, not here.
+      Background line 31 -- prose that belongs in the change register, not here.
+      Background line 32 -- prose that belongs in the change register, not here.
+      Background line 33 -- prose that belongs in the change register, not here.
+      Background line 34 -- prose that belongs in the change register, not here.
+      Background line 35 -- prose that belongs in the change register, not here.
+      Background line 36 -- prose that belongs in the change register, not here.
+      Background line 37 -- prose that belongs in the change register, not here.
+      Background line 38 -- prose that belongs in the change register, not here.
+      Background line 39 -- prose that belongs in the change register, not here.
+      Background line 40 -- prose that belongs in the change register, not here.
+      Background line 41 -- prose that belongs in the change register, not here.
+      Background line 42 -- prose that belongs in the change register, not here.
+      Background line 43 -- prose that belongs in the change register, not here.
+      Background line 44 -- prose that belongs in the change register, not here.
+      Background line 45 -- prose that belongs in the change register, not here.
+      Background line 46 -- prose that belongs in the change register, not here.
+      Background line 47 -- prose that belongs in the change register, not here.
+      Background line 48 -- prose that belongs in the change register, not here.
+      Background line 49 -- prose that belongs in the change register, not here.
+      Background line 50 -- prose that belongs in the change register, not here.
+      Background line 51 -- prose that belongs in the change register, not here.
+      Background line 52 -- prose that belongs in the change register, not here.
+      Background line 53 -- prose that belongs in the change register, not here.
+      Background line 54 -- prose that belongs in the change register, not here.
+      Background line 55 -- prose that belongs in the change register, not here.
+      Background line 56 -- prose that belongs in the change register, not here.
+      Background line 57 -- prose that belongs in the change register, not here.
+      Background line 58 -- prose that belongs in the change register, not here.
+      Background line 59 -- prose that belongs in the change register, not here.
+      Background line 60 -- prose that belongs in the change register, not here.
+
+      ## Anatomy
+
+  # C-UNLANDED is NOT planted here, and the selftest is what said so.
+  #
+  # The check reads the LOWEST declared layer. That was SYS; declaring the SW
+  # layer on 2026-09-05 moved it to SW, which is empty until Stage 4 -- so
+  # removing a `lands SYS-xxxx` entry from the plan stopped meaning anything
+  # and the plant went blind. Deleted rather than left red: a plant that cannot
+  # fire reads as coverage and is worse than none (R-REQ-9).
+  #
+  # RETURNS AT STAGE 6, once SW rows exist and the plan lands them. The other
+  # three plan checks below still fire and are unaffected.
+
+  - expect: C-DUPLAND
+    file: PARITY_Implementation_Plan.md
+    why: one requirement landed by two packages -- two places to build one thing
+    find: |-
+      lands `SYS-0022`, `SYS-0023`
+    replace: |-
+      lands `SYS-0022`, `SYS-0023`, `SYS-0020`
+
+  - expect: C-PLANUID
+    file: PARITY_Implementation_Plan.md
+    why: a package landing a UID that does not exist
+    find: |-
+      lands `SYS-0013`, `SYS-0014`
+    replace: |-
+      lands `SYS-0013`, `SYS-9999`
+
+  - expect: C-PLANMARK
+    file: PARITY_Implementation_Plan.md
+    why: >-
+      a row marked started with no resume condition. R-REQ-6a allows `[~]` only
+      when it says `closed by <command or condition>` -- its whole value is
+      telling the next session where to pick up.
+    find: |-
+      - [ ] **WP-05**
+    replace: |-
+      - [~] **WP-05**

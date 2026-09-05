@@ -1,0 +1,181 @@
+# PARITY requirement set -- the ONE declaration the checker is driven by.
+#
+# R-REQ-12. This file says which layers the set populates, what each layer is
+# expected to weigh, and which surfaces and software items its requirements are
+# allowed to constrain. Nothing about the layer chain is hardcoded in
+# py/trace_check.py -- that file is the module-agnostic copy from
+# .claude/templates/requirements, unchanged except its COMPONENT header token.
+#
+# "Parity" here means parity between the bench we have and the bench we
+# intend. It is an internal standard, not a comparison with any product.
+
+module: PARITY
+component: SIM                # R-NAME-6 token
+
+# ---------------------------------------------------------------- layers ----
+# THREE layers. The two-layer version of this set was wrong, and the reason is
+# recorded in budget_history below: a set that says only WHAT the bench must do
+# cannot be built from, and the software rows that would have covered it in the
+# v2 set describe the design this work replaces.
+#
+# IMP is still NOT declared. The implementation design is the code plus
+# PARITY_Implementation_Plan.md.
+layers:
+  - id: STK
+    name: Stakeholder
+    doc: PARITY_Stakeholder_Requirements.md
+    tests: [STT, E2E]
+    budget: 16
+    # R-REQ-16. ONE category, and that is a decision on the record.
+    #
+    # `kpi` is deliberately NOT declared. The bench is a developer tool, not a
+    # vehicle feature: nobody buys it, nobody ships it, and it carries no
+    # performance target of its own that a stakeholder could hold us to.
+    # Author's call, 2026-09-05. Declaring the category and leaving it empty
+    # would be a finding; not declaring it is honest.
+    categories: [feature]
+  - id: SYS
+    name: System
+    doc: PARITY_System_Requirements.md
+    tests: [SYT, INSP, ANL]
+    budget: 40
+    # R-REQ-15. sim is not a component and has no conf/ports.yaml, so a row
+    # here names the declared SURFACE it constrains instead of a port. The
+    # purpose is the same: a requirement that binds to nothing is scope creep.
+    requires_item: true
+  - id: SW
+    name: Software
+    doc: PARITY_Software_Requirements.md
+    tests: [UT, IT]
+    budget: 56
+    requires_item: true       # internal, so it names a declared software item
+
+test_spec: PARITY_Test_Spec.md
+
+# R-REQ-6a. The build order, and the ONE hand-maintained progress state in this
+# set. Declaring it turns on four checks -- every requirement in the lowest
+# declared layer is landed by exactly one package, no package lands a UID that
+# does not exist, no UID is landed twice, and a `[~]` row must say what closes
+# it -- plus `--status`, derived from the checkboxes and never typed anywhere.
+plan: PARITY_Implementation_Plan.md
+
+# ---------------------------------------------------------------- budget ----
+# R-REQ-13. A declared EXPECTATION, reported every run -- never a failure.
+# Derived, not negotiated. The unit of buildable work is a change item: one row
+# of PARITY_Change_Register.md marked KEEP. There are 14 of them.
+#
+# per_unit 8 is not a taste. It is what modules/df/docs/ldw declares, and the
+# resulting split lands where two real sets already sit:
+#
+#     set        SYS/STK   SW/SYS
+#     ldw           1.14     1.75
+#     sim v2           -     1.39
+#     PARITY        2.50     1.40   <- 16 / 40 / 56
+#
+# A higher SYS/STK than ldw is expected and not a defect: a stakeholder row
+# here is a whole bench outcome ("move through a recording") where ldw's is one
+# algorithm behaviour, so it decomposes further.
+budget_basis:
+  unit: change_item
+  count: 14
+  per_unit: 8
+  total: 112                  # = 16 (STK) + 40 (SYS) + 56 (SW)
+
+# ------------------------------------------------------------ unit limits ---
+# R-REQ-14. Cap the COMMENTARY, never the count and never the length.
+#
+#   requirement_words  ONE-OBLIGATION DETECTORS, not length limits. A row over
+#   headline_chars     these is carrying more than one obligation (R-REQ-1) and
+#                      is fixed by SPLITTING it, which makes the set better.
+#                      Never raised.
+#
+#   commentary_lines_  THE cap. Measured 2026-09-05 across every set in this
+#     per_requirement  repo -- readable documents run 1.6 to 4.3; the two that
+#                      became unreadable run 81 and 990. Length separated none
+#                      of them.
+limits:
+  requirement_words: 60                   # Shall + Accept -- HARD, never raised
+  headline_chars: 90                      # HARD, never raised
+  commentary_lines_per_requirement: 6     # the one that actually bounds a document
+
+# --------------------------------------------------------- budget history ---
+# Every change to the basis or to a soft cap, made WHILE writing rather than
+# negotiated afterwards, with what would otherwise have been lost. Printed by
+# `trace_check.py --stats` on every run, because a reason kept only in a
+# comment is a reason nobody reads.
+budget_history:
+  - date: 2026-09-05
+    change: "per_unit 2 -> 3 (total 28 -> 42); STK 10 -> 14, SYS 18 -> 28"
+    why: >-
+      Writing STK at a budget of 10 forced four of its ten rows to carry two
+      obligations each (isolate-a-stage with derived-mixed-state,
+      headless-reproduction with live-session-control, sections with markers,
+      plug-in-identity with configuration-bytes). R-REQ-1 allows one. The
+      budget was producing rows that hide work, so it was re-derived from the
+      count the work actually needs.
+  - date: 2026-09-05
+    change: "doc_lines removed entirely; commentary_lines_per_requirement (6) added"
+    why: >-
+      Raising doc_lines from 400 to 800 was the wrong fix and lasted about an
+      hour. Any cap on document length penalises HAVING many requirements,
+      which is legitimate, and it was the pressure behind the merge above.
+      Measured across every set in this repo: readable documents run 1.6 to
+      4.3 commentary lines per requirement, the two that became unreadable run
+      81 and 990, and LENGTH SEPARATED NEITHER. So the length cap was deleted,
+      not raised, and the commentary cap took its place. Promoted the same day
+      to R-REQ-13/R-REQ-14 in .claude/rules/requirements.md.
+  - date: 2026-09-05
+    change: "SW layer declared; per_unit 3 -> 8 (total 42 -> 112); STK 14 -> 16, SYS 28 -> 40, SW 0 -> 56"
+    why: >-
+      The two-layer set could not be built from, and the justification for
+      omitting SW was wrong. It read "every row here changes a system that
+      already has software requirements next door" -- but v2's 377 SW rows
+      describe the design this work REPLACES. SW-0011 and SW-0032 both specify
+      "the resolved topic-to-port table", which SYS-0001 inverts. So the new
+      behaviour had no software coverage anywhere, and two existing rows will
+      become actively wrong. Concretely, WP-01 gave a developer two rows and
+      answered none of these: the schema shape, what happens when zero
+      candidates match, a matched topic whose type disagrees with the port, how
+      `absent:` interacts with a candidate list, or where the match is
+      reported. Each is a decision somebody makes silently at the keyboard. SYS
+      was compressed for the same reason -- nine transport actions in one row,
+      five step granularities in another -- so it grows too. per_unit 8 is
+      ldw's own declared figure, and the split puts SW/SYS at 1.40 against v2's
+      measured 1.39. R-REQ-12 anticipates this: adding a layer later is a
+      re-point pass the checker enumerates by name.
+
+# ---------------------------------------------------------------- surfaces --
+# Declared once, never invented at the point of use. A SYS row names one or
+# more of the SURFACES; an SW row names a SOFTWARE ITEM. Both live in this one
+# list because the checker resolves `Item.` against it for either layer.
+items:
+  # -- surfaces, named by SYS rows: the part of the bench someone can observe --
+  ingest:   The ingest map and how a port resolves to recorded data
+  engine:   The run graph -- stages, modes, wiring and scheduling
+  runspec:  The resolved run spec and the run manifest it writes
+  launcher: The pre-run selection face
+  player:   Vantage's interactive face -- transport, panels, layers
+  diag:     The diagnostic log and how an error is reported
+  plugin:   Plug-in discovery, identity and loading
+  record:   The recording model, its codecs and its provenance
+
+  # -- software items, named by SW rows ---------------------------------------
+  # One item is one thing a developer can hold on its own with its
+  # collaborators stubbed. Declared here so no row invents one.
+  mapschema: Ingest-map schema and its parser
+  resolver:  Port-to-address resolution, ordering and match reporting
+  sourceset: Named source declaration and per-port binding
+  specasm:   Resolved run spec assembly and hashing
+  manifest:  The run manifest writer
+  selmodel:  The launcher's selection model -- modes, groups, derived states
+  selview:   The launcher's controls and what they display
+  transport: The player's transport state machine
+  stepping:  Step granularity and cycle-boundary resolution
+  cycles:    Cycle discovery, identity and period
+  ranges:    Named time ranges -- storage, restore, query
+  marks:     Annotations and classifications
+  diaglog:   The diagnostic log writer, de-duplication and thresholds
+  plugmeta:  Plug-in identity declaration, validation and display
+  bundle:    Configuration-bundle embedding and retrieval
+  refrun:    Side-by-side execution and divergence detection
+  livectl:   The live session control surface
