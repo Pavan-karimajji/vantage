@@ -221,14 +221,14 @@ mutations:
   # twice as layers were added, and each time the selftest reported it rather
   # than letting it pass as coverage.
   - expect: C-UNLANDED
-    file: PARITY_Implementation_Plan.md
+    file: PARITY_Implementation_Design.md
     why: >-
       a design row no work package lands -- nothing will build it, and no other
       check can see that, because the row itself is perfectly well formed
     find: |-
-      `IMP-0040`, `IMP-0041`, `IMP-0042`
+      | `IMP-0040` | `SW-0039` | `WP-05` |
     replace: |-
-      `IMP-0041`, `IMP-0042`
+      | `IMP-0040` | `SW-0039` |  |
 
   - expect: C-CHANGE
     file: PARITY_Implementation_Design.md
@@ -241,24 +241,28 @@ mutations:
     replace: |-
       | `IMP-0004` | `SW-0004` | `WP-01` | `REFACTOR` |
 
-  - expect: C-DUPLAND
-    file: PARITY_Implementation_Plan.md
-    why: one requirement landed by two packages -- two places to build one thing
-    find: |-
-      lands `IMP-0037`, `IMP-0038`, `IMP-0039`
-    replace: |-
-      lands `IMP-0037`, `IMP-0038`, `IMP-0039`, `IMP-0034`
+  # C-DUPLAND is NOT planted, because it can no longer fire -- and that is the
+  # result the merge was for, not a gap in it.
+  #
+  # It caught one requirement landed by two packages, which was possible while
+  # each package row carried its own `lands` list: two lists, one file, nothing
+  # stopping them naming the same row. Deriving the mapping from the design
+  # table's single WP column makes the defect UNREPRESENTABLE -- a row has one
+  # cell, so it belongs to one package by construction.
+  #
+  # Left in the checker for a set that reintroduces explicit lists. Not planted
+  # here, because a plant that cannot fire reads as coverage (R-REQ-9).
 
   - expect: C-PLANUID
-    file: PARITY_Implementation_Plan.md
-    why: a package landing a UID that does not exist
+    file: PARITY_Implementation_Design.md
+    why: a design row naming a work package the plan does not declare
     find: |-
-      lands `IMP-0053`, `IMP-0054`
+      | `IMP-0053` | `SW-0051` | `WP-13` |
     replace: |-
-      lands `IMP-0053`, `IMP-9999`
+      | `IMP-0053` | `SW-0051` | `WP-99` |
 
   - expect: C-PLANMARK
-    file: PARITY_Implementation_Plan.md
+    file: PARITY_Implementation_Design.md
     why: >-
       a row marked started with no resume condition. R-REQ-6a allows `[~]` only
       when it says `closed by <command or condition>` -- its whole value is

@@ -70,12 +70,15 @@ layers:
 
 test_spec: PARITY_Test_Spec.md
 
-# R-REQ-6a. The build order, and the ONE hand-maintained progress state in this
-# set. Declaring it turns on four checks -- every requirement in the lowest
+# R-REQ-6a. The build order. It is the SAME FILE as the IMP layer's document:
+# R-REQ's layer table says `IMP-nnnn -> WP-nn` and nothing about how many files
+# that takes, and at 54 rows one document is 200 lines. sim's v2 set splits them
+# because 379 rows genuinely need their own file; that is a scale decision, not
+# a principle. Declaring it turns on four checks -- every requirement in the lowest
 # declared layer is landed by exactly one package, no package lands a UID that
 # does not exist, no UID is landed twice, and a `[~]` row must say what closes
 # it -- plus `--status`, derived from the checkboxes and never typed anywhere.
-plan: PARITY_Implementation_Plan.md
+plan: PARITY_Implementation_Design.md
 
 # ---------------------------------------------------------------- budget ----
 # R-REQ-13. A declared EXPECTATION, reported every run -- never a failure.

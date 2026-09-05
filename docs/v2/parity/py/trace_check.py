@@ -71,6 +71,7 @@ class Req:
     binds: list[str] = field(default_factory=list)
     items: list[str] = field(default_factory=list)
     category: str = ""
+    wp: str = ""
     verify: list[str] = field(default_factory=list)
     trace: list[str] = field(default_factory=list)
 
@@ -137,7 +138,7 @@ def declared_ports(root: Path, spec: dict) -> tuple[dict[str, str], set[str]]:
 
 
 RE_WP = re.compile(
-    r"^-\s*\[(?P<box>[ x~])\]\s*\*\*(?P<wp>WP-\d+)\*\*\s*—\s*(?P<headline>.+?)\s*·\s*lands\s*(?P<lands>.+?)\s*·\s*(?P<note>.*)$"
+    r"^-\s*\[(?P<box>[ x~])\]\s*\*\*(?P<wp>WP-\d+)\*\*\s*—\s*(?P<headline>[^·]+?)(?:\s*·\s*(?P<note>.*))?$"
 )
 
 
@@ -153,9 +154,9 @@ def parse_plan(path: Path) -> list[dict]:
             {
                 "wp": m["wp"],
                 "box": m["box"],
-                "headline": m["headline"],
-                "lands": RE_UID.findall(m["lands"]),
-                "note": m["note"],
+                "headline": m["headline"].strip(),
+                "lands": [],  # filled from the design table's WP column
+                "note": (m["note"] or "").strip(),
             }
         )
     return out
@@ -221,7 +222,8 @@ def parse_table_requirements(path: Path, layer: str) -> list[Req]:
         )
         r.trace = RE_UID.findall(m["serves"])
         r.verify = RE_TID.findall(m["tests"])
-        r.items = RE_TICKED.findall(m["wp"]) + RE_TICKED.findall(m["change"])
+        found_wp = RE_TICKED.findall(m["wp"])
+        r.wp = found_wp[0] if found_wp else ""
         r.category = (m["change"] or "").strip().strip("`* ")
         reqs.append(r)
     return reqs
@@ -574,6 +576,18 @@ def run_checks(root: Path) -> tuple[list[Finding], list[str], dict]:
             )
         else:
             packages = parse_plan(planfile)
+            declared_wps = {p["wp"] for p in packages}
+            # The mapping is the design table's WP column -- one place, beside
+            # the artifact it describes. A package's contents are derived, so a
+            # package and a row can never disagree about what it lands.
+            for r in reqs.values():
+                if r.wp:
+                    if r.wp not in declared_wps:
+                        findings.append(
+                            Finding("C-PLANUID", r.uid, f"names {r.wp}, which the plan does not declare")
+                        )
+                    else:
+                        next(p for p in packages if p["wp"] == r.wp)["lands"].append(r.uid)
             landed: dict[str, str] = {}
             for pkg in packages:
                 if pkg["box"] == "~" and "closed by" not in pkg["note"].lower():

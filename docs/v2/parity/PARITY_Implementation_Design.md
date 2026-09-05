@@ -1,8 +1,89 @@
 # PARITY — Implementation Design
 
-**Layer:** `IMP`. **Parent layer:** `SW`.
-**Reader:** the developer about to write the code, and the reviewer holding the
-diff against it.
+**One document, not two.** The build order is on top; the design rows are
+below. `R-REQ`'s layer table says `IMP-nnnn` → `WP-nn` and nothing about how
+many files that takes — the split was inherited from `sim`'s v2 set, where 379
+rows genuinely need their own file. At 54 rows one document is 200 lines, and
+keeping the order and the detail apart would mean two files to hold in
+agreement for no reader's benefit.
+
+**A package row says only what it alone knows** — the checkbox, the headline,
+and why it sits where it does in the order. **What it lands is not written
+there**: that mapping is the `WP` column of the table below, one place, beside
+the artifact it describes, so a package and a row cannot disagree about what
+belongs to it. `--status` derives the contents.
+
+**The checkboxes are the only hand-maintained progress state in this set**
+(`R-REQ-6a`). No requirement document carries a progress mark, so there is
+nothing to roll up and nothing to drift. Three states, and no others:
+
+| Box | Means |
+|---|---|
+| `[ ]` | not started |
+| `[~]` | started — **and the row must say `closed by <command or condition>`** |
+| `[x]` | done — the tests the requirements name pass |
+
+A bare `[~]` is a finding (`C-PLANMARK`). Its whole value is telling the next
+session where to resume.
+
+**Progress is not verification** (`R-REQ-6`). A ticked box says the work was
+done; whether the requirement is met is a Test Execution Record's answer, one
+per campaign, and none exists yet.
+
+---
+
+## Prerequisite, owned elsewhere
+
+**The `Source`/`Feed` interface — register item `C-16`, allocated to
+`modules/viz`.** It is unwritten, and every transport control is a call on it.
+If it ships offering message granularity only, the fifth step kind in `WP-09`
+becomes impossible to add later without changing the interface.
+
+**Blocks `WP-08` and `WP-09`, and nothing else.** Eleven of the thirteen
+packages are independent of it, so it gates breadth rather than progress.
+
+---
+
+## Order, and why
+
+Ingest first: it is the foundation everything reads through, it is contained,
+and it is the highest-value thing in the register. The launcher and the
+self-describing artifacts follow because they are independent of everything.
+The player packages wait on the prerequisite above. The two `R2` packages —
+the side-by-side run and live control — are last because nothing depends on
+them.
+
+## A. Getting data in
+
+- [ ] **WP-01** — Ingest map keyed by port, with an ordered address list · Invert the key, resolve in order, report what matched. `absent:` is untouched.
+- [ ] **WP-02** — Named sources and per-port binding · Several complete recordings in one run; each port bound to exactly one, with a declared default. Not multi-source merging.
+
+## B. Setting a run up
+
+- [ ] **WP-03** — Launcher: isolate, and the computed mixed state · One action to isolate a stage; a third group state that is computed and has no setter to reach.
+- [ ] **WP-04** — Headless reproduction, and the test that proves it · Display the reproducing invocation, and make both paths resolve through one construction. The test matters more than the line.
+
+## C. Saying what things are
+
+- [ ] **WP-05** — Diagnostics: occurrence counting · Collapse an identical repeated message into one entry with a count, and say once when that began.
+- [ ] **WP-06** — Plug-in identity · Four mandatory fields, refused by name when incomplete, carried into the deployed copy, read through one accessor.
+- [ ] **WP-07** — The bundle travels in the recording · Embed the bytes, store their hash, and make absence a value rather than a reason to look on disk.
+
+## D. Moving through a recording
+
+- [ ] **WP-08** — Transport controls and play speed · The nine named actions, and a rate that is measured rather than requested. **Blocked by the prerequisite.**
+- [ ] **WP-09** — Step granularity and cycles · Five kinds of step, cycles discovered from the recording, and a cycle step that lands on a coherent input set. **Blocked by the prerequisite.**
+- [ ] **WP-10** — Named ranges · Bounds in the recording's own timebase, travelling with the file, inclusive at both ends.
+- [ ] **WP-11** — Marks, in two kinds · Annotation and classification as separate types in separate blocks, each stamped with author and time at creation.
+
+## E. Trusting the answer
+
+- [ ] **WP-12** — Side-by-side reference run · Two builds sharing one resolved input set; the first divergence located; both builds' outputs recorded separably.
+- [ ] **WP-13** — Live session control · Read and control a running session from a script, over an operation table built from the headless API's own exports.
+
+---
+
+# The design rows
 
 **A path here is a promise: the code goes at that path under that name.** Every
 directory named below exists today, so a `NEW` row names a file that does not
@@ -12,9 +93,9 @@ exist yet inside a package that does.
 attached. The value it adds is exactly one of: *where the code goes*, *what the
 symbol is called*, *what its signature is*, or *what has to be deleted first*.
 
-**One row per requirement, as a table** (`layers.yaml`, `row_style: table`).
-Six columns, fixed and positional, because the value of a design is that every
-row answers the same questions.
+**One row per software requirement, as a table** (`layers.yaml`,
+`row_style: table`). Six columns, fixed and positional, because the value of a
+design is that every row answers the same questions.
 
 **`Change` is derived from what exists today, never asserted.** A row claiming
 `NEW` for code already present is a design error a reviewer can see without
@@ -34,10 +115,10 @@ verified by the tests of the `SW` it serves — repeated in the last column so a
 row is self-contained — plus the build gates. Giving it separate test ids would
 create a second, weaker copy of the same checks.
 
-**Length is expected here** (`R-REQ-14`, amended 2026-09-05). What is capped in
-an implementation document is execution narration, not design. The test is
-tense: a row below says what *will* be true of the code. A row in the past
-tense is in the wrong document.
+**Length is expected here** (`R-REQ-14`). What is capped in an implementation
+document is execution narration, not design. The test is tense: a row below
+says what *will* be true of the code. A row in the past tense is in the wrong
+document.
 
 ---
 
@@ -97,3 +178,19 @@ tense is in the wrong document.
 | `IMP-0052` | `SW-0050` | `WP-12` | `NEW` | `engine/refrun.py` records each build under a topic prefix derived from its role, so the two are separable without a side-car index. | `UT-refrun-03` |
 | `IMP-0053` | `SW-0051` | `WP-13` | `NEW` | `pyapi/live.py::LiveSession` over a local socket, attachable while a run is in progress and requiring no display. | `UT-livectl-01` |
 | `IMP-0054` | `SW-0052` | `WP-13` | `NEW` | `pyapi/live.py` builds its operation table from the headless API's exported names, so an operation with no headless twin cannot be registered. | `UT-livectl-02` |
+
+---
+
+## Not in this plan
+
+**The five `AMEND` register items land in the v2 set, not here** — one clause
+each on a requirement that already exists (`C-03`, `C-04`, `C-17`, `C-20`,
+`C-28`). Tracking them as work packages here would make this plan the second
+place their obligation lives, which is the thing `R-REQ-1` forbids. They are
+Stage 7's handoff.
+
+**The two `ALLOCATE` items land in `modules/viz`** (`C-16`, `C-18`), and the
+first of them is this plan's prerequisite.
+
+**The two `PARK` items have triggers, not schedules** (`C-05`, `C-07`). A
+parked item with a date is a plan; a parked item with a trigger is a decision.
