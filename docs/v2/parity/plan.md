@@ -239,53 +239,44 @@ prefix names exactly one layer.
 links. `--selftest` catches all 18 plants. Commentary 2.6 / 1.7 / 1.2 per
 requirement against a cap of 6.
 
-### Stage 6 — Implementation design, then the plan ◀ **current — start here next**
+### Stage 6 — Implementation design, then the plan ✅ **done**
 
-**Two documents, and the split is the point.** The work packages stay short —
-a checkbox, what it lands, and the ordering. The detail goes in an
-implementation **design**, one row per software requirement, naming *which
-file, which symbol, in what order*. That is the shape
-`SIM_Implementation_Design_v0.1.md` already uses across 379 rows, and it is
-the right one: **a path in a design row is a promise that the code goes at that
-path under that name.**
+**Two documents, and the split is the point.** `PARITY_Implementation_Design.md`
+carries **54 rows, one per software requirement**, each naming a concrete file
+and symbol — `ingest/resolve.py::resolve_port`, `runspec/sources.py::SourceSet`,
+`viz/cpp/viz/player/transport.hpp::Transport`. Every directory named exists
+today, so a `NEW` row names a file that does not exist yet inside a package
+that does. **A path there is a promise: the code goes at that path under that
+name.** The work packages stayed one line each — what they land, and what for.
 
-Each row carries: the `SW` it serves · the software item · the work package
-that lands it · a **change class** · the concrete artifact and the one design
-statement that makes the `SW`'s `Accept` reachable · the tests it is checked
-by. The change class is derived from what exists today, never asserted —
-`KEEP` · `MOVE` · `DEDUPE` · `EXTEND` · `NEW` · `DROP`.
+**`Change` is a closed vocabulary, checked.** `KEEP` · `MOVE` · `DEDUPE` ·
+`EXTEND` · `NEW` · `DROP`, derived from what exists today rather than asserted,
+enforced by the new `C-CHANGE`. A row claiming `NEW` for code already present
+is a design error a reviewer can see without opening the file.
 
-**What a design row is not.** It is not its `SW` reworded with a filename
-attached. The value it adds is exactly one of: *where the code goes*, *what the
-symbol is called*, *what its signature is*, or *what has to be deleted first*.
+**Three checker changes, each forced by a real defect rather than anticipated:**
 
-**Two mechanical questions this stage has to answer first**, both real:
+- **`row_style: table`.** A design is one row per requirement — 379 of them in
+  the v2 set — and in the block anatomy that is six lines each and unscannable.
+  But the checker parsed only the block form, and `count_commentary` read a
+  table row as prose, so a 54-row design would have failed `R-REQ-14` on the
+  one document that rule explicitly exempts.
+- **`C-ORPHAN` scoped to layers that declare tests.** `IMP` declares none: it
+  is verified by the tests of the `SW` it serves, plus build gates. Demanding
+  its own test ids would invent a second, weaker copy of them.
+- **`C-TWOWAY` scoped the same way.** An `IMP` row repeats its parent's test
+  ids so it reads standalone. That is a citation, not a claim to be served —
+  requiring the test to name the design row back would invent a link
+  `R-REQ-11` never asked for.
 
-- **A design of 54 rows is a table, not 54 six-line blocks** — 379 rows in the
-  v2 set proves the point. The checker parses the block anatomy, and counts a
-  table row as commentary, so a table-shaped layer needs a declared row style
-  before it can be checked at all. That is the first task of the stage, not an
-  afterthought.
-- **`C-UNLANDED` is firing 54 times right now**, because the existing plan
-  lands `SYS` rows and the lowest layer is `SW`. Re-pointing it is not
-  bookkeeping — it is the checker naming every requirement nothing will build.
+**Two plants went stale and one came back.** `C-DUPLAND` and `C-PLANUID` were
+anchored on the old `SYS`-landing plan text and reported *anchor not found*
+rather than passing quietly. `C-UNLANDED` returned exactly where this file said
+it would — it reads the lowest declared layer, which has now been `SYS`, `SW`
+and `IMP` in turn, and the selftest caught it going blind both times.
 
-**One hard ordering constraint.** The feed interface (`C-16`) is unwritten and
-every transport control is a call on it. It is first, and it belongs to `viz`.
-It blocks two packages; the rest are independent of it.
-
-**Closed by.** Every `SW` row served by at least one design row and landed by
-exactly one package; `--status` derives.
-
-**Length is expected here, and is not the thing to control.** `R-REQ-14` was
-amended on 2026-09-05 to say so: an implementation document is expected to be
-long and dense, and what is capped in it is **execution narration** — what was
-run, what was found, how long it took — which belongs in a Test Execution
-Record or a commit message. The test is tense: a design row says what *will* be
-true of the code; narration says what *happened*. A row in the past tense is in
-the wrong document. The v2 plan reached 85 essay-length checkbox rows and had
-to be compressed by 53%; that is the failure this clause exists to prevent, and
-it is not the same failure as being detailed.
+**Closed by.** `PASS — 163 requirements, 109 tests, no findings`; `--selftest`
+**all 20 caught**; `--status` reports 13 packages landing 54 design rows.
 
 ### Stage 7 — Handoff
 
@@ -315,7 +306,7 @@ obligation appears in two sets.
 
 ## 6. Where we stopped
 
-**Restarted at Stage 1 on 2026-09-05. Stages 1 to 5 are done.**
+**Restarted at Stage 1 on 2026-09-05. Stages 1 to 6 are done. One remains.**
 
 ```
 layer     reqs   budget   tests
@@ -323,44 +314,45 @@ layer     reqs   budget   tests
 STK         16       16      16
 SYS         39       40      39
 SW          54       56      54
+IMP         54       56       0
 -------------------------------
-total      109      112     109
+total      163      168     109
 
-Test cases: 164.
-Commentary per requirement (R-REQ-14, cap 6):  STK 2.6   SYS 1.7   SW 1.2
-Selftest -- all 18 planted violations caught.
+PASS -- 163 requirements, 109 tests, no findings.
+Selftest -- all 20 planted violations caught, no baseline codes.
+Status  -- 13 packages, 0 done, 54 of 54 design rows landed. Next: WP-01.
+
+Commentary per requirement (cap 6):  STK 2.6  SYS 1.7  SW 1.2  IMP 0.4
 ```
 
-**The requirement set is closed and traced both ways.** `C-UNDECOMP` is silent
-at every layer; every requirement has a test and every test serves a
-requirement.
-
-**Exactly one finding remains, 54 times over:**
-
-```
-C-UNLANDED   SW-0001 .. SW-0054   no work package lands it -- nothing will build it
-```
-
-That is Stage 6, and it is the checker asking for precisely what the author
-asked for: a plan detailed enough to build from. Nothing else is reported — not
-size, commentary, categories, surfaces, items, layers or status marks.
+**The chain is closed end to end and checked in both directions.** 16
+stakeholder outcomes → 39 system rows → 54 software rows → 54 design rows, each
+naming a file and a symbol, each landed by exactly one of 13 work packages.
 
 | Document | Lines | Rows |
 |---|---:|---:|
 | `PARITY_Stakeholder_Requirements.md` | 170 | 16 |
 | `PARITY_System_Requirements.md` | 293 | 39 |
 | `PARITY_Software_Requirements.md` | 375 | 54 |
+| `PARITY_Implementation_Design.md` | 99 | 54 |
 | `PARITY_Test_Spec.md` | 695 | 109 tests, 164 cases |
-| **Specification total** | **1533** | **109 requirements — 14.1 lines each** |
+| **Specification total** | **1632** | **163 requirements — 10.0 lines each** |
+| `PARITY_Implementation_Plan.md` | 92 | 13 packages |
+| `PARITY_Change_Register.md` | 409 | 29 disposed candidates |
+| `layers.yaml` · `selftest_mutations.yaml` | 219 · 269 | declaration · 20 plants |
 
-**14.1 lines of specification per requirement**, against `ldw`'s 17. The set
-grew four-fold from the two-layer version and got *denser* per row, which is
-the shape `R-REQ-14` is aiming at: more rows, never fatter ones.
+**10.0 lines of specification per requirement.** The set is now four times the
+size of the two-layer version and *denser* per row than when it started — 14.1
+before the design layer, 10.0 after, against `ldw`'s 17. That is `R-REQ-14`
+working as intended: more rows, never fatter ones.
 
-**Committed and pushed through Stage 2** — `sim ec9c1d8`, superproject
-`1deb181` and `590fdcd`, `df db2543a`. Stages 3, 4 and 5 are not yet committed.
+**Committed and pushed through Stage 5** — `sim 5222fd0`, superproject
+`828aa8c`. Stage 6 is not yet committed.
 
-**Next: Stage 6**, where the file-level detail lands.
+**Next: Stage 7, the last.** For each `AMEND` register row, the exact v2
+requirement that gains a clause; for each `ALLOCATE` row, the `viz` id it
+becomes; and the v2 `SW` rows this work invalidates — `SW-0011` and `SW-0032`
+both specify "the resolved topic-to-port table", which `SYS-0001` inverts.
 
 ## 7. Running the checker
 

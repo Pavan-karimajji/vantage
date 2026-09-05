@@ -216,32 +216,46 @@ mutations:
 
       ## Anatomy
 
-  # C-UNLANDED is NOT planted here, and the selftest is what said so.
-  #
-  # The check reads the LOWEST declared layer. That was SYS; declaring the SW
-  # layer on 2026-09-05 moved it to SW, which is empty until Stage 4 -- so
-  # removing a `lands SYS-xxxx` entry from the plan stopped meaning anything
-  # and the plant went blind. Deleted rather than left red: a plant that cannot
-  # fire reads as coverage and is worse than none (R-REQ-9).
-  #
-  # RETURNS AT STAGE 6, once SW rows exist and the plan lands them. The other
-  # three plan checks below still fire and are unaffected.
+  # C-UNLANDED returns, as this file said it would at Stage 6. It reads the
+  # LOWEST declared layer: that was SYS, then SW, and is now IMP. It went blind
+  # twice as layers were added, and each time the selftest reported it rather
+  # than letting it pass as coverage.
+  - expect: C-UNLANDED
+    file: PARITY_Implementation_Plan.md
+    why: >-
+      a design row no work package lands -- nothing will build it, and no other
+      check can see that, because the row itself is perfectly well formed
+    find: |-
+      `IMP-0040`, `IMP-0041`, `IMP-0042`
+    replace: |-
+      `IMP-0041`, `IMP-0042`
+
+  - expect: C-CHANGE
+    file: PARITY_Implementation_Design.md
+    why: >-
+      a change class outside the closed vocabulary. The six classes are derived
+      from what exists today; an invented one is how a design starts describing
+      intent instead of what is actually there.
+    find: |-
+      | `IMP-0004` | `SW-0004` | `WP-01` | `NEW` |
+    replace: |-
+      | `IMP-0004` | `SW-0004` | `WP-01` | `REFACTOR` |
 
   - expect: C-DUPLAND
     file: PARITY_Implementation_Plan.md
     why: one requirement landed by two packages -- two places to build one thing
     find: |-
-      lands `SYS-0022`, `SYS-0023`
+      lands `IMP-0037`, `IMP-0038`, `IMP-0039`
     replace: |-
-      lands `SYS-0022`, `SYS-0023`, `SYS-0020`
+      lands `IMP-0037`, `IMP-0038`, `IMP-0039`, `IMP-0034`
 
   - expect: C-PLANUID
     file: PARITY_Implementation_Plan.md
     why: a package landing a UID that does not exist
     find: |-
-      lands `SYS-0013`, `SYS-0014`
+      lands `IMP-0053`, `IMP-0054`
     replace: |-
-      lands `SYS-0013`, `SYS-9999`
+      lands `IMP-0053`, `IMP-9999`
 
   - expect: C-PLANMARK
     file: PARITY_Implementation_Plan.md

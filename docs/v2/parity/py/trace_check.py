@@ -161,7 +161,7 @@ def parse_plan(path: Path) -> list[dict]:
     return out
 
 
-def count_commentary(lines: list[str]) -> int:
+def count_commentary(lines: list[str], table_style: bool = False) -> int:
     """Lines that are neither requirement content nor structure (``R-REQ-14``).
 
     A requirement field, a UID headline, a markdown heading, a table rule, a
@@ -178,8 +178,53 @@ def count_commentary(lines: list[str]) -> int:
             continue
         if s.startswith("#") or s.startswith("```") or RE_TABLERULE.match(s):
             continue
+        # In a table-style layer every requirement IS a table row, so counting
+        # rows as prose would fail the one document R-REQ-14 exempts.
+        if table_style and s.startswith("|"):
+            continue
         n += 1
     return n
+
+
+RE_TABLE_REQ = re.compile(
+    r"^\|\s*`(?P<uid>[A-Z]+-\d{4})`\s*\|(?P<serves>[^|]*)\|(?P<wp>[^|]*)\|"
+    r"(?P<change>[^|]*)\|(?P<design>.*)\|(?P<tests>[^|]*)\|\s*$"
+)
+
+# R-REQ-3's anatomy in one row. `Change` is a closed vocabulary derived from
+# what exists today, never asserted: a row claiming NEW for code that is
+# already there is a design error a reviewer can see.
+CHANGE_CLASSES = {"KEEP", "MOVE", "DEDUPE", "EXTEND", "NEW", "DROP"}
+
+
+def parse_table_requirements(path: Path, layer: str) -> list[Req]:
+    """One row per requirement (``row_style: table``).
+
+    The design text lands in ``shall`` so the word cap still applies -- a
+    design statement that runs past 60 words is doing more than naming a file
+    and a symbol, which is the same defect the cap catches everywhere else.
+    """
+    reqs: list[Req] = []
+    for n, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        m = RE_TABLE_REQ.match(raw.strip())
+        if not m:
+            continue
+        design = m["design"].strip()
+        r = Req(
+            uid=m["uid"],
+            layer=layer,
+            headline=design[:90],
+            doc=path.name,
+            line=n,
+            shall=design,
+            accept="",
+        )
+        r.trace = RE_UID.findall(m["serves"])
+        r.verify = RE_TID.findall(m["tests"])
+        r.items = RE_TICKED.findall(m["wp"]) + RE_TICKED.findall(m["change"])
+        r.category = (m["change"] or "").strip().strip("`* ")
+        reqs.append(r)
+    return reqs
 
 
 def parse_requirements(path: Path, layer: str) -> list[Req]:
@@ -295,7 +340,9 @@ def run_checks(root: Path) -> tuple[list[Finding], list[str], dict]:
             findings.append(
                 Finding("C-STATUS", ly["doc"], "a Status field in a specification (R-REQ-6)")
             )
-        for r in parse_requirements(doc, ly["id"]):
+        table_style = ly.get("row_style") == "table"
+        parse = parse_table_requirements if table_style else parse_requirements
+        for r in parse(doc, ly["id"]):
             if r.uid in reqs:
                 findings.append(Finding("C-DUPUID", r.uid, f"allocated twice ({reqs[r.uid].doc}, {r.doc})"))
             reqs[r.uid] = r
@@ -303,7 +350,7 @@ def run_checks(root: Path) -> tuple[list[Finding], list[str], dict]:
 
         ccap = limits.get("commentary_lines_per_requirement")
         nreq = len(per_layer[ly["id"]])
-        ncom = count_commentary(body)
+        ncom = count_commentary(body, table_style)
         if ccap and nreq:
             per = ncom / nreq
             commentary[ly["id"]] = (ncom, nreq, per)
@@ -418,14 +465,25 @@ def run_checks(root: Path) -> tuple[list[Finding], list[str], dict]:
     # --- C-ORPHAN / C-WIDOW / C-TWOWAY -------------------------------------
     for r in reqs.values():
         if not r.verify:
-            findings.append(Finding("C-ORPHAN", r.uid, "no test -- unverifiable as written"))
+            # A layer declaring no test prefixes is verified by something other
+            # than a test in this spec -- an implementation design is checked by
+            # the tests of the requirement it serves, plus build gates. Asking it
+            # for its own test id would invent a second, weaker copy of them.
+            if by_id[r.layer].get("tests"):
+                findings.append(Finding("C-ORPHAN", r.uid, "no test -- unverifiable as written"))
+        # A layer declaring no test prefixes repeats its parent's test ids so a
+        # row reads standalone. That is a citation, not a claim to be served --
+        # the test still names only the requirement it verifies, and demanding it
+        # name the design row too would invent a link R-REQ-11 never asked for.
+        two_way = bool(by_id[r.layer].get("tests"))
         for tid in r.verify:
             if tid not in tests:
                 findings.append(Finding("C-DANGLING", r.uid, f"cites test {tid}, which does not exist"))
             elif r.uid not in tests[tid].serves:
-                findings.append(
-                    Finding("C-TWOWAY", r.uid, f"claims to be served by {tid}, which does not cite it back (R-REQ-11)")
-                )
+                if two_way:
+                    findings.append(
+                        Finding("C-TWOWAY", r.uid, f"claims to be served by {tid}, which does not cite it back (R-REQ-11)")
+                    )
     for t in tests.values():
         if not t.serves:
             findings.append(Finding("C-WIDOW", t.tid, "serves no requirement -- invented scope"))
@@ -552,6 +610,23 @@ def run_checks(root: Path) -> tuple[list[Finding], list[str], dict]:
                         Finding("C-UNLANDED", r.uid, "no work package lands it -- nothing will build it")
                     )
         stats_plan = packages
+
+    # --- C-CHANGE ----------------------------------------------------------
+    # A table-style layer declares a change class per row from a closed list.
+    # An invented class is how a design starts describing intent instead of
+    # what is actually there.
+    for lid in order:
+        if by_id[lid].get("row_style") != "table":
+            continue
+        for r in per_layer[lid]:
+            if r.category not in CHANGE_CLASSES:
+                findings.append(
+                    Finding(
+                        "C-CHANGE",
+                        r.uid,
+                        f"change class {r.category!r} is not one of {sorted(CHANGE_CLASSES)}",
+                    )
+                )
 
     # --- C-WORDS / C-HEADLINE (R-REQ-14) -----------------------------------
     wcap = limits.get("requirement_words")
