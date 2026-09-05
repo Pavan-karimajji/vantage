@@ -30,40 +30,46 @@ between that read and this register.
 | **PARK** | Right, but not now. The row states the **trigger** that unparks it, so the diagnosis takes minutes rather than a day. |
 | **NO CHANGE** | Examined and deliberately left alone. Recorded so nobody re-derives it as a good idea. |
 
-Counts over 29 rows: **14 KEEP** · 5 AMEND · 2 ALLOCATE · 2 PARK · 6 NO CHANGE.
+Counts over 29 rows: **14 KEEP** · 4 AMEND · 2 ALLOCATE · 2 PARK · 7 NO CHANGE.
+`C-17` moved from AMEND to NO CHANGE once its target was read — see its row.
 The 14 KEEP rows are the `count:` in `layers.yaml`'s budget basis.
 
 ---
 
-## A · Getting data in
+## KEEP — the fourteen that became requirements
 
-### C-01 · A port names several source addresses, tried in order — **KEEP**
-**Want.** An ingest map entry is keyed by the **port** and lists the recorded
-addresses that can feed it, in priority order. The first one present wins, and
-the run reports which one matched.
-**Today.** The map is keyed by topic, one topic to one port. A recording
-family that renamed a topic between software generations needs a second family
-file — and the rule that two maps must not claim one port then works against
-us.
-**Why.** A port name is stable; a topic name is not. Keying on the unstable
-half is what forces a file to be cloned every time a producer is renamed.
-**Touches.** `ingest`
+**These rows have done their job and are compressed to one line each.** Each
+argued that something deserved a requirement; each won, and the requirement now
+carries the obligation. The argument is history — `git log -- <this file>` has
+it in full if a decision is ever questioned.
 
-### C-02 · One run reads more than one recording — **KEEP**
-**Want.** A run names several recordings, each individually complete, and a
-port binds to exactly one of them with a declared default.
-**Today.** One recording per run. There is no way to say *"take these four
-ports from that other file"*.
-**Why.** It is the only capability in this pass we genuinely cannot express.
-A staged run — front end executed and recorded, then re-run with the front end
-replayed — still needs its calibration and non-volatile inputs from the
-original measurement, because the stage-1 output never carried them. It is
-also what removes any temptation to relax the rule that an export is terminal:
-our stage-1 output is already a full recording.
-**Why it is safe.** Each named source stays individually complete and each
-port binds to one of them, so the port-keyed index, the single time base and
-determinism are all untouched. This is **not** multi-source merging.
-**Touches.** `ingest`, `engine`, `runspec`
+The `KEEP` count is `layers.yaml`'s `budget_basis.count`, so this table is also
+the derivation of the budget.
+
+| | What it wanted | Became |
+|---|---|---|
+| **C-01** | A port names several source addresses, tried in order | `STK-0001`, `STK-0016` |
+| **C-02** | One run reads more than one recording | `STK-0002` |
+| **C-06** | Candidate and reference run side by side in one process | `STK-0003` |
+| **C-09** | One click isolates a single stage | `STK-0004` |
+| **C-10** | A group whose members disagree shows a derived mixed state | `STK-0011` |
+| **C-11** | The launcher shows what reproduces it, and a test proves it does | `STK-0005` |
+| **C-12** | The full transport control set, with an honest unbounded speed | `STK-0006`, `STK-0015` |
+| **C-13** | Step granularity, including a complete cycle | `STK-0009` |
+| **C-14** | Named sections inside a recording | `STK-0008` |
+| **C-15** | Markers, in two families | `STK-0013` |
+| **C-19** | A repeated message collapses to one entry with a count | `STK-0007` |
+| **C-21** | Every plug-in carries an identity block | `STK-0010` |
+| **C-22** | A recording carries the configuration bundle's bytes | `STK-0014` |
+
+---
+
+## The other fifteen — still live, and stated in full
+
+Every row below is the **only** place its content lives. A `NO CHANGE` row is
+what stops the idea being re-derived in a year; a `PARK` row's trigger is
+written nowhere else; an `AMEND` or `ALLOCATE` row names a clause nobody has
+written yet.
 
 ### C-03 · A replayed stage resolves through the same ingest map — **AMEND**
 **Want.** One sentence stating that a stage in *measured* mode resolves its
@@ -130,22 +136,6 @@ periods plus the data triggers we already have.
 
 ---
 
-## B · Running our software
-
-### C-06 · Candidate and reference run side by side in one process — **KEEP**
-**Want.** An additional run mode that executes a candidate build and a
-reference build in the same process, on the same tick, from provably identical
-inputs, and reports the first tick where they diverge. The reference binaries
-are staged as an explicit artifact with a lifecycle, never something someone
-remembers to keep.
-**Today.** Determinism is measured across two separate runs on four declared
-axes, two gated and two tracked.
-**Why.** The usual objection to a determinism report is *"were the inputs
-really the same?"*. One process removes the doubt and locates the divergence
-for free. It is an **extra** mode, not a replacement — it cannot cover
-fresh-process or different-machine.
-**Touches.** `engine`, `runspec`
-
 ### C-07 · A port says whether it is cyclic or latched — **PARK**
 **Want.** A port declares `cyclic` or `latched`, so a static calibration-like
 value is never reported stale.
@@ -173,80 +163,6 @@ same as init-then-reset.
 
 ---
 
-## C · Choosing the run
-
-### C-09 · One click isolates a single stage — **KEEP**
-**Want.** One action per group meaning *"execute this one, replay everything
-else"*.
-**Why.** It is the single most common thing a developer does at this screen,
-and today it is one toggle per stage.
-**Touches.** `launcher`
-
-### C-10 · A group whose members disagree shows a derived mixed state — **KEEP**
-**Want.** A group control with a third state that is **computed, never
-settable**, shown as disabled, meaning *"the stages under me do not agree"*.
-**Why.** A three-state control whose third state is a fact rather than a
-choice cannot lie about what is selected. It is the same discipline our
-derived progress marks already follow.
-**Touches.** `launcher`
-
-### C-11 · The launcher shows what reproduces it, and a test proves it does — **KEEP**
-**Want.** The launcher displays the exact headless invocation that reproduces
-its own current selection — and a check that launching from the written run
-spec and launching from the in-memory selection produce the same resolved run
-spec.
-**Today.** The launcher writes a run spec file, which is more reproducible
-than a printed command line. What is missing is the visible line, and the
-proof.
-**Why the test matters more than the line.** A GUI and a CLI drift by
-defaulting one field differently — one restores the last selection, the other
-falls back to an automatic default — and then the printed command does not
-reproduce the screen. Parity needs a test, not a button.
-**Touches.** `launcher`, `runspec`
-
----
-
-## D · Driving it — Vantage
-
-### C-12 · The full transport control set, with an honest unbounded speed — **KEEP**
-**Want.** Jump to start, fast reverse, step back N, step back, pause, step,
-step forward N, fast forward, jump to end — plus play speed as a slider **and**
-a *maximum possible* mode where you ask for unbounded and the achieved rate is
-what is shown.
-**Why.** These are the controls a developer's hands already know. *Maximum
-possible* is the honest form of "as fast as it can": it does not claim a
-multiplier it cannot hold.
-**Touches.** `player`
-
-### C-13 · Step granularity, including a complete cycle — **KEEP**
-**Want.** Five kinds of step, chosen explicitly: one message · N messages · a
-fixed time interval · the next message of a chosen source · **the next
-complete run of a chosen cycle**. The chosen cycle is shown by name, index and
-period. `N` comes from a small preset list plus a custom value.
-**Why the fifth matters.** It is the only one of the five that lands on a
-coherent input set. Stepping by one message lands mid-cycle, where half the
-inputs belong to this tick and half to the last one — which looks exactly like
-an algorithm bug.
-**Depends on.** `C-16` — every one of these is a call on the feed interface,
-so it cannot be specified around it.
-**Touches.** `player`
-
-### C-14 · Named sections inside a recording — **KEEP**
-**Want.** Named time ranges inside a recording, first-class enough that a
-batch run can be told to play only the sections, or to ignore them.
-**Why.** A three-hour recording has four interesting minutes in it. Without
-sections, finding them again is a note in someone's file.
-**Touches.** `player`, `record`
-
-### C-15 · Markers, in two families — **KEEP**
-**Want.** Two distinct things, not one: **annotation** markers a person leaves
-on a moment, and **classification** markers that type a stretch of the
-recording.
-**Why two.** *"Look at this"* and *"this stretch is a night-time urban
-approach"* are different data with different lifetimes. Merging them makes the
-second unusable for selecting a corpus.
-**Touches.** `player`, `record`
-
 ### C-16 · A feed interface that can step to a cycle boundary — **ALLOCATE (viz)**
 **Want.** The `Source`/`Feed` interface — open, next tick, seek — written so
 that *next tick* can mean *"advance to the next boundary of the chosen
@@ -260,7 +176,7 @@ in the whole pass** — it blocks `WP-08` and `WP-09`, and nothing else. Who
 writes it, and when, is open question 3 in `misc/START_HERE.md`.
 **Touches.** `player`
 
-### C-17 · Reset action and reset timing as two controls — **AMEND**
+### C-17 · Reset action and reset timing as two controls — **NO CHANGE**
 **Want.** Two independent dropdowns, not one merged list: **what** happens
 (nothing · reset · reset and re-initialise) and **when** (before the whole
 batch · before each entry · before each played section).
@@ -295,16 +211,6 @@ covers the layer list). Written there.
 
 ---
 
-## E · Telling you what happened
-
-### C-19 · A repeated message collapses to one entry with a count — **KEEP**
-**Want.** Identical diagnostics de-duplicate into a single entry carrying an
-occurrence count, with a flood threshold.
-**Why.** The first time a per-tick warning fires at 100 Hz it drowns
-everything else in the log, and the one message that mattered is above the
-scrollback.
-**Touches.** `diag`
-
 ### C-20 · Every message names exactly where it came from — **AMEND**
 **Want.** A fully-qualified instance path in every diagnostic — bus, composite,
 component, leaf — so you can go from any message straight to the configuration
@@ -315,40 +221,6 @@ precise.
 the cycle"*. It gains one clause: the report also carries the fully-qualified
 instance path of the reporter. No new id.
 **Touches.** `diag`
-
-### C-21 · Every plug-in carries an identity block — **KEEP**
-**Want.** Four mandatory fields on every plug-in — a one-line description, its
-own version independent of the plug-in API generation, the projects it
-supports, and an author — surfaced wherever a plug-in is listed, inspected or
-refused.
-**Today.** A plug-in declares its API generation, its component and what it
-provides. Nothing tells you what it is or who to ask.
-**Why.** With sixty plug-ins installed, the description line is in practice the
-only documentation most of them have, and it is enough to pick one out of a
-list. The fields ride into the deployed copy on the existing packing step
-unchanged.
-**Note.** The same identity questions should be answerable through one surface
-for **every** plug-in kind — a reader, a layer provider, an exporter. One
-reflection surface is what keeps a large installation navigable.
-**Touches.** `plugin`
-
----
-
-## F · Provenance
-
-### C-22 · A recording carries the configuration bundle's bytes — **KEEP**
-**Want.** A recording embeds the resolved configuration bundle itself, not only
-its hash, so it renders correctly on a machine with no build.
-**Today.** The hash is real and proven end to end on a real library. The bytes
-are not embedded — the writer embeds no run manifest at all.
-**Why.** The hash answers *"was it the same?"*. Only the bytes answer *"what
-was it?"* on a colleague's machine. A missing bundle must be reported, never
-quietly substituted from whatever source checkout happens to be present.
-**Touches.** `record`, `runspec`
-
----
-
-## G · Driving it from outside
 
 ### C-23 · A running session is controllable from a script — **KEEP, then park**
 **Want.** A running session exposes control: open and close a configuration,
@@ -364,8 +236,6 @@ demo.
 **Touches.** `runspec`, `player`
 
 ---
-
-## H · Examined and left alone
 
 Recorded so nobody re-derives them.
 
