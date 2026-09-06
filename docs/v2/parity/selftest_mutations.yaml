@@ -271,3 +271,35 @@ mutations:
       - [ ] **WP-05**
     replace: |-
       - [~] **WP-05**
+
+  - expect: C-ROWBOX
+    file: PARITY_Implementation_Design.md
+    why: >-
+      a design row carrying no progress box. The row is the atom of progress
+      (R-REQ-6a); one without a box is a piece of work no rollup can see.
+    find: |-
+      | `[ ]` | `IMP-0036` | `SW-0035` | `WP-10` | `NEW` |
+    replace: |-
+      | `IMP-0036` | `SW-0035` | `WP-10` | `NEW` |
+
+  - expect: C-ROWMARK
+    file: PARITY_Implementation_Design.md
+    why: >-
+      a design row marked started with no resume condition. Same rule as
+      C-PLANMARK one level up: `[~]` is only worth carrying when it says what
+      closes it.
+    find: |-
+      | `[ ]` | `IMP-0035` | `SW-0034` | `WP-10` | `NEW` |
+    replace: |-
+      | `[~]` | `IMP-0035` | `SW-0034` | `WP-10` | `NEW` |
+
+  - expect: C-WPROLL
+    file: PARITY_Implementation_Design.md
+    why: >-
+      a package whose box disagrees with the rows it lands. Ticking both of
+      `WP-13`'s rows makes the package done; leaving the package open is the
+      drift R-REQ-6a's "recompute every mark" exists to catch.
+    find: |-
+      | `[ ]` | `IMP-0053` | `SW-0051` | `WP-13` | `NEW` |
+    replace: |-
+      | `[x]` | `IMP-0053` | `SW-0051` | `WP-13` | `NEW` |

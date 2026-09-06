@@ -82,6 +82,7 @@ class Req:
     items: list[str] = field(default_factory=list)
     category: str = ""
     wp: str = ""
+    box: str = ""   # R-REQ-6a progress mark, table-style design rows only
     verify: list[str] = field(default_factory=list)
     trace: list[str] = field(default_factory=list)
 
@@ -172,6 +173,86 @@ def parse_plan(path: Path) -> list[dict]:
     return out
 
 
+# R-REQ-6a, applied to a supporting document that carries its own build order.
+# A delivery design (`context: … rollup: true`) has the same two halves as a
+# plan -- a package list and a design-row table -- with ids scoped to itself,
+# so the rollup is the same computation over different names. Deliberately
+# generic: `WP-<anything>` and `<PREFIX>-<digits>`, because the checker must
+# contain no module's vocabulary or "copy it to any module" stops being true.
+RE_ROLL_ROW = re.compile(
+    r"^\|\s*`\[(?P<box>[ x~])\]`\s*\|\s*`(?P<rid>[A-Z]{1,4}-\d{2,4})`\s*\|"
+    r"\s*`(?P<wp>WP-[A-Za-z0-9]+)`\s*\|(?P<rest>.*)$"
+)
+RE_ROLL_ROW_ANY = re.compile(
+    r"^\|(?:\s*`\[[ x~]\]`\s*\|)?\s*`(?P<rid>[A-Z]{1,4}-\d{2,4})`\s*\|"
+    r"\s*`(?P<wp>WP-[A-Za-z0-9]+)`\s*\|"
+)
+RE_ROLL_WP = re.compile(
+    r"^-\s*\[(?P<box>[ x~])\]\s*\*\*(?P<wp>WP-[A-Za-z0-9]+)\*\*(?P<rest>.*)$"
+)
+
+
+def rollup_findings(text: str, where: str) -> tuple[list[Finding], dict[str, list[str]]]:
+    """The row is the atom; the package box is recomputed from it.
+
+    Same three defects the plan path reports, over a document that allocates no
+    UID: a design row with no box, a ``[~]`` that does not say what closes it,
+    and a package box that disagrees with its rows. Returns the findings and
+    the per-package tally so ``--status`` can print what it checked.
+    """
+    findings: list[Finding] = []
+    rows: dict[str, list[str]] = {}
+    lines = text.splitlines()
+    for n, raw in enumerate(lines, 1):
+        line = raw.strip()
+        if not RE_ROLL_ROW_ANY.match(line):
+            continue
+        m = RE_ROLL_ROW.match(line)
+        if not m:
+            findings.append(
+                Finding("C-ROWBOX", f"{where}:{n}",
+                        "design row carries no progress box -- the row is the atom "
+                        "of progress (R-REQ-6a) and one without a box is work no "
+                        "package rollup can see")
+            )
+            continue
+        if m["box"] == "~" and "closed by" not in m["rest"].lower():
+            findings.append(
+                Finding("C-ROWMARK", f"{where}:{m['rid']}",
+                        "marked started with no 'closed by <command or condition>' -- "
+                        "a started mark exists to say where to resume (R-REQ-6a)")
+            )
+        rows.setdefault(m["wp"], []).append(m["box"])
+    for n, raw in enumerate(lines, 1):
+        m = RE_ROLL_WP.match(raw.strip())
+        if not m:
+            continue
+        marks = rows.get(m["wp"])
+        if not marks:
+            findings.append(
+                Finding("C-PLANUID", f"{where}:{m['wp']}",
+                        "lands no design row -- the row table is the one place a "
+                        "package's contents are written")
+            )
+            continue
+        roll = ("x" if all(b == "x" for b in marks)
+                else " " if all(b == " " for b in marks) else "~")
+        if roll != m["box"]:
+            findings.append(
+                Finding("C-WPROLL", f"{where}:{m['wp']}",
+                        f"box [{m['box']}] disagrees with the rows it lands "
+                        f"({marks.count('x')} done, {marks.count('~')} started, "
+                        f"{marks.count(' ')} open of {len(marks)}) -- rolls up to [{roll}]")
+            )
+        if m["box"] == "~" and "closed by" not in m["rest"].lower():
+            findings.append(
+                Finding("C-PLANMARK", f"{where}:{m['wp']}",
+                        "marked started with no 'closed by <command or condition>' "
+                        "(R-REQ-6a)")
+            )
+    return findings, rows
+
+
 def count_commentary(lines: list[str], table_style: bool = False) -> int:
     """Lines that are neither requirement content nor structure (``R-REQ-14``).
 
@@ -197,8 +278,12 @@ def count_commentary(lines: list[str], table_style: bool = False) -> int:
     return n
 
 
+# The leading box column is OPTIONAL to the parser and REQUIRED by a check
+# (``C-ROWBOX``, and only where a plan is declared). Optional here on purpose:
+# a row that simply failed to match would vanish from the set and be reported
+# as a missing decomposition three checks away from its real defect.
 RE_TABLE_REQ = re.compile(
-    r"^\|\s*`(?P<uid>[A-Z]+-\d{4})`\s*\|(?P<serves>[^|]*)\|(?P<wp>[^|]*)\|"
+    r"^\|(?:\s*`\[(?P<box>[ x~])\]`\s*\|)?\s*`(?P<uid>[A-Z]+-\d{4})`\s*\|(?P<serves>[^|]*)\|(?P<wp>[^|]*)\|"
     r"(?P<change>[^|]*)\|(?P<design>.*)\|(?P<tests>[^|]*)\|\s*$"
 )
 
@@ -235,6 +320,7 @@ def parse_table_requirements(path: Path, layer: str) -> list[Req]:
         found_wp = RE_TICKED.findall(m["wp"])
         r.wp = found_wp[0] if found_wp else ""
         r.category = (m["change"] or "").strip().strip("`* ")
+        r.box = m["box"] or ""
         reqs.append(r)
     return reqs
 
@@ -633,6 +719,59 @@ def run_checks(root: Path) -> tuple[list[Finding], list[str], dict]:
                     findings.append(
                         Finding("C-UNLANDED", r.uid, "no work package lands it -- nothing will build it")
                     )
+
+            # --- progress: the design ROW is the atom (R-REQ-6a) ------------
+            # A package is not a unit of work, it is a bag of them, so a
+            # package-level box can only ever say "some of this happened".
+            # The row is one buildable artifact -- one file, one symbol -- so
+            # the row's box is the only progress state anyone TYPES, and the
+            # package's box is recomputed from the rows it lands. That is what
+            # R-REQ-6a's "the ordinary check recomputes every mark and fails on
+            # disagreement" asks for, and nothing could do it while the package
+            # was the finest thing the document carried.
+            tabular = {lid for lid in order if by_id[lid].get("row_style") == "table"}
+            for r in reqs.values():
+                if r.layer not in tabular:
+                    continue
+                if not r.box:
+                    findings.append(
+                        Finding(
+                            "C-ROWBOX",
+                            r.uid,
+                            "design row carries no progress box -- a set declaring a plan "
+                            "states `[ ]`, `[~]` or `[x]` on every design row (R-REQ-6a)",
+                        )
+                    )
+                elif r.box == "~" and "closed by" not in r.shall.lower():
+                    findings.append(
+                        Finding(
+                            "C-ROWMARK",
+                            r.uid,
+                            "marked started with no 'closed by <command or condition>' -- "
+                            "a started mark exists to say where to resume (R-REQ-6a)",
+                        )
+                    )
+            for pkg in packages:
+                marks = [reqs[u].box for u in pkg["lands"] if u in reqs and reqs[u].box]
+                pkg["rows"] = marks
+                if not marks:
+                    continue
+                roll = (
+                    "x" if all(b == "x" for b in marks)
+                    else " " if all(b == " " for b in marks)
+                    else "~"
+                )
+                pkg["roll"] = roll
+                if roll != pkg["box"]:
+                    findings.append(
+                        Finding(
+                            "C-WPROLL",
+                            pkg["wp"],
+                            f"box [{pkg['box']}] disagrees with the rows it lands "
+                            f"({marks.count('x')} done, {marks.count('~')} started, "
+                            f"{marks.count(' ')} open of {len(marks)}) -- rolls up to [{roll}]",
+                        )
+                    )
         stats_plan = packages
 
     # --- C-CHANGE ----------------------------------------------------------
@@ -713,8 +852,25 @@ def run_checks(root: Path) -> tuple[list[Finding], list[str], dict]:
                         f"fine, allocating one is not: an obligation lives in exactly one "
                         f"place and it is a requirement document (R-REQ-1, R-REQ-17)")
             )
+        # R-REQ-6a. A supporting document may carry its own build order -- a
+        # delivery design does, with its packages and rows scoped to itself and
+        # allocating no UID. Declaring `rollup: true` asks for the same three
+        # checks the plan gets. Opt-in: a context document that is pure prose
+        # is not asked about progress it does not carry.
+        rows: dict[str, list[str]] = {}
+        if entry.get("rollup"):
+            rfindings, rows = rollup_findings(body, str(docname))
+            findings += rfindings
+            if not rows:
+                findings.append(
+                    Finding("C-ROLLUP-EMPTY", str(docname),
+                            "declares `rollup: true` but carries no boxed design row "
+                            "-- a declared rollup with nothing to roll up is a "
+                            "silent no-op (R-REQ-6a, R-REQ-12's principle)")
+                )
         context_docs.append({"kind": kind, "doc": str(docname),
-                             "lines": len(body.splitlines()), "unit": "lines"})
+                             "lines": len(body.splitlines()), "unit": "lines",
+                             "rollup": rows})
 
     # A context document nothing refers to is the stale-contract failure: it
     # keeps being true-looking long after the set stopped agreeing with it.
@@ -766,25 +922,52 @@ def run_checks(root: Path) -> tuple[list[Finding], list[str], dict]:
 
 
 def print_status(stats: dict) -> None:
-    """R-REQ-6a. Every number here is recomputed from the plan's checkboxes,
-    which are the only progress state anyone types."""
+    """R-REQ-6a. Every number here is recomputed from the DESIGN ROWS' boxes,
+    which are the only progress state anyone types. A package's own box is the
+    rollup of its rows; the checker has already failed if the two disagree, so
+    nothing printed here can be a second opinion."""
     pkgs = stats.get("plan") or []
     if not pkgs:
         print("\n  no implementation plan declared (layers.yaml `plan:`) -- nothing to roll up")
         return
+    reqs = stats["reqs"]
     sym = {"x": "done", "~": "started", " ": "open"}
     done = sum(1 for p in pkgs if p["box"] == "x")
     started = sum(1 for p in pkgs if p["box"] == "~")
-    landed_done = sum(len(p["lands"]) for p in pkgs if p["box"] == "x")
-    landed_all = sum(len(p["lands"]) for p in pkgs)
+    marks = [r.box for r in reqs.values() if r.box]
     print(f"\n  {stats['spec']['module']} -- implementation status (R-REQ-6a, derived)\n")
     for p in pkgs:
-        print(f"    [{p['box']}] {p['wp']:<7} {sym[p['box']]:<8} {len(p['lands'])} req  {p['headline'][:52]}")
+        m = p.get("rows") or []
+        tally = f"{m.count('x')}/{len(m)}" if m else f"-/{len(p['lands'])}"
+        print(
+            f"    [{p['box']}] {p['wp']:<7} {sym[p['box']]:<8} rows {tally:>7}  {p['headline'][:46]}"
+        )
     print(f"\n    packages: {done} done, {started} started, {len(pkgs) - done - started} open, of {len(pkgs)}")
-    print(f"    requirements landed by a done package: {landed_done} of {landed_all}")
+    print(
+        f"    design rows: {marks.count('x')} done, {marks.count('~')} started, "
+        f"{marks.count(' ')} open, of {len(marks)}"
+    )
     nxt = next((p for p in pkgs if p["box"] != "x"), None)
     if nxt:
+        row = next(
+            (r for r in reqs.values() if r.wp == nxt["wp"] and r.box != "x"), None
+        )
         print(f"    next: {nxt['wp']} -- {nxt['headline']}")
+        if row is not None:
+            print(f"          first open row: {row.uid} -- {row.shall[:70]}")
+    # A delivery design is real work with its own packages, and leaving it out
+    # of the status report is how "the function is done" comes to mean "the
+    # algorithm is done" while nothing can draw it or drive it.
+    extra = [c for c in (stats.get("context") or []) if c.get("rollup")]
+    if extra:
+        print("\n    Delivery designs (R-REQ-17 context documents, own build order):\n")
+        for c in extra:
+            allm = [b for marks in c["rollup"].values() for b in marks]
+            roll = ("x" if all(b == "x" for b in allm)
+                    else " " if all(b == " " for b in allm) else "~")
+            print(f"    [{roll}] {c['doc']:<28} {len(c['rollup'])} pkg  "
+                  f"rows {allm.count('x')}/{len(allm)}")
+
     print("\n    Progress is not verification (R-REQ-6): a ticked box says the work")
     print("    was done, never that the requirement is met. That is a Test Execution")
     print("    Record's answer, one per campaign.")

@@ -60,7 +60,14 @@ layers:
     # positional, because a design row's whole value is that every row answers
     # the same questions: which file, which symbol, in what order.
     #
-    #   | UID | Serves | WP | Change | Artifact - Design | Tests |
+    #   | Box | UID | Serves | WP | Change | Artifact - Design | Tests |
+    #
+    # `Box` is the R-REQ-6a progress mark and the ONE hand-typed progress state
+    # in the set: a design row is one buildable artifact, so its box is simply
+    # true or false, while a work package is a bag of rows and can only say
+    # "some of this happened". The package boxes above are RECOMPUTED from
+    # these (C-WPROLL); C-ROWBOX catches a row without one, C-ROWMARK a `[~]`
+    # that does not say what closes it.
     #
     # `Change` is a closed vocabulary (KEEP MOVE DEDUPE EXTEND NEW DROP),
     # checked by C-CHANGE. It is derived from what exists today, never
