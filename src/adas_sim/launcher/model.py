@@ -30,6 +30,8 @@ from pathlib import Path
 from typing import Literal
 
 from adas_sim.graph.build import Mode, Pipeline
+from adas_sim.resolve.component import SilComponent
+from adas_sim.runspec.manifest import load_run_spec
 from adas_sim.diagnostics.errors import AuthoringError, ProvenanceWarning
 
 #: `WP-03`: a group's computed third state (`SW-0018`) -- disagreeing
@@ -95,6 +97,28 @@ class Selection:
     project: str = "base"
     config: Path | None = None
     search: tuple[Path, ...] = ()
+
+    @classmethod
+    def from_spec(
+        cls, path: Path, *, search: tuple[Path, ...] = (),
+        components: Mapping[str, SilComponent] | None = None,
+    ) -> Selection:
+        """`SW-0019`/`IMP-0020`: the file-and-memory convergence point --
+        reloads `path` exactly as `write.py::launch` does (`Pipeline.load`,
+        never trusting a caller's own stale in-memory state) plus the
+        top-level `recording:`/`project:`/`config:` keys `runspec.manifest.
+        load_run_spec` already reads. Every stage's mode/impl/inputs is
+        already baked into the loaded `Pipeline`, so this returns a
+        `Selection` with EMPTY `mode_overrides`/`impl_overrides` --
+        overriding an already-resolved value would be a second source of
+        truth, never a third state to reconcile."""
+        pipeline = Pipeline.load(path, search=search, components=components)
+        spec = load_run_spec(path)
+        return cls(
+            base_pipeline=pipeline, project=spec.project,
+            recordings=(spec.recording,) if spec.recording is not None else (),
+            selected_recording=spec.recording, config=spec.config, search=search,
+        )
 
     @property
     def working_pipeline(self) -> Pipeline:

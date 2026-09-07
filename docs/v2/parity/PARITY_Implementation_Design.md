@@ -68,7 +68,7 @@ them.
 ## B. Setting a run up
 
 - [x] **WP-03** — Launcher: isolate, and the computed mixed state · One action to isolate a stage; a third group state that is computed and has no setter to reach.
-- [ ] **WP-04** — Headless reproduction, and the test that proves it · Display the reproducing invocation, and make both paths resolve through one construction. The test matters more than the line.
+- [x] **WP-04** — Headless reproduction, and the test that proves it · Display the reproducing invocation, and make both paths resolve through one construction. The test matters more than the line.
 
 ## C. Saying what things are
 
@@ -150,17 +150,17 @@ document.
 | `[x]` | `IMP-0009` | `SW-0009` | `WP-02` | `NEW` | `runspec/sources.py::SourceSet.for_port(port) -> str` returns one name, always. There is no multi-source return type to misuse. | `UT-sourceset-02` |
 | `[x]` | `IMP-0010` | `SW-0010` | `WP-02` | `NEW` | `runspec/sources.py::UnknownSource` raised from `for_port` during spec assembly, before `graph/build.py` opens anything. | `UT-sourceset-03` |
 | `[x]` | `IMP-0011` | `SW-0054` | `WP-02` | `NEW` | `runspec/sources.py::SourceSet.for_port` consults the explicit assignment map first, the default second. Two lookups, in that order. | `UT-sourceset-04` |
-| `[ ]` | `IMP-0012` | `SW-0011` | `WP-04` | `EXTEND` | `runspec/canon.py` gains source and per-port assignment canonicalisation, so assembly order cannot reach the emitted bytes. | `UT-specasm-01` |
-| `[ ]` | `IMP-0013` | `SW-0012` | `WP-04` | `KEEP` | `runspec/canon.py::canonical` + `compute_spec_sha` already give a stable serialisation and its hash; both are taken unchanged. The new fields ride the existing path. | `UT-specasm-02` |
+| `[x]` | `IMP-0012` | `SW-0011` | `WP-04` | `EXTEND` | `runspec/canon.py` gains source and per-port assignment canonicalisation, so assembly order cannot reach the emitted bytes. | `UT-specasm-01` |
+| `[x]` | `IMP-0013` | `SW-0012` | `WP-04` | `KEEP` | `runspec/canon.py::canonical` + `compute_spec_sha` already give a stable serialisation and its hash; both are taken unchanged. The new fields ride the existing path. | `UT-specasm-02` |
 | `[ ]` | `IMP-0014` | `SW-0013` | `WP-12` | `EXTEND` | `runspec/emit.py::emit_run_spec` refuses when `reference:` is configured without a staged identity, alongside its existing `unresolved()` refusal. | `UT-specasm-03` |
 | `[x]` | `IMP-0015` | `SW-0014` | `WP-01` | `EXTEND` | `runspec/manifest.py` gains `ports[].matched_address`, filled from `Resolution.chosen` and left null when unresolved. | `UT-manifest-01` |
 | `[ ]` | `IMP-0016` | `SW-0015` | `WP-07` | `EXTEND` | `runspec/manifest.py` gains `config_bundle_embedded_sha256` beside the existing `config_bundle_sha256`. Two fields, because one cannot show a mismatch. | `UT-manifest-02` |
 | `[ ]` | `IMP-0017` | `SW-0016` | `WP-12` | `EXTEND` | `runspec/manifest.py` gains `reference_build_sha256`, absent rather than empty for an ordinary run. | `UT-manifest-03` |
 | `[x]` | `IMP-0018` | `SW-0017` | `WP-03` | `EXTEND` | `launcher/model.py::Selection.isolate(stage)` — **new method** on the existing `Selection`, mutating only the mode field of every stage. | `UT-selmodel-01` |
 | `[x]` | `IMP-0019` | `SW-0018` | `WP-03` | `EXTEND` | `launcher/model.py` — a **new** read-only `group_state` property over a group's members. No setter is defined, so the third state is unreachable by assignment. | `UT-selmodel-02` |
-| `[ ]` | `IMP-0020` | `SW-0019` | `WP-04` | `EXTEND` | `launcher/model.py::Selection` gains a **new** `from_spec`, made the only construction path; the interactive path builds a spec via `write.py::to_run_config` and reads it back. | `UT-selmodel-03` |
+| `[x]` | `IMP-0020` | `SW-0019` | `WP-04` | `EXTEND` | `launcher/model.py::Selection` gains a **new** `from_spec`, made the only construction path; the interactive path builds a spec via `write.py::to_run_config` and reads it back. | `UT-selmodel-03` |
 | `[x]` | `IMP-0021` | `SW-0020` | `WP-03` | `EXTEND` | `launcher/model.py`'s view binding renders the computed group state disabled. The control has no enabled variant for that value. | `UT-selview-01` |
-| `[ ]` | `IMP-0022` | `SW-0021` | `WP-04` | `EXTEND` | `launcher/write.py` — a **new** `reproduce_line(model)` beside `to_run_config`, rendering from the model and returning one line. No display string is read back to build it. | `UT-selview-02` |
+| `[x]` | `IMP-0022` | `SW-0021` | `WP-04` | `EXTEND` | `launcher/write.py` — a **new** `reproduce_line(model)` beside `to_run_config`, rendering from the model and returning one line. No display string is read back to build it. | `UT-selview-02` |
 | `[ ]` | `IMP-0023` | `SW-0022` | `WP-08` | `NEW` | `viz/cpp/viz/player/transport.hpp::Transport` — one enum of actions and one `Apply(Action, Position)`, so an action cannot exist without a transform. | `UT-transport-01` |
 | `[ ]` | `IMP-0024` | `SW-0023` | `WP-08` | `NEW` | `viz/cpp/viz/player/transport.cpp` serves a backward move from `SceneHistory` only; it holds no handle on which to call the software under test. | `UT-transport-02` |
 | `[ ]` | `IMP-0025` | `SW-0024` | `WP-08` | `NEW` | `viz/cpp/viz/player/transport.hpp::kStepPresets` plus a custom slot. `Apply` takes the resolved count, never a free integer from the UI. | `UT-transport-03` |

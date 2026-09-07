@@ -18,6 +18,7 @@ than trusting whatever the caller's `Selection` claimed."""
 
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 
@@ -65,6 +66,28 @@ def to_run_config(selection: Selection, path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(dump(data))
     return path
+
+
+def reproduce_line(selection: Selection) -> str:
+    """`SW-0021`/`IMP-0022`: the reproducing invocation, rendered directly
+    from `selection` -- never composed by reading back previously displayed
+    text. Every field `to_run_config` would write (stage mode/impl/inputs,
+    project, recording, config) feeds the digest naming the file it would
+    write; `Selection.layout` is display-only (its own docstring's "no
+    headless reader consumes a layout: key") and is excluded on purpose, so
+    changing only a label leaves this line unchanged (`SW-0021` Accept)."""
+    pipeline = selection.working_pipeline
+    fingerprint_src = "|".join([
+        *(f"{s.name}:{s.mode}:{s.impl or ''}:{sorted(s.inputs.items())}" for s in pipeline.stages),
+        f"project={selection.project}",
+        f"recording={selection.selected_recording}",
+        f"config={selection.config}",
+    ])
+    digest = hashlib.sha256(fingerprint_src.encode("utf-8")).hexdigest()[:8]
+    line = f"sim resim --pipeline run_{digest}.yaml"
+    for directory in selection.search:
+        line += f" --search {directory}"
+    return line
 
 
 def launch(path: Path, *, search: tuple[Path, ...] = (), waivers: tuple[Waiver, ...] = ()) -> int:

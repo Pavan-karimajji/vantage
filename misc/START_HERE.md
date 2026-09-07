@@ -24,17 +24,16 @@ doing and why*, and **contains no counts at all**.
 
 ## The next action — exactly one
 
-> **`WP-01`, `WP-02` and `WP-03` are done** (2026-09-07): the ingest map is
-> keyed by port with an ordered `from:` address list, resolved via
-> `ingest/resolve.py::resolve_port`, reported in the run manifest's
-> `ports[].matched_address`; `runspec/sources.py::SourceSet` binds every port
-> to exactly one of several named recordings; and `launcher/model.py::
-> Selection` gained `isolate`/`group_state` plus a `group_control_view` that
-> renders a disagreeing group's `"mixed"` state as unselectable. `df`'s real
-> ingest map is migrated to the new schema.
+> **`WP-01` through `WP-04` are done** (2026-09-07): the ingest map is keyed
+> by port with an ordered `from:` address list, resolved via `ingest/
+> resolve.py::resolve_port`; `runspec/sources.py::SourceSet` binds every port
+> to exactly one of several named recordings; `launcher/model.py::Selection`
+> gained `isolate`/`group_state`/`from_spec`; and `runspec/canon.py` +
+> `launcher/write.py::reproduce_line` make the file and in-memory paths
+> resolve to the same model, with a reproducing invocation rendered straight
+> from it. `df`'s real ingest map is migrated to the new schema.
 >
-> **Write `WP-04` next: headless reproduction, and the test that proves it.**
-> Four design rows.
+> **Write `WP-05` next: diagnostics occurrence counting.** Three design rows.
 >
 > **Read `docs/v2/parity/README.md` first**, then run its checker. That answers
 > *"where do I start"* — not a list written down here.

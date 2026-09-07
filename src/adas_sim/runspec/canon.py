@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from adas_sim.diagnostics.errors import InternalError
+from adas_sim.runspec.sources import SourceSet
 
 #: design §3.1's own field order -- fixed so the file's head is readable at
 #: a glance, unlike a lexicographically-sorted top level which would bury
@@ -74,6 +75,26 @@ def _canon_value(value: object, *, key: str | None) -> object:
         found=f"{type(value).__name__}: {value!r}", where="adas_sim.runspec.canon.canonical",
         hint="emit_run_spec must build the spec from JSON-safe types only",
     )
+
+
+def canonical_sources(source_set: SourceSet) -> dict[str, object]:
+    """`WP-04` (`SW-0011`, `IMP-0012`): a `SourceSet`'s named recordings and
+    per-port assignments, as a JSON-safe block ready to ride `canonical()`'s
+    existing path unchanged (`IMP-0013`). Both lists are sorted by their own
+    key -- `canonical()` sorts mapping keys but keeps array order exactly as
+    given (design §3.1), so without this sort the order `sources`/
+    `assignments` happened to be built in would leak straight into the
+    emitted bytes, defeating `SW-0011`'s "assembly order does not matter"."""
+    return {
+        "named": [
+            {"name": name, "recording": str(source.recording), "default": source.default}
+            for name, source in sorted(source_set.sources.items())
+        ],
+        "assignments": [
+            {"port": port, "source": name}
+            for port, name in sorted(source_set.assignments.items())
+        ],
+    }
 
 
 def canonical(spec: RunSpec) -> str:
