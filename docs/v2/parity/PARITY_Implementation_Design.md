@@ -74,13 +74,13 @@ them.
 
 - [x] **WP-05** — Diagnostics: occurrence counting · Collapse an identical repeated message into one entry with a count, and say once when that began.
 - [x] **WP-06** — Plug-in identity · Four mandatory fields, refused by name when incomplete, carried into the deployed copy, read through one accessor.
-- [ ] **WP-07** — The bundle travels in the recording · Embed the bytes, store their hash, and make absence a value rather than a reason to look on disk.
+- [x] **WP-07** — The bundle travels in the recording · Embed the bytes, store their hash, and make absence a value rather than a reason to look on disk.
 
 ## D. Moving through a recording
 
 - [ ] **WP-08** — Transport controls and play speed · The nine named actions, and a rate that is measured rather than requested. **Blocked by the prerequisite.**
 - [ ] **WP-09** — Step granularity and cycles · Five kinds of step, cycles discovered from the recording, and a cycle step that lands on a coherent input set. **Blocked by the prerequisite.**
-- [ ] **WP-10** — Named ranges · Bounds in the recording's own timebase, travelling with the file, inclusive at both ends.
+- [x] **WP-10** — Named ranges · Bounds in the recording's own timebase, travelling with the file, inclusive at both ends.
 - [ ] **WP-11** — Marks, in two kinds · Annotation and classification as separate types in separate blocks, each stamped with author and time at creation.
 
 ## E. Trusting the answer
@@ -154,7 +154,7 @@ document.
 | `[x]` | `IMP-0013` | `SW-0012` | `WP-04` | `KEEP` | `runspec/canon.py::canonical` + `compute_spec_sha` already give a stable serialisation and its hash; both are taken unchanged. The new fields ride the existing path. | `UT-specasm-02` |
 | `[ ]` | `IMP-0014` | `SW-0013` | `WP-12` | `EXTEND` | `runspec/emit.py::emit_run_spec` refuses when `reference:` is configured without a staged identity, alongside its existing `unresolved()` refusal. | `UT-specasm-03` |
 | `[x]` | `IMP-0015` | `SW-0014` | `WP-01` | `EXTEND` | `runspec/manifest.py` gains `ports[].matched_address`, filled from `Resolution.chosen` and left null when unresolved. | `UT-manifest-01` |
-| `[ ]` | `IMP-0016` | `SW-0015` | `WP-07` | `EXTEND` | `runspec/manifest.py` gains `config_bundle_embedded_sha256` beside the existing `config_bundle_sha256`. Two fields, because one cannot show a mismatch. | `UT-manifest-02` |
+| `[x]` | `IMP-0016` | `SW-0015` | `WP-07` | `EXTEND` | `runspec/manifest.py` gains `config_bundle_embedded_sha256` beside the existing `config_bundle_sha256`. Two fields, because one cannot show a mismatch. | `UT-manifest-02` |
 | `[ ]` | `IMP-0017` | `SW-0016` | `WP-12` | `EXTEND` | `runspec/manifest.py` gains `reference_build_sha256`, absent rather than empty for an ordinary run. | `UT-manifest-03` |
 | `[x]` | `IMP-0018` | `SW-0017` | `WP-03` | `EXTEND` | `launcher/model.py::Selection.isolate(stage)` — **new method** on the existing `Selection`, mutating only the mode field of every stage. | `UT-selmodel-01` |
 | `[x]` | `IMP-0019` | `SW-0018` | `WP-03` | `EXTEND` | `launcher/model.py` — a **new** read-only `group_state` property over a group's members. No setter is defined, so the third state is unreachable by assignment. | `UT-selmodel-02` |
@@ -172,9 +172,9 @@ document.
 | `[ ]` | `IMP-0031` | `SW-0030` | `WP-09` | `NEW` | `io/cycles.py::discover(reader) -> list[Cycle]` takes only a reader. No configuration parameter exists to pass it. | `UT-cycles-01` |
 | `[ ]` | `IMP-0032` | `SW-0031` | `WP-09` | `NEW` | `io/cycles.py::Cycle` carries `name`, `index` and `period_ns` as an integer, matching the two-clock discipline the recording model already uses. | `UT-cycles-02` |
 | `[ ]` | `IMP-0033` | `SW-0032` | `WP-09` | `NEW` | `io/cycles.py::run_of(topic, log_time_ns) -> int` numbers each run of a cycle, so attribution is a lookup rather than a reconstruction. | `UT-cycles-03` |
-| `[ ]` | `IMP-0034` | `SW-0033` | `WP-10` | `NEW` | `io/ranges.py::Range` stores `start_ns`/`end_ns` in the recording's timebase. No wall-clock field is defined to be tempted by. | `UT-ranges-01` |
-| `[ ]` | `IMP-0035` | `SW-0034` | `WP-10` | `NEW` | `io/ranges.py::read`/`write` use the recording's existing meta-block mechanism, so ranges travel with the file rather than beside it. | `UT-ranges-02` |
-| `[ ]` | `IMP-0036` | `SW-0035` | `WP-10` | `NEW` | `io/ranges.py::contains(tick_ns)` is inclusive at both bounds, stated here because the boundary case is the one that gets decided by accident. | `UT-ranges-03` |
+| `[x]` | `IMP-0034` | `SW-0033` | `WP-10` | `NEW` | `io/ranges.py::Range` stores `start_ns`/`end_ns` in the recording's timebase. No wall-clock field is defined to be tempted by. | `UT-ranges-01` |
+| `[x]` | `IMP-0035` | `SW-0034` | `WP-10` | `NEW` | `io/ranges.py::read`/`write` use the recording's existing meta-block mechanism, so ranges travel with the file rather than beside it. | `UT-ranges-02` |
+| `[x]` | `IMP-0036` | `SW-0035` | `WP-10` | `NEW` | `io/ranges.py::contains(tick_ns)` is inclusive at both bounds, stated here because the boundary case is the one that gets decided by accident. | `UT-ranges-03` |
 | `[ ]` | `IMP-0037` | `SW-0036` | `WP-11` | `NEW` | `io/marks.py::Annotation` and `Classification` are separate dataclasses in separate meta blocks. Neither accepts the other's fields. | `UT-marks-01` |
 | `[ ]` | `IMP-0038` | `SW-0037` | `WP-11` | `NEW` | `io/marks.py::_stamp` fills `author` and `created_ns` at construction from the session identity, never from file metadata at read time. | `UT-marks-02` |
 | `[ ]` | `IMP-0039` | `SW-0038` | `WP-11` | `NEW` | `io/marks.py::select(recordings, classification)` filters on the stored value only, with no fuzzy or prefix matching to explain later. | `UT-marks-03` |
@@ -185,9 +185,9 @@ document.
 | `[x]` | `IMP-0044` | `SW-0043` | `WP-06` | `EXTEND` | `resolve/plugins.py` — a **new** `MissingIdentityField` naming the absent field, raised from `_read_plugin_yaml`'s single validation site. | `UT-plugmeta-02` |
 | `[x]` | `IMP-0045` | `SW-0044` | `WP-06` | `EXTEND` | `interfaces/scripts/pack_plugin_bundle.py` copies the four fields into the deployed `plugin.yaml` beside the existing `sha256:` stamp, unchanged. | `UT-plugmeta-03` |
 | `[x]` | `IMP-0046` | `SW-0053` | `WP-06` | `EXTEND` | `resolve/plugins.py::PluginBundle` gains a **new** `identity()`, the single accessor the listing, the inspection view and the refusal message all call. | `UT-plugmeta-04` |
-| `[ ]` | `IMP-0047` | `SW-0045` | `WP-07` | `EXTEND` | `config/bundle.py` — a **new** `embed(writer, bundle_dir)` beside `may_enter_bundle`, writing the packed bytes into a recording meta block, reusing the mechanism the manifest already uses. | `UT-bundle-01` |
-| `[ ]` | `IMP-0048` | `SW-0046` | `WP-07` | `EXTEND` | `config/bundle.py` — `embed` stores the digest it computed; a **new** `read` recomputes and compares, returning a mismatch rather than raising. | `UT-bundle-02` |
-| `[ ]` | `IMP-0049` | `SW-0047` | `WP-07` | `NEW` | `config/bundle.py::BundleAbsent` is a returned value, not an exception and not `None`, so no caller can treat it as a path to fall back from. | `UT-bundle-03` |
+| `[x]` | `IMP-0047` | `SW-0045` | `WP-07` | `EXTEND` | `config/bundle.py` — a **new** `embed(writer, bundle_dir)` beside `may_enter_bundle`, writing the packed bytes into a recording meta block, reusing the mechanism the manifest already uses. | `UT-bundle-01` |
+| `[x]` | `IMP-0048` | `SW-0046` | `WP-07` | `EXTEND` | `config/bundle.py` — `embed` stores the digest it computed; a **new** `read` recomputes and compares, returning a mismatch rather than raising. | `UT-bundle-02` |
+| `[x]` | `IMP-0049` | `SW-0047` | `WP-07` | `NEW` | `config/bundle.py::BundleAbsent` is a returned value, not an exception and not `None`, so no caller can treat it as a path to fall back from. | `UT-bundle-03` |
 | `[ ]` | `IMP-0050` | `SW-0048` | `WP-12` | `NEW` | `engine/refrun.py::RefRun.tick` resolves inputs once and passes the same objects to both libraries, so equality is structural rather than checked. | `UT-refrun-01` |
 | `[ ]` | `IMP-0051` | `SW-0049` | `WP-12` | `NEW` | `engine/refrun.py::first_divergence` walks ports in manifest order and returns on the first difference, carrying tick, port and field. | `UT-refrun-02` |
 | `[ ]` | `IMP-0052` | `SW-0050` | `WP-12` | `NEW` | `engine/refrun.py` records each build under a topic prefix derived from its role, so the two are separable without a side-car index. | `UT-refrun-03` |

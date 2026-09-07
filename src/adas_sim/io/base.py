@@ -95,6 +95,13 @@ class ComponentBuildInfo:
     config_bundle: str = ""
     config_bundle_sha256: str = ""
     config_bundle_embedded: bool = False
+    #: `WP-07` (`SW-0015`, `IMP-0016`): the hash of the bytes actually
+    #: embedded in THIS recording (`config.bundle.embed`'s own return
+    #: value) -- distinct from `config_bundle_sha256` above (the packed
+    #: bundle's hash) because one field alone cannot show a mismatch
+    #: between what should have been embedded and what actually was.
+    #: `""` when `config_bundle_embedded` is `False`.
+    config_bundle_embedded_sha256: str = ""
     enabled_functions: tuple[str, ...] = ()
     #: `impl: pkg:<ref>`'s own addressing (`sim_resim_and_recording.md`
     #: "Pinning a resim to the build that produced it", `OQ-9`/`NR-SIM-24`).
@@ -425,6 +432,7 @@ def manifest_to_dict(manifest: RunManifest) -> dict:
                 "config_bundle": c.config_bundle,
                 "config_bundle_sha256": c.config_bundle_sha256,
                 "config_bundle_embedded": c.config_bundle_embedded,
+                "config_bundle_embedded_sha256": c.config_bundle_embedded_sha256,
                 "enabled_functions": list(c.enabled_functions),
                 "package_ref": c.package_ref,
                 "tolerance_sha256": c.tolerance_sha256,
@@ -489,6 +497,7 @@ def manifest_from_dict(data: dict) -> RunManifest:
             config_bundle=c.get("config_bundle", ""),
             config_bundle_sha256=c.get("config_bundle_sha256", ""),
             config_bundle_embedded=c.get("config_bundle_embedded", False),
+            config_bundle_embedded_sha256=c.get("config_bundle_embedded_sha256", ""),
             enabled_functions=tuple(c.get("enabled_functions", ())),
             package_ref=c.get("package_ref", ""),
             tolerance_sha256=c.get("tolerance_sha256", ""),

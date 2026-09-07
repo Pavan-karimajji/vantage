@@ -24,20 +24,23 @@ doing and why*, and **contains no counts at all**.
 
 ## The next action — exactly one
 
-> **`WP-01` through `WP-06` are done** (2026-09-07, half the set): ingest map
-> keyed by port with ordered `from:` resolution; `runspec/sources.py::
+> **`WP-01`, `WP-02`, `WP-03`, `WP-04`, `WP-05`, `WP-06`, `WP-07` and `WP-10`
+> are done** (2026-09-07): ingest map keyed by port; `runspec/sources.py::
 > SourceSet` per-port source binding; `launcher/model.py::Selection`
-> isolate/group_state/from_spec; `runspec/canon.py` + `launcher/write.py::
-> reproduce_line` for file/memory convergence; `diagnostics/logging.py`
-> de-duplication past `FLOOD_THRESHOLD` (`Event.DEDUP_STARTED` added in
-> lockstep across its four hand-transcribed homes); and `resolve/plugins.py::
-> PluginBundle` now requires `description`/`version`/`author`/`projects`,
-> refusing by name when incomplete, read through one `identity()` accessor.
-> `df`'s and `perception-core`'s real `sim/plugin.yaml` and `df`'s ingest map
-> are migrated to the new schemas.
+> isolate/group_state/from_spec; `runspec/canon.py` + `reproduce_line` for
+> file/memory convergence; `diagnostics/logging.py` de-duplication;
+> `resolve/plugins.py::PluginBundle` identity fields; `config/bundle.py::
+> embed`/`read`/`BundleAbsent`/`BundleMismatch` for the config bundle
+> travelling in the recording; and `io/ranges.py::Range` for named spans in
+> the recording's own timebase. `df`'s and `perception-core`'s real
+> `sim/plugin.yaml` and `df`'s ingest map are migrated to the new schemas.
 >
-> **Write `WP-07` next: the bundle travels in the recording.** Four design
-> rows.
+> **`WP-08`/`WP-09` are skipped, not next** — both are blocked by the
+> unwritten `Source`/`Feed` interface in `modules/viz` (register item
+> `C-16`, this plan's own prerequisite; see "Open — PARITY's three" below)
+> and are C++ work (`viz/cpp/viz/player/`) outside this checkout besides.
+>
+> **Write `WP-11` next: marks, in two kinds.** Three design rows.
 >
 > **Read `docs/v2/parity/README.md` first**, then run its checker. That answers
 > *"where do I start"* — not a list written down here.

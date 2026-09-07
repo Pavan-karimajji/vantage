@@ -210,6 +210,7 @@ def build_manifest(
     component_build_shas: Mapping[str, str] | None = None,
     component_bundle_paths: Mapping[str, str] | None = None,
     component_bundle_shas: Mapping[str, str] | None = None,
+    component_bundle_embedded_shas: Mapping[str, str] | None = None,
     component_tolerance_shas: Mapping[str, str] | None = None,
     resolutions: Sequence[Resolution] = (),
     config_bundle_embedded: bool = False,
@@ -248,6 +249,10 @@ def build_manifest(
           bytes; the bytes go once per recording on the `/meta/config_bundle`
           topic. `config_bundle_embedded` states whether *this* recording actually
           carries them.
+        - `component_bundle_embedded_shas` (`WP-07`, `IMP-0016`) is `config.bundle.
+          embed`'s own returned digest per stage -- the hash of the bytes actually
+          embedded, kept apart from `component_bundle_shas` (the packed bundle's own
+          hash) because one field alone cannot show the two disagreeing.
         - `bundle_overrides`/`base_bundle_sha` describe a calibration sweep
           (`NR-SIM-6`): the declared override set and the hash of the bundle it was
           derived from. Distinct from `bundle_sha`, which reports whatever bundle
@@ -286,6 +291,7 @@ def build_manifest(
     component_build_shas = component_build_shas or {}
     component_bundle_paths = component_bundle_paths or {}
     component_bundle_shas = component_bundle_shas or {}
+    component_bundle_embedded_shas = component_bundle_embedded_shas or {}
     component_tolerance_shas = component_tolerance_shas or {}
     bundle_overrides = bundle_overrides or {}
     pipeline_sha = _sha256_file(pipeline_path) if pipeline_path is not None and pipeline_path.exists() else ""
@@ -317,6 +323,7 @@ def build_manifest(
             config_bundle=component_bundle_paths.get(stage.name, ""),
             config_bundle_sha256=component_bundle_shas.get(stage.name, ""),
             config_bundle_embedded=config_bundle_embedded,
+            config_bundle_embedded_sha256=component_bundle_embedded_shas.get(stage.name, ""),
             tolerance_sha256=component_tolerance_shas.get(stage.name, ""),
             period_ns=pipeline.manifest_for(stage.name).period_ns,
         )

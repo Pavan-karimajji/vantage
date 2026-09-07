@@ -24,14 +24,17 @@ that itself touches `ctypes` (`ANL-SW-34`, `IMP-0164`).
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping
 from enum import StrEnum
 from pathlib import Path
+from typing import Protocol
 from warnings import warn
 
 import yaml
 
 from adas_sim.diagnostics.errors import AuthoringError, ProvenanceWarning
+from adas_sim.config.project import bundle_bytes_for_recording
 
 
 class BundleCategory(StrEnum):
@@ -69,6 +72,80 @@ def may_enter_bundle(category: BundleCategory, *, key: str) -> None:
         where="config bundle assembly",
         hint=_R_SIM_9,
     )
+
+
+class BundleWriter(Protocol):
+    """`WP-07` (`SW-0045`): the write-side of `F-STORE` -- whatever carries
+    the embedded bundle bytes for a later read needs only this."""
+
+    def write_config_bundle(self, payload: bytes) -> None: ...
+
+
+class BundleReader(Protocol):
+    """The read-side twin -- `io.mcap.McapReader.config_bundle_bytes`
+    already satisfies this shape (an "extra beyond the `RecordingReader`
+    Protocol's minimum," same allowance that method's own docstring
+    claims), so `read()` below works against a real recording unchanged."""
+
+    def config_bundle_bytes(self) -> bytes: ...
+
+
+class BundleAbsent:
+    """`WP-07` (`SW-0047`): a missing embedded bundle, returned as a value
+    -- never an exception, never `None`, never the empty bytes a caller
+    might otherwise be tempted to fall back from. `read()` returns exactly
+    this for a recording carrying none, and consults no filesystem path to
+    decide it."""
+
+    def __repr__(self) -> str:
+        return "<BundleAbsent>"
+
+
+#: The one instance `read()` ever returns for absence -- `is` comparable,
+#: same discipline a closed-vocabulary sentinel gets elsewhere in this tree.
+BUNDLE_ABSENT = BundleAbsent()
+
+
+class BundleMismatch:
+    """`WP-07` (`SW-0046`): the embedded bytes' recomputed hash disagrees
+    with the one `embed()` reported when they were written -- returned,
+    never raised, so a caller decides what an altered recording means for
+    them rather than having that decision made by an exception."""
+
+    def __init__(self, *, stored: str, recomputed: str) -> None:
+        self.stored = stored
+        self.recomputed = recomputed
+
+    def __repr__(self) -> str:
+        return f"<BundleMismatch stored={self.stored[:8]} recomputed={self.recomputed[:8]}>"
+
+
+def embed(writer: BundleWriter, bundle_dir: Path) -> str:
+    """`WP-07` (`SW-0045`/`SW-0046`): packs `bundle_dir` via `config.
+    project.bundle_bytes_for_recording` -- the same mechanism the run
+    manifest's own `config_bundle_sha256` already assumes was embedded --
+    and writes it through `writer`. Returns the digest of exactly the
+    bytes written, the value a caller records as this stage's
+    `config_bundle_embedded_sha256` (`IMP-0016`)."""
+    payload = bundle_bytes_for_recording(bundle_dir)
+    writer.write_config_bundle(payload)
+    return hashlib.sha256(payload).hexdigest()
+
+
+def read(reader: BundleReader, *, expected_sha256: str = "") -> bytes | BundleAbsent | BundleMismatch:
+    """`WP-07` (`SW-0046`/`SW-0047`): reads the embedded bytes back and
+    recomputes their hash -- `expected_sha256` (usually `embed()`'s own
+    stored return value) decides whether that recompute agrees. Absence is
+    checked first and unconditionally: `reader.config_bundle_bytes()` is
+    the only call this function makes, so "no bundle" can never fall
+    through to a filesystem path nobody asked it to consult."""
+    payload = reader.config_bundle_bytes()
+    if not payload:
+        return BUNDLE_ABSENT
+    recomputed = hashlib.sha256(payload).hexdigest()
+    if expected_sha256 and recomputed != expected_sha256:
+        return BundleMismatch(stored=expected_sha256, recomputed=recomputed)
+    return payload
 
 
 def _load_ego_params(bundle_dir: Path) -> Mapping[str, object]:

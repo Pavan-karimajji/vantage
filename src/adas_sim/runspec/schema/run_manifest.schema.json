@@ -47,6 +47,7 @@
           "config_bundle": {"type": "string"},
           "config_bundle_sha256": {"type": "string"},
           "config_bundle_embedded": {"type": "boolean"},
+          "config_bundle_embedded_sha256": {"type": "string"},
           "enabled_functions": {"type": "array", "items": {"type": "string"}},
           "package_ref": {"type": "string"},
           "tolerance_sha256": {"type": "string"},
