@@ -39,6 +39,8 @@ const char* ToString(Event event) {
       return "expect_fail";
     case Event::kBundleMismatch:
       return "bundle_mismatch";
+    case Event::kDedupStarted:
+      return "dedup_started";
   }
   return "";  // unreachable for a valid Event; never guess a value
 }

@@ -13,7 +13,7 @@
 
 namespace simcore {
 
-// Twelve values, no free text (N-10: "event= value added to the closed
+// Thirteen values, no free text (N-10: "event= value added to the closed
 // vocabulary"). Adding a value is a review, never a runtime extension
 // point.
 enum class Event {
@@ -29,6 +29,7 @@ enum class Event {
   kExpectPass,
   kExpectFail,
   kBundleMismatch,
+  kDedupStarted,
 };
 
 const char* ToString(Event event);

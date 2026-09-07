@@ -72,7 +72,7 @@ them.
 
 ## C. Saying what things are
 
-- [ ] **WP-05** — Diagnostics: occurrence counting · Collapse an identical repeated message into one entry with a count, and say once when that began.
+- [x] **WP-05** — Diagnostics: occurrence counting · Collapse an identical repeated message into one entry with a count, and say once when that began.
 - [ ] **WP-06** — Plug-in identity · Four mandatory fields, refused by name when incomplete, carried into the deployed copy, read through one accessor.
 - [ ] **WP-07** — The bundle travels in the recording · Embed the bytes, store their hash, and make absence a value rather than a reason to look on disk.
 
@@ -178,9 +178,9 @@ document.
 | `[ ]` | `IMP-0037` | `SW-0036` | `WP-11` | `NEW` | `io/marks.py::Annotation` and `Classification` are separate dataclasses in separate meta blocks. Neither accepts the other's fields. | `UT-marks-01` |
 | `[ ]` | `IMP-0038` | `SW-0037` | `WP-11` | `NEW` | `io/marks.py::_stamp` fills `author` and `created_ns` at construction from the session identity, never from file metadata at read time. | `UT-marks-02` |
 | `[ ]` | `IMP-0039` | `SW-0038` | `WP-11` | `NEW` | `io/marks.py::select(recordings, classification)` filters on the stored value only, with no fuzzy or prefix matching to explain later. | `UT-marks-03` |
-| `[ ]` | `IMP-0040` | `SW-0039` | `WP-05` | `EXTEND` | `diagnostics/logging.py` — a **new** `_dedupe_key` over the closed vocabulary's fields (`_WARN_EVENTS`/`_ERROR_EVENTS`), so a key cannot silently ignore a field added later. | `UT-diaglog-01` |
-| `[ ]` | `IMP-0041` | `SW-0040` | `WP-05` | `EXTEND` | `diagnostics/logging.py` — a **new** entry record with an `occurrences` count, accumulated per key by `log()` and emitted once at flush rather than per occurrence. | `UT-diaglog-02` |
-| `[ ]` | `IMP-0042` | `SW-0041` | `WP-05` | `EXTEND` | `diagnostics/logging.py` — a **new** `FLOOD_THRESHOLD` and one `dedup_started` event added to the declared vocabulary, emitted once per key. | `UT-diaglog-03` |
+| `[x]` | `IMP-0040` | `SW-0039` | `WP-05` | `EXTEND` | `diagnostics/logging.py` — a **new** `_dedupe_key` over the closed vocabulary's fields (`_WARN_EVENTS`/`_ERROR_EVENTS`), so a key cannot silently ignore a field added later. | `UT-diaglog-01` |
+| `[x]` | `IMP-0041` | `SW-0040` | `WP-05` | `EXTEND` | `diagnostics/logging.py` — a **new** entry record with an `occurrences` count, accumulated per key by `log()` and emitted once at flush rather than per occurrence. | `UT-diaglog-02` |
+| `[x]` | `IMP-0042` | `SW-0041` | `WP-05` | `EXTEND` | `diagnostics/logging.py` — a **new** `FLOOD_THRESHOLD` and one `dedup_started` event added to the declared vocabulary, emitted once per key. | `UT-diaglog-03` |
 | `[ ]` | `IMP-0043` | `SW-0042` | `WP-06` | `EXTEND` | `resolve/plugins.py::PluginBundle` gains `description`, `version`, `author` and `projects`, required in `_from_yaml` rather than defaulted. **Not `plugins/registry.py`** — that is the codec registry. | `UT-plugmeta-01` |
 | `[ ]` | `IMP-0044` | `SW-0043` | `WP-06` | `EXTEND` | `resolve/plugins.py` — a **new** `MissingIdentityField` naming the absent field, raised from `_read_plugin_yaml`'s single validation site. | `UT-plugmeta-02` |
 | `[ ]` | `IMP-0045` | `SW-0044` | `WP-06` | `EXTEND` | `interfaces/scripts/pack_plugin_bundle.py` copies the four fields into the deployed `plugin.yaml` beside the existing `sha256:` stamp, unchanged. | `UT-plugmeta-03` |

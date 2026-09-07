@@ -33,3 +33,5 @@ event:
     level: error
   - name: bundle_mismatch
     level: error
+  - name: dedup_started
+    level: warn

@@ -24,16 +24,17 @@ doing and why*, and **contains no counts at all**.
 
 ## The next action — exactly one
 
-> **`WP-01` through `WP-04` are done** (2026-09-07): the ingest map is keyed
-> by port with an ordered `from:` address list, resolved via `ingest/
-> resolve.py::resolve_port`; `runspec/sources.py::SourceSet` binds every port
-> to exactly one of several named recordings; `launcher/model.py::Selection`
-> gained `isolate`/`group_state`/`from_spec`; and `runspec/canon.py` +
-> `launcher/write.py::reproduce_line` make the file and in-memory paths
-> resolve to the same model, with a reproducing invocation rendered straight
-> from it. `df`'s real ingest map is migrated to the new schema.
+> **`WP-01` through `WP-05` are done** (2026-09-07): ingest map keyed by port
+> with ordered `from:` resolution; `runspec/sources.py::SourceSet` per-port
+> source binding; `launcher/model.py::Selection` isolate/group_state/
+> from_spec; `runspec/canon.py` + `launcher/write.py::reproduce_line` for
+> file/memory convergence; and `diagnostics/logging.py` now de-duplicates a
+> repeated message past `FLOOD_THRESHOLD` occurrences, announcing once
+> (`Event.DEDUP_STARTED`, added to the closed vocabulary in lockstep across
+> `events.py`/`events.yaml`/`events.hpp`/`events.cpp`) and flushing one
+> aggregate entry. `df`'s real ingest map is migrated to the new schema.
 >
-> **Write `WP-05` next: diagnostics occurrence counting.** Three design rows.
+> **Write `WP-06` next: plug-in identity.** Four design rows.
 >
 > **Read `docs/v2/parity/README.md` first**, then run its checker. That answers
 > *"where do I start"* — not a list written down here.

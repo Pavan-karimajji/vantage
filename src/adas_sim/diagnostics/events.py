@@ -7,7 +7,7 @@
 
 Moved out of `diagnostics/logging.py` into its own module (`WP-03`,
 `IMP-0127`) so it has a C++ parity twin: `src/simcore/errors/events.cpp`
-carries the same twelve values, hand-transcribed from `docs/v2/events.yaml`
+carries the same thirteen values, hand-transcribed from `docs/v2/events.yaml`
 alongside this file and kept honest by `scripts/check_error_parity.py`.
 """
 
@@ -31,3 +31,7 @@ class Event(StrEnum):
     EXPECT_PASS = "expect_pass"
     EXPECT_FAIL = "expect_fail"
     BUNDLE_MISMATCH = "bundle_mismatch"
+    #: `WP-05` (`SW-0041`): a key first crossing the flood threshold
+    #: (`diagnostics/logging.py::FLOOD_THRESHOLD`) -- emitted exactly once
+    #: per key, never per suppressed occurrence.
+    DEDUP_STARTED = "dedup_started"
