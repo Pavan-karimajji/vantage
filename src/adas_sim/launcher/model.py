@@ -24,12 +24,18 @@ never smuggled into the setter itself."""
 from __future__ import annotations
 
 import warnings
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import Literal
 
 from adas_sim.graph.build import Mode, Pipeline
 from adas_sim.diagnostics.errors import AuthoringError, ProvenanceWarning
+
+#: `WP-03`: a group's computed third state (`SW-0018`) -- disagreeing
+#: members, never assignable directly (`Selection.group_state` only ever
+#: derives it, and no setter exists that could return it a different way).
+GroupState = Mode | Literal["mixed"]
 
 
 def _stage_names(pipeline: Pipeline) -> frozenset[str]:
@@ -114,6 +120,28 @@ class Selection:
         _require_stage(self.base_pipeline, stage, where="launcher.model.Selection.set_mode")
         return replace(self, mode_overrides={**self.mode_overrides, stage: mode})
 
+    def isolate(self, stage: str) -> Selection:
+        """`SW-0017`: one operation setting `stage` to execute (`simulate`)
+        and every other declared stage to replay (`measured`) -- the whole
+        `mode_overrides` mapping is replaced in one step, so no stage keeps
+        a stale mode from before the call, and no other field changes."""
+        _require_stage(self.base_pipeline, stage, where="launcher.model.Selection.isolate")
+        modes: dict[str, Mode] = {
+            s.name: ("simulate" if s.name == stage else "measured") for s in self.base_pipeline.stages
+        }
+        return replace(self, mode_overrides=modes)
+
+    def group_state(self, stages: Collection[str]) -> GroupState:
+        """`SW-0018`: `stages`' shared mode, or `"mixed"` when they
+        disagree -- read-only by construction, since this only ever
+        computes from `working_pipeline`; the sole way to move it is
+        `set_mode`/`isolate` on an individual member."""
+        pipeline = self.working_pipeline
+        modes = {stage.mode for stage in pipeline.stages if stage.name in stages}
+        if len(modes) == 1:
+            return next(iter(modes))
+        return "mixed"
+
     def set_impl(self, stage: str, impl: str) -> Selection:
         _require_stage(self.base_pipeline, stage, where="launcher.model.Selection.set_impl")
         return replace(self, impl_overrides={**self.impl_overrides, stage: impl})
@@ -130,3 +158,23 @@ class Selection:
 
     def set_layout(self, name: str) -> Selection:
         return replace(self, layout=name)
+
+
+@dataclass(frozen=True, slots=True)
+class GroupControlView:
+    """`IMP-0021` (`SW-0020`): what a group control renders -- pure state,
+    no pixels (`player/panels/pipeline_panel.py::StageView`'s own
+    discipline). `selectable` is `False` exactly when `state == "mixed"` --
+    there is no enabled variant for that value, so a caller cannot build a
+    view that offers input against a state nothing can be assigned to."""
+
+    state: GroupState
+    selectable: bool
+
+
+def group_control_view(selection: Selection, stages: Collection[str]) -> GroupControlView:
+    """`SW-0020`: renders `Selection.group_state` as a control state -- the
+    one place `"mixed"` becomes `selectable=False`, so every caller sees
+    the same rule rather than re-deriving it per widget."""
+    state = selection.group_state(stages)
+    return GroupControlView(state=state, selectable=state != "mixed")

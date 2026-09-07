@@ -24,16 +24,17 @@ doing and why*, and **contains no counts at all**.
 
 ## The next action — exactly one
 
-> **`WP-01` and `WP-02` are done** (2026-09-07): the ingest map is keyed by
-> port with an ordered `from:` address list, resolved via `ingest/resolve.py::
-> resolve_port` against a recording's topic index, reported in the run
-> manifest's `ports[].matched_address`; and `runspec/sources.py::SourceSet`
-> binds every port to exactly one of several named recordings, explicit
-> assignment beating the declared default. `df`'s real ingest map is migrated
-> to the new schema.
+> **`WP-01`, `WP-02` and `WP-03` are done** (2026-09-07): the ingest map is
+> keyed by port with an ordered `from:` address list, resolved via
+> `ingest/resolve.py::resolve_port`, reported in the run manifest's
+> `ports[].matched_address`; `runspec/sources.py::SourceSet` binds every port
+> to exactly one of several named recordings; and `launcher/model.py::
+> Selection` gained `isolate`/`group_state` plus a `group_control_view` that
+> renders a disagreeing group's `"mixed"` state as unselectable. `df`'s real
+> ingest map is migrated to the new schema.
 >
-> **Write `WP-03` next: launcher isolate, and the computed mixed state.** Three
-> design rows.
+> **Write `WP-04` next: headless reproduction, and the test that proves it.**
+> Four design rows.
 >
 > **Read `docs/v2/parity/README.md` first**, then run its checker. That answers
 > *"where do I start"* — not a list written down here.
