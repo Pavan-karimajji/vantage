@@ -30,7 +30,7 @@ def test_it14_ingest_map_resolves_from_the_deployed_directory_with_no_checkout(t
         yaml.safe_dump({
             "family": "df.legacy",
             "matches": {"any_topic": ["df/gen_object_list"]},
-            "provides": {"df/gen_object_list": {"port": "gen_object_list"}},
+            "provides": {"gen_object_list": {"from": ["df/gen_object_list"]}},
         }),
         encoding="utf-8",
     )

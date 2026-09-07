@@ -18,22 +18,34 @@ step that computes is an unversioned algorithm sitting between the recording
 and the SUT, which would make a resim reproduce the recording *plus whatever
 that step did* (`R-SIM-5`, `R-SIM-7`).
 
-**Two names, one declaration.** A `provides:` entry's `port:` is the
-run-relative name a layer provider's `self.<port>` resolves against
-(`contracts/binding.py`, `R-SIM-21`) -- for an observation port this is
-still qualified by the recording's own pipeline-stage name (a two-function
-component's own port, prefixed the way that particular bridge happened to
-be run), because *that* is a fact about how this recording came to exist,
-not a framework concept. `ProvidedPort.manifest_port` is derived from it
-(the same `name.partition(".")[2]` `_match_component_ref` already uses to
-strip a stage prefix) -- the bare, pipeline-stage-agnostic name a
-component's own manifest declares (`PortSpec.name`), which is what
-`Session.feasible_cuts` needs: whether a *file* can satisfy a stage's
-declared outputs is a question about the file and the manifest, never about
-what a particular pipeline chose to call its stage. A `source.*` stimulus
-port has no stage segment to strip (`"source"` is the framework's own
-reserved producer name, `contracts/pipeline.py`'s grammar) and passes
-through unchanged.
+**Two names, one declaration.** A `provides:` entry is keyed by **port**
+(`WP-01`, `SW-0001`) -- the run-relative name a layer provider's
+`self.<port>` resolves against (`contracts/binding.py`, `R-SIM-21`) -- for
+an observation port this is still qualified by the recording's own
+pipeline-stage name (a two-function component's own port, prefixed the way
+that particular bridge happened to be run), because *that* is a fact about
+how this recording came to exist, not a framework concept.
+`ProvidedPort.manifest_port` is derived from it (the same
+`name.partition(".")[2]` `_match_component_ref` already uses to strip a
+stage prefix) -- the bare, pipeline-stage-agnostic name a component's own
+manifest declares (`PortSpec.name`), which is what `Session.feasible_cuts`
+needs: whether a *file* can satisfy a stage's declared outputs is a
+question about the file and the manifest, never about what a particular
+pipeline chose to call its stage. A `source.*` stimulus port has no stage
+segment to strip (`"source"` is the framework's own reserved producer name,
+`contracts/pipeline.py`'s grammar) and passes through unchanged.
+
+**One port, several candidate addresses.** An entry's value carries an
+ordered `from:` list of recorded topic names (`WP-01`) -- the same port may
+have been published under different raw names across a family's own
+history. `ingest/resolve.py::resolve_port` tries them in the declared
+order against a recording's real topic index and reports which one
+matched (`SW-0004`..`SW-0007`); `ProvidedPort.topic` keeps today's callers
+working unchanged by carrying the *first* declared candidate, and
+`ProvidedPort.candidates` carries the full ordered list for a caller that
+resolves per recording. The topic-keyed shape this replaced (`port:` as a
+sub-key of a topic-keyed entry) is rejected outright, never accepted
+alongside the new one -- the two shapes cannot coexist in one file.
 
 **Two discovery paths, one parser.** `discover_ingest_maps` scans `modules/
 */sim/ingest/*.yaml` under the superproject root directly -- a source-
@@ -65,7 +77,10 @@ _SUPERPROJECT_ROOT = _superproject_root()
 #: `IMP-0188`: `unit:`/`shape:`/`header:` extend the closed `provides:`
 #: vocabulary -- still renames and tags only (`unit:` resolves through
 #: `units.py`'s closed table, never a raw factor/offset typed in the map).
-_ALLOWED_PROVIDES_KEYS = frozenset({"port", "proto_type", "origin", "unit", "shape", "header"})
+#: `IMP-0001`: `port` left the entry (it is now the key); `from` is the
+#: ordered address list that replaces it -- an entry still carrying `port`
+#: is the old topic-keyed shape, and is rejected as an unknown key.
+_ALLOWED_PROVIDES_KEYS = frozenset({"from", "proto_type", "origin", "unit", "shape", "header"})
 _ALLOWED_HEADER_KEYS = frozenset({"t_source", "counter", "status"})
 _ALLOWED_ABSENT_KEYS = frozenset({"reason"})
 _VALID_ORIGINS = frozenset(p.value for p in Provenance)
@@ -79,7 +94,12 @@ class ProvidedPort:
     `HeaderBinding` rather than three flat fields to avoid a second copy
     of `header.py`'s own shape). `factor`/`offset` default to the identity
     conversion (`1.0`/`0.0`) for a map declaring no `unit:` -- unchanged
-    behaviour for every map written before `WP-12`."""
+    behaviour for every map written before `WP-12`.
+
+    `topic` is the entry's first declared `from:` candidate -- every caller
+    predating `WP-01` (`IngestRecordingReader`, `Session`) keeps reading one
+    topic per port unchanged. `candidates` carries the full ordered list, for
+    a caller that resolves per recording (`ingest.resolve.resolve_port`)."""
 
     topic: str
     port: str  # this run's Tick.ports / known_ports key (self.<port> resolution target)
@@ -91,6 +111,7 @@ class ProvidedPort:
     offset: float = 0.0
     shape: tuple[int, ...] | None = None
     header: HeaderBinding | None = None
+    candidates: tuple[str, ...] = ()  # `WP-01`: the entry's full ordered `from:` list
 
     def __repr__(self) -> str:
         return f"<ProvidedPort {self.topic!r} -> {self.port!r} ({self.family!r})>"
@@ -147,6 +168,22 @@ def _require_reason_keys(entry: Mapping[str, object], *, allowed: frozenset[str]
         )
 
 
+def _require_from_list(entry: Mapping[str, object], *, where: str) -> list[str]:
+    """`IMP-0002`: the one raise site for a `provides:` entry missing its
+    required `from:` list -- distinct from `_require_reason_keys` above,
+    which only ever catches an *extra* key. `where` already names the port
+    (`SW-0002`), so this names only the field at fault, and no caller
+    composes its own message."""
+    candidates = entry.get("from")
+    if not isinstance(candidates, list) or not candidates or not all(isinstance(c, str) for c in candidates):
+        raise AuthoringError(
+            expected="a 'from:' key naming a non-empty, ordered list of recorded addresses",
+            found=repr(candidates), where=where,
+            hint="a provides: entry is keyed by port and its value carries an ordered from: sequence (WP-01)",
+        )
+    return candidates
+
+
 def _parse_ingest_map(path: Path) -> IngestMap:
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     family = raw.get("family")
@@ -167,12 +204,10 @@ def _parse_ingest_map(path: Path) -> IngestMap:
         )
 
     provides = []
-    for topic, entry in (raw.get("provides") or {}).items():
-        where = f"{path} provides '{topic}'"
+    for port, entry in (raw.get("provides") or {}).items():
+        where = f"{path} provides '{port}'"
         _require_reason_keys(entry, allowed=_ALLOWED_PROVIDES_KEYS, where=where)
-        port = entry.get("port")
-        if not port:
-            raise AuthoringError(expected="a 'port:' name", found=repr(port), where=where, hint="")
+        candidates = _require_from_list(entry, where=where)
         origin_raw = entry.get("origin", Provenance.MEASURED.value)
         if origin_raw not in _VALID_ORIGINS:
             raise AuthoringError(
@@ -192,7 +227,7 @@ def _parse_ingest_map(path: Path) -> IngestMap:
                 status=header_entry.get("status"),
             )
         provides.append(ProvidedPort(
-            topic=topic, port=port, manifest_port=_manifest_port(port),
+            topic=candidates[0], candidates=tuple(candidates), port=port, manifest_port=_manifest_port(port),
             proto_type=entry.get("proto_type", ""), origin=Provenance(origin_raw), family=family,
             factor=factor, offset=offset, shape=shape, header=header,
         ))

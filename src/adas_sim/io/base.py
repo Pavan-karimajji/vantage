@@ -188,6 +188,18 @@ class DelayStepRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class PortResolutionRecord:
+    """`IMP-0015` (`SW-0014`): one port's ingest resolution outcome, exactly
+    as `ingest.resolve.Resolution` reported it -- `matched_address` is the
+    candidate the resolver chose (`Resolution.chosen`), `None` when no
+    candidate matched. Every resolved port appears once; nothing downstream
+    re-derives which address a port actually used."""
+
+    port: str
+    matched_address: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class RecordPolicyRecord:
     """One declared output port's resolved `record:` policy, exactly as it
     appears in the run manifest (`UT-C2-12`, `NR-SIM-42`). Written for
@@ -225,6 +237,11 @@ class RunManifest:
     project: str = ""
     pipeline: str = ""
     components: tuple[ComponentBuildInfo, ...] = field(default_factory=tuple)
+    #: `IMP-0015` (`SW-0014`): every resolved port's chosen address, from
+    #: `ingest.resolve.Resolution` -- empty when this run resolved no ports
+    #: through the `WP-01` resolver (every caller predating it, or a run
+    #: with no ingest map applicable).
+    ports: tuple[PortResolutionRecord, ...] = field(default_factory=tuple)
     #: `R-SIM-15`'s "declared, never smuggled," made legible (`S-D6`,
     #: `UT-D6-2`) -- previously only hashed into `run_id` (`core.manifest.
     #: _overrides_repr`), never actually readable from a written manifest.
@@ -415,6 +432,9 @@ def manifest_to_dict(manifest: RunManifest) -> dict:
             }
             for c in manifest.components
         ],
+        "ports": [
+            {"port": p.port, "matched_address": p.matched_address} for p in manifest.ports
+        ],
         "overrides": [
             {"stage": o.stage, "address": o.address, "verb": o.verb, "value": o.value}
             for o in manifest.overrides
@@ -476,6 +496,10 @@ def manifest_from_dict(data: dict) -> RunManifest:
         )
         for c in data.get("components", ())
     )
+    ports = tuple(
+        PortResolutionRecord(port=p["port"], matched_address=p.get("matched_address"))
+        for p in data.get("ports", ())
+    )
     overrides = tuple(
         OverrideRecord(stage=o["stage"], address=o["address"], verb=o["verb"], value=o.get("value"))
         for o in data.get("overrides", ())
@@ -516,6 +540,7 @@ def manifest_from_dict(data: dict) -> RunManifest:
         allow_mixed_projects=data.get("allow_mixed_projects", False),
         process_nonce=data.get("process_nonce", ""),
         components=components,
+        ports=ports,
         overrides=overrides,
         record_policies=record_policies,
         faults=faults,

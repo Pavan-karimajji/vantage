@@ -113,7 +113,7 @@ def test_a_provides_entry_with_an_expression_key_is_refused(tmp_path):
     path = _write_map(tmp_path, {
         "family": "test.family",
         "matches": {"any_topic": ["some/topic"]},
-        "provides": {"some/topic": {"port": "source.x", "expr": "x * 2"}},
+        "provides": {"source.x": {"from": ["some/topic"], "expr": "x * 2"}},
     })
 
     with pytest.raises(AuthoringError) as excinfo:

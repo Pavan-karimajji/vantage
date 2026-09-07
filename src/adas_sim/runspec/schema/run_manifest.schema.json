@@ -54,6 +54,17 @@
         }
       }
     },
+    "ports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["port", "matched_address"],
+        "properties": {
+          "port": {"type": "string"},
+          "matched_address": {"type": ["string", "null"]}
+        }
+      }
+    },
     "overrides": {
       "type": "array",
       "items": {

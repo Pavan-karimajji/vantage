@@ -24,9 +24,14 @@ doing and why*, and **contains no counts at all**.
 
 ## The next action — exactly one
 
-> **Write `WP-01` of the PARITY set: the ingest map keyed by port, with an
-> ordered address list.** Eight design rows, each naming a file and a symbol,
-> blocked by nothing.
+> **`WP-01` is done** (2026-09-07): the ingest map is keyed by port with an
+> ordered `from:` address list, `ingest/resolve.py::resolve_port` resolves it
+> against a recording's topic index, and the run manifest carries
+> `ports[].matched_address`. `df`'s real map (`modules/df/sim/ingest/
+> carla_legacy.yaml`) is migrated to the new schema — the old topic-keyed shape
+> is rejected, so every ingest map in the tree had to move together.
+>
+> **Write `WP-02` next: named sources and per-port binding.** Four design rows.
 >
 > **Read `docs/v2/parity/README.md` first**, then run its checker. That answers
 > *"where do I start"* — not a list written down here.

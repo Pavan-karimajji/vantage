@@ -41,7 +41,7 @@ def _write_map(tmp_path: Path, body: dict, *, filename: str = "family.yaml") -> 
 def test_onboarding_a_family_needs_only_one_yaml_and_the_one_parser(tmp_path):
     path = _write_map(tmp_path, {
         "family": "test.family", "matches": {"any_topic": ["some/topic"]},
-        "provides": {"some/topic": {"port": "source.x", "proto_type": "test.Schema"}},
+        "provides": {"source.x": {"from": ["some/topic"], "proto_type": "test.Schema"}},
     })
     ingest_map = _parse_ingest_map(path)
     assert ingest_map.family == "test.family"
@@ -56,8 +56,8 @@ def test_onboarding_a_family_needs_only_one_yaml_and_the_one_parser(tmp_path):
 def test_every_signal_binding_field_is_declared_and_read_back(tmp_path):
     path = _write_map(tmp_path, {
         "family": "test.family", "matches": {"any_topic": ["ARS540.Obj"]},
-        "provides": {"ARS540.Obj": {
-            "port": "fusion.objects", "proto_type": "adas.perception.DfObjList", "origin": "measured",
+        "provides": {"fusion.objects": {
+            "from": ["ARS540.Obj"], "proto_type": "adas.perception.DfObjList", "origin": "measured",
             "unit": "km_h", "shape": [8],
             "header": {"t_source": "fusion.t_source", "counter": "fusion.counter", "status": "fusion.status"},
         }},
@@ -77,7 +77,7 @@ def test_every_signal_binding_field_is_declared_and_read_back(tmp_path):
 def test_a_map_declaring_no_unit_keeps_the_identity_conversion(tmp_path):
     path = _write_map(tmp_path, {
         "family": "test.family", "matches": {"any_topic": ["t"]},
-        "provides": {"t": {"port": "source.x", "proto_type": "test.Schema"}},
+        "provides": {"source.x": {"from": ["t"], "proto_type": "test.Schema"}},
     })
     provided = _parse_ingest_map(path).provides[0]
     assert (provided.factor, provided.offset) == (1.0, 0.0)
@@ -194,7 +194,7 @@ def test_a_unit_outside_the_closed_table_is_refused():
 def test_a_provides_entry_naming_an_unknown_unit_is_refused_at_parse(tmp_path):
     path = _write_map(tmp_path, {
         "family": "test.family", "matches": {"any_topic": ["t"]},
-        "provides": {"t": {"port": "source.x", "unit": "smoots"}},
+        "provides": {"source.x": {"from": ["t"], "unit": "smoots"}},
     })
     with pytest.raises(AuthoringError) as excinfo:
         _parse_ingest_map(path)
@@ -210,7 +210,7 @@ def test_a_provides_entry_naming_an_unknown_unit_is_refused_at_parse(tmp_path):
 def test_parsed_ingest_map_is_plain_data_with_no_callables(tmp_path):
     path = _write_map(tmp_path, {
         "family": "test.family", "matches": {"any_topic": ["t"]},
-        "provides": {"t": {"port": "source.x"}},
+        "provides": {"source.x": {"from": ["t"]}},
     })
     ingest_map = _parse_ingest_map(path)
     for provided in ingest_map.provides:
@@ -325,7 +325,7 @@ def test_resolving_static_data_never_writes_the_sidecar_file(tmp_path):
 def test_parsing_an_ingest_map_never_writes_the_map_file(tmp_path):
     path = _write_map(tmp_path, {
         "family": "test.family", "matches": {"any_topic": ["t"]},
-        "provides": {"t": {"port": "source.x"}},
+        "provides": {"source.x": {"from": ["t"]}},
     })
     before = (path.read_bytes(), path.stat().st_mtime_ns)
     _parse_ingest_map(path)

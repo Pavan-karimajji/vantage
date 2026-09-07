@@ -30,7 +30,7 @@ import os
 import socket
 import tempfile
 import uuid
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -45,6 +45,7 @@ from adas_sim.graph.coherence import Verdict, classify, render_finding
 from adas_sim.graph.grid import derive_step
 from adas_sim.diagnostics.errors import AuthoringError, ContractError, ProvenanceWarning
 from adas_sim.runspec.ids import new_run_id
+from adas_sim.ingest.resolve import Resolution
 from adas_sim.io.base import (
     CAPTURE_TIME_MANIFEST_VERSION,
     BundleOverrideRecord,
@@ -52,6 +53,7 @@ from adas_sim.io.base import (
     DelayStepRecord,
     FaultRecord,
     OverrideRecord,
+    PortResolutionRecord,
     RecordPolicyRecord,
     RunManifest,
     manifest_to_dict,
@@ -158,6 +160,13 @@ def _record_policy_records(pipeline: Pipeline) -> tuple[RecordPolicyRecord, ...]
     return records
 
 
+def _port_records(resolutions: Sequence[Resolution]) -> tuple[PortResolutionRecord, ...]:
+    """`IMP-0015` (`SW-0014`): every port `resolutions` covers, written as
+    the manifest's own record -- `matched_address` is `Resolution.chosen`
+    verbatim, `None` for a port no candidate resolved (`WP-01`)."""
+    return tuple(PortResolutionRecord(port=r.port, matched_address=r.chosen) for r in resolutions)
+
+
 def _coherence_summary(pipeline: Pipeline) -> tuple[str, tuple[str, ...]]:
     """`IMP-0224`: `graph.coherence.classify(pipeline)`, aggregated to one
     worst-of verdict plus every finding's rendered text -- `"broken"` beats
@@ -202,6 +211,7 @@ def build_manifest(
     component_bundle_paths: Mapping[str, str] | None = None,
     component_bundle_shas: Mapping[str, str] | None = None,
     component_tolerance_shas: Mapping[str, str] | None = None,
+    resolutions: Sequence[Resolution] = (),
     config_bundle_embedded: bool = False,
     bundle_sha: str = "",
     bundle_overrides: Mapping[str, object] | None = None,
@@ -245,6 +255,8 @@ def build_manifest(
         - `component_tolerance_shas` is keyed by stage name, `diagnostics.tolerance.
           ToleranceSet.sha256` per component (`IMP-0226`) -- absent/`""` for a
           component with no `tolerance.yaml` (every field exact).
+        - `resolutions` (`IMP-0015`) is every port `ingest.resolve.resolve_port`
+          resolved for this run -- empty for every caller predating `WP-01`.
         - `run_spec_sha256` is `runspec/canon.py::compute_spec_sha256`'s own result
           for this run's Resolved Run Spec (`IMP-0216`) -- `""` when no spec was
           emitted.
@@ -330,6 +342,7 @@ def build_manifest(
         project=project,
         pipeline=pipeline.name if pipeline is not None else "",
         components=components,
+        ports=_port_records(resolutions),
         overrides=_override_records(pipeline) if pipeline is not None else (),
         record_policies=tuple(_record_policy_records(pipeline)) if pipeline is not None else (),
         faults=_fault_records(pipeline) if pipeline is not None else (),
