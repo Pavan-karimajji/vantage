@@ -24,14 +24,15 @@ doing and why*, and **contains no counts at all**.
 
 ## The next action — exactly one
 
-> **Every non-`viz` package is done except `WP-12`/`WP-13`** (2026-09-07):
-> `WP-01`, `WP-02`, `WP-03`, `WP-04`, `WP-05`, `WP-06`, `WP-07`, `WP-10` and
-> `WP-11` all closed — ingest map keyed by port; `runspec/sources.py::
-> SourceSet`; `launcher/model.py::Selection` isolate/group_state/from_spec;
-> `reproduce_line`; `diagnostics/logging.py` de-duplication; `resolve/
-> plugins.py::PluginBundle` identity fields; `config/bundle.py`'s
-> embed/read/BundleAbsent/BundleMismatch; `io/ranges.py::Range`; and
-> `io/marks.py::Annotation`/`Classification`/`select`. `df`'s and
+> **Every non-`viz` package is done except `WP-13`** (2026-09-07): `WP-01`
+> through `WP-07`, `WP-10`, `WP-11` and `WP-12` all closed — ingest map keyed
+> by port; `runspec/sources.py::SourceSet`; `launcher/model.py::Selection`
+> isolate/group_state/from_spec; `reproduce_line`; `diagnostics/logging.py`
+> de-duplication; `resolve/plugins.py::PluginBundle` identity fields;
+> `config/bundle.py`'s embed/read/BundleAbsent/BundleMismatch;
+> `io/ranges.py::Range`; `io/marks.py::Annotation`/`Classification`/`select`;
+> and `engine/refrun.py::RefRun`/`first_divergence`/`topic_for` plus
+> `emit_run_spec`'s/the run manifest's `reference_build_sha256`. `df`'s and
 > `perception-core`'s real `sim/plugin.yaml` and `df`'s ingest map are
 > migrated to the new schemas.
 >
@@ -40,8 +41,9 @@ doing and why*, and **contains no counts at all**.
 > plan's own prerequisite; see "Open — PARITY's three" below) and are C++
 > work (`viz/cpp/viz/player/`) outside this checkout besides.
 >
-> **Write `WP-12` next: side-by-side reference run.** Five design rows —
-> the last unblocked package (`WP-13` is two rows and comes after it).
+> **Write `WP-13` next: live session control.** Two design rows — the last
+> unblocked package. Once it lands, everything left in this plan is
+> `viz`-blocked.
 >
 > **Read `docs/v2/parity/README.md` first**, then run its checker. That answers
 > *"where do I start"* — not a list written down here.

@@ -85,7 +85,7 @@ them.
 
 ## E. Trusting the answer
 
-- [ ] **WP-12** — Side-by-side reference run · Two builds sharing one resolved input set; the first divergence located; both builds' outputs recorded separably.
+- [x] **WP-12** — Side-by-side reference run · Two builds sharing one resolved input set; the first divergence located; both builds' outputs recorded separably.
 - [ ] **WP-13** — Live session control · Read and control a running session from a script, over an operation table built from the headless API's own exports.
 
 ---
@@ -152,10 +152,10 @@ document.
 | `[x]` | `IMP-0011` | `SW-0054` | `WP-02` | `NEW` | `runspec/sources.py::SourceSet.for_port` consults the explicit assignment map first, the default second. Two lookups, in that order. | `UT-sourceset-04` |
 | `[x]` | `IMP-0012` | `SW-0011` | `WP-04` | `EXTEND` | `runspec/canon.py` gains source and per-port assignment canonicalisation, so assembly order cannot reach the emitted bytes. | `UT-specasm-01` |
 | `[x]` | `IMP-0013` | `SW-0012` | `WP-04` | `KEEP` | `runspec/canon.py::canonical` + `compute_spec_sha` already give a stable serialisation and its hash; both are taken unchanged. The new fields ride the existing path. | `UT-specasm-02` |
-| `[ ]` | `IMP-0014` | `SW-0013` | `WP-12` | `EXTEND` | `runspec/emit.py::emit_run_spec` refuses when `reference:` is configured without a staged identity, alongside its existing `unresolved()` refusal. | `UT-specasm-03` |
+| `[x]` | `IMP-0014` | `SW-0013` | `WP-12` | `EXTEND` | `runspec/emit.py::emit_run_spec` refuses when `reference:` is configured without a staged identity, alongside its existing `unresolved()` refusal. | `UT-specasm-03` |
 | `[x]` | `IMP-0015` | `SW-0014` | `WP-01` | `EXTEND` | `runspec/manifest.py` gains `ports[].matched_address`, filled from `Resolution.chosen` and left null when unresolved. | `UT-manifest-01` |
 | `[x]` | `IMP-0016` | `SW-0015` | `WP-07` | `EXTEND` | `runspec/manifest.py` gains `config_bundle_embedded_sha256` beside the existing `config_bundle_sha256`. Two fields, because one cannot show a mismatch. | `UT-manifest-02` |
-| `[ ]` | `IMP-0017` | `SW-0016` | `WP-12` | `EXTEND` | `runspec/manifest.py` gains `reference_build_sha256`, absent rather than empty for an ordinary run. | `UT-manifest-03` |
+| `[x]` | `IMP-0017` | `SW-0016` | `WP-12` | `EXTEND` | `runspec/manifest.py` gains `reference_build_sha256`, absent rather than empty for an ordinary run. | `UT-manifest-03` |
 | `[x]` | `IMP-0018` | `SW-0017` | `WP-03` | `EXTEND` | `launcher/model.py::Selection.isolate(stage)` — **new method** on the existing `Selection`, mutating only the mode field of every stage. | `UT-selmodel-01` |
 | `[x]` | `IMP-0019` | `SW-0018` | `WP-03` | `EXTEND` | `launcher/model.py` — a **new** read-only `group_state` property over a group's members. No setter is defined, so the third state is unreachable by assignment. | `UT-selmodel-02` |
 | `[x]` | `IMP-0020` | `SW-0019` | `WP-04` | `EXTEND` | `launcher/model.py::Selection` gains a **new** `from_spec`, made the only construction path; the interactive path builds a spec via `write.py::to_run_config` and reads it back. | `UT-selmodel-03` |
@@ -188,9 +188,9 @@ document.
 | `[x]` | `IMP-0047` | `SW-0045` | `WP-07` | `EXTEND` | `config/bundle.py` — a **new** `embed(writer, bundle_dir)` beside `may_enter_bundle`, writing the packed bytes into a recording meta block, reusing the mechanism the manifest already uses. | `UT-bundle-01` |
 | `[x]` | `IMP-0048` | `SW-0046` | `WP-07` | `EXTEND` | `config/bundle.py` — `embed` stores the digest it computed; a **new** `read` recomputes and compares, returning a mismatch rather than raising. | `UT-bundle-02` |
 | `[x]` | `IMP-0049` | `SW-0047` | `WP-07` | `NEW` | `config/bundle.py::BundleAbsent` is a returned value, not an exception and not `None`, so no caller can treat it as a path to fall back from. | `UT-bundle-03` |
-| `[ ]` | `IMP-0050` | `SW-0048` | `WP-12` | `NEW` | `engine/refrun.py::RefRun.tick` resolves inputs once and passes the same objects to both libraries, so equality is structural rather than checked. | `UT-refrun-01` |
-| `[ ]` | `IMP-0051` | `SW-0049` | `WP-12` | `NEW` | `engine/refrun.py::first_divergence` walks ports in manifest order and returns on the first difference, carrying tick, port and field. | `UT-refrun-02` |
-| `[ ]` | `IMP-0052` | `SW-0050` | `WP-12` | `NEW` | `engine/refrun.py` records each build under a topic prefix derived from its role, so the two are separable without a side-car index. | `UT-refrun-03` |
+| `[x]` | `IMP-0050` | `SW-0048` | `WP-12` | `NEW` | `engine/refrun.py::RefRun.tick` resolves inputs once and passes the same objects to both libraries, so equality is structural rather than checked. | `UT-refrun-01` |
+| `[x]` | `IMP-0051` | `SW-0049` | `WP-12` | `NEW` | `engine/refrun.py::first_divergence` walks ports in manifest order and returns on the first difference, carrying tick, port and field. | `UT-refrun-02` |
+| `[x]` | `IMP-0052` | `SW-0050` | `WP-12` | `NEW` | `engine/refrun.py` records each build under a topic prefix derived from its role, so the two are separable without a side-car index. | `UT-refrun-03` |
 | `[ ]` | `IMP-0053` | `SW-0051` | `WP-13` | `NEW` | `pyapi/live.py::LiveSession` over a local socket, attachable while a run is in progress and requiring no display. | `UT-livectl-01` |
 | `[ ]` | `IMP-0054` | `SW-0052` | `WP-13` | `NEW` | `pyapi/live.py` builds its operation table from the headless API's exported names, so an operation with no headless twin cannot be registered. | `UT-livectl-02` |
 

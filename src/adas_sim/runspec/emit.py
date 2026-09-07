@@ -220,6 +220,18 @@ def unresolved(spec: RunSpec) -> list[str]:
     return findings
 
 
+@dataclass(frozen=True, slots=True)
+class ReferenceSpec:
+    """`WP-12` (`SW-0013`): a caller's own "run this side by side against a
+    staged reference build" declaration. `staged_build_sha256` is that
+    build's identity; `None` means a side-by-side run was requested but
+    nothing has actually been staged yet -- `emit_run_spec` refuses that
+    combination rather than silently emitting a spec with no reference to
+    compare against."""
+
+    staged_build_sha256: str | None = None
+
+
 def emit_run_spec(
     resolved: ResolvedConfig,
     *,
@@ -236,12 +248,25 @@ def emit_run_spec(
     checkpoint: Mapping[str, object] | None = None,
     limits: Mapping[str, object] | None = None,
     diagnostics: Mapping[str, object] | None = None,
+    reference: ReferenceSpec | None = None,
 ) -> RunSpec:
     """Builds the Resolved Run Spec from `resolved`'s `COMPOSITION` (units)
     and `CONNECTIONS` (wiring) layers plus every already-probed
     `manifests[unit_name]`. Raises `InternalError` unless `unresolved()`
     returns empty on the built spec -- an emitter that produces something
-    unresolved is this module's own bug, never the caller's (`IMP-0001`)."""
+    unresolved is this module's own bug, never the caller's (`IMP-0001`).
+
+    `WP-12` (`SW-0013`): `reference`, when given, must carry a staged
+    build's identity -- a caller that asks for a side-by-side run before
+    one is actually staged is refused here, alongside (never instead of)
+    the `unresolved()` refusal below."""
+    if reference is not None and not reference.staged_build_sha256:
+        raise AuthoringError(
+            expected="reference.staged_build_sha256 naming the staged reference build",
+            found=repr(reference.staged_build_sha256), where="adas_sim.runspec.emit.emit_run_spec",
+            hint="a side-by-side run needs a staged reference before its spec can be assembled -- "
+                 "stage one, or drop reference: entirely for an ordinary run",
+        )
     modes = modes or {}
     record_policy = record_policy or {}
     sampling_defaults = sampling_defaults or {}
@@ -336,6 +361,11 @@ def emit_run_spec(
         "limits": limits,
         "diagnostics": diagnostics,
     }
+    if reference is not None:
+        # WP-12 (SW-0013): omitted entirely for an ordinary run, never an
+        # empty string -- absence is a value, same discipline `config.
+        # bundle.BundleAbsent` (WP-07) states for its own field.
+        data["reference_build_sha256"] = reference.staged_build_sha256
 
     spec = RunSpec(data=data)
     validate_run_spec(spec)

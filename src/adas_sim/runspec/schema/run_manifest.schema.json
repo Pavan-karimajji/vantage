@@ -119,6 +119,7 @@
     },
     "base_config_bundle_sha256": {"type": "string"},
     "run_spec_sha256": {"type": "string"},
+    "reference_build_sha256": {"type": ["string", "null"]},
     "coherence_verdict": {"enum": ["normal", "orphan", "broken", "unknown"]},
     "coherence_findings": {"type": "array", "items": {"type": "string"}},
     "divergence": {"type": "string"},

@@ -10,6 +10,7 @@
     "schema": {"const": "adas.sim.runspec/1.0"},
     "run_id": {"type": "string"},
     "spec_sha256": {"type": "string"},
+    "reference_build_sha256": {"type": "string"},
     "grid": {
       "type": "object", "additionalProperties": false, "required": ["step_ns"],
       "properties": {"step_ns": {"type": "integer", "minimum": 0}}

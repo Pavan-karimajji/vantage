@@ -274,6 +274,11 @@ class RunManifest:
     #: can make from this manifest alone. `""` whenever `bundle_overrides`
     #: is empty -- there is no second hash to distinguish from the first.
     base_config_bundle_sha256: str = ""
+    #: `WP-12` (`SW-0016`): the staged reference build's identity, for a
+    #: side-by-side run -- `None` (absent, not an empty string) for every
+    #: ordinary run, so "there is no reference" and "the reference hash is
+    #: unknown" can never be confused (`R-SIM-25`/`NR-SIM-4`).
+    reference_build_sha256: str | None = None
     seed: int = 0
     #: `OD-11` (`R-SIM-3a` §9.1): whether this run's pipeline declared
     #: `allow_mixed_projects: true` -- badges a deliberate cross-project
@@ -462,6 +467,7 @@ def manifest_to_dict(manifest: RunManifest) -> dict:
             {"address": o.address, "value": o.value} for o in manifest.bundle_overrides
         ],
         "base_config_bundle_sha256": manifest.base_config_bundle_sha256,
+        "reference_build_sha256": manifest.reference_build_sha256,
         "run_spec_sha256": manifest.run_spec_sha256,
         "coherence_verdict": manifest.coherence_verdict,
         "coherence_findings": list(manifest.coherence_findings),
@@ -555,6 +561,7 @@ def manifest_from_dict(data: dict) -> RunManifest:
         faults=faults,
         bundle_overrides=bundle_overrides,
         base_config_bundle_sha256=data.get("base_config_bundle_sha256", ""),
+        reference_build_sha256=data.get("reference_build_sha256"),
         run_spec_sha256=data.get("run_spec_sha256", ""),
         coherence_verdict=data.get("coherence_verdict", "unknown"),
         coherence_findings=tuple(data.get("coherence_findings", ())),
