@@ -81,7 +81,7 @@ them.
 - [ ] **WP-08** — Transport controls and play speed · The nine named actions, and a rate that is measured rather than requested. **Blocked by the prerequisite.**
 - [ ] **WP-09** — Step granularity and cycles · Five kinds of step, cycles discovered from the recording, and a cycle step that lands on a coherent input set. **Blocked by the prerequisite.**
 - [x] **WP-10** — Named ranges · Bounds in the recording's own timebase, travelling with the file, inclusive at both ends.
-- [ ] **WP-11** — Marks, in two kinds · Annotation and classification as separate types in separate blocks, each stamped with author and time at creation.
+- [x] **WP-11** — Marks, in two kinds · Annotation and classification as separate types in separate blocks, each stamped with author and time at creation.
 
 ## E. Trusting the answer
 
@@ -175,9 +175,9 @@ document.
 | `[x]` | `IMP-0034` | `SW-0033` | `WP-10` | `NEW` | `io/ranges.py::Range` stores `start_ns`/`end_ns` in the recording's timebase. No wall-clock field is defined to be tempted by. | `UT-ranges-01` |
 | `[x]` | `IMP-0035` | `SW-0034` | `WP-10` | `NEW` | `io/ranges.py::read`/`write` use the recording's existing meta-block mechanism, so ranges travel with the file rather than beside it. | `UT-ranges-02` |
 | `[x]` | `IMP-0036` | `SW-0035` | `WP-10` | `NEW` | `io/ranges.py::contains(tick_ns)` is inclusive at both bounds, stated here because the boundary case is the one that gets decided by accident. | `UT-ranges-03` |
-| `[ ]` | `IMP-0037` | `SW-0036` | `WP-11` | `NEW` | `io/marks.py::Annotation` and `Classification` are separate dataclasses in separate meta blocks. Neither accepts the other's fields. | `UT-marks-01` |
-| `[ ]` | `IMP-0038` | `SW-0037` | `WP-11` | `NEW` | `io/marks.py::_stamp` fills `author` and `created_ns` at construction from the session identity, never from file metadata at read time. | `UT-marks-02` |
-| `[ ]` | `IMP-0039` | `SW-0038` | `WP-11` | `NEW` | `io/marks.py::select(recordings, classification)` filters on the stored value only, with no fuzzy or prefix matching to explain later. | `UT-marks-03` |
+| `[x]` | `IMP-0037` | `SW-0036` | `WP-11` | `NEW` | `io/marks.py::Annotation` and `Classification` are separate dataclasses in separate meta blocks. Neither accepts the other's fields. | `UT-marks-01` |
+| `[x]` | `IMP-0038` | `SW-0037` | `WP-11` | `NEW` | `io/marks.py::_stamp` fills `author` and `created_ns` at construction from the session identity, never from file metadata at read time. | `UT-marks-02` |
+| `[x]` | `IMP-0039` | `SW-0038` | `WP-11` | `NEW` | `io/marks.py::select(recordings, classification)` filters on the stored value only, with no fuzzy or prefix matching to explain later. | `UT-marks-03` |
 | `[x]` | `IMP-0040` | `SW-0039` | `WP-05` | `EXTEND` | `diagnostics/logging.py` — a **new** `_dedupe_key` over the closed vocabulary's fields (`_WARN_EVENTS`/`_ERROR_EVENTS`), so a key cannot silently ignore a field added later. | `UT-diaglog-01` |
 | `[x]` | `IMP-0041` | `SW-0040` | `WP-05` | `EXTEND` | `diagnostics/logging.py` — a **new** entry record with an `occurrences` count, accumulated per key by `log()` and emitted once at flush rather than per occurrence. | `UT-diaglog-02` |
 | `[x]` | `IMP-0042` | `SW-0041` | `WP-05` | `EXTEND` | `diagnostics/logging.py` — a **new** `FLOOD_THRESHOLD` and one `dedup_started` event added to the declared vocabulary, emitted once per key. | `UT-diaglog-03` |

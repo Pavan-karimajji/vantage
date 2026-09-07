@@ -24,23 +24,24 @@ doing and why*, and **contains no counts at all**.
 
 ## The next action — exactly one
 
-> **`WP-01`, `WP-02`, `WP-03`, `WP-04`, `WP-05`, `WP-06`, `WP-07` and `WP-10`
-> are done** (2026-09-07): ingest map keyed by port; `runspec/sources.py::
-> SourceSet` per-port source binding; `launcher/model.py::Selection`
-> isolate/group_state/from_spec; `runspec/canon.py` + `reproduce_line` for
-> file/memory convergence; `diagnostics/logging.py` de-duplication;
-> `resolve/plugins.py::PluginBundle` identity fields; `config/bundle.py::
-> embed`/`read`/`BundleAbsent`/`BundleMismatch` for the config bundle
-> travelling in the recording; and `io/ranges.py::Range` for named spans in
-> the recording's own timebase. `df`'s and `perception-core`'s real
-> `sim/plugin.yaml` and `df`'s ingest map are migrated to the new schemas.
+> **Every non-`viz` package is done except `WP-12`/`WP-13`** (2026-09-07):
+> `WP-01`, `WP-02`, `WP-03`, `WP-04`, `WP-05`, `WP-06`, `WP-07`, `WP-10` and
+> `WP-11` all closed — ingest map keyed by port; `runspec/sources.py::
+> SourceSet`; `launcher/model.py::Selection` isolate/group_state/from_spec;
+> `reproduce_line`; `diagnostics/logging.py` de-duplication; `resolve/
+> plugins.py::PluginBundle` identity fields; `config/bundle.py`'s
+> embed/read/BundleAbsent/BundleMismatch; `io/ranges.py::Range`; and
+> `io/marks.py::Annotation`/`Classification`/`select`. `df`'s and
+> `perception-core`'s real `sim/plugin.yaml` and `df`'s ingest map are
+> migrated to the new schemas.
 >
-> **`WP-08`/`WP-09` are skipped, not next** — both are blocked by the
-> unwritten `Source`/`Feed` interface in `modules/viz` (register item
-> `C-16`, this plan's own prerequisite; see "Open — PARITY's three" below)
-> and are C++ work (`viz/cpp/viz/player/`) outside this checkout besides.
+> **`WP-08`/`WP-09` stay skipped** — both are blocked by the unwritten
+> `Source`/`Feed` interface in `modules/viz` (register item `C-16`, this
+> plan's own prerequisite; see "Open — PARITY's three" below) and are C++
+> work (`viz/cpp/viz/player/`) outside this checkout besides.
 >
-> **Write `WP-11` next: marks, in two kinds.** Three design rows.
+> **Write `WP-12` next: side-by-side reference run.** Five design rows —
+> the last unblocked package (`WP-13` is two rows and comes after it).
 >
 > **Read `docs/v2/parity/README.md` first**, then run its checker. That answers
 > *"where do I start"* — not a list written down here.
