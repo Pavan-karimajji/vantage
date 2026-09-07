@@ -39,15 +39,24 @@ per campaign, and none exists yet.
 
 ---
 
-## Prerequisite, owned elsewhere
+## Prerequisite, owned elsewhere — resolved 2026-09-07
 
 **The `Source`/`Feed` interface — register item `C-16`, allocated to
-`modules/viz`.** It is unwritten, and every transport control is a call on it.
-If it ships offering message granularity only, the fifth step kind in `WP-09`
-becomes impossible to add later without changing the interface.
-
-**Blocks `WP-08` and `WP-09`, and nothing else.** Eleven of the thirteen
-packages are independent of it, so it gates breadth rather than progress.
+`modules/viz`.** Scoped in depth before landing: `viz::session::Source`/
+`Session` (`WP-12`/`WP-15` in `modules/viz`'s own Implementation Plan, both
+closed 2026-08-19) already exposed everything `WP-08`/`WP-09` need —
+`At`/`SeekNs`/`RunManifestBytes`, all read-only over a finished recording.
+**No interface change was needed.** What was missing was two files nobody had
+written yet: `viz/cpp/viz/player/transport.hpp`/`.cpp` (`WP-08`) and
+`viz/cpp/viz/player/stepping.hpp`/`.cpp` (`WP-09`), both pure position/cycle
+arithmetic with no `Session`/`Source` handle of their own. Landed directly in
+`modules/viz` (same cross-repo placement `WP-06`'s `IMP-0045` already used for
+`interfaces/scripts/pack_plugin_bundle.py` — the obligation stays here, the
+code lives where it runs), verified by `viz_test_transport`/`viz_test_stepping`
+(gtest, native Windows, `ctest -C Release`, both green) citing `UT-transport-
+01`..`05`/`UT-stepping-01`..`03` verbatim. `modules/viz`'s own `trace_check.py`
+and toolkit-isolation/dependency-graph checks all still pass — no new `viz`
+requirement was minted, matching the same precedent.
 
 ---
 
@@ -78,8 +87,8 @@ them.
 
 ## D. Moving through a recording
 
-- [ ] **WP-08** — Transport controls and play speed · The nine named actions, and a rate that is measured rather than requested. **Blocked by the prerequisite.**
-- [ ] **WP-09** — Step granularity and cycles · Five kinds of step, cycles discovered from the recording, and a cycle step that lands on a coherent input set. **Blocked by the prerequisite.**
+- [x] **WP-08** — Transport controls and play speed · The nine named actions, and a rate that is measured rather than requested.
+- [x] **WP-09** — Step granularity and cycles · Five kinds of step, cycles discovered from the recording, and a cycle step that lands on a coherent input set.
 - [x] **WP-10** — Named ranges · Bounds in the recording's own timebase, travelling with the file, inclusive at both ends.
 - [x] **WP-11** — Marks, in two kinds · Annotation and classification as separate types in separate blocks, each stamped with author and time at creation.
 
@@ -161,17 +170,17 @@ document.
 | `[x]` | `IMP-0020` | `SW-0019` | `WP-04` | `EXTEND` | `launcher/model.py::Selection` gains a **new** `from_spec`, made the only construction path; the interactive path builds a spec via `write.py::to_run_config` and reads it back. | `UT-selmodel-03` |
 | `[x]` | `IMP-0021` | `SW-0020` | `WP-03` | `EXTEND` | `launcher/model.py`'s view binding renders the computed group state disabled. The control has no enabled variant for that value. | `UT-selview-01` |
 | `[x]` | `IMP-0022` | `SW-0021` | `WP-04` | `EXTEND` | `launcher/write.py` — a **new** `reproduce_line(model)` beside `to_run_config`, rendering from the model and returning one line. No display string is read back to build it. | `UT-selview-02` |
-| `[ ]` | `IMP-0023` | `SW-0022` | `WP-08` | `NEW` | `viz/cpp/viz/player/transport.hpp::Transport` — one enum of actions and one `Apply(Action, Position)`, so an action cannot exist without a transform. | `UT-transport-01` |
-| `[ ]` | `IMP-0024` | `SW-0023` | `WP-08` | `NEW` | `viz/cpp/viz/player/transport.cpp` serves a backward move from `SceneHistory` only; it holds no handle on which to call the software under test. | `UT-transport-02` |
-| `[ ]` | `IMP-0025` | `SW-0024` | `WP-08` | `NEW` | `viz/cpp/viz/player/transport.hpp::kStepPresets` plus a custom slot. `Apply` takes the resolved count, never a free integer from the UI. | `UT-transport-03` |
-| `[ ]` | `IMP-0026` | `SW-0025` | `WP-08` | `NEW` | `viz/cpp/viz/player/transport.cpp::AchievedRate` divides executed ticks by elapsed time from the injected clock. The requested value is not an input to it. | `UT-transport-04` |
-| `[ ]` | `IMP-0027` | `SW-0026` | `WP-08` | `NEW` | `viz/cpp/viz/player/transport.hpp::PlaybackRate` holds `requested` and `achieved` as separate members, so no accessor can return one for the other. | `UT-transport-05` |
-| `[ ]` | `IMP-0028` | `SW-0027` | `WP-09` | `NEW` | `viz/cpp/viz/player/stepping.hpp::Granularity` — a scoped enum of five, with no open integer variant. | `UT-stepping-01` |
-| `[ ]` | `IMP-0029` | `SW-0028` | `WP-09` | `NEW` | `viz/cpp/viz/player/stepping.cpp::NextCycleBoundary` reads the cycle index rather than the message stream, so a boundary is found without scanning. | `UT-stepping-02` |
-| `[ ]` | `IMP-0030` | `SW-0029` | `WP-09` | `NEW` | `viz/cpp/viz/player/stepping.cpp::Select` validates against the loaded recording's cycle set and returns the prior selection on refusal. | `UT-stepping-03` |
-| `[ ]` | `IMP-0031` | `SW-0030` | `WP-09` | `NEW` | `io/cycles.py::discover(reader) -> list[Cycle]` takes only a reader. No configuration parameter exists to pass it. | `UT-cycles-01` |
-| `[ ]` | `IMP-0032` | `SW-0031` | `WP-09` | `NEW` | `io/cycles.py::Cycle` carries `name`, `index` and `period_ns` as an integer, matching the two-clock discipline the recording model already uses. | `UT-cycles-02` |
-| `[ ]` | `IMP-0033` | `SW-0032` | `WP-09` | `NEW` | `io/cycles.py::run_of(topic, log_time_ns) -> int` numbers each run of a cycle, so attribution is a lookup rather than a reconstruction. | `UT-cycles-03` |
+| `[x]` | `IMP-0023` | `SW-0022` | `WP-08` | `NEW` | `viz/cpp/viz/player/transport.hpp::Transport` — one enum of actions and one `Apply(Action, Position)`, so an action cannot exist without a transform. | `UT-transport-01` |
+| `[x]` | `IMP-0024` | `SW-0023` | `WP-08` | `NEW` | `viz/cpp/viz/player/transport.cpp::Apply` holds no `Session`/`Source`/component handle at all — stronger than "serves a backward move from `SceneHistory`" (this row's original text: `df_viz::history::SceneHistory` is Scene-shaped, `VizScene*`, and does not fit a `Position` transform). A backward move re-reads an already-recorded position via the caller's own `Session::At`; `Apply` never reaches past the `Position` it is given. | `UT-transport-02` |
+| `[x]` | `IMP-0025` | `SW-0024` | `WP-08` | `NEW` | `viz/cpp/viz/player/transport.hpp::kStepPresets` plus a custom slot. `Apply` takes the resolved count, never a free integer from the UI. | `UT-transport-03` |
+| `[x]` | `IMP-0026` | `SW-0025` | `WP-08` | `NEW` | `viz/cpp/viz/player/transport.cpp::AchievedRate` divides executed ticks by elapsed time from the injected clock. The requested value is not an input to it. | `UT-transport-04` |
+| `[x]` | `IMP-0027` | `SW-0026` | `WP-08` | `NEW` | `viz/cpp/viz/player/transport.hpp::PlaybackRate` holds `requested` and `achieved` as separate members, so no accessor can return one for the other. | `UT-transport-05` |
+| `[x]` | `IMP-0028` | `SW-0027` | `WP-09` | `NEW` | `viz/cpp/viz/player/stepping.hpp::Granularity` — a scoped enum of five, with no open integer variant. | `UT-stepping-01` |
+| `[x]` | `IMP-0029` | `SW-0028` | `WP-09` | `NEW` | `viz/cpp/viz/player/stepping.cpp::NextCycleBoundary` reads the cycle index rather than the message stream, so a boundary is found without scanning. | `UT-stepping-02` |
+| `[x]` | `IMP-0030` | `SW-0029` | `WP-09` | `NEW` | `viz/cpp/viz/player/stepping.cpp::Select` validates against the loaded recording's cycle set and returns the prior selection on refusal. | `UT-stepping-03` |
+| `[x]` | `IMP-0031` | `SW-0030` | `WP-09` | `NEW` | `io/cycles.py::discover(reader) -> list[Cycle]` takes only a reader. No configuration parameter exists to pass it. | `UT-cycles-01` |
+| `[x]` | `IMP-0032` | `SW-0031` | `WP-09` | `NEW` | `io/cycles.py::Cycle` carries `name`, `index` and `period_ns` as an integer, matching the two-clock discipline the recording model already uses. | `UT-cycles-02` |
+| `[x]` | `IMP-0033` | `SW-0032` | `WP-09` | `NEW` | `io/cycles.py::run_of(topic, log_time_ns) -> int` numbers each run of a cycle, so attribution is a lookup rather than a reconstruction. | `UT-cycles-03` |
 | `[x]` | `IMP-0034` | `SW-0033` | `WP-10` | `NEW` | `io/ranges.py::Range` stores `start_ns`/`end_ns` in the recording's timebase. No wall-clock field is defined to be tempted by. | `UT-ranges-01` |
 | `[x]` | `IMP-0035` | `SW-0034` | `WP-10` | `NEW` | `io/ranges.py::read`/`write` use the recording's existing meta-block mechanism, so ranges travel with the file rather than beside it. | `UT-ranges-02` |
 | `[x]` | `IMP-0036` | `SW-0035` | `WP-10` | `NEW` | `io/ranges.py::contains(tick_ns)` is inclusive at both bounds, stated here because the boundary case is the one that gets decided by accident. | `UT-ranges-03` |

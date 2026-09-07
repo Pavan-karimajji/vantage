@@ -163,7 +163,7 @@ same as init-then-reset.
 
 ---
 
-### C-16 · A feed interface that can step to a cycle boundary — **ALLOCATE (viz)**
+### C-16 · A feed interface that can step to a cycle boundary — **ALLOCATE (viz), resolved 2026-09-07**
 **Want.** The `Source`/`Feed` interface — open, next tick, seek — written so
 that *next tick* can mean *"advance to the next boundary of the chosen
 cycle"*, not only *"advance by one message"*.
@@ -171,9 +171,13 @@ cycle"*, not only *"advance by one message"*.
 calls on it. If it ships offering message granularity only, the fifth step kind
 in `C-13` becomes impossible to add later without changing the interface.
 **Disposition.** **ALLOCATE to `modules/viz`, `IF-06`.** Written there,
-tracing up to this set's stepping outcome. **The one hard ordering constraint
-in the whole pass** — it blocks `WP-08` and `WP-09`, and nothing else. Who
-writes it, and when, is open question 3 in `misc/START_HERE.md`.
+tracing up to this set's stepping outcome. **Resolved without touching
+`Source`/`Session` at all**: both already exposed everything `WP-08`/`WP-09`
+needed (`At`/`SeekNs`/`RunManifestBytes`). The gap was two unwritten files —
+`viz/cpp/viz/player/transport.hpp`/`.cpp` and `stepping.hpp`/`.cpp` — landed
+directly in `modules/viz`, verified by `viz_test_transport`/`viz_test_stepping`
+(gtest, native Windows, both green). See `PARITY_Implementation_Design.md`'s
+own "Prerequisite, owned elsewhere" section for the full account.
 **Touches.** `player`
 
 ### C-17 · Reset action and reset timing as two controls — **NO CHANGE**

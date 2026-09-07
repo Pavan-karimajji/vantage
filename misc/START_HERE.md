@@ -24,30 +24,24 @@ doing and why*, and **contains no counts at all**.
 
 ## The next action — exactly one
 
-> **Every unblocked package is done — 11/13, 43/54 design rows** (2026-09-07).
-> `WP-01` through `WP-07` and `WP-10` through `WP-13` are all closed: ingest
-> map keyed by port; `runspec/sources.py::SourceSet`; `launcher/model.py::
-> Selection` isolate/group_state/from_spec; `reproduce_line`; `diagnostics/
-> logging.py` de-duplication; `resolve/plugins.py::PluginBundle` identity
-> fields; `config/bundle.py`'s embed/read/BundleAbsent/BundleMismatch;
-> `io/ranges.py::Range`; `io/marks.py::Annotation`/`Classification`/`select`;
-> `engine/refrun.py::RefRun`/`first_divergence`/`topic_for` plus
-> `reference_build_sha256`; and `pyapi/live.py::LiveSession`/`LiveClient`,
-> serving `pyapi.Api`'s own exported methods over a local socket. `df`'s and
-> `perception-core`'s real `sim/plugin.yaml` and `df`'s ingest map are
-> migrated to the new schemas.
+> **The PARITY set is fully closed — 13/13 packages, 54/54 design rows**
+> (2026-09-07). `C-16` (the `Source`/`Feed` cycle-boundary prerequisite) is
+> resolved: scoping found that `viz::session::Source`/`Session` already
+> exposed everything `WP-08`/`WP-09` needed (`At`/`SeekNs`/
+> `RunManifestBytes`) — no interface change, just two unwritten files.
+> `viz/cpp/viz/player/transport.hpp`/`.cpp` and `stepping.hpp`/`.cpp` landed
+> directly in `modules/viz`, verified by `viz_test_transport`/
+> `viz_test_stepping` (gtest, native Windows, both green;
+> `modules/viz`'s own `trace_check.py` and isolation checks still pass, no
+> new `viz` requirement minted). `io/cycles.py` (`WP-09`'s Python half)
+> landed in `modules/sim` alongside it.
 >
-> **`WP-08`/`WP-09` are the only two left, and stay parked here** — both are
-> blocked by the unwritten `Source`/`Feed` interface in `modules/viz`
-> (register item `C-16`, this plan's own declared prerequisite) and are C++
-> work (`viz/cpp/viz/player/transport.hpp`/`stepping.hpp`) in a different
-> submodule besides. **There is nothing left for this checkout to do on
-> PARITY until that interface exists.** Check `modules/viz`'s own state
-> (and whether `C-16` has since landed) before resuming here — this is a
-> real stopping point, not a to-do left dangling.
->
-> **Read `docs/v2/parity/README.md` first**, then run its checker. That answers
-> *"where do I start"* — not a list written down here.
+> **There is no next PARITY work package.** Before starting anything new
+> here: re-read `docs/v2/parity/README.md` and `PARITY_Change_Register.md`'s
+> parked/no-change rows for what this pass deliberately left out, and check
+> whether new scope has been decided since 2026-09-07 — this file's own
+> "Ending a session" rule still applies (a decision, a risk, a trigger,
+> nothing else).
 
 **When PARITY is not the work:** the v2 board has six amber items
 (`CONSOLIDATED_REQUIREMENTS.md`) and five work packages at zero boxes. Nothing
@@ -95,17 +89,17 @@ was execution narration (`R-REQ-14`) and it was cut on 2026-09-05.
 | **E** | The demo *is* the definition of done, explicitly as a POC | 2026-08-27 |
 | **F** | Hosted CI is out of scope. `scripts/ci_gate.py` (run by hand, both platforms) is the real gate; `.github/workflows/sim-ci.yml` stays as an explicitly unobserved, unmaintained artifact. `WP-01`'s two items that were waiting on this (the stale `R-REQ-9` test-id citations, the Conan-editable-install system test) are **not-doing**, not pending — recorded, not silently dropped | 2026-08-31 |
 | **G** | **No driver view.** The chase camera (`#20`, `WP-22`) is sufficient; a driver-view camera feed is not wanted. Board `#20` closes green with nothing left open in it — stated explicitly so it cannot quietly reopen as a "gap" | 2026-08-31 |
+| **H** | **`C-16`/`IF-06` needed no interface change.** `viz::session::Source`/`Session` already exposed `At`/`SeekNs`/`RunManifestBytes`; `WP-08`/`WP-09`'s own C++ (`viz/cpp/viz/player/transport.*`, `stepping.*`) was written directly against them, in `modules/viz`, with no new `Source`/`Session` method. If a future need genuinely requires the interface itself to change, that is a new, separate decision — this one only closes the "cycle-boundary stepping" gap the register named | 2026-09-07 |
 
-## Open — PARITY's three, none blocking
+## Open — PARITY's remaining two, neither blocking anything now
 
-Raised by writing the set, and none of them stops the first seven work
-packages. Each is a decision no tool can make.
+Raised by writing the set. Question 3 (who writes `IF-06`/`C-16`) is answered
+— see the Decisions table below.
 
 | # | Question | Blocks |
 |---|---|---|
-| 1 | **The absent-port convention.** `SYS-0084` says an unused stage's ports *shall simply be absent*. The bench study's `C-04` wants them *bound to a typed, inert sink* so an upstream producer keeps writing somewhere legal. Both keep the graph whole; only one can be the convention. | Nothing — `WP-02` proceeds either way |
+| 1 | **The absent-port convention.** `SYS-0084` says an unused stage's ports *shall simply be absent*. The bench study's `C-04` wants them *bound to a typed, inert sink* so an upstream producer keeps writing somewhere legal. Both keep the graph whole; only one can be the convention. | Nothing — `WP-02` shipped either way |
 | 2 | **Does the resolved run spec carry which candidate address matched**, or does the run manifest alone carry it? | Nothing — the manifest already does |
-| 3 | **Who writes `IF-06`** (`Source`/`Feed`) in `modules/viz`, and when? It is unwritten, and every transport control is a call on it. | `WP-08` and `WP-09` only |
 
 ## Parked — and what unparks each
 
