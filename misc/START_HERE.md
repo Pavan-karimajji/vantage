@@ -24,31 +24,30 @@ doing and why*, and **contains no counts at all**.
 
 ## The next action — exactly one
 
-> **Every non-`viz` package is done except `WP-13`** (2026-09-07): `WP-01`
-> through `WP-07`, `WP-10`, `WP-11` and `WP-12` all closed — ingest map keyed
-> by port; `runspec/sources.py::SourceSet`; `launcher/model.py::Selection`
-> isolate/group_state/from_spec; `reproduce_line`; `diagnostics/logging.py`
-> de-duplication; `resolve/plugins.py::PluginBundle` identity fields;
-> `config/bundle.py`'s embed/read/BundleAbsent/BundleMismatch;
+> **Every unblocked package is done — 11/13, 43/54 design rows** (2026-09-07).
+> `WP-01` through `WP-07` and `WP-10` through `WP-13` are all closed: ingest
+> map keyed by port; `runspec/sources.py::SourceSet`; `launcher/model.py::
+> Selection` isolate/group_state/from_spec; `reproduce_line`; `diagnostics/
+> logging.py` de-duplication; `resolve/plugins.py::PluginBundle` identity
+> fields; `config/bundle.py`'s embed/read/BundleAbsent/BundleMismatch;
 > `io/ranges.py::Range`; `io/marks.py::Annotation`/`Classification`/`select`;
-> and `engine/refrun.py::RefRun`/`first_divergence`/`topic_for` plus
-> `emit_run_spec`'s/the run manifest's `reference_build_sha256`. `df`'s and
+> `engine/refrun.py::RefRun`/`first_divergence`/`topic_for` plus
+> `reference_build_sha256`; and `pyapi/live.py::LiveSession`/`LiveClient`,
+> serving `pyapi.Api`'s own exported methods over a local socket. `df`'s and
 > `perception-core`'s real `sim/plugin.yaml` and `df`'s ingest map are
 > migrated to the new schemas.
 >
-> **`WP-08`/`WP-09` stay skipped** — both are blocked by the unwritten
-> `Source`/`Feed` interface in `modules/viz` (register item `C-16`, this
-> plan's own prerequisite; see "Open — PARITY's three" below) and are C++
-> work (`viz/cpp/viz/player/`) outside this checkout besides.
->
-> **Write `WP-13` next: live session control.** Two design rows — the last
-> unblocked package. Once it lands, everything left in this plan is
-> `viz`-blocked.
+> **`WP-08`/`WP-09` are the only two left, and stay parked here** — both are
+> blocked by the unwritten `Source`/`Feed` interface in `modules/viz`
+> (register item `C-16`, this plan's own declared prerequisite) and are C++
+> work (`viz/cpp/viz/player/transport.hpp`/`stepping.hpp`) in a different
+> submodule besides. **There is nothing left for this checkout to do on
+> PARITY until that interface exists.** Check `modules/viz`'s own state
+> (and whether `C-16` has since landed) before resuming here — this is a
+> real stopping point, not a to-do left dangling.
 >
 > **Read `docs/v2/parity/README.md` first**, then run its checker. That answers
 > *"where do I start"* — not a list written down here.
->
-> **The next thing is code, not documents.**
 
 **When PARITY is not the work:** the v2 board has six amber items
 (`CONSOLIDATED_REQUIREMENTS.md`) and five work packages at zero boxes. Nothing

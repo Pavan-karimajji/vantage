@@ -86,7 +86,7 @@ them.
 ## E. Trusting the answer
 
 - [x] **WP-12** — Side-by-side reference run · Two builds sharing one resolved input set; the first divergence located; both builds' outputs recorded separably.
-- [ ] **WP-13** — Live session control · Read and control a running session from a script, over an operation table built from the headless API's own exports.
+- [x] **WP-13** — Live session control · Read and control a running session from a script, over an operation table built from the headless API's own exports.
 
 ---
 
@@ -191,8 +191,8 @@ document.
 | `[x]` | `IMP-0050` | `SW-0048` | `WP-12` | `NEW` | `engine/refrun.py::RefRun.tick` resolves inputs once and passes the same objects to both libraries, so equality is structural rather than checked. | `UT-refrun-01` |
 | `[x]` | `IMP-0051` | `SW-0049` | `WP-12` | `NEW` | `engine/refrun.py::first_divergence` walks ports in manifest order and returns on the first difference, carrying tick, port and field. | `UT-refrun-02` |
 | `[x]` | `IMP-0052` | `SW-0050` | `WP-12` | `NEW` | `engine/refrun.py` records each build under a topic prefix derived from its role, so the two are separable without a side-car index. | `UT-refrun-03` |
-| `[ ]` | `IMP-0053` | `SW-0051` | `WP-13` | `NEW` | `pyapi/live.py::LiveSession` over a local socket, attachable while a run is in progress and requiring no display. | `UT-livectl-01` |
-| `[ ]` | `IMP-0054` | `SW-0052` | `WP-13` | `NEW` | `pyapi/live.py` builds its operation table from the headless API's exported names, so an operation with no headless twin cannot be registered. | `UT-livectl-02` |
+| `[x]` | `IMP-0053` | `SW-0051` | `WP-13` | `NEW` | `pyapi/live.py::LiveSession` over a local socket, attachable while a run is in progress and requiring no display. | `UT-livectl-01` |
+| `[x]` | `IMP-0054` | `SW-0052` | `WP-13` | `NEW` | `pyapi/live.py` builds its operation table from the headless API's exported names, so an operation with no headless twin cannot be registered. | `UT-livectl-02` |
 
 ---
 
