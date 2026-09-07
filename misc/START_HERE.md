@@ -24,17 +24,20 @@ doing and why*, and **contains no counts at all**.
 
 ## The next action — exactly one
 
-> **`WP-01` through `WP-05` are done** (2026-09-07): ingest map keyed by port
-> with ordered `from:` resolution; `runspec/sources.py::SourceSet` per-port
-> source binding; `launcher/model.py::Selection` isolate/group_state/
-> from_spec; `runspec/canon.py` + `launcher/write.py::reproduce_line` for
-> file/memory convergence; and `diagnostics/logging.py` now de-duplicates a
-> repeated message past `FLOOD_THRESHOLD` occurrences, announcing once
-> (`Event.DEDUP_STARTED`, added to the closed vocabulary in lockstep across
-> `events.py`/`events.yaml`/`events.hpp`/`events.cpp`) and flushing one
-> aggregate entry. `df`'s real ingest map is migrated to the new schema.
+> **`WP-01` through `WP-06` are done** (2026-09-07, half the set): ingest map
+> keyed by port with ordered `from:` resolution; `runspec/sources.py::
+> SourceSet` per-port source binding; `launcher/model.py::Selection`
+> isolate/group_state/from_spec; `runspec/canon.py` + `launcher/write.py::
+> reproduce_line` for file/memory convergence; `diagnostics/logging.py`
+> de-duplication past `FLOOD_THRESHOLD` (`Event.DEDUP_STARTED` added in
+> lockstep across its four hand-transcribed homes); and `resolve/plugins.py::
+> PluginBundle` now requires `description`/`version`/`author`/`projects`,
+> refusing by name when incomplete, read through one `identity()` accessor.
+> `df`'s and `perception-core`'s real `sim/plugin.yaml` and `df`'s ingest map
+> are migrated to the new schemas.
 >
-> **Write `WP-06` next: plug-in identity.** Four design rows.
+> **Write `WP-07` next: the bundle travels in the recording.** Four design
+> rows.
 >
 > **Read `docs/v2/parity/README.md` first**, then run its checker. That answers
 > *"where do I start"* — not a list written down here.

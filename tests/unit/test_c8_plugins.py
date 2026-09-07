@@ -26,6 +26,11 @@ import pack_plugin_bundle  # noqa: E402
 from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.resolve.plugins import PluginBundle
 
+#: WP-06 (SW-0042): every plugin.yaml fixture in this file declares these
+#: four so identity validation never contaminates a test aimed at a
+#: different failure (api range, missing provides:, etc.).
+_IDENTITY = {"description": "test plugin", "version": "1.0", "author": "test", "projects": ["base"]}
+
 
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -38,7 +43,7 @@ def _authored_plugin_dir(tmp_path: Path, *, name: str = "authored", provides: li
     # further under a second "sim" directory.
     root = tmp_path / name
     _write(root / "plugin.yaml", yaml.safe_dump({
-        "api": 1, "component": name, "provides": provides or ["sim.layers.thing"],
+        "api": 1, "component": name, "provides": provides or ["sim.layers.thing"], **_IDENTITY,
     }))
     _write(root / "layers" / "__init__.py", "")
     _write(root / "layers" / "thing.py", "VALUE = 1\n")
@@ -93,7 +98,7 @@ def test_pack_excludes_pycache_and_plugin_yaml_itself_from_the_hash(tmp_path):
 def _bundle_dir(tmp_path: Path, name: str, *, api: int = 1, component: str | None = None) -> Path:
     root = tmp_path / name
     _write(root / "plugin.yaml", yaml.safe_dump({
-        "api": api, "component": component or name, "provides": [], "sha256": "0" * 64,
+        "api": api, "component": component or name, "provides": [], "sha256": "0" * 64, **_IDENTITY,
     }))
     return root
 
@@ -131,7 +136,9 @@ def test_resolve_returns_none_when_no_tier_has_a_plugin_yaml(tmp_path):
 def test_out_of_range_api_is_refused_naming_both_numbers(tmp_path):
     """UT-D5-4."""
     root = tmp_path / "bad_api"
-    _write(root / "plugin.yaml", yaml.safe_dump({"api": 999, "component": "bad", "provides": ["sim.layers.explodes"]}))
+    _write(root / "plugin.yaml", yaml.safe_dump({
+        "api": 999, "component": "bad", "provides": ["sim.layers.explodes"], **_IDENTITY,
+    }))
     _write(root / "layers" / "__init__.py", "")
     _write(root / "layers" / "explodes.py", "raise RuntimeError('must never be imported')\n")
 
@@ -146,7 +153,7 @@ def test_out_of_range_api_is_refused_naming_both_numbers(tmp_path):
 
 def test_missing_required_key_is_an_authoring_error(tmp_path):
     root = tmp_path / "incomplete"
-    _write(root / "plugin.yaml", yaml.safe_dump({"api": 1, "component": "incomplete"}))  # no provides:
+    _write(root / "plugin.yaml", yaml.safe_dump({"api": 1, "component": "incomplete", **_IDENTITY}))  # no provides:
 
     with pytest.raises(AuthoringError) as excinfo:
         PluginBundle.resolve(library_dir=root)

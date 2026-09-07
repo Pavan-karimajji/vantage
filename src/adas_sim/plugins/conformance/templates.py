@@ -40,7 +40,15 @@ def write_template_plugin_dir(root: Path, *, component: str = "conformance_templ
     plugin_dir = root / "sim"
     plugin_dir.mkdir(parents=True, exist_ok=True)
     (plugin_dir / "plugin.yaml").write_text(
-        yaml.safe_dump({"api": 1, "component": component, "provides": ["sim.layers.template"]}), encoding="utf-8",
+        yaml.safe_dump({
+            "api": 1, "component": component, "provides": ["sim.layers.template"],
+            # WP-06 (SW-0042): identity is required, so the shipped template
+            # already declares it -- a real author edits these four, never
+            # discovers the requirement only when resolve() refuses them.
+            "description": "template plug-in -- replace with a real description",
+            "version": "0.1", "author": "replace with a real author", "projects": ["base"],
+        }),
+        encoding="utf-8",
     )
     layers_dir = plugin_dir / "layers"
     layers_dir.mkdir(exist_ok=True)

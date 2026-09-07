@@ -73,7 +73,7 @@ them.
 ## C. Saying what things are
 
 - [x] **WP-05** — Diagnostics: occurrence counting · Collapse an identical repeated message into one entry with a count, and say once when that began.
-- [ ] **WP-06** — Plug-in identity · Four mandatory fields, refused by name when incomplete, carried into the deployed copy, read through one accessor.
+- [x] **WP-06** — Plug-in identity · Four mandatory fields, refused by name when incomplete, carried into the deployed copy, read through one accessor.
 - [ ] **WP-07** — The bundle travels in the recording · Embed the bytes, store their hash, and make absence a value rather than a reason to look on disk.
 
 ## D. Moving through a recording
@@ -181,10 +181,10 @@ document.
 | `[x]` | `IMP-0040` | `SW-0039` | `WP-05` | `EXTEND` | `diagnostics/logging.py` — a **new** `_dedupe_key` over the closed vocabulary's fields (`_WARN_EVENTS`/`_ERROR_EVENTS`), so a key cannot silently ignore a field added later. | `UT-diaglog-01` |
 | `[x]` | `IMP-0041` | `SW-0040` | `WP-05` | `EXTEND` | `diagnostics/logging.py` — a **new** entry record with an `occurrences` count, accumulated per key by `log()` and emitted once at flush rather than per occurrence. | `UT-diaglog-02` |
 | `[x]` | `IMP-0042` | `SW-0041` | `WP-05` | `EXTEND` | `diagnostics/logging.py` — a **new** `FLOOD_THRESHOLD` and one `dedup_started` event added to the declared vocabulary, emitted once per key. | `UT-diaglog-03` |
-| `[ ]` | `IMP-0043` | `SW-0042` | `WP-06` | `EXTEND` | `resolve/plugins.py::PluginBundle` gains `description`, `version`, `author` and `projects`, required in `_from_yaml` rather than defaulted. **Not `plugins/registry.py`** — that is the codec registry. | `UT-plugmeta-01` |
-| `[ ]` | `IMP-0044` | `SW-0043` | `WP-06` | `EXTEND` | `resolve/plugins.py` — a **new** `MissingIdentityField` naming the absent field, raised from `_read_plugin_yaml`'s single validation site. | `UT-plugmeta-02` |
-| `[ ]` | `IMP-0045` | `SW-0044` | `WP-06` | `EXTEND` | `interfaces/scripts/pack_plugin_bundle.py` copies the four fields into the deployed `plugin.yaml` beside the existing `sha256:` stamp, unchanged. | `UT-plugmeta-03` |
-| `[ ]` | `IMP-0046` | `SW-0053` | `WP-06` | `EXTEND` | `resolve/plugins.py::PluginBundle` gains a **new** `identity()`, the single accessor the listing, the inspection view and the refusal message all call. | `UT-plugmeta-04` |
+| `[x]` | `IMP-0043` | `SW-0042` | `WP-06` | `EXTEND` | `resolve/plugins.py::PluginBundle` gains `description`, `version`, `author` and `projects`, required in `_from_yaml` rather than defaulted. **Not `plugins/registry.py`** — that is the codec registry. | `UT-plugmeta-01` |
+| `[x]` | `IMP-0044` | `SW-0043` | `WP-06` | `EXTEND` | `resolve/plugins.py` — a **new** `MissingIdentityField` naming the absent field, raised from `_read_plugin_yaml`'s single validation site. | `UT-plugmeta-02` |
+| `[x]` | `IMP-0045` | `SW-0044` | `WP-06` | `EXTEND` | `interfaces/scripts/pack_plugin_bundle.py` copies the four fields into the deployed `plugin.yaml` beside the existing `sha256:` stamp, unchanged. | `UT-plugmeta-03` |
+| `[x]` | `IMP-0046` | `SW-0053` | `WP-06` | `EXTEND` | `resolve/plugins.py::PluginBundle` gains a **new** `identity()`, the single accessor the listing, the inspection view and the refusal message all call. | `UT-plugmeta-04` |
 | `[ ]` | `IMP-0047` | `SW-0045` | `WP-07` | `EXTEND` | `config/bundle.py` — a **new** `embed(writer, bundle_dir)` beside `may_enter_bundle`, writing the packed bytes into a recording meta block, reusing the mechanism the manifest already uses. | `UT-bundle-01` |
 | `[ ]` | `IMP-0048` | `SW-0046` | `WP-07` | `EXTEND` | `config/bundle.py` — `embed` stores the digest it computed; a **new** `read` recomputes and compares, returning a mismatch rather than raising. | `UT-bundle-02` |
 | `[ ]` | `IMP-0049` | `SW-0047` | `WP-07` | `NEW` | `config/bundle.py::BundleAbsent` is a returned value, not an exception and not `None`, so no caller can treat it as a path to fall back from. | `UT-bundle-03` |

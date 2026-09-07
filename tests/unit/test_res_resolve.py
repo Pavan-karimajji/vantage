@@ -47,7 +47,10 @@ def _make_libdir(root: Path, *, wheelbase: float = 2.7, plugin_component: str = 
     sim_dir = lib_dir / "sim"
     sim_dir.mkdir()
     (sim_dir / "plugin.yaml").write_text(
-        yaml.safe_dump({"api": 1, "component": plugin_component, "provides": [], "sha256": "deadbeef"}),
+        yaml.safe_dump({
+            "api": 1, "component": plugin_component, "provides": [], "sha256": "deadbeef",
+            "description": "test plugin", "version": "1.0", "author": "test", "projects": ["base"],
+        }),
         encoding="utf-8",
     )
     return lib_dir
@@ -190,7 +193,11 @@ def test_ut_res_08_refuses_an_unsupported_plugin_generation_before_import(tmp_pa
     any import happens -- count imports performed: zero."""
     lib_dir = _make_libdir(tmp_path)
     (lib_dir / "sim" / "plugin.yaml").write_text(
-        yaml.safe_dump({"api": 99, "component": "df", "provides": []}), encoding="utf-8",
+        yaml.safe_dump({
+            "api": 99, "component": "df", "provides": [],
+            "description": "test plugin", "version": "1.0", "author": "test", "projects": ["base"],
+        }),
+        encoding="utf-8",
     )
     imports = []
     monkeypatch.setattr(PluginBundle, "import_modules", lambda self: imports.append(self) or ())

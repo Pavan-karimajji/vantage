@@ -43,12 +43,37 @@ PluginBundleOrigin = Literal["explicit", "embedded", "library", "checkout"]
 SUPPORTED_PLUGIN_API_MIN = 1
 SUPPORTED_PLUGIN_API_MAX = 1
 
+#: `WP-06` (`SW-0042`): a plug-in's identity, required so it can be
+#: identified without its source (`STK-0010`) -- checked once, here, so
+#: `_from_yaml`'s own required-field loop (`api`/`component`/`provides`)
+#: never has to duplicate it.
+_REQUIRED_IDENTITY_FIELDS = ("description", "version", "author", "projects")
+
+
+class MissingIdentityField(AuthoringError):
+    """`WP-06` (`SW-0043`): one of `plugin.yaml`'s four required identity
+    fields is absent -- names that field and no other, so a refusal is
+    never generic."""
+
+    def __init__(self, *, field: str, where: str) -> None:
+        super().__init__(
+            expected=f"plugin.yaml to declare '{field}'",
+            found=f"'{field}' is absent",
+            where=where,
+            hint="a plug-in's identity (description/version/author/projects) is required "
+                 "so it can be identified without its source (SW-0042)",
+        )
+
 
 def _read_plugin_yaml(plugin_dir: Path) -> dict | None:
     path = plugin_dir / "plugin.yaml"
     if not path.is_file():
         return None
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    for field_name in _REQUIRED_IDENTITY_FIELDS:
+        if field_name not in data:
+            raise MissingIdentityField(field=field_name, where=str(path))
+    return data
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,9 +84,26 @@ class PluginBundle:
     provides: tuple[str, ...]
     origin: PluginBundleOrigin
     root: Path  #: the resolved `sim/` directory `provides:` is relative to
+    #: `WP-06` (`SW-0042`): required, never defaulted -- `_from_yaml` only
+    #: ever constructs a `PluginBundle` after `_read_plugin_yaml` has
+    #: already confirmed all four are present.
+    description: str
+    version: str
+    author: str
+    projects: tuple[str, ...]
 
     def __repr__(self) -> str:
         return f"<PluginBundle {self.component!r} api={self.api} origin={self.origin}>"
+
+    def identity(self) -> str:
+        """`WP-06` (`SW-0053`): the one accessor every surface that
+        displays this plug-in's identity calls -- `format_listing_row`/
+        `format_inspection`/`format_refusal` below, so a change to what
+        this renders reaches all three, never duplicated per surface."""
+        return (
+            f"{self.component} v{self.version} by {self.author} -- {self.description} "
+            f"(projects: {', '.join(self.projects)})"
+        )
 
     @classmethod
     def resolve(
@@ -110,6 +152,8 @@ class PluginBundle:
         return cls(
             component=str(data["component"]), api=api, sha256=str(data.get("sha256", "")),
             provides=tuple(data["provides"]), origin=origin, root=root,
+            description=str(data["description"]), version=str(data["version"]),
+            author=str(data["author"]), projects=tuple(data["projects"]),
         )
 
     def import_modules(self) -> tuple[ModuleType, ...]:
@@ -151,6 +195,25 @@ class PluginBundle:
             spec.loader.exec_module(module)
             modules.append(module)
         return tuple(modules)
+
+
+def format_listing_row(bundle: PluginBundle) -> str:
+    """`WP-06` (`SW-0053`): the listing surface -- one row, `bundle.
+    identity()` verbatim."""
+    return bundle.identity()
+
+
+def format_inspection(bundle: PluginBundle) -> str:
+    """`WP-06` (`SW-0053`): the inspection-view surface -- `identity()`
+    plus the fields a listing row has no room for."""
+    return f"Plug-in: {bundle.identity()}\n  api={bundle.api} origin={bundle.origin}"
+
+
+def format_refusal(bundle: PluginBundle, *, reason: str) -> str:
+    """`WP-06` (`SW-0053`): the refusal-message surface -- a bundle that
+    resolved and parsed but is refused for some other reason (e.g. a pin
+    mismatch) is still identifiable without opening its source."""
+    return f"refused: {bundle.identity()} -- {reason}"
 
 
 def discover_plugins(plugin_path: Sequence[Path]) -> tuple[PluginBundle, ...]:

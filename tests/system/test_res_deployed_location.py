@@ -57,7 +57,10 @@ def test_it15_player_points_at_a_folder_of_libraries_with_no_sibling_checkout(tm
         "REGISTERED = True\n", encoding="utf-8",
     )
     (sim_dir / "plugin.yaml").write_text(
-        yaml.safe_dump({"api": 1, "component": "df", "provides": ["sim.layers"], "sha256": "cafef00d"}),
+        yaml.safe_dump({
+            "api": 1, "component": "df", "provides": ["sim.layers"], "sha256": "cafef00d",
+            "description": "test plugin", "version": "1.0", "author": "test", "projects": ["base"],
+        }),
         encoding="utf-8",
     )
     (library_dir / "config").mkdir()

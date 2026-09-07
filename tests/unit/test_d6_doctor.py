@@ -25,6 +25,10 @@ from adas_sim.diagnostics.diagnostics import _plugin_diagnoses, doctor_report
 
 import adas_sim.io.mcap  # noqa: E402,F401 -- registers the ".mcap"/".csv" codecs
 
+#: WP-06 (SW-0042): every plugin.yaml fixture here declares these four so
+#: identity validation never contaminates a test aimed at a different check.
+_IDENTITY = {"description": "test plugin", "version": "1.0", "author": "test", "projects": ["base"]}
+
 
 def _pipeline_yaml(tmp_path: Path, *, stem: str = "nonexistent_stem") -> Path:
     path = tmp_path / "pipeline.yaml"
@@ -119,7 +123,8 @@ def test_plugin_diagnoses_reports_a_resolved_library_tier_bundle(tmp_path):
     plugin_dir = tmp_path / "df" / "sim"
     plugin_dir.mkdir(parents=True)
     (plugin_dir / "plugin.yaml").write_text(
-        yaml.safe_dump({"api": 1, "component": "df", "provides": [], "sha256": "abc123"}), encoding="utf-8",
+        yaml.safe_dump({"api": 1, "component": "df", "provides": [], "sha256": "abc123", **_IDENTITY}),
+        encoding="utf-8",
     )
 
     results = _plugin_diagnoses([entry])
@@ -151,12 +156,12 @@ def test_plugin_diagnoses_explicit_plugin_root_wins_over_the_library_tier(tmp_pa
     library_plugin_dir = tmp_path / "df" / "sim"
     library_plugin_dir.mkdir(parents=True)
     (library_plugin_dir / "plugin.yaml").write_text(
-        yaml.safe_dump({"api": 1, "component": "df", "provides": []}), encoding="utf-8",
+        yaml.safe_dump({"api": 1, "component": "df", "provides": [], **_IDENTITY}), encoding="utf-8",
     )
     explicit_dir = tmp_path / "explicit_override"
     explicit_dir.mkdir()
     (explicit_dir / "plugin.yaml").write_text(
-        yaml.safe_dump({"api": 1, "component": "df-explicit", "provides": []}), encoding="utf-8",
+        yaml.safe_dump({"api": 1, "component": "df-explicit", "provides": [], **_IDENTITY}), encoding="utf-8",
     )
 
     results = _plugin_diagnoses([entry], plugin_root=explicit_dir)
