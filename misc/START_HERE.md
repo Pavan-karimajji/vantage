@@ -24,14 +24,16 @@ doing and why*, and **contains no counts at all**.
 
 ## The next action — exactly one
 
-> **`WP-01` is done** (2026-09-07): the ingest map is keyed by port with an
-> ordered `from:` address list, `ingest/resolve.py::resolve_port` resolves it
-> against a recording's topic index, and the run manifest carries
-> `ports[].matched_address`. `df`'s real map (`modules/df/sim/ingest/
-> carla_legacy.yaml`) is migrated to the new schema — the old topic-keyed shape
-> is rejected, so every ingest map in the tree had to move together.
+> **`WP-01` and `WP-02` are done** (2026-09-07): the ingest map is keyed by
+> port with an ordered `from:` address list, resolved via `ingest/resolve.py::
+> resolve_port` against a recording's topic index, reported in the run
+> manifest's `ports[].matched_address`; and `runspec/sources.py::SourceSet`
+> binds every port to exactly one of several named recordings, explicit
+> assignment beating the declared default. `df`'s real ingest map is migrated
+> to the new schema.
 >
-> **Write `WP-02` next: named sources and per-port binding.** Four design rows.
+> **Write `WP-03` next: launcher isolate, and the computed mixed state.** Three
+> design rows.
 >
 > **Read `docs/v2/parity/README.md` first**, then run its checker. That answers
 > *"where do I start"* — not a list written down here.
