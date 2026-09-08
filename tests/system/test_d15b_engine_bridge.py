@@ -30,7 +30,7 @@ from adas_sim.engine.bridge import (
     run_pipeline_via_engine,
 )
 from adas_sim.diagnostics.errors import EnvironmentError_
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.io.base import Provenance, TopicInfo
 from adas_sim.plugins.registry import reader_for, writer_for
 from adas_sim.resolve.component import ComponentManifest, PortSpec

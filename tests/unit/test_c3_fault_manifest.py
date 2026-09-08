@@ -24,7 +24,7 @@ import yaml
 
 from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
 from adas_sim.config.fault import Fault, FaultVerb
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.runspec.manifest import build_manifest
 
 _CLOCK = datetime(2026, 8, 6, 12, 0, 0, tzinfo=timezone.utc)

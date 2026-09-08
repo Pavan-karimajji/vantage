@@ -19,7 +19,7 @@ from adas_sim.config import load
 from adas_sim.config.paths import ConfigPaths
 from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.engine.refrun import RefRun, first_divergence, topic_for
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent
 from adas_sim.runspec.emit import ReferenceSpec, emit_run_spec
 from adas_sim.runspec.manifest import build_manifest

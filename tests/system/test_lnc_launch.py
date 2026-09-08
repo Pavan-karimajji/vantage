@@ -22,7 +22,7 @@ import pytest
 
 from adas_sim.diagnostics.errors import EnvironmentError_
 from adas_sim.engine.bridge import resolve_simengine_executable
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.launcher.model import Selection
 from adas_sim.launcher.write import launch, to_run_config
 

@@ -15,7 +15,7 @@ import yaml
 
 from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.graph import coherence, modes
-from adas_sim.graph.build import Pipeline, Stage
+from adas_sim.graph.pipeline import Pipeline, Stage
 from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
 
 _CHAIN_NAMES = ("vdy", "perception", "fusion", "aeb")

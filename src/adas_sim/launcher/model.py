@@ -29,7 +29,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Literal
 
-from adas_sim.graph.build import Mode, Pipeline
+from adas_sim.graph.pipeline import Mode, Pipeline
 from adas_sim.resolve.component import SilComponent
 from adas_sim.runspec.manifest import load_run_spec
 from adas_sim.diagnostics.errors import AuthoringError, ProvenanceWarning

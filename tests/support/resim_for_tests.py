@@ -36,7 +36,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
-from adas_sim.graph.build import Pipeline, _split_ref
+from adas_sim.graph.pipeline import Pipeline, _split_ref
 from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.io.base import Provenance, RunManifest, TopicInfo, group_by_log_time
 from adas_sim.ingest.map import IngestRecordingReader, discover_ingest_maps

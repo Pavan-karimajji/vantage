@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.orchestrate.batch import RecordingOutcome
 
 

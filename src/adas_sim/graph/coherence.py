@@ -4,7 +4,7 @@
 # @author Pavan Karimajji
 
 """`SI-11 graph` -- transitive coherence (`WP-20`), the package's own named
-"one correctness defect": `graph/build.py::Pipeline.severed_chains()`
+"one correctness defect": `graph/pipeline.py::Pipeline.severed_chains()`
 inspects exactly one hop upstream and one hop downstream of a `measured`
 stage. A `simulate -> measured -> measured -> simulate` chain -- two
 consecutive `measured` stages -- produces no finding there: the first
@@ -48,7 +48,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from adas_sim.graph.build import Pipeline, Stage
+    from adas_sim.graph.pipeline import Pipeline, Stage
 
 
 class Verdict(StrEnum):
@@ -79,7 +79,7 @@ def _edges(stages: Sequence["Stage"]) -> dict[str, dict[str, str]]:
     """stage name -> {this stage's own input port name: producer stage
     name}, `"source"` references dropped -- stimulus has no upstream stage
     to be transitively stale from."""
-    from adas_sim.graph.build import _split_ref
+    from adas_sim.graph.pipeline import _split_ref
 
     result: dict[str, dict[str, str]] = {}
     for stage in stages:

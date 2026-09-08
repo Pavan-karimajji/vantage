@@ -8,7 +8,7 @@
 an actual run.
 
 **No invented schema.** `to_run_config` writes exactly the field set
-`graph.build.Pipeline.to_yaml`/`Pipeline.load` already read, plus the
+`graph.pipeline.Pipeline.to_yaml`/`Pipeline.load` already read, plus the
 `recording:`/`project:`/`config:` top-level keys `runspec.manifest.
 RunSpec`/`cli.resim` already read (`WP-15b`'s own real engine bridge) --
 never a launcher-only format (`SW-0347`). `launch` takes a **path**, never
@@ -23,7 +23,7 @@ import os
 from pathlib import Path
 
 from adas_sim.config.roundtrip import dump
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.graph.waiver import Waiver
 from adas_sim.launcher.classify import LaunchBlocked, classify
 from adas_sim.launcher.model import Selection

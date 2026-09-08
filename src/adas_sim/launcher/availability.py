@@ -30,7 +30,7 @@ from adas_sim.resolve.library import resolve_library_report
 if TYPE_CHECKING:
     from adas_sim.launcher.model import Selection
 
-#: `_resolve_components`'s own closed set (`graph/build.py`) -- only these
+#: `_resolve_components`'s own closed set (`graph/pipeline.py`) -- only these
 #: two kinds resolve to a real file this probe can check; `stub:`/`legacy:`
 #: stages are excluded below because `Pipeline.load` (no `components=`, the
 #: shape a written run config loads through) cannot resolve either kind at

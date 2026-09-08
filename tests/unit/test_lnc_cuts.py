@@ -20,7 +20,7 @@ from pathlib import Path
 
 import yaml
 
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.graph.feasible import RecordingIndex, RecordingTopic
 from adas_sim.io.base import Provenance, RunManifest, TopicInfo
 from adas_sim.launcher.cuts import cuts_for_all, cuts_for_recording

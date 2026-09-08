@@ -16,7 +16,7 @@ import pytest
 import yaml
 
 from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
-from adas_sim.graph.build import Pipeline, RecordPolicy, RecordVerb, Stage, record_policy_for, validate_recordable
+from adas_sim.graph.pipeline import Pipeline, RecordPolicy, RecordVerb, Stage, record_policy_for, validate_recordable
 from adas_sim.config.scenario import Scenario
 from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.sources.base import Source

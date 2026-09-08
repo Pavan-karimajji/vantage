@@ -652,7 +652,7 @@ class LauncherApp:
             # Imported here, not at module scope: this launcher must start on
             # an install where `adas_sim` is not importable so that it can SAY
             # so (this file's own rule 1). An ImportError becomes a sentence.
-            from adas_sim.graph.build import Pipeline
+            from adas_sim.graph.pipeline import Pipeline
             from adas_sim.launcher.classify import classify
             from adas_sim.launcher.cuts import cuts_for_recording
             from adas_sim.launcher.model import Selection

@@ -11,14 +11,14 @@ A `Source` is the production-side counterpart to `SilComponent`
 the live CARLA world-model client is removed, `DD-12`). `emits()` is
 `Source`'s own manifest analogue: `Pipeline.load`'s `source.*` wiring is
 validated against it exactly as a stage-to-stage reference is validated
-against a producer's `PortSpec.name`s (`graph/build.py` `_validate_wiring`),
+against a producer's `PortSpec.name`s (`graph/pipeline.py` `_validate_wiring`),
 so a pipeline asking a source for more than it can produce is a load error
 naming both ends (`R-SIM-10`).
 
 `poll()` returns raw serialized bytes per port, unqualified (no `source.`
 prefix) -- exactly the shape `Pipeline.exec`/`step`'s `stimulus:` parameter
 already expects, since `source.*` is split into `("source", port)` before
-either function ever looks at the map (`graph/build.py` `_split_ref`).
+either function ever looks at the map (`graph/pipeline.py` `_split_ref`).
 
 `Scenario` (`config.scenario.Scenario`, `S-C3`) is the schema-v2 type --
 this module's own interim `{name, raw}` wrapper (`S-C2`'s stand-in, before

@@ -14,7 +14,7 @@ from pathlib import Path
 import yaml
 
 from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.runspec.manifest import build_manifest
 from adas_sim.io.base import CAPTURE_TIME_MANIFEST_VERSION
 

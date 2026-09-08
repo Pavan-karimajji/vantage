@@ -36,7 +36,7 @@ from pathlib import Path
 
 import pytest
 
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.diagnostics.determinism import compare_exact
 from adas_sim.diagnostics.errors import EnvironmentError_
 from adas_sim.engine.bridge import resolve_simengine_executable, run_pipeline_merged_via_engine

@@ -74,7 +74,7 @@ import pytest
 
 from adas_sim.resolve.component import CtypesSilComponent
 from adas_sim.resolve.library import resolve_library
-from adas_sim.graph.build import Pipeline, Stage
+from adas_sim.graph.pipeline import Pipeline, Stage
 from adas_sim.diagnostics.errors import EnvironmentError_
 from adas_sim.session.session import Session
 

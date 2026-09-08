@@ -108,7 +108,7 @@ def test_choosing_measured_writes_a_run_config_and_points_the_command_at_it(app)
 
     # And what was written is a real pipeline the headless path can reload,
     # with the one field changed -- `CN-0175`, checked rather than asserted.
-    from adas_sim.graph.build import Pipeline
+    from adas_sim.graph.pipeline import Pipeline
 
     reloaded = Pipeline.load(derived, search=[SEARCH])
     assert {s.name: s.mode for s in reloaded.stages}["df"] == "measured"
@@ -135,7 +135,7 @@ def test_flipping_to_simulate_rewrites_it_and_both_files_survive(app):
     assert measured != simulated, "both directions wrote the same file"
     assert measured.exists() and simulated.exists()
 
-    from adas_sim.graph.build import Pipeline
+    from adas_sim.graph.pipeline import Pipeline
 
     assert {s.name: s.mode for s in Pipeline.load(measured, search=[SEARCH]).stages}["df"] == "measured"
     assert {s.name: s.mode for s in Pipeline.load(simulated, search=[SEARCH]).stages}["df"] == "simulate"

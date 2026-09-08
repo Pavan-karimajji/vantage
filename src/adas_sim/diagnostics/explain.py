@@ -137,7 +137,7 @@ def explain(name: str, session: Session, *, config: ResolvedConfig | None = None
 class _StagesOnly:
     """The one attribute `graph.coherence.classify`/`ancestors`/
     `descendants` actually read (that module's own docstring: "no reader,
-    no loader, no path"). A real `graph.build.Pipeline` cannot be
+    no loader, no path"). A real `graph.pipeline.Pipeline` cannot be
     constructed with zero component resolution (`Pipeline.__init__` needs a
     real manifest per stage to derive the base grid) -- this stands in for
     one everywhere coherence classification only ever looks at `.stages`,
@@ -158,7 +158,7 @@ def injection_boundary(stages: Sequence[object]) -> tuple[tuple[str, str, str, s
     zero-load shape `SW-0271` needs. Returns `(measured_stage, measured_
     port, simulate_stage, simulate_port)` tuples, in stage-declaration
     order."""
-    from adas_sim.graph.build import _split_ref  # local: avoids a module-load-order cycle
+    from adas_sim.graph.pipeline import _split_ref  # local: avoids a module-load-order cycle
 
     mode_by_name = {stage.name: stage.mode for stage in stages}
     boundary: list[tuple[str, str, str, str]] = []
@@ -201,7 +201,7 @@ def dry_run(
     returned rather than merely implied so a caller can assert it directly
     (`UT-DIA-01`'s own "count ticks executed and libraries loaded")."""
     from adas_sim.graph import coherence
-    from adas_sim.graph.build import Pipeline
+    from adas_sim.graph.pipeline import Pipeline
 
     stages = Pipeline.parse_stages(pipeline_path)
     boundary = injection_boundary(stages)

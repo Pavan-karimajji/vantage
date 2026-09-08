@@ -20,7 +20,7 @@ import argparse
 from pathlib import Path
 
 from adas_sim.cli.record import _build_source, _tick_count
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.config.scenario import load_scenario
 from adas_sim.runspec.manifest import build_manifest
 from adas_sim.sources.recorder import Recorder

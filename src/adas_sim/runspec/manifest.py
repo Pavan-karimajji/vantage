@@ -40,7 +40,7 @@ from warnings import warn
 import jsonschema
 import yaml
 
-from adas_sim.graph.build import Pipeline, record_policy_for
+from adas_sim.graph.pipeline import Pipeline, record_policy_for
 from adas_sim.graph.coherence import Verdict, classify, render_finding
 from adas_sim.graph.grid import derive_step
 from adas_sim.diagnostics.errors import AuthoringError, ContractError, ProvenanceWarning

@@ -81,7 +81,7 @@ class ModuleManifest:
 class CutFeasibility:
     """One pipeline stage's answer to "can this recording drive it as
     `mode: measured`" (`R-SIM-23`, `CR-SIM-21` made mechanical) -- a query,
-    never a load-time assertion (`graph/build.py::_validate_wiring` is
+    never a load-time assertion (`graph/pipeline.py::_validate_wiring` is
     that). Relocated verbatim from `session/session.py`, `Session`'s own
     former home for this type -- moving here avoids a circular import
     (`Session` now depends on `graph.feasible`, not the reverse)."""
@@ -120,7 +120,7 @@ def feasible_cuts(index: RecordingIndex, stage_manifests: Mapping[str, ModuleMan
 
 
 def check_measured_supported(stage_name: str, outputs: Iterable[PortSpec], recording_topics: Iterable[str]) -> None:
-    """`IMP-0111`, `MOVE`: relocated from `graph/build.py::_validate_wiring`'s
+    """`IMP-0111`, `MOVE`: relocated from `graph/pipeline.py::_validate_wiring`'s
     own inline `mode: measured` check -- a `measured` stage's declared
     output topics must all be present in the recording, refused at load
     naming every missing one. Load-time (`AuthoringError`, blocking), unlike

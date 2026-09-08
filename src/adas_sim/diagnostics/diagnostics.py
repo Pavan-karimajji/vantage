@@ -44,7 +44,7 @@ from typing import Literal
 
 from adas_sim.resolve.probe import probe_manifest
 from adas_sim.resolve.library import resolve_library_report
-from adas_sim.graph.build import Pipeline, Stage
+from adas_sim.graph.pipeline import Pipeline, Stage
 from adas_sim.diagnostics.errors import AuthoringError, SimError
 from adas_sim.session.session import Session
 from adas_sim.plugins.registry import (

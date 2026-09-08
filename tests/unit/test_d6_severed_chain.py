@@ -34,7 +34,7 @@ from pathlib import Path
 import yaml
 
 from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.diagnostics.errors import ProvenanceWarning
 
 

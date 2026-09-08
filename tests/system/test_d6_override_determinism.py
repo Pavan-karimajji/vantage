@@ -24,7 +24,7 @@ from google.protobuf import descriptor_pool as _dpool
 from google.protobuf import message_factory as _mfactory
 
 from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.config.scenario import (
     EgoScenario, RoadHint, RunControl, Scenario, ScenarioContent, SensorModelRef, SutRef,
 )

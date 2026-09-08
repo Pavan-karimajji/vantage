@@ -17,7 +17,7 @@ import pytest
 import yaml
 
 from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.session.session import Session
 from adas_sim.io.base import Provenance, TopicInfo

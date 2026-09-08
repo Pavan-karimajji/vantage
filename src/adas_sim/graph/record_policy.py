@@ -4,7 +4,7 @@
 # @author Pavan Karimajji
 
 """`SI-11 graph` -- `check_consumed_ports_recorded` (`IMP-0115`, `WP-20`),
-relocated verbatim from `graph/build.py::validate_recordable`
+relocated verbatim from `graph/pipeline.py::validate_recordable`
 (`R-SIM-6`'s per-port `record:` policy, `NR-SIM-42`). `build.py` keeps
 `validate_recordable` as a thin wrapper -- both the public name and the two
 types it takes (`Stage`, `SilComponent`) stay defined in `build.py`, so this
@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 from adas_sim.diagnostics.errors import AuthoringError
 
 if TYPE_CHECKING:
-    from adas_sim.graph.build import RecordVerb, SilComponent, Stage
+    from adas_sim.graph.pipeline import RecordVerb, SilComponent, Stage
 
 
 def check_consumed_ports_recorded(stages: Sequence["Stage"], components: Mapping[str, "SilComponent"]) -> None:
@@ -34,7 +34,7 @@ def check_consumed_ports_recorded(stages: Sequence["Stage"], components: Mapping
     not keeping, which can never be resimmed. `source.*`-fed inputs are
     exempt -- stimulus has no `record:` policy of its own in this model,
     the recorder always keeps it in full."""
-    from adas_sim.graph.build import RecordVerb, _split_ref, record_policy_for
+    from adas_sim.graph.pipeline import RecordVerb, _split_ref, record_policy_for
 
     by_name = {stage.name: stage for stage in stages}
     for stage in stages:

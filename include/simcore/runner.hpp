@@ -321,7 +321,7 @@ struct RecordPolicy {
 // indistinguishable from a declared complete one (`R-SIM-6`'s whole point).
 //
 // **Known, named limitation, belonging to `IMP-0009`/`load.cpp`, not here:**
-// `graph/build.py` writes a decimate policy as the JSON object
+// `graph/pipeline.py` writes a decimate policy as the JSON object
 // `{"decimate": n}`, and `runspec/load.cpp` reads `record` as a bare
 // `std::string`, so the object form does not survive into `SpecPort::record`
 // today. The string form above is what a C++-side spec can express; widening

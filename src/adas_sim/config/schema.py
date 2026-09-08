@@ -9,9 +9,9 @@ everywhere -- an unknown key is an error, never a warning (`CN-0183`,
 `IMP-0152`), and the error carries `near_matches` (`IMP-0124`) so a typo
 points at the real key instead of a bare "not allowed."
 
-`check_version` (`IMP-0153`) ports `graph/build.py::_resolve_version`'s
+`check_version` (`IMP-0153`) ports `graph/pipeline.py::_resolve_version`'s
 gate -- version required, integer, `>= 1`, never newer than this reader
-understands -- to every file kind, not just the pipeline. `graph/build.py`
+understands -- to every file kind, not just the pipeline. `graph/pipeline.py`
 keeps its own copy for now (`R-STYLE-2`: that module's version handling is
 not itself a WP-04 artifact); this is the one every NEW kind uses.
 """
@@ -51,7 +51,7 @@ def _schema_for(kind: FileKind) -> dict:
 def check_version(kind: FileKind, raw: Mapping[str, object], *, where: str) -> int:
     """`version:` is required going forward; a file with none is refused
     (every WP-04 kind is new -- there is no pre-version file to upgrade,
-    unlike `graph/build.py`'s pipeline reader, `IMP-0153`'s own `MOVE` note).
+    unlike `graph/pipeline.py`'s pipeline reader, `IMP-0153`'s own `MOVE` note).
     A version newer than `CURRENT_VERSIONS[kind]` is a load error naming
     both."""
     current = CURRENT_VERSIONS[kind]

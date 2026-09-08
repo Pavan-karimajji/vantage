@@ -30,7 +30,7 @@ from pathlib import Path
 import pytest
 
 from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
-from adas_sim.graph.build import Pipeline, Stage
+from adas_sim.graph.pipeline import Pipeline, Stage
 from adas_sim.diagnostics.errors import AuthoringError, ProvenanceWarning
 from adas_sim.runspec.manifest import check_library_provenance
 from adas_sim.io.base import ComponentBuildInfo, Provenance, RunManifest, TopicInfo

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml
 
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.launcher.model import Selection
 from adas_sim.launcher.write import reproduce_line, to_run_config
 from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec

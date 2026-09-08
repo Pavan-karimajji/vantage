@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 
 from adas_sim.check.runner import discover_pipelines
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 
 SIM_ROOT = Path(__file__).resolve().parent.parent.parent
 MODULES_ROOT = SIM_ROOT.parent

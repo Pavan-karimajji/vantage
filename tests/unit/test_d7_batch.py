@@ -21,7 +21,7 @@ import pytest
 from pathlib import Path
 
 from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.orchestrate.batch import RecordingOutcome, expand_recordings, run_batch, write_report
 from adas_sim.engine.bridge import resolve_simengine_executable
 

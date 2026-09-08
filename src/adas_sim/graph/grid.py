@@ -5,7 +5,7 @@
 
 """`SI-11 graph` -- grid derivation and cycle detection (`WP-20`).
 
-`derive_step`/`check_period_multiples` are `graph/build.py::
+`derive_step`/`check_period_multiples` are `graph/pipeline.py::
 _compute_base_grid_ns`/`_require_multiple`'s own logic, relocated
 (`IMP-0063`/`IMP-0172`, `DEDUPE`) -- `build.py` keeps calling through to
 these two rather than a second copy, so nothing importing the old private

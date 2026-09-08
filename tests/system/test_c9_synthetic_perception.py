@@ -34,7 +34,7 @@ from pathlib import Path
 import pytest
 
 from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.io.base import Provenance, RunManifest, TopicInfo
 from adas_sim.ingest.map import IngestMap, ProvidedPort
 from adas_sim.plugins.registry import writer_for

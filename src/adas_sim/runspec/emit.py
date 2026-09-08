@@ -123,7 +123,7 @@ def _compute_grid_step_ns(period_ns_by_stage: Mapping[str, int]) -> int:
     `period_ns` -- computed here, once, so `simcore` never derives it
     (`ANL-SW-02` greps the engine for `gcd`). A period not an integer
     multiple of the result is an emit-time error naming both, same
-    discipline `graph/build.py::_compute_base_grid_ns` already established
+    discipline `graph/pipeline.py::_compute_base_grid_ns` already established
     (ported, not shared, since `runspec/` must not import `graph/`)."""
     periods = [p for p in period_ns_by_stage.values() if p > 0]
     if not periods:
@@ -176,7 +176,7 @@ def _port_dict(
 def _record_verb_for(stage: str, port_name: str, record_policy: Mapping[str, Mapping[str, str]]) -> str:
     """`IMP-0009`: every port carries a concrete `record` value at emit time
     -- an exact entry wins, else `"*"`, else the closed default `full`,
-    same precedence `graph/build.py::record_policy_for` already
+    same precedence `graph/pipeline.py::record_policy_for` already
     establishes (ported here so the ENGINE never holds this table)."""
     stage_policy = record_policy.get(stage, {})
     if port_name in stage_policy:

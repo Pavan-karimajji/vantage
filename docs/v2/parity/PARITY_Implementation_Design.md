@@ -157,7 +157,7 @@ document.
 | `[x]` | `IMP-0007` | `SW-0007` | `WP-01` | `NEW` | `ingest/resolve.py::Unresolved` and `Absent` are distinct types, not two spellings of `None`, so a caller cannot conflate them by accident. | `UT-resolver-04` |
 | `[x]` | `IMP-0008` | `SW-0008` | `WP-02` | `NEW` | `runspec/sources.py::SourceSet` — a name-to-recording mapping validating exactly one `default: true` at construction. | `UT-sourceset-01` |
 | `[x]` | `IMP-0009` | `SW-0009` | `WP-02` | `NEW` | `runspec/sources.py::SourceSet.for_port(port) -> str` returns one name, always. There is no multi-source return type to misuse. | `UT-sourceset-02` |
-| `[x]` | `IMP-0010` | `SW-0010` | `WP-02` | `NEW` | `runspec/sources.py::UnknownSource` raised from `for_port` during spec assembly, before `graph/build.py` opens anything. | `UT-sourceset-03` |
+| `[x]` | `IMP-0010` | `SW-0010` | `WP-02` | `NEW` | `runspec/sources.py::UnknownSource` raised from `for_port` during spec assembly, before `graph/pipeline.py` opens anything. | `UT-sourceset-03` |
 | `[x]` | `IMP-0011` | `SW-0054` | `WP-02` | `NEW` | `runspec/sources.py::SourceSet.for_port` consults the explicit assignment map first, the default second. Two lookups, in that order. | `UT-sourceset-04` |
 | `[x]` | `IMP-0012` | `SW-0011` | `WP-04` | `EXTEND` | `runspec/canon.py` gains source and per-port assignment canonicalisation, so assembly order cannot reach the emitted bytes. | `UT-specasm-01` |
 | `[x]` | `IMP-0013` | `SW-0012` | `WP-04` | `KEEP` | `runspec/canon.py::canonical` + `compute_spec_sha` already give a stable serialisation and its hash; both are taken unchanged. The new fields ride the existing path. | `UT-specasm-02` |

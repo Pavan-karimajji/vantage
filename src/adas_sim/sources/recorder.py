@@ -43,7 +43,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from types import MappingProxyType
 
-from adas_sim.graph.build import Pipeline, RecordVerb, _split_ref, record_policy_for
+from adas_sim.graph.pipeline import Pipeline, RecordVerb, _split_ref, record_policy_for
 from adas_sim.config.scenario import Scenario
 from adas_sim.diagnostics.errors import InternalError
 from adas_sim.diagnostics.tap import resolve_taps

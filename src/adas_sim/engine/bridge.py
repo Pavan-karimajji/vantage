@@ -43,7 +43,7 @@ from pathlib import Path
 from adas_sim.config.fault import FaultVerb
 from adas_sim.config.paths import sim_root
 from adas_sim.diagnostics.errors import EnvironmentError_, InternalError
-from adas_sim.graph.build import Pipeline, _split_ref
+from adas_sim.graph.pipeline import Pipeline, _split_ref
 from adas_sim.io.base import Provenance, RunManifest, TopicInfo, group_by_log_time
 from adas_sim.plugins.registry import reader_for, writer_for
 from adas_sim.resolve.component import ComponentManifest

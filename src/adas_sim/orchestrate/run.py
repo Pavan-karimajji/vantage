@@ -28,7 +28,7 @@ from pathlib import Path
 from collections.abc import Sequence
 
 from adas_sim.engine.bridge import EngineRunResult, run_pipeline_via_engine
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.orchestrate.progress import ProgressSink
 
 

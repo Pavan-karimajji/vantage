@@ -9,7 +9,7 @@ enumerates a specific processing chain. `ANL-SW-35` (`scripts/
 check_invariants.py`) is the static half of the same requirement; this is
 the dynamic half -- two pipelines, differing only in their own `stages:`
 list, produce differently-ordered/differently-sized `Pipeline.stages`,
-proving the result tracks the YAML rather than a literal `graph/build.py`
+proving the result tracks the YAML rather than a literal `graph/pipeline.py`
 never has in the first place."""
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ import pytest
 import yaml
 
 from adas_sim.diagnostics.errors import AuthoringError
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
 
 
@@ -62,7 +62,7 @@ def test_ut_grf_05_the_built_graph_tracks_the_manifest_not_a_literal(tmp_path):
     DIFFERENT `Pipeline.stages` -- reordering/replacing the chain in the
     YAML alone changes the result (`SW-0167`'s own Accept clause: "a
     configuration change only"). A hard-coded chain anywhere in
-    `graph/build.py` would make one of these two assertions fail."""
+    `graph/pipeline.py` would make one of these two assertions fail."""
     three_stage = _pipeline_from_stage_names(tmp_path, "three.yaml", ("vdy", "perception", "aeb"))
     assert [s.name for s in three_stage.stages] == ["vdy", "perception", "aeb"]
 
@@ -70,7 +70,7 @@ def test_ut_grf_05_the_built_graph_tracks_the_manifest_not_a_literal(tmp_path):
     assert [s.name for s in reordered.stages] == ["perception", "vdy", "gateway"]
 
     # The two builds share zero stage NAMES in common at index 1/2 (aeb vs.
-    # vdy/gateway) -- if `graph/build.py` ever hard-coded a chain, at least
+    # vdy/gateway) -- if `graph/pipeline.py` ever hard-coded a chain, at least
     # one of these two pipelines would have been forced onto it and this
     # would fail.
     assert [s.name for s in three_stage.stages] != [s.name for s in reordered.stages]

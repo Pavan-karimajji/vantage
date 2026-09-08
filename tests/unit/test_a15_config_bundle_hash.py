@@ -9,7 +9,7 @@ recording a real `dll:`/`stubdll:` pipeline produced, so *"which
 calibration?"* read `unknown` even though *"which build?"* (`component_
 build_shas`) already worked.
 
-Root cause: `graph.build._resolve_components` has always computed each
+Root cause: `graph.pipeline._resolve_components` has always computed each
 stage's bundle directory (`bundle_dirs`, `<library_dir>/config`) -- it is
 `_validate_cross_component_agreement`'s own input -- but `Pipeline.load`
 discarded it after that one call instead of keeping it on the instance, so
@@ -35,7 +35,7 @@ from adas_sim.config.project import _bundle_sha256
 from adas_sim.diagnostics.evidence import evidence, format_evidence
 from adas_sim.io.base import ComponentBuildInfo, RunManifest
 from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent
-from adas_sim.graph.build import Pipeline, Stage
+from adas_sim.graph.pipeline import Pipeline, Stage
 from adas_sim.runspec.manifest import build_manifest
 from adas_sim.session.session import Session
 from adas_sim.session.tick import Pose2D, PortValue, Tick

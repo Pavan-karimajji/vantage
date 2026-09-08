@@ -20,7 +20,7 @@ import pytest
 import yaml
 
 from adas_sim.cli import doctor as doctor_cli
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.diagnostics.diagnostics import _plugin_diagnoses, doctor_report
 
 import adas_sim.io.mcap  # noqa: E402,F401 -- registers the ".mcap"/".csv" codecs

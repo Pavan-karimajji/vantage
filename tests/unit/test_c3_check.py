@@ -28,7 +28,7 @@ from adas_sim.check.runner import (
     ScenarioCheckResult, check_scenario, check_scenarios, default_recording_stem_for, discover_pipelines,
 )
 from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.config.scenario import (
     EgoScenario, RoadHint, RunControl, Scenario, ScenarioContent, SensorModelRef, SutRef,
 )

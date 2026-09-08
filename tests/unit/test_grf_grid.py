@@ -4,7 +4,7 @@
 # @author Pavan Karimajji
 
 """`WP-20` `SI-11 graph` -- `UT-GRF-01`, `UT-GRF-02`, `UT-GRF-10`, `UT-GRF-11`
-(`graph/grid.py`, `graph/build.py`'s relocated grid logic). Fixture style
+(`graph/grid.py`, `graph/pipeline.py`'s relocated grid logic). Fixture style
 matches `test_c1c_pipeline.py`'s own (`InProcessSilComponent`, synthetic
 components, no DLL)."""
 
@@ -17,7 +17,7 @@ import yaml
 
 from adas_sim.graph import grid
 from adas_sim.diagnostics.errors import AuthoringError
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
 
 

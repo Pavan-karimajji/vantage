@@ -39,7 +39,7 @@ import pytest
 from adas_sim.cli.probe import run as probe_run
 from adas_sim.diagnostics.errors import EnvironmentError_
 from adas_sim.engine.bridge import resolve_simengine_executable, run_pipeline_merged_via_engine
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.runspec.manifest import build_manifest
 from adas_sim.session.session import Session
 from adas_sim.plugins.registry import reader_for

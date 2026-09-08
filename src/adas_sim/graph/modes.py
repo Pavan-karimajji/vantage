@@ -4,7 +4,7 @@
 # @author Pavan Karimajji
 
 """`SI-11 graph` -- `with_mode` (`WP-20` phase 4, `IMP-0183`/`IMP-0184`),
-relocated from `graph/build.py::Pipeline.with_mode`. `Pipeline.with_mode`
+relocated from `graph/pipeline.py::Pipeline.with_mode`. `Pipeline.with_mode`
 stays as a thin wrapper (nothing calling the method breaks). The one real
 behaviour change this move makes: gap-closing now runs on
 `coherence.classify()` (`WP-20` phase 2's transitive fix) instead of the
@@ -28,7 +28,7 @@ from adas_sim.diagnostics.errors import AuthoringError, ProvenanceWarning
 from adas_sim.graph import coherence
 
 if TYPE_CHECKING:
-    from adas_sim.graph.build import Mode, Pipeline
+    from adas_sim.graph.pipeline import Mode, Pipeline
 
 
 def with_mode(pipeline: "Pipeline", stage: str, mode: "Mode", *, close_gaps: bool = True) -> "Pipeline":
@@ -46,7 +46,7 @@ def with_mode(pipeline: "Pipeline", stage: str, mode: "Mode", *, close_gaps: boo
     headless caller sees in the log, not an error (`SW-0178`'s actual
     blocking behaviour is a future run-loop caller's job, see `graph/
     coherence.py`'s own top note)."""
-    from adas_sim.graph.build import Pipeline, Stage
+    from adas_sim.graph.pipeline import Pipeline, Stage
 
     names = {s.name for s in pipeline.stages}
     if stage not in names:
@@ -96,7 +96,7 @@ def with_port_mode(pipeline: "Pipeline", stage: str, port: str, mode: "Mode") ->
     stage were in `mode` for the purpose of that one port's edges only --
     scoped this narrowly on purpose (`OQ-04` stays open on whether
     stage-level plus per-port is the right final granularity)."""
-    from adas_sim.graph.build import Pipeline, Stage
+    from adas_sim.graph.pipeline import Pipeline, Stage
 
     names = {s.name for s in pipeline.stages}
     if stage not in names:

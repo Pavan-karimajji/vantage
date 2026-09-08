@@ -39,7 +39,7 @@ import pytest
 from adas_sim.diagnostics.determinism import compare_exact
 from adas_sim.diagnostics.errors import EnvironmentError_
 from adas_sim.engine.bridge import resolve_simengine_executable, run_engine, run_pipeline_via_engine
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.plugins.registry import reader_for
 from adas_sim.runspec.canon import write_run_spec
 from tests.system.test_d15b_engine_bridge import _echo_stub_path

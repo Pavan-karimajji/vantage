@@ -86,7 +86,7 @@ def test_injection_boundary_is_computed_structurally_with_no_component_resolutio
     """`CN-0121`: only ports crossing FROM a `measured` stage INTO a
     `simulate` stage count -- `vdy -> perception` (simulate -> measured) is
     not the boundary."""
-    from adas_sim.graph.build import Pipeline
+    from adas_sim.graph.pipeline import Pipeline
 
     stages = Pipeline.parse_stages(_chain4_pipeline_yaml(tmp_path))
     boundary = injection_boundary(stages)

@@ -13,7 +13,7 @@ tooling." A file/category that is not runtime calibration a module's own
 DLL reads at run time is refused, quoting the rule.
 
 The two agreement checks are ported, unchanged in behaviour, from
-`graph/build.py::_validate_cross_component_agreement` (`OD-11`): project-name
+`graph/pipeline.py::_validate_cross_component_agreement` (`OD-11`): project-name
 agreement is a **warning**, escapable via `allow_mixed_projects: true`; ego-
 parameter agreement is a **hard error with no escape**, and the escape
 widening beyond project-name is exactly what `R-SIM-3a` forbids. This module

@@ -30,7 +30,7 @@ from adas_sim.diagnostics.errors import EXIT_CODES
 from adas_sim.graph import coherence, waiver
 
 if TYPE_CHECKING:
-    from adas_sim.graph.build import Pipeline
+    from adas_sim.graph.pipeline import Pipeline
 
 
 @dataclass(frozen=True, slots=True)

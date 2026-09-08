@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from adas_sim.resolve.component import CtypesSilComponent
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.diagnostics.errors import SimError
 from adas_sim.resolve.plugins import PluginBundle
 from adas_sim.config.project import materialize_derived_bundle

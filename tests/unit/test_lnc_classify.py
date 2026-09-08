@@ -14,7 +14,7 @@ import pytest
 import yaml
 
 from adas_sim.graph import coherence, waiver
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.launcher.classify import LaunchBlocked, classify, remedies_for
 from adas_sim.launcher.model import Selection
 from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec

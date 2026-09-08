@@ -53,7 +53,7 @@ def test_check_anl_sw34_config_module_is_clean():
 
 
 def test_check_anl_sw34_not_yet_enforced_documents_the_known_graph_violation():
-    """`graph/build.py` (formerly `contracts/pipeline.py`) already imports
+    """`graph/pipeline.py` (formerly `contracts/pipeline.py`) already imports
     `adas_sim.io.base.RecordingReader` for `Pipeline.load`'s `recording:`
     parameter -- predates `WP-04`, and untangling it is `WP-05`'s own seam
     work (`IF-09`), not this `WP`'s. This test documents the known,
@@ -62,4 +62,4 @@ def test_check_anl_sw34_not_yet_enforced_documents_the_known_graph_violation():
     `run_all()` is the one-line follow-up (IMP-0164's own design note)."""
     sim_root = _SCRIPTS_DIR.parent
     findings = check_anl_sw34(src_root=sim_root / "src" / "adas_sim")
-    assert any("graph" in f and "build.py" in f for f in findings)
+    assert any("graph" in f and "pipeline.py" in f for f in findings)

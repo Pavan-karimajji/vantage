@@ -38,7 +38,7 @@ from adas_sim.cli.resim import run as resim_run
 from adas_sim.engine.bridge import EngineRunResult
 from adas_sim.io.base import RunManifest
 from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent, PortSpec
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.plugins.registry import writer_for
 from adas_sim.runspec.manifest import write_run_manifest
 

@@ -48,7 +48,7 @@ import warnings
 from collections.abc import Collection
 from dataclasses import dataclass
 
-from adas_sim.graph.build import Pipeline, SeveredChain, Stage
+from adas_sim.graph.pipeline import Pipeline, SeveredChain, Stage
 
 _VALID_MODES = ("simulate", "measured", "off")
 

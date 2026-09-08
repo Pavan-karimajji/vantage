@@ -199,7 +199,7 @@ def _eval_row1(row: Row) -> RowResult:
     )
 
 
-# Row 2 -- pipeline load and validation. Survivor: adas_sim/graph/build.py
+# Row 2 -- pipeline load and validation. Survivor: adas_sim/graph/pipeline.py
 # (real). Dies: sil_host/src/pipeline.cpp's load half.
 def _eval_row2(row: Row) -> RowResult:
     py_ok, py_detail = run_pytest(("tests/unit/test_c1c_pipeline.py",))
@@ -243,7 +243,7 @@ def _eval_row4(row: Row) -> RowResult:
     return RowResult(row, "PASS", f"{sil_detail} | {mh_detail}")
 
 
-# Row 5 -- base-grid computation. Survivor: adas_sim/graph/build.py's
+# Row 5 -- base-grid computation. Survivor: adas_sim/graph/pipeline.py's
 # `_compute_base_grid_ns`/`_require_multiple`. The C++ corpus
 # (test_pipeline_period_grid.cpp) exercises `RequirePeriodIsMultipleOfBaseGrid`
 # with one adversarial case: period_ns=7_000_000, base_grid_ns=10_000_000,
@@ -256,7 +256,7 @@ def _eval_row5(row: Row) -> RowResult:
 
     sys.path.insert(0, str(SIM_ROOT / "src"))
     try:
-        from adas_sim.graph.build import _require_multiple  # noqa: PLC0415
+        from adas_sim.graph.pipeline import _require_multiple  # noqa: PLC0415
         from adas_sim.diagnostics.errors import AuthoringError  # noqa: PLC0415
 
         same_input_ok = True
@@ -365,7 +365,7 @@ ROWS: tuple[Row, ...] = (
         "simcore/io ReadRange + simcore::bus::CycleReconstructor (C++, WP-06+WP-08, assembled WP-15a)",
         "sil_host/src/recording_reader.cpp's grouping",
         ("tests/integration/test_wp15a_row1_recording_read.cpp", "sil_host/tests/unit/test_resim_measured.cpp"), _eval_row1),
-    Row(2, "Pipeline load and validation", "adas_sim/graph/build.py",
+    Row(2, "Pipeline load and validation", "adas_sim/graph/pipeline.py",
         "sil_host/src/pipeline.cpp's load half",
         ("tests/unit/test_c1c_pipeline.py", "sil_host/tests/unit/test_pipeline_load_errors.cpp"), _eval_row2),
     Row(3, "Ingest map parsing", "adas_sim/ingest/map.py",
@@ -374,7 +374,7 @@ ROWS: tuple[Row, ...] = (
     Row(4, "Component host", "simcore/module_host (C++, WP-10)",
         "contracts/component.py's execution path",
         ("sil_host/tests/system/test_st_c7_2_two_stage_resim.cpp", "tests/unit/test_mh_component.cpp"), _eval_row4),
-    Row(5, "Base-grid computation", "adas_sim/graph/build.py::_compute_base_grid_ns",
+    Row(5, "Base-grid computation", "adas_sim/graph/pipeline.py::_compute_base_grid_ns",
         "sil_host/src/pipeline.cpp::ComputeBaseGridNs",
         ("tests/unit/test_c1c_pipeline.py", "sil_host/tests/unit/test_pipeline_period_grid.cpp"), _eval_row5),
     Row(6, "Library resolution", "adas_sim/resolve/library.py",

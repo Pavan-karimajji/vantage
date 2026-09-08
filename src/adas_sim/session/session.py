@@ -21,7 +21,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.graph.feasible import (
     CutFeasibility, ModuleManifest, RecordingIndex, RecordingTopic, feasible_cuts as _feasible_cuts,

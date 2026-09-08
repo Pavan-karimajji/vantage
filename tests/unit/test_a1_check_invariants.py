@@ -321,7 +321,7 @@ def test_check_anl_sw37_passes_with_the_two_named_exceptions(tmp_path):
     (tmp_path / "resolve").mkdir(parents=True)
     (tmp_path / "resolve" / "probe.py").write_text("path = resolve_library(str(path_or_stem), search=search)\n", encoding="utf-8")
     (tmp_path / "graph").mkdir(parents=True)
-    (tmp_path / "graph" / "build.py").write_text("lib_path = resolve_library(ref, search=search)\n", encoding="utf-8")
+    (tmp_path / "graph" / "pipeline.py").write_text("lib_path = resolve_library(ref, search=search)\n", encoding="utf-8")
     assert check_anl_sw37(src_root=tmp_path) == []
 
 
@@ -331,7 +331,7 @@ def test_check_anl_sw37_still_fails_on_an_unlisted_third_call_site(tmp_path):
     (tmp_path / "resolve").mkdir(parents=True)
     (tmp_path / "resolve" / "probe.py").write_text("path = resolve_library(str(path_or_stem), search=search)\n", encoding="utf-8")
     (tmp_path / "graph").mkdir(parents=True)
-    (tmp_path / "graph" / "build.py").write_text("lib_path = resolve_library(ref, search=search)\n", encoding="utf-8")
+    (tmp_path / "graph" / "pipeline.py").write_text("lib_path = resolve_library(ref, search=search)\n", encoding="utf-8")
     (tmp_path / "launcher").mkdir(parents=True)
     (tmp_path / "launcher" / "model.py").write_text("lib_path = resolve_library(ref, search=search)\n", encoding="utf-8")
     findings = check_anl_sw37(src_root=tmp_path)
@@ -374,7 +374,7 @@ def test_check_anl_sw38_fails_when_a_resolver_file_is_missing(tmp_path):
 
 
 def test_check_anl_sw35_passes_on_the_current_build_py():
-    """`ANL-SW-35`: the real `graph/build.py` reads `stages` from
+    """`ANL-SW-35`: the real `graph/pipeline.py` reads `stages` from
     `parse_stages(path)`, never a literal chain."""
     assert check_anl_sw35() == []
 
@@ -382,7 +382,7 @@ def test_check_anl_sw35_passes_on_the_current_build_py():
 def test_check_anl_sw35_fails_on_a_planted_hard_coded_chain(tmp_path):
     graph_dir = tmp_path / "graph"
     graph_dir.mkdir(parents=True)
-    (graph_dir / "build.py").write_text(
+    (graph_dir / "pipeline.py").write_text(
         'stages = ["perception", "fusion", "aeb"]\n', encoding="utf-8",
     )
     findings = check_anl_sw35(src_root=tmp_path)
@@ -393,7 +393,7 @@ def test_check_anl_sw35_fails_on_a_planted_hard_coded_chain(tmp_path):
 def test_check_anl_sw35_allows_a_dynamic_build(tmp_path):
     graph_dir = tmp_path / "graph"
     graph_dir.mkdir(parents=True)
-    (graph_dir / "build.py").write_text(
+    (graph_dir / "pipeline.py").write_text(
         "stages = cls.parse_stages(path)\nstages: list[Stage] = []\n", encoding="utf-8",
     )
     assert check_anl_sw35(src_root=tmp_path) == []

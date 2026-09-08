@@ -45,7 +45,7 @@ from pathlib import Path
 
 from adas_sim.check.expect import ExpectationResult, evaluate_scenario
 from adas_sim.resolve.component import ComponentManifest, resolve_message_classes
-from adas_sim.graph.build import Pipeline
+from adas_sim.graph.pipeline import Pipeline
 from adas_sim.config.paths import superproject_root as _superproject_root
 from adas_sim.config.scenario import load_scenario
 from adas_sim.diagnostics.errors import AuthoringError

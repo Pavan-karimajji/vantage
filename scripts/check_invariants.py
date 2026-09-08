@@ -351,7 +351,7 @@ def check_anl_sw34(src_root: Path = SRC_ROOT) -> list[str]:
 # "stricter than forbidding the binding by folder, and the only form that
 # survives the probe pass existing" (SwReq SWQ-14). **Scope, stated
 # honestly:** this cannot decide arbitrary call-graph reachability (e.g.
-# `graph/build.py` importing `CtypesSilComponent` by class name and calling
+# `graph/pipeline.py` importing `CtypesSilComponent` by class name and calling
 # its `.exec()` — a real, permanent behaviour, `WP-16`'s own "not a
 # duplicate; stays" note) -- only whether the literal ctypes symbol tokens
 # are bound outside the three permitted folders, which is what "bounded by
@@ -418,7 +418,7 @@ def check_anl_sw08(simcore_root: Path = SIMCORE_ROOT, simengine_root: Path = SIM
 #   for `sim probe <lib>`, with no `RunSpec`/pipeline stage in the picture --
 #   a different operation from resolving a stage's `impl:`, not an instance
 #   of the thing this check guards against.
-# - `graph/build.py` is TEMPORARY, pending Bench building a `RunSpec` first
+# - `graph/pipeline.py` is TEMPORARY, pending Bench building a `RunSpec` first
 #   and constructing its `Pipeline` from that (so `_resolve_components`
 #   reads `IMP-0003`'s already-resolved `stages[].impl` instead of calling
 #   `resolve_library` itself). That refactor is a separate work package, not
@@ -428,7 +428,7 @@ _RESOLVE_LIBRARY_CALL = re.compile(r"(?<![A-Za-z0-9_.])resolve_library\s*\(")
 _RESOLVE_LIBRARY_DEF = re.compile(r"^\s*def\s+resolve_library\s*\(")
 _ANL_SW_37_ALLOWED_CALLERS = (
     Path("resolve") / "probe.py",       # permanent -- no RunSpec exists yet at this call
-    Path("graph") / "build.py",         # temporary -- closed by the Bench-through-RunSpec refactor
+    Path("graph") / "pipeline.py",      # temporary -- closed by the Bench-through-RunSpec refactor
 )
 
 
@@ -497,10 +497,10 @@ _HARDCODED_STAGE_CHAIN = re.compile(r"""\b\w*stages?\w*\s*[:=]\s*[\[(]\s*["'][\w
 
 
 def check_anl_sw35(src_root: Path = SRC_ROOT) -> list[str]:
-    """`ANL-SW-35`: `graph/build.py` never assigns a `stages`-named variable
+    """`ANL-SW-35`: `graph/pipeline.py` never assigns a `stages`-named variable
     a literal list/tuple of quoted stage names."""
     findings = []
-    path = src_root / "graph" / "build.py"
+    path = src_root / "graph" / "pipeline.py"
     if not path.is_file():
         return findings
     for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
