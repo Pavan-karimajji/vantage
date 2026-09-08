@@ -74,6 +74,21 @@ def build_parser() -> argparse.ArgumentParser:
 
 def run(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    # The run spec is written to disk and read back by *other processes* --
+    # `simengine`, and `vantage_app.exe` opening the `.spec.json` sidecar --
+    # each with its own working directory, so a relative path in it resolves
+    # against the wrong root or not at all. `runspec.emit.unresolved()`
+    # asserts that invariant deep inside `pipeline_to_run_spec`; this is the
+    # boundary that *establishes* it, because a user's own relative path
+    # enters here and nowhere else. Resolving late (or weakening the check)
+    # would trade a clear refusal for a spec that silently means something
+    # different to whoever reads it next.
+    args.pipeline = args.pipeline.resolve()
+    if args.save is not None:
+        args.save = args.save.resolve()
+    if args.config is not None:
+        args.config = args.config.resolve()
+    args.search = [directory.resolve() for directory in args.search]
     spec = load_run_spec(args.pipeline)
     recording = args.recording if args.recording is not None else spec.recording
     if recording is None:
@@ -81,6 +96,7 @@ def run(argv: list[str] | None = None) -> int:
             expected="a recording (positional argument, or a recording: key in --pipeline's own file)",
             found="neither given", where=str(args.pipeline), hint="",
         )
+    recording = Path(recording).resolve()
     project = args.project if args.project is not None else spec.project
     config = args.config if args.config is not None else spec.config
 
@@ -106,6 +122,12 @@ def run(argv: list[str] | None = None) -> int:
     # is still built above for provenance checks and `pipeline_to_run_spec`'s
     # own manifest/library-path reads; it is never `init_components`'d or
     # `exec()`'d in this process any more.
+    if args.save is not None:
+        # `--save logs/new_dir/out.mcap` writes two files here (the recording
+        # and its `.spec.json` sidecar) and both are opened by name, by a
+        # separate process, without either creating the directory first.
+        # Creating it is the caller's job precisely once -- here.
+        args.save.parent.mkdir(parents=True, exist_ok=True)
     output_path = args.save
     cleanup_output = False
     if output_path is None:
