@@ -19,6 +19,7 @@ build logic of its own.
 Usage: python build.py -t <target> -p <platform> [-P <project>] [--clean]
        python build.py config
 """
+import json
 import os
 import shutil
 import subprocess
@@ -29,8 +30,17 @@ from pathlib import Path
 # Default `toolchain` git remote pip installs a version from, by tag
 # (docs/imp_design.md §4, decided 2026-09-08 - no package index, no
 # server). Overridable for anyone whose network reaches a mirror instead.
+# Used only for a "vX.Y.Z" pin (see install_pinned()) - a bare "X.Y.Z" pin
+# installs via Conan instead (§5 addendum, §9.8), needing no git remote at
+# all.
 TOOLCHAIN_GIT_URL = os.environ.get(
     "ADAS_TOOLCHAIN_GIT_URL", "https://github.com/Pavan-karimajji/toolchain")
+
+# Conan remote a bare "X.Y.Z" pin installs adas-build-tools from (§5
+# addendum, §9.8) - the same remote every other adas-* package already
+# needs reachable, so a machine that can build this repo at all can also
+# install this package this way.
+ADAS_LOCAL_REMOTE = os.environ.get("ADAS_LOCAL_REMOTE", "adas-local")
 
 # How long a second, concurrent invocation waits for the first to finish
 # bootstrapping .venv before giving up (TCT-10).
@@ -53,8 +63,10 @@ def read_pin(component_root):
     if not pin_path.is_file():
         sys.exit(
             f"ERROR: no build-tools version pin found at {pin_path}.\n"
-            f"Add one - e.g. on Windows: echo v1.0.0> \"{pin_path}\"\n"
-            f"          on POSIX:        echo v1.0.0 > \"{pin_path}\""
+            f"Add one - e.g. a Conan-published version (§5 addendum):\n"
+            f"          echo 1.0.3> \"{pin_path}\"\n"
+            f"       or a git tag (§4):\n"
+            f"          echo v1.0.0> \"{pin_path}\""
         )
     return pin_path.read_text(encoding="utf-8").strip()
 
@@ -119,18 +131,92 @@ def _acquire_lock(component_root):
 
 
 def install_pinned(venv_dir, pin):
-    """`pip install "git+<toolchain-url>@<pin>"` into `venv_dir`
-    (docs/imp_design.md §2.4 step 6). The marker is written only after a
-    successful install, so a failed install is retried next run rather than
-    silently treated as current (TCT-09)."""
+    """Installs `pin` into `venv_dir` via one of two mechanisms, chosen by
+    the pin's own shape (docs/imp_design.md §5 addendum, §9.8) - a "vX.Y.Z"
+    git tag installs via `pip install git+<toolchain-url>@<pin>` (§4,
+    original mechanism, needs the toolchain git remote reachable); a bare
+    "X.Y.Z" installs via Conan (`conan download` -> `conan cache path` ->
+    `pip install <wheel>`), reusing whatever adas-local infrastructure is
+    already required for every other adas-* package - for a machine that
+    can't reach the toolchain git remote (docs/imp_design.md §5's original
+    motivation) but already has adas-local configured for its C++ deps.
+    The marker is written only after a successful install, so a failed
+    install is retried next run rather than silently treated as current
+    (TCT-09)."""
     _, interpreter = venv_paths(venv_dir.parent)
+    if pin.startswith("v"):
+        proc = subprocess.run(
+            [str(interpreter), "-m", "pip", "install", "--quiet",
+             f"git+{TOOLCHAIN_GIT_URL}@{pin}"],
+        )
+        if proc.returncode != 0:
+            sys.exit(f"ERROR: pip install of adas-build-tools@{pin} failed (exit {proc.returncode}).")
+    else:
+        _install_pinned_via_conan(interpreter, pin)
+    (venv_dir / "adas_build_tools.version").write_text(pin, encoding="utf-8")
+
+
+def _install_pinned_via_conan(interpreter, pin):
+    """Conan-based half of install_pinned() (docs/imp_design.md §5
+    addendum, §9.8). `adas-build-tools/<pin>`'s package_id() calls
+    self.info.clear(), so it always collapses to one fixed hash regardless
+    of settings - never hardcoded here, queried fresh via `conan list`
+    each time, since relying on a literal would silently break the moment
+    Conan's own hashing of an empty ConanInfo ever changed."""
+    if shutil.which("conan") is None:
+        sys.exit(
+            "ERROR: conf/build_tools.version names a bare version "
+            f"({pin!r}), which installs via Conan, but 'conan' isn't on "
+            "PATH. Install Conan first, or pin a \"vX.Y.Z\" git tag "
+            "instead (§4)."
+        )
+
+    ref = f"adas-build-tools/{pin}"
+    proc = subprocess.run(["conan", "download", ref, "-r", ADAS_LOCAL_REMOTE])
+    if proc.returncode != 0:
+        sys.exit(
+            f"ERROR: conan download of {ref} from '{ADAS_LOCAL_REMOTE}' "
+            f"failed (exit {proc.returncode})."
+        )
+
+    list_proc = subprocess.run(
+        ["conan", "list", f"{ref}:*", "--format=json"],
+        capture_output=True, text=True,
+    )
+    if list_proc.returncode != 0:
+        sys.exit(
+            f"ERROR: conan list of {ref} failed (exit {list_proc.returncode}):\n"
+            f"{list_proc.stderr}"
+        )
+    data = json.loads(list_proc.stdout)
+    package_ids = [
+        package_id
+        for cache_data in data.values()
+        for revision_data in cache_data.get(ref, {}).get("revisions", {}).values()
+        for package_id in revision_data.get("packages", {})
+    ]
+    if not package_ids:
+        sys.exit(f"ERROR: no built packages found for {ref} on '{ADAS_LOCAL_REMOTE}'.")
+
+    path_proc = subprocess.run(
+        ["conan", "cache", "path", f"{ref}:{package_ids[0]}"],
+        capture_output=True, text=True,
+    )
+    if path_proc.returncode != 0:
+        sys.exit(
+            f"ERROR: conan cache path of {ref}:{package_ids[0]} failed "
+            f"(exit {path_proc.returncode}):\n{path_proc.stderr}"
+        )
+    package_dir = Path(path_proc.stdout.strip())
+    wheels = list(package_dir.glob("adas_build_tools-*.whl"))
+    if not wheels:
+        sys.exit(f"ERROR: no adas_build_tools wheel found in {package_dir}.")
+
     proc = subprocess.run(
-        [str(interpreter), "-m", "pip", "install", "--quiet",
-         f"git+{TOOLCHAIN_GIT_URL}@{pin}"],
+        [str(interpreter), "-m", "pip", "install", "--quiet", str(wheels[0])],
     )
     if proc.returncode != 0:
-        sys.exit(f"ERROR: pip install of adas-build-tools@{pin} failed (exit {proc.returncode}).")
-    (venv_dir / "adas_build_tools.version").write_text(pin, encoding="utf-8")
+        sys.exit(f"ERROR: pip install of {wheels[0]} failed (exit {proc.returncode}).")
 
 
 def ensure_venv(component_root, pin):
