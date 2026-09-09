@@ -39,8 +39,16 @@ TOOLCHAIN_GIT_URL = os.environ.get(
 # Conan remote a bare "X.Y.Z" pin installs adas-build-tools from (§5
 # addendum, §9.8) - the same remote every other adas-* package already
 # needs reachable, so a machine that can build this repo at all can also
-# install this package this way.
+# install this package this way. ADAS_LOCAL_URL has NO default - same "no
+# plausible default" discipline adas_build_tools.conan_ops's own copy of
+# this constant already documents (project_conan_server_infra: no stable,
+# network-reachable address exists for every machine yet). Credentials DO
+# have a real, working default (demo/demo, the actual shipped adas-local
+# login).
 ADAS_LOCAL_REMOTE = os.environ.get("ADAS_LOCAL_REMOTE", "adas-local")
+ADAS_LOCAL_URL = os.environ.get("ADAS_LOCAL_URL")
+ADAS_LOCAL_USER = os.environ.get("ADAS_LOCAL_USER", "demo")
+ADAS_LOCAL_PASSWORD = os.environ.get("ADAS_LOCAL_PASSWORD", "demo")
 
 # How long a second, concurrent invocation waits for the first to finish
 # bootstrapping .venv before giving up (TCT-10).
@@ -156,6 +164,58 @@ def install_pinned(venv_dir, pin):
     (venv_dir / "adas_build_tools.version").write_text(pin, encoding="utf-8")
 
 
+def _ensure_adas_local_remote():
+    """Minimal, strictly-additive auto-provisioning of the adas-local
+    remote itself - a slice of adas_build_tools.conan_ops's own
+    ensure_conan_environment() (§2.5), duplicated here because this runs
+    BEFORE adas_build_tools is installed (the whole reason this stub
+    exists): a bare "X.Y.Z" pin's `conan download` needs adas-local
+    reachable before that later, fuller auto-provisioning step ever gets a
+    chance to run - without this, a genuinely bare machine using the Conan
+    pin would need adas-local pre-registered by hand, silently reopening
+    the exact manual-setup gap §2.5 exists to close. Never overwrites an
+    existing remote or re-registers one already present; a missing
+    ADAS_LOCAL_URL just means this is a no-op, same "no plausible default"
+    discipline conan_ops.py's own copy already documents."""
+    list_proc = subprocess.run(
+        ["conan", "remote", "list", "--format=json"],
+        capture_output=True, text=True,
+    )
+    try:
+        remotes = [entry.get("name") for entry in json.loads(list_proc.stdout)] \
+            if list_proc.returncode == 0 else []
+    except (ValueError, AttributeError):
+        remotes = []
+
+    if ADAS_LOCAL_REMOTE not in remotes:
+        if not ADAS_LOCAL_URL:
+            return
+        subprocess.run(
+            ["conan", "remote", "add", ADAS_LOCAL_REMOTE, ADAS_LOCAL_URL],
+            check=False,
+        )
+        remotes.append(ADAS_LOCAL_REMOTE)
+
+    if ADAS_LOCAL_REMOTE not in remotes:
+        return
+    users_proc = subprocess.run(
+        ["conan", "remote", "list-users", ADAS_LOCAL_REMOTE, "--format=json"],
+        capture_output=True, text=True,
+    )
+    try:
+        authenticated = bool(
+            json.loads(users_proc.stdout).get(ADAS_LOCAL_REMOTE, {}).get("authenticated")
+        ) if users_proc.returncode == 0 else False
+    except (ValueError, AttributeError):
+        authenticated = False
+    if not authenticated:
+        subprocess.run(
+            ["conan", "remote", "login", ADAS_LOCAL_REMOTE,
+             ADAS_LOCAL_USER, "-p", ADAS_LOCAL_PASSWORD],
+            check=False, capture_output=True,
+        )
+
+
 def _install_pinned_via_conan(interpreter, pin):
     """Conan-based half of install_pinned() (docs/imp_design.md §5
     addendum, §9.8). `adas-build-tools/<pin>`'s package_id() calls
@@ -170,6 +230,8 @@ def _install_pinned_via_conan(interpreter, pin):
             "PATH. Install Conan first, or pin a \"vX.Y.Z\" git tag "
             "instead (§4)."
         )
+
+    _ensure_adas_local_remote()
 
     ref = f"adas-build-tools/{pin}"
     proc = subprocess.run(["conan", "download", ref, "-r", ADAS_LOCAL_REMOTE])

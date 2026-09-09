@@ -42,8 +42,11 @@ TOOLCHAIN_GIT_URL = os.environ.get(
     "ADAS_TOOLCHAIN_GIT_URL", "https://github.com/Pavan-karimajji/toolchain")
 
 # Conan remote a bare "X.Y.Z" pin installs adas-build-tools from (§5
-# addendum, §9.8) - kept identical to build.py's own constant.
+# addendum, §9.8) - kept identical to build.py's own constants.
 ADAS_LOCAL_REMOTE = os.environ.get("ADAS_LOCAL_REMOTE", "adas-local")
+ADAS_LOCAL_URL = os.environ.get("ADAS_LOCAL_URL")
+ADAS_LOCAL_USER = os.environ.get("ADAS_LOCAL_USER", "demo")
+ADAS_LOCAL_PASSWORD = os.environ.get("ADAS_LOCAL_PASSWORD", "demo")
 
 # How long a second, concurrent invocation waits for the first to finish
 # bootstrapping .venv before giving up (same lock build.py uses - the GUI
@@ -155,6 +158,48 @@ def install_pinned(venv_dir, pin):
     (venv_dir / "adas_build_tools.version").write_text(pin, encoding="utf-8")
 
 
+def _ensure_adas_local_remote():
+    """Minimal, strictly-additive auto-provisioning of the adas-local
+    remote itself, identical to build.py's own - see its docstring."""
+    list_proc = subprocess.run(
+        ["conan", "remote", "list", "--format=json"],
+        capture_output=True, text=True,
+    )
+    try:
+        remotes = [entry.get("name") for entry in json.loads(list_proc.stdout)] \
+            if list_proc.returncode == 0 else []
+    except (ValueError, AttributeError):
+        remotes = []
+
+    if ADAS_LOCAL_REMOTE not in remotes:
+        if not ADAS_LOCAL_URL:
+            return
+        subprocess.run(
+            ["conan", "remote", "add", ADAS_LOCAL_REMOTE, ADAS_LOCAL_URL],
+            check=False,
+        )
+        remotes.append(ADAS_LOCAL_REMOTE)
+
+    if ADAS_LOCAL_REMOTE not in remotes:
+        return
+    users_proc = subprocess.run(
+        ["conan", "remote", "list-users", ADAS_LOCAL_REMOTE, "--format=json"],
+        capture_output=True, text=True,
+    )
+    try:
+        authenticated = bool(
+            json.loads(users_proc.stdout).get(ADAS_LOCAL_REMOTE, {}).get("authenticated")
+        ) if users_proc.returncode == 0 else False
+    except (ValueError, AttributeError):
+        authenticated = False
+    if not authenticated:
+        subprocess.run(
+            ["conan", "remote", "login", ADAS_LOCAL_REMOTE,
+             ADAS_LOCAL_USER, "-p", ADAS_LOCAL_PASSWORD],
+            check=False, capture_output=True,
+        )
+
+
 def _install_pinned_via_conan(interpreter, pin):
     """Conan-based half of install_pinned(), identical to build.py's own -
     see its docstring."""
@@ -165,6 +210,8 @@ def _install_pinned_via_conan(interpreter, pin):
             "PATH. Install Conan first, or pin a \"vX.Y.Z\" git tag "
             "instead (§4)."
         )
+
+    _ensure_adas_local_remote()
 
     ref = f"adas-build-tools/{pin}"
     proc = subprocess.run(["conan", "download", ref, "-r", ADAS_LOCAL_REMOTE])
