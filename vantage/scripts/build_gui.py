@@ -1,0 +1,185 @@
+#!/usr/bin/env python3
+"""Bootstrap stub for the Build & Publish GUI - docs/imp_design.md §9.2
+(GB-03). Duplicates scripts/build.py's own find_component_root()/
+read_pin()/venv_paths()/ensure_venv() logic on purpose, not by import:
+both stubs are copy-distributed, standalone files that must run before
+anything is installed, so neither can import from the other's
+not-yet-installed package (§9.2's own note - the accepted cost every
+copy-distributed file already carries, docs/conanfile_commonality_plan.md).
+This is what lets `gui.bat` open the GUI without ever having run
+`build.bat` first (GBT-01).
+
+Physically identical across every component that carries it - propagating
+a future fix means editing modules/toolchain/copy_files/scripts/
+build_gui.py, running sync_copy_files.py, and committing the fan-out into
+every component's own repo (R-BUILD-6), same discipline as build.py's own
+stub.
+
+Runs on bare system Python, stdlib only - see build.py's own docstring for
+why. Its only job: find or create a .venv, make sure the pinned version of
+adas_build_tools is installed into it (reusing the exact same .venv
+build.py would, keyed on the same conf/build_tools.version pin), then exec
+into it running adas_build_tools.gui instead of adas_build_tools.cli.
+
+Usage: python build_gui.py
+       (or: gui.bat)
+"""
+import os
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+# Default `toolchain` git remote pip installs a version from, by tag
+# (docs/imp_design.md §4). Overridable for anyone whose network reaches a
+# mirror instead. Kept identical to build.py's own constant - both stubs
+# install the exact same package, just exec a different entry point.
+TOOLCHAIN_GIT_URL = os.environ.get(
+    "ADAS_TOOLCHAIN_GIT_URL", "https://github.com/Pavan-karimajji/toolchain")
+
+# How long a second, concurrent invocation waits for the first to finish
+# bootstrapping .venv before giving up (same lock build.py uses - the GUI
+# and a concurrent `build.bat` share one .venv and must not race it).
+LOCK_TIMEOUT_S = 600
+
+
+def find_component_root():
+    """The directory containing this scripts/build_gui.py file's parent
+    (the component root) - this file is still copy-distributed and lives
+    at a fixed location relative to the component, unlike the package it
+    bootstraps."""
+    return Path(__file__).resolve().parent.parent
+
+
+def read_pin(component_root):
+    """conf/build_tools.version, one line, stripped. Missing file is a hard
+    error naming the expected path - never a silently-assumed default
+    version, same discipline as build.py's own read_pin()."""
+    pin_path = component_root / "conf" / "build_tools.version"
+    if not pin_path.is_file():
+        sys.exit(
+            f"ERROR: no build-tools version pin found at {pin_path}.\n"
+            f"Add one - e.g. on Windows: echo v1.0.0> \"{pin_path}\"\n"
+            f"          on POSIX:        echo v1.0.0 > \"{pin_path}\""
+        )
+    return pin_path.read_text(encoding="utf-8").strip()
+
+
+def venv_paths(component_root):
+    """`.venv`'s location and the platform-correct interpreter path -
+    identical shape to build.py's own venv_paths(), and the same `.venv`
+    directory (GBT-02: the GUI reuses it, never creates a second one)."""
+    venv_dir = component_root / ".venv"
+    if sys.platform.startswith("win"):
+        interpreter = venv_dir / "Scripts" / "python.exe"
+    else:
+        interpreter = venv_dir / "bin" / "python"
+    return venv_dir, interpreter
+
+
+def venv_is_current(venv_dir, pin):
+    """True if the last SUCCESSFUL install into `venv_dir` already matches
+    `pin`, read from the same marker file build.py's own install_pinned()
+    writes - so a `.venv` build.bat already bootstrapped is recognized as
+    current here too, and vice versa (GBT-02)."""
+    marker = venv_dir / "adas_build_tools.version"
+    return marker.is_file() and marker.read_text(encoding="utf-8").strip() == pin
+
+
+def _venv_targets_current_python(venv_dir, interpreter):
+    """False for a missing/corrupted interpreter, or one built from a
+    DIFFERENT system Python than the one running this stub right now - both
+    cases must recreate .venv rather than trust it as-is."""
+    if not interpreter.is_file():
+        return False
+    cfg = venv_dir / "pyvenv.cfg"
+    if not cfg.is_file():
+        return False
+    home = None
+    for line in cfg.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.strip().startswith("home"):
+            home = line.split("=", 1)[1].strip()
+            break
+    if not home:
+        return False
+    return Path(home).resolve() == Path(sys.executable).resolve().parent
+
+
+def _acquire_lock(component_root):
+    """A directory-create-based lock, identical to build.py's own - shared
+    by name (.venv.lock under the component root) so a concurrent
+    `build.bat`/`gui.bat` pair against the same empty .venv don't race each
+    other into a corrupted install."""
+    lock_dir = component_root / ".venv.lock"
+    deadline = time.monotonic() + LOCK_TIMEOUT_S
+    while True:
+        try:
+            lock_dir.mkdir()
+            return lock_dir
+        except FileExistsError:
+            if time.monotonic() > deadline:
+                sys.exit(
+                    f"ERROR: timed out after {LOCK_TIMEOUT_S}s waiting for the .venv "
+                    f"bootstrap lock at {lock_dir} (held by another build). Remove it "
+                    f"by hand only if you're sure no other build is actually running."
+                )
+            time.sleep(0.5)
+
+
+def install_pinned(venv_dir, pin):
+    """`pip install "git+<toolchain-url>@<pin>"` into `venv_dir`. The
+    marker is written only after a successful install, so a failed install
+    is retried next run rather than silently treated as current."""
+    _, interpreter = venv_paths(venv_dir.parent)
+    proc = subprocess.run(
+        [str(interpreter), "-m", "pip", "install", "--quiet",
+         f"git+{TOOLCHAIN_GIT_URL}@{pin}"],
+    )
+    if proc.returncode != 0:
+        sys.exit(f"ERROR: pip install of adas-build-tools@{pin} failed (exit {proc.returncode}).")
+    (venv_dir / "adas_build_tools.version").write_text(pin, encoding="utf-8")
+
+
+def ensure_venv(component_root, pin):
+    """Creates `.venv` if absent or if it targets a different Python, then
+    installs `pin` into it if not already current - identical logic to
+    build.py's own ensure_venv(), duplicated rather than imported (see this
+    file's own module docstring)."""
+    lock_dir = _acquire_lock(component_root)
+    try:
+        venv_dir, interpreter = venv_paths(component_root)
+        if not _venv_targets_current_python(venv_dir, interpreter):
+            if venv_dir.exists():
+                shutil.rmtree(venv_dir)
+            subprocess.run([sys.executable, "-m", "venv", str(venv_dir)], check=True)
+        if not venv_is_current(venv_dir, pin):
+            install_pinned(venv_dir, pin)
+        return venv_dir
+    finally:
+        lock_dir.rmdir()
+
+
+def exec_into_venv(venv_dir, argv):
+    """Runs adas_build_tools.gui from inside `venv_dir` with `argv`
+    forwarded untouched, propagating its exit code unmodified - os.execv on
+    POSIX; Windows has no true exec-replace, so subprocess.run + sys.exit
+    there. Same shape as build.py's own exec_into_venv(), targeting
+    `adas_build_tools.gui` instead of `.cli`."""
+    _, interpreter = venv_paths(venv_dir.parent)
+    if os.name == "posix":
+        os.execv(str(interpreter), [str(interpreter), "-m", "adas_build_tools.gui", *argv])
+    else:
+        proc = subprocess.run([str(interpreter), "-m", "adas_build_tools.gui", *argv])
+        sys.exit(proc.returncode)
+
+
+def main():
+    component_root = find_component_root()
+    pin = read_pin(component_root)
+    venv_dir = ensure_venv(component_root, pin)
+    exec_into_venv(venv_dir, sys.argv[1:])
+
+
+if __name__ == "__main__":
+    main()
