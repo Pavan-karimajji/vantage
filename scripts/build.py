@@ -160,11 +160,38 @@ def install_pinned(venv_dir, pin):
         if proc.returncode != 0:
             sys.exit(f"ERROR: pip install of adas-build-tools@{pin} failed (exit {proc.returncode}).")
     else:
-        _install_pinned_via_conan(interpreter, pin)
+        _install_pinned_via_conan(interpreter, pin, venv_dir.parent)
     (venv_dir / "adas_build_tools.version").write_text(pin, encoding="utf-8")
 
 
-def _ensure_adas_local_remote():
+def _team_server_url(component_root):
+    """Fallback source for the adas-local URL when ADAS_LOCAL_URL isn't
+    set (docs/imp_design.md §11 addendum): scripts/team_conan_server.txt
+    at the superproject root, a checked-in file scripts/setup.py's own
+    --role dev path already reads for this exact purpose. Walks upward
+    from `component_root` looking for it, same generosity as
+    find_component_root()'s own walk - a standalone component clone (no
+    superproject present) simply has no such file to find, so this
+    returns None rather than raising in that case. Duplicated from
+    adas_build_tools.conan_ops's own copy for the same reason every
+    function in this stub is duplicated (§9.2's own note: must run before
+    that package is installed)."""
+    candidate = component_root
+    for _ in range(6):
+        team_file = candidate / "scripts" / "team_conan_server.txt"
+        if team_file.is_file():
+            for line in team_file.read_text(encoding="utf-8").splitlines():
+                stripped = line.strip()
+                if stripped and not stripped.startswith("#"):
+                    return stripped
+            return None
+        if candidate.parent == candidate:
+            return None
+        candidate = candidate.parent
+    return None
+
+
+def _ensure_adas_local_remote(component_root):
     """Minimal, strictly-additive auto-provisioning of the adas-local
     remote itself - a slice of adas_build_tools.conan_ops's own
     ensure_conan_environment() (§2.5), duplicated here because this runs
@@ -174,9 +201,10 @@ def _ensure_adas_local_remote():
     chance to run - without this, a genuinely bare machine using the Conan
     pin would need adas-local pre-registered by hand, silently reopening
     the exact manual-setup gap §2.5 exists to close. Never overwrites an
-    existing remote or re-registers one already present; a missing
-    ADAS_LOCAL_URL just means this is a no-op, same "no plausible default"
-    discipline conan_ops.py's own copy already documents."""
+    existing remote or re-registers one already present; no URL from
+    either ADAS_LOCAL_URL or scripts/team_conan_server.txt just means this
+    is a no-op, same "no plausible default" discipline conan_ops.py's own
+    copy already documents."""
     list_proc = subprocess.run(
         ["conan", "remote", "list", "--format=json"],
         capture_output=True, text=True,
@@ -188,10 +216,11 @@ def _ensure_adas_local_remote():
         remotes = []
 
     if ADAS_LOCAL_REMOTE not in remotes:
-        if not ADAS_LOCAL_URL:
+        url = ADAS_LOCAL_URL or _team_server_url(component_root)
+        if not url:
             return
         subprocess.run(
-            ["conan", "remote", "add", ADAS_LOCAL_REMOTE, ADAS_LOCAL_URL],
+            ["conan", "remote", "add", ADAS_LOCAL_REMOTE, url],
             check=False,
         )
         remotes.append(ADAS_LOCAL_REMOTE)
@@ -216,7 +245,7 @@ def _ensure_adas_local_remote():
         )
 
 
-def _install_pinned_via_conan(interpreter, pin):
+def _install_pinned_via_conan(interpreter, pin, component_root):
     """Conan-based half of install_pinned() (docs/imp_design.md §5
     addendum, §9.8). `adas-build-tools/<pin>`'s package_id() calls
     self.info.clear(), so it always collapses to one fixed hash regardless
@@ -231,7 +260,7 @@ def _install_pinned_via_conan(interpreter, pin):
             "instead (§4)."
         )
 
-    _ensure_adas_local_remote()
+    _ensure_adas_local_remote(component_root)
 
     ref = f"adas-build-tools/{pin}"
     proc = subprocess.run(["conan", "download", ref, "-r", ADAS_LOCAL_REMOTE])

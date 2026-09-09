@@ -154,11 +154,29 @@ def install_pinned(venv_dir, pin):
         if proc.returncode != 0:
             sys.exit(f"ERROR: pip install of adas-build-tools@{pin} failed (exit {proc.returncode}).")
     else:
-        _install_pinned_via_conan(interpreter, pin)
+        _install_pinned_via_conan(interpreter, pin, venv_dir.parent)
     (venv_dir / "adas_build_tools.version").write_text(pin, encoding="utf-8")
 
 
-def _ensure_adas_local_remote():
+def _team_server_url(component_root):
+    """Fallback source for the adas-local URL when ADAS_LOCAL_URL isn't
+    set, identical to build.py's own - see its docstring."""
+    candidate = component_root
+    for _ in range(6):
+        team_file = candidate / "scripts" / "team_conan_server.txt"
+        if team_file.is_file():
+            for line in team_file.read_text(encoding="utf-8").splitlines():
+                stripped = line.strip()
+                if stripped and not stripped.startswith("#"):
+                    return stripped
+            return None
+        if candidate.parent == candidate:
+            return None
+        candidate = candidate.parent
+    return None
+
+
+def _ensure_adas_local_remote(component_root):
     """Minimal, strictly-additive auto-provisioning of the adas-local
     remote itself, identical to build.py's own - see its docstring."""
     list_proc = subprocess.run(
@@ -172,10 +190,11 @@ def _ensure_adas_local_remote():
         remotes = []
 
     if ADAS_LOCAL_REMOTE not in remotes:
-        if not ADAS_LOCAL_URL:
+        url = ADAS_LOCAL_URL or _team_server_url(component_root)
+        if not url:
             return
         subprocess.run(
-            ["conan", "remote", "add", ADAS_LOCAL_REMOTE, ADAS_LOCAL_URL],
+            ["conan", "remote", "add", ADAS_LOCAL_REMOTE, url],
             check=False,
         )
         remotes.append(ADAS_LOCAL_REMOTE)
@@ -200,7 +219,7 @@ def _ensure_adas_local_remote():
         )
 
 
-def _install_pinned_via_conan(interpreter, pin):
+def _install_pinned_via_conan(interpreter, pin, component_root):
     """Conan-based half of install_pinned(), identical to build.py's own -
     see its docstring."""
     if shutil.which("conan") is None:
@@ -211,7 +230,7 @@ def _install_pinned_via_conan(interpreter, pin):
             "instead (§4)."
         )
 
-    _ensure_adas_local_remote()
+    _ensure_adas_local_remote(component_root)
 
     ref = f"adas-build-tools/{pin}"
     proc = subprocess.run(["conan", "download", ref, "-r", ADAS_LOCAL_REMOTE])
