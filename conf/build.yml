@@ -94,6 +94,19 @@ variants:
     sil:
       platforms: &base_platforms
         - build: vs2026
+        # WP-17/LO-01 (toolchain's imp_design.md section 12): adas-viz's
+        # own real ubuntu_gcc build needs this component green there --
+        # never declared before this session, on any target. Without it,
+        # AdasComponent.layout()'s own _editable_platform() shortcut
+        # ("exactly one declared platform -> return it unconditionally")
+        # returned "vs2026" even on a genuine ubuntu_gcc build, silently
+        # pointing every consumer (viz) at the wrong build-sil-<platform>/
+        # directory regardless of the {build_type} fix in layout() itself
+        # -- found live, the real reason "Library 'simcore' not found"
+        # persisted even after adas-sim was correctly built under
+        # ubuntu_gcc. Same one-line addition mathlib/df each needed for
+        # their own ubuntu_gcc bring-up (see mathlib's own conf/build.yml).
+        - build: ubuntu_gcc
     # WP-06: UT-IO-* need a real test binary -- modules/sim had none before
     # this stage (WP-03's own scoping note: "no gtest target, no C++ tests
     # exist yet"). Same list, aliased -- not a second, independently

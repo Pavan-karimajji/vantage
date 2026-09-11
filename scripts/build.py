@@ -153,9 +153,22 @@ def install_pinned(venv_dir, pin):
     (TCT-09)."""
     _, interpreter = venv_paths(venv_dir.parent)
     if pin.startswith("v"):
+        # LO-02 (imp_design.md section 12): on a machine with no cached git
+        # credentials for a private repo, `git clone` over https blocks
+        # indefinitely waiting for a username/password prompt that has
+        # nothing to answer it - confirmed live, no error at all, for as
+        # long as this session measured (50 minutes) before anyone
+        # noticed. GIT_TERMINAL_PROMPT=0 makes git fail fast instead
+        # (confirmed live: same command, same broken URL - hangs past a
+        # timeout with the var unset, fails in under a second with a
+        # clear "could not read Username ...: terminal prompts disabled"
+        # with it set to "0"). Env is inherited (`{**os.environ, ...}`),
+        # not replaced, so nothing else about this subprocess's
+        # environment changes.
         proc = subprocess.run(
             [str(interpreter), "-m", "pip", "install", "--quiet",
              f"git+{TOOLCHAIN_GIT_URL}@{pin}"],
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
         )
         if proc.returncode != 0:
             sys.exit(f"ERROR: pip install of adas-build-tools@{pin} failed (exit {proc.returncode}).")
