@@ -323,6 +323,39 @@ def _install_pinned_via_conan(interpreter, pin, component_root):
         sys.exit(f"ERROR: pip install of {wheels[0]} failed (exit {proc.returncode}).")
 
 
+def _rmtree_tolerant(path):
+    """Like `shutil.rmtree(path)`, but a directory-shaped entry
+    `os.scandir()` cannot even open - a foreign-OS symlink such as a WSL
+    venv's `lib64` -> `lib` (Windows cannot traverse it through the
+    WSL/NTFS 9P bridge, `WinError 1920` - the exact incident that hits
+    this function: recreating a `.venv` a WSL build left behind, from
+    native Windows, per `_venv_targets_current_python()`'s own mismatch
+    check just above) - is removed with a plain, non-recursive
+    `os.rmdir()` instead. Proven live: `os.rmdir()`/`Directory.Delete()`
+    succeeds on exactly this path even though `os.scandir()` into it does
+    not, since removing a directory entry never needs to enumerate what's
+    inside it. Never silently gives up - a removal that still fails after
+    that fallback re-raises the ORIGINAL error, same as an unhandled
+    `shutil.rmtree()` would."""
+    def _onerror(_func, failed_path, exc_info):
+        # shutil.rmtree() always retries os.rmdir(path) unconditionally
+        # after ANY failure for that path, even one this handler already
+        # fixed (its scandir() failure branch has no entries to reason
+        # about, so it falls through to the same unconditional rmdir()
+        # every other directory gets) - found live via this function's own
+        # test, TypeError-free but a real second call: onerror() fires
+        # again for the SAME path with FileNotFoundError once the first
+        # call's os.rmdir() already removed it. Already-gone is success,
+        # not a new failure to report.
+        if not os.path.exists(failed_path):
+            return
+        try:
+            os.rmdir(failed_path)
+        except OSError:
+            raise exc_info[1]
+    shutil.rmtree(path, onerror=_onerror)
+
+
 def ensure_venv(component_root, pin):
     """Creates `.venv` if absent or if it targets a different Python
     (TCT-07), then installs `pin` into it if not already current
@@ -332,7 +365,7 @@ def ensure_venv(component_root, pin):
         venv_dir, interpreter = venv_paths(component_root)
         if not _venv_targets_current_python(venv_dir, interpreter):
             if venv_dir.exists():
-                shutil.rmtree(venv_dir)
+                _rmtree_tolerant(venv_dir)
             subprocess.run([sys.executable, "-m", "venv", str(venv_dir)], check=True)
         if not venv_is_current(venv_dir, pin):
             install_pinned(venv_dir, pin)
