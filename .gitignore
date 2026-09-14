@@ -116,3 +116,8 @@ scripts/gui_config.json
 # screenshots, so they are study material only and never ship. Design authority
 # stays in docs/v2/. See misc/mts_bench/README.md.
 /misc/mts_bench/
+
+# conan_workarea/ (docs/dependency_report_plan.md DR-05/DR-06/DR-07,
+# WP-12) - generated on every build: used/ shortcuts + delivered/ copy,
+# never committed.
+conan_workarea/
