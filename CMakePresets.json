@@ -32,16 +32,53 @@
         "TARGET_TYPE": "gtest",
         "BUILD_TESTING": "ON"
       }
+    },
+    {
+      "name": "ubuntu_gcc",
+      "displayName": "Ubuntu GCC (common toolchain settings)",
+      "hidden": true,
+      "generator": "Unix Makefiles",
+      "cacheVariables": { "CMAKE_POLICY_DEFAULT_CMP0091": "NEW", "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "sil-ubuntu_gcc",
+      "displayName": "SIL ubuntu_gcc",
+      "inherits": "ubuntu_gcc",
+      "binaryDir": "${sourceDir}/build-sil-ubuntu_gcc",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build-sil-ubuntu_gcc/conan_toolchain.cmake",
+        "TARGET_TYPE": "sil",
+        "BUILD_TESTING": "OFF"
+      }
+    },
+    {
+      "name": "gtest-ubuntu_gcc",
+      "displayName": "GTest ubuntu_gcc",
+      "inherits": "ubuntu_gcc",
+      "binaryDir": "${sourceDir}/build-gtest-ubuntu_gcc",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build-gtest-ubuntu_gcc/conan_toolchain.cmake",
+        "TARGET_TYPE": "gtest",
+        "BUILD_TESTING": "ON"
+      }
     }
   ],
   "buildPresets": [
     { "name": "sil-vs2026", "configurePreset": "sil-vs2026", "configuration": "Release" },
-    { "name": "gtest-vs2026", "configurePreset": "gtest-vs2026", "configuration": "Release" }
+    { "name": "gtest-vs2026", "configurePreset": "gtest-vs2026", "configuration": "Release" },
+    { "name": "sil-ubuntu_gcc", "configurePreset": "sil-ubuntu_gcc", "configuration": "Release" },
+    { "name": "gtest-ubuntu_gcc", "configurePreset": "gtest-ubuntu_gcc", "configuration": "Release" }
   ],
   "testPresets": [
     {
       "name": "gtest-vs2026",
       "configurePreset": "gtest-vs2026",
+      "configuration": "Release",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "gtest-ubuntu_gcc",
+      "configurePreset": "gtest-ubuntu_gcc",
       "configuration": "Release",
       "output": { "outputOnFailure": true }
     }
