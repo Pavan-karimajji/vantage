@@ -374,24 +374,28 @@ def ensure_venv(component_root, pin):
         lock_dir.rmdir()
 
 
-def exec_into_venv(venv_dir, argv):
-    """Runs adas_build_tools.cli from inside `venv_dir` with `argv`
-    forwarded untouched, propagating its exit code unmodified
-    (docs/imp_design.md §2.4 step 7) - os.execv on POSIX; Windows has no
-    true exec-replace, so subprocess.run + sys.exit there."""
+def exec_into_venv(venv_dir, argv, module="adas_build_tools.cli"):
+    """Runs `module` from inside `venv_dir` with `argv` forwarded untouched,
+    propagating its exit code unmodified (docs/imp_design.md §2.4 step 7) -
+    os.execv on POSIX; Windows has no true exec-replace, so subprocess.run +
+    sys.exit there. `module` defaults to the CLI entry point; build_gui.py
+    (docs/imp_design.md §13, BS-01/BS-02) delegates into this same function
+    with `module="adas_build_tools.gui"` instead of duplicating it."""
     _, interpreter = venv_paths(venv_dir.parent)
     if os.name == "posix":
-        os.execv(str(interpreter), [str(interpreter), "-m", "adas_build_tools.cli", *argv])
+        os.execv(str(interpreter), [str(interpreter), "-m", module, *argv])
     else:
-        proc = subprocess.run([str(interpreter), "-m", "adas_build_tools.cli", *argv])
+        proc = subprocess.run([str(interpreter), "-m", module, *argv])
         sys.exit(proc.returncode)
 
 
-def main():
+def main(argv=None, module="adas_build_tools.cli"):
+    if argv is None:
+        argv = sys.argv[1:]
     component_root = find_component_root()
     pin = read_pin(component_root)
     venv_dir = ensure_venv(component_root, pin)
-    exec_into_venv(venv_dir, sys.argv[1:])
+    exec_into_venv(venv_dir, argv, module=module)
 
 
 if __name__ == "__main__":
