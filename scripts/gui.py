@@ -270,7 +270,7 @@ FIELD_HELP: dict[str, tuple[str, str]] = {
         "If you set this, you almost certainly need --search and --config too.",
     ),
     "search": (
-        "..\\df\\build-sil-vs2026\\src\\platform\\df_sil\\Release",
+        "..\\df\\conan_workarea\\build-sil-vs2026\\src\\platform\\df_sil\\Release",
         "The directory holding the component's built library (df_sil.dll).\n\n"
         "Only needed with a pipeline -- it is how 'impl: dll:df_sil' is resolved "
         "to a real file (P-5).\n\n"
@@ -278,7 +278,7 @@ FIELD_HELP: dict[str, tuple[str, str]] = {
         "about loading LAYERS from there, not the DLL.",
     ),
     "config_path": (
-        "..\\df\\build-sil-vs2026\\src\\platform\\df_sil\\Release\\config",
+        "..\\df\\conan_workarea\\build-sil-vs2026\\src\\platform\\df_sil\\Release\\config",
         "The packed config bundle the DLL is initialised with (adasInit).\n\n"
         "Only needed with a pipeline. It is the 'config' folder sitting beside "
         "the built DLL.\n\n"

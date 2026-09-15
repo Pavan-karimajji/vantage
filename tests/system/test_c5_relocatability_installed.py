@@ -38,10 +38,10 @@ from adas_sim.diagnostics.errors import EnvironmentError_
 SIM_ROOT = Path(__file__).resolve().parent.parent.parent
 MODULES_ROOT = SIM_ROOT.parent
 DF_ROOT = MODULES_ROOT / "df"
-_SIL_BUILD_DIR = DF_ROOT / "build-sil-vs2026"
+_SIL_BUILD_DIR = DF_ROOT / "conan_workarea" / "build-sil-vs2026"
 
 _SKIP_REASON_NO_BUILD = (
-    "no configured modules/df/build-sil-vs2026 (partial clone, or `sil` target not built here)"
+    "no configured modules/df/conan_workarea/build-sil-vs2026 (partial clone, or `sil` target not built here)"
 )
 _SKIP_REASON_NO_CMAKE = "cmake not found on PATH -- needed to exercise the real install() rule"
 

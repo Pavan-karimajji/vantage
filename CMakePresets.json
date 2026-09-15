@@ -15,9 +15,9 @@
       "name": "sil-vs2026",
       "displayName": "SIL vs2026",
       "inherits": "vs2026",
-      "binaryDir": "${sourceDir}/build-sil-vs2026",
+      "binaryDir": "${sourceDir}/conan_workarea/build-sil-vs2026",
       "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build-sil-vs2026/conan_toolchain.cmake",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/conan_workarea/build-sil-vs2026/conan_toolchain.cmake",
         "TARGET_TYPE": "sil",
         "BUILD_TESTING": "OFF"
       }
@@ -26,9 +26,9 @@
       "name": "gtest-vs2026",
       "displayName": "GTest vs2026",
       "inherits": "vs2026",
-      "binaryDir": "${sourceDir}/build-gtest-vs2026",
+      "binaryDir": "${sourceDir}/conan_workarea/build-gtest-vs2026",
       "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build-gtest-vs2026/conan_toolchain.cmake",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/conan_workarea/build-gtest-vs2026/conan_toolchain.cmake",
         "TARGET_TYPE": "gtest",
         "BUILD_TESTING": "ON"
       }
@@ -44,9 +44,9 @@
       "name": "sil-ubuntu_gcc",
       "displayName": "SIL ubuntu_gcc",
       "inherits": "ubuntu_gcc",
-      "binaryDir": "${sourceDir}/build-sil-ubuntu_gcc",
+      "binaryDir": "${sourceDir}/conan_workarea/build-sil-ubuntu_gcc",
       "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build-sil-ubuntu_gcc/conan_toolchain.cmake",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/conan_workarea/build-sil-ubuntu_gcc/conan_toolchain.cmake",
         "TARGET_TYPE": "sil",
         "BUILD_TESTING": "OFF"
       }
@@ -55,9 +55,9 @@
       "name": "gtest-ubuntu_gcc",
       "displayName": "GTest ubuntu_gcc",
       "inherits": "ubuntu_gcc",
-      "binaryDir": "${sourceDir}/build-gtest-ubuntu_gcc",
+      "binaryDir": "${sourceDir}/conan_workarea/build-gtest-ubuntu_gcc",
       "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build-gtest-ubuntu_gcc/conan_toolchain.cmake",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/conan_workarea/build-gtest-ubuntu_gcc/conan_toolchain.cmake",
         "TARGET_TYPE": "gtest",
         "BUILD_TESTING": "ON"
       }

@@ -32,20 +32,20 @@ target_link_libraries(vantage_test_fixture_echo_stub PRIVATE AdasInterfaces::Ada
 # own generated INTERFACE_INCLUDE_DIRECTORIES comes out empty for the same
 # reason cpp/vantage/CMakeLists.txt already names -- echo_stub.cpp needs
 # BOTH its source headers (cpp/) and its build-generated proto headers
-# (build-sil-<platform>/build/generated/, `Adas__Sil/component_manifest.
+# (conan_workarea/build-sil-<platform>/build/generated/, `Adas__Sil/component_manifest.
 # pb.h`), so both are added explicitly here rather than relied on
 # transitively.
 if(DEFINED adas-interfaces_PACKAGE_FOLDER_RELEASE)
     target_include_directories(vantage_test_fixture_echo_stub PRIVATE
         "${adas-interfaces_PACKAGE_FOLDER_RELEASE}/cpp"
         "${adas-interfaces_PACKAGE_FOLDER_RELEASE}/include"
-        "${adas-interfaces_PACKAGE_FOLDER_RELEASE}/build-sil-vs2026/build/generated"
+        "${adas-interfaces_PACKAGE_FOLDER_RELEASE}/conan_workarea/build-sil-vs2026/build/generated"
     )
 elseif(DEFINED adas-interfaces_PACKAGE_FOLDER_DEBUG)
     target_include_directories(vantage_test_fixture_echo_stub PRIVATE
         "${adas-interfaces_PACKAGE_FOLDER_DEBUG}/cpp"
         "${adas-interfaces_PACKAGE_FOLDER_DEBUG}/include"
-        "${adas-interfaces_PACKAGE_FOLDER_DEBUG}/build-sil-vs2026/build/generated"
+        "${adas-interfaces_PACKAGE_FOLDER_DEBUG}/conan_workarea/build-sil-vs2026/build/generated"
     )
 endif()
 # WP-33 (SM-11), named, honest workaround: `protobuf::libprotobuf`'s own

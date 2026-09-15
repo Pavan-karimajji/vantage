@@ -29,7 +29,7 @@ from adas_sim.config.project import ProjectModel
 SIM_ROOT = Path(__file__).resolve().parent.parent.parent
 MODULES_ROOT = SIM_ROOT.parent
 DF_ROOT = MODULES_ROOT / "df"
-_DF_SIL_CONFIG = DF_ROOT / "build-sil-vs2026" / "src" / "platform" / "df_sil" / "Release" / "config"
+_DF_SIL_CONFIG = DF_ROOT / "conan_workarea" / "build-sil-vs2026" / "src" / "platform" / "df_sil" / "Release" / "config"
 
 pytestmark = pytest.mark.skipif(
     sys.platform != "win32" or not (_DF_SIL_CONFIG / "vehicle" / "ego_params.yaml").is_file(),

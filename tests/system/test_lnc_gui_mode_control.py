@@ -56,7 +56,7 @@ def app(tmp_path, monkeypatch):
 
 DF = SIM_DIR.parent / "df"
 PIPELINE = DF / "sim" / "pipelines" / "df_only.yaml"
-SEARCH = DF / "build-sil-vs2026" / "src" / "platform" / "df_sil" / "Release"
+SEARCH = DF / "conan_workarea" / "build-sil-vs2026" / "src" / "platform" / "df_sil" / "Release"
 CONFIG = DF / "src" / "project" / "base" / "default.yaml"
 SELF_PRODUCED = SIM_DIR / "logs" / "_step0" / "v_self.mcap"
 STIMULUS_ONLY = DF / "tests" / "carla_testruns" / "aeb" / "aeb_closing_ego20mps_lead10mps_30m.mcap"

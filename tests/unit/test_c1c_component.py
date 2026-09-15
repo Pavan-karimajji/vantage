@@ -36,8 +36,8 @@ MODULES_ROOT = SIM_ROOT.parent
 DF_ROOT = MODULES_ROOT / "df"
 DF_DEFAULT_PROJECT_YAML = DF_ROOT / "src" / "project" / "base" / "default.yaml"
 _DF_SIL_SEARCH_DIRS = [
-    DF_ROOT / "build-sil-vs2026" / "src" / "platform" / "df_sil" / "Release",
-    DF_ROOT / "build-sil-vs2026" / "src" / "platform" / "df_sil" / "Debug",
+    DF_ROOT / "conan_workarea" / "build-sil-vs2026" / "src" / "platform" / "df_sil" / "Release",
+    DF_ROOT / "conan_workarea" / "build-sil-vs2026" / "src" / "platform" / "df_sil" / "Debug",
     DF_ROOT / "build-gtest-vs2026" / "src" / "platform" / "df_sil" / "Release",
     DF_ROOT / "build-gtest-vs2026" / "src" / "platform" / "df_sil" / "Debug",
 ]

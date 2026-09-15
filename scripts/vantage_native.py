@@ -120,8 +120,8 @@ def find_vantage_app_exe() -> Path:
     comment), so either produces a real `vantage_app.exe`."""
     vantage_dir = _SIM_ROOT / "vantage"
     candidates = [
-        vantage_dir / "build-sil-vs2026" / "build" / "cpp" / "vantage_app" / "Release" / "vantage_app.exe",
-        vantage_dir / "build-gtest-vs2026" / "build" / "cpp" / "vantage_app" / "Release" / "vantage_app.exe",
+        vantage_dir / "conan_workarea" / "build-sil-vs2026" / "build" / "cpp" / "vantage_app" / "Release" / "vantage_app.exe",
+        vantage_dir / "conan_workarea" / "build-gtest-vs2026" / "build" / "cpp" / "vantage_app" / "Release" / "vantage_app.exe",
     ]
     for c in candidates:
         if c.is_file():

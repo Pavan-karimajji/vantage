@@ -91,12 +91,12 @@ def test_find_vantage_app_exe_prefers_sil_over_gtest_build(tmp_path, monkeypatch
     fake_sim_root = tmp_path
     monkeypatch.setattr(vantage_native, "_SIM_ROOT", fake_sim_root)
 
-    gtest_exe = fake_sim_root / "vantage" / "build-gtest-vs2026" / "build" / "cpp" / "vantage_app" / "Release" / "vantage_app.exe"
+    gtest_exe = fake_sim_root / "vantage" / "conan_workarea" / "build-gtest-vs2026" / "build" / "cpp" / "vantage_app" / "Release" / "vantage_app.exe"
     gtest_exe.parent.mkdir(parents=True)
     gtest_exe.write_bytes(b"")
     assert vantage_native.find_vantage_app_exe() == gtest_exe
 
-    sil_exe = fake_sim_root / "vantage" / "build-sil-vs2026" / "build" / "cpp" / "vantage_app" / "Release" / "vantage_app.exe"
+    sil_exe = fake_sim_root / "vantage" / "conan_workarea" / "build-sil-vs2026" / "build" / "cpp" / "vantage_app" / "Release" / "vantage_app.exe"
     sil_exe.parent.mkdir(parents=True)
     sil_exe.write_bytes(b"")
     assert vantage_native.find_vantage_app_exe() == sil_exe

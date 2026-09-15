@@ -63,10 +63,10 @@ CONFIG_PATH = SCRIPT_DIR / "ci_gate_config.yaml"
 # duplicates the load, this run against the real files IS the proof.
 DF_SCENARIO_SET = SIM_ROOT.parent / "df" / "tests" / "carla_scenarios"
 _DF_SIL_SEARCH_DIRS = [
-    SIM_ROOT.parent / "df" / "build-sil-vs2026" / "src" / "platform" / "df_sil" / "Release",
-    SIM_ROOT.parent / "df" / "build-sil-vs2026" / "src" / "platform" / "df_sil" / "Debug",
-    SIM_ROOT.parent / "df" / "build-gtest-vs2026" / "src" / "platform" / "df_sil" / "Release",
-    SIM_ROOT.parent / "df" / "build-gtest-vs2026" / "src" / "platform" / "df_sil" / "Debug",
+    SIM_ROOT.parent / "df" / "conan_workarea" / "build-sil-vs2026" / "src" / "platform" / "df_sil" / "Release",
+    SIM_ROOT.parent / "df" / "conan_workarea" / "build-sil-vs2026" / "src" / "platform" / "df_sil" / "Debug",
+    SIM_ROOT.parent / "df" / "conan_workarea" / "build-gtest-vs2026" / "src" / "platform" / "df_sil" / "Release",
+    SIM_ROOT.parent / "df" / "conan_workarea" / "build-gtest-vs2026" / "src" / "platform" / "df_sil" / "Debug",
 ]
 
 

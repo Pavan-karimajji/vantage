@@ -32,7 +32,7 @@ SIM_ROOT = Path(__file__).resolve().parent.parent.parent
 MODULES_ROOT = SIM_ROOT.parent
 DF_ROOT = MODULES_ROOT / "df"
 
-_DF_SIL_DIR = DF_ROOT / "build-sil-vs2026" / "src" / "platform" / "df_sil" / "Release"
+_DF_SIL_DIR = DF_ROOT / "conan_workarea" / "build-sil-vs2026" / "src" / "platform" / "df_sil" / "Release"
 _PIPELINE_PATH = DF_ROOT / "sim" / "pipelines" / "df_only.yaml"
 _RECORDINGS_DIR = DF_ROOT / "tests" / "carla_testruns"
 
