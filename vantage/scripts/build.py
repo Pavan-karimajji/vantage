@@ -153,9 +153,22 @@ def install_pinned(venv_dir, pin):
     (TCT-09)."""
     _, interpreter = venv_paths(venv_dir.parent)
     if pin.startswith("v"):
+        # LO-02 (imp_design.md section 12): on a machine with no cached git
+        # credentials for a private repo, `git clone` over https blocks
+        # indefinitely waiting for a username/password prompt that has
+        # nothing to answer it - confirmed live, no error at all, for as
+        # long as this session measured (50 minutes) before anyone
+        # noticed. GIT_TERMINAL_PROMPT=0 makes git fail fast instead
+        # (confirmed live: same command, same broken URL - hangs past a
+        # timeout with the var unset, fails in under a second with a
+        # clear "could not read Username ...: terminal prompts disabled"
+        # with it set to "0"). Env is inherited (`{**os.environ, ...}`),
+        # not replaced, so nothing else about this subprocess's
+        # environment changes.
         proc = subprocess.run(
             [str(interpreter), "-m", "pip", "install", "--quiet",
              f"git+{TOOLCHAIN_GIT_URL}@{pin}"],
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
         )
         if proc.returncode != 0:
             sys.exit(f"ERROR: pip install of adas-build-tools@{pin} failed (exit {proc.returncode}).")
@@ -310,6 +323,39 @@ def _install_pinned_via_conan(interpreter, pin, component_root):
         sys.exit(f"ERROR: pip install of {wheels[0]} failed (exit {proc.returncode}).")
 
 
+def _rmtree_tolerant(path):
+    """Like `shutil.rmtree(path)`, but a directory-shaped entry
+    `os.scandir()` cannot even open - a foreign-OS symlink such as a WSL
+    venv's `lib64` -> `lib` (Windows cannot traverse it through the
+    WSL/NTFS 9P bridge, `WinError 1920` - the exact incident that hits
+    this function: recreating a `.venv` a WSL build left behind, from
+    native Windows, per `_venv_targets_current_python()`'s own mismatch
+    check just above) - is removed with a plain, non-recursive
+    `os.rmdir()` instead. Proven live: `os.rmdir()`/`Directory.Delete()`
+    succeeds on exactly this path even though `os.scandir()` into it does
+    not, since removing a directory entry never needs to enumerate what's
+    inside it. Never silently gives up - a removal that still fails after
+    that fallback re-raises the ORIGINAL error, same as an unhandled
+    `shutil.rmtree()` would."""
+    def _onerror(_func, failed_path, exc_info):
+        # shutil.rmtree() always retries os.rmdir(path) unconditionally
+        # after ANY failure for that path, even one this handler already
+        # fixed (its scandir() failure branch has no entries to reason
+        # about, so it falls through to the same unconditional rmdir()
+        # every other directory gets) - found live via this function's own
+        # test, TypeError-free but a real second call: onerror() fires
+        # again for the SAME path with FileNotFoundError once the first
+        # call's os.rmdir() already removed it. Already-gone is success,
+        # not a new failure to report.
+        if not os.path.exists(failed_path):
+            return
+        try:
+            os.rmdir(failed_path)
+        except OSError:
+            raise exc_info[1]
+    shutil.rmtree(path, onerror=_onerror)
+
+
 def ensure_venv(component_root, pin):
     """Creates `.venv` if absent or if it targets a different Python
     (TCT-07), then installs `pin` into it if not already current
@@ -319,7 +365,7 @@ def ensure_venv(component_root, pin):
         venv_dir, interpreter = venv_paths(component_root)
         if not _venv_targets_current_python(venv_dir, interpreter):
             if venv_dir.exists():
-                shutil.rmtree(venv_dir)
+                _rmtree_tolerant(venv_dir)
             subprocess.run([sys.executable, "-m", "venv", str(venv_dir)], check=True)
         if not venv_is_current(venv_dir, pin):
             install_pinned(venv_dir, pin)
@@ -328,24 +374,28 @@ def ensure_venv(component_root, pin):
         lock_dir.rmdir()
 
 
-def exec_into_venv(venv_dir, argv):
-    """Runs adas_build_tools.cli from inside `venv_dir` with `argv`
-    forwarded untouched, propagating its exit code unmodified
-    (docs/imp_design.md §2.4 step 7) - os.execv on POSIX; Windows has no
-    true exec-replace, so subprocess.run + sys.exit there."""
+def exec_into_venv(venv_dir, argv, module="adas_build_tools.cli"):
+    """Runs `module` from inside `venv_dir` with `argv` forwarded untouched,
+    propagating its exit code unmodified (docs/imp_design.md §2.4 step 7) -
+    os.execv on POSIX; Windows has no true exec-replace, so subprocess.run +
+    sys.exit there. `module` defaults to the CLI entry point; build_gui.py
+    (docs/imp_design.md §13, BS-01/BS-02) delegates into this same function
+    with `module="adas_build_tools.gui"` instead of duplicating it."""
     _, interpreter = venv_paths(venv_dir.parent)
     if os.name == "posix":
-        os.execv(str(interpreter), [str(interpreter), "-m", "adas_build_tools.cli", *argv])
+        os.execv(str(interpreter), [str(interpreter), "-m", module, *argv])
     else:
-        proc = subprocess.run([str(interpreter), "-m", "adas_build_tools.cli", *argv])
+        proc = subprocess.run([str(interpreter), "-m", module, *argv])
         sys.exit(proc.returncode)
 
 
-def main():
+def main(argv=None, module="adas_build_tools.cli"):
+    if argv is None:
+        argv = sys.argv[1:]
     component_root = find_component_root()
     pin = read_pin(component_root)
     venv_dir = ensure_venv(component_root, pin)
-    exec_into_venv(venv_dir, sys.argv[1:])
+    exec_into_venv(venv_dir, argv, module=module)
 
 
 if __name__ == "__main__":
