@@ -15,7 +15,9 @@ find_package(protobuf REQUIRED)
 # needed. `io`'s own named Conan component keeps its separate, narrower
 # `requires:` list (conf/build.yml), so `io` alone still requires nothing
 # first-party; only the whole-engine root target gains this edge.
-find_package(AdasInterfaces REQUIRED)
+if(NOT TARGET AdasInterfaces::AdasInterfaces)
+    find_package(AdasInterfaces REQUIRED)
+endif()
 # WP-10 (SI-04): module_host's exec_timeout.cpp watchdog (std::thread/
 # std::future) -- same dependency sil_host's own sil_core target already
 # requires for the identical file.

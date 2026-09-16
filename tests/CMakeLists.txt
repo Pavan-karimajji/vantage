@@ -26,7 +26,9 @@ endif()
 # own direct `target_link_libraries(... AdasInterfaces::AdasInterfaces)`
 # needs its own resolution, idempotent against Conan's already-generated
 # find module.
-find_package(AdasInterfaces REQUIRED)
+if(NOT TARGET AdasInterfaces::AdasInterfaces)
+    find_package(AdasInterfaces REQUIRED)
+endif()
 add_library(sim_test_fixture_echo_stub SHARED fixtures/echo_stub/echo_stub.cpp)
 target_link_libraries(sim_test_fixture_echo_stub PRIVATE AdasInterfaces::AdasInterfaces)
 target_compile_definitions(sim_test_fixture_echo_stub PRIVATE ADAS_SIL_ABI_EXPORTS)

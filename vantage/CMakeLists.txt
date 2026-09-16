@@ -8,8 +8,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # "why not adas-sim itself" account. Resolved as ordinary Conan
 # dependencies, never in-tree -- no aggregator, no ordering tricks needed,
 # because neither `adas-sim` nor `adas-viz` depends back on this package.
-find_package(AdasSim REQUIRED)
-find_package(AdasViz REQUIRED)
+if(NOT TARGET AdasSim::AdasSim)
+    find_package(AdasSim REQUIRED)
+endif()
+if(NOT TARGET AdasViz::AdasViz)
+    find_package(AdasViz REQUIRED)
+endif()
 
 add_subdirectory(cpp/vantage)
 

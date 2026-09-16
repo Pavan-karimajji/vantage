@@ -26,7 +26,9 @@ endif()
 # scripts/build_gui.py/.clang-format, never test fixtures). Building
 # sim's own source file directly means one file, one set of include paths,
 # never two copies to keep in sync by hand.
-find_package(AdasInterfaces REQUIRED)
+if(NOT TARGET AdasInterfaces::AdasInterfaces)
+    find_package(AdasInterfaces REQUIRED)
+endif()
 # echo_stub.cpp uses protobuf's DescriptorPool/DynamicMessageFactory
 # reflection directly (google/protobuf/descriptor.h) -- a real, direct
 # dependency of this fixture file, declared explicitly rather than relied
