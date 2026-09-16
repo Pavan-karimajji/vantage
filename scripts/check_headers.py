@@ -59,7 +59,7 @@ _CPP_HEADER = re.compile(
 
 
 def _excluded(path: Path, sim_root: Path) -> bool:
-    if any(part in _EXCLUDE_DIR_NAMES or part.endswith(".egg-info") for part in path.parts):
+    if any(part in _EXCLUDE_DIR_NAMES or part.endswith(".egg-info") or part.startswith(".venv-") for part in path.parts):
         return True
     return path.relative_to(sim_root).as_posix() in _EXCLUDE_FILES
 
