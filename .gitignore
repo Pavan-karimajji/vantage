@@ -6,6 +6,7 @@ __pycache__/
 build/
 dist/
 .venv/
+.venv-*/
 venv/
 # S-D5: PyInstaller auto-writes this beside the entry point it's given
 # (scripts/freeze.py's own invocation) -- a regenerated build artifact,

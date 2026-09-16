@@ -81,8 +81,30 @@ def read_pin(component_root):
 
 def venv_paths(component_root):
     """`.venv`'s location and the platform-correct interpreter path
-    (docs/imp_design.md §2.4 step 3, TCT-08)."""
-    venv_dir = component_root / ".venv"
+    (docs/imp_design.md §2.4 step 3, TCT-08).
+
+    Suffixed by `sys.platform` (item 3, 2026-09-16) -- found live: a
+    Windows build and a WSL build of the SAME checkout (the two access
+    Path.exists/mkdir/rmtree the identical directory through DrvFs, which
+    IS mutually visible with no caching lag, confirmed live with a
+    concurrent mkdir/Test-Path probe) used to share one bare `.venv`.
+    `_venv_targets_current_python()` correctly treats a foreign-OS venv as
+    stale and recreates it -- but the `.venv.lock` directory below only
+    guards `ensure_venv()`'s own create/install window, not the much
+    longer window afterward where `exec_into_venv()` is actually RUNNING
+    the build out of that venv's interpreter with no lock held at all. So
+    the failure needs no timing coincidence beyond "the other platform is
+    still running its own build": platform B's `ensure_venv()` correctly
+    decides platform A's venv is foreign, deletes it, and platform A's
+    still-running process loses the DLL/site-packages files it has open
+    mid-install. Splitting the directory by platform removes the shared
+    resource instead of trying to serialize access to it -- the two
+    platforms never touch the same `.venv-*` directory, so there is
+    nothing left to race. `sys.platform` (not sys.platform.startswith so
+    the exact tag, "win32"/"linux", is stable and greppable) is already
+    used two lines below for the interpreter subpath decision, so this
+    reuses a signal already computed, not a new one."""
+    venv_dir = component_root / f".venv-{sys.platform}"
     if sys.platform.startswith("win"):
         interpreter = venv_dir / "Scripts" / "python.exe"
     else:
@@ -121,8 +143,14 @@ def _acquire_lock(component_root):
     """A directory-create-based lock (atomic on every platform this repo
     targets) so two simultaneous invocations against the same empty .venv
     don't race each other into a corrupted install (TCT-10) - the second
-    process waits, then finds .venv already current and does nothing."""
-    lock_dir = component_root / ".venv.lock"
+    process waits, then finds .venv already current and does nothing.
+
+    Suffixed by `sys.platform` (item 3, 2026-09-16) to match venv_paths()'s
+    own per-platform directory -- two builds for the SAME platform still
+    need to serialize their .venv-<platform> install; two builds for
+    DIFFERENT platforms no longer share a directory at all, so they no
+    longer need to wait on each other's lock either."""
+    lock_dir = component_root / f".venv-{sys.platform}.lock"
     deadline = time.monotonic() + LOCK_TIMEOUT_S
     while True:
         try:
