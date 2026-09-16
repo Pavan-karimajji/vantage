@@ -41,22 +41,44 @@ target_link_libraries(vantage_test_fixture_echo_stub PRIVATE AdasInterfaces::Ada
 # WP-33 (SM-11), named, honest workaround, corrected 2026-09-16 (same root
 # cause and same fix as cpp/vantage/CMakeLists.txt's own workaround):
 # `AdasInterfaces::AdasInterfaces`'s own generated INTERFACE_INCLUDE_
-# DIRECTORIES comes out empty for this multi-hop graph even with no
-# editables registered. The old `/cpp` and `/conan_workarea/build-sil-
-# vs2026/build/generated` subdirectories never existed in a PACKAGED (as
-# opposed to live-checkout) adas-interfaces artifact -- a Conan package
-# folder has no conan_workarea/ of its own, ever. Both echo_stub.cpp's
-# bare includes (`Adas__Sil/component_manifest.pb.h`, generated, and
-# `adas/adas_sil_abi.h`, hand-written) resolve from the SAME single root,
-# confirmed live against the real cached package:
-# include/adas-interfaces/{Adas__Sil,adas}/...
+# DIRECTORIES comes out empty for this multi-hop graph in EVERY mode
+# (package and develop alike), not "with no editables registered"
+# specifically -- item 2 (prompt 38) found live that this row's own
+# original fix (cache-mode-only `include/adas-interfaces`, below) is
+# exactly what left `--mode develop` broken: an EDITABLE `adas-interfaces`
+# resolves `adas-interfaces_PACKAGE_FOLDER_RELEASE`/`_DEBUG` to its own
+# checkout root (base_recipe.py's `is_editable` branch), where headers sit
+# UNNESTED under `cpp/` and (generated protobuf) `generated/` -- the
+# `include/adas-interfaces/` nesting below is real, but only for a
+# genuinely packaged (non-editable) `adas-interfaces`, confirmed live
+# against the real cached package. All candidate subpaths are added
+# unconditionally rather than branching on editable-ness, same reasoning
+# as cpp/vantage/CMakeLists.txt's own copy of this fix: a directory that
+# doesn't exist is simply never searched.
+#
+# `generated/` (echo_stub.cpp's protoc-generated `Adas__Sil/
+# component_manifest.pb.h`) is NOT under PACKAGE_FOLDER directly in
+# editable mode -- it's a BUILD output, under whichever target/platform
+# build tree `adas-interfaces` itself was last built into
+# (base_recipe.py's `_editable_target`/`_editable_platform`, imp_design.md
+# §4.1). `adas-interfaces_LIB_DIRS_RELEASE`/`_DEBUG` (CMakeDeps' own,
+# already target-aware) already resolves to exactly that build tree's
+# `.../build/<config>` -- one directory up from it is `.../build/`, whose
+# `generated/` sibling is where protoc actually wrote the header
+# (confirmed live against `_LIB_DIRS_RELEASE` for THIS build, item 2).
 if(DEFINED adas-interfaces_PACKAGE_FOLDER_RELEASE)
     target_include_directories(vantage_test_fixture_echo_stub PRIVATE
         "${adas-interfaces_PACKAGE_FOLDER_RELEASE}/include/adas-interfaces"
+        "${adas-interfaces_PACKAGE_FOLDER_RELEASE}/cpp"
+        "${adas-interfaces_PACKAGE_FOLDER_RELEASE}/include"
+        "${adas-interfaces_LIB_DIRS_RELEASE}/../generated"
     )
 elseif(DEFINED adas-interfaces_PACKAGE_FOLDER_DEBUG)
     target_include_directories(vantage_test_fixture_echo_stub PRIVATE
         "${adas-interfaces_PACKAGE_FOLDER_DEBUG}/include/adas-interfaces"
+        "${adas-interfaces_PACKAGE_FOLDER_DEBUG}/cpp"
+        "${adas-interfaces_PACKAGE_FOLDER_DEBUG}/include"
+        "${adas-interfaces_LIB_DIRS_DEBUG}/../generated"
     )
 endif()
 # WP-33 (SM-11), named, honest workaround: `protobuf::libprotobuf`'s own
