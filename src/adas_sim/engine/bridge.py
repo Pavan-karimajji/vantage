@@ -142,11 +142,14 @@ def _run_subprocess(cmd: list[str], *, timeout_s: float = _DEFAULT_PROCESS_TIMEO
     turns it into a real `SIM_EXIT_TIMEOUT` result instead of an indefinite
     hang."""
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=timeout_s)
+        return subprocess.run(
+            cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout_s
+        )
     except OSError:
         win_cmd = " ".join(f'"{c}"' if " " in c else c for c in cmd)
         return subprocess.run(
-            ["cmd.exe", "/c", win_cmd], capture_output=True, text=True, encoding="utf-8", timeout=timeout_s
+            ["cmd.exe", "/c", win_cmd], capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=timeout_s
         )
 
 

@@ -364,7 +364,9 @@ def _launch_worker(
         )
     else:
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=timeout_s)
+            proc = subprocess.run(
+                cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout_s
+            )
         except subprocess.TimeoutExpired as exc:
             duration_s = time.monotonic() - start
             stderr = exc.stderr if isinstance(exc.stderr, str) else ""
@@ -453,7 +455,9 @@ def _launch_worker_polled(
         else limit.poll_interval_s if limit is not None
         else 0.5
     )
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
+    proc = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace"
+    )
     finding = _PollFinding()
     processing = _watchdog.ProcessingWatchdog(watchdogs.processing_s, poll_interval_s) if watchdogs else None
     responsiveness = (

@@ -77,7 +77,7 @@ def _run_id() -> str:
 def _changed_paths(since: str) -> list[str]:
     proc = subprocess.run(
         ["git", "diff", "--name-only", since, "HEAD"],
-        cwd=SIM_ROOT, capture_output=True, text=True, encoding="utf-8",
+        cwd=SIM_ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
     if proc.returncode != 0:
         # Can't resolve the ref (e.g. shallow clone, first commit) -- fail
@@ -97,9 +97,22 @@ def _load_config() -> dict:
 def _run_pytest(artifact_dir: Path) -> tuple[bool, str]:
     """Returns (ok, detail_line). Writes junit xml + stdout into artifact_dir."""
     junit_path = artifact_dir / "pytest-junit.xml"
+    # errors="replace": a child pytest process's stdout encoding follows the
+    # OS console codepage, not this process's own -- on Windows that is
+    # cp1252 by default, not UTF-8, so a docstring/message containing a
+    # non-ASCII character (verified live, 2026-09-16: a real "§1" in
+    # test_a1_package.py, itself correctly UTF-8 in the source file) comes
+    # back from the child as a single cp1252 byte a strict UTF-8 decode
+    # cannot read. Without errors=, that decode failure crashes inside
+    # subprocess's own reader thread and leaves proc.stdout/proc.stderr as
+    # None, which then fails a second, more confusing way at the write_text
+    # below (R-REQ-9's "a check nobody has seen fail" moment: this gate had
+    # never actually run to completion before that was found). Replacing the
+    # undecodable byte with U+FFFD never hides a real test failure -- ok/
+    # detail below are derived from the JUnit XML, never from this text.
     proc = subprocess.run(
         [sys.executable, "-m", "pytest", "tests", "-q", f"--junit-xml={junit_path}"],
-        cwd=SIM_ROOT, capture_output=True, text=True, encoding="utf-8",
+        cwd=SIM_ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
     (artifact_dir / "pytest-stdout.txt").write_text(
         proc.stdout + proc.stderr, encoding="utf-8", newline="\n"
@@ -219,7 +232,7 @@ def _run_sim_check(artifact_dir: Path) -> tuple[bool, str]:
     proc = subprocess.run(
         [sys.executable, "-c", "import sys; from adas_sim.cli import main; sys.exit(main(sys.argv[1:]))",
          "check", str(DF_SCENARIO_SET), "--search", str(lib_dir), "--report", str(report_path)],
-        cwd=SIM_ROOT, capture_output=True, text=True, encoding="utf-8",
+        cwd=SIM_ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
     (artifact_dir / "sim_check_stdout.txt").write_text(proc.stdout + proc.stderr, encoding="utf-8", newline="\n")
 
@@ -233,7 +246,7 @@ def _run_sim_check(artifact_dir: Path) -> tuple[bool, str]:
 
 
 def _run_subprocess_check(cmd: list[str], cwd: Path, artifact_dir: Path, log_name: str) -> tuple[bool, str]:
-    proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8")
+    proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     (artifact_dir / log_name).write_text(proc.stdout + proc.stderr, encoding="utf-8", newline="\n")
     tail = (proc.stdout or "").strip().splitlines()
     detail = tail[-1] if tail else ""

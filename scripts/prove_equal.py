@@ -93,11 +93,12 @@ def _run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess
     cmd.exe/powershell.exe is safe for a non-GUI binary; never for a GL
     window)."""
     try:
-        return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8")
+        return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     except OSError:
         win_cmd = " ".join(f'"{c}"' if " " in c else c for c in cmd)
         return subprocess.run(
-            ["cmd.exe", "/c", win_cmd], cwd=cwd, capture_output=True, text=True, encoding="utf-8"
+            ["cmd.exe", "/c", win_cmd], cwd=cwd, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
 
 
