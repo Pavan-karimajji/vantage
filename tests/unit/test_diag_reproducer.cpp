@@ -53,12 +53,20 @@ TEST(UtEdg08Reproducer, WritesARealPackageWithEveryDeclaredPiece) {
   std::ifstream stderr_in(package.package_dir / "stderr.txt");
   std::ostringstream buf;
   buf << stderr_in.rdbuf();
+  stderr_in.close();
   EXPECT_EQ(buf.str(), input.captured_stderr);
 
   std::ifstream snapshot_in(package.package_dir / "input_capture" / "a.in.bin", std::ios::binary);
   std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(snapshot_in)), std::istreambuf_iterator<char>());
+  snapshot_in.close();
   EXPECT_EQ(bytes, input.input_capture["a.in"]);
 
+  // Both ifstreams above must be closed before remove_all below: an open
+  // handle on a file under output_dir blocks its own deletion on Windows
+  // (a real file-lock race, reproduced live) even though POSIX permits
+  // unlinking an open file -- destructor-only closure (at the end of this
+  // scope) runs too late relative to remove_all, since locals destruct in
+  // reverse order only at the closing brace, after this statement.
   std::filesystem::remove_all(output_dir);
   std::filesystem::remove(spec_path);
 }
