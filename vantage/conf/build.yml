@@ -16,10 +16,19 @@
 # already depends on `adas-viz` (which depends on `adas-sim`) with no cycle.
 # This is a deliberate, explicit deviation from R-GIT-1's "one repo per
 # component" convention, approved for exactly this reason: `modules/sim/
-# vantage/` is versioned inside the sim repo but is its own Conan package,
-# `adas-vantage`, entirely independent of `adas-sim`'s own conf/build.yml/
-# conanfile.py (this file, byte-identical `conanfile.py`/`build.bat`/
-# `scripts/build.py` copies included).
+# vantage/` is versioned inside the sim repo and stays its own Conan
+# package, `adas-vantage`, with its own conanfile.py/conf/build.yml (this
+# file) -- that part of WP-33 is permanent, the cycle does not go away.
+#
+# SS13.3a restructure (done): what changed is that this package has no
+# build ENTRY POINT of its own any more -- no build.bat/build.sh/gui.bat/
+# scripts/build.py/scripts/build_gui.py/.clang-format, and no
+# conf/build_tools.version pin. `../conf/build.yml`'s own `subcomponents:
+# [vantage]` is what drives this directory now: sim's build entry point
+# (`python build.py -t/-p/-P`) re-invokes the same adas_build_tools CLI
+# with this directory as cwd, exactly as if you had cd'd in and typed the
+# command by hand -- so this package inherits whichever adas_build_tools
+# sim's own build already resolved rather than pinning its own.
 layout_kind: cmake_layout
 
 recipe:

@@ -24,3 +24,10 @@ endif()
 # (`adas-vantage`) in this same git repo, requiring both `adas-sim` and
 # `adas-viz` as ordinary dependencies -- see that directory's own
 # `conf/build.yml` and the `WP-33` plan row for the full account of why.
+#
+# SS13.3a restructure (done): "not built here" is about CMake/Conan package
+# boundaries only, not about how you invoke a build. `conf/build.yml`'s own
+# `subcomponents: [vantage]` makes this component's build entry point
+# (build.bat/build.sh/scripts/build.py, unchanged) drive vantage's build
+# too, automatically -- vantage has no build entry point of its own left to
+# invoke separately.

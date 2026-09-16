@@ -17,6 +17,29 @@
 build_subdir: src/simcore
 build_includedir: include
 
+# WP-33/SS13.3a restructure (done): vantage is a build target of THIS
+# component's own build entry point, never a separate one -- `python
+# build.py -t/-p/-P` (or build.bat/build.sh) here also builds
+# modules/sim/vantage/, with no separate command, no bootstrap stub and no
+# conf/build_tools.version pin of its own (adas_build_tools.cli reads this
+# key generically -- it never learns the name "vantage").
+#
+# vantage stays a genuinely distinct Conan package (its own conanfile.py +
+# conf/build.yml one level down) purely because adas-viz already requires
+# adas-sim unconditionally (its player component's AdasSim::io edge,
+# VZ-12/D-10) -- a package-level requires the other way, from THIS
+# component onto adas-viz, is a real Conan graph cycle, verified live via
+# `conan graph info`. CMakeDeps' build_context_activated/tool_requires
+# mechanism (already used two lines below for protobuf/protoc) was tried
+# as an escape and rejected: it resolves without a cycle error, but
+# generates only empty-LIBS interface stubs for a build-context library --
+# unusable for actually linking vantage_app against the real, compiled
+# adas-viz toolkit/player/host/runner components. Every entry here is
+# skipped, never failed, for a target/platform vantage's own conf/build.yml
+# does not declare (e.g. this component's ubuntu_gcc build correctly skips
+# vantage, which is vs2026-only).
+subcomponents: [vantage]
+
 recipe:
   type: static-library
   libs: [simcore]

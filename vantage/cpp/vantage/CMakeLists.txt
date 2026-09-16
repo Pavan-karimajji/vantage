@@ -26,25 +26,38 @@ target_include_directories(vantage_bridge PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(vantage_bridge PUBLIC AdasSim::io AdasViz::player AdasInterfaces::AdasInterfaces)
 target_compile_features(vantage_bridge PUBLIC cxx_std_17)
 
-# WP-33 (SM-11), named, honest workaround -- not a permanent fix: even after
-# conanfile.py's editable-mode includedirs override (this pass's own fix,
-# verified correct by direct instrumentation -- self.cpp_info.includedirs
-# reads ["cpp", "include"] exactly as expected), the CMakeDeps-generated
-# `AdasInterfaces::AdasInterfaces` imported target's own
-# INTERFACE_INCLUDE_DIRECTORIES still comes out empty specifically when
-# `adas-interfaces` is resolved as an EDITABLE package two hops away
-# (vantage -> sim/viz -> interfaces) rather than a direct one (vantage ->
-# sim, vantage -> viz, both correct) -- a real, unexplained Conan/CMakeDeps
-# limit in how it regenerates a transitively-reached editable node's own
-# per-config data file, not a bug this pass's package_info() changes can
-# reach. Worked around here, locally, by reading the SAME
-# `adas-interfaces_PACKAGE_FOLDER_RELEASE`/`_DEBUG` variable CMakeDeps
-# itself generates and already resolves correctly (confirmed correct in
-# every case checked) -- fragile (an internal Conan variable name, not a
-# public API) but scoped to this one target and clearly named as a
-# workaround, not silently relied upon.
+# WP-33 (SM-11), named, honest workaround -- not a permanent fix: the
+# CMakeDeps-generated `AdasInterfaces::AdasInterfaces` imported target's own
+# INTERFACE_INCLUDE_DIRECTORIES still comes out empty specifically for
+# `adas-interfaces` as vantage's own nested `conan install` resolves it
+# (multiple paths reaching the same node -- vantage requires both adas-sim
+# and adas-viz, both of which require adas-interfaces themselves) even with
+# NO editable packages registered at all (SS13.3b, 2026-09-16 -- the
+# original 2026-08 finding above blamed editable mode specifically; found
+# live that a plain Cache resolution hits the identical symptom once
+# vantage's build is actually exercised end-to-end again, via the
+# `subcomponents:` restructure). Worked around here, locally, by reading
+# the SAME `adas-interfaces_PACKAGE_FOLDER_RELEASE`/`_DEBUG` variable
+# CMakeDeps itself generates and already resolves correctly (confirmed
+# correct in every case checked, including this one) -- fragile (an
+# internal Conan variable name, not a public API) but scoped to this one
+# target and clearly named as a workaround, not silently relied upon.
+#
+# Subdirectory corrected 2026-09-16: `adas-interfaces`'s own packaged layout
+# no longer has a top-level `cpp/` folder (confirmed live against the
+# cached package -- only `cmake/include/lib/scripts/share`); its headers
+# install under `include/adas-interfaces/...`, and `simcore/transport.hpp`
+# (adas-sim's own installed header, `AdasSim::io`'s public surface) includes
+# `transport/ITransport.hpp` bare, without the `adas-interfaces/` prefix --
+# confirmed by comparing against sim's OWN generated
+# `adas-interfaces_INCLUDE_DIRS_RELEASE`, which correctly resolves to
+# `.../include/adas-interfaces` in sim's simpler (single-path) graph. The
+# old `/cpp` suffix here predates that layout and was silently wrong for
+# this same reason -- it happened to never matter while the primary
+# (non-workaround) mechanism worked, and this row's own fallback was never
+# exercised until now.
 if(DEFINED adas-interfaces_PACKAGE_FOLDER_RELEASE)
-    target_include_directories(vantage_bridge PUBLIC "${adas-interfaces_PACKAGE_FOLDER_RELEASE}/cpp")
+    target_include_directories(vantage_bridge PUBLIC "${adas-interfaces_PACKAGE_FOLDER_RELEASE}/include/adas-interfaces")
 elseif(DEFINED adas-interfaces_PACKAGE_FOLDER_DEBUG)
-    target_include_directories(vantage_bridge PUBLIC "${adas-interfaces_PACKAGE_FOLDER_DEBUG}/cpp")
+    target_include_directories(vantage_bridge PUBLIC "${adas-interfaces_PACKAGE_FOLDER_DEBUG}/include/adas-interfaces")
 endif()
