@@ -14,11 +14,18 @@ if(NOT GTest_FOUND)
     FetchContent_MakeAvailable(googletest)
 endif()
 
-# WP-33: a COPY of modules/sim's own echo_stub fixture, not a shared
-# reference -- this is a separate git repo-adjacent Conan package and must
-# build standalone with only this checkout present (same reasoning
-# modules/sim's own copy is itself "ported from sil_host's identical
-# fixture", tests/CMakeLists.txt's own top note there).
+# De-duplicated 2026-09-16 (prompt 32, item 2): this used to be a hand-
+# maintained BYTE COPY of modules/sim's own echo_stub fixture, justified by
+# a claim that vantage "must build standalone with only this checkout
+# present." That claim doesn't hold: vantage is versioned INSIDE the sim
+# git repo (WP-33's own conf/build.yml top comment), not a separate
+# checkout, so sim's real fixture is always right there via a relative
+# path -- a hand-copied test fixture with hand-maintained include paths is
+# exactly the drift CPY-1 guards against, in a directory CPY-1 does not
+# scan (CPY-1 only fans out build.bat/build.sh/scripts/build.py/
+# scripts/build_gui.py/.clang-format, never test fixtures). Building
+# sim's own source file directly means one file, one set of include paths,
+# never two copies to keep in sync by hand.
 find_package(AdasInterfaces REQUIRED)
 # echo_stub.cpp uses protobuf's DescriptorPool/DynamicMessageFactory
 # reflection directly (google/protobuf/descriptor.h) -- a real, direct
@@ -26,26 +33,28 @@ find_package(AdasInterfaces REQUIRED)
 # on transitively through AdasInterfaces (SM-02's own established
 # reasoning: a consumer's own header needs are spelled out, never assumed).
 find_package(protobuf REQUIRED)
-add_library(vantage_test_fixture_echo_stub SHARED fixtures/echo_stub/echo_stub.cpp)
+add_library(vantage_test_fixture_echo_stub SHARED
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/fixtures/echo_stub/echo_stub.cpp)
 target_link_libraries(vantage_test_fixture_echo_stub PRIVATE AdasInterfaces::AdasInterfaces protobuf::libprotobuf)
-# WP-33 (SM-11), named, honest workaround: `AdasInterfaces::AdasInterfaces`'s
-# own generated INTERFACE_INCLUDE_DIRECTORIES comes out empty for the same
-# reason cpp/vantage/CMakeLists.txt already names -- echo_stub.cpp needs
-# BOTH its source headers (cpp/) and its build-generated proto headers
-# (conan_workarea/build-sil-<platform>/build/generated/, `Adas__Sil/component_manifest.
-# pb.h`), so both are added explicitly here rather than relied on
-# transitively.
+# WP-33 (SM-11), named, honest workaround, corrected 2026-09-16 (same root
+# cause and same fix as cpp/vantage/CMakeLists.txt's own workaround):
+# `AdasInterfaces::AdasInterfaces`'s own generated INTERFACE_INCLUDE_
+# DIRECTORIES comes out empty for this multi-hop graph even with no
+# editables registered. The old `/cpp` and `/conan_workarea/build-sil-
+# vs2026/build/generated` subdirectories never existed in a PACKAGED (as
+# opposed to live-checkout) adas-interfaces artifact -- a Conan package
+# folder has no conan_workarea/ of its own, ever. Both echo_stub.cpp's
+# bare includes (`Adas__Sil/component_manifest.pb.h`, generated, and
+# `adas/adas_sil_abi.h`, hand-written) resolve from the SAME single root,
+# confirmed live against the real cached package:
+# include/adas-interfaces/{Adas__Sil,adas}/...
 if(DEFINED adas-interfaces_PACKAGE_FOLDER_RELEASE)
     target_include_directories(vantage_test_fixture_echo_stub PRIVATE
-        "${adas-interfaces_PACKAGE_FOLDER_RELEASE}/cpp"
-        "${adas-interfaces_PACKAGE_FOLDER_RELEASE}/include"
-        "${adas-interfaces_PACKAGE_FOLDER_RELEASE}/conan_workarea/build-sil-vs2026/build/generated"
+        "${adas-interfaces_PACKAGE_FOLDER_RELEASE}/include/adas-interfaces"
     )
 elseif(DEFINED adas-interfaces_PACKAGE_FOLDER_DEBUG)
     target_include_directories(vantage_test_fixture_echo_stub PRIVATE
-        "${adas-interfaces_PACKAGE_FOLDER_DEBUG}/cpp"
-        "${adas-interfaces_PACKAGE_FOLDER_DEBUG}/include"
-        "${adas-interfaces_PACKAGE_FOLDER_DEBUG}/conan_workarea/build-sil-vs2026/build/generated"
+        "${adas-interfaces_PACKAGE_FOLDER_DEBUG}/include/adas-interfaces"
     )
 endif()
 # WP-33 (SM-11), named, honest workaround: `protobuf::libprotobuf`'s own
