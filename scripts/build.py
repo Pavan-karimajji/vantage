@@ -286,6 +286,24 @@ def _ensure_adas_local_remote(component_root):
         )
 
 
+def _cached_package_ids(ref):
+    """OF-02 (offline_setup_plan.md): package ids of `ref` already in the LOCAL
+    Conan cache - `conan list` with no `-r` never touches a remote. [] when
+    the ref is absent or the listing cannot be read."""
+    proc = subprocess.run(["conan", "list", f"{ref}:*", "--format=json"],
+                          capture_output=True, text=True)
+    if proc.returncode != 0:
+        return []
+    try:
+        data = json.loads(proc.stdout)
+    except ValueError:
+        return []
+    return [package_id
+            for cache_data in data.values()
+            for revision_data in cache_data.get(ref, {}).get("revisions", {}).values()
+            for package_id in revision_data.get("packages", {})]
+
+
 def _install_pinned_via_conan(interpreter, pin, component_root):
     """Conan-based half of install_pinned() (docs/imp_design.md §5
     addendum, §9.8). `adas-build-tools/<pin>`'s package_id() calls
@@ -301,15 +319,20 @@ def _install_pinned_via_conan(interpreter, pin, component_root):
             "instead (§4)."
         )
 
-    _ensure_adas_local_remote(component_root)
-
     ref = f"adas-build-tools/{pin}"
-    proc = subprocess.run(["conan", "download", ref, "-r", ADAS_LOCAL_REMOTE])
-    if proc.returncode != 0:
-        sys.exit(
-            f"ERROR: conan download of {ref} from '{ADAS_LOCAL_REMOTE}' "
-            f"failed (exit {proc.returncode})."
-        )
+    if _cached_package_ids(ref):
+        # OF-02: already in the local cache (an offline bundle, or an earlier
+        # download) - never contact, register or log in to adas-local.
+        print(f"{ref} is already in the local Conan cache - not contacting "
+              f"'{ADAS_LOCAL_REMOTE}'.", flush=True)
+    else:
+        _ensure_adas_local_remote(component_root)
+        proc = subprocess.run(["conan", "download", ref, "-r", ADAS_LOCAL_REMOTE])
+        if proc.returncode != 0:
+            sys.exit(
+                f"ERROR: conan download of {ref} from '{ADAS_LOCAL_REMOTE}' "
+                f"failed (exit {proc.returncode})."
+            )
 
     list_proc = subprocess.run(
         ["conan", "list", f"{ref}:*", "--format=json"],
