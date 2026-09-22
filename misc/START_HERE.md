@@ -142,13 +142,16 @@ wait on `WP-31` or anything else. See the log entry below and
    at all. Genuinely absent data, confirmed against the file — named, not
    fixed, and not a defect in the layer.
 
-6. **An editable dependency's build artifact can sit stale across a
-   behaviour-changing commit** and nothing in the ordinary build/test loop
-   notices. It shipped two real regressions unnoticed in one week, both found
-   by accident. `scripts/check_build_freshness.py` at the superproject root
-   answers it, run by hand; it is deliberately not wired into any automated
-   gate (hosted CI is out of scope, Decision F) or into any component's
-   byte-identical `build.py` (`R-BUILD-6`).
+6. **Retired 2026-09-22** (`remove_develop_mode_plan.md`, RD-03): this row
+   described a stale-editable-build risk (`scripts/check_build_freshness.py`
+   at the superproject root, run by hand) that no longer exists — develop
+   mode and Conan editable registrations were removed from the root build;
+   package mode always resolves a real published dependency, never a stale
+   editable build artifact from a checkout. `check_build_freshness.py` was
+   deleted with its test in the same pass. See
+   `docs/v2/SIM_Test_Execution_2026-08-31_build_freshness_check.md` for the
+   dated record this row used to point at — left untouched, a historical
+   fact, not edited retroactively.
 
 ## Ending a session
 
