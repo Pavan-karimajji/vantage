@@ -54,6 +54,15 @@ ADAS_LOCAL_PASSWORD = os.environ.get("ADAS_LOCAL_PASSWORD", "demo")
 # bootstrapping .venv before giving up (TCT-10).
 LOCK_TIMEOUT_S = 600
 
+# NS-06 (cache_first_no_server_plan.md D4/WP-4, STEP 4): the test-only
+# override, same name and same precedence role as scripts/
+# conan_home_resolution.REMOTES_ENV_VAR - kept as a literal string rather
+# than importing that module, since this stub must run before anything
+# outside the standard library is available and a standalone submodule
+# clone has no scripts/conan_home_resolution.py to import at all (same
+# reasoning as _team_server_url()'s own duplication note below).
+REMOTES_ENV_VAR = "ADAS_REMOTES_ENABLED"
+
 
 def find_component_root():
     """The directory containing this scripts/build.py file's parent (the
@@ -232,6 +241,49 @@ def _team_server_url(component_root):
     return None
 
 
+def _is_loopback_url(url):
+    """NS-24/D1a duplicated (cache_first_no_server_plan.md, same reasoning
+    as scripts/conan_home_resolution._is_loopback_url): a per-machine
+    loopback Conan server in scripts/team_conan_server.txt is not a team
+    server - without this, remotes_enabled() below would read ON on every
+    machine that ever ran a local adas-local instance, defeating NS-06's
+    whole point."""
+    from urllib.parse import urlsplit
+    host = urlsplit(url).hostname
+    return host is not None and host.lower() in ("127.0.0.1", "localhost", "::1")
+
+
+def remotes_enabled(component_root, env=None):
+    """NS-06 (cache_first_no_server_plan.md D4/WP-4, STEP 4): duplicated
+    from scripts/conan_home_resolution.remotes_enabled() for the same
+    reason _team_server_url() above is duplicated - this stub must decide
+    whether it may contact a remote BEFORE adas_build_tools (and the
+    superproject's own scripts/, which may not even be checked out for a
+    standalone submodule clone, NS-07) is available to ask. No CLI-override
+    level here (unlike the root copy): this stub forwards argv to
+    adas_build_tools.cli untouched and never parses it itself (see this
+    file's own module docstring), so the only overrides are the env var
+    and scripts/team_conan_server.txt. Returns (bool enabled, str reason).
+    """
+    env = os.environ if env is None else env
+    raw = env.get(REMOTES_ENV_VAR)
+    if raw is not None:
+        value = raw.strip().lower()
+        if value in ("on", "1", "true", "yes"):
+            return True, f"{REMOTES_ENV_VAR}={raw!r} (env override)"
+        if value in ("off", "0", "false", "no"):
+            return False, f"{REMOTES_ENV_VAR}={raw!r} (env override)"
+        # Not a recognized spelling - fall through, same as the root copy.
+
+    url = _team_server_url(component_root)
+    if url:
+        if _is_loopback_url(url):
+            return False, (f"{url} is a loopback address, not a team "
+                            f"server (NS-24/D1a)")
+        return True, f"team server configured: {url}"
+    return False, "no team Conan server configured (scripts/team_conan_server.txt is a placeholder or absent)"
+
+
 def _ensure_adas_local_remote(component_root):
     """Minimal, strictly-additive auto-provisioning of the adas-local
     remote itself - a slice of adas_build_tools.conan_ops's own
@@ -326,6 +378,20 @@ def _install_pinned_via_conan(interpreter, pin, component_root):
         print(f"{ref} is already in the local Conan cache - not contacting "
               f"'{ADAS_LOCAL_REMOTE}'.", flush=True)
     else:
+        # NS-06 (cache_first_no_server_plan.md D4/WP-4, STEP 4): cache-first,
+        # remotes-off-by-default applies here too - a missing pin with
+        # remotes off is a stop naming the pin, the cache checked, and
+        # setup.bat, never an implicit `conan download`. With remotes on,
+        # the original download path is unchanged.
+        enabled, reason = remotes_enabled(component_root)
+        if not enabled:
+            sys.exit(
+                f"ERROR: {ref} is not in this machine's Conan cache "
+                f"(checked the local Conan cache only - remotes are off: "
+                f"{reason}). Run setup.bat to populate the cache, or "
+                f"enable remotes (scripts/team_conan_server.txt, or "
+                f"{REMOTES_ENV_VAR}=on) to allow a download."
+            )
         _ensure_adas_local_remote(component_root)
         proc = subprocess.run(["conan", "download", ref, "-r", ADAS_LOCAL_REMOTE])
         if proc.returncode != 0:
