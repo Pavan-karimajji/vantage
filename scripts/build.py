@@ -338,6 +338,80 @@ def _ensure_adas_local_remote(component_root):
         )
 
 
+# NS-12/D4c (cache_first_no_server_plan.md, piece 2): how many directory
+# levels _find_offline_bundle() walks upward looking for a superproject's
+# own misc/offline_bundle/ - same generosity as _team_server_url()'s own
+# walk above.
+_BUNDLE_SEARCH_DEPTH = 6
+
+
+def _find_offline_bundle(component_root):
+    """NS-12/D4c piece 2: a folder written by scripts/make_offline_
+    bundle.py, checked in the same two places adas_build_tools.conan_ops'
+    own find_offline_bundle() checks - this component's own misc/
+    offline_bundle/ first (a standalone clone ships its own copy
+    alongside it, since there is no superproject root to hold one), then
+    walked upward looking for a real superproject checkout's misc/
+    offline_bundle/ at whatever depth this component happens to be
+    nested (modules/df, modules/sim/vantage, ...) - never assumed to be
+    exactly one level up. Returns None if neither is found; never
+    raises. Duplicated rather than imported for the usual reason (this
+    stub must run BEFORE adas_build_tools is installed)."""
+    own = component_root / "misc" / "offline_bundle"
+    if own.is_dir():
+        return own
+    candidate = component_root
+    for _ in range(_BUNDLE_SEARCH_DEPTH):
+        if candidate.parent == candidate:
+            return None
+        candidate = candidate.parent
+        found = candidate / "misc" / "offline_bundle"
+        if found.is_dir():
+            return found
+    return None
+
+
+def _parse_bundle_manifest(text):
+    """bundle_manifest.txt -> {bare ref: revision}. Duplicated from
+    scripts/make_offline_bundle.parse_manifest() (superproject-only, not
+    importable from a standalone component clone) - deliberately a much
+    smaller subset: this stub only ever needs "is this ref in the bundle
+    at all", never date/source_commit/pins/wheels."""
+    refs = {}
+    for line in text.splitlines():
+        key, _, value = line.partition(": ")
+        if key == "ref":
+            ref, _, rest = value.partition("#")
+            refs[ref] = rest.split()[0] if rest else ""
+    return refs
+
+
+def _restore_ref_from_bundle(bundle_dir, ref):
+    """NS-12/D4c piece 2: restores `bundle_dir`'s single adas_offline_*.tgz
+    archive into the local Conan cache if its manifest carries `ref` - the
+    chicken-and-egg this stub exists to solve (this pin is what makes
+    adas_build_tools itself resolvable at all, so restoring it from a
+    bundle can only happen here, in plain Conan CLI, before any venv or
+    installed package exists to ask instead). A no-op (returns False,
+    never raises) for a manifest missing bundle_manifest.txt, more or
+    less than one archive, or a manifest that simply doesn't list `ref`
+    (an older bundle than this pin). The caller re-checks
+    _cached_package_ids() itself afterward rather than trusting this
+    function's return value as proof of success, same "verify, don't
+    assume" discipline as install_pinned()'s own marker file."""
+    manifest_file = bundle_dir / "bundle_manifest.txt"
+    if not manifest_file.is_file():
+        return False
+    manifest_refs = _parse_bundle_manifest(manifest_file.read_text(encoding="utf-8"))
+    if ref not in manifest_refs:
+        return False
+    archives = sorted(bundle_dir.glob("adas_offline_*.tgz"))
+    if len(archives) != 1:
+        return False
+    proc = subprocess.run(["conan", "cache", "restore", str(archives[0])])
+    return proc.returncode == 0
+
+
 def _cached_package_ids(ref):
     """OF-02 (offline_setup_plan.md): package ids of `ref` already in the LOCAL
     Conan cache - `conan list` with no `-r` never touches a remote. [] when
@@ -385,20 +459,36 @@ def _install_pinned_via_conan(interpreter, pin, component_root):
         # the original download path is unchanged.
         enabled, reason = remotes_enabled(component_root)
         if not enabled:
-            sys.exit(
-                f"ERROR: {ref} is not in this machine's Conan cache "
-                f"(checked the local Conan cache only - remotes are off: "
-                f"{reason}). Run setup.bat to populate the cache, or "
-                f"enable remotes (scripts/team_conan_server.txt, or "
-                f"{REMOTES_ENV_VAR}=on) to allow a download."
-            )
-        _ensure_adas_local_remote(component_root)
-        proc = subprocess.run(["conan", "download", ref, "-r", ADAS_LOCAL_REMOTE])
-        if proc.returncode != 0:
-            sys.exit(
-                f"ERROR: conan download of {ref} from '{ADAS_LOCAL_REMOTE}' "
-                f"failed (exit {proc.returncode})."
-            )
+            # NS-12/D4c piece 2: try the offline bundle before refusing -
+            # the chicken-and-egg this stub exists to solve (see
+            # _restore_ref_from_bundle()'s own docstring).
+            bundle_dir = _find_offline_bundle(component_root)
+            if bundle_dir is not None:
+                print(f"{ref} is not in this machine's Conan cache - trying "
+                      f"the offline bundle at {bundle_dir} ...", flush=True)
+                _restore_ref_from_bundle(bundle_dir, ref)
+            if not _cached_package_ids(ref):
+                bundle_note = (
+                    f" A bundle was found at {bundle_dir} but does not "
+                    "carry this ref." if bundle_dir is not None
+                    else " No offline bundle was found either.")
+                sys.exit(
+                    f"ERROR: {ref} is not in this machine's Conan cache "
+                    f"(checked the local Conan cache only - remotes are off: "
+                    f"{reason}).{bundle_note} Run setup.bat to populate the "
+                    f"cache, or enable remotes (scripts/team_conan_server.txt, "
+                    f"or {REMOTES_ENV_VAR}=on) to allow a download."
+                )
+            print(f"{ref} restored from the offline bundle - not contacting "
+                  f"'{ADAS_LOCAL_REMOTE}'.", flush=True)
+        else:
+            _ensure_adas_local_remote(component_root)
+            proc = subprocess.run(["conan", "download", ref, "-r", ADAS_LOCAL_REMOTE])
+            if proc.returncode != 0:
+                sys.exit(
+                    f"ERROR: conan download of {ref} from '{ADAS_LOCAL_REMOTE}' "
+                    f"failed (exit {proc.returncode})."
+                )
 
     list_proc = subprocess.run(
         ["conan", "list", f"{ref}:*", "--format=json"],
