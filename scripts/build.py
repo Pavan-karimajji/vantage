@@ -297,7 +297,19 @@ def _ensure_adas_local_remote(component_root):
     existing remote or re-registers one already present; no URL from
     either ADAS_LOCAL_URL or scripts/team_conan_server.txt just means this
     is a no-op, same "no plausible default" discipline conan_ops.py's own
-    copy already documents."""
+    copy already documents.
+
+    NS-43 (cache_first_no_server_plan.md, RQ-5): defence in depth. Today
+    there is exactly one call site and it already sits inside the
+    remotes-enabled branch (WHERE/WHETHER split, RQ-5) - this guard makes
+    that true by construction instead of by "the one caller happens to
+    check first", so a future call site, or the outer `if` at that one
+    call site being refactored away, cannot silently re-open remote
+    contact on a remotes-off machine. Returns immediately, touching
+    nothing, when remotes are off."""
+    enabled, _ = remotes_enabled(component_root)
+    if not enabled:
+        return
     list_proc = subprocess.run(
         ["conan", "remote", "list", "--format=json"],
         capture_output=True, text=True,
