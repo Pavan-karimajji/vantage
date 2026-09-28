@@ -9,6 +9,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # this file) and the C++ engine are sibling deliverables of one component.
 add_subdirectory(src)
 
+# PT-48 (python_tool_envs_plan.md D22): adas_sim ships in this package under
+# python/, so a consumer's Python tool environment (viz's `parity` env,
+# first_party: [adas-sim]) installs it from the Conan cache at the same
+# version and recipe revision as the C++ it links -- never by reaching into
+# modules/sim/src.
+install(DIRECTORY src/adas_sim DESTINATION python
+    PATTERN "__pycache__" EXCLUDE
+    PATTERN "*.pyc" EXCLUDE)
+
 # Item 3 (prompt 38, docs/build_superbuild_aggregator_plan.md §3): lets a
 # future consumer link "AdasSim::AdasSim"/"AdasSim::io" whether this
 # package is in-tree or a real Conan package, same convention viz/vantage
