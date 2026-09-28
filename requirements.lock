@@ -1,0 +1,20 @@
+# LOCK -- generated, never hand-edited (python_tool_envs_plan.md D2).
+# env:    sim:sim
+# source: pyproject.toml
+# python: 3.12 (win32)
+# date:   2026-09-28
+# regenerate: python scripts/lock_python_env.py sim sim
+attrs==26.1.0
+jsonschema-specifications==2025.9.1
+jsonschema==4.26.0
+lz4==4.4.5
+mcap-protobuf-support==0.5.4
+mcap==1.5.0
+numpy==2.5.3
+protobuf==7.36.2
+PyYAML==6.0.3
+referencing==0.37.0
+rpds-py==2026.6.3
+ruamel.yaml==0.19.1
+typing_extensions==4.16.0
+zstandard==0.25.0
