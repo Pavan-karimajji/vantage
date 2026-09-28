@@ -468,6 +468,14 @@ def _cached_package_ids(ref):
             for package_id in revision_data.get("packages", {})]
 
 
+def _setup_run_line(component_root):
+    """D11/PT-21: the exact command that runs this component's setup, for
+    this host's shell -- setup.bat on Windows, never on Linux."""
+    if sys.platform == "win32":
+        return f'cd /d "{component_root}" && setup.bat'
+    return f'cd "{component_root}" && python3 scripts/setup.py'
+
+
 def _install_pinned_via_conan(interpreter, pin, component_root):
     """Conan-based half of install_pinned() (docs/imp_design.md §5
     addendum, §9.8). `adas-build-tools/<pin>`'s package_id() calls
@@ -510,13 +518,14 @@ def _install_pinned_via_conan(interpreter, pin, component_root):
                     f" A bundle was found at {bundle_dir} but does not "
                     "carry this ref." if bundle_dir is not None
                     else " No offline bundle was found either.")
-                sys.exit(
-                    f"ERROR: {ref} is not in this machine's Conan cache "
-                    f"(checked the local Conan cache only - remotes are off: "
-                    f"{reason}).{bundle_note} Run setup.bat to populate the "
-                    f"cache, or enable remotes (scripts/team_conan_server.txt, "
-                    f"or {REMOTES_ENV_VAR}=on) to allow a download."
-                )
+                print(f"Reason: {ref} is not in this machine's Conan cache "
+                      f"(checked the local Conan cache only - remotes are off: "
+                      f"{reason}).{bundle_note}")
+                print("Fix:    run this component's setup to populate the cache "
+                      "(or enable remotes: scripts/team_conan_server.txt, or "
+                      f"{REMOTES_ENV_VAR}=on, to allow a download).")
+                print(f"Run:    {_setup_run_line(component_root)}")
+                sys.exit(1)
             print(f"{ref} restored from the offline bundle - not contacting "
                   f"'{ADAS_LOCAL_REMOTE}'.", flush=True)
         else:
