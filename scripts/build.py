@@ -357,6 +357,13 @@ def _ensure_adas_local_remote(component_root):
 _BUNDLE_SEARCH_DEPTH = 6
 
 
+# D14 (python_tool_envs_plan.md, PT-17): host -> bundle platform. The ONE
+# duplicate of adas_build_tools.conan_ops.HOST_BUNDLE_PLATFORM (this stub
+# runs before that package is installed); check_invariants.py HPM-1 holds
+# the two equal.
+HOST_BUNDLE_PLATFORM = {"win32": "vs2026", "linux": "ubuntu_gcc"}
+
+
 def _find_offline_bundle(component_root):
     """NS-12/D4c piece 2: a folder written by scripts/make_offline_
     bundle.py, checked in the same two places adas_build_tools.conan_ops'
@@ -368,19 +375,38 @@ def _find_offline_bundle(component_root):
     nested (modules/df, modules/sim/vantage, ...) - never assumed to be
     exactly one level up. Returns None if neither is found; never
     raises. Duplicated rather than imported for the usual reason (this
-    stub must run BEFORE adas_build_tools is installed)."""
+    stub must run BEFORE adas_build_tools is installed). D14: returns the
+    HOST platform's subfolder; a flat pre-D14 bundle is refused (exit 1,
+    Reason / Fix / Run), never used."""
+    top = None
     own = component_root / "misc" / "offline_bundle"
     if own.is_dir():
-        return own
+        top = own
     candidate = component_root
     for _ in range(_BUNDLE_SEARCH_DEPTH):
-        if candidate.parent == candidate:
-            return None
+        if top is not None or candidate.parent == candidate:
+            break
         candidate = candidate.parent
         found = candidate / "misc" / "offline_bundle"
         if found.is_dir():
-            return found
-    return None
+            top = found
+    if top is None:
+        return None
+    platform = HOST_BUNDLE_PLATFORM.get(sys.platform, "ubuntu_gcc")
+    if (top / "bundle_manifest.txt").is_file() or any(top.glob("adas_offline_*.tgz")):
+        if sys.platform == "win32":
+            run = (f'cd /d "{top}" && mkdir {platform} && move adas_offline_*.tgz {platform}\\ '
+                   f'&& move bundle_manifest.txt {platform}\\ && move wheels {platform}\\')
+        else:
+            run = (f'cd "{top}" && mkdir -p {platform} && '
+                   f'mv adas_offline_*.tgz bundle_manifest.txt wheels {platform}/')
+        print(f"Reason: {top} holds an offline bundle in the old flat layout; bundles "
+              f"now live in one subfolder per platform ({top / platform}).")
+        print("Fix:    move it into its platform subfolder, then re-run.")
+        print(f"Run:    {run}")
+        sys.exit(1)
+    sub = top / platform
+    return sub if sub.is_dir() else None
 
 
 def _parse_bundle_manifest(text):
