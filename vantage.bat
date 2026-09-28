@@ -23,47 +23,36 @@ REM The launcher is Tkinter (stdlib) on purpose -- it must start on any
 REM install with no extra installed at all, instead of dying with an
 REM ImportError on the one screen whose job is getting you running.
 
-set "PYCMD="
-if exist "%~dp0.venv\Scripts\python.exe" (
-  REM Quotes embedded IN the value (not wrapped around %PYCMD% at the call
-  REM site below) -- a bare command name like `py` must reach CreateProcess
-  REM unquoted (quoting a bare, PATH-resolved name like "py" makes PowerShell's
-  REM own child-process invocation fail to create the process, verified live;
-  REM cmd.exe alone tolerates it, PowerShell does not), while a real path
-  REM that might contain spaces (this venv one) still needs its own quotes.
-  set "PYCMD="%~dp0.venv\Scripts\python.exe""
-) else (
-  where py >nul 2>&1
-  if not errorlevel 1 (
-    py -3 -c "" >nul 2>&1
-    if not errorlevel 1 set "PYCMD=py -3"
-  )
-  REM Fallback to unversioned py/python only if -3 isn't resolvable -- prefer
-  REM -3 because PowerShell's own child-process invocation of a bare,
-  REM unversioned `py <script>.py` can fail (CreateProcess error) on machines
-  REM where it works fine from a real cmd.exe window; `py -3` sidesteps
-  REM py.exe's own auto-select path entirely and has been verified to work
-  REM from both.
-  if not defined PYCMD (
-    where py >nul 2>&1
-    if not errorlevel 1 (
-      py -c "" >nul 2>&1
-      if not errorlevel 1 set "PYCMD=py"
-    )
-  )
-  if not defined PYCMD (
-    where python >nul 2>&1
-    if not errorlevel 1 (
-      python -c "" >nul 2>&1
-      if not errorlevel 1 set "PYCMD=python"
-    )
-  )
-)
-if not defined PYCMD (
-  echo ERROR: no Python found -- neither .venv\Scripts\python.exe nor py/python on PATH.
-  echo Vantage needs Python to run its launcher.
+REM PT-45 (python_tool_envs_plan.md PR-7, D10): Vantage runs from sim's own
+REM declared tool environment, .venv-sim-win32 (python_envs: sim:sim) --
+REM never modules\sim\.venv and never a global `py -3`, whose site-packages
+REM nobody controls. setup decides whether that environment is usable
+REM (--check-only never installs anything); on a refusal its own
+REM Reason / Fix / Run is shown and nothing starts.
+set "SIM_ENV_PY=%~dp0.venv-sim-win32\Scripts\python.exe"
+set "ENVCHECK_LOG=%TEMP%\vantage_envcheck_%RANDOM%%RANDOM%.txt"
+call "%~dp0setup.bat" --python-envs-only --python-env sim:sim --check-only > "%ENVCHECK_LOG%" 2>&1
+set "ENVCHECK_RC=!errorlevel!"
+if not "!ENVCHECK_RC!"=="0" (
+  type "%ENVCHECK_LOG%"
+  del "%ENVCHECK_LOG%" >nul 2>&1
+  echo Vantage not started: sim's Python environment sim:sim is not ready ^(see Reason / Fix / Run above^).
   exit /b 1
 )
+del "%ENVCHECK_LOG%" >nul 2>&1
+if not exist "%SIM_ENV_PY%" (
+  echo Reason: setup reported sim:sim ready, but %SIM_ENV_PY% does not exist.
+  echo Fix:    recreate sim's environment with setup, then retry.
+  echo Run:    cd /d "%~dp0" ^&^& setup.bat --python-env sim:sim
+  exit /b 1
+)
+REM Quotes embedded IN the value (not wrapped around %PYCMD% at the call
+REM site below): the lesson from the old PATH fallback still holds -- a bare,
+REM PATH-resolved name like `py` must reach CreateProcess unquoted (quoting it
+REM makes PowerShell's own child-process invocation fail to create the
+REM process, verified live; cmd.exe alone tolerates it), while a real path
+REM that might contain spaces, like this env's python.exe, needs its quotes.
+set "PYCMD="%SIM_ENV_PY%""
 
 REM A bare command name must reach CreateProcess UNQUOTED -- see the comment
 REM on PYCMD above. `%PYCMD%` is deliberately not wrapped in quotes here.

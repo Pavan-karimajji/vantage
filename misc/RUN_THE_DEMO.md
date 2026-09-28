@@ -169,7 +169,7 @@ Reading it:
 ## 6. Same thing without the GUI
 
 ```
-.venv\Scripts\python.exe scripts\vantage_native.py logs\_step0\v_self.mcap ^
+.venv-sim-win32\Scripts\python.exe scripts\vantage_native.py logs\_step0\v_self.mcap ^
   --plugin-root ..\df\build-sil_viz-vs2026\src\platform\df_viz\Release ^
   --project base ^
   --search ..\df\build-sil-vs2026\src\platform\df_sil\Release ^
