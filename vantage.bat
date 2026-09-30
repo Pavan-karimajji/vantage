@@ -56,7 +56,7 @@ set "PYCMD="%SIM_ENV_PY%""
 
 REM A bare command name must reach CreateProcess UNQUOTED -- see the comment
 REM on PYCMD above. `%PYCMD%` is deliberately not wrapped in quotes here.
-if "%*"=="" (
+if "%~1"=="" (
   %PYCMD% "%~dp0scripts\gui.py"
   exit /b !errorlevel!
 )
