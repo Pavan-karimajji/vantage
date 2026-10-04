@@ -203,7 +203,7 @@ def install_pinned(venv_dir, pin):
         # not replaced, so nothing else about this subprocess's
         # environment changes.
         proc = subprocess.run(
-            [str(interpreter), "-m", "pip", "install", "--quiet",
+            [str(interpreter), "-m", "pip", "install", "--quiet", "--no-compile",
              f"git+{TOOLCHAIN_GIT_URL}@{pin}"],
             env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
         )
@@ -571,7 +571,7 @@ def _install_pinned_via_conan(interpreter, pin, component_root):
         sys.exit(f"ERROR: no adas_build_tools wheel found in {package_dir}.")
 
     proc = subprocess.run(
-        [str(interpreter), "-m", "pip", "install", "--quiet", str(wheels[0])],
+        [str(interpreter), "-m", "pip", "install", "--quiet", "--no-compile", str(wheels[0])],
     )
     if proc.returncode != 0:
         sys.exit(f"ERROR: pip install of {wheels[0]} failed (exit {proc.returncode}).")
@@ -610,6 +610,56 @@ def _rmtree_tolerant(path):
     shutil.rmtree(path, onerror=_onerror)
 
 
+def _bundled_pip_wheel(python_exe):
+    """The pip wheel bundled inside `python_exe`'s own ensurepip package -
+    queried on that interpreter itself, not assumed to match the one
+    running this stub. None if ensurepip is missing/stripped or carries
+    no wheel."""
+    proc = subprocess.run(
+        [str(python_exe), "-c",
+         "import ensurepip, os; print(os.path.join(os.path.dirname(ensurepip.__file__), '_bundled'))"],
+        capture_output=True, text=True)
+    if proc.returncode != 0:
+        return None
+    bundled = Path(proc.stdout.strip())
+    if not bundled.is_dir():
+        return None
+    wheels = sorted(bundled.glob("pip-*.whl"))
+    return wheels[-1] if wheels else None
+
+
+def _create_venv(venv_dir, python_exe):
+    """`venv_dir` created WITHOUT pip, then pip bootstrapped into it
+    --no-compile from a wheel - the same sys.path-prepend-and-runpy trick
+    ensurepip uses internally, just with --no-compile added (setup_
+    followup_prompt.md step 4: `adas_build_tools.venv_util.create_venv()`'s
+    twin, duplicated here because this stub is stdlib-only and cannot
+    import that package - same reason every other function in this file
+    is duplicated, R-BUILD-6, propagated via sync_copy_files.py).
+    `python -m venv` WITH pip (the default) fails deterministically on
+    WSL's DrvFS-mounted /mnt/c: pip's own install-time compile-and-read-
+    back step races the 9p mount (`assert os.path.exists(pyc_path)`,
+    reproduced live 2026-10-04). --no-compile is used on every platform,
+    not only DrvFS paths - one code path is sleeker, and a tool venv's
+    first import simply recompiles once, same cost as any freshly
+    installed package."""
+    subprocess.run([str(python_exe), "-m", "venv", "--without-pip", str(venv_dir)], check=True)
+    pip_wheel = _bundled_pip_wheel(python_exe)
+    if pip_wheel is None:
+        sys.exit(f"ERROR: no pip wheel found in {python_exe}'s own ensurepip bundle.")
+    _, interpreter = venv_paths(venv_dir.parent)
+    script = (
+        "import runpy, sys\n"
+        f"sys.path[0:0] = [{str(pip_wheel)!r}]\n"
+        "sys.argv[1:] = ['install', '--no-cache-dir', '--no-compile', '--no-index', "
+        f"'--find-links', {str(pip_wheel.parent)!r}, 'pip']\n"
+        "runpy.run_module('pip', run_name='__main__')\n"
+    )
+    proc = subprocess.run([str(interpreter), "-c", script])
+    if proc.returncode != 0:
+        sys.exit(f"ERROR: bootstrapping pip into {venv_dir} failed (exit {proc.returncode}).")
+
+
 def ensure_venv(component_root, pin):
     """Creates `.venv` if absent or if it targets a different Python
     (TCT-07), then installs `pin` into it if not already current
@@ -620,7 +670,7 @@ def ensure_venv(component_root, pin):
         if not _venv_targets_current_python(venv_dir, interpreter):
             if venv_dir.exists():
                 _rmtree_tolerant(venv_dir)
-            subprocess.run([sys.executable, "-m", "venv", str(venv_dir)], check=True)
+            _create_venv(venv_dir, sys.executable)
         if not venv_is_current(venv_dir, pin):
             install_pinned(venv_dir, pin)
         return venv_dir
