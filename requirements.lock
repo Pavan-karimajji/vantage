@@ -2,8 +2,8 @@
 # env:    sim:sim
 # source: pyproject.toml
 # python: 3.12 (win32)
-# baseline: adas-build-tools/1.0.30 (adas_build_tools-1.0.30-py3-none-any.whl)
-# date:   2026-09-28
+# baseline: adas-build-tools/1.0.45 (adas_build_tools-1.0.45-py3-none-any.whl)
+# date:   2026-10-05
 # regenerate: python scripts/lock_python_env.py sim sim
 attrs==26.1.0
 jsonschema-specifications==2025.9.1
@@ -15,7 +15,7 @@ numpy==2.5.3
 protobuf==7.36.2
 PyYAML==6.0.3
 referencing==0.37.0
-rpds-py==2026.6.3
+rpds-py==2026.9.1
 ruamel.yaml==0.19.1
 typing_extensions==4.16.0
 zstandard==0.25.0
