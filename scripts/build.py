@@ -610,11 +610,29 @@ def _rmtree_tolerant(path):
     shutil.rmtree(path, onerror=_onerror)
 
 
+def _bundle_pip_wheel(component_root):
+    """A pip wheel from the offline bundle's own flat wheels/ folder
+    (make_offline_bundle.py's WHEEL_REQUIREMENTS carries one, pure-Python
+    so it fits any interpreter), tried BEFORE ensurepip: found live,
+    2026-10-04 - Debian/Ubuntu's packaged system Python deliberately
+    ships ensurepip with no bundled wheels at all (Debian policy: pip
+    comes from apt, not from CPython's own bundle), so relying on
+    ensurepip alone refuses to create a venv on exactly the host most in
+    need of the offline bundle. None if no bundle is found or it carries
+    no pip wheel."""
+    bundle_dir = _find_offline_bundle(component_root)
+    if bundle_dir is None:
+        return None
+    wheels = sorted((bundle_dir / "wheels").glob("pip-*.whl"))
+    return wheels[-1] if wheels else None
+
+
 def _bundled_pip_wheel(python_exe):
     """The pip wheel bundled inside `python_exe`'s own ensurepip package -
     queried on that interpreter itself, not assumed to match the one
-    running this stub. None if ensurepip is missing/stripped or carries
-    no wheel."""
+    running this stub. None if ensurepip is missing/stripped (Debian/
+    Ubuntu's own packaged Python, see _bundle_pip_wheel()'s docstring) or
+    carries no wheel."""
     proc = subprocess.run(
         [str(python_exe), "-c",
          "import ensurepip, os; print(os.path.join(os.path.dirname(ensurepip.__file__), '_bundled'))"],
@@ -628,7 +646,7 @@ def _bundled_pip_wheel(python_exe):
     return wheels[-1] if wheels else None
 
 
-def _create_venv(venv_dir, python_exe):
+def _create_venv(venv_dir, python_exe, component_root=None):
     """`venv_dir` created WITHOUT pip, then pip bootstrapped into it
     --no-compile from a wheel - the same sys.path-prepend-and-runpy trick
     ensurepip uses internally, just with --no-compile added (setup_
@@ -642,11 +660,15 @@ def _create_venv(venv_dir, python_exe):
     reproduced live 2026-10-04). --no-compile is used on every platform,
     not only DrvFS paths - one code path is sleeker, and a tool venv's
     first import simply recompiles once, same cost as any freshly
-    installed package."""
+    installed package. The offline bundle's own pip wheel is tried
+    before ensurepip's (see _bundle_pip_wheel()'s docstring - Debian/
+    Ubuntu's system Python ships no bundled wheel at all)."""
     subprocess.run([str(python_exe), "-m", "venv", "--without-pip", str(venv_dir)], check=True)
-    pip_wheel = _bundled_pip_wheel(python_exe)
+    pip_wheel = (_bundle_pip_wheel(component_root) if component_root else None) \
+        or _bundled_pip_wheel(python_exe)
     if pip_wheel is None:
-        sys.exit(f"ERROR: no pip wheel found in {python_exe}'s own ensurepip bundle.")
+        sys.exit(f"ERROR: no pip wheel found (neither the offline bundle nor "
+                 f"{python_exe}'s own ensurepip bundle).")
     _, interpreter = venv_paths(venv_dir.parent)
     script = (
         "import runpy, sys\n"
@@ -670,7 +692,7 @@ def ensure_venv(component_root, pin):
         if not _venv_targets_current_python(venv_dir, interpreter):
             if venv_dir.exists():
                 _rmtree_tolerant(venv_dir)
-            _create_venv(venv_dir, sys.executable)
+            _create_venv(venv_dir, sys.executable, component_root)
         if not venv_is_current(venv_dir, pin):
             install_pinned(venv_dir, pin)
         return venv_dir
