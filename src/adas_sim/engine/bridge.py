@@ -88,9 +88,11 @@ _MODULE_ROOT = sim_root()
 #: `SIMCORE_TESTS_CANDIDATES` uses for the gtest binary, applied here to
 #: the product binary this bridge actually drives.
 _SIMENGINE_CANDIDATES = (
-    _MODULE_ROOT / "build-gtest-vs2026" / "src" / "simengine" / "Release" / "simengine.exe",
-    _MODULE_ROOT / "build-gtest-vs2026" / "src" / "simengine" / "Debug" / "simengine.exe",
-    _MODULE_ROOT / "build-gtest-ubuntu_gcc" / "src" / "simengine" / "simengine",
+    _MODULE_ROOT / "conan_workarea" / "build-sil-vs2026" / "src" / "simengine" / "Release" / "simengine.exe",
+    _MODULE_ROOT / "conan_workarea" / "build-gtest-vs2026" / "src" / "simengine" / "Release" / "simengine.exe",
+    _MODULE_ROOT / "conan_workarea" / "build-gtest-vs2026" / "src" / "simengine" / "Debug" / "simengine.exe",
+    _MODULE_ROOT / "conan_workarea" / "build-sil-ubuntu_gcc" / "src" / "simengine" / "simengine",
+    _MODULE_ROOT / "conan_workarea" / "build-gtest-ubuntu_gcc" / "src" / "simengine" / "simengine",
 )
 
 
