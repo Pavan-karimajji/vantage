@@ -83,6 +83,24 @@ MODE_AS_AUTHORED = "(as authored)"
 #: they are a build output of a selection, not something to edit or commit.
 DERIVED_DIR = SIM_DIR / "logs" / "_launcher"
 
+_DF_DIR = MODULES_DIR / "df"
+_DF_SIL_VIZ = _DF_DIR / "conan_workarea" / "build-sil_viz-vs2026" / "src" / "platform"
+_DEMO_RECORDING = SIM_DIR / "logs" / "_step0" / "v_self.mcap"
+_STIMULUS_RECORDING = _DF_DIR / "tests" / "carla_testruns" / "aeb" / "aeb_closing_ego20mps_lead10mps_30m.mcap"
+
+#: Temporary demo prefill: used only for a field the saved config leaves empty.
+#: Prefers the self-produced recording (RUN_THE_DEMO.md step 1) so the
+#: measured/simulated toggle has df outputs to replay; falls back to the
+#: checked-in stimulus recording, which supports `simulate` only.
+DEMO_DEFAULTS: dict[str, str] = {
+    "recording": str(_DEMO_RECORDING if _DEMO_RECORDING.is_file() else _STIMULUS_RECORDING),
+    "plugin_root": str(_DF_SIL_VIZ / "df_viz" / "Release"),
+    "project": "base",
+    "pipeline": str(_DF_DIR / "sim" / "pipelines" / "df_only.yaml"),
+    "search": str(_DF_SIL_VIZ / "df_sil" / "Release"),
+    "config_path": str(_DF_DIR / "src" / "project" / "base" / "default.yaml"),
+}
+
 
 # --------------------------------------------------------------------------
 # discovery -- what exists on THIS machine, so the screen offers real choices
@@ -113,8 +131,9 @@ def find_plugin_roots() -> list[Path]:
             continue
         if (module / PLUGIN_MARKER).is_file():
             roots.append(module)
-        for candidate in module.glob("build-*/**/" + PLUGIN_MARKER.as_posix()):
-            roots.append(candidate.parent.parent)
+        for pattern in ("build-*/**/", "conan_workarea/build-*/**/"):
+            for candidate in module.glob(pattern + PLUGIN_MARKER.as_posix()):
+                roots.append(candidate.parent.parent)
     return roots
 
 
@@ -178,7 +197,7 @@ def classify_plugin_root(root: str | Path) -> tuple[str, str]:
             "bad",
             "No built library (.dll/.so) here -- the native host cannot load a bare source "
             "checkout. Point it at the DEPLOYED build directory of the component's OWN VIZ "
-            "target (e.g. ..\\df\\build-sil_viz-vs2026\\src\\platform\\df_viz\\Release).",
+            "target (e.g. ..\\df\\conan_workarea\\build-sil_viz-vs2026\\src\\platform\\df_viz\\Release).",
         )
     viz_libs = [lib for lib in libs if _exports_viz_abi(lib)]
     if viz_libs:
@@ -220,11 +239,11 @@ FIELD_HELP: dict[str, tuple[str, str]] = {
         "modules/*/tests/**, newest first.",
     ),
     "plugin_root": (
-        "..\\df\\build-sil_viz-vs2026\\src\\platform\\df_viz\\Release",
+        "..\\df\\conan_workarea\\build-sil_viz-vs2026\\src\\platform\\df_viz\\Release",
         "Where a component's LAYERS come from -- the picture of that component's "
         "own function.\n\n"
         "Use the component's own DEPLOYED VIZ BUILD:\n"
-        "  ..\\df\\build-sil_viz-vs2026\\src\\platform\\df_viz\\Release\n\n"
+        "  ..\\df\\conan_workarea\\build-sil_viz-vs2026\\src\\platform\\df_viz\\Release\n\n"
         "This used to say the opposite -- 'use the source checkout, not the built "
         "directory, AR-61 is open'. AR-61 was closed and re-verified at WP-34a, "
         "and the native host cannot load a bare source checkout at all: it needs "
@@ -434,14 +453,17 @@ class LauncherApp:
         self.events: queue.Queue = queue.Queue()
         self.runner = ProcessRunner(self.events)
 
-        self.recording = tk.StringVar(value=cfg.get("recording", ""))
-        self.plugin_root = tk.StringVar(value=cfg.get("plugin_root", ""))
-        self.project = tk.StringVar(value=cfg.get("project", "base"))
+        def initial(key: str) -> str:
+            return cfg.get(key) or DEMO_DEFAULTS.get(key, "")
+
+        self.recording = tk.StringVar(value=initial("recording"))
+        self.plugin_root = tk.StringVar(value=initial("plugin_root"))
+        self.project = tk.StringVar(value=initial("project"))
         self.preset = tk.StringVar(value=cfg.get("preset", ""))
         self.at_s = tk.StringVar(value=cfg.get("at_s", ""))
-        self.pipeline = tk.StringVar(value=cfg.get("pipeline", ""))
-        self.search = tk.StringVar(value=cfg.get("search", ""))
-        self.config_path = tk.StringVar(value=cfg.get("config_path", ""))
+        self.pipeline = tk.StringVar(value=initial("pipeline"))
+        self.search = tk.StringVar(value=initial("search"))
+        self.config_path = tk.StringVar(value=initial("config_path"))
         #: The measured/simulated toggle. Deliberately NOT persisted to
         #: `gui_config.json`: which module you injected last time is not a
         #: preference, and silently reopening in `measured` would be exactly
