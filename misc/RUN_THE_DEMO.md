@@ -193,8 +193,9 @@ Stated so you do not spend time on them:
   `docs/v2/SIM_Test_Execution_2026-08-31_a15_real_path_proof.md`). If you see
   `unknown` instead, your `df_sil.dll` predates that fix or was not rebuilt
   after it — rebuild `df` (`build.bat -t sil -p vs2026`) and re-run the resim.
-- **`aeb.compState` is empty.** Deliberate: AEB's heartbeat is not implemented
-  yet in `df`, and this is not a sim defect.
+- **`aeb.compState` carries `function: aeb`, `state: RUNNING`** since `df`'s
+  AEB heartbeat landed (2026-10-09). If it is empty, your `df_sil.dll` predates
+  that — rebuild `df` (`build.bat -t sil -p vs2026`) and re-run the resim.
 - **`bsd_curve_r172_passby` passes honestly since 2026-08-28**, but is
   **under-asserted**: its BSD warning genuinely fires from t≈7.4 s to t≈9.6 s
   and no expectation covers that — `EXP-1` checks only the first 5 s of an
