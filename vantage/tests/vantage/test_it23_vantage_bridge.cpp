@@ -13,6 +13,7 @@
 /// @author Pavan Karimajji <Pavan.Karimajji@larsentoubro.com>
 
 #include "vantage/host_loop.hpp"
+#include "vantage/frame_bridge.hpp"
 
 #include <cstdint>
 #include <cstdlib>
@@ -134,8 +135,10 @@ TEST_F(It23VantageBridge, EmbeddedRunDeliversTicksMatchingTheTransportsRealFrame
     if (!tick.has_value()) break;
     ++ticks_seen;
 
-    const viz::session::PortValue* port = tick->Port("sut.outputs");
-    ASSERT_NE(port, nullptr) << "tick " << tick->index << " carried no sut.outputs port";
+    // A frame's "sut.outputs" reaches the player in the canonical spelling a Session uses for a recorded
+    // port, which is what the plug-in port resolver matches (a dotted name would bind no layer).
+    const viz::session::PortValue* port = tick->Port("/sut/outputs");
+    ASSERT_NE(port, nullptr) << "tick " << tick->index << " carried no /sut/outputs port";
     EXPECT_EQ(port->origin, viz::session::Origin::kSimulated);
     ASSERT_EQ(port->payload.size(), 1u);
     EXPECT_EQ(port->payload[0], 0xAB);  // echo_stub's default output byte
@@ -145,6 +148,22 @@ TEST_F(It23VantageBridge, EmbeddedRunDeliversTicksMatchingTheTransportsRealFrame
     EXPECT_TRUE(port->schema_name.empty());
   }
   EXPECT_EQ(ticks_seen, 3);
+}
+
+// A frame's dotted port name reaches the player in the canonical spelling a Session gives a recorded port
+// ("df.fast.outputs" -> "/df/fast.outputs"), which is what the plug-in port resolver matches.
+TEST(FrameBridgeNames, AFramesDottedPortNameIsCanonical) {
+  sim::vantage::FrameBridge bridge;
+  const std::uint8_t byte = 7;
+  adas::transport::PortFrame frame{};
+  frame.portName = "df.fast.outputs";
+  frame.data = &byte;
+  frame.size = 1;
+  bridge.AddFrame(frame);
+  const viz::session::Tick tick = bridge.TakeTick(0);
+  ASSERT_EQ(tick.ports.size(), 1u);
+  EXPECT_NE(tick.Port("/df/fast.outputs"), nullptr);
+  EXPECT_EQ(tick.Port("df.fast.outputs"), nullptr);
 }
 
 }  // namespace

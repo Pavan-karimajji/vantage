@@ -27,7 +27,10 @@ simcore::Result<EmbeddedEngine> EmbeddedEngine::Create(const std::string& run_sp
                        "sim::vantage::EmbeddedEngine::Create"});
   }
 
-  auto transport = std::make_unique<simcore::transport::InProcessTransport>(/*depth=*/8);
+  // One cycle's frames are drained together (StepOnce), so the depth must hold every port a cycle publishes:
+  // a component with four functions publishes a dozen, and a ring of 8 silently dropped the oldest ones (every
+  // layer that needed them was then unavailable). 256 is far above any one cycle's port count.
+  auto transport = std::make_unique<simcore::transport::InProcessTransport>(/*depth=*/256);
   // `InProcessTransport` multiply-inherits `ITransport` AND
   // `TransportPublisher` -- convert to the correct base HERE, while the
   // compiler still has both types, BEFORE erasing to `void*` (`simcore.h`'s
