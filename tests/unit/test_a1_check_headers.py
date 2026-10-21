@@ -59,6 +59,18 @@ def test_check_python_headers_fails_on_a_planted_wrong_component(tmp_path):
     assert "wrong.py" in findings[0]
 
 
+def test_the_copy_distributed_launchers_are_exempt_and_a_neighbouring_script_is_not(tmp_path):
+    """build.py, build_gui.py and setup.py are byte-identical in every component (CPY-1), so none can carry
+    COMPONENT: SIM; a script beside them with no header is still a finding."""
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    for name in ("build.py", "build_gui.py", "setup.py", "other.py"):
+        (scripts / name).write_text('"""No header."""\n', encoding="utf-8")
+    findings, scanned = check_python_headers(sim_root=tmp_path)
+    assert scanned == 1
+    assert len(findings) == 1 and "other.py" in findings[0]
+
+
 def test_check_python_headers_accepts_the_real_template(tmp_path):
     src = tmp_path / "src"
     src.mkdir()

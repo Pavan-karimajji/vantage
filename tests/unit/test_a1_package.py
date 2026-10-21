@@ -18,11 +18,12 @@ SRC_ROOT = SIM_ROOT / "src" / "adas_sim"
 
 #: docs/v2/SIM_Implementation_Design_v0.1.md §2.1/§2.3's package map, as of
 #: WP-02(a)'s rename (`sources/` and `check/` still present -- WP-02(b)/(c)
-#: remove them later in this same work package).
+#: remove them later in this same work package). `scene/` and `render/` are gone:
+#: SM-12 (7d4c626) deleted the Python scene/render implementation for `viz`'s C++.
 EXPECTED_SUBPACKAGES = {
-    "core", "scene", "io", "sources", "check", "cli",
+    "core", "io", "sources", "check", "cli",
     "config", "graph", "ingest", "resolve", "runspec", "orchestrate",
-    "diagnostics", "session", "render", "player", "plugins",
+    "diagnostics", "session", "player", "plugins",
     # WP-15b (IMP-0422): the one shared bridge onto simcore/simengine's C
     # ABI every rewired call site (cli/resim.py first) goes through.
     "engine",
@@ -40,10 +41,10 @@ FORBIDDEN_AT_IMPORT = ("PySide6", "matplotlib", "mcap", "google.protobuf")
 
 #: UT-A1-6: the import direction docs/v2/SIM_Implementation_Design_v0.1.md §2.1 requires.
 _LOWER_LAYER = (
-    "core", "scene", "io", "check", "config", "graph", "ingest",
+    "core", "io", "check", "config", "graph", "ingest",
     "resolve", "runspec", "orchestrate", "diagnostics", "session", "plugins",
 )
-_UPPER_LAYER = ("player", "render", "cli")
+_UPPER_LAYER = ("player", "render", "cli")   # `render` is deleted; keeping it here makes a re-import a finding
 
 
 def test_import_adas_sim_succeeds_with_nonempty_version():

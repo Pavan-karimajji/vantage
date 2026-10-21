@@ -11,8 +11,8 @@ COMPONENT: SIM / @file / @brief / @author` (C++, `//`+`///`-style), per
 `docs/file_header_template.md`. `src/simcore/**` and `src/simengine/**`
 gained real content at `WP-03`/`WP-14`; a scan that finds none reports
 `SKIPPED` rather than a false PASS (Plan WP-01's third Exit gate).
-`scripts/build.py` is exempt (`R-BUILD-2`): byte-identical across every
-component, so it cannot carry a per-component `COMPONENT:` token.
+`scripts/build.py`, `build_gui.py` and `setup.py` are exempt (`R-BUILD-2`/`4`/`6`): byte-identical
+across every component, so they cannot carry a per-component `COMPONENT:` token.
 """
 
 from __future__ import annotations
@@ -40,7 +40,11 @@ _EXCLUDE_DIR_NAMES = {
 # check's exemption to invent: the file's own docstring already states
 # "Physically identical across every component ... no component name or
 # kind may appear in it."
-_EXCLUDE_FILES = {"scripts/build.py"}
+#
+# The same holds for the other two copy-distributed launchers, `scripts/build_gui.py` (R-BUILD-4) and
+# `scripts/setup.py` (modules/toolchain/copy_files/scripts/): held identical by CPY-1, so a header with this
+# module's COMPONENT token would make sim's copy differ from every other component's and fail CPY-1.
+_EXCLUDE_FILES = {"scripts/build.py", "scripts/build_gui.py", "scripts/setup.py"}
 
 _PY_HEADER = re.compile(
     r"^# Copyright \(c\) .+\. All Rights Reserved\.\n"
