@@ -233,6 +233,19 @@ def test_becomes_passes_and_fails():
     assert evaluate_expectation(exp, ticks, markers={"entry": 1.0}).passed is False
 
 
+def test_becomes_needs_a_real_edge_not_the_first_sample():
+    """A series that merely starts at the value has not become it: the first
+    sample has no predecessor, so it is never a transition."""
+    exp = parse_expectation(
+        {"id": "E", "signal": "widget.outputs.value", "becomes": 1, "within_s": 0.5, "of": "marker.entry"}, where="t",
+    )
+    starts_at_value = evaluate_expectation(exp, _ticks([1, 1, 1]), markers={"entry": 0.0})
+    assert starts_at_value.passed is False
+    assert "never became" in starts_at_value.detail
+    leaves_and_returns = evaluate_expectation(exp, _ticks([1, 0, 1]), markers={"entry": 0.2})
+    assert leaves_and_returns.passed is True
+
+
 def test_becomes_never_reaching_value_fails():
     ticks = _ticks([0, 0, 0])
     exp = parse_expectation(
@@ -278,6 +291,13 @@ def test_count_passes_and_fails():
     # transitions into 1: at index 1 and index 4 -> 2 total
     assert evaluate_expectation(exp, _ticks([0, 1, 1, 0, 1]), markers={}).passed is True
     assert evaluate_expectation(exp, _ticks([0, 1, 1, 1, 1]), markers={}).passed is False
+
+
+def test_count_does_not_count_the_first_sample_as_an_edge():
+    exp = parse_expectation({"id": "E", "signal": "widget.outputs.value", "count": {"value": 1, "times": 1}}, where="t")
+    # starts at 1, leaves, returns once -> one real rising edge, not two
+    assert evaluate_expectation(exp, _ticks([1, 1, 0, 1]), markers={}).passed is True
+    assert evaluate_expectation(exp, _ticks([1, 1, 1, 1]), markers={}).passed is False
 
 
 def test_between_passes_and_fails():

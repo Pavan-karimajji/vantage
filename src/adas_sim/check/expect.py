@@ -395,11 +395,13 @@ def _series(
 
 def _first_transition_into(series: Sequence[tuple[float, object]], value: object) -> tuple[float, object] | None:
     """The first `(t_s, value)` pair whose value equals `value` and whose
-    predecessor's did not (or which is the very first sample) -- "becomes"
-    (SS5.1) and a `count:` rising edge share this one definition."""
+    predecessor's did not -- "becomes" (SS5.1) and a `count:` rising edge
+    share this one definition. The very first sample has no predecessor, so
+    it is never an edge: a series that starts at `value` has not become it
+    until it leaves and returns (an initial state is `equals:`'s to assert)."""
     previous: object = None
     for i, (t_s, v) in enumerate(series):
-        if v == value and (i == 0 or previous != value):
+        if v == value and i > 0 and previous != value:
             return t_s, v
         previous = v
     return None
@@ -409,7 +411,7 @@ def _count_transitions_into(series: Sequence[tuple[float, object]], value: objec
     count = 0
     previous: object = None
     for i, (_t_s, v) in enumerate(series):
-        if v == value and (i == 0 or previous != value):
+        if v == value and i > 0 and previous != value:
             count += 1
         previous = v
     return count
