@@ -83,8 +83,17 @@ EmbeddedEngine& EmbeddedEngine::operator=(EmbeddedEngine&& other) noexcept {
 }
 
 bool EmbeddedEngine::StepOnce(viz::session::PushSource& sink) {
+  std::optional<viz::session::Tick> tick = StepTick();
+  if (!tick.has_value()) {
+    return false;
+  }
+  sink.DeliverTick(std::move(*tick));
+  return true;
+}
+
+std::optional<viz::session::Tick> EmbeddedEngine::StepTick() {
   if (!ok_ || exhausted_) {
-    return false;  // a prior step already failed or exhausted the run -- no-op, never re-entered
+    return std::nullopt;  // a prior step already failed or exhausted the run -- no-op, never re-entered
   }
 
   char step_err[512] = {0};
@@ -93,20 +102,20 @@ bool EmbeddedEngine::StepOnce(viz::session::PushSource& sink) {
   if (step_exit != kSimExitOk) {
     ok_ = false;
     error_ = step_err;
-    return false;
+    return std::nullopt;
   }
   if (keep_going == 0) {
     exhausted_ = true;  // no cycle was actually stepped this call -- ok_ stays true (SW-0148's own "expected, not an error")
-    return false;
+    return std::nullopt;
   }
 
   adas::transport::PortFrame frame{};
   while (transport_->tryReceive(&frame)) {
     bridge_.AddFrame(frame);
   }
-  sink.DeliverTick(bridge_.TakeTick(static_cast<std::uint64_t>(cycles_stepped_)));
+  viz::session::Tick tick = bridge_.TakeTick(static_cast<std::uint64_t>(cycles_stepped_));
   ++cycles_stepped_;
-  return true;
+  return tick;
 }
 
 HostLoopResult RunEmbedded(const std::string& run_spec_path, const std::string& config_path,

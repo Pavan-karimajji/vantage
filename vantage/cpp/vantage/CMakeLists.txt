@@ -3,6 +3,7 @@
 add_library(vantage_bridge STATIC
     frame_bridge.cpp
     host_loop.cpp
+    engine_thread.cpp
 )
 set_target_properties(vantage_bridge PROPERTIES POSITION_INDEPENDENT_CODE ON)
 

@@ -18,9 +18,11 @@
 ///   ring would have evicted everything but its last few ticks by the time
 ///   a frame is drawn). `EmbeddedEngine::StepOnce` is the same per-cycle
 ///   body (`simEngineStepOnce` -> drain -> bridge -> `DeliverTick`), called
-///   once per frame on the caller's own thread instead -- no background
-///   thread, since `PushSource` (a bare `std::deque`) has no locking and
-///   nothing else in `viz`/`sim` drives a `Source` from a second thread.
+///   once per frame on the caller's own thread instead. (Engine integration
+///   plan E-4 moved the windowed host off this: `EngineThread`
+///   (engine_thread.hpp) calls `StepTick` on its own worker and hands the
+///   Ticks over through a locked, bounded hand-over; `PushSource` is not
+///   used there. `StepOnce`/`RunEmbedded` stay for headless use.)
 ///   `RunEmbedded` is now a thin loop over `Create`/`StepOnce`, kept for
 ///   `test_it23_vantage_bridge.cpp`'s own headless, no-window use.
 /// @author Pavan Karimajji <Pavan.Karimajji@larsentoubro.com>
@@ -29,6 +31,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "simcore/errors.hpp"
@@ -76,6 +79,11 @@ class EmbeddedEngine {
   // engine. A step failure sets `ok()`/`error()`; exhaustion alone does not
   // (`ok()` stays `true` -- exhaustion is expected, not an error).
   bool StepOnce(viz::session::PushSource& sink);
+
+  // The same per-cycle body without a sink: one cycle's `Tick`, or `nullopt` once the run is exhausted or a
+  // step failed (`ok()`/`error()` say which). `EngineThread` calls this from its worker thread, the only
+  // thread that touches the engine; `StepOnce` is this plus `sink.DeliverTick`.
+  std::optional<viz::session::Tick> StepTick();
 
   bool ok() const { return ok_; }
   const std::string& error() const { return error_; }

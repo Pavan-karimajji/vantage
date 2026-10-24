@@ -1699,10 +1699,10 @@ Everything in this part exists to make one sentence true in code rather than in 
 **Built.** ● done — `IMP-0430` in `WP-33`
 **Now.** `NEW` — nothing turned a live frame into a `Tick` before this pass; `PushSource::DeliverTick` existed with no caller (`VZ-15`/`WP-12`).
 
-**`SW-0427`** · `SI-09` · `P1` · `R1` — The bridge drives a real window, one step per frame
-**Shall.** `vantage` shall provide a real executable that drives `SW-0426`'s bridge one engine cycle per rendered frame and draws the resulting Ticks through the same window/plug-in-loading path `viz`'s own player uses, so a live embedded run is watchable, not just pullable in-process.
-**Accept.** `sim::vantage::EmbeddedEngine::StepOnce` performs exactly one engine cycle (mirroring `RunEmbedded`'s own per-cycle body) and is safe to call once per rendered frame with no background thread, since `viz::session::PushSource` carries no locking. The resulting executable (`vantage_app`) never includes an ImGui/GLFW/GL header itself and links only against `viz`'s exported window/render-loop component, never a second, vendored copy of the toolkit.
-**Verify.** T · `UT-VTG-01`; `IT-23`   **Trace.** SYS-0272 (`SW-0426`'s own parent, extended to the windowed consumer)
+**`SW-0427`** · `SI-09` · `P1` · `R1` — The bridge feeds a real window from its own engine thread
+**Shall.** `vantage` shall run `SW-0426`'s bridge on its own engine thread and draw its Ticks in `viz`'s player window in engine mode; the window shall never step the engine.
+**Accept.** Every engine call runs on the engine thread; the hand-over never blocks it and drops only the oldest tick, counted; the published ticks are identical at every pace; `vantage_app` includes no ImGui/GLFW/GL header.
+**Verify.** T · `UT-VTG-01`; `UT-VTG-04`; `UT-VTG-05`; `UT-VTG-06`; `UT-VTG-07`; `UT-VTG-08`; `UT-VTG-09`; `UT-VTG-10`; `UT-VTG-11`; `IT-23`   **Trace.** SYS-0272 (`SW-0426`'s own parent, extended to the windowed consumer)
 **Built.** ● done — `IMP-0431` in `WP-34`
 **Now.** `NEW` — `EmbeddedEngine`/`RunPlayerWindow`/`vantage_app.cpp` build and link clean on a real `vs2026` rebuild (`modules/viz` 41/41 gtest, `modules/sim/vantage` `IT-23` unchanged); the windowed exit criterion (a real plug-in drawing from a real run, confirmed visually) is not yet exercised — `WP-34`'s own plan row has the open item.
 

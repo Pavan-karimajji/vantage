@@ -5,10 +5,12 @@
 /// @brief
 ///   `WP-34` (`SM-11`): `vantage`'s real windowed `main()` -- the piece
 ///   `WP-32`/`WP-33` left open (host_loop.hpp's own top note). Parses argv,
-///   builds a `sim::vantage::EmbeddedEngine` from a run-spec, and hands a
-///   `next_tick` callback wrapping `EmbeddedEngine::StepOnce` +
-///   `viz::session::PushSource::NextTick` to `viz::render_gl::
-///   RunPlayerWindow` -- the same window/GL/ImGui loop `viz_player`'s own
+///   starts a `sim::vantage::EngineThread` (the engine on its own thread,
+///   engine integration plan E-4: it used to be stepped from the window's
+///   own frame loop) and hands `viz::render_gl::RunPlayerWindow` a
+///   non-blocking `next_tick` that only pops finished cycles, plus the
+///   host's own toolbar buttons (Run/Pause, Step, pace, step-locked) as data
+///   -- the same window/GL/ImGui loop `viz_player`'s own
 ///   `player_app.cpp` drives, extracted for exactly this reuse
 ///   (`player_runner.hpp`'s own top note has the full account of why this
 ///   file never includes an ImGui/GLFW header itself).
@@ -40,6 +42,7 @@
 #include <string>
 #include <vector>
 
+#include "vantage/engine_thread.hpp"
 #include "vantage/host_loop.hpp"
 #include "viz/render_gl/player_runner.hpp"
 #include "viz/session/source.hpp"
@@ -47,7 +50,6 @@
 
 namespace {
 
-constexpr std::size_t kPushSourceDepth = 200;  // mirrors RunPlayerWindow's own kHistoryDepth
 constexpr std::int64_t kExecTimeoutMs = 2000;
 
 }  // namespace
@@ -95,41 +97,87 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  viz::session::PushSource sink(kPushSourceDepth);
-  simcore::Result<bool> sink_opened = sink.Open();
-  if (!sink_opened.ok()) {
-    std::fprintf(stderr, "vantage_app: %s\n", sink_opened.error().Format().c_str());
+  // E-4: the engine runs on its own thread (created, stepped and destroyed there); the window only pops what
+  // it has finished. No PushSource on this path: the worker produces Ticks straight into the hand-over.
+  sim::vantage::EngineThread engine(sim::vantage::MakeEmbeddedFactory(run_spec_path, config_path, kExecTimeoutMs));
+  std::string start_error;
+  if (!engine.Start(&start_error)) {
+    std::fprintf(stderr, "vantage_app: %s\n", start_error.c_str());
     return 1;
   }
 
-  simcore::Result<sim::vantage::EmbeddedEngine> created =
-      sim::vantage::EmbeddedEngine::Create(run_spec_path, config_path, kExecTimeoutMs);
-  if (!created.ok()) {
-    std::fprintf(stderr, "vantage_app: %s\n", created.error().Format().c_str());
-    return 1;
-  }
-  // `std::move(created).value()` (the `&&`-qualified `Result<T>::value()`
-  // overload) is not portable across every `adas-sim` package this repo
-  // might resolve against -- host_loop.cpp's own `RunEmbedded` already
-  // works around an older cached package lacking it via this identical
-  // `const_cast` idiom (also established in `modules/viz/tests/unit/
-  // test_session.cpp`), so this stays buildable regardless of which
-  // `errors.hpp` a given build resolves.
-  sim::vantage::EmbeddedEngine engine = std::move(const_cast<sim::vantage::EmbeddedEngine&>(created.value()));
+  auto next_tick = [&engine]() -> std::optional<viz::session::Tick> { return engine.NextTick(); };
 
-  auto next_tick = [&]() -> std::optional<viz::session::Tick> {
-    engine.StepOnce(sink);  // no-op past exhaustion or a prior step failure -- sink just holds
-    return sink.NextTick();
+  // Vantage's own controls, as data for the toolbar's host slot. Called on the window thread each frame;
+  // every press hands off to the engine thread through EngineThread's own locked setters.
+  auto host_buttons = [&engine]() {
+    std::vector<viz::render_gl::HostButton> buttons;
+    const bool running = engine.Running();
+    const bool over = engine.Finished() || engine.Failed();
+    const sim::vantage::PaceSetting pace = engine.Pace();
+    buttons.push_back({running ? "Pause" : "Run", !over, false, [&engine, running] { engine.SetRunning(!running); }});
+    buttons.push_back({"Step", !running && !over, false, [&engine] { engine.RequestStep(); }});
+    char hz_label[32];
+    std::snprintf(hz_label, sizeof(hz_label), "%g cycles/s", pace.hz);
+    buttons.push_back({"max", true, pace.max, [&engine, pace] {
+                         sim::vantage::PaceSetting next = pace;
+                         next.max = true;
+                         engine.SetPace(next);
+                       }});
+    buttons.push_back({hz_label, true, !pace.max, [&engine, pace] {
+                         sim::vantage::PaceSetting next = pace;
+                         next.max = false;
+                         engine.SetPace(next);
+                       }});
+    const bool locked = engine.StepLocked();
+    buttons.push_back({"step-locked", true, locked, [&engine, locked] { engine.SetStepLocked(!locked); }});
+    return buttons;
+  };
+
+  auto host_notes = [&engine]() {
+    std::vector<viz::render_gl::StatusNote> notes;
+    // Where the engine is, always: the viewed cycle can be frozen or stepped back while the engine runs on.
+    char where[96];
+    const sim::vantage::PaceSetting pace = engine.Pace();
+    char pace_text[32];
+    if (pace.max) {
+      std::snprintf(pace_text, sizeof(pace_text), "pace max");
+    } else {
+      std::snprintf(pace_text, sizeof(pace_text), "%g cycles/s", pace.hz);
+    }
+    std::snprintf(where, sizeof(where), "engine at cycle %llu - %s%s, %s",
+                  static_cast<unsigned long long>(engine.CyclesProduced()),
+                  engine.Finished() || engine.Failed() ? "stopped" : (engine.Running() ? "running" : "paused"),
+                  engine.StepLocked() ? ", step-locked" : "", pace_text);
+    notes.push_back({where, viz::render_gl::NoteSeverity::kInfo});
+    if (engine.Failed()) {
+      notes.push_back({"engine error: " + engine.Error(), viz::render_gl::NoteSeverity::kWarning});
+    } else if (engine.Finished()) {
+      notes.push_back({"run finished after " + std::to_string(engine.CyclesProduced()) + " cycles",
+                       viz::render_gl::NoteSeverity::kInfo});
+    }
+    return notes;
   };
 
   viz::render_gl::RunConfig config;
   config.window_title = "vantage";
   config.plugin_dirs = std::move(plugin_dirs);
   config.bundle_path = bundle_path.empty() ? nullptr : bundle_path.c_str();
+  config.time_owner = df_viz::TimeOwner::kEngine;  // the engine owns time; viz only looks
+  config.host_buttons = host_buttons;
+  config.host_notes = host_notes;
+  config.host_dropped = [&engine]() -> std::uint64_t { return engine.Dropped(); };
 
   const int exit_code = viz::render_gl::RunPlayerWindow(config, next_tick);
-  if (!engine.ok()) {
-    std::fprintf(stderr, "vantage_app: engine error: %s\n", engine.error().c_str());
+  engine.Stop();  // closing the window stops and joins the worker, from running, paused or step-locked
+  if (engine.CyclesProduced() > 0) {
+    std::fprintf(stderr, "vantage_app: engine made %llu cycles, %.1f us each inside the engine, %llu not kept by the window\n",
+                 static_cast<unsigned long long>(engine.CyclesProduced()),
+                 engine.BusySeconds() * 1e6 / static_cast<double>(engine.CyclesProduced()),
+                 static_cast<unsigned long long>(engine.Dropped()));
+  }
+  if (engine.Failed()) {
+    std::fprintf(stderr, "vantage_app: engine error: %s\n", engine.Error().c_str());
     return exit_code == 0 ? 1 : exit_code;
   }
   return exit_code;

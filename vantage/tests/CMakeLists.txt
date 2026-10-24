@@ -98,7 +98,7 @@ target_compile_definitions(vantage_test_fixture_echo_stub PRIVATE ADAS_SIL_ABI_E
 set_target_properties(vantage_test_fixture_echo_stub PROPERTIES OUTPUT_NAME "echo_stub")
 
 # IT-23/UT-VTG-01 (WP-33, SW-0426).
-add_executable(vantage_tests vantage/test_it23_vantage_bridge.cpp)
+add_executable(vantage_tests vantage/test_it23_vantage_bridge.cpp vantage/test_engine_thread.cpp)
 target_link_libraries(vantage_tests PRIVATE
     vantage_bridge
     GTest::gtest_main
