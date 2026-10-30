@@ -18,6 +18,13 @@ if str(_SCRIPTS_DIR) not in sys.path:
 
 from check_headers import check_cpp_headers, check_python_headers  # noqa: E402
 
+_PY_TEMPLATE = (
+    "# Copyright (c) <ORG>. All Rights Reserved.\n"
+    "# Proprietary and Confidential.\n"
+    "# COMPONENT: {token}\n"
+    "# @author Pavan Karimajji\n"
+)
+
 
 def test_check_python_headers_passes_on_the_current_skeleton():
     findings, scanned = check_python_headers()
@@ -61,7 +68,7 @@ def test_check_python_headers_fails_on_a_planted_wrong_component(tmp_path):
 
 def test_the_copy_distributed_launchers_are_exempt_and_a_neighbouring_script_is_not(tmp_path):
     """build.py, build_gui.py and setup.py are byte-identical in every component (CPY-1), so none can carry
-    COMPONENT: SIM; a script beside them with no header is still a finding."""
+    COMPONENT: VANTAGE; a script beside them with no header is still a finding."""
     scripts = tmp_path / "scripts"
     scripts.mkdir()
     for name in ("build.py", "build_gui.py", "setup.py", "other.py"):
@@ -77,7 +84,7 @@ def test_check_python_headers_accepts_the_real_template(tmp_path):
     (src / "ok.py").write_text(
         "# Copyright (c) <ORG>. All Rights Reserved.\n"
         "# Proprietary and Confidential.\n"
-        "# COMPONENT: SIM\n"
+        "# COMPONENT: VANTAGE\n"
         "# @author Pavan Karimajji\n"
         "\n"
         '"""Module docstring."""\n',
@@ -114,3 +121,49 @@ def test_check_cpp_headers_fails_on_a_planted_missing_header(tmp_path):
     assert scanned == 1
     assert findings
     assert "bus.hpp" in findings[0]
+
+
+def _scan_one(tmp_path, token, seed_files):
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "f.py").write_text(_PY_TEMPLATE.format(token=token), encoding="utf-8")
+    return check_python_headers(sim_root=tmp_path, seed_files=seed_files)
+
+
+def test_a_new_file_headed_sim_fails(tmp_path):
+    findings, scanned = _scan_one(tmp_path, "SIM", {"src/other.py"})
+    assert scanned == 1
+    assert len(findings) == 1 and "f.py" in findings[0]
+
+
+def test_a_seed_file_headed_sim_passes(tmp_path):
+    findings, scanned = _scan_one(tmp_path, "SIM", {"src/f.py"})
+    assert scanned == 1
+    assert findings == []
+
+
+def test_a_new_file_headed_vantage_passes(tmp_path):
+    findings, scanned = _scan_one(tmp_path, "VANTAGE", {"src/other.py"})
+    assert scanned == 1
+    assert findings == []
+
+
+def test_a_seed_file_headed_vantage_passes(tmp_path):
+    findings, scanned = _scan_one(tmp_path, "VANTAGE", {"src/f.py"})
+    assert scanned == 1
+    assert findings == []
+
+
+def test_cpp_header_follows_the_same_seed_rule(tmp_path):
+    simcore = tmp_path / "src" / "simcore"
+    simcore.mkdir(parents=True)
+    (simcore / "bus.hpp").write_text(
+        "// Copyright (c) <ORG>. All Rights Reserved.\n"
+        "// Proprietary and Confidential.\n"
+        "// COMPONENT: SIM\n"
+        "/// @file\n"
+        "/// @brief\n",
+        encoding="utf-8",
+    )
+    assert check_cpp_headers(sim_root=tmp_path, seed_files=set())[0]
+    assert check_cpp_headers(sim_root=tmp_path, seed_files={"src/simcore/bus.hpp"})[0] == []

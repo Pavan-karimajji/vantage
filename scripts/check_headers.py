@@ -6,9 +6,10 @@
 """IMP-0374 / ANL-SW-68 (docs/v2/SIM_Implementation_Plan_v0.1.md WP-01) --
 R-STYLE-1's file header block, mechanised. Every `.cpp`/`.hpp`/`.h`/`.py`
 under this module's own tree carries `Copyright / Proprietary /
-COMPONENT: SIM / @author` (Python, `#`-style) or `Copyright / Proprietary /
-COMPONENT: SIM / @file / @brief / @author` (C++, `//`+`///`-style), per
-`docs/file_header_template.md`. `src/simcore/**` and `src/simengine/**`
+COMPONENT: VANTAGE / @author` (Python, `#`-style) or `Copyright / Proprietary /
+COMPONENT: VANTAGE / @file / @brief / @author` (C++, `//`+`///`-style), per
+`docs/file_header_template.md`; a file already present at the `seed-from-sim`
+tag may still carry `COMPONENT: SIM` (inherited files are not mass re-headed). `src/simcore/**` and `src/simengine/**`
 gained real content at `WP-03`/`WP-14`; a scan that finds none reports
 `SKIPPED` rather than a false PASS (Plan WP-01's third Exit gate).
 `scripts/build.py`, `build_gui.py` and `setup.py` are exempt (`R-BUILD-2`/`4`/`6`): byte-identical
@@ -18,11 +19,15 @@ across every component, so they cannot carry a per-component `COMPONENT:` token.
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
+from functools import lru_cache
 from pathlib import Path
+from typing import Collection, Optional
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SIM_ROOT = SCRIPT_DIR.parent
+SEED_TAG = "seed-from-sim"
 
 # Excluded: generated/vendored/build trees, never authored here.
 _EXCLUDE_DIR_NAMES = {
@@ -35,7 +40,7 @@ _EXCLUDE_DIR_NAMES = {
 }
 
 # R-BUILD-2: scripts/build.py is byte-identical across every component --
-# it cannot carry a COMPONENT: SIM token, because the same file also sits
+# it cannot carry a COMPONENT: VANTAGE token, because the same file also sits
 # in df/vdy/sil_host/etc. with no per-component token at all. Not this
 # check's exemption to invent: the file's own docstring already states
 # "Physically identical across every component ... no component name or
@@ -49,17 +54,38 @@ _EXCLUDE_FILES = {"scripts/build.py", "scripts/build_gui.py", "scripts/setup.py"
 _PY_HEADER = re.compile(
     r"^# Copyright \(c\) .+\. All Rights Reserved\.\n"
     r"# Proprietary and Confidential\.\n"
-    r"# COMPONENT: SIM\n"
+    r"# COMPONENT: (?P<token>VANTAGE|SIM)\n"
     r"# @author .+\n"
 )
 
 _CPP_HEADER = re.compile(
     r"^// Copyright \(c\) .+\. All Rights Reserved\.\n"
     r"// Proprietary and Confidential\.\n"
-    r"// COMPONENT: SIM\n"
+    r"// COMPONENT: (?P<token>VANTAGE|SIM)\n"
     r"/// @file\n"
     r"/// @brief\n"
 )
+
+
+@lru_cache(maxsize=None)
+def read_seed_tree(root: Path = SIM_ROOT) -> frozenset[str]:
+    """Paths of the tree at the seed tag, read once per run; empty (with one
+    printed line) when the tag is missing, so `COMPONENT: SIM` is accepted nowhere."""
+    try:
+        done = subprocess.run(
+            ["git", "-C", str(root), "ls-tree", "-r", "--name-only", SEED_TAG],
+            capture_output=True, text=True, encoding="utf-8", check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        print(f"check_headers: {SEED_TAG} tag not found; COMPONENT: SIM accepted nowhere")
+        return frozenset()
+    return frozenset(done.stdout.splitlines())
+
+
+def _header_ok(match: Optional[re.Match], path: Path, sim_root: Path, seed_files: Collection[str]) -> bool:
+    if match is None:
+        return False
+    return match.group("token") == "VANTAGE" or path.relative_to(sim_root).as_posix() in seed_files
 
 
 def _excluded(path: Path, sim_root: Path) -> bool:
@@ -76,8 +102,12 @@ def _iter_files(root: Path, suffixes: tuple[str, ...], sim_root: Path) -> list[P
     )
 
 
-def check_python_headers(sim_root: Path = SIM_ROOT) -> tuple[list[str], int]:
+def check_python_headers(
+    sim_root: Path = SIM_ROOT, seed_files: Optional[Collection[str]] = None
+) -> tuple[list[str], int]:
     """Return (findings, files scanned)."""
+    if seed_files is None:
+        seed_files = read_seed_tree(sim_root)
     findings: list[str] = []
     files = [
         p for root in ("src", "scripts", "tests", "docs/v2/py")
@@ -85,15 +115,19 @@ def check_python_headers(sim_root: Path = SIM_ROOT) -> tuple[list[str], int]:
     ]
     for path in files:
         text = path.read_text(encoding="utf-8")
-        if not _PY_HEADER.match(text):
+        if not _header_ok(_PY_HEADER.match(text), path, sim_root, seed_files):
             findings.append(f"{path}: missing/malformed R-STYLE-1 header block")
     return findings, len(files)
 
 
-def check_cpp_headers(sim_root: Path = SIM_ROOT) -> tuple[list[str], int]:
+def check_cpp_headers(
+    sim_root: Path = SIM_ROOT, seed_files: Optional[Collection[str]] = None
+) -> tuple[list[str], int]:
     """Return (findings, files scanned). `src/simcore/`, `src/simengine/`
     and `include/simcore/` do not exist until WP-03/WP-06 -- an empty scan
     is reported as such by the caller, never silently as PASS."""
+    if seed_files is None:
+        seed_files = read_seed_tree(sim_root)
     findings: list[str] = []
     files = [
         p for root in ("src/simcore", "src/simengine", "include/simcore")
@@ -101,7 +135,7 @@ def check_cpp_headers(sim_root: Path = SIM_ROOT) -> tuple[list[str], int]:
     ]
     for path in files:
         text = path.read_text(encoding="utf-8")
-        if not _CPP_HEADER.match(text):
+        if not _header_ok(_CPP_HEADER.match(text), path, sim_root, seed_files):
             findings.append(f"{path}: missing/malformed R-STYLE-1 header block")
     return findings, len(files)
 
