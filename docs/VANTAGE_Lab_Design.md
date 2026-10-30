@@ -605,7 +605,7 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 
 - [x] **LAB-WP-01** — The lab repo in the standard build · Nothing else can be built or tried before a component repo configures with the shared toolchain
 - [x] **LAB-WP-02** — Template, generator and the running example's libraries · The first implementer of every component obligation; needs `LAB-WP-01`
-- [ ] **LAB-WP-03** — Contract harness and ABI loader · Passes the harness tests as soon as a library exists, before any car
+- [x] **LAB-WP-03** — Contract harness and ABI loader · Passes the harness tests as soon as a library exists, before any car
 - [ ] **LAB-WP-04** — Fake car: sources, scheduler, recorder, on the running example · Makes `F-LAB`; needs the libraries and the ABI loader
 - [ ] **LAB-WP-05** — Running example scenarios: restart, fault, calibration · Makes `F-LAB-RESTART`, `F-LAB-FAULT`, `F-LAB-CAL`
 - [ ] **LAB-WP-06** — Run setups, provisional values and the reference re-run · Makes `F-LM` and closes `G2` without Vantage
@@ -633,10 +633,10 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 | `[x]` | `LAB-17` | `LAB-WP-02` | — | `src/platform/lab_sil/lab_components.cmake::lab_add_topology` — configure-time generation, one library and one bundle folder per component. |
 | `[x]` | `LAB-18` | `LAB-WP-02` | — | `catalogue/running_example.yaml` — the file of section 6.1, scenario `base` only. |
 | `[x]` | `LAB-54` | `LAB-WP-02` | — | `catalogue/provisional.yaml` — `LAB_<C>_MAX_AGE_US` and `LAB_<C>_RECOVERY_RUNS` of section 7 for every component of `running_example`, each with `status: provisional`. |
-| `[ ]` | `LAB-19` | `LAB-WP-03` | — | `src/lab_tools/abi.py::LabLibrary` with `AdasPort`, `AdasPortSet` — `load`, `manifest`, `init`, `exec`, `shutdown` through `ctypes`. |
-| `[ ]` | `LAB-20` | `LAB-WP-03` | — | `src/lab_tools/messages.py::MessageFactory` — message classes built from the manifest's descriptor set. |
-| `[ ]` | `LAB-21` | `LAB-WP-03` | — | `tests/harness/lab_harness.py::LabHarness` — drives one library with scripted controls and hand-made samples (`F-HARN`). |
-| `[ ]` | `LAB-22` | `LAB-WP-03` | `RCT:SYS-0003`, `RCT:SYS-0006`, `RCT:SYS-0007`, `RCT:SYS-0014`, `RCT:SYS-0015`, `RCT:SYS-0022` | `tests/harness/test_contract_harness.py` — `SYT-HDR-03`, `SYT-CTL-01`, `SYT-CTL-02`, `SYT-RSY-02`, `SYT-RSY-03`, `SYT-CST-06`. |
+| `[x]` | `LAB-19` | `LAB-WP-03` | — | `src/lab_tools/abi.py::LabLibrary` with `AdasPort`, `AdasPortSet` — `load`, `manifest`, `init`, `exec`, `shutdown` through `ctypes`. |
+| `[x]` | `LAB-20` | `LAB-WP-03` | — | `src/lab_tools/messages.py::MessageFactory` — message classes built from the manifest's descriptor set. |
+| `[x]` | `LAB-21` | `LAB-WP-03` | — | `tests/harness/lab_harness.py::LabHarness` — drives one library with scripted controls and hand-made samples (`F-HARN`). |
+| `[x]` | `LAB-22` | `LAB-WP-03` | `RCT:SYS-0003`, `RCT:SYS-0006`, `RCT:SYS-0007`, `RCT:SYS-0014`, `RCT:SYS-0015`, `RCT:SYS-0022` | `tests/harness/test_contract_harness.py` — `SYT-HDR-03`, `SYT-CTL-01`, `SYT-CTL-02`, `SYT-RSY-02`, `SYT-RSY-03`, `SYT-CST-06`. |
 | `[ ]` | `LAB-23` | `LAB-WP-04` | `RCT:IMP-0030` | `src/lab_tools/car.py::Task` — nominal tick, drawn jitter, the seeded generator `"<seed>/<name>"`. |
 | `[ ]` | `LAB-24` | `LAB-WP-04` | `RCT:IMP-0029` | `src/lab_tools/car.py::SourceTask` — counter plus 1, non-zero nominal time, `value` equal to the counter. |
 | `[ ]` | `LAB-25` | `LAB-WP-04` | `RCT:IMP-0030` | `src/lab_tools/car.py::Bus` — per port history; newest not after now; newest strictly before now. |
