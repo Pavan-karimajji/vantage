@@ -604,7 +604,7 @@ only why it sits where it does; what it lands is the `WP` column of the rows bel
 place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 
 - [x] **LAB-WP-01** — The lab repo in the standard build · Nothing else can be built or tried before a component repo configures with the shared toolchain
-- [ ] **LAB-WP-02** — Template, generator and the running example's libraries · The first implementer of every component obligation; needs `LAB-WP-01`
+- [x] **LAB-WP-02** — Template, generator and the running example's libraries · The first implementer of every component obligation; needs `LAB-WP-01`
 - [ ] **LAB-WP-03** — Contract harness and ABI loader · Passes the harness tests as soon as a library exists, before any car
 - [ ] **LAB-WP-04** — Fake car: sources, scheduler, recorder, on the running example · Makes `F-LAB`; needs the libraries and the ABI loader
 - [ ] **LAB-WP-05** — Running example scenarios: restart, fault, calibration · Makes `F-LAB-RESTART`, `F-LAB-FAULT`, `F-LAB-CAL`
@@ -620,19 +620,19 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 | `[x]` | `LAB-04` | `LAB-WP-01` | — | `CMakeLists.txt`, `src/platform/lab_sil/CMakeLists.txt` — find `AdasInterfaces`, include `lab_components.cmake`, one `lab_add_topology` per catalogue file. |
 | `[x]` | `LAB-05` | `LAB-WP-01` | `RCT:SYS-0035` | `modules/interfaces/proto/lab/lab_sample.proto`, `modules/interfaces/proto/lab/lab_image.proto` — package `adas.lab`, `LabSample`, `LabImage`, one `sig_header` each, fields as `RCT_Implementation_Design.md` *Message fields*; each file headed "lab-only, never a production port" (`D20` (1)). |
 | `[x]` | `LAB-06` | `LAB-WP-01` | — | `pyproject.toml` — the `lab_tools` package and its dependencies. |
-| `[ ]` | `LAB-07` | `LAB-WP-02` | `RCT:IMP-0028` | `src/lab_tools/topology.py::load_topology` — reads a topology file into `Topology`; raises `TopologyError` for each check of section 3. |
-| `[ ]` | `LAB-08` | `LAB-WP-02` | `RCT:IMP-0022` | `template/lab_component.hpp.in::LabComponent::exec` — one run per control; `publish` is the only exit. |
-| `[ ]` | `LAB-09` | `LAB-WP-02` | `RCT:IMP-0023` | `template/lab_component.hpp.in::LabComponent::exec` first branch — `State{}`, stickers INIT, `compState` NOT_INITIALIZED. |
-| `[ ]` | `LAB-10` | `LAB-WP-02` | `RCT:IMP-0024` | `template/lab_component.hpp.in::inputTrusted` — sticker OK and `int64_t` age within `maxAgeUs`. |
-| `[ ]` | `LAB-11` | `LAB-WP-02` | `RCT:IMP-0025` | `template/lab_component.hpp.in::LabComponent::exec` — untrusted input gives ERROR with the port in `reason`; `recoveryRuns_` trusted runs clear it. |
-| `[ ]` | `LAB-12` | `LAB-WP-02` | `RCT:IMP-0027` | `template/lab_component.hpp.in::LabComponent::compute` — the polynomial sum, the running sum, output k plus k. |
-| `[ ]` | `LAB-13` | `LAB-WP-02` | `RCT:SYS-0013` | `template/lab_sil.cpp.in` — `adasAbiVersion`, `adasManifest`, `adasInit`, `adasExec`, `adasShutdown` over the generated bindings. |
-| `[ ]` | `LAB-14` | `LAB-WP-02` | `RCT:IMP-0026` | `template/lab_sil.cpp.in::loadCalibration` — a missing key gives `calibrationError_`; also the hang and crash switches. |
-| `[ ]` | `LAB-15` | `LAB-WP-02` | `RCT:IMP-0028` | `src/lab_tools/generate.py::generate_component` — declared input order is manifest order and `RefSyncBuilder` order. |
-| `[ ]` | `LAB-16` | `LAB-WP-02` | `RCT:IMP-0028` | `src/lab_tools/generate.py::write_ports_yaml`, `write_ports_header`, `write_default_yaml`, `write_index` — `write_default_yaml` takes `LAB_<C>_MAX_AGE_US` and `LAB_<C>_RECOVERY_RUNS` from `catalogue/provisional.yaml` and refuses a component without them, naming the component and the key. |
-| `[ ]` | `LAB-17` | `LAB-WP-02` | — | `src/platform/lab_sil/lab_components.cmake::lab_add_topology` — configure-time generation, one library and one bundle folder per component. |
-| `[ ]` | `LAB-18` | `LAB-WP-02` | — | `catalogue/running_example.yaml` — the file of section 6.1, scenario `base` only. |
-| `[ ]` | `LAB-54` | `LAB-WP-02` | — | `catalogue/provisional.yaml` — `LAB_<C>_MAX_AGE_US` and `LAB_<C>_RECOVERY_RUNS` of section 7 for every component of `running_example`, each with `status: provisional`. |
+| `[x]` | `LAB-07` | `LAB-WP-02` | `RCT:IMP-0028` | `src/lab_tools/topology.py::load_topology` — reads a topology file into `Topology`; raises `TopologyError` for each check of section 3. |
+| `[x]` | `LAB-08` | `LAB-WP-02` | `RCT:IMP-0022` | `template/lab_component.hpp.in::LabComponent::exec` — one run per control; `publish` is the only exit. |
+| `[x]` | `LAB-09` | `LAB-WP-02` | `RCT:IMP-0023` | `template/lab_component.hpp.in::LabComponent::exec` first branch — `State{}`, stickers INIT, `compState` NOT_INITIALIZED. |
+| `[x]` | `LAB-10` | `LAB-WP-02` | `RCT:IMP-0024` | `template/lab_component.hpp.in::inputTrusted` — sticker OK and `int64_t` age within `maxAgeUs`. |
+| `[x]` | `LAB-11` | `LAB-WP-02` | `RCT:IMP-0025` | `template/lab_component.hpp.in::LabComponent::exec` — untrusted input gives ERROR with the port in `reason`; `recoveryRuns_` trusted runs clear it. |
+| `[x]` | `LAB-12` | `LAB-WP-02` | `RCT:IMP-0027` | `template/lab_component.hpp.in::LabComponent::compute` — the polynomial sum, the running sum, output k plus k. |
+| `[x]` | `LAB-13` | `LAB-WP-02` | `RCT:SYS-0013` | `template/lab_sil.cpp.in` — `adasAbiVersion`, `adasManifest`, `adasInit`, `adasExec`, `adasShutdown` over the generated bindings. |
+| `[x]` | `LAB-14` | `LAB-WP-02` | `RCT:IMP-0026` | `template/lab_sil.cpp.in::loadCalibration` — a missing key gives `calibrationError_`; also the hang and crash switches. |
+| `[x]` | `LAB-15` | `LAB-WP-02` | `RCT:IMP-0028` | `src/lab_tools/generate.py::generate_component` — declared input order is manifest order and `RefSyncBuilder` order. |
+| `[x]` | `LAB-16` | `LAB-WP-02` | `RCT:IMP-0028` | `src/lab_tools/generate.py::write_ports_yaml`, `write_ports_header`, `write_default_yaml`, `write_index` — `write_default_yaml` takes `LAB_<C>_MAX_AGE_US` and `LAB_<C>_RECOVERY_RUNS` from `catalogue/provisional.yaml` and refuses a component without them, naming the component and the key. |
+| `[x]` | `LAB-17` | `LAB-WP-02` | — | `src/platform/lab_sil/lab_components.cmake::lab_add_topology` — configure-time generation, one library and one bundle folder per component. |
+| `[x]` | `LAB-18` | `LAB-WP-02` | — | `catalogue/running_example.yaml` — the file of section 6.1, scenario `base` only. |
+| `[x]` | `LAB-54` | `LAB-WP-02` | — | `catalogue/provisional.yaml` — `LAB_<C>_MAX_AGE_US` and `LAB_<C>_RECOVERY_RUNS` of section 7 for every component of `running_example`, each with `status: provisional`. |
 | `[ ]` | `LAB-19` | `LAB-WP-03` | — | `src/lab_tools/abi.py::LabLibrary` with `AdasPort`, `AdasPortSet` — `load`, `manifest`, `init`, `exec`, `shutdown` through `ctypes`. |
 | `[ ]` | `LAB-20` | `LAB-WP-03` | — | `src/lab_tools/messages.py::MessageFactory` — message classes built from the manifest's descriptor set. |
 | `[ ]` | `LAB-21` | `LAB-WP-03` | — | `tests/harness/lab_harness.py::LabHarness` — drives one library with scripted controls and hand-made samples (`F-HARN`). |
