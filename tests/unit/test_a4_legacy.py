@@ -20,6 +20,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from mcap.writer import Writer as RawMcapWriter
 
 from adas_sim.io.base import Provenance, RunManifest, TopicInfo
@@ -45,6 +47,8 @@ def _write_legacy_shaped_recording(path):
 def test_legacy_topic_names_map_correctly_and_manifest_is_unknown(tmp_path):
     """UT-A4-5, rewritten for `S-C9`: `df`'s real ingest map, not a
     framework-internal dict."""
+    if not (Path(__file__).resolve().parents[3] / "df" / "sim" / "ingest" / "carla_legacy.yaml").is_file():
+        pytest.skip("modules/df is not part of this checkout (df owns the legacy ingest map)")
     path = tmp_path / "legacy.mcap"
     _write_legacy_shaped_recording(path)
 

@@ -91,6 +91,8 @@ def _logged_port_names(capsys: pytest.CaptureFixture[str]) -> set[str]:
 
 def test_anl_sw69_screen_names_are_a_subset_of_config_names():
     """ANL-SW-69: no screen surface renames a concept config didn't declare."""
+    if not (DF_ROOT / "conf" / "ports.yaml").is_file():
+        pytest.skip("modules/df is not part of this checkout (no conf/ports.yaml to compare against)")
     screen = _screen_port_names()
     config = _config_port_names()
     assert screen, "no AppendPortTree(...) literal found -- test fixture is stale"
