@@ -606,7 +606,7 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 - [x] **LAB-WP-01** — The lab repo in the standard build · Nothing else can be built or tried before a component repo configures with the shared toolchain
 - [x] **LAB-WP-02** — Template, generator and the running example's libraries · The first implementer of every component obligation; needs `LAB-WP-01`
 - [x] **LAB-WP-03** — Contract harness and ABI loader · Passes the harness tests as soon as a library exists, before any car
-- [ ] **LAB-WP-04** — Fake car: sources, scheduler, recorder, on the running example · Makes `F-LAB`; needs the libraries and the ABI loader
+- [x] **LAB-WP-04** — Fake car: sources, scheduler, recorder, on the running example · Makes `F-LAB`; needs the libraries and the ABI loader
 - [ ] **LAB-WP-05** — Running example scenarios: restart, fault, calibration · Makes `F-LAB-RESTART`, `F-LAB-FAULT`, `F-LAB-CAL`
 - [ ] **LAB-WP-06** — Run setups, provisional values and the reference re-run · Makes `F-LM` and closes `G2` without Vantage
 - [ ] **LAB-WP-07** — The other topologies, one file each · Added after the milestone, one corner case at a time
@@ -637,14 +637,14 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 | `[x]` | `LAB-20` | `LAB-WP-03` | — | `src/lab_tools/messages.py::MessageFactory` — message classes built from the manifest's descriptor set. |
 | `[x]` | `LAB-21` | `LAB-WP-03` | — | `tests/harness/lab_harness.py::LabHarness` — drives one library with scripted controls and hand-made samples (`F-HARN`). |
 | `[x]` | `LAB-22` | `LAB-WP-03` | `RCT:SYS-0003`, `RCT:SYS-0006`, `RCT:SYS-0007`, `RCT:SYS-0014`, `RCT:SYS-0015`, `RCT:SYS-0022` | `tests/harness/test_contract_harness.py` — `SYT-HDR-03`, `SYT-CTL-01`, `SYT-CTL-02`, `SYT-RSY-02`, `SYT-RSY-03`, `SYT-CST-06`. |
-| `[ ]` | `LAB-23` | `LAB-WP-04` | `RCT:IMP-0030` | `src/lab_tools/car.py::Task` — nominal tick, drawn jitter, the seeded generator `"<seed>/<name>"`. |
-| `[ ]` | `LAB-24` | `LAB-WP-04` | `RCT:IMP-0029` | `src/lab_tools/car.py::SourceTask` — counter plus 1, non-zero nominal time, `value` equal to the counter. |
-| `[ ]` | `LAB-25` | `LAB-WP-04` | `RCT:IMP-0030` | `src/lab_tools/car.py::Bus` — per port history; newest not after now; newest strictly before now. |
-| `[ ]` | `LAB-26` | `LAB-WP-04` | `RCT:IMP-0030` | `src/lab_tools/car.py::Car.run` — the event loop in the order of section 5.2, including input-triggered starts. |
-| `[ ]` | `LAB-27` | `LAB-WP-04` | `RCT:IMP-0030` | `src/lab_tools/car.py::ControlWriter` and `Car.startComponent` — control fields of section 5.3; never reads `compState`. |
-| `[ ]` | `LAB-28` | `LAB-WP-04` | `RCT:SYS-0013`, `RCT:SYS-0016` | `src/lab_tools/car.py::Car.startComponent` — picks the inputs, calls `adasExec` once, writes every output. |
-| `[ ]` | `LAB-29` | `LAB-WP-04` | `RCT:IMP-0031` | `src/lab_tools/recorder.py::McapRecorder` — topics, schemas, metadata of section 5.6; byte-identical for one seed. |
-| `[ ]` | `LAB-30` | `LAB-WP-04` | `RCT:SYS-0001`, `RCT:SYS-0002`, `RCT:SYS-0004`, `RCT:SYS-0010`, `RCT:SYS-0013` | `tests/test_car_running_example.py` — `SYT-HDR-01`, `SYT-HDR-02`, `SYT-HDR-04`, `SYT-CTL-05`, `SYT-RSY-01`, and two car runs giving identical bytes. |
+| `[x]` | `LAB-23` | `LAB-WP-04` | `RCT:IMP-0030` | `src/lab_tools/car.py::Task` — nominal tick, drawn jitter, the seeded generator `"<seed>/<name>"`. |
+| `[x]` | `LAB-24` | `LAB-WP-04` | `RCT:IMP-0029` | `src/lab_tools/car.py::SourceTask` — counter plus 1, non-zero nominal time, `value` equal to the counter. |
+| `[x]` | `LAB-25` | `LAB-WP-04` | `RCT:IMP-0030` | `src/lab_tools/car.py::Bus` — per port history; newest not after now; newest strictly before now. |
+| `[x]` | `LAB-26` | `LAB-WP-04` | `RCT:IMP-0030` | `src/lab_tools/car.py::Car.run` — the event loop in the order of section 5.2, including input-triggered starts. |
+| `[x]` | `LAB-27` | `LAB-WP-04` | `RCT:IMP-0030` | `src/lab_tools/car.py::ControlWriter` and `Car.startComponent` — control fields of section 5.3; never reads `compState`. |
+| `[x]` | `LAB-28` | `LAB-WP-04` | `RCT:SYS-0013`, `RCT:SYS-0016` | `src/lab_tools/car.py::Car.startComponent` — picks the inputs, calls `adasExec` once, writes every output. |
+| `[x]` | `LAB-29` | `LAB-WP-04` | `RCT:IMP-0031` | `src/lab_tools/recorder.py::McapRecorder` — topics, schemas, metadata of section 5.6; byte-identical for one seed. |
+| `[x]` | `LAB-30` | `LAB-WP-04` | `RCT:SYS-0001`, `RCT:SYS-0002`, `RCT:SYS-0004`, `RCT:SYS-0010`, `RCT:SYS-0013` | `tests/test_car_running_example.py` — `SYT-HDR-01`, `SYT-HDR-02`, `SYT-HDR-04`, `SYT-CTL-05`, `SYT-RSY-01`, and two car runs giving identical bytes. |
 | `[ ]` | `LAB-31` | `LAB-WP-05` | `RCT:IMP-0030` | `src/lab_tools/car.py::ControlWriter` — scripted restart from `car.restart`. |
 | `[ ]` | `LAB-32` | `LAB-WP-05` | `RCT:SYS-0018`, `RCT:SYS-0020` | `src/lab_tools/car.py::SourceTask` — `silent` and `invalid` windows. |
 | `[ ]` | `LAB-33` | `LAB-WP-05` | — | `catalogue/running_example.yaml` — scenarios `restart` and `fault` of section 6.2. |
