@@ -228,6 +228,234 @@ To dispose: 659 rows (389 `CN`, 270 `SYS`).
 
 | UID | Disposition | Target | Why |
 |---|---|---|---|
+| SIM:CN-0001..0007, SIM:CN-0281 | carried | VNT | §1.3 — the scope of what Vantage simulates is unchanged |
+| SIM:CN-0008..0012, SIM:CN-0282 | carried | VNT | §1.4 — the limits of what Vantage is not are unchanged |
+| SIM:CN-0013..0018, SIM:CN-0283 | carried | VNT | §2.2 — one product, project content from configuration and plug-ins only |
+| SIM:CN-0019 | moved | RCT:SYS-0001, RCT:SYS-0002, RCT:SYS-0003 | the contract states which header fields every output carries |
+| SIM:CN-0020 | superseded | ARCH §3.4, ARCH §6 | the header is read at the door of every sample buffer and drives selection by number |
+| SIM:CN-0021 | moved | RCT:SYS-0037 | every port with its record policy is in the recording (RCT:SYS-0037); rate is the period each manifest declares (R-SIM-18); group and size are retired here, left to the open ECU-logging decision (RCT §13) |
+| SIM:CN-0022 | carried | VNT | a stage may be measured only if the recording holds its outputs; the launcher model checks the cut before the run |
+| SIM:CN-0023 | retired | — | volume is estimated before a run from the record policy, so no separate size budget is kept |
+| SIM:CN-0024 | carried | VNT | the recording I/O keeps message bytes, header included, when it converts |
+| SIM:CN-0025..0028 | carried | VNT | §3.1 — input, processing and output stay declared by the user, with a core that knows no project |
+| SIM:CN-0029 | carried | VNT | the component library under test is still what Vantage loads |
+| SIM:CN-0030 | superseded | D13 | a viewer plug-in is the viewer's design |
+| SIM:CN-0031 | carried | VNT | the manifest and the ingest map stay with the component |
+| SIM:CN-0032 | superseded | D13 | the rule on a viewer plug-in belongs to the viewer's design |
+| SIM:CN-0033 | superseded | D13 | what a viewer renders is the viewer's design; the live measurement carries the same data for both |
+| SIM:CN-0034 | superseded | D13 | drawing code is the viewer's design |
+| SIM:CN-0035..0046, SIM:CN-0286..0287 | carried | VNT | §4 — the design principles still hold for Vantage |
+| SIM:CN-0047 | carried | VNT | the engine stays a library with a stable C ABI, now version 3 |
+| SIM:CN-0048 | carried | VNT | simengine stays the thin executable with no GUI dependency |
+| SIM:CN-0049 | superseded | D13 | the player is a viewer process; any reader attaches to the live measurement |
+| SIM:CN-0050 | superseded | ARCH §10, ARCH §14 | the live measurement is the only carrier out of the engine and the player transport was rejected |
+| SIM:CN-0051 | superseded | D13 | no player is shipped; the launcher window starts the engine and is no viewer |
+| SIM:CN-0052 | superseded | ARCH §10 | the live measurement is shared memory for control and bulk alike |
+| SIM:CN-0053 | moved | RCT:SYS-0026 | the contract says the writer never waits for a reader, so a reader may come and go |
+| SIM:CN-0063..0065 | superseded | D13 | §5.4 — which data a viewer reads straight from the recording is the viewer's design |
+| SIM:CN-0066 | carried | VNT | ports stay named and found through the manifest |
+| SIM:CN-0067 | carried | VNT | readers still produce port values and components still consume them |
+| SIM:CN-0068 | carried | VNT | the mapping from source names to ports stays a file, the ingest map |
+| SIM:CN-0069 | carried | VNT | the versioning rule of the port model stays; the contract states only its first instance (`RCT:SYS-0033`) |
+| SIM:CN-0070 | carried | VNT | a missing input stays explicit: an empty input with unknown origin and a badge, never a zero fill |
+| SIM:CN-0071 | carried | VNT | a project's own messages are decoded from the descriptors in the manifest without forking the core |
+| SIM:CN-0072 | moved | RCT:SYS-0001, RCT:SYS-0002, RCT:SYS-0003 | the contract states the header fields each output carries |
+| SIM:CN-0073 | superseded | ARCH §6, ARCH §13 | the header has one timestamp and inputs are chosen by number, so no choice of timestamp is recorded |
+| SIM:CN-0074 | superseded | ARCH §6 | a sample with no number or time is a badged fallback of the time rule |
+| SIM:CN-0078 | carried | VNT | a reader opens a source, indexes it, seeks and returns port values |
+| SIM:CN-0079 | carried | VNT | a reader seeks by time or brings an index that makes it possible |
+| SIM:CN-0080 | carried | VNT | the sidecar index is built on first open and reused by later runs |
+| SIM:CN-0081 | carried | VNT | the index is keyed by port, so a run reads only the ports its graph needs |
+| SIM:CN-0082 | carried | VNT | several readers in one run are merged on one time base |
+| SIM:CN-0083 | retired | — | Vantage never corrects a recorded time: it matches by counter (D18) and uses the sender's time (C1) |
+| SIM:CN-0084 | superseded | D18, ARCH §3.4 | samples are kept per port (`buffer_depth`) and picked by counter, so arrival order needs no sync buffer |
+| SIM:CN-0085 | carried | VNT | readers are found by registration, so a new format needs no change to the core |
+| SIM:CN-0086 | carried | VNT | a reader uses the format's own data description and allows an external override |
+| SIM:CN-0087..0092, SIM:CN-0311..0312 | carried | VNT | §9.1 — components stay declarative, with a manifest and one producer per port |
+| SIM:CN-0093 | carried | VNT | port kinds stay in the manifest; control is a conventional port |
+| SIM:CN-0094 | superseded | ARCH §4 | who runs when is the trigger of each stage in the run setup |
+| SIM:CN-0095 | superseded | ARCH §3.2 | start and restart reach a component as the op mode of its control message |
+| SIM:CN-0096 | carried | VNT | the component host keeps loading and driving the lifecycle; reset is the RESTART run |
+| SIM:CN-0097 | carried | VNT | a failing component is reported with its stage and step and a reproducer |
+| SIM:CN-0098 | carried | VNT | conversion between port values and structs stays driven by the manifest |
+| SIM:CN-0099 | superseded | ARCH §9 | the isolated stage runs one stage in a second process for bisecting a crash |
+| SIM:CN-0100..0102, SIM:CN-0316 | carried | VNT | §9.4 — the component ABI stays small, versioned and free of clocks and threads |
+| SIM:CN-0103..0106 | carried | VNT | §9.5 — composition and variables stay in the launcher's configuration |
+| SIM:CN-0107 | carried | VNT | outputs stay optional: a recording and a live measurement, each may be absent |
+| SIM:CN-0108 | carried | VNT | export formats and the replayable output stay with the recording I/O |
+| SIM:CN-0109 | moved | RCT:SYS-0042 | the contract says Vantage's reader reads an engine-run recording as written |
+| SIM:CN-0110 | carried | VNT | exports are still filtered by port and by time range |
+| SIM:CN-0111 | carried | VNT | the run manifest in every artifact is Vantage's metadata on top of C6; step 8 states it |
+| SIM:CN-0112 | carried | VNT | an export keeps the header bytes and carries origin from its source |
+| SIM:CN-0113..0117 | carried | VNT | §10.2 — the run manifest, exit codes and logs stay; Vantage still reports and never judges |
+| SIM:CN-0118..0121, SIM:CN-0320..0321 | carried | VNT | §11.1 — mode and implementation per stage stay the two independent fields of a stage |
+| SIM:CN-0122..0128, SIM:CN-0324..0325 | carried | VNT | §11.3 — the launcher model keeps the broken-chain rule, waivers and promote choice, and the engine records the verdict |
+| SIM:CN-0129..0131, SIM:CN-0326..0329 | carried | VNT | §11.4 — overrides and faults keep their closed verb lists and run in the mutator |
+| SIM:CN-0132 | carried | VNT | the engine stays open-loop |
+| SIM:CN-0133 | carried | VNT | the first divergence is still found and recorded, by step number |
+| SIM:CN-0134 | carried | VNT | data after the divergence plus a grace is still flagged informational |
+| SIM:CN-0135 | retired | — | R-SIM-7 puts integrating a signal into a component under test; no part of Vantage does it (open question) |
+| SIM:CN-0136 | carried | VNT | closed-loop work stays out of scope; a simulator reaches Vantage as a recording |
+| SIM:CN-0137 | superseded | ARCH §3.2 | a component sees the trigger's time in its control header and the orchestrator alone holds simulation time |
+| SIM:CN-0138 | carried | VNT | execution time is still never used to decide anything |
+| SIM:CN-0139 | carried | VNT | internal time stays integer nanoseconds |
+| SIM:CN-0140..0142, SIM:CN-0330 | superseded | D10, ARCH §7 | §12.2 — a run is one recorded control message, so cycles are no longer reconstructed from a flat recording |
+| SIM:CN-0143..0146, SIM:CN-0331..0334, SIM:CN-0392..0395 | superseded | D10, ARCH §7 | §12.3 — no base grid and no due tick; a step is an event and a run exists only for a ticket |
+| SIM:CN-0148..0150 | superseded | D18 | §12.4 — input selection by number is the only policy; sampling and on_missing are refused at load |
+| SIM:CN-0151 | carried | VNT | runs of one instant go in rank order, and the order is printed |
+| SIM:CN-0152 | superseded | ARCH §2.3 | a previous_cycle input replaces delay_steps, which has no meaning when steps are events |
+| SIM:CN-0153 | carried | VNT | a loop with no previous-cycle edge is a load error naming the loop |
+| SIM:CN-0154 | carried | VNT | the previous-cycle inputs are recorded in the description of the live measurement |
+| SIM:CN-0155..0158, SIM:CN-0335..0336 | superseded | D13 | §13.1 — the player is a viewer, out of this design; it reads the live measurement later |
+| SIM:CN-0159..0163, SIM:CN-0337..0340 | superseded | D13 | §13.2 — layout, draw layers and primitives are the viewer's design |
+| SIM:CN-0164..0168, SIM:CN-0341..0343 | superseded | D13 | §13.3 — transport, timeline, snapshot, plots and evidence belong to the viewer |
+| SIM:CN-0170 | superseded | D13 | reading context signals straight from the recording is the viewer's work |
+| SIM:CN-0171..0172, SIM:CN-0174..0177, SIM:CN-0344 | carried | VNT | §14 — the launcher window shows and enters the choices and the launcher model keeps the rules behind them (layout choice goes with the viewer) |
+| SIM:CN-0173 | superseded | D13 | lazy decode and marking of display-only data is the viewer's work |
+| SIM:CN-0178..0184, SIM:CN-0345..0347 | carried | VNT | §15.1 — run configuration layers, schema, validation at load and round trip stay with the launcher |
+| SIM:CN-0185 | carried | VNT | a batch is still one run setup over a list of recordings |
+| SIM:CN-0186 | carried | VNT | each recording runs in its own process under a supervisor |
+| SIM:CN-0187 | carried | VNT | each run still writes its own artifact directory |
+| SIM:CN-0188 | carried | VNT | a failing run still does not stop the batch |
+| SIM:CN-0189 | carried | VNT | the batch still reports a status list with reason and duration |
+| SIM:CN-0190 | carried | VNT | parameter sweeps stay with the batch loop |
+| SIM:CN-0191 | carried | VNT | a batch is still resumable from the checkpoint files |
+| SIM:CN-0192 | carried | VNT | index caches are still shared across a batch |
+| SIM:CN-0193 | carried | VNT | per-run timeout and limits stay in the run setup |
+| SIM:CN-0194..0197 | superseded | D17 | §16.2 — a stage restarts on its first run and after a jump and each recording has its own process, so no reset policy is chosen |
+| SIM:CN-0198..0199 | carried | VNT | §16.3 — the read-error policies of a batch stay with the batch loop and the reader |
+| SIM:CN-0200 | carried | VNT | the engine still needs no display or prompt |
+| SIM:CN-0201 | carried | VNT | one engine binary serves the desktop and CI |
+| SIM:CN-0202 | carried | VNT | the exit codes stay distinct and documented |
+| SIM:CN-0203 | carried | VNT | an artifact directory stays self-contained, the config bundle being embedded |
+| SIM:CN-0204 | carried | VNT | the optional watchdog stays as the execution timeout |
+| SIM:CN-0205 | carried | VNT | the watchdog is still off when a debugger is attached |
+| SIM:CN-0206 | carried | VNT | per-component timing statistics stay in the cost report |
+| SIM:CN-0207 | carried | VNT | explain still does a dry run and prints the plan of ranks, triggers and clocks |
+| SIM:CN-0208 | carried | VNT | tap points stay named in configuration |
+| SIM:CN-0209 | superseded | D13 | the provenance query read a Session for the evidence panel, which goes with the viewer |
+| SIM:CN-0210 | carried | VNT | the cycle trace stays, keyed by step number |
+| SIM:CN-0211 | carried | VNT | comparing two runs port by port with first divergence stays |
+| SIM:CN-0212 | carried | VNT | the warning summary at the end of a run stays |
+| SIM:CN-0213 | carried | VNT | everything the command line does stays available from Python |
+| SIM:CN-0214 | carried | VNT | algorithm modules load in-process, so one attach reaches them all |
+| SIM:CN-0215 | carried | VNT | `--wait-for-debugger` prints the process id and pauses before the first cycle |
+| SIM:CN-0216 | carried | VNT | break conditions: at a step, at a time, on entry to a module, on a port condition |
+| SIM:CN-0217 | carried | VNT | the cycle loop is single-threaded and deterministic by default so breakpoints work |
+| SIM:CN-0218 | carried | VNT | the watchdog and timeouts are off in debug mode |
+| SIM:CN-0219 | carried | VNT | the engine launches without the Python layer from a resolved run spec |
+| SIM:CN-0220 | carried | VNT | symbol resolution is documented and configurable on both platforms |
+| SIM:CN-0221 | carried | VNT | ready-made debugger launch configurations ship for common IDEs |
+| SIM:CN-0222 | retired | — | component state is not exposed by the ABI, the state snapshot is parked (RCT P1) and R-SIM-17 allows only recompute from the start; the checkpoint is progress, not state |
+| SIM:CN-0223 | carried | VNT | a module crash writes a minimal reproducer package |
+| SIM:CN-0224 | carried | VNT | only the ports the active stages need are read |
+| SIM:CN-0225 | carried | VNT | a payload is decoded only when a simulated stage consumes it |
+| SIM:CN-0226 | carried | VNT | the sidecar index is still built once and reused |
+| SIM:CN-0227 | carried | VNT | iterating against an exported recording stays the way to avoid re-running perception |
+| SIM:CN-0228 | superseded | ARCH §8 | runs of one rank may run in parallel inside a step, with a barrier after every rank |
+| SIM:CN-0229 | carried | VNT | bulk data stays in buffers viewed without copying |
+| SIM:CN-0230 | superseded | D13 | display-only data is read by the viewer, not the engine |
+| SIM:CN-0231 | carried | VNT | a time slice is still a jump before the first step |
+| SIM:CN-0232 | carried | VNT | the per-run report of time, steps and bytes stays |
+| SIM:CN-0233 | carried | VNT | explain still estimates the duration, counting steps |
+| SIM:CN-0234 | carried | VNT | the integrity check of a recording stays a gate |
+| SIM:CN-0235 | carried | VNT | integrity results stay available as a gate |
+| SIM:CN-0236 | carried | VNT | the content hash stays the recording's identity as sources[].sha256 |
+| SIM:CN-0237 | carried | VNT | extract by time range and port stays |
+| SIM:CN-0238 | carried | VNT | convert and index stay with the recording I/O |
+| SIM:CN-0239 | carried | VNT | inspect stays the listing of ports, rates and time range |
+| SIM:CN-0240 | carried | VNT | lineage of a derived recording is Vantage's metadata on top of C6; step 8 states it |
+| SIM:CN-0241 | carried | VNT | the preparation tools stay usable without the engine and their output is engine input |
+| SIM:CN-0242..0248, SIM:CN-0363 | carried | VNT | §24 — the same configuration and results on Windows and Linux stay required |
+| SIM:CN-0249 | carried | VNT | the same inputs, setup and binaries still give equal outputs |
+| SIM:CN-0250 | carried | VNT | no clock, unseeded randomness or thread dependence in the default mode |
+| SIM:CN-0251 | superseded | ARCH §8 | parallelism is also allowed across same-rank runs of a step, with a one-thread against N-thread comparison |
+| SIM:CN-0252 | carried | VNT | every run still writes a manifest of versions, hashes, modes and result |
+| SIM:CN-0253 | carried | VNT | a run is still reproducible from its manifest |
+| SIM:CN-0254 | carried | VNT | anything that breaks reproducibility is still declared |
+| SIM:CN-0255 | carried | VNT | reader, exporter and module stay extension points; the visualization point goes with the viewer |
+| SIM:CN-0256 | carried | VNT | codecs are still found by registration |
+| SIM:CN-0257 | carried | VNT | each extension point keeps a versioned interface and a conformance kit |
+| SIM:CN-0258 | carried | VNT | templates for the reader, exporter and module points stay in the delivery |
+| SIM:CN-0259 | carried | VNT | Vantage is delivered as a versioned package for both systems |
+| SIM:CN-0260 | carried | VNT | semantic versions and independent port-model and ABI versions stay |
+| SIM:CN-0261 | carried | VNT | a project still pins a version range |
+| SIM:CN-0262 | carried | VNT | the delivery list stays, without the player |
+| SIM:CN-0263 | carried | VNT | every release still ships a self-test on a miniature recording |
+| SIM:CN-0264 | carried | VNT | breaking changes still come with a migration guide |
+| SIM:CN-0265 | carried | VNT | components stay shared libraries on a stable C layer |
+| SIM:CN-0266 | carried | VNT | a component stays single-threaded or deterministic inside |
+| SIM:CN-0267 | moved | RCT:SYS-0001, RCT:SYS-0002 | the contract states the header every output carries |
+| SIM:CN-0268 | moved | RCT:SYS-0037 | the contract says a recording holds a topic for every declared port not excluded |
+| SIM:CN-0269 | moved | RCT:SYS-0039 | the contract says a recording keeps one log_time clock in event order |
+| SIM:CN-0270 | retired | — | a size fact about typical recordings, not an obligation; the live measurement sizes are fixed by measurement (ARCH §4) |
+| SIM:CN-0271..0280, SIM:CN-0374..0376 | retired | — | §29 — a risk list is not an obligation; each mitigation is held by the row it cites |
+| SIM:CN-0284 | superseded | D10, ARCH §2.3 | a period only survives as clock_period_ns of a stage no recording starts, and it no longer drives scheduling |
+| SIM:CN-0285 | carried | VNT | ingest map and config bundle are deployed beside the library; the viewer plug-in part goes with D13 |
+| SIM:CN-0288..0291 | carried | VNT | §6.1 — the split of per-message work in C++ and per-run work in Python is kept (ARCH §11 draws it) |
+| SIM:CN-0292..0296, SIM:CN-0396..0398 | carried | VNT | §6.2 — the run setup is the only input of the engine, written by the launcher, as the Resolved Run Spec was |
+| SIM:CN-0297 | carried | VNT | no generated bindings and no sibling checkout are needed to decode a port |
+| SIM:CN-0298 | superseded | ARCH §13 | capture_time is not used to age a value and the header keeps one timestamp |
+| SIM:CN-0299 | moved | RCT:SYS-0041 | a recording states its origin tags from the closed list (the list has no unknown; open question) |
+| SIM:CN-0300 | carried | VNT | the reader marks a topic with no stated origin unknown (the contract does not state it; open question) |
+| SIM:CN-0301 | carried | VNT | a value the engine did not read or compute is badged and never invented |
+| SIM:CN-0302 | carried | VNT | a reader streams, so a recording never has to fit in memory |
+| SIM:CN-0303 | carried | VNT | a codec declares its capabilities, and one that cannot round-trip is no input; the capture-time capability is dropped (D22) |
+| SIM:CN-0304 | carried | VNT | the ingest map names each signal's port, type, origin and array shape; unit and scale are not carried (R-SIM-23, CN-0309) |
+| SIM:CN-0305 | superseded | ARCH §3.4 | the header is read from the sig_header field of each message at the door, not bound by the map |
+| SIM:CN-0306 | carried | VNT | absent: in the ingest map still names a port a family never recorded |
+| SIM:CN-0307 | carried | VNT | recording families are still recognised by declared match rules |
+| SIM:CN-0308 | carried | VNT | a port claimed by two maps is still an authoring error naming both |
+| SIM:CN-0309 | retired | — | R-SIM-23 wins: an ingest map renames and tags only; a unit conversion is an unversioned algorithm between the recording and the component |
+| SIM:CN-0310 | carried | VNT | ingest maps are still deployed beside the component library |
+| SIM:CN-0313 | carried | VNT | exports are still bound by name at run time |
+| SIM:CN-0314 | carried | VNT | an undersized output buffer still grows once, then is a contract error |
+| SIM:CN-0315 | carried | VNT | the per-run execution timeout stays as limits.exec_timeout_ms |
+| SIM:CN-0317 | carried | VNT | the record policy and the volume estimate before a run stay with the launcher and the run setup |
+| SIM:CN-0318 | moved | RCT:SYS-0029 | the contract says bulk payloads are referenced, never inline |
+| SIM:CN-0319 | carried | VNT | the merged output is Vantage's metadata on top of C6; step 8 states it |
+| SIM:CN-0322..0323 | carried | VNT | §11.2 — the coherence classification stays with the launcher model, computed without running |
+| SIM:CN-0348 | carried | VNT | ok, fail, crash and timeout stay four outcomes, judged from outside the worker |
+| SIM:CN-0349 | carried | VNT | the worker still checkpoints progress, now by step number |
+| SIM:CN-0350 | carried | VNT | every capability stays reachable from a short script |
+| SIM:CN-0351 | retired | — | a rule for the order of the sim v2 build; this program's order and gates are in the plan section 5 |
+| SIM:CN-0352 | carried | VNT | name resolution with did-you-mean stays for the launcher's names |
+| SIM:CN-0353 | carried | VNT | the environment report (doctor) stays and never raises |
+| SIM:CN-0354 | carried | VNT | the closed error taxonomy stays in both languages |
+| SIM:CN-0355 | carried | VNT | the reader still streams and memory stays bounded by the working set |
+| SIM:CN-0356 | carried | VNT | cost and throughput stay budgeted with a number and measured |
+| SIM:CN-0357 | superseded | D13 | player frame time is a viewer budget |
+| SIM:CN-0358 | carried | VNT | the engine keeps one implementation of each capability |
+| SIM:CN-0359 | retired | — | evidence about the duplicate grid scheduler, which the event-driven orchestrator replaces (ARCH §11); the rule itself is `CN-0358` |
+| SIM:CN-0360 | superseded | D3 | sim is untouched until Vantage replaces its content at migration |
+| SIM:CN-0361 | superseded | D9 | Vantage is proven on the lab first and each gate leaves a working tool |
+| SIM:CN-0362 | superseded | ARCH §11 | the Python run path is legacy and not carried, so no second engine exists |
+| SIM:CN-0364 | carried | VNT | determinism is still measured per axis, with the thread count added (ARCH §13) |
+| SIM:CN-0365 | carried | VNT | tolerance stays declared once per component with a written reason |
+| SIM:CN-0366 | carried | VNT | a resim is still pinned to the library hash the recording carries |
+| SIM:CN-0367 | superseded | D13 | a recording carries a viewer plug-in's identity, so this is the viewer's design |
+| SIM:CN-0368 | superseded | D13 | the plug-in API version belongs to the viewer's plug-ins |
+| SIM:CN-0369 | superseded | D13 | binding a plug-in to ports through the manifest belongs to the viewer's plug-ins |
+| SIM:CN-0370 | superseded | D13 | a shipped player is a viewer |
+| SIM:CN-0371 | carried | VNT | the documentation stays sized for a new maintainer |
+| SIM:CN-0372 | carried | VNT | what a component owes Vantage stays a checklist, tried on the lab's components |
+| SIM:CN-0373 | superseded | D10 | recordings now carry the control message of each run, so cycles are not reconstructed |
+| SIM:CN-0377 | superseded | D5 | the Vantage set has no concept layer to trace to |
+| SIM:CN-0378 | superseded | D5 | the register disposes every row; no deferred marks are kept |
+| SIM:CN-0379 | superseded | D5 | open questions are recorded in the architecture and the plan, not in a concept layer |
+| SIM:CN-0380 | retired | — | a rule for the old test spec; the section 4 principles are carried row by row |
+| SIM:CN-0381 | retired | — | a rule on writing requirements, held by R-REQ-3 for every set |
+| SIM:CN-0382 | retired | — | a rule on status, held by R-REQ-6 for every set |
+| SIM:CN-0383 | retired | — | a rule on test identifiers, held by R-REQ-9 for every set |
+| SIM:CN-0384..0386 | carried | VNT | Library loading splits in two — the run setup carries resolved library paths and the engine searches nothing |
+| SIM:CN-0387 | retired | — | evidence of drift between the old ingest parsers; one parser is the rule of CN-0358 and CN-0287 |
+| SIM:CN-0388 | carried | VNT | the executable keeps argument handling and lifecycle, and the engine's checks run in the library |
+| SIM:CN-0389 | retired | — | main.cpp now holds the supervisor and isolated stage (ARCH §11), so a line count no longer shows leakage; CN-0388 stays |
+| SIM:CN-0390 | carried | VNT | simcore stays usable without simengine |
+| SIM:CN-0391 | superseded | ARCH §13 | the capture time is no longer kept, so it cannot be filled from reception |
+| SIM:CN-0399 | retired | — | a rule on trace links, held by R-REQ-11 for every set |
+| SIM:CN-0400..0402 | carried | VNT | §2.4 — the safety-evidence stance stays with the tool; the plan and the architecture say nothing else (open question) |
+| SIM:CN-0403 | retired | — | a rule on progress marks, held by R-REQ-6a for every set |
 
 ### 4.2 SIM software rows, part 1 (6d)
 

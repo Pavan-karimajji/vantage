@@ -732,7 +732,7 @@ for the viewer's own design; they are listed as *moved out*, not changed.
 | `R-SIM-17` | "head", "tick 0", transport | the head is the furthest step; the viewer-facing transport moves out; the engine offers `simEngineSeek` only |
 | `R-SIM-10` | port set; "severed chain" | a stage's port set includes `control`, `refSync`, `compState`; the badge is `KIND_COMPUTED_NOT_CONSUMED`; closing the gap by default is launcher advice |
 | `R-SIM-19` | faces | the developer face is `simengine` started directly; the batch face runs under a supervisor; the supervisor writes crash and timeout into the live measurement; the in-process face has no crash outcome |
-| `R-SIM-14` | two clocks | `capture_time_ns` is not used to age a value: `age_ns` is simulation time since the value was last written, and the header has one timestamp. The envelope field stays as the codec's |
+| `R-SIM-14` | two clocks | one clock: a recording keeps one time per message, `log_time`, with `publish_time` equal to it (`RCT:SYS-0039`); the measurement time travels in each payload's header (C1), so no `capture_time_ns` is kept or used to age a value; `age_ns` is simulation time since the value was last written |
 | `R-SIM-4`, `R-SIM-22` | ports | additive: `control`, `refSync`, `compState` are conventional port names generated into every shim |
 | `R-SIM-23` | ingest map | additive: a recording's `control` and `refSync` topics are declared in `provides:` |
 | `R-SIM-13` | "the viewer renders a Session" | moved out: a viewer reads the live measurement (`D13`) |

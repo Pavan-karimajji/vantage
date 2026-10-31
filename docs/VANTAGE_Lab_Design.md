@@ -11,7 +11,7 @@ Built on, and not changed here (`D14`): `modules/interfaces/docs/resim_contract/
 (`RCT_Architecture.md`, `RCT_System_Requirements.md` cited as `RCT:SYS-nnnn`,
 `RCT_Test_Spec.md` for the fixture names, `RCT_Implementation_Design.md` cited as
 `RCT:IMP-nnnn`) and `VANTAGE_Architecture.md` (cited as `ARCH §n`). Program decisions:
-`VANTAGE_DEV_PLAN.md` (`D1`..`D20`, gates `G2`..`G4`). The term **equal outputs** is the one
+`VANTAGE_DEV_PLAN.md` (`D1`..`D22`, gates `G2`..`G4`). The term **equal outputs** is the one
 defined in the `RCT_System_Requirements.md` preamble.
 
 ## 1. In plain words
@@ -80,7 +80,7 @@ and are used here without redefinition.
 | start | event | the car runs the component and writes its outputs, at the nominal tick time plus the drawn jitter | one per tick |
 | seed | integer in the topology file | makes every jitter draw repeatable | one topology |
 | bus | the car's own history | for each port, every sample with its logging time; the car reads from it | one scenario run |
-| recorder | Python module `lab_tools.recorder` | writes the bus content as a recording file | one scenario run |
+| recorder | Python module `lab_tools.recorder` | writes the bus content as a recording file, through the Python writer in `interfaces` (`RCT_Architecture.md` §6a) | one scenario run |
 | recording | `.mcap` file | every source, `control`, data output, `refSync` and `compState` of every component; the known right answer | one per scenario |
 | run setup | JSON file | the input Vantage's engine reads (`ARCH §2.3`), written here for tests | one per resim case |
 | catalogue | the folder `catalogue/` | all topology files | the whole lab |
@@ -377,7 +377,7 @@ closed.
 | `car:` | `renumber: [component]` | the component's outputs carry its own run count as `measurement_counter` (a break of `RCT:SYS-0001`) | drill: producer renumbers |
 | `car:` | `counter_jump: [{source, at_counter, by}]` | from that counter on, the source's counter is `by` higher | drill: counter jump |
 | `recording:` | `drop_sample: [{port, counter}]` | the sample is not written, though the bus had it and a `refSync` names it | drill: refSync names a missing sample |
-| `recording:` | `drop_ref_sync: all` | no `refSync` topic is written | drill: no refSyncs |
+| `recording:` | `drop_ref_sync: all` | no `refSync` topic is written, and every `refSync` port is listed `excluded` in `record_policies` | drill: no refSyncs |
 
 The `silent` and `invalid` windows are half-open, `[from, from+for)`, on a sample's nominal (source) time, so jitter never moves a sample across an edge.
 
@@ -387,21 +387,16 @@ only in the car's hand-over would leave a recording no resim could equal.
 
 ### 5.6 The recorder and the recording format
 
-`lab_tools.recorder` writes an `.mcap` file, Vantage's default codec (`ARCH §4`), with the
-`mcap` Python package.
-
-| Item | Content |
-|---|---|
-| topic | the port name: `source.<name>` for a source; `<component>.<port>` for `control`, each data output, `refSync`, `compState` (`R-SIM-6`) |
-| schema | the message's full name and the `FileDescriptorSet` taken from the library's manifest, as `adas.sil.ComponentManifest` carries it |
-| message order | event order; messages with equal logging time keep file order |
-| `log_time` | logging time in ns (µs * 1000); `publish_time` is set equal and the manifest version tells readers it is not a capture time |
-| metadata `manifest` | scenario name, seed, `source_kind: synthetic`, `run_kind: sim`, each library's build id; **no wall-clock time**, so one scenario, topology and seed always gives byte-identical files |
-| metadata `topic_provenance` | sources `mocked`; every component port `simulated` (`R-SIM-12`) |
-| topics sorted | channel numbers are deterministic |
-
-Every component port is recorded, with no decimation or exclusion (`R-SIM-6`), so a recording
-supports any cut. The recorder also writes the `recording:` edits of the scenario.
+`lab_tools.recorder` writes an `.mcap` file through the Python writer in `interfaces`,
+found through the `interfaces` package's `python/` folder that the lab's build adds to
+`index.json`. Topics, schemas, message order, times and metadata follow the recording
+contract, `RCT_Architecture.md` §6a (`D22`). The lab gives only its own argument values:
+no logging time, so one scenario, topology and seed always give byte-identical files;
+sources `mocked` and every component port `simulated`; `source_kind: synthetic` and
+`run_kind: sim`; every port `full` in `record_policies`, with no decimation or exclusion
+(`R-SIM-6`), so a recording supports any cut. The recorder also writes the scenario's
+`recording:` edits (section 5.5) and states them in `manifest`. A drill that drops a port's messages declares that port
+`excluded` in `record_policies`, so its hole is stated (RCT §6a).
 
 ## 6. The catalogue and the fixtures
 
@@ -518,6 +513,9 @@ Drill scenarios (`G4`; `ARCH §12`), also on the running example:
 | `F-CAM` | the `camera` topology and its `base` recording; the case sets `bulk: [source.Cam]`. The oversize case leaves `bulk` empty and the source has `big_frame: {at_counter: 20, bytes: 65536}`, one inline frame larger than the provisional `MeasCycle` slot |
 | `F-PROTO` | not made by the lab. Made from `interfaces` by `check_rct_schema.py`. The lab's messages live in `interfaces` too (`modules/interfaces/proto/lab/lab_sample.proto`, `lab_image.proto`, `D20` (1)) and are checked by the same scripts |
 | `F-SRC` | not made by the lab. The lab's source tree is one of the trees `RCT:SYS-0036`'s check searches; the lab defines no live-measurement struct |
+| `F-WRITER` | `tests/test_recording.py` calls the `interfaces` writer directly with the topics of the `base` recording and a scripted message list |
+| `F-ENGINE-REC` | not made by the lab. Vantage re-runs the `base` recording with `outputs.path` set |
+| `F-SRC-PY` | the lab's `src/`, and a copy of it with one planted second writer, made by `tests/test_recording.py` |
 
 ### 6.4 Which tests the lab can pass alone
 
@@ -527,7 +525,8 @@ compares its outputs with the recording as equal outputs (`lab_tools.compare.equ
 With `use_ref_sync=False` it hands the newest sample not after the trigger time and **counts**
 the mismatches, the model's second check. With it, the lab passes alone, with no Vantage:
 `SYT-HDR-01`..`SYT-HDR-04`, `SYT-CTL-01`, `SYT-CTL-02`, `SYT-CTL-05`, `SYT-CTL-07`,
-`SYT-RSY-01`..`SYT-RSY-04`, `SYT-CST-01`..`SYT-CST-06`. The tests that need a Vantage re-run
+`SYT-RSY-01`..`SYT-RSY-04`, `SYT-CST-01`..`SYT-CST-06`, `SYT-REC-01`..`SYT-REC-03` (Python
+writer cases) and `ANL-06` (lab cases). The tests that need a Vantage re-run
 (`SYT-CTL-03`, `SYT-CTL-04`, `SYT-CTL-06`, `SYT-LMS-*`) use the same fixtures. `G2` is closed
 by the first group.
 
@@ -573,15 +572,15 @@ path is a promise: the code goes there under that name.
 | Run setups | `src/lab_tools/setup_writer.py`, `catalogue/provisional.yaml` | `write_run_setup`, `load_provisional` |
 | ABI loader | `src/lab_tools/abi.py`, `src/lab_tools/messages.py` | `LabLibrary`, `AdasPort`, `AdasPortSet`, `MessageFactory` |
 | Fake car | `src/lab_tools/car.py` | `Car`, `Task`, `SourceTask`, `Bus`, `ControlWriter`, `Car.run`, `Car.startComponent` |
-| Recorder | `src/lab_tools/recorder.py` | `McapRecorder`, `apply_recording_edits` |
+| Recorder | `src/lab_tools/recorder.py` | `McapRecorder` (writes through the `interfaces` writer), `apply_recording_edits` |
 | Bundles | `src/lab_tools/bundles.py` | `bundle_variant` |
 | Checks | `src/lab_tools/compare.py`, `src/lab_tools/reference.py` | `equal_outputs`, `ReferenceResim` |
 | Supervised run | `src/lab_tools/supervise.py` | `run_under_supervisor` |
 | Command line | `src/lab_tools/__main__.py` | verbs `generate`, `car`, `setup`, `reference`, `supervise`, `all` |
 | Catalogue | `catalogue/<topology>.yaml` | section 6.1 |
-| Tests | `tests/harness/lab_harness.py`, `tests/harness/test_contract_harness.py`, `tests/test_car_*.py`, `tests/test_catalogue.py`, `tests/unit/` (topology loader, generator and library smoke tests) | each contract test id in its test name (`R-REQ-9`) |
+| Tests | `tests/harness/lab_harness.py`, `tests/harness/test_contract_harness.py`, `tests/test_car_*.py`, `tests/test_catalogue.py`, `tests/test_recording.py`, `tests/unit/` (topology loader, generator and library smoke tests) | each contract test id in its test name (`R-REQ-9`) |
 
-Contract rows `RCT:IMP-0022`..`RCT:IMP-0031`, re-pointed to these files and symbols by a
+Contract rows `RCT:IMP-0022`..`RCT:IMP-0031` and `RCT:IMP-0047`, re-pointed to these files and symbols by a
 design-row edit (`D14`). This table maps each contract row to the lab row that builds it.
 
 | RCT row | Part named there | File and symbol | Lab row |
@@ -595,7 +594,8 @@ design-row edit (`D14`). This table maps each contract row to the lab row that b
 | `RCT:IMP-0028` | generator | `src/lab_tools/generate.py` `generate_component` | `LAB-15` |
 | `RCT:IMP-0029` | fake car, sources | `src/lab_tools/car.py` `SourceTask` | `LAB-24` |
 | `RCT:IMP-0030` | fake car, scheduler | `src/lab_tools/car.py` `ControlWriter`, `Car.run` | `LAB-27`, `LAB-31` |
-| `RCT:IMP-0031` | fake car, recorder | `src/lab_tools/recorder.py` `McapRecorder` | `LAB-29` |
+| `RCT:IMP-0031` | fake car, recorder | `src/lab_tools/recorder.py` `McapRecorder`, writing through the `interfaces` writer | `LAB-29` |
+| `RCT:IMP-0047` | fake car, recorder on the `interfaces` writer | `src/lab_tools/recorder.py` `McapRecorder`; `src/lab_tools/generate.py` `write_index` | `LAB-55` |
 
 The scheduler's text, including the scripted restart of `car.restart`, lives in `RCT:IMP-0030`
 (one fact, one place).
@@ -603,7 +603,8 @@ The scheduler's text, including the scripted restart of `car.restart`, lives in 
 ## 9. Build order
 
 The first milestone is `LAB-WP-01` to `LAB-WP-06`: the running example only. `LAB-WP-02` and
-`LAB-WP-03` close `RCT:WP-06`; `LAB-WP-04` and `LAB-WP-05` close `RCT:WP-07`. A package says
+`LAB-WP-03` close `RCT:WP-06`; `LAB-WP-04` and `LAB-WP-05` close `RCT:WP-07`; `LAB-WP-09`
+closes `RCT:WP-12`. A package says
 only why it sits where it does; what it lands is the `WP` column of the rows below, in one
 place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 
@@ -615,6 +616,7 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 - [x] **LAB-WP-06** — Run setups, provisional values and the reference re-run · Makes `F-LM` and closes `G2` without Vantage
 - [x] **LAB-WP-07** — The other topologies, one file each · Added after the milestone, one corner case at a time
 - [~] **LAB-WP-08** — Camera, drills and the supervised run · The `G4` drills; needs `LAB-WP-05` and `LAB-WP-06`. Closed by `LAB-53` (`supervise.py`) and the supervised `hang` and `crash` cases passing.
+- [ ] **LAB-WP-09** — The recorder on the `interfaces` writer (RCT C6, `D22`) · Needs `RCT:WP-11`; closes before `G2`, so every lab recording follows `RCT_Architecture.md` §6a by construction
 
 | Box | ID | WP | Serves (RCT) | Artifact — Design |
 |---|---|---|---|---|
@@ -672,14 +674,14 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 | `[x]` | `LAB-51` | `LAB-WP-08` | `RCT:SYS-0016` | `src/lab_tools/recorder.py::apply_recording_edits` — `drop_sample`, `drop_ref_sync`. |
 | `[x]` | `LAB-52` | `LAB-WP-08` | — | `catalogue/running_example.yaml` — the drill scenarios and cases `hang`, `crash` of section 6.2. |
 | `[ ]` | `LAB-53` | `LAB-WP-08` | — | `src/lab_tools/supervise.py::run_under_supervisor` — starts `simengine --supervise`, returns exit code and the sealed `outcome`. |
+| `[ ]` | `LAB-55` | `LAB-WP-09` | `RCT:IMP-0047` | `src/lab_tools/recorder.py::McapRecorder` — writes through the `interfaces` writer, found through `index.json`: `generate.py::write_index` adds the `interfaces` package's `python/` folder, which `lab_add_topology` passes in; the recording edits stay here. |
+| `[ ]` | `LAB-56` | `LAB-WP-09` | `RCT:SYS-0037`, `RCT:SYS-0038`, `RCT:SYS-0039`, `RCT:SYS-0040`, `RCT:SYS-0041`, `RCT:SYS-0043` | `tests/test_recording.py` — `SYT-REC-01`, `SYT-REC-02`, `SYT-REC-03` `.c1` and `.c2`, and `ANL-06` `.c1` and `.c3`, the second writer planted in a copy of `src/`. |
 
 ## 10. Open questions, decided, rejected options, parked
 
 ### Open questions
 
-| # | Question | Recommendation |
-|---|---|---|
-| `Q-L4` | Recording conventions Vantage's reader must agree with: `source.<name>` topics for the lab's sources, equal logging times keeping file order, `manifest_version` below the capture-time version | confirm in step 8 against the ingest rules (`R-SIM-23`); the lab changes only its recorder if one differs |
+None.
 
 ### Decided
 
@@ -693,6 +695,7 @@ The owner's decisions of 2026-10-30, recorded as `D20` in `VANTAGE_DEV_PLAN.md`.
 - `Q-L7` — maximum input age and recovery runs have no code default; provisional calibration values, the generator refuses a component without them (`D20` (2)).
 - `Q-L8` — the seven scenario verbs of section 5.5, a closed list (`D20` (3)).
 - `Q-L9` — the provisional values of section 7, for the lab's tests only (`D20` (3)).
+- `Q-L4` — closed by the RCT recording contract C6 (`D22`, 2026-10-31): the conventions are `RCT_Architecture.md` §6a, and the recorder writes through the `interfaces` writer (`LAB-WP-09`).
 
 ### Rejected options
 
