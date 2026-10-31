@@ -608,7 +608,7 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 - [x] **LAB-WP-03** — Contract harness and ABI loader · Passes the harness tests as soon as a library exists, before any car
 - [x] **LAB-WP-04** — Fake car: sources, scheduler, recorder, on the running example · Makes `F-LAB`; needs the libraries and the ABI loader
 - [x] **LAB-WP-05** — Running example scenarios: restart, fault, calibration · Makes `F-LAB-RESTART`, `F-LAB-FAULT`, `F-LAB-CAL`
-- [ ] **LAB-WP-06** — Run setups, provisional values and the reference re-run · Makes `F-LM` and closes `G2` without Vantage
+- [x] **LAB-WP-06** — Run setups, provisional values and the reference re-run · Makes `F-LM` and closes `G2` without Vantage
 - [ ] **LAB-WP-07** — The other topologies, one file each · Added after the milestone, one corner case at a time
 - [ ] **LAB-WP-08** — Camera, drills and the supervised run · The `G4` drills; needs `LAB-WP-05` and `LAB-WP-06`
 
@@ -650,11 +650,11 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 | `[x]` | `LAB-33` | `LAB-WP-05` | — | `catalogue/running_example.yaml` — scenarios `restart` and `fault` of section 6.2. |
 | `[x]` | `LAB-34` | `LAB-WP-05` | `RCT:SYS-0019` | `src/lab_tools/bundles.py::bundle_variant` — copy a bundle, set or remove keys, repack with the new `bundle.sha256`. |
 | `[x]` | `LAB-35` | `LAB-WP-05` | `RCT:SYS-0012`, `RCT:SYS-0017`, `RCT:SYS-0018`, `RCT:SYS-0019`, `RCT:SYS-0020`, `RCT:SYS-0021` | `tests/test_car_scenarios.py` — `SYT-CTL-07`, `SYT-CST-01`..`SYT-CST-05`. |
-| `[ ]` | `LAB-36` | `LAB-WP-06` | — | `src/lab_tools/setup_writer.py::write_run_setup` — one run setup JSON per resim case, with the keys of `ARCH §2.3` only. |
-| `[ ]` | `LAB-37` | `LAB-WP-06` | — | `catalogue/provisional.yaml` — the run-setup values of section 7, each with `status: provisional`. |
-| `[ ]` | `LAB-38` | `LAB-WP-06` | `RCT:SYS-0016` | `src/lab_tools/compare.py::equal_outputs` — same count, byte-identical once `cycle_counter` is 0. |
-| `[ ]` | `LAB-39` | `LAB-WP-06` | `RCT:SYS-0016` | `src/lab_tools/reference.py::ReferenceResim` — re-run by refSync for any cut and order; `use_ref_sync=False` counts mismatches. |
-| `[ ]` | `LAB-40` | `LAB-WP-06` | `RCT:SYS-0016` | `tests/test_catalogue.py` — `SYT-RSY-04` on every catalogue file present. |
+| `[x]` | `LAB-36` | `LAB-WP-06` | — | `src/lab_tools/setup_writer.py::write_run_setup` — one run setup JSON per resim case, with the keys of `ARCH §2.3` only. |
+| `[x]` | `LAB-37` | `LAB-WP-06` | — | `catalogue/provisional.yaml` — the run-setup values of section 7, each with `status: provisional`. |
+| `[x]` | `LAB-38` | `LAB-WP-06` | `RCT:SYS-0016` | `src/lab_tools/compare.py::equal_outputs` — same count, byte-identical once `cycle_counter` is 0. |
+| `[x]` | `LAB-39` | `LAB-WP-06` | `RCT:SYS-0016` | `src/lab_tools/reference.py::ReferenceResim` — re-run by refSync for any cut and order; `use_ref_sync=False` counts mismatches. |
+| `[x]` | `LAB-40` | `LAB-WP-06` | `RCT:SYS-0016` | `tests/test_catalogue.py` — `SYT-RSY-04` on every catalogue file present. |
 | `[ ]` | `LAB-41` | `LAB-WP-07` | `RCT:SYS-0016` | `catalogue/fan_out.yaml`. |
 | `[ ]` | `LAB-42` | `LAB-WP-07` | `RCT:SYS-0016` | `catalogue/diamond.yaml`. |
 | `[ ]` | `LAB-43` | `LAB-WP-07` | `RCT:SYS-0016` | `catalogue/rates_not_multiple.yaml`. |
