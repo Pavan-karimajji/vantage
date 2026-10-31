@@ -671,6 +671,169 @@ To dispose: 377 rows (188 `SW`, 189 `IMP`).
 
 | UID | Disposition | Target | Why |
 |---|---|---|---|
+| SIM:SW-0001 | carried | VNT | the run setup stays flat and fully resolved, with absolute paths and one producer per port; no period is computed, there being no grid |
+| SIM:SW-0002 | carried | VNT | the run setup stays the only input of the engine |
+| SIM:SW-0003 | carried | VNT | the setup carries each library's resolved path, the pattern it matched and the search order |
+| SIM:SW-0004 | carried | VNT | the setup is hashed as `spec_sha256` and the hash goes into the run artifacts |
+| SIM:SW-0005 | carried | VNT | the setup keeps a schema version, moved to a new version string, and the engine refuses one outside its range |
+| SIM:SW-0006 | superseded | D10, ARCH §2.3 | the setup carries each stage's `clock_period_ns` and no grid step |
+| SIM:SW-0007 | carried | VNT | the setup keeps the resolved wiring, with `previous_cycle` marked on an input |
+| SIM:SW-0008 | carried | VNT | overrides and faults stay resolved verbs in `mutations[]` |
+| SIM:SW-0009 | carried | VNT | the record policy stays a key of each port in the setup |
+| SIM:SW-0010 | superseded | D18 | `sampling` and `on_missing` are refused at load; input selection by number is the only policy |
+| SIM:SW-0011 | carried | VNT | the setup keeps the resolved ingest table and the absent ports; unit factor, offset and header bindings are gone (`R-SIM-23`, ARCH §3.4) |
+| SIM:SW-0012 | carried | VNT | the setup stays a text file with a stable, diffable serialisation |
+| SIM:SW-0013 | carried | VNT | per-message work stays in C++ (ARCH §11 draws the line) |
+| SIM:SW-0014 | carried | VNT | bulk data stays in engine-owned buffers that Python views without copying |
+| SIM:SW-0015 | carried | VNT | a view onto a reused engine buffer is invalidated and access raises |
+| SIM:SW-0016 | carried | VNT | the engine never calls back into Python during a run |
+| SIM:SW-0017 | superseded | ARCH §3.1, ARCH §10 | the launcher starts an engine run only from a file it has written, and the live measurement replaces the player transport |
+| SIM:SW-0018 | carried | VNT | the engine reads no YAML or ingest map and searches no library path; its own rank and loop checks (ARCH §3.2) are not the launcher's wiring validation (open question) |
+| SIM:SW-0019 | superseded | D9, ARCH §11 | Vantage is proven on the lab first and no second engine is carried, so no duplicate waits for a proof of equality |
+| SIM:SW-0020 | carried | VNT | the check that no capability keeps two implementations stays (`check_no_duplication.py`), run at each gate |
+| SIM:SW-0021 | carried | VNT | a codec keeps its small fixed read and write method set |
+| SIM:SW-0022 | carried | VNT | a codec still declares its capabilities as data; the capture-time capability is dropped (D22, ARCH §13) |
+| SIM:SW-0023 | carried | VNT | codecs are found by registration and matched to a source by extension |
+| SIM:SW-0024 | carried | VNT | conversion stays a consequence of the capability table |
+| SIM:SW-0025..0027 | carried | VNT | §5.2 — readers stream in bounded batches and decode only when a consumer asks |
+| SIM:SW-0028 | carried | VNT | the sidecar index is built on first open and reused |
+| SIM:SW-0029 | carried | VNT | the index is keyed by topic |
+| SIM:SW-0030 | carried | VNT | a seek is exact and reads nothing before its target |
+| SIM:SW-0031 | carried | VNT | selection stays by source, instance and topic; the cycle-identifier axis goes with cycle reconstruction (D10) |
+| SIM:SW-0032 | carried | VNT | the reader applies the resolved table to rename and tag only; the unit factor and offset are gone (`R-SIM-23`) |
+| SIM:SW-0033 | retired | — | `R-SIM-23` wins: a unit correction is an unversioned algorithm between the recording and the component |
+| SIM:SW-0034 | carried | VNT | a payload whose type does not match the port is refused, never coerced |
+| SIM:SW-0035 | carried | VNT | several sources are merged under a declared policy; force-alignment is dropped (D18) |
+| SIM:SW-0036 | retired | — | a recording has one clock (`RCT:SYS-0039`) and Vantage never re-stamps a message (D18), so a merge has no alignment basis to declare |
+| SIM:SW-0037 | retired | — | Vantage never changes a recorded time (D18), so no message is ever marked as re-stamped |
+| SIM:SW-0038 | carried | VNT | meta blocks stay declared kinds and unknown ones survive a round trip; plug-in identity goes with the viewer (D13) |
+| SIM:SW-0039 | carried | VNT | a recording with no stated provenance reads as unknown (open question) |
+| SIM:SW-0040 | moved | RCT:SYS-0040 | the contract says a writer reads no clock and the same arguments give the same bytes |
+| SIM:SW-0041 | carried | VNT | the engine's writer writes each step's output as it is produced |
+| SIM:SW-0042 | carried | VNT | a merged output loads alone; step 8 states it on top of C6 |
+| SIM:SW-0043 | superseded | ARCH §3.4 | a sample holds the four header fields, its arrival time, origin and payload; capture time and the repeat flag are gone |
+| SIM:SW-0044 | superseded | ARCH §13 | `R-SIM-14` now has one clock: `source_timestamp_us` in the header, with no capture time kept |
+| SIM:SW-0045 | superseded | ARCH §13 | age is simulation time since the value was last written, not derived from a capture time |
+| SIM:SW-0046 | carried | VNT | no time quantity inside the engine is floating point |
+| SIM:SW-0047 | carried | VNT | a missing input is explicit: an empty input with unknown origin, never a zero fill |
+| SIM:SW-0048 | carried | VNT | a value carries its origin from the closed set, including unknown; the contract states only the recorded origins |
+| SIM:SW-0049 | superseded | D10, ARCH §7 | a run is one recorded control message, so no cycle is grouped from file timestamps |
+| SIM:SW-0050 | superseded | D10, ARCH §7 | cycles are not reconstructed, so no recovery ladder is kept |
+| SIM:SW-0051 | superseded | D10, ARCH §7 | there is no ladder to force a rung of |
+| SIM:SW-0052 | superseded | ARCH §6 | a sample with no number or time is a badged fallback of the time rule, not a timing-approximated mark |
+| SIM:SW-0053 | carried | VNT | a counter gap is detected and counted in the event log, never interpolated (ARCH §3.4, ARCH §6) |
+| SIM:SW-0054 | superseded | D18 | inputs are picked by counter, so no repeat flag reaches a component |
+| SIM:SW-0055 | superseded | D10, ARCH §7 | rate is not reconstructed from a flat recording, and a declared period no longer schedules |
+| SIM:SW-0056 | superseded | D10, ARCH §3.4 | no stage is due or not due; the sample buffer gives the newest sample with its age |
+| SIM:SW-0057 | carried | VNT | a component always receives its full port set, now with `control`; the car's empty entry gives an empty input |
+| SIM:SW-0058 | carried | VNT | sample buffers are bounded by `buffer_depth` per port |
+| SIM:SW-0059 | moved | RCT:SYS-0029 | the contract says bulk payloads are referenced from the cycle by slot and sequence, never inline |
+| SIM:SW-0060 | carried | VNT | a static parameter port stays its own port kind in the manifest |
+| SIM:SW-0061 | superseded | D10, ARCH §3.3 | the one step loop (`StepOnce`) is the only path; the grid scheduler is replaced |
+| SIM:SW-0062 | superseded | D10, ARCH §2.3 | `grid_step_ns` is gone from the setup |
+| SIM:SW-0063 | superseded | D10, ARCH §7 | with no grid there is no multiple-of-grid load error |
+| SIM:SW-0064 | superseded | D10, ARCH §7 | there is no due test; a run exists only for a ticket |
+| SIM:SW-0065 | superseded | D10, ARCH §2.3 | a stage starts by control, a named input port or a clock, set in the run setup |
+| SIM:SW-0066 | superseded | D10, ARCH §7 | no schedule is predicted, so there is no disagreement to report; a component that sets no `updated` makes no sample |
+| SIM:SW-0067 | superseded | D10, ARCH §2.3 | there is no grid whose size could be pathological |
+| SIM:SW-0068..0071 | superseded | D18, ARCH §3.4 | §7.1 — input selection by number is the only policy; sampling and on_missing are refused at load |
+| SIM:SW-0072 | carried | VNT | runs of one instant go in rank order, fixed by the setup alone |
+| SIM:SW-0073 | superseded | ARCH §2.3 | a `previous_cycle` input replaces the delay counted in grid steps |
+| SIM:SW-0074 | carried | VNT | a loop with no previous-cycle edge is a load error naming the loop |
+| SIM:SW-0075 | carried | VNT | the orchestrator decides from sample headers and the setup and reads no payload beyond `sig_header` (ARCH §3.2, ARCH §3.4) |
+| SIM:SW-0076 | carried | VNT | the engine prints its plan of ranks, triggers and clocks without executing; a step-by-step schedule can no longer be predicted (ARCH §7) |
+| SIM:SW-0077 | carried | VNT | the orchestrator reads no wall clock to decide anything |
+| SIM:SW-0078 | superseded | D13 | play-rate pacing belongs to the viewer; real-time pacing is parked (ARCH §14) |
+| SIM:SW-0079..0083 | carried | VNT | §8.1 — the host opens a module by absolute path, binds its exports by name and checks the ABI version first |
+| SIM:SW-0084 | carried | VNT | the host keeps driving the lifecycle, reset being the RESTART run |
+| SIM:SW-0085 | superseded | ARCH §3.2 | a reset is a RESTART run, the op mode of a control message, not a separate host call |
+| SIM:SW-0086 | superseded | ARCH §3.2 | start and restart reach a component as the op mode of its control message, not as wired lifecycle ports |
+| SIM:SW-0087 | carried | VNT | the host passes the resolved bundle path and does not read the bundle |
+| SIM:SW-0088..0091 | carried | VNT | §8.3 — conversion and the port set stay driven by the manifest, buffers grow once, a binary without a manifest is quarantined |
+| SIM:SW-0092..0096 | carried | VNT | §8.4 — the execution timeout, the failure report, in-process loading and the isolated stage stay |
+| SIM:SW-0097 | carried | VNT | the six override verbs stay a closed list |
+| SIM:SW-0098 | carried | VNT | an override never creates an entity |
+| SIM:SW-0099 | carried | VNT | the address grammar stays `[i]` and `[*]` with no predicate |
+| SIM:SW-0100 | carried | VNT | a fixed-slot port is cleared in place and never compacted |
+| SIM:SW-0101 | carried | VNT | the five fault verbs stay a closed list |
+| SIM:SW-0102 | carried | VNT | a value is decoded and re-encoded once per step per overridden port |
+| SIM:SW-0103 | carried | VNT | a value an override touched is tagged overridden at the value |
+| SIM:SW-0104 | carried | VNT | the delay fault never writes a timestamp the source did not produce; the capture stamp is gone (ARCH §13) |
+| SIM:SW-0105 | carried | VNT | the mutator touches only the ports the setup names |
+| SIM:SW-0106 | carried | VNT | every closed vocabulary is compared with its schema on each build |
+| SIM:SW-0107 | carried | VNT | an override contradicting the coherence classification is a waiver |
+| SIM:SW-0108 | carried | VNT | a fault window is recorded, in steps or time, in the manifest and the event log (ARCH §4) |
+| SIM:SW-0109 | carried | VNT | the runner is built from the setup and exposes one entry point that advances the run (`StepOnce`) |
+| SIM:SW-0110 | carried | VNT | a measured stage emits its recorded outputs and is never executed |
+| SIM:SW-0111 | carried | VNT | `measured` against a recording lacking those outputs is a startup error naming the stage and ports |
+| SIM:SW-0112 | carried | VNT | an off stage contributes no ports |
+| SIM:SW-0113 | carried | VNT | the ports crossing from measured into simulate are computed and logged before the first step |
+| SIM:SW-0114 | moved | RCT:SYS-0037 | the contract says a recording holds a topic for every declared port not excluded, which the runner's offer to the writer must give |
+| SIM:SW-0115 | carried | VNT | excluding or decimating a consumed input is a load error at record time |
+| SIM:SW-0116 | carried | VNT | the first divergence is detected by step number and recorded with stage and port |
+| SIM:SW-0117 | carried | VNT | data after the divergence plus a grace is flagged informational per message |
+| SIM:SW-0118 | carried | VNT | a simulated output never changes what a reader returns; the engine stays open-loop |
+| SIM:SW-0119 | carried | VNT | progress is checkpointed by step number as the run goes |
+| SIM:SW-0120 | carried | VNT | a time slice is a jump before the first step, not a read from the start |
+| SIM:SW-0121..0130 | carried | VNT | §11 — the closed error taxonomy, exit codes, structured log and warning summary stay |
+| SIM:SW-0131 | carried | VNT | the engine states the ranks, triggers and clocks it loaded, apart from the configuration layer |
+| SIM:SW-0132 | carried | VNT | the optional trace stays, one entry per run keyed by step; held is a property of a port value, not of a stage (ARCH §7) |
+| SIM:SW-0133 | carried | VNT | the trace is off by default and changes no value |
+| SIM:SW-0134 | carried | VNT | the per-run report of time, steps, per-module time and bytes read stays |
+| SIM:SW-0135 | carried | VNT | bytes read are counted at the codec boundary per topic |
+| SIM:SW-0136 | carried | VNT | no measured duration enters a decision, a value or an output |
+| SIM:SW-0137 | carried | VNT | the engine reports each module's path, versions, build and bundle hash |
+| SIM:SW-0138 | carried | VNT | break conditions at a step, at a time, on module entry and on a port condition stay |
+| SIM:SW-0139 | carried | VNT | a crash writes a minimal reproducer package |
+| SIM:SW-0140 | carried | VNT | no diagnostic raises or aborts a run |
+| SIM:SW-0141 | carried | VNT | the executable stays thin; it now also holds the supervisor and the isolated stage (ARCH §3.7, ARCH §11) |
+| SIM:SW-0142 | carried | VNT | the executable runs a complete simulation with no interpreter loaded |
+| SIM:SW-0143 | carried | VNT | the executable prints its process id and pauses before the first step (`--wait-for-attach`) |
+| SIM:SW-0144 | carried | VNT | the engine library stays usable without the executable |
+| SIM:SW-0145 | carried | VNT | one engine binary serves desktop, batch and CI |
+| SIM:SW-0146 | carried | VNT | the engine builds and runs with no graphical toolkit and never prompts |
+| SIM:SW-0147 | carried | VNT | a restart after an abnormal end stays explicit, bounded and off by default |
+| SIM:SW-0148 | carried | VNT | the executable returns the taxonomy's exit code, never a raw platform code |
+| SIM:SW-0149 | carried | VNT | the four configuration layers stay, each value keeping its layer |
+| SIM:SW-0150 | carried | VNT | composition, connections and source-signal binding stay separate file kinds; the visual layout file goes with the viewer (D13) |
+| SIM:SW-0151 | carried | VNT | every configuration file is validated against a published schema with locating errors |
+| SIM:SW-0152 | carried | VNT | an unknown key fails the load with near matches; `sampling` and `on_missing` are now among them (D18) |
+| SIM:SW-0153 | carried | VNT | every file carries a schema version and an unknown or missing one is refused |
+| SIM:SW-0154 | carried | VNT | references, types and modes are checked at load, never first at run time |
+| SIM:SW-0155 | carried | VNT | configuration round-trips to a byte-identical file |
+| SIM:SW-0156 | carried | VNT | includes and fragments stay and resolve identically |
+| SIM:SW-0157 | carried | VNT | variables resolve at load and every resolution is reported |
+| SIM:SW-0158 | carried | VNT | configuration stays in the algorithm team's repository |
+| SIM:SW-0159 | carried | VNT | only a file some module reads at run time enters the bundle |
+| SIM:SW-0160 | carried | VNT | project agreement (a warning) and ego-parameter agreement (an error) are checked at load |
+| SIM:SW-0161 | carried | VNT | geometry comes from the project's configuration per run; drawing is the viewer's |
+| SIM:SW-0162 | carried | VNT | a calibration value changes with no rebuild and no host edit |
+| SIM:SW-0163 | superseded | D10, ARCH §2.3 | a period survives only as `clock_period_ns` of a stage no recording starts, and the setup holds it in integer nanoseconds |
+| SIM:SW-0164 | carried | VNT | the configuration layer opens no payload, recording or binary; the probe pass hands it the data |
+| SIM:SW-0165 | carried | VNT | a fast validation checks everything checkable with no recording and no binary |
+| SIM:SW-0166 | carried | VNT | a resolved value keeps its file, layer and line for the dry run |
+| SIM:SW-0167 | carried | VNT | the graph is built from manifests and the project's active module list |
+| SIM:SW-0168 | carried | VNT | two producers for one port are refused at load, naming both |
+| SIM:SW-0169 | carried | VNT | a required input with no producer is refused, naming what was considered |
+| SIM:SW-0170 | carried | VNT | port types are matched at load |
+| SIM:SW-0171 | carried | VNT | a data port never connects to a control port |
+| SIM:SW-0172 | superseded | D10, ARCH §7 | there is no base grid to derive |
+| SIM:SW-0173 | superseded | D10, ARCH §7 | there is no grid for a period to fit |
+| SIM:SW-0174 | carried | VNT | the launcher model finds a stale measured stage over the transitive ancestors |
+| SIM:SW-0175 | carried | VNT | the launcher model finds consumption over the transitive descendants |
+| SIM:SW-0176 | carried | VNT | the classification stays exactly three outcomes: broken chain, orphan simulation, injection |
+| SIM:SW-0177 | carried | VNT | the classification runs on the graph alone and is callable on its own |
+| SIM:SW-0178 | carried | VNT | the launcher model blocks a broken chain by default, naming the path and the landing point |
+| SIM:SW-0179 | carried | VNT | the launcher model computes remedies including the smallest change |
+| SIM:SW-0180 | carried | VNT | a waiver needs a flag and a written reason and the manifest marks the run; "visibly in the player" goes with the viewer (D13) |
+| SIM:SW-0181 | carried | VNT | a policy setting can forbid waivers |
+| SIM:SW-0182 | carried | VNT | an orphan warns once and is badged `KIND_COMPUTED_NOT_CONSUMED` (ARCH §5) |
+| SIM:SW-0183 | carried | VNT | the launcher model closes the gap by default, undoably, and a forced gap is badged |
+| SIM:SW-0184 | carried | VNT | a mode change returns a new configuration and leaves the old one |
+| SIM:SW-0185 | carried | VNT | the launcher model computes the feasible cuts from the recording's index before any run |
+| SIM:SW-0186 | carried | VNT | a stage cannot be set to `measured` when the recording lacks its outputs |
+| SIM:SW-0187 | carried | VNT | the bridge from a recording's signal names to ports stays a declared file, parsed once in Python |
+| SIM:SW-0188 | carried | VNT | a map declares port, payload type, origin tag and array shape; unit, scale and offset are dropped (`R-SIM-23`) |
 
 ### 4.3 SIM software rows, part 2 (6d)
 
