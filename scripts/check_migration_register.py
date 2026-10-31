@@ -23,7 +23,12 @@ in the universe: only a row defined in the document's own requirement form
 (or, for `IMP`, its table row) counts as live.
 
 Usage:
-    check_migration_register.py [--register <md>] [--selftest]
+    check_migration_register.py [--register <md>] [--require-placed] [--selftest]
+
+A `carried` row's Target is `VNT` (kept, not yet placed) or `VNT:SYS-nnnn` (the
+Vantage system rows that state it). `C-PLACE` is a `VNT:` Target that is not a
+row of the Vantage set; every run prints how many carried rows are still bare
+`VNT`, and `--require-placed` makes each of them a `C-PLACE` finding.
 """
 
 from __future__ import annotations
@@ -106,6 +111,8 @@ class Context:
     sections: Dict[str, str] = field(default_factory=dict)
     # Every file of the seed tree under the code roots; used for a directory with no row.
     seed_files: Optional[List[str]] = None
+    # VNT:SYS-0001, ... from the Vantage set; empty when the set does not exist yet.
+    vnt_uids: Set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -196,6 +203,31 @@ def load_rct(repo: Path) -> Set[str]:
     return uids
 
 
+def load_vnt(root: Path) -> Set[str]:
+    """SYS rows of the Vantage set: the document `docs/layers.yaml` names for layer SYS."""
+    layers = root / "docs" / "layers.yaml"
+    if not layers.is_file():
+        return set()
+    doc = None
+    layer_id = None
+    for line in _read(layers).splitlines():
+        m = re.match(r"^\s*-?\s*id:\s*(\S+)", line)
+        if m:
+            layer_id = m.group(1)
+        m = re.match(r"^\s*doc:\s*(\S+)", line)
+        if m and layer_id == "SYS":
+            doc = m.group(1)
+            break
+    if doc is None or not (root / "docs" / doc).is_file():
+        return set()
+    uids: Set[str] = set()
+    for line in _read(root / "docs" / doc).splitlines():
+        m = re.match(BLOCK_RE % "SYS", line)
+        if m:
+            uids.add(f"VNT:{m.group(1)}")
+    return uids
+
+
 def load_context(root: Path = ROOT) -> Context:
     repo = root.parent.parent
     universe: Dict[str, str] = {}
@@ -217,7 +249,7 @@ def load_context(root: Path = ROOT) -> Context:
     }
     return Context(
         universe, serves, decisions, arch_sections, arch_text, load_rct(repo), root,
-        read_seed_entries(root), sections, read_seed_files(root),
+        read_seed_entries(root), sections, read_seed_files(root), load_vnt(root),
     )
 
 
@@ -332,6 +364,21 @@ def check_row_target(ctx: Context, word: str, target: str) -> Optional[str]:
                 if m.group(1) not in ctx.arch_sections:
                     return f"ARCH §{m.group(1)} is not a section of the architecture"
     return None
+
+
+def check_placement(ctx: Context, target: str) -> Tuple[bool, List[str]]:
+    """For a carried Target: (still bare VNT, what is wrong with its VNT: terms)."""
+    bare = False
+    problems: List[str] = []
+    for term in (x.strip() for x in _clean(target).split(",")):
+        if term == "VNT":
+            bare = True
+        elif re.match(r"^VNT:SYS-\d{4}$", term):
+            if term not in ctx.vnt_uids:
+                problems.append(f"{term} does not exist in the Vantage set")
+        elif re.match(r"^VNT:[A-Z]+-\d{4}$", term):
+            problems.append(f"{term} is not a placement: only VNT:SYS-nnnn is")
+    return bare, problems
 
 
 def check_code_target(ctx: Context, word: str, target: str) -> Optional[str]:
@@ -564,9 +611,21 @@ def expand_section_row(ctx: Context, cell: str, why: str) -> Tuple[List[str], Li
     return uids, problems
 
 
-def run_checks(ctx: Context, reg: Register) -> Tuple[List[str], List[str]]:
+def _placement_findings(ctx: Context, where: str, target: str, require_placed: bool) -> List[str]:
+    bare, problems = check_placement(ctx, target)
+    out = [f"C-PLACE {where}: {p}" for p in problems]
+    if bare and require_placed:
+        out.append(f"C-PLACE {where}: Target is still bare VNT; place it on the VNT:SYS rows that state it")
+    return out
+
+
+def run_checks(
+    ctx: Context, reg: Register, require_placed: bool = False
+) -> Tuple[List[str], List[str]]:
     """Returns (findings, summary lines)."""
     findings: List[str] = []
+    carried = 0
+    bare_by_section: Dict[str, int] = {}
     listed: Dict[str, str] = {}  # uid -> word
     first_line: Dict[str, int] = {}
     in_section: Dict[str, Set[str]] = {sec.name: set() for sec in reg.sections}
@@ -591,6 +650,8 @@ def run_checks(ctx: Context, reg: Register) -> Tuple[List[str], List[str]]:
                         findings.append(f"C-TARGET {cell}: {problem}")
                     if word == "retired" and cells[3].strip().partition(" — ")[2].strip() in ("", "—"):
                         findings.append(f"C-WHY {cell}: a retired row needs a Why")
+                    if word == "carried":
+                        findings += _placement_findings(ctx, cell, cells[2], require_placed)
             for uid in uids:
                 if uid in first_line:
                     findings.append(
@@ -608,6 +669,10 @@ def run_checks(ctx: Context, reg: Register) -> Tuple[List[str], List[str]]:
                     continue
                 listed[uid] = word
                 in_section[sec.name].add(uid)
+                if word == "carried":
+                    carried += 1
+                    if check_placement(ctx, cells[2])[0]:
+                        bare_by_section[sec.name] = bare_by_section.get(sec.name, 0) + 1
                 if section_row:
                     continue
                 if word not in ROW_WORDS:
@@ -618,6 +683,8 @@ def run_checks(ctx: Context, reg: Register) -> Tuple[List[str], List[str]]:
                     findings.append(f"C-TARGET {uid}: {problem}")
                 if word == "retired" and _clean(cells[3]) in ("", "—"):
                     findings.append(f"C-WHY {uid}: a retired row needs a Why")
+                if word == "carried":
+                    findings += _placement_findings(ctx, uid, cells[2], require_placed)
 
     inherited: Set[str] = set()
     for uid in sorted(u for u, k in ctx.universe.items() if k == "IMP"):
@@ -663,6 +730,12 @@ def run_checks(ctx: Context, reg: Register) -> Tuple[List[str], List[str]]:
     summary.append(
         f"total: universe {tot[0]}, listed {tot[1]}, inherited {tot[2]}, missing {tot[3]}"
     )
+    bare = sum(bare_by_section.values())
+    by_sec = ", ".join(f"{n}: {c}" for n, c in bare_by_section.items())
+    summary.append(
+        f"placement: carried {carried}, placed {carried - bare}, still bare VNT {bare}"
+        + (f" ({by_sec})" if by_sec else "")
+    )
     return findings, summary
 
 
@@ -683,6 +756,7 @@ BASE_ROWS: Dict[str, List[Tuple[str, str, str, str]]] = {
         ("SIM:SW-0002", "carried", "VNT", "kept"),
     ],
 }
+CS_SEC = "4.1 Concept and system"
 BASE_CODE: List[Tuple[str, str, str, str]] = [
     ("src/simcore/", "reused", "Runner, ARCH §3.3", "kept"),
     ("src/simcore/bus/", "corrected", "Sample buffers, ARCH §3.4", "gains buffers"),
@@ -748,12 +822,12 @@ def make_context(root: Path) -> Context:
         universe, serves, {"D13"}, {"3", "3.1", "3.3", "3.4", "3.7", "11"}, SELF_ARCH,
         {"RCT:SYS-0001"}, root, list_code_entries(SELF_SEED),
         {"SIM:CN-0001": "§1", "SIM:CN-0002": "§2", "SIM:SYS-0001": "§1"},
-        list_seed_files(SELF_SEED),
+        list_seed_files(SELF_SEED), {"VNT:SYS-0001"},
     )
 
 
-def planted_cases() -> List[Tuple[str, str, str, str]]:
-    """(check id, uid or path expected in the finding, register text, label)."""
+def planted_cases() -> List[Tuple[str, str, str, bool]]:
+    """(check id, uid or path expected in the finding, register text, --require-placed)."""
     def rows(mod=None):
         r = {k: list(v) for k, v in BASE_ROWS.items()}
         if mod:
@@ -793,8 +867,13 @@ def planted_cases() -> List[Tuple[str, str, str, str]]:
         ("C-RANGE", "SIM:CN-0001..0002",
          render_register(rows(lambda r: r["4.1 Concept and system"].__setitem__(
              slice(0, 2), [("SIM:CN-0001..0002", "carried", "VNT", "§1 — one section")])), code())),
+        ("C-PLACE", "SIM:CN-0001",
+         render_register(rows(setrow(CS_SEC, 0, target="VNT:SYS-9999")), code())),
+        ("C-PLACE", "SIM:CN-0001",
+         render_register(rows(setrow(CS_SEC, 0, target="VNT:IMP-0001")), code())),
     ]
-    return cases
+    bare = render_register(rows(), code())  # bare VNT passes alone, fails with the flag
+    return [(*c, False) for c in cases] + [("C-PLACE", "SIM:CN-0001", bare, True)]
 
 
 def selftest() -> List[str]:
@@ -807,8 +886,8 @@ def selftest() -> List[str]:
         base, _ = run_checks(ctx, parse_register(render_register(BASE_ROWS, BASE_CODE)))
         if base:
             failures.append(f"baseline is not clean: {base}")
-        for check, where, text in planted_cases():
-            found, _ = run_checks(ctx, parse_register(text))
+        for check, where, text, require in planted_cases():
+            found, _ = run_checks(ctx, parse_register(text), require)
             if not any(f.startswith(f"{check} {where}:") for f in found):
                 failures.append(f"{check} planted at {where} was not caught")
     return failures
@@ -821,6 +900,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="Check the Vantage migration register (D15).")
     parser.add_argument("--register", type=Path, default=ROOT / "docs" / "VANTAGE_Migration_Register.md")
+    parser.add_argument("--require-placed", action="store_true",
+                        help="a carried row still bare VNT is a C-PLACE finding")
     parser.add_argument("--selftest", action="store_true", help="plant one violation per check")
     args = parser.parse_args(argv)
 
@@ -833,7 +914,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     ctx = load_context()
     reg = parse_register(_read(args.register))
-    findings, summary = run_checks(ctx, reg)
+    findings, summary = run_checks(ctx, reg, args.require_placed)
     for line in summary:
         print(line)
     for line in findings:

@@ -21,7 +21,7 @@ SW = "4.2 Software"
 CS = "4.1 Concept and system"
 
 
-def _findings(tmp_path, rows=None, code=None):
+def _findings(tmp_path, rows=None, code=None, require_placed=False):
     """Write a register into tmp_path, parse it back, run every check."""
     root = tmp_path / "vantage"
     cmr.make_tree(root)
@@ -32,7 +32,8 @@ def _findings(tmp_path, rows=None, code=None):
     )
     path = tmp_path / "register.md"
     path.write_text(text, encoding="utf-8")
-    findings, _ = cmr.run_checks(ctx, cmr.parse_register(path.read_text(encoding="utf-8")))
+    reg = cmr.parse_register(path.read_text(encoding="utf-8"))
+    findings, _ = cmr.run_checks(ctx, reg, require_placed)
     return findings
 
 
@@ -228,6 +229,93 @@ def test_universe_excludes_a_row_a_document_lists_as_retired(tmp_path):
     assert serves["SIM:IMP-0001"] == ["SIM:SW-0001"]
     universe, serves = cmr.load_set(root, "PARITY")
     assert universe["PARITY:IMP-0001"] == "IMP" and serves["PARITY:IMP-0001"] == ["PARITY:SW-0001"]
+
+
+# --------------------------------------------------------------- placement --
+
+def _place(target, word="carried"):
+    rows = _rows()
+    rows[CS][0] = ("SIM:CN-0001", word, target, "x")
+    return rows
+
+
+def test_a_placement_on_a_vantage_sys_row_that_exists_passes(tmp_path):
+    found = _findings(tmp_path, _place("VNT:SYS-0001"), require_placed=True)
+    assert not any(f.startswith("C-PLACE SIM:CN-0001") for f in found)
+    assert _findings(tmp_path, _place("VNT:SYS-0001")) == []
+
+
+def test_c_place_a_placement_on_a_row_the_vantage_set_lacks(tmp_path):
+    found = _findings(tmp_path, _place("VNT:SYS-9999"))
+    assert _ids(found, "C-PLACE") == [
+        "C-PLACE SIM:CN-0001: VNT:SYS-9999 does not exist in the Vantage set"
+    ]
+
+
+def test_c_place_every_placement_fails_while_the_vantage_set_does_not_exist(tmp_path):
+    root = tmp_path / "vantage"
+    cmr.make_tree(root)
+    ctx = cmr.make_context(root)
+    ctx.vnt_uids = set()
+    text = cmr.render_register(_place("VNT:SYS-0001"), list(cmr.BASE_CODE))
+    found, _ = cmr.run_checks(ctx, cmr.parse_register(text))
+    assert len(_ids(found, "C-PLACE")) == 1
+
+
+def test_c_place_only_a_sys_row_is_a_placement(tmp_path):
+    found = _findings(tmp_path, _place("VNT:IMP-0001"))
+    assert any("only VNT:SYS-nnnn" in f for f in _ids(found, "C-PLACE"))
+
+
+def test_a_placement_on_a_row_the_set_lacks_in_a_list_is_found(tmp_path):
+    found = _findings(tmp_path, _place("VNT:SYS-0001, VNT:SYS-9999"))
+    assert len(_ids(found, "C-PLACE")) == 1
+
+
+def test_a_bare_vnt_passes_without_the_flag_and_fails_with_it(tmp_path):
+    assert _ids(_findings(tmp_path), "C-PLACE") == []
+    found = _ids(_findings(tmp_path, require_placed=True), "C-PLACE")
+    assert len(found) == 3 and found[0].startswith("C-PLACE SIM:CN-0001:")
+
+
+def test_a_bare_vnt_in_a_section_row_fails_once_with_the_flag(tmp_path):
+    rows = _rows()
+    rows[SW] = [("SIM:SW-0001..0002", "carried", "VNT", "§1 — kept")]
+    found = _findings(tmp_path, rows, require_placed=True)
+    assert [f for f in found if f.startswith("C-PLACE SIM:SW-0001..0002:")] != []
+    assert not any(f.startswith("C-PLACE SIM:SW-0001:") for f in found)
+
+
+def test_a_row_that_is_not_carried_is_not_a_placement_matter(tmp_path):
+    rows = _rows()
+    rows[CS][0] = ("SIM:CN-0001", "superseded", "D13", "x")
+    found = _ids(_findings(tmp_path, rows, require_placed=True), "C-PLACE")
+    assert len(found) == 2 and not any("CN-0001" in f for f in found)
+
+
+def test_the_summary_counts_placed_and_bare_carried_rows_by_section(tmp_path):
+    root = tmp_path / "vantage"
+    cmr.make_tree(root)
+    ctx = cmr.make_context(root)
+    text = cmr.render_register(_place("VNT:SYS-0001"), list(cmr.BASE_CODE))
+    _, summary = cmr.run_checks(ctx, cmr.parse_register(text))
+    assert summary[-1] == (
+        "placement: carried 3, placed 1, still bare VNT 2 (4.2 Software: 2)"
+    )
+
+
+def test_load_vnt_reads_the_sys_document_that_layers_yaml_names(tmp_path):
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    assert cmr.load_vnt(tmp_path) == set()
+    (docs / "layers.yaml").write_text(
+        "layers:\n  - id: SYS\n    name: System\n    doc: V_SYS.md\n  - id: IMP\n    doc: V_IMP.md\n",
+        encoding="utf-8",
+    )
+    assert cmr.load_vnt(tmp_path) == set()
+    (docs / "V_SYS.md").write_text("**`SYS-0001`** · P0 — a\n**`SYS-0002`** · P0 — b\n", encoding="utf-8")
+    (docs / "V_IMP.md").write_text("**`SYS-0009`** · P0 — not read\n", encoding="utf-8")
+    assert cmr.load_vnt(tmp_path) == {"VNT:SYS-0001", "VNT:SYS-0002"}
 
 
 # ------------------------------------------------------------ section rows --
