@@ -1039,6 +1039,71 @@ Filled by 6e: the parity set in `docs/v2/parity/`. To dispose: 163 rows (16 `STK
 
 | UID | Disposition | Target | Why |
 |---|---|---|---|
+| PARITY:STK-0001..0002, PARITY:STK-0016 | carried | VNT | §1 — feeding a port from ordered recorded names, saying which name fed it, and taking ports from more than one recording stay with the ingest map and the run setup |
+| PARITY:STK-0003 | carried | VNT | a build is still compared with a reference and the first divergence shown (as SIM:SYS-0205); two engine runs on one recording do it, not two builds in one process |
+| PARITY:STK-0004 | carried | VNT | the launcher window keeps one action that sets a chosen stage to `simulate` and every other to `measured` (D21) |
+| PARITY:STK-0011 | carried | VNT | the launcher window keeps a computed mixed state for a group whose stages disagree (D21) |
+| PARITY:STK-0005 | carried | VNT | the launcher window keeps the copied command line, which does exactly what start does (D21) |
+| PARITY:STK-0012 | superseded | D13, ARCH §10 | a running engine run is read through the live measurement and the inspector; playback and marks on a running session are the viewer's design |
+| PARITY:STK-0006, PARITY:STK-0008..0009, PARITY:STK-0013, PARITY:STK-0015 | superseded | D13 | §4 — transport, speed, step units, named ranges and marks are the viewer's design |
+| PARITY:STK-0007 | carried | VNT | the log keeps one counted entry for a message repeating every step, so earlier messages stay visible |
+| PARITY:STK-0010 | superseded | D13 | a plug-in is a viewer plug-in; its identity is the viewer's design (as SIM:SW-0210) |
+| PARITY:STK-0014 | carried | VNT | a recording the engine writes still carries the configuration it ran with (as SIM:SYS-0197); rendering with it is the viewer's |
+| PARITY:SYS-0001..0003, PARITY:SYS-0005, PARITY:SYS-0029..0030, PARITY:SYS-0034 | carried | VNT | §1 — ordered addresses per port, the matched address in the manifest, named sources with a default, a refused unknown source and an unresolved port stay with the ingest map and the run setup |
+| PARITY:SYS-0006 | retired | — | two builds on each step in one process was the retired `engine/refrun.py` (register §3) and is parked in ARCH §14; two engine runs get equal inputs from the one recording |
+| PARITY:SYS-0007 | carried | VNT | the first diverging step, port and field is still reported, or none (as SIM:SYS-0205) |
+| PARITY:SYS-0008 | retired | — | a reference build staged for a one-process side-by-side run has no place while that run is parked (ARCH §14); each run's manifest keeps its own build hashes |
+| PARITY:SYS-0038 | retired | — | both builds' outputs under one recording's topics belongs to the parked side-by-side run (ARCH §14); each engine run writes its own recording |
+| PARITY:SYS-0009 | carried | VNT | the launcher window keeps the one action that isolates a stage (D21) |
+| PARITY:SYS-0010 | carried | VNT | the launcher window keeps the unselectable mixed state of a group (D21) |
+| PARITY:SYS-0011 | carried | VNT | the launcher window keeps the copyable command line for the setup it wrote (D21) |
+| PARITY:SYS-0012 | carried | VNT | the setup file written from the selection and the selection resolve to the same run setup; the launcher holds no state outside the file (as SIM:SYS-0160) |
+| PARITY:SYS-0013 | superseded | D13, ARCH §10 | a script reads a running engine run through the live measurement; playback and marks on a session are the viewer's |
+| PARITY:SYS-0014 | superseded | D13, ARCH §10 | the live control surface it constrains is retired with `pyapi/live.py`; the live measurement replaces the running session |
+| PARITY:SYS-0015 | superseded | D13 | the nine transport actions are the viewer's design; the engine offers `simEngineSeek` only (ARCH §14) |
+| PARITY:SYS-0031 | superseded | D13 | the choice of the step count of a transport action is the viewer's design |
+| PARITY:SYS-0016 | superseded | D13 | play speed and the achieved rate are the viewer's; real-time pacing is parked (ARCH §14) |
+| PARITY:SYS-0032 | superseded | D13 | showing requested against achieved speed is the viewer's design |
+| PARITY:SYS-0017 | superseded | D13 | the five step granularities belong to the viewer's transport |
+| PARITY:SYS-0033 | superseded | D13 | refusing a step granularity the recording cannot support belongs to the viewer's transport |
+| PARITY:SYS-0018 | superseded | D13 | showing the selected cycle belongs to the viewer |
+| PARITY:SYS-0019 | superseded | D13 | landing a cycle step on one run's inputs belongs to the viewer's transport |
+| PARITY:SYS-0020 | superseded | D13 | naming a range of a recording is the viewer's act (open question: where it is stored) |
+| PARITY:SYS-0039 | superseded | D13 | the timebase of a named range belongs with the viewer's ranges (open question: where it is stored) |
+| PARITY:SYS-0021 | superseded | D13 | named ranges are the viewer's; the engine keeps only the time slice (SIM:SYS-0232) |
+| PARITY:SYS-0022 | superseded | D13 | annotations and classifications are marks made in a viewer (open question: where they are stored) |
+| PARITY:SYS-0023 | superseded | D13 | choosing recordings by classification depends on the viewer's marks (open question) |
+| PARITY:SYS-0040 | superseded | D13 | author and time of a mark belong with the viewer's marks (open question) |
+| PARITY:SYS-0024 | carried | VNT | the log keeps one counted entry for an identical repeated message above a flood threshold |
+| PARITY:SYS-0035 | carried | VNT | the log keeps one entry saying that counting began, naming the message and the threshold |
+| PARITY:SYS-0025 | superseded | D13 | a plug-in is a viewer plug-in; its identity is the viewer's design (as SIM:SW-0210) |
+| PARITY:SYS-0036 | superseded | D13 | the identity of the deployed viewer plug-in copy goes with the viewer |
+| PARITY:SYS-0026 | superseded | D13 | where a viewer plug-in's identity is shown is the viewer's design |
+| PARITY:SYS-0027 | carried | VNT | a recording the engine writes still embeds the configuration bundle's bytes (as SIM:SYS-0197) |
+| PARITY:SYS-0037 | carried | VNT | the embedded bundle's hash is recorded and a mismatch reported |
+| PARITY:SYS-0028 | superseded | D13 | reporting a missing bundle instead of reading a local one is a rule for the reader that draws the recording |
+| PARITY:SW-0001..0003 | carried | VNT | §1 — the ingest map keeps a port-keyed entry with an ordered address list, names the port and field of a bad entry and parses declared holes beside provided ports |
+| PARITY:SW-0004..0007 | carried | VNT | §2 — the resolver keeps trying candidates in order, retains the chosen one, skips a type mismatch without converting and tells unresolved from absent |
+| PARITY:SW-0008..0010, PARITY:SW-0054 | carried | VNT | §3 — named sources with one default, one source per port, an explicit assignment over the default and a refused unknown name stay with the run setup |
+| PARITY:SW-0011 | carried | VNT | the run setup is still the same whatever order the choices were made in |
+| PARITY:SW-0012 | carried | VNT | `spec_sha256` stays unchanged by re-emission and changes with any field |
+| PARITY:SW-0013 | retired | — | the setup has no reference build identity while the side-by-side run is parked (ARCH §14) |
+| PARITY:SW-0014 | carried | VNT | the manifest still records, per port, the address the ingest matched |
+| PARITY:SW-0015 | carried | VNT | the manifest still records the bundle's hash as packed and the hash of the embedded bytes |
+| PARITY:SW-0016 | retired | — | the manifest has no reference build hash while the side-by-side run is parked (ARCH §14) |
+| PARITY:SW-0017..0021 | carried | VNT | §5 — the isolate operation, the computed group state, one setup from file or selection, and their display in the window stay with the launcher model and window (D21) |
+| PARITY:SW-0022..0026 | superseded | D13 | §6 — transport actions, step counts and measured play rate are the viewer's design (pacing is parked, ARCH §14) |
+| PARITY:SW-0027..0032 | superseded | D13, ARCH §7 | §7 — step granularity and cycles are the viewer's, and the Python cycle model is not carried (`io/cycles.py`) |
+| PARITY:SW-0033..0038 | superseded | D13 | §8 — named ranges and the two kinds of mark are the viewer's design (open question: where they are stored) |
+| PARITY:SW-0039..0041 | carried | VNT | §9 — the log keeps a dedupe key, a count per key and one entry when the flood threshold is crossed |
+| PARITY:SW-0042..0044, PARITY:SW-0053 | superseded | D13 | §10 — plug-in identity belongs to the viewer plug-ins, which move out with the viewer (as SIM:SW-0210) |
+| PARITY:SW-0045 | carried | VNT | the bundle's bytes are still written into the recording the engine makes (as SIM:SW-0210) |
+| PARITY:SW-0046 | carried | VNT | the hash of the embedded bytes is stored and a mismatch reported |
+| PARITY:SW-0047 | superseded | D13 | representing a missing bundle instead of reading a disk copy is a rule for the reader that draws the recording |
+| PARITY:SW-0048 | retired | — | one input set fed to two builds on each step is the retired `engine/refrun.py` (register §3) and is parked (ARCH §14) |
+| PARITY:SW-0049 | carried | VNT | the first difference is still kept with step, port and field (as SIM:SW-0116); the divergence latch does it |
+| PARITY:SW-0050 | retired | — | recording two builds' outputs side by side belongs to the parked side-by-side run (ARCH §14) |
+| PARITY:SW-0051..0052 | superseded | D13, ARCH §10 | §13 — script control of a running session ended with `pyapi/live.py`; the live measurement replaces it |
 
 ## 5. How to check
 
