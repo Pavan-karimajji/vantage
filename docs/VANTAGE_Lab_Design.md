@@ -607,7 +607,7 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 - [x] **LAB-WP-02** — Template, generator and the running example's libraries · The first implementer of every component obligation; needs `LAB-WP-01`
 - [x] **LAB-WP-03** — Contract harness and ABI loader · Passes the harness tests as soon as a library exists, before any car
 - [x] **LAB-WP-04** — Fake car: sources, scheduler, recorder, on the running example · Makes `F-LAB`; needs the libraries and the ABI loader
-- [ ] **LAB-WP-05** — Running example scenarios: restart, fault, calibration · Makes `F-LAB-RESTART`, `F-LAB-FAULT`, `F-LAB-CAL`
+- [x] **LAB-WP-05** — Running example scenarios: restart, fault, calibration · Makes `F-LAB-RESTART`, `F-LAB-FAULT`, `F-LAB-CAL`
 - [ ] **LAB-WP-06** — Run setups, provisional values and the reference re-run · Makes `F-LM` and closes `G2` without Vantage
 - [ ] **LAB-WP-07** — The other topologies, one file each · Added after the milestone, one corner case at a time
 - [ ] **LAB-WP-08** — Camera, drills and the supervised run · The `G4` drills; needs `LAB-WP-05` and `LAB-WP-06`
@@ -645,11 +645,11 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 | `[x]` | `LAB-28` | `LAB-WP-04` | `RCT:SYS-0013`, `RCT:SYS-0016` | `src/lab_tools/car.py::Car.startComponent` — picks the inputs, calls `adasExec` once, writes every output. |
 | `[x]` | `LAB-29` | `LAB-WP-04` | `RCT:IMP-0031` | `src/lab_tools/recorder.py::McapRecorder` — topics, schemas, metadata of section 5.6; byte-identical for one seed. |
 | `[x]` | `LAB-30` | `LAB-WP-04` | `RCT:SYS-0001`, `RCT:SYS-0002`, `RCT:SYS-0004`, `RCT:SYS-0010`, `RCT:SYS-0013` | `tests/test_car_running_example.py` — `SYT-HDR-01`, `SYT-HDR-02`, `SYT-HDR-04`, `SYT-CTL-05`, `SYT-RSY-01`, and two car runs giving identical bytes. |
-| `[ ]` | `LAB-31` | `LAB-WP-05` | `RCT:IMP-0030` | `src/lab_tools/car.py::ControlWriter` — scripted restart from `car.restart`. |
-| `[ ]` | `LAB-32` | `LAB-WP-05` | `RCT:SYS-0018`, `RCT:SYS-0020` | `src/lab_tools/car.py::SourceTask` — `silent` and `invalid` windows. |
-| `[ ]` | `LAB-33` | `LAB-WP-05` | — | `catalogue/running_example.yaml` — scenarios `restart` and `fault` of section 6.2. |
-| `[ ]` | `LAB-34` | `LAB-WP-05` | `RCT:SYS-0019` | `src/lab_tools/bundles.py::bundle_variant` — copy a bundle, set or remove keys, repack with the new `bundle.sha256`. |
-| `[ ]` | `LAB-35` | `LAB-WP-05` | `RCT:SYS-0012`, `RCT:SYS-0017`, `RCT:SYS-0018`, `RCT:SYS-0019`, `RCT:SYS-0020`, `RCT:SYS-0021` | `tests/test_car_scenarios.py` — `SYT-CTL-07`, `SYT-CST-01`..`SYT-CST-05`. |
+| `[x]` | `LAB-31` | `LAB-WP-05` | `RCT:IMP-0030` | `src/lab_tools/car.py::ControlWriter` — scripted restart from `car.restart`. |
+| `[x]` | `LAB-32` | `LAB-WP-05` | `RCT:SYS-0018`, `RCT:SYS-0020` | `src/lab_tools/car.py::SourceTask` — `silent` and `invalid` windows. |
+| `[x]` | `LAB-33` | `LAB-WP-05` | — | `catalogue/running_example.yaml` — scenarios `restart` and `fault` of section 6.2. |
+| `[x]` | `LAB-34` | `LAB-WP-05` | `RCT:SYS-0019` | `src/lab_tools/bundles.py::bundle_variant` — copy a bundle, set or remove keys, repack with the new `bundle.sha256`. |
+| `[x]` | `LAB-35` | `LAB-WP-05` | `RCT:SYS-0012`, `RCT:SYS-0017`, `RCT:SYS-0018`, `RCT:SYS-0019`, `RCT:SYS-0020`, `RCT:SYS-0021` | `tests/test_car_scenarios.py` — `SYT-CTL-07`, `SYT-CST-01`..`SYT-CST-05`. |
 | `[ ]` | `LAB-36` | `LAB-WP-06` | — | `src/lab_tools/setup_writer.py::write_run_setup` — one run setup JSON per resim case, with the keys of `ARCH §2.3` only. |
 | `[ ]` | `LAB-37` | `LAB-WP-06` | — | `catalogue/provisional.yaml` — the run-setup values of section 7, each with `status: provisional`. |
 | `[ ]` | `LAB-38` | `LAB-WP-06` | `RCT:SYS-0016` | `src/lab_tools/compare.py::equal_outputs` — same count, byte-identical once `cycle_counter` is 0. |
