@@ -381,6 +381,7 @@ closed.
 | `car:` | `counter_jump: [{source, at_counter, by}]` | from that counter on, the source's counter is `by` higher | drill: counter jump |
 | `recording:` | `drop_sample: [{port, counter}]` | the sample is not written, though the bus had it and a `refSync` names it | drill: refSync names a missing sample |
 | `recording:` | `drop_ref_sync: all` | no `refSync` topic is written, and every `refSync` port is listed `excluded` in `record_policies` | drill: no refSyncs |
+| `recording:` | `repeat_sample: [{port, counter}]` | the sample is written a second time, byte-identical, 1 ms after the original | drill: a repeated trigger sample |
 
 The `silent` and `invalid` windows are half-open, `[from, from+for)`, on a sample's nominal (source) time, so jitter never moves a sample across an edge.
 
@@ -419,6 +420,7 @@ One YAML file each, added one corner case at a time. The first milestone is the 
 | `data_triggered` | `X` 30; `Y` 20; `T` reads `X`,`Y`, `trigger: in_X` | a run started by an input, not by its own clock |
 | `loop_no_edge` | `X` 10; `A` 20 reads `X`,`B`; `B` 20 reads `A`; `expect: refused_at_load` | a loop with no previous-cycle input; Vantage must refuse it at load |
 | `camera` | `X` 30; `Cam` image 64 x 48, 50; `A` 20 reads `X` | a bulk source for the live measurement (`F-CAM`); the contract's fixture needs it |
+| `coprime_periods` | `X` 7; `A` 11 reads `X`; `B` 13 reads `A`,`X` | periods with no common divisor above 1 ms: no stage shares a grid with another |
 
 `camera` is not in the list the program fixed for the catalogue; `F-CAM` of the contract's test
 specification requires it, so it is added and flagged.
@@ -494,6 +496,8 @@ Drill scenarios (`G4`; `ARCH §12`), also on the running example:
 | `counter_jump` | `car: {counter_jump: [{source: X, at_counter: 50, by: 1000}]}` | `all_simulated` | a counter jump in the event log |
 | (cases of `base`) `hang`, `crash` | — | `config: {B: {set: {LAB_B_HANG_AFTER_RUNS: 5}}}`, and `LAB_B_CRASH_AFTER_RUNS: 5` | timeout and crash outcomes |
 | (case of `base`) `error` | — | none; the `fault` scenario is the ERROR drill | a component that reports ERROR |
+| `renumber_lib` | — | `shifted`: `config: {A: {set: {LAB_A_RENUMBER: 1}}}` | `A`'s own code shifts its data outputs' counter: each output in the event log |
+| `repeat_trigger` (in `data_triggered`) | `recording: {repeat_sample: [{port: source.X, counter: 10}]}` | `by_data` | a stalled trigger in the event log, and no extra `T` run |
 
 `renumber` acts only where a component's trigger counter differs from its own run count, so its drill uses an input-triggered component after a counter jump.
 
@@ -704,7 +708,7 @@ The owner's decisions of 2026-10-30, recorded as `D20` in `VANTAGE_DEV_PLAN.md`.
 - `Q-L5` — the component description stays inside the topology file (`D20` (3)).
 - `Q-L6` — `LAB_<C>_HANG_AFTER_RUNS` and `LAB_<C>_CRASH_AFTER_RUNS` are kept (`D20` (3)).
 - `Q-L7` — maximum input age and recovery runs have no code default; provisional calibration values, the generator refuses a component without them (`D20` (2)).
-- `Q-L8` — the seven scenario verbs of section 5.5, a closed list (`D20` (3)).
+- `Q-L8` — the scenario verbs of section 5.5, a closed list (`D20` (3)); amended 2026-10-31: eight verbs (`D20 (3)`).
 - `Q-L9` — the provisional values of section 7, for the lab's tests only (`D20` (3)).
 - `Q-L4` — closed by the RCT recording contract C6 (`D22`, 2026-10-31): the conventions are `RCT_Architecture.md` §6a, and the recorder writes through the `interfaces` writer (`LAB-WP-09`).
 
