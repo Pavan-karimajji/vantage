@@ -30,7 +30,8 @@ happens into one place, the **live measurement**, where any reader can look at i
 | Input 3 | A run setup: which stages run again, how each is started, how they are wired | the launcher |
 | Output | The live measurement: shared memory with the description, one `MeasCycle` per engine step, bulk frames and a status block | Vantage only |
 
-Vantage has no window and no viewer (`D13`). A command-line inspector reads the live
+Vantage has no viewer (`D13`); its one window is the launcher window, a thin
+front over the launcher (`D21`). A command-line inspector reads the live
 measurement and proves that it holds everything a viewer will need.
 
 ```mermaid
@@ -631,7 +632,7 @@ new file. A path is a promise: the code goes there under that name. Test files a
 named by step 8.
 
 New directories: `src/livemeas/`, `include/vantage/`, `src/inspector/`,
-`src/simcore/orchestrator/`. Two build entries are added to `conf/build.yml`: the
+`src/simcore/orchestrator/`, `src/adas_sim/scenario/`. Two build entries are added to `conf/build.yml`: the
 `livemeas` component and the `vantage-inspect` executable, both in the standard
 recipe.
 
@@ -640,6 +641,8 @@ recipe.
 | Launcher | `src/adas_sim/launcher/model.py` (E), `src/adas_sim/launcher/write.py` (E), `src/adas_sim/launcher/classify.py` (E), `src/adas_sim/launcher/cuts.py` (E), `src/adas_sim/launcher/availability.py` (E) | `Selection`, `to_run_config`, `launch`, `cuts_for_recording` |
 | Run setup writer | `src/adas_sim/runspec/emit.py` (E), `src/adas_sim/runspec/schema/run_spec.schema.json` (E), `src/adas_sim/graph/pipeline.py` (E) | `emit_run_spec` writes `trigger`, `clock_period_ns`, `previous_cycle`, `bulk`, `buffer_depth`, `outputs.livemeas`, `readiness_limit_steps`; stops writing `grid_step_ns`, `order`, `delay_steps` |
 | Engine start from Python | `src/adas_sim/engine/bridge.py` (E) | passes `--supervise` and reads the exit code |
+| Launcher window (`D21`) | — | `src/adas_sim/launcher/window.py` (N): `LauncherWindow`, on Python's standard-library toolkit; every action is a launcher-model call |
+| Scenario to recording (`D22`) | — | `src/adas_sim/scenario/record.py` (N): `record_scenario`, the `sim record` verb; builds messages from a scenario file of explicit values and writes them through the Python writer in `interfaces` |
 | Run setup loader | `include/simcore/runspec.hpp` (E), `src/simcore/runspec/load.cpp` (E) | `RunSpec`, `SpecStage::trigger`, `clock_period_ns`, `SpecInput::previous_cycle`, `SpecPort::bulk`, `buffer_depth`, `SpecOutputs::livemeas`, `RunSpec::readiness_limit_steps`; `LoadRunSpec` checks the `⊘` values are present and refuses `sampling` and `on_missing` |
 | Orchestrator: graph | `include/simcore/scheduler.hpp` (E) | new `include/simcore/orchestrator.hpp` (N), `src/simcore/orchestrator/graph.cpp` (N): `BuildGraph`, `Rank`, loop error naming the loop |
 | Orchestrator: events and steps | `src/simcore/scheduler/due.cpp` (E) | `src/simcore/orchestrator/orchestrator.cpp` (N): `Orchestrator::BeginStep`, `NextRunnable`, `Commit`, `EndStep`, `Jump`; `src/simcore/orchestrator/event_queue.cpp` (N): `EventQueue` |
