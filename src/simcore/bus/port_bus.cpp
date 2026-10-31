@@ -17,17 +17,33 @@ namespace simcore::bus {
 
 PortBus::PortBus(std::size_t byte_budget) : byte_budget_(byte_budget) {}
 
+void PortBus::DeclarePort(const PortId& port, std::int64_t buffer_depth, const google::protobuf::Descriptor* descriptor) {
+  Slot& slot = slots_[port];
+  slot.buffer = SampleBuffer(buffer_depth < 1 ? std::size_t{1} : static_cast<std::size_t>(buffer_depth));
+  slot.descriptor = descriptor;
+}
+
+const SampleBuffer* PortBus::Buffer(const PortId& port) const {
+  const auto it = slots_.find(port);
+  return it == slots_.end() ? nullptr : &it->second.buffer;
+}
+
 Result<bool> PortBus::Publish(const PortId& port, PortValue value, std::int64_t now_ns) {
   Slot& slot = slots_[port];
-  const std::size_t old_capacity = slot.value.payload.capacity();
-  const bool reused = slot.has_value && old_capacity >= value.payload.size();
+  const Sample* previous = slot.buffer.Newest();
+  const bool reused = previous != nullptr && previous->payload().capacity() >= value.payload.size();
 
   value.port = port;
   value.updated = true;
   value.hold_ns = std::int64_t{0};
-  slot.value = std::move(value);
+
+  Sample sample;
+  sample.sig = ReadSignalHeader(value.payload, slot.descriptor);
+  sample.arrival_ns = now_ns;
+  sample.value = std::move(value);
+  if (slot.descriptor != nullptr) identity_.Observe(port, sample.sig);
+  slot.buffer.Push(std::move(sample));
   slot.last_produced_ns = now_ns;
-  slot.has_value = true;
 
   if (reused) {
     ++stats_.reuse_count;
@@ -35,7 +51,7 @@ Result<bool> PortBus::Publish(const PortId& port, PortValue value, std::int64_t 
 
   std::size_t total = 0;
   for (const auto& [id, s] : slots_) {
-    total += s.value.payload.capacity();
+    for (const Sample& held : s.buffer.Samples()) total += held.payload().capacity();
   }
   stats_.total_bytes = total;
   stats_.high_water_bytes = std::max(stats_.high_water_bytes, total);
@@ -49,8 +65,9 @@ Result<bool> PortBus::Publish(const PortId& port, PortValue value, std::int64_t 
 }
 
 PortValue PortBus::Get(const PortId& port, std::int64_t now_ns) const {
-  auto it = slots_.find(port);
-  if (it == slots_.end()) {
+  const auto it = slots_.find(port);
+  const Sample* newest = it == slots_.end() ? nullptr : it->second.buffer.Newest();
+  if (newest == nullptr) {
     PortValue never_produced;
     never_produced.port = port;
     never_produced.origin = Origin::Unknown;
@@ -59,9 +76,9 @@ PortValue PortBus::Get(const PortId& port, std::int64_t now_ns) const {
   }
   const Slot& slot = it->second;
   if (slot.last_produced_ns == now_ns) {
-    return slot.value;  // fresh this tick, exactly as Publish() left it
+    return newest->value;  // fresh this tick, exactly as Publish() left it
   }
-  PortValue held = slot.value;
+  PortValue held = newest->value;
   held.updated = false;
   held.hold_ns = now_ns - slot.last_produced_ns;
   return held;

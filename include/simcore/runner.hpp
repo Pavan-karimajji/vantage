@@ -24,7 +24,7 @@
 ///   **Honestly out of scope this slice** (named rather than discovered by
 ///   failing):
 ///   1. **Cycle grouping is by `log_time_ns`**, the same key both ported
-///      sources use -- NOT `bus::CycleReconstructor`'s recovery ladder.
+///      sources use -- NOT a recovery ladder (the reconstructor is retired, `IMP-0010`).
 ///      `WP-08`'s own plan row already names the wire-level decode that
 ///      would feed the ladder (`t_source_ns`/`counter` out of raw payload
 ///      bytes) as a follow-on it did not attempt; without it the ladder has

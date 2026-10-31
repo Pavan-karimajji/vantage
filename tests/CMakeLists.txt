@@ -70,8 +70,11 @@ set(SIM_TEST_SOURCES
     # WP-01 (VANTAGE, C1): LoadRunSpec reads schema 2.0 -- IMP-0001 to IMP-0004
     # and IMP-0049 (refusals by name).
     unit/test_ut_runspec_load.cpp
-    # WP-08 (SI-02 bus): UT-BUS-07..13, UT-BUS-19 (CycleReconstructor).
-    unit/test_ut_bus_cycle.cpp
+    # WP-02 (VANTAGE, C1): IMP-0006, IMP-0008, IMP-0009 (IMP-0010 retired the
+    # cycle reconstructor and its test file).
+    unit/test_ut_bus_sample_buffer.cpp
+    unit/test_ut_bus_signal_header.cpp
+    unit/test_ut_bus_identity.cpp
     # WP-09 (SI-02 bus / SI-03 scheduler): PortBus + Scheduler core.
     unit/test_ut_bus_port_bus.cpp
     unit/test_ut_sch_core.cpp
@@ -101,10 +104,6 @@ set(SIM_TEST_SOURCES
     integration/test_it11_embed_host.cpp
     integration/test_ut_exe_04_restart.cpp
     integration/test_ut_exe_05_exit_codes.cpp
-    # WP-15a row 1: simcore/io (WP-06) + CycleReconstructor (WP-08) wired
-    # into one recording-read-and-group capability, compared to
-    # sil_host/recording_reader.cpp -- closes scripts/prove_equal.py's row 1.
-    integration/test_wp15a_row1_recording_read.cpp
     # WP-15 (SI-08): engine diagnostics -- IMP-0076/0131..0140.
     unit/test_sch_dump.cpp
     unit/test_diag_graph_dump.cpp

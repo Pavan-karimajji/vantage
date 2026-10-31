@@ -15,7 +15,7 @@
 ///   own `Step()` (the `DEDUPE`/`MOVE` source `WP-09`'s own plan row
 ///   names). Explicitly **not** attempted here, named rather than
 ///   discovered missing: the data-driven trigger (`SW-0065`, freshness-
-///   key evaluation needs `bus::CycleReconstructor` wired in), the five
+///   key evaluation needs the sample buffers wired in), the five
 ///   sampling policies (`SW-0068`), missing-data behaviour beyond hold
 ///   (`SW-0070`), per-edge transport delay (`SW-0073`), play-rate pacing
 ///   (`SW-0078`), the pathological-grid warning (`SW-0067`) and

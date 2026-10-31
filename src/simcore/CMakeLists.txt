@@ -42,7 +42,10 @@ add_library(simcore STATIC
     bus/static_data.cpp
     bus/bulk.cpp
     bus/catalogue.cpp
-    bus/cycle.cpp
+    # WP-02 (VANTAGE, C1): sample buffers, the header read at the door, identity checks.
+    bus/sample_buffer.cpp
+    bus/signal_header.cpp
+    bus/identity.cpp
     bus/port_bus.cpp
     # SM-06 (SI-25, D-5): the engine-side implementations behind
     # modules/interfaces' ITransport contract.

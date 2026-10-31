@@ -414,6 +414,15 @@ SimEngine* simEngineCreate(const char* run_spec_json_path, const char* config_pa
   // PoolFromTopics`).
   PopulateDescriptorPoolFromTopics(engine->reader->Describe(), engine->descriptor_pool);
   engine->message_factory = std::make_unique<google::protobuf::DynamicMessageFactory>(&engine->descriptor_pool);
+  // IMP-0007: every declared stage port gets a sample buffer of its
+  // `buffer_depth`, reading `sig_header` from its message type. Source-fed
+  // ports are not stage ports and stay undeclared until `WP-05`.
+  for (const simcore::SpecStage& declared_stage : engine->spec.stages) {
+    for (const simcore::SpecPort& declared_port : declared_stage.ports) {
+      engine->bus.DeclarePort(declared_stage.name + "." + declared_port.name, declared_port.buffer_depth,
+                              engine->descriptor_pool.FindMessageTypeByName(declared_port.proto_type));
+    }
+  }
   simcore::mutate::Mutator::PortResolver resolve_port =
       [&spec = engine->spec, &pool = engine->descriptor_pool, &reader = *engine->reader](
           const std::string& stage, const std::string& port) -> std::optional<simcore::mutate::PortInfo> {
