@@ -492,10 +492,12 @@ Drill scenarios (`G4`; `ARCH §12`), also on the running example:
 | `missing_sample` | `recording: {drop_sample: [{port: source.Y, counter: 20}, {port: source.Y, counter: 21}, {port: source.Y, counter: 22}]}` | `all_simulated` | fallback by counter, inside `fallback_max_gap` (3 missing) |
 | `missing_run` | ten consecutive counters of `source.Y` dropped | `all_simulated` | gap beyond `fallback_max_gap`: the time rule picks |
 | `no_ref_sync` | `recording: {drop_ref_sync: all}` | `all_simulated` | `expect: diverges` (mismatches are counted, not zero) |
-| `renumber` | `car: {renumber: [A]}` | `all_simulated` | identity broken on `A`'s output |
+| `renumber` (in `data_triggered`) | `car: {counter_jump: [{source: X, at_counter: 10, by: 1000}], renumber: [T]}` | `by_data` | identity broken on `T`'s output |
 | `counter_jump` | `car: {counter_jump: [{source: X, at_counter: 50, by: 1000}]}` | `all_simulated` | a counter jump in the event log |
 | (cases of `base`) `hang`, `crash` | — | `config: {B: {set: {LAB_B_HANG_AFTER_RUNS: 5}}}`, and `LAB_B_CRASH_AFTER_RUNS: 5` | timeout and crash outcomes |
 | (case of `base`) `error` | — | none; the `fault` scenario is the ERROR drill | a component that reports ERROR |
+
+`renumber` acts only where a component's trigger counter differs from its own run count, so its drill uses an input-triggered component after a counter jump.
 
 `expect` has three values: `exact` (default: the re-run equals the recording), `diverges`
 (a difference is expected and counted) and `refused_at_load`.
@@ -612,7 +614,7 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 - [x] **LAB-WP-05** — Running example scenarios: restart, fault, calibration · Makes `F-LAB-RESTART`, `F-LAB-FAULT`, `F-LAB-CAL`
 - [x] **LAB-WP-06** — Run setups, provisional values and the reference re-run · Makes `F-LM` and closes `G2` without Vantage
 - [x] **LAB-WP-07** — The other topologies, one file each · Added after the milestone, one corner case at a time
-- [ ] **LAB-WP-08** — Camera, drills and the supervised run · The `G4` drills; needs `LAB-WP-05` and `LAB-WP-06`
+- [~] **LAB-WP-08** — Camera, drills and the supervised run · The `G4` drills; needs `LAB-WP-05` and `LAB-WP-06`. Closed by `LAB-53` (`supervise.py`) and the supervised `hang` and `crash` cases passing.
 
 | Box | ID | WP | Serves (RCT) | Artifact — Design |
 |---|---|---|---|---|
@@ -665,10 +667,10 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 | `[x]` | `LAB-46` | `LAB-WP-07` | `RCT:SYS-0016` | `catalogue/late_consumer.yaml`. |
 | `[x]` | `LAB-47` | `LAB-WP-07` | `RCT:SYS-0009`, `RCT:SYS-0016` | `catalogue/data_triggered.yaml` — resim cases with `trigger: control` and `trigger: {T: in_X}`. |
 | `[x]` | `LAB-48` | `LAB-WP-07` | — | `catalogue/loop_no_edge.yaml` — `expect: refused_at_load`; the loader accepts it only with that word. |
-| `[ ]` | `LAB-49` | `LAB-WP-08` | `RCT:SYS-0029`, `RCT:SYS-0031` | `catalogue/camera.yaml` and `src/lab_tools/car.py::SourceTask` image kind with `big_frame`. |
-| `[ ]` | `LAB-50` | `LAB-WP-08` | `RCT:SYS-0001` | `src/lab_tools/car.py::Car.startComponent` — `renumber` and `counter_jump`. |
-| `[ ]` | `LAB-51` | `LAB-WP-08` | `RCT:SYS-0016` | `src/lab_tools/recorder.py::apply_recording_edits` — `drop_sample`, `drop_ref_sync`. |
-| `[ ]` | `LAB-52` | `LAB-WP-08` | — | `catalogue/running_example.yaml` — the drill scenarios and cases `hang`, `crash` of section 6.2. |
+| `[x]` | `LAB-49` | `LAB-WP-08` | `RCT:SYS-0029`, `RCT:SYS-0031` | `catalogue/camera.yaml` and `src/lab_tools/car.py::SourceTask` image kind with `big_frame`. |
+| `[x]` | `LAB-50` | `LAB-WP-08` | `RCT:SYS-0001` | `src/lab_tools/car.py::Car.startComponent` — `renumber` and `counter_jump`. |
+| `[x]` | `LAB-51` | `LAB-WP-08` | `RCT:SYS-0016` | `src/lab_tools/recorder.py::apply_recording_edits` — `drop_sample`, `drop_ref_sync`. |
+| `[x]` | `LAB-52` | `LAB-WP-08` | — | `catalogue/running_example.yaml` — the drill scenarios and cases `hang`, `crash` of section 6.2. |
 | `[ ]` | `LAB-53` | `LAB-WP-08` | — | `src/lab_tools/supervise.py::run_under_supervisor` — starts `simengine --supervise`, returns exit code and the sealed `outcome`. |
 
 ## 10. Open questions, decided, rejected options, parked
