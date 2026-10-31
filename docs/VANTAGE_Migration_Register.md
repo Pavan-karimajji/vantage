@@ -1050,10 +1050,10 @@ Filled by 6e: the parity set in `docs/v2/parity/`. To dispose: 163 rows (16 `STK
 | PARITY:STK-0010 | superseded | D13 | a plug-in is a viewer plug-in; its identity is the viewer's design (as SIM:SW-0210) |
 | PARITY:STK-0014 | carried | VNT | a recording the engine writes still carries the configuration it ran with (as SIM:SYS-0197); rendering with it is the viewer's |
 | PARITY:SYS-0001..0003, PARITY:SYS-0005, PARITY:SYS-0029..0030, PARITY:SYS-0034 | carried | VNT | §1 — ordered addresses per port, the matched address in the manifest, named sources with a default, a refused unknown source and an unresolved port stay with the ingest map and the run setup |
-| PARITY:SYS-0006 | retired | — | two builds on each step in one process was the retired `engine/refrun.py` (register §3) and is parked in ARCH §14; two engine runs get equal inputs from the one recording |
+| PARITY:SYS-0006 | superseded | ARCH §14 | two builds stepped in one process are parked (ARCH §14); comparing two builds is two engine runs over one recording, compared by port values (R-SIM-24) |
 | PARITY:SYS-0007 | carried | VNT | the first diverging step, port and field is still reported, or none (as SIM:SYS-0205) |
-| PARITY:SYS-0008 | retired | — | a reference build staged for a one-process side-by-side run has no place while that run is parked (ARCH §14); each run's manifest keeps its own build hashes |
-| PARITY:SYS-0038 | retired | — | both builds' outputs under one recording's topics belongs to the parked side-by-side run (ARCH §14); each engine run writes its own recording |
+| PARITY:SYS-0008 | superseded | ARCH §14 | a reference build staged for a side-by-side run is parked with it (ARCH §14); each build is its own engine run, compared by port values (R-SIM-24) |
+| PARITY:SYS-0038 | superseded | ARCH §14 | both builds' outputs under one recording's topics belong to the parked side-by-side run (ARCH §14); each engine run writes its own recording (R-SIM-24) |
 | PARITY:SYS-0009 | carried | VNT | the launcher window keeps the one action that isolates a stage (D21) |
 | PARITY:SYS-0010 | carried | VNT | the launcher window keeps the unselectable mixed state of a group (D21) |
 | PARITY:SYS-0011 | carried | VNT | the launcher window keeps the copyable command line for the setup it wrote (D21) |
@@ -1072,7 +1072,7 @@ Filled by 6e: the parity set in `docs/v2/parity/`. To dispose: 163 rows (16 `STK
 | PARITY:SYS-0039 | superseded | D13 | the timebase of a named range belongs with the viewer's ranges (open question: where it is stored) |
 | PARITY:SYS-0021 | superseded | D13 | named ranges are the viewer's; the engine keeps only the time slice (SIM:SYS-0232) |
 | PARITY:SYS-0022 | superseded | D13 | annotations and classifications are marks made in a viewer (open question: where they are stored) |
-| PARITY:SYS-0023 | superseded | D13 | choosing recordings by classification depends on the viewer's marks (open question) |
+| PARITY:SYS-0023 | carried | VNT | the batch loop chooses which recordings to run by their tags; step 8 decides where the tags come from (recording metadata or later viewer marks) |
 | PARITY:SYS-0040 | superseded | D13 | author and time of a mark belong with the viewer's marks (open question) |
 | PARITY:SYS-0024 | carried | VNT | the log keeps one counted entry for an identical repeated message above a flood threshold |
 | PARITY:SYS-0035 | carried | VNT | the log keeps one entry saying that counting began, naming the message and the threshold |
@@ -1087,10 +1087,10 @@ Filled by 6e: the parity set in `docs/v2/parity/`. To dispose: 163 rows (16 `STK
 | PARITY:SW-0008..0010, PARITY:SW-0054 | carried | VNT | §3 — named sources with one default, one source per port, an explicit assignment over the default and a refused unknown name stay with the run setup |
 | PARITY:SW-0011 | carried | VNT | the run setup is still the same whatever order the choices were made in |
 | PARITY:SW-0012 | carried | VNT | `spec_sha256` stays unchanged by re-emission and changes with any field |
-| PARITY:SW-0013 | retired | — | the setup has no reference build identity while the side-by-side run is parked (ARCH §14) |
+| PARITY:SW-0013 | superseded | ARCH §14 | the setup's reference build identity belongs to the parked side-by-side run (ARCH §14) |
 | PARITY:SW-0014 | carried | VNT | the manifest still records, per port, the address the ingest matched |
 | PARITY:SW-0015 | carried | VNT | the manifest still records the bundle's hash as packed and the hash of the embedded bytes |
-| PARITY:SW-0016 | retired | — | the manifest has no reference build hash while the side-by-side run is parked (ARCH §14) |
+| PARITY:SW-0016 | superseded | ARCH §14 | the manifest's reference build hash belongs to the parked side-by-side run (ARCH §14) |
 | PARITY:SW-0017..0021 | carried | VNT | §5 — the isolate operation, the computed group state, one setup from file or selection, and their display in the window stay with the launcher model and window (D21) |
 | PARITY:SW-0022..0026 | superseded | D13 | §6 — transport actions, step counts and measured play rate are the viewer's design (pacing is parked, ARCH §14) |
 | PARITY:SW-0027..0032 | superseded | D13, ARCH §7 | §7 — step granularity and cycles are the viewer's, and the Python cycle model is not carried (`io/cycles.py`) |
@@ -1100,9 +1100,9 @@ Filled by 6e: the parity set in `docs/v2/parity/`. To dispose: 163 rows (16 `STK
 | PARITY:SW-0045 | carried | VNT | the bundle's bytes are still written into the recording the engine makes (as SIM:SW-0210) |
 | PARITY:SW-0046 | carried | VNT | the hash of the embedded bytes is stored and a mismatch reported |
 | PARITY:SW-0047 | superseded | D13 | representing a missing bundle instead of reading a disk copy is a rule for the reader that draws the recording |
-| PARITY:SW-0048 | retired | — | one input set fed to two builds on each step is the retired `engine/refrun.py` (register §3) and is parked (ARCH §14) |
+| PARITY:SW-0048 | superseded | ARCH §14 | one input set fed to two builds each step is the parked side-by-side run (ARCH §14); the retired `engine/refrun.py` was its Python form |
 | PARITY:SW-0049 | carried | VNT | the first difference is still kept with step, port and field (as SIM:SW-0116); the divergence latch does it |
-| PARITY:SW-0050 | retired | — | recording two builds' outputs side by side belongs to the parked side-by-side run (ARCH §14) |
+| PARITY:SW-0050 | superseded | ARCH §14 | recording two builds' outputs side by side belongs to the parked side-by-side run (ARCH §14) |
 | PARITY:SW-0051..0052 | superseded | D13, ARCH §10 | §13 — script control of a running session ended with `pyapi/live.py`; the live measurement replaces it |
 
 ## 5. How to check
