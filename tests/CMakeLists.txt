@@ -104,8 +104,11 @@ set(SIM_TEST_SOURCES
     integration/test_it11_embed_host.cpp
     integration/test_ut_exe_04_restart.cpp
     integration/test_ut_exe_05_exit_codes.cpp
-    # WP-15 (SI-08): engine diagnostics -- IMP-0076/0131..0140.
-    unit/test_sch_dump.cpp
+    # WP-03 (VANTAGE, C1): IMP-0012..IMP-0015 (IMP-0015 retired
+    # test_sch_dump.cpp with the schedule dump).
+    unit/test_orc_graph.cpp
+    unit/test_orc_plan.cpp
+    # WP-15 (SI-08): engine diagnostics -- IMP-0131..0140.
     unit/test_diag_graph_dump.cpp
     unit/test_diag_trace.cpp
     unit/test_diag_cost.cpp

@@ -88,10 +88,11 @@ add_library(simcore STATIC
     # and IT-11's non-simengine test harness both link against.
     module_host/isolate.cpp
     abi/simcore.cpp
-    # WP-15 (SI-08): engine diagnostics -- IMP-0076/0131..0140. dump.cpp
-    # sits beside `Scheduler` itself (EXTEND, scheduler.hpp); the rest is
-    # the new diagnostics/ facility.
-    scheduler/dump.cpp
+    # WP-03 (VANTAGE, C1): the orchestrator's graph, ranks and plan --
+    # IMP-0012..IMP-0015 (IMP-0015 replaced scheduler/dump.cpp).
+    orchestrator/graph.cpp
+    orchestrator/plan_dump.cpp
+    # WP-15 (SI-08): engine diagnostics -- IMP-0131..0140.
     diagnostics/graph_dump.cpp
     diagnostics/trace.cpp
     diagnostics/cost.cpp
