@@ -611,7 +611,7 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 - [x] **LAB-WP-04** — Fake car: sources, scheduler, recorder, on the running example · Makes `F-LAB`; needs the libraries and the ABI loader
 - [x] **LAB-WP-05** — Running example scenarios: restart, fault, calibration · Makes `F-LAB-RESTART`, `F-LAB-FAULT`, `F-LAB-CAL`
 - [x] **LAB-WP-06** — Run setups, provisional values and the reference re-run · Makes `F-LM` and closes `G2` without Vantage
-- [ ] **LAB-WP-07** — The other topologies, one file each · Added after the milestone, one corner case at a time
+- [x] **LAB-WP-07** — The other topologies, one file each · Added after the milestone, one corner case at a time
 - [ ] **LAB-WP-08** — Camera, drills and the supervised run · The `G4` drills; needs `LAB-WP-05` and `LAB-WP-06`
 
 | Box | ID | WP | Serves (RCT) | Artifact — Design |
@@ -657,14 +657,14 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 | `[x]` | `LAB-38` | `LAB-WP-06` | `RCT:SYS-0016` | `src/lab_tools/compare.py::equal_outputs` — same count, byte-identical once `cycle_counter` is 0. |
 | `[x]` | `LAB-39` | `LAB-WP-06` | `RCT:SYS-0016` | `src/lab_tools/reference.py::ReferenceResim` — re-run by refSync for any cut and order; `use_ref_sync=False` counts mismatches. |
 | `[x]` | `LAB-40` | `LAB-WP-06` | `RCT:SYS-0016` | `tests/test_catalogue.py` — `SYT-RSY-04` on every catalogue file present. |
-| `[ ]` | `LAB-41` | `LAB-WP-07` | `RCT:SYS-0016` | `catalogue/fan_out.yaml`. |
-| `[ ]` | `LAB-42` | `LAB-WP-07` | `RCT:SYS-0016` | `catalogue/diamond.yaml`. |
-| `[ ]` | `LAB-43` | `LAB-WP-07` | `RCT:SYS-0016` | `catalogue/rates_not_multiple.yaml`. |
-| `[ ]` | `LAB-44` | `LAB-WP-07` | `RCT:SYS-0016` | `catalogue/feedback.yaml`. |
-| `[ ]` | `LAB-45` | `LAB-WP-07` | `RCT:SYS-0016` | `catalogue/measured_middle.yaml`. |
-| `[ ]` | `LAB-46` | `LAB-WP-07` | `RCT:SYS-0016` | `catalogue/late_consumer.yaml`. |
-| `[ ]` | `LAB-47` | `LAB-WP-07` | `RCT:SYS-0009`, `RCT:SYS-0016` | `catalogue/data_triggered.yaml` — resim cases with `trigger: control` and `trigger: {T: in_X}`. |
-| `[ ]` | `LAB-48` | `LAB-WP-07` | — | `catalogue/loop_no_edge.yaml` — `expect: refused_at_load`; the loader accepts it only with that word. |
+| `[x]` | `LAB-41` | `LAB-WP-07` | `RCT:SYS-0016` | `catalogue/fan_out.yaml`. |
+| `[x]` | `LAB-42` | `LAB-WP-07` | `RCT:SYS-0016` | `catalogue/diamond.yaml`. |
+| `[x]` | `LAB-43` | `LAB-WP-07` | `RCT:SYS-0016` | `catalogue/rates_not_multiple.yaml`. |
+| `[x]` | `LAB-44` | `LAB-WP-07` | `RCT:SYS-0016` | `catalogue/feedback.yaml`. |
+| `[x]` | `LAB-45` | `LAB-WP-07` | `RCT:SYS-0016` | `catalogue/measured_middle.yaml`. |
+| `[x]` | `LAB-46` | `LAB-WP-07` | `RCT:SYS-0016` | `catalogue/late_consumer.yaml`. |
+| `[x]` | `LAB-47` | `LAB-WP-07` | `RCT:SYS-0009`, `RCT:SYS-0016` | `catalogue/data_triggered.yaml` — resim cases with `trigger: control` and `trigger: {T: in_X}`. |
+| `[x]` | `LAB-48` | `LAB-WP-07` | — | `catalogue/loop_no_edge.yaml` — `expect: refused_at_load`; the loader accepts it only with that word. |
 | `[ ]` | `LAB-49` | `LAB-WP-08` | `RCT:SYS-0029`, `RCT:SYS-0031` | `catalogue/camera.yaml` and `src/lab_tools/car.py::SourceTask` image kind with `big_frame`. |
 | `[ ]` | `LAB-50` | `LAB-WP-08` | `RCT:SYS-0001` | `src/lab_tools/car.py::Car.startComponent` — `renumber` and `counter_jump`. |
 | `[ ]` | `LAB-51` | `LAB-WP-08` | `RCT:SYS-0016` | `src/lab_tools/recorder.py::apply_recording_edits` — `drop_sample`, `drop_ref_sync`. |
