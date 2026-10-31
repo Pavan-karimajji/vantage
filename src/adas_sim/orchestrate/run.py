@@ -30,10 +30,11 @@ from collections.abc import Sequence
 from adas_sim.engine.bridge import EngineRunResult, run_pipeline_via_engine
 from adas_sim.graph.pipeline import Pipeline
 from adas_sim.orchestrate.progress import ProgressSink
+from adas_sim.runspec.emit import RunSetupValues
 
 
 def invoke_engine(
-    pipeline: Pipeline, recording_path: Path, *, run_id: str, output_path: Path,
+    pipeline: Pipeline, recording_path: Path, *, run_id: str, output_path: Path, setup_values: RunSetupValues,
     config_path: Path | None = None, exec_timeout_ms: int = 250,
     spec_json_path: Path | None = None, simengine_path: Path | None = None, search: Sequence[Path] = (),
     progress: ProgressSink | None = None, checkpoint_path: Path | None = None,
@@ -53,7 +54,8 @@ def invoke_engine(
     given, is forwarded to `run_pipeline_via_engine` unchanged -- a real
     `progress.json` on disk (`SW-0119`), still only readable AFTER this call
     returns (or the process dies), not a live mid-run channel; that remains
-    this docstring's own named gap."""
+    this docstring's own named gap. `setup_values` is forwarded to
+    `run_pipeline_via_engine` unchanged (`IMP-0051`)."""
     sink = progress if progress is not None else ProgressSink()
     if sink.cancelled:
         sink.message("cancelled before start")
@@ -64,7 +66,7 @@ def invoke_engine(
     result = run_pipeline_via_engine(
         pipeline, recording_path, run_id=run_id, output_path=output_path, config_path=config_path,
         exec_timeout_ms=exec_timeout_ms, spec_json_path=spec_json_path, simengine_path=simengine_path, search=search,
-        checkpoint_path=checkpoint_path,
+        checkpoint_path=checkpoint_path, setup_values=setup_values,
     )
     sink.report(1, 1)
     sink.message(f"finished run {run_id}: ok={result.ok}")

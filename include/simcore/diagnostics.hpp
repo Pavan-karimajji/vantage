@@ -58,7 +58,6 @@ struct GraphStageView {
 
 struct GraphView {
   std::string run_id;
-  std::int64_t grid_step_ns = 0;
   std::vector<GraphStageView> stages;  // declaration order, per R-SIM-1's
                                             // sibling discipline (UT-A4-12/P-8)
 };

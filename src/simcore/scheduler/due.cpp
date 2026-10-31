@@ -12,6 +12,8 @@
 
 #include "simcore/scheduler.hpp"
 
+#include <utility>
+
 namespace simcore::scheduler {
 
 namespace {
@@ -23,7 +25,8 @@ const SpecStage* FindStage(const RunSpec& spec, const std::string& name) {
 }
 }  // namespace
 
-Scheduler::Scheduler(const RunSpec& spec) : spec_(spec), grid_step_ns_(spec.grid_step_ns), order_(spec.order) {}
+Scheduler::Scheduler(const RunSpec& spec, std::int64_t grid_step_ns, std::vector<std::string> order)
+    : spec_(spec), grid_step_ns_(grid_step_ns), order_(std::move(order)) {}
 
 void Scheduler::Advance() {
   ++tick_index_;
@@ -33,8 +36,8 @@ void Scheduler::Advance() {
 bool Scheduler::IsDue(const std::string& stage_name) const {
   const SpecStage* stage = FindStage(spec_, stage_name);
   if (stage == nullptr) return false;
-  if (stage->period_ns == 0) return true;  // static/aperiodic producer -- always due, ported from pipeline.cpp
-  return now_ns_ % stage->period_ns == 0;
+  if (stage->clock_period_ns == 0) return true;  // static/aperiodic producer -- always due, ported from pipeline.cpp
+  return now_ns_ % stage->clock_period_ns == 0;
 }
 
 }  // namespace simcore::scheduler

@@ -12,6 +12,7 @@ the single stage under test is `widget`, same convention
 
 from __future__ import annotations
 
+import functools
 import json
 import struct
 from pathlib import Path
@@ -22,6 +23,7 @@ from google.protobuf import descriptor_pb2 as _dpb
 from google.protobuf import descriptor_pool as _dpool
 from google.protobuf import message_factory as _mfactory
 
+from adas_sim.check import runner as check_runner
 from adas_sim.check.expect import ExpectationResult
 from adas_sim.check.report import format_report_json, format_report_md, suite_passed, write_report
 from adas_sim.check.runner import (
@@ -33,11 +35,29 @@ from adas_sim.config.scenario import (
     EgoScenario, RoadHint, RunControl, Scenario, ScenarioContent, SensorModelRef, SutRef,
 )
 from adas_sim.diagnostics.errors import AuthoringError
+from adas_sim.runspec.emit import RunSetupValues
 from adas_sim.runspec.manifest import build_manifest
 from adas_sim.sources.recorder import Recorder
 from adas_sim.sources.synthetic import SyntheticSource
 from tests.system.test_d15b_engine_bridge import _echo_stub_path
 from adas_sim.engine.bridge import resolve_simengine_executable
+
+
+# `check_scenario` starts the engine through `invoke_engine`, which needs the
+# run setup's `⊘` values (`WP-01`, `IMP-0051`); nothing in `check/` supplies
+# them yet, so the tests that really run the engine supply these
+# provisional test values here.
+_TEST_SETUP_VALUES = RunSetupValues(
+    readiness_limit_steps=4, fallback_max_gap=4, trigger={"widget": ""}, buffer_depth={"*": 16},
+)
+
+
+@pytest.fixture(autouse=True)
+def _engine_setup_values(monkeypatch):
+    monkeypatch.setattr(
+        check_runner, "invoke_engine",
+        functools.partial(check_runner.invoke_engine, setup_values=_TEST_SETUP_VALUES),
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -7,10 +7,19 @@
 Takes `config.ResolvedConfig` (`WP-04`) plus whatever a caller has already
 PROBED as plain data (`ComponentManifest` per unit, a content hash per
 source, design §3.3a) and returns a `RunSpec` with every reference
-resolved, every path absolute, every port carrying a concrete `record`/
-`sampling`/`on_missing` -- **"if the engine has to decide something the
+resolved, every path absolute, every port carrying a concrete `record`,
+`bulk` and `buffer_depth` -- **"if the engine has to decide something the
 configuration layer could have decided, the spec is missing a field"**
 (design §3.3, the one rule this module exists to keep).
+
+**Schema `adas.sim.runspec/2.0`** (`VANTAGE_Architecture.md` §2.3, `IMP-0051`):
+the writer emits `trigger`, `clock_period_ns`, `previous_cycle`, `bulk`,
+`buffer_depth`, `outputs.livemeas`, `readiness_limit_steps` and
+`fallback_max_gap`, and no longer writes `grid`, `order`, `delay_steps`,
+`sampling` or `on_missing`. The values nobody supplied are `⊘`
+(`ARCH §4`): they arrive in a `RunSetupValues` the caller must pass, this
+module holds no default for any of them, and a missing one is an
+`AuthoringError` naming the key.
 
 **Why this module never opens a recording or loads a binary itself**
 (`ANL-SW-34`, `runspec/` is one of the four restricted directories): the
@@ -24,9 +33,9 @@ by `IMP-0003`'s own design note ("exactly as it uses today's
 **Scoped, honestly, for this pass** (`WP-05`): `sources[].ingest` needs
 `IMP-0187`'s ingest-map parser, which is `WP-12`'s own work package and
 does not exist yet -- every source's `ingest`/`absent` emit as empty lists,
-never guessed. `coherence` needs `SI-12`, also not built -- it emits
-`{"verdict": "unknown", ...}`, an explicit non-answer (`R-SIM-25`,
-`NR-SIM-4`), never a plausible `"normal"`.
+never guessed. `coherence_verdict` needs `SI-12`, also not built -- it emits
+`"unknown"`, an explicit non-answer (`R-SIM-25`, `NR-SIM-4`), never a
+plausible `"normal"`.
 """
 
 from __future__ import annotations
@@ -49,8 +58,8 @@ from adas_sim.resolve.library import resolve_library
 from adas_sim.runspec.address import resolve_address
 from adas_sim.runspec.canon import RunSpec
 
-#: `SW-0005` -- the one schema string `LoadRunSpec` accepts today.
-RUN_SPEC_SCHEMA = "adas.sim.runspec/1.0"
+#: `SW-0005`, `SYS-0004` -- the one schema string `LoadRunSpec` accepts.
+RUN_SPEC_SCHEMA = "adas.sim.runspec/2.0"
 
 _SCHEMA_PATH = Path(__file__).parent / "schema" / "run_spec.schema.json"
 
@@ -68,11 +77,90 @@ def validate_run_spec(spec: RunSpec) -> None:
     can never silently drift apart from each other."""
     jsonschema.validate(instance=spec.data, schema=_run_spec_schema())
 
-#: `IMP-0010`'s own fallback when a proto_type has no declared default --
-#: hold-last-value is this framework's own convention everywhere else
-#: (`R-SIM-18`'s "held" semantics), so it is not an arbitrary guess.
-_DEFAULT_SAMPLING = "latest_at_or_before"
-_DEFAULT_ON_MISSING = "hold"
+@dataclass(frozen=True, slots=True)
+class LiveMeasSpec:
+    """`outputs.livemeas` (`ARCH §2.3`): the name and geometry of the live
+    measurement. The four geometry values are `⊘` -- no default exists."""
+
+    name: str
+    cycle_slot_count: int
+    cycle_slot_size: int
+    bulk_slot_count: int
+    bulk_slot_size: int
+
+
+@dataclass(frozen=True, slots=True)
+class RunSetupValues:
+    """What a run setup needs that no component manifest or configuration
+    file carries (`IMP-0051`, `ARCH §2.3`, `§4`). The caller supplies every
+    one; this module has no default for any (`⊘`). A value that is missing
+    or not of its type is an `AuthoringError` naming the key.
+
+    - `readiness_limit_steps`, `fallback_max_gap`: integers (`⊘`).
+    - `trigger`: stage name -> `control`, an input port name, or `""` when
+      a clock starts the stage. Required for every `simulate` stage; a
+      `measured` or `off` stage is never run and is written with `""`.
+    - `buffer_depth`: `"<stage>.<port>"` or `"*"` -> integer (`⊘`); an exact
+      entry wins over `"*"`. Required for every port.
+    - `previous_cycle`: the `"<stage>.<port>"` inputs that are
+      previous-cycle inputs (the rest are not).
+    - `bulk`: the `"<stage>.<port>"` ports whose values go to `MeasBulk`.
+    - `livemeas`: the live measurement, or `None` for no live measurement.
+    """
+
+    readiness_limit_steps: int | None
+    fallback_max_gap: int | None
+    trigger: Mapping[str, str]
+    buffer_depth: Mapping[str, int]
+    previous_cycle: frozenset[str] = frozenset()
+    bulk: frozenset[str] = frozenset()
+    livemeas: LiveMeasSpec | None = None
+
+
+def _require_setup_integer(value: object, *, key: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise AuthoringError(
+            expected=f"an integer value for '{key}' (a ⊘ value: no default exists)", found=repr(value),
+            where="adas_sim.runspec.emit.RunSetupValues", hint=f"supply '{key}' in the RunSetupValues",
+        )
+    return value
+
+
+def _buffer_depth_for(values: RunSetupValues, stage: str, port: str) -> int:
+    key = f"{stage}.{port}"
+    where = f"stages[{stage}].ports[{port}].buffer_depth"
+    for candidate in (key, "*"):
+        if candidate in values.buffer_depth:
+            return _require_setup_integer(values.buffer_depth[candidate], key=where)
+    raise AuthoringError(
+        expected=f"an integer value for '{where}' (a ⊘ value: no default exists)", found="absent",
+        where="adas_sim.runspec.emit.RunSetupValues.buffer_depth",
+        hint=f"add '{key}' (or '*') to RunSetupValues.buffer_depth",
+    )
+
+
+def _trigger_for(values: RunSetupValues, stage: str, mode: str) -> str:
+    if mode != "simulate":
+        return ""
+    if stage not in values.trigger:
+        raise AuthoringError(
+            expected=f"a trigger for the simulated stage '{stage}' (control, an input port name, or '')",
+            found="absent", where=f"stages[{stage}].trigger",
+            hint=f"add '{stage}' to RunSetupValues.trigger -- the engine never picks a trigger",
+        )
+    return values.trigger[stage]
+
+
+def _livemeas_dict(livemeas: LiveMeasSpec) -> dict:
+    where = "outputs.livemeas"
+    return {
+        "name": livemeas.name,
+        "cycle_slot_count": _require_setup_integer(livemeas.cycle_slot_count, key=f"{where}.cycle_slot_count"),
+        "cycle_slot_size": _require_setup_integer(livemeas.cycle_slot_size, key=f"{where}.cycle_slot_size"),
+        "bulk_slot_count": _require_setup_integer(livemeas.bulk_slot_count, key=f"{where}.bulk_slot_count"),
+        "bulk_slot_size": _require_setup_integer(livemeas.bulk_slot_size, key=f"{where}.bulk_slot_size"),
+    }
+
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,8 +207,10 @@ def _resolve_impl(impl_raw: str, *, stage: str, search: Sequence[Path]) -> dict:
 
 
 def _compute_grid_step_ns(period_ns_by_stage: Mapping[str, int]) -> int:
-    """`IMP-0006`: the GCD over every stage's declared (nonzero)
-    `period_ns` -- computed here, once, so `simcore` never derives it
+    """Converts a fault's `after_tick` into a time window (`engine/bridge.py`,
+    `_fault_mutations`) -- **never written into a run setup** (schema 2.0 has
+    no grid). The GCD over every stage's declared (nonzero)
+    `period_ns` -- computed here, so `simcore` never derives it
     (`ANL-SW-02` greps the engine for `gcd`). A period not an integer
     multiple of the result is an emit-time error naming both, same
     discipline `graph/pipeline.py::_compute_base_grid_ns` already established
@@ -139,37 +229,15 @@ def _compute_grid_step_ns(period_ns_by_stage: Mapping[str, int]) -> int:
     return step_ns
 
 
-def _topological_order(stage_names: Sequence[str], depends_on: Mapping[str, set[str]]) -> tuple[str, ...]:
-    """`SW-0072`: precomputed once at emit, never re-derived by the engine.
-    Kahn's algorithm; a cycle is an emit-time error naming every stage
-    still blocked (never a silent partial order)."""
-    remaining = {name: set(depends_on.get(name, ())) for name in stage_names}
-    ordered: list[str] = []
-    while remaining:
-        ready = sorted(name for name, deps in remaining.items() if not deps)
-        if not ready:
-            raise AuthoringError(
-                expected="a wiring graph with no cycle", found=f"still blocked: {sorted(remaining)}",
-                where="emit_run_spec order (SW-0072)", hint="a stage cannot (directly or transitively) depend on itself",
-            )
-        for name in ready:
-            del remaining[name]
-        for deps in remaining.values():
-            deps.difference_update(ready)
-        ordered.extend(ready)
-    return tuple(ordered)
-
-
 def _port_dict(
-    spec: PortSpec, *, direction: str, record: str, sampling_defaults: Mapping[str, str],
-    on_missing_defaults: Mapping[str, str],
+    spec: PortSpec, *, stage: str, direction: str, record: str, values: RunSetupValues,
 ) -> dict:
     return {
         "name": spec.name, "dir": direction, "kind": "data", "proto_type": spec.proto_type,
         "record": record,
-        "sampling": sampling_defaults.get(spec.proto_type, _DEFAULT_SAMPLING),  # IMP-0010
-        "on_missing": on_missing_defaults.get(spec.proto_type, _DEFAULT_ON_MISSING),  # IMP-0010
         "fixed_slots": spec.fixed_slots,
+        "bulk": f"{stage}.{spec.name}" in values.bulk,
+        "buffer_depth": _buffer_depth_for(values, stage, spec.name),
     }
 
 
@@ -220,35 +288,20 @@ def unresolved(spec: RunSpec) -> list[str]:
     return findings
 
 
-@dataclass(frozen=True, slots=True)
-class ReferenceSpec:
-    """`WP-12` (`SW-0013`): a caller's own "run this side by side against a
-    staged reference build" declaration. `staged_build_sha256` is that
-    build's identity; `None` means a side-by-side run was requested but
-    nothing has actually been staged yet -- `emit_run_spec` refuses that
-    combination rather than silently emitting a spec with no reference to
-    compare against."""
-
-    staged_build_sha256: str | None = None
-
-
 def emit_run_spec(
     resolved: ResolvedConfig,
     *,
     run_id: str,
     manifests: Mapping[str, ComponentManifest],
+    setup_values: RunSetupValues,
     modes: Mapping[str, str] | None = None,
     search: Sequence[Path] = (),
     record_policy: Mapping[str, Mapping[str, str]] | None = None,
-    sampling_defaults: Mapping[str, str] | None = None,
-    on_missing_defaults: Mapping[str, str] | None = None,
     overrides: Mapping[str, Mapping[str, Override]] | None = None,
     sources: Sequence[SourceSpec] = (),
     outputs: Mapping[str, object] | None = None,
     checkpoint: Mapping[str, object] | None = None,
     limits: Mapping[str, object] | None = None,
-    diagnostics: Mapping[str, object] | None = None,
-    reference: ReferenceSpec | None = None,
 ) -> RunSpec:
     """Builds the Resolved Run Spec from `resolved`'s `COMPOSITION` (units)
     and `CONNECTIONS` (wiring) layers plus every already-probed
@@ -256,66 +309,57 @@ def emit_run_spec(
     returns empty on the built spec -- an emitter that produces something
     unresolved is this module's own bug, never the caller's (`IMP-0001`).
 
-    `WP-12` (`SW-0013`): `reference`, when given, must carry a staged
-    build's identity -- a caller that asks for a side-by-side run before
-    one is actually staged is refused here, alongside (never instead of)
-    the `unresolved()` refusal below."""
-    if reference is not None and not reference.staged_build_sha256:
-        raise AuthoringError(
-            expected="reference.staged_build_sha256 naming the staged reference build",
-            found=repr(reference.staged_build_sha256), where="adas_sim.runspec.emit.emit_run_spec",
-            hint="a side-by-side run needs a staged reference before its spec can be assembled -- "
-                 "stage one, or drop reference: entirely for an ordinary run",
-        )
+    `setup_values` carries the `⊘` values and the per-stage and per-port
+    choices no manifest holds (`RunSetupValues`); there is no default for
+    any of them, and a missing one is an `AuthoringError` naming the key."""
     modes = modes or {}
     record_policy = record_policy or {}
-    sampling_defaults = sampling_defaults or {}
-    on_missing_defaults = on_missing_defaults or {}
     overrides = overrides or {}
     outputs = dict(outputs or {})
+    if setup_values.livemeas is not None:
+        outputs["livemeas"] = _livemeas_dict(setup_values.livemeas)
     checkpoint = dict(checkpoint or {})
     limits = {"exec_timeout_ms": 250, "severity_exit": "error", **(limits or {})}
-    diagnostics = {"cycle_trace": False, "graph_dump": False, **(diagnostics or {})}
+    readiness_limit_steps = _require_setup_integer(setup_values.readiness_limit_steps, key="readiness_limit_steps")
+    fallback_max_gap = _require_setup_integer(setup_values.fallback_max_gap, key="fallback_max_gap")
 
     units = resolved.resolved.get(FileKind.COMPOSITION, {}).get("units")
     units_list = list(units.value) if units is not None else []
     wiring = resolved.resolved.get(FileKind.CONNECTIONS, {}).get("wiring")
     wiring_list = list(wiring.value) if wiring is not None else []
 
-    depends_on: dict[str, set[str]] = {u["name"]: set() for u in units_list}
     inputs_by_stage: dict[str, list[dict]] = {u["name"]: [] for u in units_list}
     for edge in wiring_list:
         stage, port, producer_ref = edge["stage"], edge["port"], edge["from"]
         producer, _, producer_port = producer_ref.partition(".")
-        depends_on.setdefault(stage, set()).add(producer)
         inputs_by_stage.setdefault(stage, []).append({
             "port": port, "producer": producer, "producer_port": producer_port,  # IMP-0007
-            "delay_steps": int(edge.get("delay_steps", 0)),
+            "previous_cycle": f"{stage}.{port}" in setup_values.previous_cycle,
         })
 
     stages: list[dict] = []
-    period_ns_by_stage: dict[str, int] = {}
     for unit in units_list:
         name = unit["name"]
         manifest = manifests[name]
-        period_ns_by_stage[name] = manifest.period_ns
+        mode = modes.get(name, "simulate")
         ports = [
             _port_dict(
-                p, direction="pro", record=_record_verb_for(name, p.name, record_policy),
-                sampling_defaults=sampling_defaults, on_missing_defaults=on_missing_defaults,
+                p, stage=name, direction="pro", record=_record_verb_for(name, p.name, record_policy),
+                values=setup_values,
             )
             for p in manifest.outputs
         ] + [
             _port_dict(
-                p, direction="req", record=_record_verb_for(name, p.name, record_policy),
-                sampling_defaults=sampling_defaults, on_missing_defaults=on_missing_defaults,
+                p, stage=name, direction="req", record=_record_verb_for(name, p.name, record_policy),
+                values=setup_values,
             )
             for p in manifest.inputs
         ]
         stages.append({
-            "name": name, "mode": modes.get(name, "simulate"),
+            "name": name, "mode": mode,
             "impl": _resolve_impl(unit["impl"], stage=name, search=search),  # IMP-0003
-            "period_ns": manifest.period_ns, "abi_version": manifest.abi_version,
+            "trigger": _trigger_for(setup_values, name, mode),
+            "clock_period_ns": manifest.period_ns, "abi_version": manifest.abi_version,
             "config_bundle_sha256": manifest.config_bundle_sha256,
             "ports": ports, "inputs": inputs_by_stage.get(name, []),
         })
@@ -344,7 +388,6 @@ def emit_run_spec(
         "schema": RUN_SPEC_SCHEMA,
         "run_id": run_id,
         "spec_sha256": "",  # filled by canon.write_run_spec
-        "grid": {"step_ns": _compute_grid_step_ns(period_ns_by_stage)},  # IMP-0006
         "sources": [
             {
                 "path": _require_absolute(s.path, where="sources[].path"), "sha256": s.sha256,  # IMP-0412
@@ -354,18 +397,13 @@ def emit_run_spec(
         ],
         "stages": stages,
         "mutations": mutations,  # IMP-0008's payoff
-        "order": list(_topological_order([u["name"] for u in units_list], depends_on)),
-        "coherence": {"verdict": "unknown", "stale": [], "waiver": None},  # SI-12 not landed yet
+        "coherence_verdict": "unknown",  # SI-12 not landed yet
         "outputs": outputs,
         "checkpoint": checkpoint,
         "limits": limits,
-        "diagnostics": diagnostics,
+        "readiness_limit_steps": readiness_limit_steps,
+        "fallback_max_gap": fallback_max_gap,
     }
-    if reference is not None:
-        # WP-12 (SW-0013): omitted entirely for an ordinary run, never an
-        # empty string -- absence is a value, same discipline `config.
-        # bundle.BundleAbsent` (WP-07) states for its own field.
-        data["reference_build_sha256"] = reference.staged_build_sha256
 
     spec = RunSpec(data=data)
     validate_run_spec(spec)

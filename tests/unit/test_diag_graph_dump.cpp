@@ -19,7 +19,6 @@ namespace {
 RunSpec MakeSpec() {
   RunSpec spec;
   spec.run_id = "ut_graph_dump";
-  spec.grid_step_ns = 5'000'000;
 
   SpecStage a;
   a.name = "a";

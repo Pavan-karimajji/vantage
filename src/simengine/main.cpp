@@ -39,6 +39,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -63,6 +64,7 @@ struct Args {
   std::string config_path;
   std::int64_t exec_timeout_ms = 0;
   bool wait_for_attach = false;
+  int threads = 1;                  // IMP-0005: `--threads N`; takes effect in WP-07
   int max_restarts = 0;             // SW-0147: off by default
   std::int64_t attempt_timeout_ms = 0;
   bool worker = false;              // internal: this process IS a supervised child
@@ -77,6 +79,17 @@ bool ParseArgs(int argc, char** argv, Args& out) {
       out.exec_timeout_ms = std::stoll(argv[++i]);
     } else if (arg == "--wait-for-attach") {
       out.wait_for_attach = true;
+    } else if (arg == "--threads" && i + 1 < argc) {
+      // IMP-0005: N >= 1, default 1. A value that is not a whole number, or
+      // is below 1, is a usage error (config exit), never clamped.
+      try {
+        std::size_t consumed = 0;
+        const std::string text = argv[++i];
+        out.threads = std::stoi(text, &consumed);
+        if (consumed != text.size() || out.threads < 1) return false;
+      } catch (const std::exception&) {
+        return false;
+      }
     } else if (arg == "--restart-on-crash" && i + 1 < argc) {
       out.max_restarts = std::stoi(argv[++i]);
     } else if (arg == "--attempt-timeout-ms" && i + 1 < argc) {
@@ -199,6 +212,8 @@ std::vector<std::string> BuildChildArgs(const Args& args) {
     out.push_back("--timeout-ms");
     out.push_back(std::to_string(args.exec_timeout_ms));
   }
+  out.push_back("--threads");
+  out.push_back(std::to_string(args.threads));
   out.push_back("--__worker");
   return out;
 }
@@ -294,7 +309,7 @@ int main(int argc, char** argv) {
   Args args;
   if (!ParseArgs(argc, argv, args)) {
     std::cerr << "usage: " << argv[0]
-              << " <run_spec.json> [--config PATH] [--timeout-ms N] [--wait-for-attach]"
+              << " <run_spec.json> [--config PATH] [--timeout-ms N] [--threads N] [--wait-for-attach]"
                  " [--restart-on-crash N] [--attempt-timeout-ms N]\n";
     return static_cast<int>(kSimExitConfig);
   }

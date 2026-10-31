@@ -51,10 +51,13 @@ from adas_sim.runspec.address import resolve_address
 from adas_sim.runspec.canon import RunSpec, write_run_spec
 from adas_sim.runspec.emit import (
     RUN_SPEC_SCHEMA,
+    RunSetupValues,
     _compute_grid_step_ns,
+    _livemeas_dict,
     _port_dict,
     _record_verb_for,
-    _topological_order,
+    _require_setup_integer,
+    _trigger_for,
     unresolved,
     validate_run_spec,
 )
@@ -272,7 +275,8 @@ def _fault_mutations(faults: Sequence, *, grid_step_ns: int) -> list[dict]:
     AT `to_s` would stop one nanosecond early. `after_tick` (open-ended)
     becomes `[after_tick * grid_step_ns, None]` -- the same base grid
     `Pipeline._tick_index` counts against (`R-SIM-18`), already computed
-    once for this same spec's own `grid.step_ns`, never re-derived."""
+    from the stages' own periods and used only for this window -- schema 2.0
+    has no grid, so it is never written into the setup."""
     mutations: list[dict] = []
     for fault in faults:
         if fault.verb is not FaultVerb.CORRUPT:
@@ -373,8 +377,9 @@ def _ingest_for(recording_path: Path) -> dict[str, list]:
 
 
 def pipeline_to_run_spec(
-    pipeline: Pipeline, *, run_id: str, recording_path: Path, recording_sha256: str = "",
-    output_path: Path | None = None, exec_timeout_ms: int = 250, checkpoint_path: Path | None = None,
+    pipeline: Pipeline, *, run_id: str, recording_path: Path, setup_values: RunSetupValues,
+    recording_sha256: str = "", output_path: Path | None = None, exec_timeout_ms: int = 250,
+    checkpoint_path: Path | None = None,
 ) -> RunSpec:
     """Builds a Resolved Run Spec (`IF-09`) directly from an already-loaded
     `Pipeline` -- the Python-object twin of `runspec.emit.emit_run_spec`,
@@ -383,6 +388,10 @@ def pipeline_to_run_spec(
     `Pipeline`). Reuses `emit.py`'s already-proven per-port/grid/order
     helpers rather than a second implementation of them (`R-BUILD`'s
     no-second-implementation principle applied at function granularity).
+
+    `setup_values` carries the `⊘` values and the per-stage triggers no
+    pipeline file holds yet (`emit.RunSetupValues`); nothing here defaults
+    any of them (`IMP-0051`).
 
     `output_path=None` means no recording output declared -- the engine
     still runs, but nothing downstream can read results back (`SW-0013`'s
@@ -398,29 +407,30 @@ def pipeline_to_run_spec(
     manifests: dict[str, ComponentManifest] = {stage.name: pipeline.manifest_for(stage.name) for stage in pipeline.stages}
     period_ns_by_stage = {name: m.period_ns for name, m in manifests.items()}
 
-    depends_on: dict[str, set[str]] = {stage.name: set() for stage in pipeline.stages}
     stages: list[dict] = []
     for stage in pipeline.stages:
         manifest = manifests[stage.name]
         inputs: list[dict] = []
         for port, ref in stage.inputs.items():
             producer, producer_port = _split_ref(ref)
-            if producer != "source":
-                depends_on[stage.name].add(producer)
-            inputs.append({"port": port, "producer": producer, "producer_port": producer_port, "delay_steps": 0})
+            inputs.append({
+                "port": port, "producer": producer, "producer_port": producer_port,
+                "previous_cycle": f"{stage.name}.{port}" in setup_values.previous_cycle,
+            })
         ports = [
-            _port_dict(p, direction="pro", record=_record_verb_for(stage.name, p.name, {}),
-                       sampling_defaults={}, on_missing_defaults={})
+            _port_dict(p, stage=stage.name, direction="pro", record=_record_verb_for(stage.name, p.name, {}),
+                       values=setup_values)
             for p in manifest.outputs
         ] + [
-            _port_dict(p, direction="req", record=_record_verb_for(stage.name, p.name, {}),
-                       sampling_defaults={}, on_missing_defaults={})
+            _port_dict(p, stage=stage.name, direction="req", record=_record_verb_for(stage.name, p.name, {}),
+                       values=setup_values)
             for p in manifest.inputs
         ]
         stages.append({
             "name": stage.name, "mode": stage.mode,
             "impl": _stage_impl_dict(pipeline, stage),
-            "period_ns": manifest.period_ns, "abi_version": manifest.abi_version,
+            "trigger": _trigger_for(setup_values, stage.name, stage.mode),
+            "clock_period_ns": manifest.period_ns, "abi_version": manifest.abi_version,
             "config_bundle_sha256": manifest.config_bundle_sha256,
             "ports": ports, "inputs": inputs,
         })
@@ -444,23 +454,24 @@ def pipeline_to_run_spec(
     mutations.extend(_fault_mutations(pipeline.faults, grid_step_ns=grid_step_ns))
 
     outputs = {"path": str(output_path), "codec": "mcap"} if output_path is not None else {}
+    if setup_values.livemeas is not None:
+        outputs["livemeas"] = _livemeas_dict(setup_values.livemeas)
 
     data: dict[str, object] = {
         "schema": RUN_SPEC_SCHEMA,
         "run_id": run_id,
         "spec_sha256": "",
-        "grid": {"step_ns": grid_step_ns},
         "sources": [{
             "path": str(recording_path), "sha256": recording_sha256, "codec": "mcap",
             **_ingest_for(recording_path),
         }],
         "stages": stages,
         "mutations": mutations,
-        "order": list(_topological_order([s.name for s in pipeline.stages], depends_on)),
-        "coherence": {"verdict": "unknown", "stale": [], "waiver": None},
+        "coherence_verdict": "unknown",
         "outputs": outputs,
         "limits": {"exec_timeout_ms": exec_timeout_ms, "severity_exit": "error"},
-        "diagnostics": {"cycle_trace": False, "graph_dump": False},
+        "readiness_limit_steps": _require_setup_integer(setup_values.readiness_limit_steps, key="readiness_limit_steps"),
+        "fallback_max_gap": _require_setup_integer(setup_values.fallback_max_gap, key="fallback_max_gap"),
     }
     if checkpoint_path is not None:
         data["checkpoint"] = {"path": str(checkpoint_path)}
@@ -479,7 +490,7 @@ def pipeline_to_run_spec(
 
 
 def run_pipeline_via_engine(
-    pipeline: Pipeline, recording_path: Path, *, run_id: str, output_path: Path,
+    pipeline: Pipeline, recording_path: Path, *, run_id: str, output_path: Path, setup_values: RunSetupValues,
     config_path: Path | None = None, exec_timeout_ms: int = 250,
     spec_json_path: Path | None = None, simengine_path: Path | None = None, search: Sequence[Path] = (),
     checkpoint_path: Path | None = None,
@@ -491,10 +502,11 @@ def run_pipeline_via_engine(
     (`<output_path>.spec.json`) so a caller inspecting a failed run finds
     the exact spec that failed next to the (possibly partial) recording.
     `checkpoint_path` is forwarded to `pipeline_to_run_spec` unchanged --
-    `None` means no checkpointing, matching that function's own default."""
+    `None` means no checkpointing, matching that function's own default.
+    `setup_values` is forwarded unchanged too (`IMP-0051`)."""
     spec = pipeline_to_run_spec(
         pipeline, run_id=run_id, recording_path=recording_path, output_path=output_path,
-        exec_timeout_ms=exec_timeout_ms, checkpoint_path=checkpoint_path,
+        exec_timeout_ms=exec_timeout_ms, checkpoint_path=checkpoint_path, setup_values=setup_values,
     )
     spec_path = spec_json_path if spec_json_path is not None else output_path.with_suffix(output_path.suffix + ".spec.json")
     spec_sha256 = write_run_spec(spec, spec_path)
@@ -666,7 +678,7 @@ def merge_engine_output_with_recording(
 
 def run_pipeline_merged_via_engine(
     pipeline: Pipeline, recording_path: Path, out_path: Path, *, meta: RunManifest, run_id: str,
-    config_path: Path | None = None, exec_timeout_ms: int = 250, simengine_path: Path | None = None,
+    setup_values: RunSetupValues, config_path: Path | None = None, exec_timeout_ms: int = 250, simengine_path: Path | None = None,
     search: Sequence[Path] = (),
 ) -> EngineRunResult:
     """The retiring Python GUI's "Run" button was rewired onto this
@@ -680,7 +692,7 @@ def run_pipeline_merged_via_engine(
     engine_output_path = out_path.with_suffix(out_path.suffix + ".engine.mcap")
     result = run_pipeline_via_engine(
         pipeline, recording_path, run_id=run_id, output_path=engine_output_path, config_path=config_path,
-        exec_timeout_ms=exec_timeout_ms, simengine_path=simengine_path, search=search,
+        exec_timeout_ms=exec_timeout_ms, simengine_path=simengine_path, search=search, setup_values=setup_values,
     )
     if not result.ok:
         return result

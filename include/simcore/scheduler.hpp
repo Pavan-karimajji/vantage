@@ -5,9 +5,8 @@
 /// @brief
 ///   `Scheduler` (`SI-03`, `WP-09`) -- the multi-rate stepping engine,
 ///   `SW-0061`'s own "one execution path" made real: `IsDue`/`Advance`
-///   decide when a module runs, `Order` (a plain read of
-///   `RunSpec::order`, `SW-0072` -- consumed, never computed) decides in
-///   what sequence, and neither reads a message payload (`SW-0075`) or a
+///   decide when a module runs, `Order` (the order the constructor was
+///   given -- consumed, never computed) decides in what sequence, and neither reads a message payload (`SW-0075`) or a
 ///   wall clock (`SW-0077`).
 ///
 ///   **Scope note, this slice (2026-08-21):** the core (`IsDue`,
@@ -44,14 +43,16 @@ struct ScheduleFinding {
   bool reported_updated = false;
 };
 
-// SW-0061/0062/0064/0072/0075/0077/0413: consumes the spec's own grid
-// step and per-stage periods -- never derives a GCD, never snaps a
-// period, never reads wall-clock time or a message payload. `Advance()`
+// SW-0061/0062/0064/0072/0075/0077/0413: consumes the grid step and
+// execution order it is given (the run setup carries neither since schema
+// 2.0; `WP-04` replaces this class) and the spec's per-stage clock periods
+// -- never derives a GCD, never snaps a period, never reads wall-clock time
+// or a message payload. `Advance()`
 // is the ONLY writer of simulation time (`SW-0413`); no arrival,
 // reconstructed cycle boundary or module output may move it.
 class Scheduler {
  public:
-  explicit Scheduler(const RunSpec& spec);
+  Scheduler(const RunSpec& spec, std::int64_t grid_step_ns, std::vector<std::string> order);
 
   // SW-0413: moves to the next tick -- simulation time becomes exactly
   // `tick_index() * grid_step_ns`, the arithmetic sequence the grid step
@@ -63,7 +64,7 @@ class Scheduler {
   std::uint64_t tick_index() const { return tick_index_; }
   std::int64_t grid_step_ns() const { return grid_step_ns_; }
 
-  // SW-0064: integer due-ness -- `now_ns % period == 0` (a `period_ns==0`
+  // SW-0064: integer due-ness -- `now_ns % period == 0` (a `clock_period_ns==0`
   // stage is treated as due every tick, matching a static/aperiodic
   // producer's own real shape, ported from `pipeline.cpp::Step`'s
   // identical special case). Refuses (returns false, never throws) an
@@ -71,12 +72,9 @@ class Scheduler {
   // names real stages.
   bool IsDue(const std::string& stage_name) const;
 
-  // SW-0072: the run's own resolved execution order -- `RunSpec::order`,
-  // read once at construction, never recomputed. A topological sort over
-  // the stage graph is the spec emitter's job (design `A-4`'s own
-  // "derived, never authored twice" discipline applied here); this class
-  // trusts it, the same way `PortCatalogue::Resolve` trusts the spec's
-  // own declared port set.
+  // SW-0072: the run's own execution order -- the one given at
+  // construction, never recomputed. This class trusts it, the same way
+  // `PortCatalogue::Resolve` trusts the spec's own declared port set.
   const std::vector<std::string>& Order() const { return order_; }
 
   // SW-0066: compares a module's own reported update flag against the
@@ -114,12 +112,14 @@ struct ScheduleTick {
 // wired to a `Component`/`Runner` -- nothing is executed to produce this.
 // `horizon_ticks` counts `Advance()` calls, tick 0 (the construction state,
 // before any `Advance()`) included as the first entry.
-std::vector<ScheduleTick> PredictSchedule(const RunSpec& spec, std::uint64_t horizon_ticks);
+std::vector<ScheduleTick> PredictSchedule(const RunSpec& spec, std::int64_t grid_step_ns,
+                                          const std::vector<std::string>& order, std::uint64_t horizon_ticks);
 
 // Deterministic, line-oriented rendering of `PredictSchedule` -- diffable
 // byte-for-byte against a second dump of the same spec (`IT-10`'s own
 // comparison shape), and against the tick-by-tick due-stage sequence a real
 // run actually took.
-std::string ScheduleDumpText(const RunSpec& spec, std::uint64_t horizon_ticks);
+std::string ScheduleDumpText(const RunSpec& spec, std::int64_t grid_step_ns, const std::vector<std::string>& order,
+                             std::uint64_t horizon_ticks);
 
 }  // namespace simcore::scheduler

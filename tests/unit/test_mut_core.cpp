@@ -596,8 +596,6 @@ TEST_F(MutateFixture, UtMut11ADeclaredOverrideAppliesThroughARealRunnerCycleWith
   objects_port.kind = "data";
   objects_port.proto_type = "mutate_test.TestPort";
   objects_port.record = "full";
-  objects_port.sampling = "latest";
-  objects_port.on_missing = "hold";
 
   SpecPort meas_port = objects_port;
   meas_port.dir = "pro";
@@ -620,9 +618,7 @@ TEST_F(MutateFixture, UtMut11ADeclaredOverrideAppliesThroughARealRunnerCycleWith
 
   RunSpec spec;
   spec.run_id = "ut-mut-11";
-  spec.grid_step_ns = 10'000'000;
   spec.stages = {meas, sut};
-  spec.order = {"meas", "sut"};
 
   // The declared override: `meas.objects.x := 42.0` -- the same address
   // shape a real Resolved Run Spec's `mutations[]` carries.
@@ -646,7 +642,7 @@ TEST_F(MutateFixture, UtMut11ADeclaredOverrideAppliesThroughARealRunnerCycleWith
   recorded_message.payload = Encode(*recorded_port);
 
   Ut11Reader reader({recorded_message}, {{topic, topic_info}});
-  scheduler::Scheduler sched(spec);
+  scheduler::Scheduler sched(spec, 10'000'000, {"meas", "sut"});
   bus::PortBus bus;
   CapturingWriter sink;
   io::WriterBase writer_base(sink);

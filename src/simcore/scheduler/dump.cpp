@@ -21,8 +21,9 @@
 
 namespace simcore::scheduler {
 
-std::vector<ScheduleTick> PredictSchedule(const RunSpec& spec, std::uint64_t horizon_ticks) {
-  Scheduler scheduler(spec);
+std::vector<ScheduleTick> PredictSchedule(const RunSpec& spec, std::int64_t grid_step_ns,
+                                          const std::vector<std::string>& order, std::uint64_t horizon_ticks) {
+  Scheduler scheduler(spec, grid_step_ns, order);
   std::vector<ScheduleTick> plan;
   plan.reserve(horizon_ticks + 1);
 
@@ -39,11 +40,12 @@ std::vector<ScheduleTick> PredictSchedule(const RunSpec& spec, std::uint64_t hor
   return plan;
 }
 
-std::string ScheduleDumpText(const RunSpec& spec, std::uint64_t horizon_ticks) {
+std::string ScheduleDumpText(const RunSpec& spec, std::int64_t grid_step_ns, const std::vector<std::string>& order,
+                             std::uint64_t horizon_ticks) {
   std::ostringstream out;
   out << "run_id: " << spec.run_id << "\n";
-  out << "grid_step_ns: " << spec.grid_step_ns << "\n";
-  for (const ScheduleTick& tick : PredictSchedule(spec, horizon_ticks)) {
+  out << "grid_step_ns: " << grid_step_ns << "\n";
+  for (const ScheduleTick& tick : PredictSchedule(spec, grid_step_ns, order, horizon_ticks)) {
     out << "tick: " << tick.tick_index << " now_ns=" << tick.now_ns << " due=[";
     for (std::size_t i = 0; i < tick.due_stages.size(); ++i) {
       if (i != 0) out << ",";

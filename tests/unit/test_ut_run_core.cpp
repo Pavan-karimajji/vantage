@@ -135,15 +135,12 @@ SpecPort MakePort(const std::string& name, const std::string& dir, const std::st
   port.kind = "data";
   port.proto_type = "test.Bytes";
   port.record = record;
-  port.sampling = "latest";
-  port.on_missing = "hold";
   return port;
 }
 
 RunSpec MakeSpec(const std::string& sut_output_port, const std::string& sut_record = "full") {
   RunSpec spec;
   spec.run_id = "20260821T000000Z-run13000";
-  spec.grid_step_ns = kDtNs;
 
   SpecStage measured;
   measured.name = "meas";
@@ -173,7 +170,6 @@ RunSpec MakeSpec(const std::string& sut_output_port, const std::string& sut_reco
   dark.ports.push_back(MakePort("unused", "pro"));
 
   spec.stages = {measured, sut, dark};
-  spec.order = {"meas", "sut", "dark"};
   return spec;
 }
 
@@ -245,7 +241,7 @@ struct Harness {
                    const std::string& sut_record = "full")
       : spec(MakeSpec("outputs", sut_record)),
         reader(MakeRecording(cycles, "/sut/outputs", recorded_sut_output), MakeTopics("/sut/outputs")),
-        scheduler(spec),
+        scheduler(spec, kDtNs, {"meas", "sut", "dark"}),
         writer_base(sink) {}
 
   RunSpec spec;

@@ -21,23 +21,22 @@
 namespace simcore {
 namespace {
 
-// `period_ns_literal` is substituted verbatim as JSON, so both `20000000`
-// (integer) and `20000000.5` (fractional) can be exercised through the
-// same builder.
-std::string MinimalRunSpecJson(const std::string& grid_step_ns_literal,
-                                const std::string& period_ns_literal) {
+// `clock_period_ns_literal` is substituted verbatim as JSON, so both
+// `20000000` (integer) and `20000000.5` (fractional) can be exercised
+// through the same builder.
+std::string MinimalRunSpecJson(const std::string& clock_period_ns_literal) {
   return R"({
-    "schema": "adas.sim.runspec/1.0",
+    "schema": "adas.sim.runspec/2.0",
     "run_id": "ut-bus-04",
     "spec_sha256": "deadbeef",
-    "grid": {"step_ns": )" + grid_step_ns_literal + R"(},
     "sources": [],
     "stages": [
       {
         "name": "echo_stub",
         "mode": "simulate",
         "impl": {"kind": "dll", "path": "/abs/echo_stub.dll", "pattern": "", "search": []},
-        "period_ns": )" + period_ns_literal + R"(,
+        "trigger": "",
+        "clock_period_ns": )" + clock_period_ns_literal + R"(,
         "abi_version": 1,
         "config_bundle_sha256": "deadbeef",
         "ports": [],
@@ -45,32 +44,25 @@ std::string MinimalRunSpecJson(const std::string& grid_step_ns_literal,
       }
     ],
     "mutations": [],
-    "order": ["echo_stub"],
-    "coherence": {"verdict": "clean"},
+    "coherence_verdict": "clean",
+    "readiness_limit_steps": 4,
+    "fallback_max_gap": 4,
     "limits": {"exec_timeout_ms": 1000, "severity_exit": "error"}
   })";
 }
 
-TEST(UtBus04IntegerNanoseconds, IntegerPeriodAndGridStepLoad) {
-  const auto result = LoadRunSpec(MinimalRunSpecJson("1000000", "20000000"));
+TEST(UtBus04IntegerNanoseconds, IntegerClockPeriodLoads) {
+  const auto result = LoadRunSpec(MinimalRunSpecJson("20000000"));
   ASSERT_TRUE(result.ok()) << (result.ok() ? "" : result.error().Format());
-  EXPECT_EQ(result.value().grid_step_ns, 1'000'000);
   ASSERT_EQ(result.value().stages.size(), 1u);
-  EXPECT_EQ(result.value().stages[0].period_ns, 20'000'000);
+  EXPECT_EQ(result.value().stages[0].clock_period_ns, 20'000'000);
 }
 
-TEST(UtBus04IntegerNanoseconds, FractionalPeriodIsRefused) {
-  const auto result = LoadRunSpec(MinimalRunSpecJson("1000000", "20000000.5"));
+TEST(UtBus04IntegerNanoseconds, FractionalClockPeriodIsRefused) {
+  const auto result = LoadRunSpec(MinimalRunSpecJson("20000000.5"));
   ASSERT_FALSE(result.ok());
   EXPECT_EQ(result.error().kind, Kind::Authoring);
-  EXPECT_NE(result.error().Format().find("period_ns"), std::string::npos);
-}
-
-TEST(UtBus04IntegerNanoseconds, FractionalGridStepIsRefused) {
-  const auto result = LoadRunSpec(MinimalRunSpecJson("1000000.25", "20000000"));
-  ASSERT_FALSE(result.ok());
-  EXPECT_EQ(result.error().kind, Kind::Authoring);
-  EXPECT_NE(result.error().Format().find("grid.step_ns"), std::string::npos);
+  EXPECT_NE(result.error().Format().find("clock_period_ns"), std::string::npos);
 }
 
 }  // namespace

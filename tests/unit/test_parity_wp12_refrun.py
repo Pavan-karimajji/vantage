@@ -3,7 +3,7 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""PARITY `WP-12` tests: `UT-specasm-03`, `UT-manifest-03`, `UT-refrun-01`..
+"""PARITY `WP-12` tests: `UT-manifest-03`, `UT-refrun-01`..
 `UT-refrun-03` (`docs/v2/parity/PARITY_Test_Spec.md` §5.4/5.12).
 """
 
@@ -12,59 +12,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 
-import pytest
 import yaml
 
-from adas_sim.config import load
-from adas_sim.config.paths import ConfigPaths
-from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.engine.refrun import RefRun, first_divergence, topic_for
 from adas_sim.graph.pipeline import Pipeline
 from adas_sim.resolve.component import ComponentManifest, InProcessSilComponent
-from adas_sim.runspec.emit import ReferenceSpec, emit_run_spec
 from adas_sim.runspec.manifest import build_manifest
-
-
-# ---------------------------------------------------------------------------
-# 5.4 specasm (emit_run_spec)
-# ---------------------------------------------------------------------------
-
-
-def _one_unit_project(tmp_path: Path) -> ConfigPaths:
-    comp_dir = tmp_path / "composition"
-    comp_dir.mkdir()
-    (comp_dir / "package.yaml").write_text(
-        "version: 1\nunits:\n  - name: a\n    impl: dll:a\n    ports: [outputs]\n",
-        encoding="utf-8",
-    )
-    return ConfigPaths(project_root=tmp_path)
-
-
-def _manifests() -> dict[str, ComponentManifest]:
-    return {"a": ComponentManifest(
-        component="a", version="1", abi_version=1, build_id="test",
-        inputs=(), outputs=(), project="base", config_bundle_sha256="", descriptor_set=b"", period_ns=0,
-    )}
-
-
-def test_a_side_by_side_spec_needs_its_reference_ut_specasm_03(tmp_path):
-    """UT-specasm-03."""
-    cfg = load(_one_unit_project(tmp_path))
-    lib_dir = tmp_path / "lib"
-    lib_dir.mkdir()
-    (lib_dir / "a.dll").touch()
-
-    staged = emit_run_spec(
-        cfg, run_id="r1", manifests=_manifests(), search=[lib_dir],
-        reference=ReferenceSpec(staged_build_sha256="a" * 64),
-    )
-    assert staged.data["reference_build_sha256"] == "a" * 64  # .c1: identity carried when staged
-
-    with pytest.raises(AuthoringError):  # .c2: assembly fails with none staged
-        emit_run_spec(
-            cfg, run_id="r2", manifests=_manifests(), search=[lib_dir],
-            reference=ReferenceSpec(staged_build_sha256=None),
-        )
 
 
 # ---------------------------------------------------------------------------

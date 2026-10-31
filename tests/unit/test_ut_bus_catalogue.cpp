@@ -28,8 +28,6 @@ SpecPort MakePort(std::string name, std::string proto_type) {
   port.kind = "data";
   port.proto_type = std::move(proto_type);
   port.record = "full";
-  port.sampling = "every_cycle";
-  port.on_missing = "hold";
   return port;
 }
 

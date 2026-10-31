@@ -240,7 +240,7 @@ Result<Runner> Runner::Construct(const RunSpec& spec, scheduler::Scheduler& sche
   // governs this signal, and letting a consumer's entry claim it first would
   // let a `req` port marked `excluded` suppress a `pro` port marked `full`.
   // Claiming every `pro` topic before any `req` one removes that ordering
-  // hazard rather than relying on `spec.order` happening to be topological.
+  // hazard rather than relying on the setup's stage order happening to be topological.
   const auto build_topics = [&](const std::string& want_dir) -> Result<bool> {
     for (const SpecStage& stage : spec.stages) {
       if (stage.mode == "off") continue;

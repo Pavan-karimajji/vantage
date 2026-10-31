@@ -41,17 +41,20 @@ struct ImplRef {
   std::vector<std::string> search;
 };
 
-// design §3.1 -- stages[].ports[]. `record`/`sampling`/`on_missing` are
-// ALWAYS present (SW-0009, SW-0010) -- the engine holds no default table.
+// design §3.1 -- stages[].ports[]. `record` is ALWAYS present (SW-0009) --
+// the engine holds no default table. `sampling`/`on_missing` no longer
+// exist (`D18 (4)`): a setup that carries either is refused at load.
+// `bulk` and `buffer_depth` are new (`VANTAGE_Architecture.md` §2.3);
+// `buffer_depth` is a `⊘` value, so it is always present and has no default.
 struct SpecPort {
   std::string name;
   std::string dir;         // "pro" | "req"
   std::string kind;         // "data" (DD-05 widens this to "static" later)
   std::string proto_type;
   std::string record;
-  std::string sampling;     // one of Sampling's five string forms
-  std::string on_missing;
   std::optional<bool> fixed_slots;
+  bool bulk = false;
+  std::int64_t buffer_depth = 0;
 };
 
 // design §3.1 -- stages[].inputs[]. No reference grammar (SW-0007):
@@ -60,14 +63,15 @@ struct SpecInput {
   std::string port;
   std::string producer;
   std::string producer_port;
-  std::int64_t delay_steps = 0;
+  bool previous_cycle = false;  // was `delay_steps`
 };
 
 struct SpecStage {
   std::string name;
   std::string mode;  // "simulate" | "measured" | "off"
   ImplRef impl;
-  std::int64_t period_ns = 0;
+  std::string trigger;  // "control" | an input port name | "" when a clock starts the stage
+  std::int64_t clock_period_ns = 0;  // was `period_ns`; 0 when no clock
   int abi_version = 0;
   std::string config_bundle_sha256;
   std::vector<SpecPort> ports;
@@ -128,6 +132,17 @@ struct SpecSource {
   std::vector<std::pair<std::string, std::string>> absent;
 };
 
+// `outputs.livemeas`: the name and geometry of the live measurement; absent
+// means no live measurement. The four geometry values are `⊘` and have no
+// default (`VANTAGE_Architecture.md` §2.3, §4).
+struct SpecLiveMeas {
+  std::string name;
+  std::int64_t cycle_slot_count = 0;
+  std::int64_t cycle_slot_size = 0;
+  std::int64_t bulk_slot_count = 0;
+  std::int64_t bulk_slot_size = 0;
+};
+
 // design §3.1 -- the top-level `outputs` key. `emit.py::emit_run_spec`
 // already carries an `outputs` parameter and the JSON schema already
 // declares the key (`{"type": "object"}`, no sub-schema), but until now
@@ -142,6 +157,7 @@ struct SpecSource {
 struct SpecOutputs {
   std::string path;
   std::string codec;
+  std::optional<SpecLiveMeas> livemeas;
 };
 
 // IMP-0139's own gap, design-decided 2026-08-24: mirrors `SpecOutputs`
@@ -159,20 +175,24 @@ struct RunSpec {
   std::string schema;
   std::string run_id;
   std::string spec_sha256;
-  std::int64_t grid_step_ns = 0;
   std::vector<SpecSource> sources;
   std::vector<SpecStage> stages;
   std::vector<SpecMutation> mutations;
-  std::vector<std::string> order;
   std::string coherence_verdict;
   SpecOutputs outputs;
   SpecCheckpoint checkpoint;
+  // `⊘` values (`VANTAGE_Architecture.md` §4): the setup supplies them, the
+  // engine has no default for either.
+  std::int64_t readiness_limit_steps = 0;
+  std::int64_t fallback_max_gap = 0;
   int limits_exec_timeout_ms = 0;
   std::string limits_severity_exit;
 };
 
-// SW-0005: refuses a schema string outside the range this reader
-// understands, naming both; a missing `schema` key names the omission.
+// SW-0005, IMP-0004: loads only schema `adas.sim.runspec/2.0`; any other
+// string, or none, is a load error naming the string found and the string
+// expected. IMP-0002/0003/0049: a retired or unknown key, and a missing
+// `⊘` value, are load errors naming the key and where it is.
 // Never opens a file: `sources[].path`/`impl.path` are read as strings
 // only, not dereferenced (SW-0412's own rehash-and-compare step is a
 // deliberately separate, not-yet-built concern -- see load.cpp's own

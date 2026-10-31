@@ -67,6 +67,9 @@ set(SIM_TEST_SOURCES
     unit/test_ut_bus_bulk.cpp
     unit/test_ut_bus_static.cpp
     unit/test_ut_bus_catalogue.cpp
+    # WP-01 (VANTAGE, C1): LoadRunSpec reads schema 2.0 -- IMP-0001 to IMP-0004
+    # and IMP-0049 (refusals by name).
+    unit/test_ut_runspec_load.cpp
     # WP-08 (SI-02 bus): UT-BUS-07..13, UT-BUS-19 (CycleReconstructor).
     unit/test_ut_bus_cycle.cpp
     # WP-09 (SI-02 bus / SI-03 scheduler): PortBus + Scheduler core.

@@ -119,19 +119,19 @@ std::filesystem::path WriteTinyRecording(const std::filesystem::path& path) {
 std::filesystem::path WriteStubRunSpec(const std::filesystem::path& spec_path, const std::filesystem::path& recording) {
   std::ofstream out(spec_path);
   out << R"({
-    "schema": "adas.sim.runspec/1.0", "run_id": "20260822T000000Z-exe05",
-    "spec_sha256": "0", "grid": {"step_ns": 10000000},
+    "schema": "adas.sim.runspec/2.0", "run_id": "20260822T000000Z-exe05",
+    "spec_sha256": "0",
     "sources": [{"path": ")"
       << JsonEscape(recording) << R"(", "sha256": "0", "codec": "mcap"}],
     "stages": [{
       "name": "sut", "mode": "simulate",
       "impl": {"kind": "dll", "path": ")"
       << JsonEscape(EchoStubPath()) << R"(", "pattern": "", "search": []},
-      "period_ns": 10000000, "abi_version": 1, "config_bundle_sha256": "",
+      "trigger": "", "clock_period_ns": 10000000, "abi_version": 1, "config_bundle_sha256": "",
       "ports": [], "inputs": []
     }],
-    "mutations": [], "order": ["sut"],
-    "coherence": {"verdict": "clean"}, "limits": {"exec_timeout_ms": 2000, "severity_exit": "crash"}
+    "mutations": [],
+    "coherence_verdict": "clean", "readiness_limit_steps": 4, "fallback_max_gap": 4, "limits": {"exec_timeout_ms": 2000, "severity_exit": "crash"}
   })";
   return spec_path;
 }
@@ -152,6 +152,23 @@ TEST(UtExe05ExitCodes, ConfigOnBadArguments) {
   const auto result = simcore::module_host::RunIsolatedStage("sut", SimenginePath(), {}, std::chrono::seconds(5));
   EXPECT_EQ(result.outcome, simcore::module_host::IsolatedOutcome::kFail);
   EXPECT_EQ(result.exit_code, static_cast<int>(kSimExitConfig));
+}
+
+// IMP-0005: `--threads N` (N >= 1, default 1) is a simengine option; a value
+// below 1 or not a whole number is a usage error, never clamped.
+TEST(UtExe05ExitCodes, ThreadsOptionTakesAWholeNumberOfAtLeastOne) {
+  const auto recording = WriteTinyRecording(TempPath("ut_exe_05_threads.mcap"));
+  const auto spec = WriteStubRunSpec(TempPath("ut_exe_05_threads.json"), recording);
+  EnvGuard name("ADAS_SIL_TEST_STUB_NAME", "exe05threads");
+  const auto accepted = simcore::module_host::RunIsolatedStage(
+      "sut", SimenginePath(), {spec.string(), "--threads", "2"}, std::chrono::seconds(5));
+  EXPECT_EQ(accepted.outcome, simcore::module_host::IsolatedOutcome::kOk);
+  for (const char* bad : {"0", "-1", "two", "1.5"}) {
+    const auto refused = simcore::module_host::RunIsolatedStage(
+        "sut", SimenginePath(), {spec.string(), "--threads", bad}, std::chrono::seconds(5));
+    EXPECT_EQ(refused.outcome, simcore::module_host::IsolatedOutcome::kFail) << bad;
+    EXPECT_EQ(refused.exit_code, static_cast<int>(kSimExitConfig)) << bad;
+  }
 }
 
 TEST(UtExe05ExitCodes, ModuleOnAnAbiVersionMismatch) {

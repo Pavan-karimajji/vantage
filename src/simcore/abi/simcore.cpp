@@ -252,6 +252,15 @@ void PopulateDescriptorPoolFromTopics(const std::map<std::string, simcore::io::T
   }
 }
 
+// The run setup carries no grid step and no execution order since schema
+// 2.0; the scheduler still takes both until `WP-04` replaces it. The grid
+// step is 0 and the order is the setup's own stage order, never derived.
+std::vector<std::string> SetupStageOrder(const simcore::RunSpec& spec) {
+  std::vector<std::string> order;
+  for (const simcore::SpecStage& stage : spec.stages) order.push_back(stage.name);
+  return order;
+}
+
 }  // namespace
 
 // One constructed engine: the spec plus every live object the cycle loop
@@ -286,7 +295,7 @@ struct SimEngine {
   std::optional<simcore::runner::Checkpoint> checkpoint;
   std::optional<simcore::runner::Runner> runner;
 
-  explicit SimEngine(simcore::RunSpec s) : spec(std::move(s)), scheduler(spec), bus(0) {}
+  explicit SimEngine(simcore::RunSpec s) : spec(std::move(s)), scheduler(spec, 0, SetupStageOrder(spec)), bus(0) {}
 };
 
 int32_t simEngineAbiVersion() { return SIMCORE_ABI_VERSION; }

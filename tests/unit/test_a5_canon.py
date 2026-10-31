@@ -15,16 +15,15 @@ from adas_sim.runspec.canon import RunSpec, canonical, compute_spec_sha256, diff
 
 def _spec(**overrides) -> RunSpec:
     data = {
-        "diagnostics": {"cycle_trace": False},
-        "schema": "adas.sim.runspec/1.0",
+        "coherence_verdict": "unknown",
+        "schema": "adas.sim.runspec/2.0",
         "run_id": "r1",
         "spec_sha256": "",
-        "grid": {"step_ns": 20_000_000},
         "sources": [],
         "stages": [{"name": "aeb", "mode": "simulate"}],
         "mutations": [],
-        "order": ["aeb"],
-        "coherence": {"verdict": "unknown"},
+        "readiness_limit_steps": 4,
+        "fallback_max_gap": 4,
         "outputs": {},
         "limits": {"exec_timeout_ms": 250},
     }
@@ -33,24 +32,24 @@ def _spec(**overrides) -> RunSpec:
 
 
 def test_top_level_keys_are_in_the_fixed_declared_order_not_sorted():
-    """UT-SPC-03: `schema` must come before `diagnostics` even though 'd' <
-    's' -- the top level is design §3.1's own order, never lexicographic."""
+    """UT-SPC-03: `schema` must come before `coherence_verdict` even though
+    'c' < 's' -- the top level is design §3.1's own order, never lexicographic."""
     text = canonical(_spec())
-    assert text.index('"schema"') < text.index('"diagnostics"')
+    assert text.index('"schema"') < text.index('"coherence_verdict"')
 
 
 def test_nested_object_keys_are_sorted():
     text = canonical(_spec())
-    assert text.index('"cycle_trace"') >= 0  # only key present, trivially "sorted"
+    assert text.index('"exec_timeout_ms"') >= 0  # only key present, trivially "sorted"
     spec_with_two_keys = _spec(limits={"severity_exit": "error", "exec_timeout_ms": 250})
     text2 = canonical(spec_with_two_keys)
     assert text2.index('"exec_timeout_ms"') < text2.index('"severity_exit"')
 
 
 def test_arrays_never_sorted():
-    """`order` is semantic -- reversing it would silently change meaning,
-    so canonical() must never touch array element order."""
-    spec = _spec(order=["zzz_last", "aaa_first"])
+    """An array's order is semantic -- reversing it would silently change
+    meaning, so canonical() must never touch array element order."""
+    spec = _spec(sources=["zzz_last", "aaa_first"])
     text = canonical(spec)
     assert text.index('"zzz_last"') < text.index('"aaa_first"')
 

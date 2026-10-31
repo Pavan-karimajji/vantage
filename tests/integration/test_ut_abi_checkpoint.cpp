@@ -96,25 +96,23 @@ std::string BuildRunSpecJson(const std::filesystem::path& recording, const std::
                               const std::string& run_id, const std::string& checkpoint_json) {
   std::ostringstream out;
   out << R"({
-    "schema": "adas.sim.runspec/1.0",
+    "schema": "adas.sim.runspec/2.0",
     "run_id": ")"
       << run_id << R"(",
     "spec_sha256": "0",
-    "grid": {"step_ns": 10000000},
     "sources": [{"path": ")"
       << JsonEscape(recording) << R"(", "sha256": "0", "codec": "mcap"}],
     "stages": [{
       "name": "sut", "mode": "simulate",
       "impl": {"kind": "dll", "path": ")"
       << JsonEscape(stub) << R"(", "pattern": "", "search": []},
-      "period_ns": 10000000, "abi_version": 1, "config_bundle_sha256": "",
+      "trigger": "", "clock_period_ns": 10000000, "abi_version": 1, "config_bundle_sha256": "",
       "ports": [{"name": "outputs", "dir": "pro", "kind": "data", "proto_type": "test.Echo",
-                 "record": "full", "sampling": "latest", "on_missing": "hold", "fixed_slots": null}],
+                 "record": "full", "fixed_slots": null, "bulk": false, "buffer_depth": 16}],
       "inputs": []
     }],
     "mutations": [],
-    "order": ["sut"],
-    "coherence": {"verdict": "clean"},
+    "coherence_verdict": "clean", "readiness_limit_steps": 4, "fallback_max_gap": 4,
     "outputs": {}, )"
       << checkpoint_json << R"(
     "limits": {"exec_timeout_ms": 2000, "severity_exit": "crash"}

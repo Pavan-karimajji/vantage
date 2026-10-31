@@ -40,6 +40,7 @@ from adas_sim.graph.pipeline import Pipeline
 from adas_sim.diagnostics.determinism import compare_exact
 from adas_sim.diagnostics.errors import EnvironmentError_
 from adas_sim.engine.bridge import resolve_simengine_executable, run_pipeline_merged_via_engine
+from adas_sim.runspec.emit import RunSetupValues
 from adas_sim.runspec.manifest import build_manifest
 from adas_sim.plugins.registry import reader_for
 
@@ -131,6 +132,13 @@ def _pipeline_yaml(path: Path, *, impl_kind: str) -> None:
     )
 
 
+# Provisional test values for the run setup's `⊘` keys (`WP-01`, `IMP-0051`):
+# nothing else supplies them yet, and the writer has no default.
+_SETUP_VALUES = RunSetupValues(
+    readiness_limit_steps=4, fallback_max_gap=4, trigger={"echo_stub_with_output": ""}, buffer_depth={"*": 16},
+)
+
+
 def _resim_to(lib_dir: Path, pipeline_path: Path, out_path: Path) -> None:
     pipeline = Pipeline.load(pipeline_path, search=[lib_dir])
     meta = build_manifest(
@@ -139,6 +147,7 @@ def _resim_to(lib_dir: Path, pipeline_path: Path, out_path: Path) -> None:
     )
     result = run_pipeline_merged_via_engine(
         pipeline, _TINY, out_path, meta=meta, run_id=f"ut-c1c-15a-{out_path.stem}", search=[lib_dir],
+        setup_values=_SETUP_VALUES,
     )
     assert result.ok, f"simengine exit_code={result.exit_code} stderr={result.stderr!r}"
 

@@ -33,8 +33,8 @@ from adas_sim.runspec.sources import SourceSet
 #: a glance, unlike a lexicographically-sorted top level which would bury
 #: `schema`/`run_id` alphabetically among `coherence`/`diagnostics`.
 _TOP_LEVEL_ORDER = (
-    "schema", "run_id", "spec_sha256", "grid", "sources", "stages",
-    "mutations", "order", "coherence", "outputs", "limits", "diagnostics",
+    "schema", "run_id", "spec_sha256", "sources", "stages", "mutations", "outputs",
+    "readiness_limit_steps", "fallback_max_gap", "checkpoint", "limits", "coherence_verdict",
 )
 
 #: `SW-0046`: the only three keys whose value may be a float. Every other

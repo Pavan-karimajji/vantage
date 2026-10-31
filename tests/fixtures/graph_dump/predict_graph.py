@@ -26,7 +26,7 @@ import sys
 
 
 def dump_graph_text(spec: dict) -> str:
-    lines = [f"run_id: {spec['run_id']}", f"grid_step_ns: {spec['grid']['step_ns']}"]
+    lines = [f"run_id: {spec['run_id']}"]
     for stage in spec["stages"]:
         mode = stage["mode"]
         impl = stage["impl"]["path"] if mode == "simulate" else mode

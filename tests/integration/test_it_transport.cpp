@@ -205,7 +205,6 @@ class CapturingWriter final : public simcore::io::Writer {
 RunSpec MakeSpec() {
   RunSpec spec;
   spec.run_id = "20260824T000000Z-it-trn-01";
-  spec.grid_step_ns = kDtNs;
 
   auto make_port = [](const std::string& name, const std::string& dir) {
     SpecPort port;
@@ -214,8 +213,6 @@ RunSpec MakeSpec() {
     port.kind = "data";
     port.proto_type = "test.Bytes";
     port.record = "full";
-    port.sampling = "latest";
-    port.on_missing = "hold";
     return port;
   };
 
@@ -236,7 +233,6 @@ RunSpec MakeSpec() {
   sut.inputs.push_back(from_measured);
 
   spec.stages = {measured, sut};
-  spec.order = {"meas", "sut"};
   return spec;
 }
 
@@ -284,7 +280,7 @@ class StubComponent {
 
 struct Harness {
   explicit Harness(std::size_t cycles)
-      : spec(MakeSpec()), reader(MakeRecording(cycles), MakeTopics()), scheduler(spec), writer_base(sink) {}
+      : spec(MakeSpec()), reader(MakeRecording(cycles), MakeTopics()), scheduler(spec, kDtNs, {"meas", "sut"}), writer_base(sink) {}
 
   RunSpec spec;
   VectorReader reader;
@@ -511,7 +507,7 @@ TEST(ItTrn02Bulk, BulkPayloadCrossesIntactThroughTheMappedSegment) {
 
   RunSpec spec = MakeSpec();
   VectorReader reader(MakeBulkRecording(kCycles, kPayloadBytes), MakeTopics());
-  simcore::scheduler::Scheduler scheduler(spec);
+  simcore::scheduler::Scheduler scheduler(spec, kDtNs, {"meas", "sut"});
   simcore::bus::PortBus bus;
   NullWriter sink;
   simcore::io::WriterBase writer_base(sink);
@@ -575,7 +571,7 @@ TEST(ItTrn19MidRunAttach, AttachAndDetachDuringARunProduceIdenticalValuesAndDoNo
   ASSERT_TRUE(stub_ctrl.ok());
   RunSpec spec_ctrl = MakeSpec();
   VectorReader reader_ctrl(MakeRecording(kCycles), MakeTopics());
-  simcore::scheduler::Scheduler scheduler_ctrl(spec_ctrl);
+  simcore::scheduler::Scheduler scheduler_ctrl(spec_ctrl, kDtNs, {"meas", "sut"});
   simcore::bus::PortBus bus_ctrl;
   CapturingWriter sink_ctrl;
   simcore::io::WriterBase writer_base_ctrl(sink_ctrl);
@@ -592,7 +588,7 @@ TEST(ItTrn19MidRunAttach, AttachAndDetachDuringARunProduceIdenticalValuesAndDoNo
   ASSERT_TRUE(stub_live.ok());
   RunSpec spec_live = MakeSpec();
   VectorReader reader_live(MakeRecording(kCycles), MakeTopics());
-  simcore::scheduler::Scheduler scheduler_live(spec_live);
+  simcore::scheduler::Scheduler scheduler_live(spec_live, kDtNs, {"meas", "sut"});
   simcore::bus::PortBus bus_live;
   CapturingWriter sink_live;
   simcore::io::WriterBase writer_base_live(sink_live);

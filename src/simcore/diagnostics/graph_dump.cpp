@@ -25,7 +25,6 @@ GraphView BuildGraphView(const RunSpec& spec, const std::vector<std::string>& lo
 
   GraphView view;
   view.run_id = spec.run_id;
-  view.grid_step_ns = spec.grid_step_ns;
 
   for (const SpecStage& stage : spec.stages) {
     GraphStageView out;
@@ -58,7 +57,6 @@ GraphView BuildGraphView(const RunSpec& spec, const std::vector<std::string>& lo
 std::string DumpGraphText(const GraphView& view) noexcept {
   std::ostringstream out;
   out << "run_id: " << view.run_id << "\n";
-  out << "grid_step_ns: " << view.grid_step_ns << "\n";
   for (const GraphStageView& stage : view.stages) {
     out << "stage: " << stage.name << " mode=" << stage.mode << " impl=" << stage.impl << "\n";
     for (const std::string& input : stage.inputs) {

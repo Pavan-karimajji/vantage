@@ -154,39 +154,36 @@ std::string BuildRunSpecJson(const std::filesystem::path& recording, const std::
                               const std::filesystem::path& output_path, std::int64_t step_ns) {
   std::ostringstream out;
   out << R"({
-    "schema": "adas.sim.runspec/1.0",
+    "schema": "adas.sim.runspec/2.0",
     "run_id": "20260824T000000Z-it09",
     "spec_sha256": "0",
-    "grid": {"step_ns": )"
-      << step_ns << R"(},
     "sources": [{"path": ")"
       << JsonEscape(recording) << R"(", "sha256": "0", "codec": "mcap"}],
     "stages": [
       {
         "name": "meas", "mode": "measured",
         "impl": {"kind": "dll", "path": "", "pattern": "", "search": []},
-        "period_ns": )"
+        "trigger": "", "clock_period_ns": )"
       << step_ns << R"(, "abi_version": 1, "config_bundle_sha256": "",
         "ports": [{"name": "objects", "dir": "pro", "kind": "data", "proto_type": "test.Echo",
-                   "record": "full", "sampling": "latest", "on_missing": "hold", "fixed_slots": null}],
+                   "record": "full", "fixed_slots": null, "bulk": false, "buffer_depth": 16}],
         "inputs": []
       },
       {
         "name": "sut", "mode": "simulate",
         "impl": {"kind": "dll", "path": ")"
       << JsonEscape(stub) << R"(", "pattern": "", "search": []},
-        "period_ns": )"
+        "trigger": "", "clock_period_ns": )"
       << step_ns << R"(, "abi_version": 1, "config_bundle_sha256": "",
         "ports": [{"name": "objects", "dir": "req", "kind": "data", "proto_type": "test.Echo",
-                   "record": "excluded", "sampling": "latest", "on_missing": "hold", "fixed_slots": null},
+                   "record": "excluded", "fixed_slots": null, "bulk": false, "buffer_depth": 16},
                   {"name": "outputs", "dir": "pro", "kind": "data", "proto_type": "test.Echo",
-                   "record": "decimate:3", "sampling": "latest", "on_missing": "hold", "fixed_slots": null}],
-        "inputs": [{"port": "objects", "producer": "meas", "producer_port": "objects", "delay_steps": 0}]
+                   "record": "decimate:3", "fixed_slots": null, "bulk": false, "buffer_depth": 16}],
+        "inputs": [{"port": "objects", "producer": "meas", "producer_port": "objects", "previous_cycle": false}]
       }
     ],
     "mutations": [],
-    "order": ["meas", "sut"],
-    "coherence": {"verdict": "clean"},
+    "coherence_verdict": "clean", "readiness_limit_steps": 4, "fallback_max_gap": 4,
     "outputs": {"path": ")"
       << JsonEscape(output_path) << R"(", "codec": "mcap"},
     "limits": {"exec_timeout_ms": 2000, "severity_exit": "crash"}

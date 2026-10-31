@@ -50,7 +50,7 @@ bool Python3Available() {
 #endif
 }
 
-// A minimal, complete `adas.sim.runspec/1.0` document -- two `simulate`
+// A minimal, complete `adas.sim.runspec/2.0` document -- two `simulate`
 // stages over the real `echo_stub` fixture, one declared input between
 // them, so the dump has something structural to disagree about. String
 // escaping keeps the Windows backslash path readable in JSON.
@@ -67,29 +67,27 @@ std::string BuildRunSpecJson(const std::string& stage_b_impl_path) {
   const std::string stub_path = EscapeForJson(EchoStubPath().string());
   std::ostringstream json;
   json << R"({
-  "schema": "adas.sim.runspec/1.0",
+  "schema": "adas.sim.runspec/2.0",
   "run_id": "it10_graph_diff",
   "spec_sha256": "",
-  "grid": {"step_ns": 10000000},
   "sources": [],
   "stages": [
     {
       "name": "a", "mode": "simulate",
       "impl": {"kind": "dll", "path": ")" << stub_path << R"(", "pattern": "", "search": []},
-      "period_ns": 0, "abi_version": 1, "config_bundle_sha256": "",
+      "trigger": "", "clock_period_ns": 0, "abi_version": 1, "config_bundle_sha256": "",
       "ports": [], "inputs": []
     },
     {
       "name": "b", "mode": "simulate",
-      "impl": {"kind": "dll", "path": ")" << stage_b_impl_path << R"(", "pattern": "", "search": []},
-      "period_ns": 0, "abi_version": 1, "config_bundle_sha256": "",
+      "impl": {"kind": "dll", "path": ")" << EscapeForJson(stage_b_impl_path) << R"(", "pattern": "", "search": []},
+      "trigger": "", "clock_period_ns": 0, "abi_version": 1, "config_bundle_sha256": "",
       "ports": [],
-      "inputs": [{"port": "in", "producer": "a", "producer_port": "out", "delay_steps": 0}]
+      "inputs": [{"port": "in", "producer": "a", "producer_port": "out", "previous_cycle": false}]
     }
   ],
   "mutations": [],
-  "order": ["a", "b"],
-  "coherence": {"verdict": "unknown"},
+  "coherence_verdict": "unknown", "readiness_limit_steps": 4, "fallback_max_gap": 4,
   "limits": {"exec_timeout_ms": 0, "severity_exit": "crash"}
 })";
   return json.str();

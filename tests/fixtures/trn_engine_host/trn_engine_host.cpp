@@ -109,7 +109,6 @@ class NullWriter final : public simcore::io::Writer {
 simcore::RunSpec MakeSpec() {
   simcore::RunSpec spec;
   spec.run_id = "20260824T000000Z-it-trn-05";
-  spec.grid_step_ns = kDtNs;
 
   auto make_port = [](const std::string& name, const std::string& dir) {
     simcore::SpecPort port;
@@ -118,8 +117,6 @@ simcore::RunSpec MakeSpec() {
     port.kind = "data";
     port.proto_type = "test.Bytes";
     port.record = "full";
-    port.sampling = "latest";
-    port.on_missing = "hold";
     return port;
   };
 
@@ -140,7 +137,6 @@ simcore::RunSpec MakeSpec() {
   sut.inputs.push_back(from_measured);
 
   spec.stages = {measured, sut};
-  spec.order = {"meas", "sut"};
   return spec;
 }
 
@@ -191,7 +187,7 @@ int main(int argc, char** argv) {
 
   simcore::RunSpec spec = MakeSpec();
   VectorReader reader(MakeRecording(cycles), MakeTopics());
-  simcore::scheduler::Scheduler scheduler(spec);
+  simcore::scheduler::Scheduler scheduler(spec, kDtNs, {"meas", "sut"});
   simcore::bus::PortBus bus;
   NullWriter sink;
   simcore::io::WriterBase writer_base(sink);

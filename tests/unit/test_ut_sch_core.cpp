@@ -19,17 +19,23 @@
 namespace simcore::scheduler {
 namespace {
 
-RunSpec MakeSpec(std::int64_t grid_step_ns, std::vector<std::pair<std::string, std::int64_t>> stages) {
+RunSpec MakeSpec(std::vector<std::pair<std::string, std::int64_t>> stages) {
   RunSpec spec;
-  spec.grid_step_ns = grid_step_ns;
-  for (const auto& [name, period_ns] : stages) {
+  for (const auto& [name, clock_period_ns] : stages) {
     SpecStage stage;
     stage.name = name;
-    stage.period_ns = period_ns;
+    stage.clock_period_ns = clock_period_ns;
     spec.stages.push_back(stage);
-    spec.order.push_back(name);
   }
   return spec;
+}
+
+// The run setup carries no grid step and no order since schema 2.0; the
+// scheduler is given both. The order is the spec's own stage order.
+std::vector<std::string> OrderOf(const RunSpec& spec) {
+  std::vector<std::string> order;
+  for (const SpecStage& stage : spec.stages) order.push_back(stage.name);
+  return order;
 }
 
 // UT-SCH-01: `IsDue`/`Advance` are the only functions deciding a module
@@ -38,8 +44,8 @@ RunSpec MakeSpec(std::int64_t grid_step_ns, std::vector<std::pair<std::string, s
 // this class (a grep over scheduler/*.cpp finding no other Advance/IsDue
 // pair is `ANL-SW-17`'s own mechanised half, not attempted in this test).
 TEST(UtSch01OneExecutionPath, DueDecisionGoesThroughIsDueAlone) {
-  RunSpec spec = MakeSpec(10'000'000, {{"a", 30'000'000}});
-  Scheduler sched(spec);
+  RunSpec spec = MakeSpec({{"a", 30'000'000}});
+  Scheduler sched(spec, 10'000'000, OrderOf(spec));
   sched.Advance();  // now_ns = 10ms
   EXPECT_FALSE(sched.IsDue("a"));
   sched.Advance();  // 20ms
@@ -52,8 +58,8 @@ TEST(UtSch01OneExecutionPath, DueDecisionGoesThroughIsDueAlone) {
 // the expected set exactly, integer arithmetic only (no float/epsilon
 // anywhere in IsDue/Advance).
 TEST(UtSch02IntegerDueNess, ThirtyMsModuleFiresOnExactlyTheExpectedTicksOverSixtySeconds) {
-  RunSpec spec = MakeSpec(10'000'000, {{"a", 30'000'000}});
-  Scheduler sched(spec);
+  RunSpec spec = MakeSpec({{"a", 30'000'000}});
+  Scheduler sched(spec, 10'000'000, OrderOf(spec));
   std::vector<std::int64_t> firedAtNs;
   const std::int64_t totalTicks = 60'000'000'000LL / 10'000'000LL;  // 6000 ticks over 60s
   for (std::int64_t i = 0; i < totalTicks; ++i) {
@@ -70,8 +76,8 @@ TEST(UtSch02IntegerDueNess, ThirtyMsModuleFiresOnExactlyTheExpectedTicksOverSixt
 }
 
 TEST(UtSch02IntegerDueNess, ZeroPeriodStageIsAlwaysDue) {
-  RunSpec spec = MakeSpec(10'000'000, {{"aperiodic", 0}});
-  Scheduler sched(spec);
+  RunSpec spec = MakeSpec({{"aperiodic", 0}});
+  Scheduler sched(spec, 10'000'000, OrderOf(spec));
   for (int i = 0; i < 5; ++i) {
     sched.Advance();
     EXPECT_TRUE(sched.IsDue("aperiodic"));
@@ -82,8 +88,8 @@ TEST(UtSch02IntegerDueNess, ZeroPeriodStageIsAlwaysDue) {
 // period -- read the finding, never a silent value; agreement produces no
 // finding at all.
 TEST(UtSch04ModuleFlagAuthoritative, DisagreementProducesANamedFinding) {
-  RunSpec spec = MakeSpec(10'000'000, {{"a", 30'000'000}});
-  Scheduler sched(spec);
+  RunSpec spec = MakeSpec({{"a", 30'000'000}});
+  Scheduler sched(spec, 10'000'000, OrderOf(spec));
   sched.Advance();  // 10ms -- not due
   auto finding = sched.ReconcileModuleFlag("a", /*reported_updated=*/true);  // module ran anyway
   ASSERT_TRUE(finding.has_value());
@@ -93,8 +99,8 @@ TEST(UtSch04ModuleFlagAuthoritative, DisagreementProducesANamedFinding) {
 }
 
 TEST(UtSch04ModuleFlagAuthoritative, AgreementProducesNoFinding) {
-  RunSpec spec = MakeSpec(10'000'000, {{"a", 30'000'000}});
-  Scheduler sched(spec);
+  RunSpec spec = MakeSpec({{"a", 30'000'000}});
+  Scheduler sched(spec, 10'000'000, OrderOf(spec));
   sched.Advance();
   sched.Advance();
   sched.Advance();  // 30ms -- due
@@ -102,12 +108,12 @@ TEST(UtSch04ModuleFlagAuthoritative, AgreementProducesNoFinding) {
 }
 
 // UT-SCH-09: run one spec twice; compare the order -- identical, because
-// it is read once from RunSpec::order, never recomputed from container
+// it is read once from the order the constructor is given, never recomputed from container
 // iteration.
 TEST(UtSch09StableOrder, OrderIsIdenticalAcrossTwoInstancesOfTheSameSpec) {
-  RunSpec spec = MakeSpec(10'000'000, {{"c", 10'000'000}, {"a", 10'000'000}, {"b", 10'000'000}});
-  Scheduler first(spec);
-  Scheduler second(spec);
+  RunSpec spec = MakeSpec({{"c", 10'000'000}, {"a", 10'000'000}, {"b", 10'000'000}});
+  Scheduler first(spec, 10'000'000, OrderOf(spec));
+  Scheduler second(spec, 10'000'000, OrderOf(spec));
   EXPECT_EQ(first.Order(), second.Order());
   ASSERT_EQ(first.Order().size(), 3u);
   EXPECT_EQ(first.Order()[0], "c");  // spec's own declared order, not sorted/reordered
@@ -121,8 +127,8 @@ TEST(UtSch09StableOrder, OrderIsIdenticalAcrossTwoInstancesOfTheSameSpec) {
 // exactly SW-0413's own point (contrasted with SW-0049's identical defect
 // seen from the recording side).
 TEST(UtSch13SimTimeIsArithmeticSequence, TickSequenceIsUniformRegardlessOfAnythingElse) {
-  RunSpec spec = MakeSpec(20'000'000, {});
-  Scheduler sched(spec);
+  RunSpec spec = MakeSpec({});
+  Scheduler sched(spec, 20'000'000, OrderOf(spec));
   for (std::uint64_t i = 1; i <= 10; ++i) {
     sched.Advance();
     EXPECT_EQ(sched.now_ns(), static_cast<std::int64_t>(i) * 20'000'000);

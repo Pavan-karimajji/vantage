@@ -18,22 +18,24 @@
 namespace simcore::scheduler {
 namespace {
 
+// The run setup carries no grid step and no order since schema 2.0; the
+// scheduler is given both, as these tests do.
+constexpr std::int64_t kGridStepNs = 10'000'000;  // 10ms
+const std::vector<std::string> kOrder = {"a", "b"};
+
 RunSpec MakeSpec() {
   RunSpec spec;
   spec.run_id = "ut_sch_11";
-  spec.grid_step_ns = 10'000'000;  // 10ms
 
   SpecStage a;
   a.name = "a";
-  a.period_ns = 10'000'000;
+  a.clock_period_ns = 10'000'000;
   spec.stages.push_back(a);
-  spec.order.push_back("a");
 
   SpecStage b;
   b.name = "b";
-  b.period_ns = 30'000'000;
+  b.clock_period_ns = 30'000'000;
   spec.stages.push_back(b);
-  spec.order.push_back("b");
 
   return spec;
 }
@@ -45,14 +47,14 @@ TEST(UtSch11ScheduleDump, PredictedPlanAgreesExactlyWithARealSchedulersDueSequen
   const RunSpec spec = MakeSpec();
   constexpr std::uint64_t kHorizon = 9;
 
-  const std::vector<ScheduleTick> predicted = PredictSchedule(spec, kHorizon);
+  const std::vector<ScheduleTick> predicted = PredictSchedule(spec, kGridStepNs, kOrder, kHorizon);
   ASSERT_EQ(predicted.size(), kHorizon + 1);
 
   // The "real run" side: a SEPARATE Scheduler instance, stepped exactly the
   // way a cycle loop would (never reusing PredictSchedule's own instance or
   // its own loop body -- this must be an independent computation for the
   // comparison to mean anything).
-  Scheduler actual(spec);
+  Scheduler actual(spec, kGridStepNs, kOrder);
   for (std::uint64_t tick = 0; tick <= kHorizon; ++tick) {
     std::vector<std::string> actual_due;
     for (const std::string& stage : actual.Order()) {
@@ -67,7 +69,7 @@ TEST(UtSch11ScheduleDump, PredictedPlanAgreesExactlyWithARealSchedulersDueSequen
 
 TEST(UtSch11ScheduleDump, TickZeroCarriesNoDueStageOnAPeriodicGrid) {
   const RunSpec spec = MakeSpec();
-  const std::vector<ScheduleTick> predicted = PredictSchedule(spec, 0);
+  const std::vector<ScheduleTick> predicted = PredictSchedule(spec, kGridStepNs, kOrder, 0);
   ASSERT_EQ(predicted.size(), 1u);
   EXPECT_EQ(predicted[0].now_ns, 0);
   // now_ns=0 is a multiple of every period -- both stages are due at tick 0,
@@ -77,8 +79,8 @@ TEST(UtSch11ScheduleDump, TickZeroCarriesNoDueStageOnAPeriodicGrid) {
 
 TEST(UtSch11ScheduleDump, DumpTextIsDeterministicAndDiffableAcrossTwoCalls) {
   const RunSpec spec = MakeSpec();
-  const std::string first = ScheduleDumpText(spec, 5);
-  const std::string second = ScheduleDumpText(spec, 5);
+  const std::string first = ScheduleDumpText(spec, kGridStepNs, kOrder, 5);
+  const std::string second = ScheduleDumpText(spec, kGridStepNs, kOrder, 5);
   EXPECT_EQ(first, second);
   EXPECT_NE(first.find("run_id: ut_sch_11"), std::string::npos);
   EXPECT_NE(first.find("tick: 0 now_ns=0 due=[a,b]"), std::string::npos);
@@ -91,9 +93,9 @@ TEST(UtSch11ScheduleDump, DumpTextIsDeterministicAndDiffableAcrossTwoCalls) {
 TEST(UtSch11ScheduleDump, ADifferentPeriodProducesADetectablyDifferentPlan) {
   RunSpec spec = MakeSpec();
   RunSpec mutated = spec;
-  mutated.stages[1].period_ns = 20'000'000;  // was 30ms
+  mutated.stages[1].clock_period_ns = 20'000'000;  // was 30ms
 
-  EXPECT_NE(ScheduleDumpText(spec, 6), ScheduleDumpText(mutated, 6));
+  EXPECT_NE(ScheduleDumpText(spec, kGridStepNs, kOrder, 6), ScheduleDumpText(mutated, kGridStepNs, kOrder, 6));
 }
 
 }  // namespace
