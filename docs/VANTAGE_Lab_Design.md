@@ -264,7 +264,7 @@ declares `control`, `refSync` and `compState` (`ARCH §12`).
 | `conanfile.py` | the 6-line `python_requires` stub; no recipe logic |
 | `conf/build.yml` | `variants.base.sil.platforms` (`vs2026`, `ubuntu_gcc`); `requires: adas-interfaces/1.1.0`, `protobuf/3.21.12`; `recipe.type: shared-library`; `build_subdir: src/platform/lab_sil`; a `python_envs.lab` entry for the car (PyYAML, protobuf, mcap) |
 | `conf/build_tools.version` | the pin every component carries |
-| `build.bat`, `build.sh`, `scripts/build.py`, `scripts/build_gui.py`, `.clang-format` | **copied** by `modules/toolchain/scripts/sync_copy_files.py`, never edited here (`R-BUILD-6`) |
+| `build.bat`, `build.sh`, `gui.bat`, `setup.bat`, `scripts/build.py`, `scripts/build_gui.py`, `scripts/setup.py`, `.clang-format` | **copied** from `modules/toolchain/copy_files/` only, by `modules/toolchain/scripts/sync_copy_files.py`, never edited here (`R-BUILD-6`) |
 | `src/platform/lab_sil/CMakeLists.txt` | the standard SIL directory; includes `lab_components.cmake` |
 | the command | `build.bat -P base -t sil -p vs2026` (project, target and platform all named, `R-VAR-1`; `ubuntu_gcc` on Linux) |
 
@@ -378,6 +378,8 @@ closed.
 | `car:` | `counter_jump: [{source, at_counter, by}]` | from that counter on, the source's counter is `by` higher | drill: counter jump |
 | `recording:` | `drop_sample: [{port, counter}]` | the sample is not written, though the bus had it and a `refSync` names it | drill: refSync names a missing sample |
 | `recording:` | `drop_ref_sync: all` | no `refSync` topic is written | drill: no refSyncs |
+
+The `silent` and `invalid` windows are half-open, `[from, from+for)`, on a sample's nominal (source) time, so jitter never moves a sample across an edge.
 
 Faults are made **at the source**, not at the hand-over, because a source fault is in the
 recording: the resim hands the recorded samples and reaches the same result. A fault injected
@@ -559,9 +561,9 @@ path is a promise: the code goes there under that name.
 
 | Part | File(s) | Main symbols |
 |---|---|---|
-| Build stub | `conanfile.py`, `conf/build.yml`, `conf/build_tools.version`, `pyproject.toml` | `python_requires` stub; variants; `python_envs.lab` |
-| Copied machinery | `build.bat`, `build.sh`, `scripts/build.py`, `scripts/build_gui.py`, `.clang-format` | from `modules/toolchain/copy_files/` only |
-| CMake | `CMakeLists.txt`, `src/platform/lab_sil/CMakeLists.txt`, `src/platform/lab_sil/lab_components.cmake` | `lab_add_topology` |
+| Build stub | `conanfile.py`, `conf/build.yml`, `conf/build_tools.version`, `pyproject.toml`, `requirements.lock` | `python_requires` stub; variants; `python_envs.lab` |
+| Copied machinery | `build.bat`, `build.sh`, `gui.bat`, `setup.bat`, `scripts/build.py`, `scripts/build_gui.py`, `scripts/setup.py`, `.clang-format` | from `modules/toolchain/copy_files/` only |
+| CMake | `CMakeLists.txt`, `CMakePresets.json`, `src/platform/lab_sil/CMakeLists.txt`, `src/platform/lab_sil/lab_components.cmake` | `lab_add_topology` |
 | Lab messages | in `interfaces`, not this repo: `modules/interfaces/proto/lab/lab_sample.proto`, `modules/interfaces/proto/lab/lab_image.proto`, each headed "lab-only, never a production port" (`D20` (1)) | `adas.lab.LabSample`, `adas.lab.LabImage` |
 | Template | `template/lab_component.hpp.in`, `template/lab_sil.cpp.in` | `LabComponent::exec`, `inputTrusted`, `compute`, `loadCalibration`, `adasInit`, `adasExec`, `adasManifest` |
 | Topology | `src/lab_tools/topology.py` | `load_topology`, `Topology`, `ComponentDesc`, `SourceDesc`, `Scenario`, `TopologyError` |
@@ -575,7 +577,7 @@ path is a promise: the code goes there under that name.
 | Supervised run | `src/lab_tools/supervise.py` | `run_under_supervisor` |
 | Command line | `src/lab_tools/__main__.py` | verbs `generate`, `car`, `setup`, `reference`, `supervise`, `all` |
 | Catalogue | `catalogue/<topology>.yaml` | section 6.1 |
-| Tests | `tests/harness/lab_harness.py`, `tests/harness/test_contract_harness.py`, `tests/test_car_*.py`, `tests/test_catalogue.py` | each contract test id in its test name (`R-REQ-9`) |
+| Tests | `tests/harness/lab_harness.py`, `tests/harness/test_contract_harness.py`, `tests/test_car_*.py`, `tests/test_catalogue.py`, `tests/unit/` (topology loader, generator and library smoke tests) | each contract test id in its test name (`R-REQ-9`) |
 
 Contract rows `RCT:IMP-0022`..`RCT:IMP-0031`, re-pointed to these files and symbols by a
 design-row edit (`D14`). This table maps each contract row to the lab row that builds it.
@@ -616,10 +618,10 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 |---|---|---|---|---|
 | `[x]` | `LAB-01` | `LAB-WP-01` | — | `conanfile.py` — the 6-line `python_requires` stub pinned to `adas-toolchain/X.Y.Z`; no recipe logic. |
 | `[x]` | `LAB-02` | `LAB-WP-01` | — | `conf/build.yml`, `conf/build_tools.version` — variants `base.sil`; requires; `build_subdir: src/platform/lab_sil`; `python_envs.lab`. |
-| `[x]` | `LAB-03` | `LAB-WP-01` | — | `build.bat`, `build.sh`, `scripts/build.py`, `scripts/build_gui.py`, `.clang-format` — placed by `sync_copy_files.py`; `CPY-1` passes. |
-| `[x]` | `LAB-04` | `LAB-WP-01` | — | `CMakeLists.txt`, `src/platform/lab_sil/CMakeLists.txt` — find `AdasInterfaces`, include `lab_components.cmake`, one `lab_add_topology` per catalogue file. |
+| `[x]` | `LAB-03` | `LAB-WP-01` | — | `build.bat`, `build.sh`, `gui.bat`, `setup.bat`, `scripts/build.py`, `scripts/build_gui.py`, `scripts/setup.py`, `.clang-format` — the eight files `sync_copy_files.py` places, from `modules/toolchain/copy_files/` only; `CPY-1` passes. |
+| `[x]` | `LAB-04` | `LAB-WP-01` | — | `CMakeLists.txt`, `src/platform/lab_sil/CMakeLists.txt`, `CMakePresets.json` — find `AdasInterfaces`, include `lab_components.cmake`, one `lab_add_topology` per catalogue file; the presets are what the standard build runs with `cmake --preset`. |
 | `[x]` | `LAB-05` | `LAB-WP-01` | `RCT:SYS-0035` | `modules/interfaces/proto/lab/lab_sample.proto`, `modules/interfaces/proto/lab/lab_image.proto` — package `adas.lab`, `LabSample`, `LabImage`, one `sig_header` each, fields as `RCT_Implementation_Design.md` *Message fields*; each file headed "lab-only, never a production port" (`D20` (1)). |
-| `[x]` | `LAB-06` | `LAB-WP-01` | — | `pyproject.toml` — the `lab_tools` package and its dependencies. |
+| `[x]` | `LAB-06` | `LAB-WP-01` | — | `pyproject.toml`, `requirements.lock` — the `lab_tools` package and its dependencies; the lock pins them and is made by the superproject's `scripts/lock_python_env.py`, never by hand. |
 | `[x]` | `LAB-07` | `LAB-WP-02` | `RCT:IMP-0028` | `src/lab_tools/topology.py::load_topology` — reads a topology file into `Topology`; raises `TopologyError` for each check of section 3. |
 | `[x]` | `LAB-08` | `LAB-WP-02` | `RCT:IMP-0022` | `template/lab_component.hpp.in::LabComponent::exec` — one run per control; `publish` is the only exit. |
 | `[x]` | `LAB-09` | `LAB-WP-02` | `RCT:IMP-0023` | `template/lab_component.hpp.in::LabComponent::exec` first branch — `State{}`, stickers INIT, `compState` NOT_INITIALIZED. |
