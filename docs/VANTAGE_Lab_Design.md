@@ -140,7 +140,7 @@ Component `B` of the running example, with what the generator derives from it:
 | `refSync` entries, in order | `in_A`, `in_X`, `in_Y`, `in_Z` |
 | library | `lab_running_example_B` |
 | calibration keys, provisional values from `catalogue/provisional.yaml` | `LAB_B_MAX_AGE_US` = 118000, `LAB_B_RECOVERY_RUNS` = 2 (section 7) |
-| calibration keys the generator writes as 0 | `LAB_B_HANG_AFTER_RUNS` = 0, `LAB_B_CRASH_AFTER_RUNS` = 0 |
+| calibration keys the generator writes as 0 | `LAB_B_HANG_AFTER_RUNS` = 0, `LAB_B_CRASH_AFTER_RUNS` = 0, `LAB_B_START_COUNT` = 0 |
 
 **`LAB_<C>_MAX_AGE_US` and `LAB_<C>_RECOVERY_RUNS` have no default in code** and are not part
 of the description (`D20` (2)). Their values are provisional lab values, written per topology
@@ -151,7 +151,8 @@ made with a value nobody wrote. A key missing from a built bundle is a different
 the contract's behaviour (`RCT:SYS-0019`: ERROR naming the key, INVALID outputs). The two
 `..._AFTER_RUNS` keys make a component hang or crash after that many runs; 0 means never. They
 exist for the failure drills (section 6) and are read from the bundle, so the car's recording
-is always made by healthy components.
+is always made by healthy components. `LAB_<C>_START_COUNT` is the component's own run count
+before its first run, 0 by default; a bundle variant sets it (`SYT-HDR-03.c2` starts `B` at `0xFFFFFFFF`), and it is not a provisional value, so the generator does not refuse a component without it.
 
 **The loader checks the file** (`TopologyError`, naming file and key): a producer that does not
 exist; both or neither of `period_ms` and `trigger`; a `trigger` that is not a declared input;
@@ -178,6 +179,8 @@ The template is two files, because `R-ARCH-2` keeps `src/component/**` free of f
 |---|---|---|
 | `template/lab_component.hpp.in` | `LabComponent`: the algorithm. Plain C++, protobuf at the door only (`R-ARCH-3`). No thread, clock, file or random value | `R-ARCH-2` |
 | `template/lab_sil.cpp.in` | the composition root: `adasAbiVersion`, `adasManifest`, `adasInit`, `adasExec`, `adasShutdown`, the calibration load, the hang and crash switches | `R-ARCH-5`, `R-SIM-22` |
+
+`LabComponent` constructs its `CycleStamp` with `LAB_<C>_START_COUNT` (passed in by `lab_sil.cpp.in`, which reads the bundle), so the own count before the first run is a calibration value and no test writes into the component's memory (`RCT:IMP-0013`).
 
 `LabComponent::exec` does the same steps in the same order every run. Its shape (the
 contract rows it lands are in brackets):
