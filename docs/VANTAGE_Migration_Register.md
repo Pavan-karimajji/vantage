@@ -844,6 +844,191 @@ serve them. To dispose: 373 rows (187 `SW`, 186 `IMP`).
 
 | UID | Disposition | Target | Why |
 |---|---|---|---|
+| SIM:SW-0189 | superseded | ARCH §3.4, ARCH §6 | the header is read from `sig_header` at the door of every sample buffer, so a map binds no header field (as SIM:SYS-0015) |
+| SIM:SW-0190 | carried | VNT | `absent:` in the map still names a port a family never carries, and a cut that needs it is refused at load with the reason |
+| SIM:SW-0191 | carried | VNT | recording families are still recognised by declared match rules |
+| SIM:SW-0192 | carried | VNT | a port claimed by two maps is still an authoring error naming both |
+| SIM:SW-0193 | retired | — | `R-SIM-23` wins: a map renames and tags only, and a unit conversion is an unversioned algorithm (as SIM:SW-0033) |
+| SIM:SW-0194 | carried | VNT | ingest maps are still resolved from beside the component library, never from a checkout |
+| SIM:SW-0195 | carried | VNT | applying a map still creates no value, element or entity the source did not carry |
+| SIM:SW-0196 | carried | VNT | each source in a recording is still identified by its declared identity tuple before any interpretation is chosen |
+| SIM:SW-0197 | carried | VNT | the description artifact is still resolved in a declared order and the tier used is reported per source |
+| SIM:SW-0198 | carried | VNT | each description type still declares the versions it accepts and refuses others, naming both |
+| SIM:SW-0199 | carried | VNT | static parameter data still comes from the recording first, then from a configured directory |
+| SIM:SW-0200 | carried | VNT | a decision about a recording still goes to a sidecar and the recording stays byte-identical |
+| SIM:SW-0201 | carried | VNT | the order in which sidecars apply is still declared and every applied one is reported |
+| SIM:SW-0202 | carried | VNT | a map still admits no computation (`R-SIM-23`); the factor and offset it once allowed are gone with SIM:SW-0193 |
+| SIM:SW-0203 | carried | VNT | one resolver still turns a stem and search directories into an absolute library path, in Python |
+| SIM:SW-0204 | carried | VNT | the setup carries the search order, the pattern and the chosen path, so resolution still reports what it did |
+| SIM:SW-0205 | carried | VNT | the launcher still tells whether a library exists for the running platform without loading it |
+| SIM:SW-0206 | carried | VNT | one configuration bundle per component and build is still packed beside the library with its hash |
+| SIM:SW-0207 | carried | VNT | a bundle still resolves beside its library, an explicit path wins and a project mismatch warns |
+| SIM:SW-0208 | superseded | D13 | which bundle a viewer reads is the viewer's design; the live measurement lists each bundle with its hash |
+| SIM:SW-0209 | superseded | D13 | visualization plug-ins are the viewer's; ingest maps and bundles beside the library stay (as SIM:SYS-0255) |
+| SIM:SW-0210 | carried | VNT | the configuration bundle's bytes stay embedded in an artifact (SIM:SYS-0197); a plug-in's identity goes with the viewer (D13) |
+| SIM:SW-0211 | superseded | D13 | reading a plug-in's API version before import is the viewer's plug-in rule |
+| SIM:SW-0212 | carried | VNT | every artifact is still resolved once per run and the resolved value is what everything uses |
+| SIM:SW-0213 | carried | VNT | a re-execution is still pinned to a library hash, and a locally built library is reported as unpinnable |
+| SIM:SW-0214 | carried | VNT | every ordered resolution still uses one implementation of the ordered tier with the tier reported; the plug-in tier goes with the viewer (D13) |
+| SIM:SW-0215 | carried | VNT | the run manifest stays; its timing model, reset policy and timing-recovery rung entries go with the grid and the ladder (D10, D17) |
+| SIM:SW-0216 | carried | VNT | a past run is still reproducible from its manifest alone |
+| SIM:SW-0217 | carried | VNT | every artifact still embeds the run manifest |
+| SIM:SW-0218 | carried | VNT | the manifest still carries each reproducibility dimension as its own field |
+| SIM:SW-0219 | carried | VNT | every override, fault and bundle-value override in force is still a structured record in the manifest |
+| SIM:SW-0220 | carried | VNT | a manifest field that cannot be filled still reads `unknown` |
+| SIM:SW-0221 | carried | VNT | the run identifier is still derived from the run's own inputs |
+| SIM:SW-0222 | carried | VNT | a manifest is still written for a run that failed, crashed or timed out, with the last completed step |
+| SIM:SW-0223 | carried | VNT | a run with every exporter disabled still writes its manifest |
+| SIM:SW-0224 | carried | VNT | the manifest keeps the coherence verdict and the divergence point |
+| SIM:SW-0225 | carried | VNT | the volume estimate before a run stays with the launcher, computed from the record policy |
+| SIM:SW-0226 | carried | VNT | the hash of the tolerance declaration in force stays in the manifest |
+| SIM:SW-0227 | carried | VNT | a manifest still appears complete or not at all |
+| SIM:SW-0228 | carried | VNT | the manifest schema stays versioned and published |
+| SIM:SW-0229 | carried | VNT | command-line modules still parse arguments and delegate only |
+| SIM:SW-0230 | carried | VNT | every capability stays reachable from a short script |
+| SIM:SW-0231 | carried | VNT | every verb keeps a scripted equivalent producing the same artifacts |
+| SIM:SW-0232 | carried | VNT | the verb set stays closed, published and counted per release |
+| SIM:SW-0233 | carried | VNT | produce, execute-an-existing-recording and do-both stay distinct verbs; only `sim run` in-process is not carried (open question) |
+| SIM:SW-0234 | carried | VNT | every verb that executes keeps a dry-run path that prints the plan |
+| SIM:SW-0235 | carried | VNT | a long operation still reports progress and accepts cancellation |
+| SIM:SW-0236 | carried | VNT | each run still writes its own artifact directory |
+| SIM:SW-0237 | carried | VNT | an artifact directory stays self-contained; opening it in a viewer is that design's work |
+| SIM:SW-0238 | carried | VNT | the interactive, batch and CI paths still start the engine through one code path with one setup format |
+| SIM:SW-0239 | carried | VNT | the scripting API keeps its own version, independent of the recording format and the ABI |
+| SIM:SW-0240 | carried | VNT | no scripted use needs generated bindings or a checkout (`R-SIM-11`) |
+| SIM:SW-0241 | carried | VNT | batch runs stay separate processes; the threads of ARCH §8 live inside one engine run |
+| SIM:SW-0242 | carried | VNT | ok, fail, crash and timeout stay four outcomes, judged from outside the worker |
+| SIM:SW-0243 | carried | VNT | a failing run still does not stop the batch |
+| SIM:SW-0244 | carried | VNT | the batch aggregate still reconciles with the individual manifests |
+| SIM:SW-0245 | carried | VNT | a crash still records its recording, setup, last step, stderr and run id |
+| SIM:SW-0246 | carried | VNT | the processing watchdog stays as the per-call execution timeout with its own threshold |
+| SIM:SW-0247 | carried | VNT | the supervisor's deadline and the live measurement's heartbeat stay the separate check that the worker still responds (ARCH §9) |
+| SIM:SW-0248 | carried | VNT | per-run wall-time and memory limits stay in the run setup and are reported distinctly |
+| SIM:SW-0249 | carried | VNT | a batch is still resumable and re-executes no completed run |
+| SIM:SW-0250 | carried | VNT | a sweep over N values still gives N runs differing in exactly the swept value |
+| SIM:SW-0251 | superseded | D17 | a stage restarts on its first run and after a jump and each recording has its own process, so no reset mode or timing is chosen |
+| SIM:SW-0252 | carried | VNT | the read-error behaviours of a batch stay a closed set with skipped packages counted |
+| SIM:SW-0253 | carried | VNT | a read retry stays bounded and recorded |
+| SIM:SW-0254 | carried | VNT | an index built for a recording is still reused by every batch entry |
+| SIM:SW-0255 | carried | VNT | the developer face, the supervised batch face and the isolated stage stay (ARCH §9) |
+| SIM:SW-0256 | carried | VNT | a batch is still one run setup plus a recording list, with no format of its own |
+| SIM:SW-0257 | carried | VNT | a recording's content hash stays its identity as `sources[].sha256` |
+| SIM:SW-0258 | carried | VNT | the file and group identifiers are read by the preparation tools where the format has them; no contract row states them (open question) |
+| SIM:SW-0259 | carried | VNT | the integrity check still covers time, counter continuity, checksums and rate stability |
+| SIM:SW-0260 | carried | VNT | integrity results stay available as a gate that refuses a damaged recording |
+| SIM:SW-0261 | carried | VNT | checksum verification stays selectable and its cost is reported |
+| SIM:SW-0262 | carried | VNT | recovery of a damaged recording stays explicit and marks everything derived from it |
+| SIM:SW-0263 | carried | VNT | extract by time range and by port or source stays |
+| SIM:SW-0264 | carried | VNT | extracting several sections keeps a declared naming rule and the complement |
+| SIM:SW-0265 | carried | VNT | conversion stays a consequence of the capability table and refuses naming the missing capability |
+| SIM:SW-0266 | carried | VNT | inspect stays the listing of ports, rates, sources and time range, equal to what a run reads |
+| SIM:SW-0267 | carried | VNT | lineage of a derived recording is Vantage's metadata on top of C6 (as SIM:SYS-0226); step 8 states it |
+| SIM:SW-0268 | carried | VNT | the preparation tools stay usable with no library and no engine |
+| SIM:SW-0269 | retired | — | its parent SIM:SYS-0229 is retired: volume is estimated from the record policy, so no per-cycle size budget is kept |
+| SIM:SW-0270 | carried | VNT | no preparation operation modifies its input recording |
+| SIM:SW-0271 | carried | VNT | the dry run stays: it prints the resolved setup with each value's layer, and the plan of ranks, triggers and clocks, loading nothing |
+| SIM:SW-0272 | carried | VNT | the duration estimate stays reported with the factor it was measured to fall within |
+| SIM:SW-0273 | superseded | D13 | the one evidence producer read a `Session` for the evidence panel, which goes with the viewer (as SIM:SYS-0154) |
+| SIM:SW-0274 | superseded | D13 | the evidence record of a primitive, layer or plotted sample belongs to the viewer (R-SIM-25 is moved out, ARCH §13) |
+| SIM:SW-0275 | superseded | D13 | the evidence chain from a layer to its ports belongs to the viewer |
+| SIM:SW-0276 | superseded | D13 | where the evidence chain stops is the viewer's rule |
+| SIM:SW-0277 | carried | VNT | the environment report (doctor) stays and never raises; plug-in inspection goes with the viewer |
+| SIM:SW-0278 | carried | VNT | name resolution with did-you-mean stays for the launcher's names; layer and style-token names go with the viewer |
+| SIM:SW-0279 | carried | VNT | a probe still reads a library's ports, types, periods and schemas from its manifest |
+| SIM:SW-0280 | carried | VNT | comparing two runs still names the first diverging step, port and field and the bound in force |
+| SIM:SW-0281 | carried | VNT | the comparison axis is still derived from the two manifests, and a pair differing in more than one dimension is inconclusive |
+| SIM:SW-0282 | carried | VNT | a reproducibility comparison is still over decoded port values, now called equal outputs |
+| SIM:SW-0283 | carried | VNT | two axes stay exact gates and two stay measured; the thread-count axis joins the gates (ARCH §13) |
+| SIM:SW-0284 | carried | VNT | tolerance is still declared once per component and field with a mandatory reason, default exact |
+| SIM:SW-0285 | carried | VNT | an internal port still becomes recorded output by being named in configuration |
+| SIM:SW-0286 | carried | VNT | every diagnostic stays callable as a function returning data |
+| SIM:SW-0298 | moved | RCT:SYS-0026 | the contract says the writer never waits for a reader, so a reader may attach, detach and re-attach with no effect on the run |
+| SIM:SW-0334 | carried | VNT | the launcher window offers `measured` only for a stage whose outputs the recording holds; the rule is the launcher model's (SIM:SW-0186) |
+| SIM:SW-0341 | carried | VNT | the launcher window shows a stage's mode and implementation and lets both be chosen (D21) |
+| SIM:SW-0342 | carried | VNT | the launcher model classifies coherence as the selection changes and blocks a broken chain; the window shows the remedies (D21) |
+| SIM:SW-0343 | carried | VNT | the launcher writes the run setup and holds no state that is not in that file |
+| SIM:SW-0344 | carried | VNT | the launcher window shows which libraries are available, their versions and which lack a binary for the platform |
+| SIM:SW-0345 | carried | VNT | the launcher window shows per recording which stages could be set to `measured`; the rule is the launcher model's (ARCH §3.1) |
+| SIM:SW-0346 | carried | VNT | adding recordings and starting stay in the window; selecting a layout goes with the viewer (D13) |
+| SIM:SW-0347 | carried | VNT | the launcher and the command line still share one configuration schema, with no launcher-only fields |
+| SIM:SW-0348 | carried | VNT | the common changes stay a declared set completable within a time budget; changing the layout goes with the viewer (D13) |
+| SIM:SW-0349 | superseded | D13, ARCH §10, ARCH §14 | the player-to-engine transport is replaced by the live measurement, and the in-process transport was rejected |
+| SIM:SW-0350 | superseded | D13, ARCH §10 | a player reaching into engine memory is moot: a reader maps the live measurement read-only (RCT:SYS-0027) |
+| SIM:SW-0351 | superseded | ARCH §10 | the live measurement is shared memory for control and bulk alike, with no separate channel |
+| SIM:SW-0352 | moved | RCT:SYS-0026 | the contract says a run with a reader suspended gives the same steps and byte-identical outputs as one with none |
+| SIM:SW-0353 | moved | RCT:SYS-0026 | the contract says the writer completes every step without waiting on any reader; dropping frames is the viewer's (D13) |
+| SIM:SW-0354 | superseded | ARCH §10 | the live measurement carries its own descriptor set and a reader names no codec, world model or component |
+| SIM:SW-0355 | moved | RCT:SYS-0030 | the contract says a reader of another layout version refuses to attach, naming both versions |
+| SIM:SW-0356 | superseded | ARCH §9, ARCH §10 | a reader sees the heartbeat stop and reports the writer gone at its last step, and the supervisor seals the outcome |
+| SIM:SW-0357 | carried | VNT | the framework's shipped source still names no component and no function (`R-SIM-1`) |
+| SIM:SW-0358 | carried | VNT | reader, exporter and module stay extension points with a versioned interface and kit; the visualization point goes with the viewer (D13) |
+| SIM:SW-0359 | carried | VNT | adding a plug-in of a kept kind still needs no edit to a framework file |
+| SIM:SW-0360 | carried | VNT | package, port-model and ABI versions stay independent with a generated matrix; the plug-in API version goes with the viewer (D13) |
+| SIM:SW-0361 | carried | VNT | every closed set stays enumerable and is compared with its schema on every build |
+| SIM:SW-0362 | carried | VNT | the package stays identical across projects, with project content from configuration and plug-ins only |
+| SIM:SW-0363 | carried | VNT | one configuration set still runs unchanged on both operating systems |
+| SIM:SW-0364 | carried | VNT | path handling and dynamic loading stay abstracted at one place each |
+| SIM:SW-0365 | carried | VNT | floating-point flag expectations stay declared and a library built outside them warns at load |
+| SIM:SW-0366 | carried | VNT | the reference suite still runs on both platforms and a difference is a defect |
+| SIM:SW-0367 | carried | VNT | every measured claim still names its platform and shell |
+| SIM:SW-0368 | superseded | ARCH §8 | runs of one rank may run in parallel inside a step; the thread count must not change a result, which ARCH §8 keeps by five facts |
+| SIM:SW-0369 | carried | VNT | per-step cost and per-worker throughput stay budgeted with a number (as SIM:SYS-0234) |
+| SIM:SW-0370 | retired | — | a rule that every check ships a planted-violation test, held by R-REQ-9 for every set |
+| SIM:SW-0371 | retired | — | a rule that a cited test identifier appears in its test, held by R-REQ-9 for every set |
+| SIM:SW-0372 | superseded | D5 | the Vantage set has SYS and IMP layers only, so no software requirement exists to trace |
+| SIM:SW-0373 | retired | — | a rule on status, held by R-REQ-6 for every set |
+| SIM:SW-0374 | carried | VNT | every new source file still carries the file-header block; the gate is `check_headers.py` with the token `VANTAGE` |
+| SIM:SW-0375 | carried | VNT | a name stays the same string in the log, the configuration and the launcher window |
+| SIM:SW-0376 | retired | — | a rule for the order of the sim v2 build; this program's order and gates are in the plan section 5 (as SIM:SYS-0201) |
+| SIM:SW-0377 | carried | VNT | every release still ships a self-test on a bundled miniature recording through a stub chain |
+| SIM:SW-0378 | carried | VNT | a stub implementation on the generic ABI stays so the suite runs with no compiled component |
+| SIM:SW-0379 | carried | VNT | what a component owes Vantage stays a checklist, tried on the lab's components |
+| SIM:SW-0380 | carried | VNT | the documentation set's size is still measured and reported per release |
+| SIM:SW-0381 | carried | VNT | the release-one readers (vehicle measurement, bench capture, interchange) are still Vantage's (as SIM:SYS-0011) |
+| SIM:SW-0382 | carried | VNT | the image-folder reader and the synthetic-scenario reader stay as recording readers |
+| SIM:SW-0383 | carried | VNT | a reader produces port values and a component consumes them, and neither addresses the other |
+| SIM:SW-0384 | carried | VNT | export to the interchange format, a columnar text and a replayable recording stays with the recording I/O |
+| SIM:SW-0385 | carried | VNT | an export keeps every header field and carries origin from its source |
+| SIM:SW-0386 | carried | VNT | an export still selects ports by manifest name and time range and flattens to a declared schema |
+| SIM:SW-0387 | superseded | ARCH §6, ARCH §13 | the header has one timestamp and inputs are chosen by number, so no choice of timestamp is recorded per port |
+| SIM:SW-0388 | carried | VNT | the versioned port catalogue stays, and every port in a configuration resolves against it at load |
+| SIM:SW-0389 | carried | VNT | a port's identity stays independent of the component that produces it |
+| SIM:SW-0390 | carried | VNT | a project still extends the catalogue in its own namespace without a clash |
+| SIM:SW-0391 | carried | VNT | the checked-in manifest stays the authority, and regeneration reports and never overwrites |
+| SIM:SW-0392 | carried | VNT | the generic-ABI shim stays generated from declared data and never checked in (`R-SIM-22`) |
+| SIM:SW-0393 | carried | VNT | a component still reads no wall clock; time arrives in the control header and the port headers |
+| SIM:SW-0394 | carried | VNT | a component declares non-deterministic behaviour in its manifest and a declared one marks the run non-reproducible |
+| SIM:SW-0395 | retired | — | `R-SIM-7` puts integrating a signal into a component under test; no part of Vantage re-integrates the ego pose (as SIM:SYS-0108) |
+| SIM:SW-0396 | retired | — | component state is not exposed by the ABI and the state snapshot is parked (RCT P1), so no cycle restarts from a saved state (as SIM:SYS-0218) |
+| SIM:SW-0397 | carried | VNT | symbol resolution stays documented and ready-made debugger launch configurations ship |
+| SIM:SW-0398 | carried | VNT | a unit configuration stays self-contained, exposing named ports that a top-level file composes |
+| SIM:SW-0399 | carried | VNT | the SIM team still owns the configuration format and the algorithm team the content |
+| SIM:SW-0400 | carried | VNT | mode stays overridable per output port, a port of a simulate stage being sourced from the recording |
+| SIM:SW-0401 | carried | VNT | a component stays instantiable more than once, with distinct port namespaces per instance |
+| SIM:SW-0402 | carried | VNT | the previous-cycle inputs, the only latency left, stay recorded in the manifest and the description (as SIM:SYS-0079) |
+| SIM:SW-0403 | superseded | D13 | the provenance query is the evidence producer, which goes with the viewer |
+| SIM:SW-0406 | carried | VNT | a project still pins a package version range and the tool refuses to run outside it |
+| SIM:SW-0407 | carried | VNT | a breaking change still ships a migration guide and, where possible, a migration command |
+| SIM:SW-0408 | retired | — | a rule on writing requirements, held by R-REQ-3 for every set |
+| SIM:SW-0409 | carried | VNT | the probe pass stays the one place the configuration layer opens a library or a recording, bounded by symbol |
+| SIM:SW-0410 | carried | VNT | the probe pass still hands the recording index and the manifests on as plain data; the timing rung is gone with the ladder (D10) |
+| SIM:SW-0411 | carried | VNT | the graph, coherence and ingest matching still take the index and manifests as arguments and open nothing |
+| SIM:SW-0412 | carried | VNT | the setup keeps the hash of each recording read and the engine refuses a recording whose hash differs |
+| SIM:SW-0413 | superseded | D10, ARCH §7 | simulation time is the instant of an event, not a count of grid steps |
+| SIM:SW-0414 | superseded | D10, ARCH §7 | no rate is reconstructed from a recording and no declared period schedules a run, so no rate disagreement exists to report |
+| SIM:SW-0415..0417 | carried | VNT | §29.1 — the artifact-kind declaration, the generated use-constraints statement and the check that a named detecting check exists stay with the tool |
+| SIM:SW-0418 | retired | — | a rule on progress marks, held by R-REQ-6a for every set |
+| SIM:SW-0419 | carried | VNT | the I/O library stays linkable alone with no first-party package beyond it (`check_engine_boundary.py`) |
+| SIM:SW-0420 | carried | VNT | the port catalogue's version stays semantic and a major mismatch refuses to load |
+| SIM:SW-0421 | carried | VNT | a codec for a scalar-per-field format still rebuilds the real message by reflection on a supplied descriptor |
+| SIM:SW-0422 | carried | VNT | the embeddable ABI still builds its runner with a real writer when the setup declares recording output |
+| SIM:SW-0423 | carried | VNT | the embeddable ABI still applies the declared overrides and never ignores them |
+| SIM:SW-0424 | carried | VNT | an override's address is still the port name every other consumer of a port value uses |
+| SIM:SW-0425 | superseded | D13, ARCH §10 | the in-process viewer pump is the viewer's, and the live measurement writer replaces the transport publisher; `simEngineStepOnce` keeps its name (ARCH §7) |
+| SIM:SW-0426 | superseded | D13 | turning engine frames into the viewer's own ticks is the viewer's design |
+| SIM:SW-0427 | superseded | D13 | the windowed viewer on its own engine thread is the viewer's design |
+| SIM:SW-0428 | superseded | D2, D13 | the viz-dependent app and its launcher script are not carried over |
+| SIM:SW-0429 | carried | VNT | the launcher window lets a stage be set to `measured`, `simulate` or `off`, and the engine runs the setup file written from that choice (D21) |
 
 ### 4.4 PARITY rows (6e)
 
