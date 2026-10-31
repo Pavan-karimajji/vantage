@@ -250,7 +250,7 @@ Python environment of its own. Per component it writes, under
 | `ports.yaml` | the port declaration: names, `proto_type`, `binds:`; ungated | `adas_generate_sil_ports` |
 | `lab_params.hpp` | input names in order, output names, `memory`, key names | `lab_component.hpp` |
 | `lab_component.hpp`, `lab_sil.cpp` | the template with those names filled in (`string.Template` from the standard library) | the compiler |
-| `default.yaml` | the calibration keys: the two of `catalogue/provisional.yaml` and the two `..._AFTER_RUNS` at 0 (section 3) | `adas_pack_config_bundle` |
+| `default.yaml` | the calibration keys: the two of `catalogue/provisional.yaml`, and the two `..._AFTER_RUNS` and `LAB_<C>_START_COUNT` at 0 (section 3) | `adas_pack_config_bundle` |
 
 It writes no value of its own into C++ except the names and the memory flag. All thresholds
 are calibration keys in `default.yaml` (`R-NAME-3`, `R-SIM-3a`). Port declarations are not
@@ -620,6 +620,7 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 - [x] **LAB-WP-07** — The other topologies, one file each · Added after the milestone, one corner case at a time
 - [~] **LAB-WP-08** — Camera, drills and the supervised run · The `G4` drills; needs `LAB-WP-05` and `LAB-WP-06`. Closed by `LAB-53` (`supervise.py`) and the supervised `hang` and `crash` cases passing.
 - [x] **LAB-WP-09** — The recorder on the `interfaces` writer (RCT C6, `D22`) · Needs `RCT:WP-11`; closes before `G2`, so every lab recording follows `RCT_Architecture.md` §6a by construction.
+- [ ] **LAB-WP-10** — Cases for gate `G3`: periods with no common divisor, a renumbering library, a repeated trigger sample (owner, 2026-10-31) · Needs `LAB-WP-08`; the cases `VANTAGE_Test_Spec.md` runs for `SYS-0013`, `SYS-0047` and the catalogue of `G3`.
 
 | Box | ID | WP | Serves (RCT) | Artifact — Design |
 |---|---|---|---|---|
@@ -679,6 +680,13 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 | `[ ]` | `LAB-53` | `LAB-WP-08` | — | `src/lab_tools/supervise.py::run_under_supervisor` — starts `simengine --supervise`, returns exit code and the sealed `outcome`. |
 | `[x]` | `LAB-55` | `LAB-WP-09` | `RCT:IMP-0047` | `src/lab_tools/recorder.py::McapRecorder` — writes through the `interfaces` writer, found through `index.json`: `generate.py::write_index` adds the `interfaces` package's `python/` folder, which `lab_add_topology` passes in; the recording edits stay here. |
 | `[x]` | `LAB-56` | `LAB-WP-09` | `RCT:SYS-0037`, `RCT:SYS-0038`, `RCT:SYS-0039`, `RCT:SYS-0040`, `RCT:SYS-0041`, `RCT:SYS-0043` | `tests/test_recording.py` — `SYT-REC-01`, `SYT-REC-02`, `SYT-REC-03` `.c1` and `.c2`, and `ANL-06` `.c1` and `.c3`, the second writer planted in a copy of `src/`. |
+| `[ ]` | `LAB-57` | `LAB-WP-10` | `RCT:SYS-0016` | `catalogue/coprime_periods.yaml` — source `X` 7 ms; `A` 11 ms reads `X`; `B` 13 ms reads `A` and `X`; no jitter; periods with no common divisor above 1 ms, so no stage shares a grid with another; resim cases `cut_a` (`A` measured) and `all_simulated`. |
+| `[ ]` | `LAB-58` | `LAB-WP-10` | — | `catalogue/provisional.yaml` — `LAB_<C>_MAX_AGE_US` and `LAB_<C>_RECOVERY_RUNS` for `A` and `B` of `coprime_periods`, derived by the rule of section 7, each with `status: provisional`. |
+| `[ ]` | `LAB-59` | `LAB-WP-10` | `RCT:SYS-0001` | `template/lab_sil.cpp.in::loadCalibration` — reads `LAB_<C>_RENUMBER`; absent means 0 and is never a calibration error; not a provisional value, so the generator does not write it and only a bundle variant sets it. |
+| `[ ]` | `LAB-60` | `LAB-WP-10` | `RCT:SYS-0001` | `template/lab_component.hpp.in::LabComponent::publish` — with `LAB_<C>_RENUMBER` not 0, every data output's `measurement_counter` is the control's plus that value, modulo 2³² (a break of `RCT:SYS-0001` by the component's own code, for the drill only); `refSync` and `compState` keep the control's. |
+| `[ ]` | `LAB-61` | `LAB-WP-10` | — | `catalogue/running_example.yaml` — scenario `renumber_lib`, `expect: diverges`, no `car:` block, resim case `shifted` with `config: {A: {set: {LAB_A_RENUMBER: 1}}}` (`F-RENUMBER-LIB`). |
+| `[ ]` | `LAB-62` | `LAB-WP-10` | — | `src/lab_tools/recorder.py::apply_recording_edits` — `recording:` verb `repeat_sample: [{port, counter}]`: that sample is written a second time, byte-identical, 1 ms after the original, and stated in `manifest` with the other edits. |
+| `[ ]` | `LAB-63` | `LAB-WP-10` | — | `catalogue/data_triggered.yaml` — scenario `repeat_trigger`: `recording: {repeat_sample: [{port: source.X, counter: 10}]}`, resim case `by_data` with `trigger: {T: in_X}`. |
 
 ## 10. Open questions, decided, rejected options, parked
 

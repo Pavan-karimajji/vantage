@@ -266,7 +266,7 @@ To dispose: 659 rows (389 `CN`, 270 `SYS`).
 | SIM:CN-0079 | carried | VNT | a reader seeks by time or brings an index that makes it possible |
 | SIM:CN-0080 | carried | VNT | the sidecar index is built on first open and reused by later runs |
 | SIM:CN-0081 | carried | VNT | the index is keyed by port, so a run reads only the ports its graph needs |
-| SIM:CN-0082 | carried | VNT | several readers in one run are merged on one time base |
+| SIM:CN-0082 | carried | VNT:SYS-0005 | several readers in one run are merged on one time base |
 | SIM:CN-0083 | retired | — | Vantage never corrects a recorded time: it matches by counter (D18) and uses the sender's time (C1) |
 | SIM:CN-0084 | superseded | D18, ARCH §3.4 | samples are kept per port (`buffer_depth`) and picked by counter, so arrival order needs no sync buffer |
 | SIM:CN-0085 | carried | VNT | readers are found by registration, so a new format needs no change to the core |
@@ -292,19 +292,19 @@ To dispose: 659 rows (389 `CN`, 270 `SYS`).
 | SIM:CN-0122..0128, SIM:CN-0324..0325 | carried | VNT | §11.3 — the launcher model keeps the broken-chain rule, waivers and promote choice, and the engine records the verdict |
 | SIM:CN-0129..0131, SIM:CN-0326..0329 | carried | VNT | §11.4 — overrides and faults keep their closed verb lists and run in the mutator |
 | SIM:CN-0132 | carried | VNT | the engine stays open-loop |
-| SIM:CN-0133 | carried | VNT | the first divergence is still found and recorded, by step number |
+| SIM:CN-0133 | carried | VNT:SYS-0043 | the first divergence is still found and recorded, by step number |
 | SIM:CN-0134 | carried | VNT | data after the divergence plus a grace is still flagged informational |
 | SIM:CN-0135 | retired | — | R-SIM-7 puts integrating a signal into a component under test; no part of Vantage does it (open question) |
 | SIM:CN-0136 | carried | VNT | closed-loop work stays out of scope; a simulator reaches Vantage as a recording |
 | SIM:CN-0137 | superseded | ARCH §3.2 | a component sees the trigger's time in its control header and the orchestrator alone holds simulation time |
-| SIM:CN-0138 | carried | VNT | execution time is still never used to decide anything |
+| SIM:CN-0138 | carried | VNT:SYS-0017 | execution time is still never used to decide anything |
 | SIM:CN-0139 | carried | VNT | internal time stays integer nanoseconds |
 | SIM:CN-0140..0142, SIM:CN-0330 | superseded | D10, ARCH §7 | §12.2 — a run is one recorded control message, so cycles are no longer reconstructed from a flat recording |
 | SIM:CN-0143..0146, SIM:CN-0331..0334, SIM:CN-0392..0395 | superseded | D10, ARCH §7 | §12.3 — no base grid and no due tick; a step is an event and a run exists only for a ticket |
 | SIM:CN-0148..0150 | superseded | D18 | §12.4 — input selection by number is the only policy; sampling and on_missing are refused at load |
-| SIM:CN-0151 | carried | VNT | runs of one instant go in rank order, and the order is printed |
+| SIM:CN-0151 | carried | VNT:SYS-0009, VNT:SYS-0019 | runs of one instant go in rank order, and the order is printed |
 | SIM:CN-0152 | superseded | ARCH §2.3 | a previous_cycle input replaces delay_steps, which has no meaning when steps are events |
-| SIM:CN-0153 | carried | VNT | a loop with no previous-cycle edge is a load error naming the loop |
+| SIM:CN-0153 | carried | VNT:SYS-0010 | a loop with no previous-cycle edge is a load error naming the loop |
 | SIM:CN-0154 | carried | VNT | the previous-cycle inputs are recorded in the description of the live measurement |
 | SIM:CN-0155..0158, SIM:CN-0335..0336 | superseded | D13 | §13.1 — the player is a viewer, out of this design; it reads the live measurement later |
 | SIM:CN-0159..0163, SIM:CN-0337..0340 | superseded | D13 | §13.2 — layout, draw layers and primitives are the viewer's design |
@@ -341,9 +341,9 @@ To dispose: 659 rows (389 `CN`, 270 `SYS`).
 | SIM:CN-0214 | carried | VNT | algorithm modules load in-process, so one attach reaches them all |
 | SIM:CN-0215 | carried | VNT | `--wait-for-debugger` prints the process id and pauses before the first cycle |
 | SIM:CN-0216 | carried | VNT | break conditions: at a step, at a time, on entry to a module, on a port condition |
-| SIM:CN-0217 | carried | VNT | the cycle loop is single-threaded and deterministic by default so breakpoints work |
+| SIM:CN-0217 | carried | VNT:SYS-0040 | the cycle loop is single-threaded and deterministic by default so breakpoints work |
 | SIM:CN-0218 | carried | VNT | the watchdog and timeouts are off in debug mode |
-| SIM:CN-0219 | carried | VNT | the engine launches without the Python layer from a resolved run spec |
+| SIM:CN-0219 | carried | VNT:SYS-0001 | the engine launches without the Python layer from a resolved run spec |
 | SIM:CN-0220 | carried | VNT | symbol resolution is documented and configurable on both platforms |
 | SIM:CN-0221 | carried | VNT | ready-made debugger launch configurations ship for common IDEs |
 | SIM:CN-0222 | retired | — | component state is not exposed by the ABI, the state snapshot is parked (RCT P1) and R-SIM-17 allows only recompute from the start; the checkpoint is progress, not state |
@@ -461,7 +461,7 @@ To dispose: 659 rows (389 `CN`, 270 `SYS`).
 | SIM:SYS-0003 | carried | VNT | a reader seeks by time or brings an index that makes it possible |
 | SIM:SYS-0004 | carried | VNT | the sidecar index is built on first open and reused by later runs |
 | SIM:SYS-0005 | carried | VNT | the index is keyed by port, so a run reads only the ports its graph needs |
-| SIM:SYS-0006 | carried | VNT | several readers in one run are still merged on one time base |
+| SIM:SYS-0006 | carried | VNT:SYS-0005 | several readers in one run are still merged on one time base |
 | SIM:SYS-0007 | retired | — | Vantage never corrects a recorded time (D18, C1), so a source declares no time domain or skew; the one recording clock is `RCT:SYS-0039` (held through SIM:CN-0269) |
 | SIM:SYS-0008 | superseded | D18, ARCH §3.4 | samples are kept per port (`buffer_depth`) and picked by counter, so out-of-order arrival needs no sync buffer |
 | SIM:SYS-0009 | carried | VNT | a reader uses the format's own data description and allows an external override |
@@ -507,15 +507,15 @@ To dispose: 659 rows (389 `CN`, 270 `SYS`).
 | SIM:SYS-0073 | superseded | D18 | input selection by number is the only policy; `sampling` is refused at load |
 | SIM:SYS-0074 | superseded | D18 | `on_missing` is refused at load; a missing sample is a badged fallback |
 | SIM:SYS-0075 | superseded | D18 | inputs are picked by counter, so no repeat flag reaches a component |
-| SIM:SYS-0076 | carried | VNT | runs of one instant go in rank order and the plan prints the order |
+| SIM:SYS-0076 | carried | VNT:SYS-0009, VNT:SYS-0019 | runs of one instant go in rank order and the plan prints the order |
 | SIM:SYS-0077 | superseded | ARCH §2.3 | a `previous_cycle` input replaces the delay counted in steps, which has no meaning when steps are events |
-| SIM:SYS-0078 | carried | VNT | a loop with no previous-cycle edge is a load error naming the loop |
+| SIM:SYS-0078 | carried | VNT:SYS-0010 | a loop with no previous-cycle edge is a load error naming the loop |
 | SIM:SYS-0079 | carried | VNT | the previous-cycle inputs, the only latency left, are recorded in the description of the live measurement |
 | SIM:SYS-0080..0086 | carried | VNT | §9.1 — mode and implementation per stage stay the two independent fields of a stage |
 | SIM:SYS-0087..0096 | carried | VNT | §9.2 — the launcher model keeps the coherence classification, the broken-chain block, waivers and the closing of gaps |
 | SIM:SYS-0097..0103 | carried | VNT | §9.3 — overrides and faults keep their closed verb lists and run in the mutator |
 | SIM:SYS-0104 | carried | VNT | the engine stays open-loop |
-| SIM:SYS-0105 | carried | VNT | the first divergence is still found and recorded, by step number |
+| SIM:SYS-0105 | carried | VNT:SYS-0043 | the first divergence is still found and recorded, by step number |
 | SIM:SYS-0106 | carried | VNT | data after the divergence plus a grace is still flagged informational |
 | SIM:SYS-0107 | carried | VNT | the manifest keeps the coherence verdict and the divergence point |
 | SIM:SYS-0108 | retired | — | `R-SIM-7` puts integrating a signal into a component under test; no part of Vantage does it |
@@ -548,11 +548,11 @@ To dispose: 659 rows (389 `CN`, 270 `SYS`).
 | SIM:SYS-0162 | carried | VNT | the launcher shows which libraries are available, their versions and which lack a binary |
 | SIM:SYS-0163 | carried | VNT | the launcher shows per recording which stages could be set to `measured` |
 | SIM:SYS-0164 | carried | VNT | the four merge layers of configuration stay with the launcher |
-| SIM:SYS-0165 | carried | VNT | the run setup stays the only input of the engine; "every period computed" no longer applies, there being no grid |
+| SIM:SYS-0165 | carried | VNT:SYS-0001 | the run setup stays the only input of the engine; "every period computed" no longer applies, there being no grid |
 | SIM:SYS-0166 | carried | VNT | the run setup carries resolved library paths and the engine searches nothing |
 | SIM:SYS-0167 | carried | VNT | the engine prints what it loaded; its plan of ranks, triggers and clocks replaces the schedule |
 | SIM:SYS-0168 | carried | VNT | every configuration file is validated against a schema with locating errors |
-| SIM:SYS-0169 | carried | VNT | an unknown key is an error; `sampling` and `on_missing` are now among them (D18) |
+| SIM:SYS-0169 | carried | VNT:SYS-0002, VNT:SYS-0046 | an unknown key is an error; `sampling` and `on_missing` are now among them (D18) |
 | SIM:SYS-0170 | carried | VNT | every file carries a schema version and an unknown one is refused |
 | SIM:SYS-0171 | carried | VNT | references, modes and types are validated at load, naming both ends |
 | SIM:SYS-0172 | carried | VNT | configuration still round-trips to a byte-identical file |
@@ -598,8 +598,8 @@ To dispose: 659 rows (389 `CN`, 270 `SYS`).
 | SIM:SYS-0212 | carried | VNT | components load in-process, so one attach reaches them all |
 | SIM:SYS-0213 | carried | VNT | the engine can still print its process id and pause before its first step |
 | SIM:SYS-0214 | carried | VNT | break conditions: at a step, at a time, on entry to a module, on a port condition |
-| SIM:SYS-0215 | carried | VNT | the engine is single-threaded and deterministic by default (`--threads 1`, ARCH §8) so breakpoints work |
-| SIM:SYS-0216 | carried | VNT | the engine launches without the Python layer from a run setup |
+| SIM:SYS-0215 | carried | VNT:SYS-0040 | the engine is single-threaded and deterministic by default (`--threads 1`, ARCH §8) so breakpoints work |
+| SIM:SYS-0216 | carried | VNT:SYS-0001 | the engine launches without the Python layer from a run setup |
 | SIM:SYS-0217 | carried | VNT | symbol resolution is documented and ready-made debugger configurations ship |
 | SIM:SYS-0218 | retired | — | component state is not exposed by the ABI, the state snapshot is parked (RCT P1) and R-SIM-17 allows only recompute from the start |
 | SIM:SYS-0219 | carried | VNT | a module crash writes a minimal reproducer package |
@@ -672,10 +672,10 @@ To dispose: 377 rows (188 `SW`, 189 `IMP`).
 | UID | Disposition | Target | Why |
 |---|---|---|---|
 | SIM:SW-0001 | carried | VNT | the run setup stays flat and fully resolved, with absolute paths and one producer per port; no period is computed, there being no grid |
-| SIM:SW-0002 | carried | VNT | the run setup stays the only input of the engine |
+| SIM:SW-0002 | carried | VNT:SYS-0001 | the run setup stays the only input of the engine |
 | SIM:SW-0003 | carried | VNT | the setup carries each library's resolved path, the pattern it matched and the search order |
 | SIM:SW-0004 | carried | VNT | the setup is hashed as `spec_sha256` and the hash goes into the run artifacts |
-| SIM:SW-0005 | carried | VNT | the setup keeps a schema version, moved to a new version string, and the engine refuses one outside its range |
+| SIM:SW-0005 | carried | VNT:SYS-0004 | the setup keeps a schema version, moved to a new version string, and the engine refuses one outside its range |
 | SIM:SW-0006 | superseded | D10, ARCH §2.3 | the setup carries each stage's `clock_period_ns` and no grid step |
 | SIM:SW-0007 | carried | VNT | the setup keeps the resolved wiring, with `previous_cycle` marked on an input |
 | SIM:SW-0008 | carried | VNT | overrides and faults stay resolved verbs in `mutations[]` |
@@ -714,19 +714,19 @@ To dispose: 377 rows (188 `SW`, 189 `IMP`).
 | SIM:SW-0043 | superseded | ARCH §3.4 | a sample holds the four header fields, its arrival time, origin and payload; capture time and the repeat flag are gone |
 | SIM:SW-0044 | superseded | ARCH §13 | `R-SIM-14` now has one clock: `source_timestamp_us` in the header, with no capture time kept |
 | SIM:SW-0045 | superseded | ARCH §13 | age is simulation time since the value was last written, not derived from a capture time |
-| SIM:SW-0046 | carried | VNT | no time quantity inside the engine is floating point |
+| SIM:SW-0046 | carried | VNT:SYS-0038 | no time quantity inside the engine is floating point |
 | SIM:SW-0047 | carried | VNT | a missing input is explicit: an empty input with unknown origin, never a zero fill |
 | SIM:SW-0048 | carried | VNT | a value carries its origin from the closed set, including unknown; the contract states only the recorded origins |
 | SIM:SW-0049 | superseded | D10, ARCH §7 | a run is one recorded control message, so no cycle is grouped from file timestamps |
 | SIM:SW-0050 | superseded | D10, ARCH §7 | cycles are not reconstructed, so no recovery ladder is kept |
 | SIM:SW-0051 | superseded | D10, ARCH §7 | there is no ladder to force a rung of |
 | SIM:SW-0052 | superseded | ARCH §6 | a sample with no number or time is a badged fallback of the time rule, not a timing-approximated mark |
-| SIM:SW-0053 | carried | VNT | a counter gap is detected and counted in the event log, never interpolated (ARCH §3.4, ARCH §6) |
+| SIM:SW-0053 | carried | VNT:SYS-0030 | a counter gap is detected and counted in the event log, never interpolated (ARCH §3.4, ARCH §6) |
 | SIM:SW-0054 | superseded | D18 | inputs are picked by counter, so no repeat flag reaches a component |
 | SIM:SW-0055 | superseded | D10, ARCH §7 | rate is not reconstructed from a flat recording, and a declared period no longer schedules |
 | SIM:SW-0056 | superseded | D10, ARCH §3.4 | no stage is due or not due; the sample buffer gives the newest sample with its age |
 | SIM:SW-0057 | carried | VNT | a component always receives its full port set, now with `control`; the car's empty entry gives an empty input |
-| SIM:SW-0058 | carried | VNT | sample buffers are bounded by `buffer_depth` per port |
+| SIM:SW-0058 | carried | VNT:SYS-0006 | sample buffers are bounded by `buffer_depth` per port |
 | SIM:SW-0059 | moved | RCT:SYS-0029 | the contract says bulk payloads are referenced from the cycle by slot and sequence, never inline |
 | SIM:SW-0060 | carried | VNT | a static parameter port stays its own port kind in the manifest |
 | SIM:SW-0061 | superseded | D10, ARCH §3.3 | the one step loop (`StepOnce`) is the only path; the grid scheduler is replaced |
@@ -737,12 +737,12 @@ To dispose: 377 rows (188 `SW`, 189 `IMP`).
 | SIM:SW-0066 | superseded | D10, ARCH §7 | no schedule is predicted, so there is no disagreement to report; a component that sets no `updated` makes no sample |
 | SIM:SW-0067 | superseded | D10, ARCH §2.3 | there is no grid whose size could be pathological |
 | SIM:SW-0068..0071 | superseded | D18, ARCH §3.4 | §7.1 — input selection by number is the only policy; sampling and on_missing are refused at load |
-| SIM:SW-0072 | carried | VNT | runs of one instant go in rank order, fixed by the setup alone |
+| SIM:SW-0072 | carried | VNT:SYS-0009 | runs of one instant go in rank order, fixed by the setup alone |
 | SIM:SW-0073 | superseded | ARCH §2.3 | a `previous_cycle` input replaces the delay counted in grid steps |
-| SIM:SW-0074 | carried | VNT | a loop with no previous-cycle edge is a load error naming the loop |
-| SIM:SW-0075 | carried | VNT | the orchestrator decides from sample headers and the setup and reads no payload beyond `sig_header` (ARCH §3.2, ARCH §3.4) |
-| SIM:SW-0076 | carried | VNT | the engine prints its plan of ranks, triggers and clocks without executing; a step-by-step schedule can no longer be predicted (ARCH §7) |
-| SIM:SW-0077 | carried | VNT | the orchestrator reads no wall clock to decide anything |
+| SIM:SW-0074 | carried | VNT:SYS-0010 | a loop with no previous-cycle edge is a load error naming the loop |
+| SIM:SW-0075 | carried | VNT:SYS-0017 | the orchestrator decides from sample headers and the setup and reads no payload beyond `sig_header` (ARCH §3.2, ARCH §3.4) |
+| SIM:SW-0076 | carried | VNT:SYS-0019 | the engine prints its plan of ranks, triggers and clocks without executing; a step-by-step schedule can no longer be predicted (ARCH §7) |
+| SIM:SW-0077 | carried | VNT:SYS-0017 | the orchestrator reads no wall clock to decide anything |
 | SIM:SW-0078 | superseded | D13 | play-rate pacing belongs to the viewer; real-time pacing is parked (ARCH §14) |
 | SIM:SW-0079..0083 | carried | VNT | §8.1 — the host opens a module by absolute path, binds its exports by name and checks the ABI version first |
 | SIM:SW-0084 | carried | VNT | the host keeps driving the lifecycle, reset being the RESTART run |
@@ -764,19 +764,19 @@ To dispose: 377 rows (188 `SW`, 189 `IMP`).
 | SIM:SW-0107 | carried | VNT | an override contradicting the coherence classification is a waiver |
 | SIM:SW-0108 | carried | VNT | a fault window is recorded, in steps or time, in the manifest and the event log (ARCH §4) |
 | SIM:SW-0109 | carried | VNT | the runner is built from the setup and exposes one entry point that advances the run (`StepOnce`) |
-| SIM:SW-0110 | carried | VNT | a measured stage emits its recorded outputs and is never executed |
-| SIM:SW-0111 | carried | VNT | `measured` against a recording lacking those outputs is a startup error naming the stage and ports |
+| SIM:SW-0110 | carried | VNT:SYS-0008, VNT:SYS-0020 | a measured stage emits its recorded outputs and is never executed |
+| SIM:SW-0111 | carried | VNT:SYS-0007 | `measured` against a recording lacking those outputs is a startup error naming the stage and ports |
 | SIM:SW-0112 | carried | VNT | an off stage contributes no ports |
 | SIM:SW-0113 | carried | VNT | the ports crossing from measured into simulate are computed and logged before the first step |
 | SIM:SW-0114 | moved | RCT:SYS-0037 | the contract says a recording holds a topic for every declared port not excluded, which the runner's offer to the writer must give |
 | SIM:SW-0115 | carried | VNT | excluding or decimating a consumed input is a load error at record time |
-| SIM:SW-0116 | carried | VNT | the first divergence is detected by step number and recorded with stage and port |
+| SIM:SW-0116 | carried | VNT:SYS-0043 | the first divergence is detected by step number and recorded with stage and port |
 | SIM:SW-0117 | carried | VNT | data after the divergence plus a grace is flagged informational per message |
 | SIM:SW-0118 | carried | VNT | a simulated output never changes what a reader returns; the engine stays open-loop |
 | SIM:SW-0119 | carried | VNT | progress is checkpointed by step number as the run goes |
 | SIM:SW-0120 | carried | VNT | a time slice is a jump before the first step, not a read from the start |
 | SIM:SW-0121..0130 | carried | VNT | §11 — the closed error taxonomy, exit codes, structured log and warning summary stay |
-| SIM:SW-0131 | carried | VNT | the engine states the ranks, triggers and clocks it loaded, apart from the configuration layer |
+| SIM:SW-0131 | carried | VNT:SYS-0019 | the engine states the ranks, triggers and clocks it loaded, apart from the configuration layer |
 | SIM:SW-0132 | carried | VNT | the optional trace stays, one entry per run keyed by step; held is a property of a port value, not of a stage (ARCH §7) |
 | SIM:SW-0133 | carried | VNT | the trace is off by default and changes no value |
 | SIM:SW-0134 | carried | VNT | the per-run report of time, steps, per-module time and bytes read stays |
@@ -787,7 +787,7 @@ To dispose: 377 rows (188 `SW`, 189 `IMP`).
 | SIM:SW-0139 | carried | VNT | a crash writes a minimal reproducer package |
 | SIM:SW-0140 | carried | VNT | no diagnostic raises or aborts a run |
 | SIM:SW-0141 | carried | VNT | the executable stays thin; it now also holds the supervisor and the isolated stage (ARCH §3.7, ARCH §11) |
-| SIM:SW-0142 | carried | VNT | the executable runs a complete simulation with no interpreter loaded |
+| SIM:SW-0142 | carried | VNT:SYS-0001 | the executable runs a complete simulation with no interpreter loaded |
 | SIM:SW-0143 | carried | VNT | the executable prints its process id and pauses before the first step (`--wait-for-attach`) |
 | SIM:SW-0144 | carried | VNT | the engine library stays usable without the executable |
 | SIM:SW-0145 | carried | VNT | one engine binary serves desktop, batch and CI |
@@ -797,7 +797,7 @@ To dispose: 377 rows (188 `SW`, 189 `IMP`).
 | SIM:SW-0149 | carried | VNT | the four configuration layers stay, each value keeping its layer |
 | SIM:SW-0150 | carried | VNT | composition, connections and source-signal binding stay separate file kinds; the visual layout file goes with the viewer (D13) |
 | SIM:SW-0151 | carried | VNT | every configuration file is validated against a published schema with locating errors |
-| SIM:SW-0152 | carried | VNT | an unknown key fails the load with near matches; `sampling` and `on_missing` are now among them (D18) |
+| SIM:SW-0152 | carried | VNT:SYS-0002, VNT:SYS-0046 | an unknown key fails the load with near matches; `sampling` and `on_missing` are now among them (D18) |
 | SIM:SW-0153 | carried | VNT | every file carries a schema version and an unknown or missing one is refused |
 | SIM:SW-0154 | carried | VNT | references, types and modes are checked at load, never first at run time |
 | SIM:SW-0155 | carried | VNT | configuration round-trips to a byte-identical file |

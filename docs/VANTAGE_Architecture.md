@@ -30,6 +30,9 @@ happens into one place, the **live measurement**, where any reader can look at i
 | Input 3 | A run setup: which stages run again, how each is started, how they are wired | the launcher |
 | Output | The live measurement: shared memory with the description, one `MeasCycle` per engine step, bulk frames and a status block | Vantage only |
 
+One engine run reads one recording, which may lie in several files of one measurement
+(`sources[]`, §2.3). Many recordings are a batch: one engine run per recording (`R-SIM-19`).
+
 Vantage has no viewer (`D13`); its one window is the launcher window, a thin
 front over the launcher (`D21`). A command-line inspector reads the live
 measurement and proves that it holds everything a viewer will need.
@@ -114,7 +117,7 @@ snake_case, the same spelling as the structs. `new` marks a key this design adds
 | Key | State | Means |
 |---|---|---|
 | `schema`, `run_id`, `spec_sha256` | kept | identity of the setup; `schema` moves to a new version string. `run_id` is the setup's id and is not the engine run's `runId` |
-| `sources[]` (`path`, `sha256`, `codec`, `ingest`, `absent`) | kept | the recording and its ingest map (`R-SIM-23`) |
+| `sources[]` (`path`, `sha256`, `codec`, `ingest`, `absent`) | kept | the files of the one recording this engine run reads, several files of one measurement, each with its ingest map (`R-SIM-23`); many recordings are a batch of engine runs, never one setup |
 | `stages[].name`, `mode`, `impl`, `abi_version`, `config_bundle_sha256` | kept | as in `R-SIM-10`; become `MeasStage.name`, `mode`, `impl` |
 | `stages[].trigger` | new | `control`, an input port name, or empty when a clock starts the stage |
 | `stages[].clock_period_ns` | changed | was `period_ns`, the grid period; now the period of the clock that starts a stage with no recorded trigger; 0 when none |

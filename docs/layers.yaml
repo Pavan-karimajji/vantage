@@ -1,0 +1,91 @@
+# VNT requirement set — Vantage (Plan C).
+#
+# Driven by .claude/templates/requirements/trace_check.py --set <this dir>.
+# Layers SYS + IMP by program decision (VANTAGE_DEV_PLAN.md D5). IMP rows serve
+# SYS directly: SYS is the layer above, so no skip is declared.
+# Written in parts (VANTAGE_DEV_PLAN.md §6, step 8): 8a the orchestrator (C1),
+# 8b the live measurement writer, inspector and supervisor (C2), 8c the launcher,
+# window, scenario script, batch, configuration, diagnostics and delivery.
+
+module: VNT
+component: VANTAGE
+
+layers:
+  - id: SYS
+    name: System
+    doc: VANTAGE_System_Requirements.md
+    tests: [SYT, ANL]
+    budget: 120
+    requires_binds: true
+  - id: IMP
+    name: Implementation Design
+    doc: VANTAGE_Implementation_Design.md
+    tests: []                 # verified by the tests of the SYS rows it serves
+    budget: 120
+    row_style: table          # | Box | UID | Serves | WP | Change | Artifact - Design | Tests |
+
+test_spec: VANTAGE_Test_Spec.md
+
+# R-REQ-6a. The build order lives in the same file as the IMP rows.
+plan: VANTAGE_Implementation_Design.md
+
+# R-REQ-13. The parts of VANTAGE_Architecture.md §3 (launcher, orchestrator,
+# runner, sample buffers, live measurement writer, inspector, supervisor,
+# engines) x 30 = 240 = 120 (SYS) + 120 (IMP).
+budget_basis:
+  unit: architecture_part
+  count: 8
+  per_unit: 30
+  total: 240
+
+budget_history:
+  - date: 2026-10-31
+    change: "first declaration: 8 parts x 30 = 240; SYS 120, IMP 120"
+    why: >-
+      Part 8a states three of the eight parts (orchestrator, runner, sample
+      buffers) in 45 SYS and 48 IMP rows, about 30 rows per part. The
+      expectation assumes the other five parts are of the same size; 8b and 8c
+      check it against what they write.
+
+limits:
+  requirement_words: 60
+  headline_chars: 90
+  commentary_lines_per_requirement: 6
+
+context:
+  - kind: architecture
+    doc: VANTAGE_Architecture.md
+  - kind: register
+    doc: VANTAGE_Migration_Register.md
+  - kind: architecture
+    doc: VANTAGE_Lab_Design.md
+    rollup: true
+
+# R-REQ-15. Vantage is not a component: it has no conf/ports.yaml. Its boundary
+# is the run setup and the recording it reads, the stages it runs, and what it
+# writes. All are PROPOSED.
+ports:
+  source: ../conf/ports.yaml
+  proposed:
+    inputs:
+      - name: runSetup
+        proto_type: the run setup, a JSON file (VANTAGE_Architecture.md §2.3)
+      - name: recording
+        proto_type: the one recording an engine run reads, in one or more files
+      - name: stageOut
+        proto_type: what a simulated stage publishes in a run (data outputs, refSync, compState)
+    outputs:
+      - name: control
+        proto_type: adas.common.CycleControl, written for each run of a simulated stage
+      - name: stageIn
+        proto_type: the input samples handed to a simulated stage in one run
+      - name: runRecording
+        proto_type: the recording the engine run writes (outputs.path)
+      - name: stepRecord
+        proto_type: per engine step, what the engine hands the live measurement writer (step, time, values, badges)
+      - name: eventLog
+        proto_type: the engine's event log lines
+      - name: plan
+        proto_type: the printed plan of ranks, triggers and clocks
+      - name: exitStatus
+        proto_type: the engine's exit code and its error message
