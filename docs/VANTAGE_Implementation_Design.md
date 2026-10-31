@@ -40,6 +40,8 @@ requirement is *met* is a Test Execution Record's answer.
 **`WP-05` needs `RCT:WP-08`.** `RunStage` hands a component the message `ControlWriter::Write`
 builds and the samples `SelectInputs` picks; both are contract rows built in the same pass.
 
+**The merge of `c1` at gate G3 needs `WP-10`.** After `WP-01`, `emit_run_spec` needs `RunSetupValues` and nothing in Vantage supplies them, so `sim resim`, the batch worker and `sim check` write no run setup until `WP-10` lands; the tests vantage `c1` commit `c327be2` lists as expected red stay red until then.
+
 **`WP-09`'s tests need `RCT:WP-13` and the lab.** They read the engine-run recording, which the
 engine's writer makes (`RCT:IMP-0048`), and they run the lab cases of
 `VANTAGE_Lab_Design.md` §6, including those of `LAB-WP-10` (`coprime_periods`, `renumber_lib`,
@@ -61,6 +63,7 @@ code they scan, and the test group closes gate **G3** (`VANTAGE_DEV_PLAN.md` §5
 - [ ] **WP-03** — Graph, ranks and the plan · Load-time rules 1 to 3; every step needs the ranks.
 - [ ] **WP-04** — Events, steps, readiness, jump, event log · The orchestrator's run-time rules; needs the graph and the buffers.
 - [ ] **WP-05** — Runner: read-ahead, one run, the step loop · Drives `WP-04` and calls components; needs `RCT:WP-08`.
+- [ ] **WP-10** — Launcher run-setup values · Vantage's own callers can write a run setup again; lands after `WP-05` and before the merge of `c1` at G3.
 - [ ] **WP-06** — Equal outputs and the first divergence · Compares what `WP-05` produces with the recording.
 - [ ] **WP-07** — Threads · Only after one thread gives equal outputs (`ARCH §8`).
 - [ ] **WP-08** — Source checks · Scan the code `WP-02` to `WP-05` write.
@@ -74,7 +77,8 @@ flowchart LR
     WP03 --> WP04
     WP04 --> WP05["WP-05<br/>runner"]
     RCT8["RCT:WP-08<br/>control + selection"] --> WP05
-    WP05 --> WP06["WP-06<br/>equal outputs"]
+    WP05 --> WP10["WP-10<br/>launcher values"]
+    WP10 --> WP06["WP-06<br/>equal outputs"]
     WP06 --> WP07["WP-07<br/>threads"]
     WP05 --> WP08["WP-08<br/>source checks"]
     WP07 --> WP09["WP-09<br/>tests, G3"]
@@ -123,6 +127,7 @@ the register's code table says.
 | `[ ]` | `IMP-0023` | `SYS-0013`, `SYS-0024`, `SYS-0030`, `SYS-0037`, `SYS-0043`, `SYS-0047` | `WP-04` | `NEW` | `src/simcore/orchestrator/event_log.cpp::EventLog::Add` — one line per entry: an `event=` value of `simcore::Event`, `step=`, and `entry=` from the closed list `output_counter_break`, `fallback_beyond_gap`, `counter_gap`, `counter_reset`, `stalled_trigger`, `eviction_miss`, `first_divergence`, with the fields `ARCH §5` and `§6` name. | `SYT-ORC-05`, `SYT-ORC-11`, `SYT-SEL-05`, `SYT-SEL-11`, `SYT-STP-06`, `SYT-EQO-02` |
 | `[ ]` | `IMP-0024` | `SYS-0012` | `WP-04` | `DROP` | `include/simcore/scheduler.hpp`, `src/simcore/scheduler/due.cpp::Scheduler::Advance`, `IsDue` — deleted: no base grid and no due test; a run exists only for a ticket (`D10`). | `SYT-ORC-04` |
 | `[ ]` | `IMP-0025` | `SYS-0012` | `WP-04` | `DROP` | `src/simcore/scheduler/reconcile.cpp::ReconcileModuleFlag` — deleted: with no due flag there is nothing to reconcile; a component that does not set `updated` on a port produces no sample for it (`ARCH §7`). | `SYT-ORC-04` |
+| `[ ]` | `IMP-0052` | `SYS-0048` | `WP-10` | `EXTEND` | `src/adas_sim/graph/pipeline.py::Pipeline.load`, `Pipeline.setup_values` — `RunSetupValues` from the run configuration: its `run_setup:` block (`readiness_limit_steps`, `fallback_max_gap`, `livemeas`, absent meaning none) and each stage's `trigger`, `buffer_depth`, `bulk` and inputs' `previous_cycle`; a missing one is an `AuthoringError` naming it before any setup is written; no default. `cli/resim.py`, `orchestrate/worker.py`, `check/runner.py` pass it on. Closed by `c327be2`'s expected-red tests passing and `tests/unit/test_c3_check.py`'s provisional values removed. | `SYT-RUN-10` |
 | `[ ]` | `IMP-0026` | `SYS-0005`, `SYS-0015`, `SYS-0020` | `WP-05` | `NEW` | `src/simcore/runner/read_ahead.cpp::ReadAhead::Fill`, `Find` — reads every `sources[]` file through `io::Reader::ReadRange`, merged by reception time then `sources[]` order, up to `readiness_limit_steps` steps past the instant processed; `Find` searches by `measurement_counter`; the time rule never calls it. | `SYT-RUN-05`, `SYT-ORC-07`, `SYT-SEL-01` |
 | `[ ]` | `IMP-0027` | `SYS-0012`, `SYS-0013`, `SYS-0021`, `SYS-0027` | `WP-05` | `NEW` | `src/simcore/runner/run_stage.cpp::RunStage` — builds the port set from the control (`RCT:IMP-0032`) and the selection (`RCT:IMP-0033`), an input with no sample not offered; applies the declared overrides; calls `Component::Exec` under `limits.exec_timeout_ms`; logs each output whose `measurement_counter` differs from the control's; never retries. | `SYT-ORC-04`, `SYT-ORC-05`, `SYT-SEL-02`, `SYT-SEL-08` |
 | `[ ]` | `IMP-0028` | `SYS-0001`, `SYS-0005`, `SYS-0007`, `SYS-0008`, `SYS-0019` | `WP-05` | `EXTEND` | `src/simcore/runner/cycle_loop.cpp::Runner::Construct` — builds buffers, graph, orchestrator and read-ahead from the `RunSpec` alone, over every `sources[]` file as one recording; prints `PlanText` before loading any library; refuses a `measured` stage whose outputs the topic index lacks, naming stage and ports; loads no `measured` or `off` library. | `SYT-RUN-01`, `SYT-RUN-05`, `SYT-RUN-07`, `SYT-RUN-08`, `SYT-ORC-10` |
@@ -141,7 +146,7 @@ the register's code table says.
 | `[ ]` | `IMP-0041` | `SYS-0032`, `SYS-0035` | `WP-09` | `NEW` | `tests/support/step_tap.cpp::main` — a test executable linking `simcore`: runs a run setup through `Runner` with a sink on `Runner::SetLiveMeasurement` printing one JSON line per step (step, time, badges); `--threads N`; `--jump-at-ms F --jump-to-ms T` calls `simEngineSeek`'s jump once. | `SYT-STP-01`, `SYT-STP-04` |
 | `[ ]` | `IMP-0042` | `SYS-0008`, `SYS-0040`, `SYS-0041` | `WP-09` | `NEW` | `tests/fixtures/exec_probe/exec_probe.cpp::adasExec` — the exec probe: a component on the generic ABI that appends its stage name, library path, thread id, entry and exit to a file named in its bundle, and spins a fixed time inside each call. | `SYT-RUN-08`, `SYT-THR-02`, `SYT-THR-03` |
 | `[ ]` | `IMP-0043` | `SYS-0039`, `SYS-0042` | `WP-09` | `NEW` | `tests/system/test_vnt_gate_g3.py` — gate `G3`: `SYT-EQO-01` and `SYT-THR-01` over every exact case, comparing with `lab_tools.compare.equal_outputs`, the lab's comparator. | `SYT-EQO-01`, `SYT-THR-01` |
-| `[ ]` | `IMP-0044` | `SYS-0001`, `SYS-0002`, `SYS-0003`, `SYS-0004`, `SYS-0005`, `SYS-0006`, `SYS-0007`, `SYS-0008`, `SYS-0046` | `WP-09` | `NEW` | `tests/system/test_vnt_run_setup.py` — `SYT-RUN-01` to `SYT-RUN-09`. | `SYT-RUN-01`, `SYT-RUN-02`, `SYT-RUN-03`, `SYT-RUN-04`, `SYT-RUN-05`, `SYT-RUN-06`, `SYT-RUN-07`, `SYT-RUN-08`, `SYT-RUN-09` |
+| `[ ]` | `IMP-0044` | `SYS-0001`, `SYS-0002`, `SYS-0003`, `SYS-0004`, `SYS-0005`, `SYS-0006`, `SYS-0007`, `SYS-0008`, `SYS-0046`, `SYS-0048` | `WP-09` | `NEW` | `tests/system/test_vnt_run_setup.py` — `SYT-RUN-01` to `SYT-RUN-10`. | `SYT-RUN-01`, `SYT-RUN-02`, `SYT-RUN-03`, `SYT-RUN-04`, `SYT-RUN-05`, `SYT-RUN-06`, `SYT-RUN-07`, `SYT-RUN-08`, `SYT-RUN-09`, `SYT-RUN-10` |
 | `[ ]` | `IMP-0045` | `SYS-0009`, `SYS-0010`, `SYS-0011`, `SYS-0012`, `SYS-0013`, `SYS-0014`, `SYS-0015`, `SYS-0016`, `SYS-0018`, `SYS-0019`, `SYS-0047` | `WP-09` | `NEW` | `tests/system/test_vnt_orchestrator.py` — `SYT-ORC-01` to `SYT-ORC-11`. | `SYT-ORC-01`, `SYT-ORC-02`, `SYT-ORC-03`, `SYT-ORC-04`, `SYT-ORC-05`, `SYT-ORC-06`, `SYT-ORC-07`, `SYT-ORC-08`, `SYT-ORC-09`, `SYT-ORC-10`, `SYT-ORC-11` |
 | `[ ]` | `IMP-0046` | `SYS-0020`, `SYS-0021`, `SYS-0022`, `SYS-0023`, `SYS-0024`, `SYS-0025`, `SYS-0026`, `SYS-0027`, `SYS-0028`, `SYS-0029`, `SYS-0030` | `WP-09` | `NEW` | `tests/system/test_vnt_selection.py` — `SYT-SEL-01` to `SYT-SEL-11`. | `SYT-SEL-01`, `SYT-SEL-02`, `SYT-SEL-03`, `SYT-SEL-04`, `SYT-SEL-05`, `SYT-SEL-06`, `SYT-SEL-07`, `SYT-SEL-08`, `SYT-SEL-09`, `SYT-SEL-10`, `SYT-SEL-11` |
 | `[ ]` | `IMP-0047` | `SYS-0032`, `SYS-0033`, `SYS-0034`, `SYS-0035`, `SYS-0036`, `SYS-0037` | `WP-09` | `NEW` | `tests/system/test_vnt_step.py` — `SYT-STP-01` to `SYT-STP-06`. | `SYT-STP-01`, `SYT-STP-02`, `SYT-STP-03`, `SYT-STP-04`, `SYT-STP-05`, `SYT-STP-06` |

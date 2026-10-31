@@ -25,7 +25,7 @@ simulated stage writes in the engine run, which names what the engine handed it
 **Test areas**, declared once: `RUN` the run setup · `ORC` the orchestrator and the six rules ·
 `SEL` input selection · `STP` the engine step · `THR` threads · `EQO` equal outputs and the
 first divergence.
-Priority split: 23 `P0`, 24 `P1`, 0 `P2`; all `R1`. Without a `P0` row an engine run is not
+Priority split: 24 `P0`, 24 `P1`, 0 `P2`; all `R1`. Without a `P0` row an engine run is not
 exact against the car; a `P1` row makes a result easier to trust or diagnose.
 
 ---
@@ -90,6 +90,12 @@ recordings are a batch of engine runs (`R-SIM-19`).
 **Accept.** A lab setup with any one such key added ends with a load error naming the key and where it is (top level, stage, port or input), before the first step; a run that starts fails.
 **Binds.** `runSetup`, `exitStatus`
 **Verify.** T · `SYT-RUN-09`   **Trace.** —
+
+**`SYS-0048`** · `P0` · `R1` — The launcher refuses a run configuration missing a run-setup value
+**Shall.** The launcher shall write a run setup only from a run configuration that gives every `⊘` value of `ARCH §4` and each simulated stage's trigger, supplying no default.
+**Accept.** With each such value removed in turn, `sim resim` exits with an error naming it and writes no run setup; with all given, the setup carries exactly the configured values.
+**Binds.** `runSetup`
+**Verify.** T · `SYT-RUN-10`   **Trace.** —
 
 ## 2. The orchestrator and the six rules (`ORC`)
 
@@ -355,7 +361,7 @@ case (`R-REQ-9`).
 
 | Method | Count | Notes |
 |---|---|---|
-| T | 44 | `simengine` on a lab case, the step tap, or the exec probe |
+| T | 45 | `simengine` on a lab case, the step tap, or the exec probe |
 | A | 3 | source checks over the engine |
 
 ## 8. Superseded and retired UIDs

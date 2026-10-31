@@ -18,6 +18,7 @@ of `VANTAGE_Lab_Design.md` §6, written topology, scenario (`base` unless named)
 | `F-TAP` | `tests/support/step_tap` run on a setup: one line per engine step with its number, simulation time and badges; optionally one jump, at 500 ms to the case's `jump_to_ms` unless the steps say otherwise |
 | `F-PROBE` | The exec probe (`tests/fixtures/exec_probe`) put by the test in place of named stages' libraries, one copy per path the steps name, and its call log |
 | `F-COMPARE` | The lab's comparator, `lab_tools.compare.equal_outputs` (`VANTAGE_Lab_Design.md` §6.4), over two recordings; independent of Vantage's own comparison |
+| `F-RUN-CONFIG` | A run configuration (a pipeline file) for a stub chain on the generic ABI whose `run_setup:` block and stage keys give every run-setup value, copied by the test with the one change its steps name |
 | `F-SRC` | `include/simcore`, `src/simcore` and `src/simengine` as checked in, and per check a copy with one planted violation |
 | `F-RENUMBER-LIB` | `running_example` `renumber_lib` `shifted` (`VANTAGE_Lab_Design.md` `LAB-WP-10`): `A`'s bundle sets `LAB_A_RENUMBER`, so `A`'s own code writes its data outputs' `measurement_counter` shifted from its control's |
 
@@ -92,6 +93,12 @@ in `tests/system/test_vnt_gate_g3.py`.
 **Steps.** To copies of `running_example` `cut_c`'s setup add, one per copy, `delay_steps` to one input, `grid_step_ns` and `order` at the top level, and an unknown key `colour` to one stage; run each.
 - `.c1` **PASS:** each retired key gives a load error naming the key and where it is, per `SYS-0046` Accept. **FAIL:** a run starts, or the message lacks the key or its place.
 - `.c2` **PASS:** `colour` gives a load error naming it and its stage. **FAIL:** a run starts, or the key is ignored.
+
+**`SYT-RUN-10`** · T · fixture `F-RUN-CONFIG` — The launcher refuses a missing run-setup value
+**Serves.** `SYS-0048`
+**Steps.** Remove in turn `readiness_limit_steps`, `fallback_max_gap`, one simulated stage's `trigger` and one port's `buffer_depth`, and run `sim resim` on each copy. Then, with every value given, start the run through `sim resim`, the batch worker (`orchestrate/worker.py`) and `sim check`, and read each run setup written.
+- `.c1` **PASS:** each removal gives an error naming the value and no run setup file, per `SYS-0048` Accept. **FAIL:** a setup is written, or the error names another value.
+- `.c2` **PASS:** each of the three paths writes a setup carrying exactly the configured values. **FAIL:** a value missing, changed or filled by a default.
 
 ## 3. The orchestrator — `ORC`
 
