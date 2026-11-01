@@ -239,6 +239,7 @@ def check_scenario(
     pipeline = Pipeline.load(
         resolved_pipeline_path, search=search, components=components, faults=scenario.run.faults,
     )
+    setup_values = pipeline.setup_values()  # `IMP-0052`: a missing value is refused, named
 
     # WP-15b (IMP-0422): execution moved to `simengine`, out of process
     # (`engine.bridge` -- see that module's own docstring for why every
@@ -264,7 +265,7 @@ def check_scenario(
         output_path = Path(tmp_dir) / f"check_out{DEFAULT_RECORDING_EXT}"
         result = invoke_engine(
             pipeline, resolved_recording, run_id=f"check-{scenario.id}", output_path=output_path,
-            config_path=config_path,
+            config_path=config_path, setup_values=setup_values,
         )
         if not result.ok:
             raise AuthoringError(

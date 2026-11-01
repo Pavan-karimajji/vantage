@@ -69,7 +69,7 @@ def _with_impl(pipeline: Pipeline, stage: str, impl: str) -> Pipeline:
     )
     return Pipeline(
         name=pipeline.name, stages=new_stages, version=pipeline.version, components=pipeline._components,
-        faults=pipeline._faults, library_paths=pipeline.library_paths,
+        faults=pipeline._faults, library_paths=pipeline.library_paths, run_setup=pipeline.run_setup,
     )
 
 

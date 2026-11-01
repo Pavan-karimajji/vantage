@@ -108,6 +108,9 @@ def run(argv: list[str] | None = None) -> int:
     config = resolved.effective_config
 
     pipeline = Pipeline.load(args.pipeline, search=args.search)
+    # `IMP-0052`: the run-setup values come from the run configuration; a missing one
+    # is refused here, naming it, before any setup is written.
+    setup_values = pipeline.setup_values()
     if args.pin_builds:
         verify_pinned_builds(pipeline, recording)
     else:
@@ -148,7 +151,7 @@ def run(argv: list[str] | None = None) -> int:
         run_id = f"resim-{args.pipeline.stem}-{recording.stem}"
         result = invoke_engine(
             pipeline, recording, run_id=run_id, output_path=output_path, config_path=config,
-            checkpoint_path=checkpoint_path,
+            checkpoint_path=checkpoint_path, setup_values=setup_values,
         )
         if not result.ok:
             raise AuthoringError(

@@ -61,8 +61,11 @@ def _require_engine_and_stub() -> tuple[Path, Path]:
 
 def _write_pipeline(path: Path) -> None:
     path.write_text(
-        "version: 1\nname: it01_config_tree_deleted\nstages:\n"
-        "  - name: sut\n    mode: simulate\n    impl: \"dll:echo_stub\"\n    inputs: {}\n",
+        "version: 1\nname: it01_config_tree_deleted\n"
+        "run_setup:\n  readiness_limit_steps: 8\n  fallback_max_gap: 6\n"
+        "stages:\n"
+        "  - name: sut\n    mode: simulate\n    impl: \"dll:echo_stub\"\n    inputs: {}\n"
+        "    trigger: ''\n    buffer_depth: {'*': 16}\n",
         encoding="utf-8",
     )
 
@@ -98,6 +101,7 @@ def test_config_tree_deleted_engine_still_runs_and_matches_the_baseline(_engine_
     baseline_out = tmp_path / "baseline.mcap"
     baseline = run_pipeline_via_engine(
         pipeline, _TINY, run_id="it01-baseline", output_path=baseline_out, simengine_path=engine_path,
+        setup_values=pipeline.setup_values(),
     )
     assert baseline.ok, f"baseline run failed: exit_code={baseline.exit_code} stderr={baseline.stderr!r}"
 
@@ -109,6 +113,7 @@ def test_config_tree_deleted_engine_still_runs_and_matches_the_baseline(_engine_
     isolated_out = tmp_path / "isolated_out.mcap"
     spec = pipeline_to_run_spec(
         pipeline, run_id="it01-isolated", recording_path=_TINY, output_path=isolated_out,
+        setup_values=pipeline.setup_values(),
     )
 
     # Step 3: an isolated directory holding ONLY the three things D-1 says

@@ -12,7 +12,6 @@ the single stage under test is `widget`, same convention
 
 from __future__ import annotations
 
-import functools
 import json
 import struct
 from pathlib import Path
@@ -23,7 +22,6 @@ from google.protobuf import descriptor_pb2 as _dpb
 from google.protobuf import descriptor_pool as _dpool
 from google.protobuf import message_factory as _mfactory
 
-from adas_sim.check import runner as check_runner
 from adas_sim.check.expect import ExpectationResult
 from adas_sim.check.report import format_report_json, format_report_md, suite_passed, write_report
 from adas_sim.check.runner import (
@@ -35,7 +33,6 @@ from adas_sim.config.scenario import (
     EgoScenario, RoadHint, RunControl, Scenario, ScenarioContent, SensorModelRef, SutRef,
 )
 from adas_sim.diagnostics.errors import AuthoringError
-from adas_sim.runspec.emit import RunSetupValues
 from adas_sim.runspec.manifest import build_manifest
 from adas_sim.sources.recorder import Recorder
 from adas_sim.sources.synthetic import SyntheticSource
@@ -43,21 +40,11 @@ from tests.system.test_d15b_engine_bridge import _echo_stub_path
 from adas_sim.engine.bridge import resolve_simengine_executable
 
 
-# `check_scenario` starts the engine through `invoke_engine`, which needs the
-# run setup's `⊘` values (`WP-01`, `IMP-0051`); nothing in `check/` supplies
-# them yet, so the tests that really run the engine supply these
-# provisional test values here.
-_TEST_SETUP_VALUES = RunSetupValues(
-    readiness_limit_steps=4, fallback_max_gap=4, trigger={"widget": ""}, buffer_depth={"*": 16},
-)
-
-
-@pytest.fixture(autouse=True)
-def _engine_setup_values(monkeypatch):
-    monkeypatch.setattr(
-        check_runner, "invoke_engine",
-        functools.partial(check_runner.invoke_engine, setup_values=_TEST_SETUP_VALUES),
-    )
+# The run-setup values `sim check` writes come from the run configuration
+# (`IMP-0052`): the pipeline files below give them, as test values (marked as
+# such -- the lab's provisional numbers, never a default in code).
+_RUN_SETUP = {"readiness_limit_steps": 4, "fallback_max_gap": 4}
+_STAGE_SETUP = {"trigger": "", "buffer_depth": {"*": 16}}
 
 
 # ---------------------------------------------------------------------------
@@ -172,8 +159,11 @@ def _widget_manifest(descriptor_set: bytes) -> ComponentManifest:
 
 
 def _write_widget_pipeline(path: Path, *, mode: str, component: InProcessSilComponent) -> Pipeline:
-    stages = [{"name": "widget", "mode": mode, "impl": "stub:widget", "inputs": {}}]
-    path.write_text(yaml.safe_dump({"name": "widget_only", "stages": stages}, sort_keys=False), encoding="utf-8")
+    stages = [{"name": "widget", "mode": mode, "impl": "stub:widget", "inputs": {}, **_STAGE_SETUP}]
+    path.write_text(
+        yaml.safe_dump({"name": "widget_only", "run_setup": _RUN_SETUP, "stages": stages}, sort_keys=False),
+        encoding="utf-8",
+    )
     return Pipeline.load(path, components={"widget": component})
 
 
@@ -295,8 +285,14 @@ def _configure_real_echo_stub(monkeypatch, *, lib_dir: Path, stub_path) -> None:
 
 
 def _write_real_echo_pipeline(path: Path) -> None:
-    stages = [{"name": "widget", "mode": "simulate", "impl": "dll:echo_stub", "inputs": {"in": "source.stim"}}]
-    path.write_text(yaml.safe_dump({"name": "widget_only", "stages": stages}, sort_keys=False), encoding="utf-8")
+    stages = [{
+        "name": "widget", "mode": "simulate", "impl": "dll:echo_stub", "inputs": {"in": "source.stim"},
+        **_STAGE_SETUP,
+    }]
+    path.write_text(
+        yaml.safe_dump({"name": "widget_only", "run_setup": _RUN_SETUP, "stages": stages}, sort_keys=False),
+        encoding="utf-8",
+    )
 
 
 def _record_stim_recording(tmp_path: Path, name: str, values: list[float]) -> Path:

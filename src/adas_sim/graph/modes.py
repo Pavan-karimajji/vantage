@@ -21,6 +21,7 @@ granularity") stays open; this is not a general redesign of `Stage`.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 from warnings import warn
 
@@ -46,7 +47,7 @@ def with_mode(pipeline: "Pipeline", stage: str, mode: "Mode", *, close_gaps: boo
     headless caller sees in the log, not an error (`SW-0178`'s actual
     blocking behaviour is a future run-loop caller's job, see `graph/
     coherence.py`'s own top note)."""
-    from adas_sim.graph.pipeline import Pipeline, Stage
+    from adas_sim.graph.pipeline import Pipeline
 
     names = {s.name for s in pipeline.stages}
     if stage not in names:
@@ -55,13 +56,14 @@ def with_mode(pipeline: "Pipeline", stage: str, mode: "Mode", *, close_gaps: boo
             hint=f"declared stages: {', '.join(names)}",
         )
     new_stages = tuple(
-        Stage(name=s.name, mode=mode, impl=s.impl, inputs=s.inputs, overrides=s.overrides, record=s.record)
+        replace(s, mode=mode, port_modes={})
         if s.name == stage else s
         for s in pipeline.stages
     )
     result = Pipeline(
         name=pipeline.name, stages=new_stages, version=pipeline.version, components=pipeline._components,
         faults=pipeline._faults, library_paths=pipeline.library_paths, bundle_dirs=pipeline.bundle_dirs,
+        run_setup=pipeline.run_setup,
     )
     to_close: set[str] = set()
     for finding in coherence.classify(result):
@@ -76,13 +78,14 @@ def with_mode(pipeline: "Pipeline", stage: str, mode: "Mode", *, close_gaps: boo
         ))
         return result
     closed_stages = tuple(
-        Stage(name=s.name, mode="simulate", impl=s.impl, inputs=s.inputs, overrides=s.overrides, record=s.record)
+        replace(s, mode="simulate", port_modes={})
         if s.name in to_close else s
         for s in new_stages
     )
     return Pipeline(
         name=pipeline.name, stages=closed_stages, version=pipeline.version, components=pipeline._components,
         library_paths=pipeline.library_paths, bundle_dirs=pipeline.bundle_dirs,
+        run_setup=pipeline.run_setup,
     )
 
 
@@ -96,7 +99,7 @@ def with_port_mode(pipeline: "Pipeline", stage: str, port: str, mode: "Mode") ->
     stage were in `mode` for the purpose of that one port's edges only --
     scoped this narrowly on purpose (`OQ-04` stays open on whether
     stage-level plus per-port is the right final granularity)."""
-    from adas_sim.graph.pipeline import Pipeline, Stage
+    from adas_sim.graph.pipeline import Pipeline
 
     names = {s.name for s in pipeline.stages}
     if stage not in names:
@@ -105,14 +108,12 @@ def with_port_mode(pipeline: "Pipeline", stage: str, port: str, mode: "Mode") ->
             hint=f"declared stages: {', '.join(names)}",
         )
     new_stages = tuple(
-        Stage(
-            name=s.name, mode=s.mode, impl=s.impl, inputs=s.inputs, overrides=s.overrides, record=s.record,
-            port_modes={**s.port_modes, port: mode},
-        )
+        replace(s, port_modes={**s.port_modes, port: mode})
         if s.name == stage else s
         for s in pipeline.stages
     )
     return Pipeline(
         name=pipeline.name, stages=new_stages, version=pipeline.version, components=pipeline._components,
         faults=pipeline._faults, library_paths=pipeline.library_paths, bundle_dirs=pipeline.bundle_dirs,
+        run_setup=pipeline.run_setup,
     )

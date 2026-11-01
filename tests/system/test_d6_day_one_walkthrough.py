@@ -80,11 +80,16 @@ def _five_line_pipeline(path: Path) -> None:
     path.write_text(
         "version: 1\n"
         "name: day_one\n"
+        "run_setup:\n"
+        "  readiness_limit_steps: 8\n"
+        "  fallback_max_gap: 6\n"
         "stages:\n"
         "  - name: echo_stub_with_output\n"
         "    mode: simulate\n"
         '    impl: "dll:echo_stub_with_output"\n'
-        "    inputs: {}\n",
+        "    inputs: {}\n"
+        "    trigger: ''\n"
+        "    buffer_depth: {'*': 16}\n",
         encoding="utf-8",
     )
 
@@ -119,6 +124,7 @@ def test_day_one_walkthrough_probe_pipeline_resim_recording(tmp_path, capsys):
     )
     result = run_pipeline_merged_via_engine(
         pipeline, _TINY, out_path, meta=meta, run_id="day-one-walkthrough", search=[tmp_path],
+        setup_values=pipeline.setup_values(),
     )
     assert result.ok, f"simengine exit_code={result.exit_code} stderr={result.stderr!r}"
 

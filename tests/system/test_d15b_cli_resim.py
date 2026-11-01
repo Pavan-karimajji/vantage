@@ -58,8 +58,11 @@ def test_sim_resim_cli_runs_a_real_stage_through_simengine(tmp_path, monkeypatch
 
     pipeline_path = tmp_path / "pipeline.yaml"
     pipeline_path.write_text(
-        "name: cli_resim_test\nstages:\n"
-        "  - name: sut\n    mode: simulate\n    impl: dll:echo_stub\n    inputs: {}\n",
+        "name: cli_resim_test\n"
+        "run_setup:\n  readiness_limit_steps: 8\n  fallback_max_gap: 6\n"
+        "stages:\n"
+        "  - name: sut\n    mode: simulate\n    impl: dll:echo_stub\n    inputs: {}\n"
+        "    trigger: ''\n    buffer_depth: {'*': 16}\n",
         encoding="utf-8",
     )
     recording_path = tmp_path / "in.mcap"
@@ -132,8 +135,11 @@ def test_sim_resim_cli_save_carries_a_real_divergence_in_its_manifest(tmp_path, 
 
     pipeline_path = tmp_path / "pipeline.yaml"
     pipeline_path.write_text(
-        "name: cli_resim_divergence_test\nstages:\n"
-        "  - name: sut\n    mode: simulate\n    impl: dll:echo_stub\n    inputs: {}\n",
+        "name: cli_resim_divergence_test\n"
+        "run_setup:\n  readiness_limit_steps: 8\n  fallback_max_gap: 6\n"
+        "stages:\n"
+        "  - name: sut\n    mode: simulate\n    impl: dll:echo_stub\n    inputs: {}\n"
+        "    trigger: ''\n    buffer_depth: {'*': 16}\n",
         encoding="utf-8",
     )
     recording_path = tmp_path / "in.mcap"
@@ -172,8 +178,11 @@ def test_sim_resim_cli_without_save_still_reports_ticks_and_cleans_up(tmp_path, 
 
     pipeline_path = tmp_path / "pipeline.yaml"
     pipeline_path.write_text(
-        "name: cli_resim_test2\nstages:\n"
-        "  - name: sut\n    mode: simulate\n    impl: dll:echo_stub\n    inputs: {}\n",
+        "name: cli_resim_test2\n"
+        "run_setup:\n  readiness_limit_steps: 8\n  fallback_max_gap: 6\n"
+        "stages:\n"
+        "  - name: sut\n    mode: simulate\n    impl: dll:echo_stub\n    inputs: {}\n"
+        "    trigger: ''\n    buffer_depth: {'*': 16}\n",
         encoding="utf-8",
     )
     recording_path = tmp_path / "in.mcap"

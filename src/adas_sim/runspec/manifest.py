@@ -40,7 +40,7 @@ from warnings import warn
 import jsonschema
 import yaml
 
-from adas_sim.graph.pipeline import Pipeline, record_policy_for
+from adas_sim.graph.pipeline import Pipeline, record_policy_for, stage_setup_doc
 from adas_sim.graph.coherence import Verdict, classify, render_finding
 from adas_sim.graph.grid import derive_step
 from adas_sim.diagnostics.errors import AuthoringError, ContractError, ProvenanceWarning
@@ -668,10 +668,13 @@ def write_run_manifest(
             doc["impl"] = stage.impl
         if stage.inputs:
             doc["inputs"] = dict(stage.inputs)
+        doc.update(stage_setup_doc(stage))
         stage_docs.append(doc)
 
     base_dir = path.resolve().parent
     manifest: dict[str, object] = {"version": 1, "name": pipeline.name, "stages": stage_docs}
+    if pipeline.run_setup:
+        manifest["run_setup"] = dict(pipeline.run_setup)
     if recording is not None:
         manifest["recording"] = os.path.relpath(recording.resolve(), base_dir)
     manifest["project"] = project

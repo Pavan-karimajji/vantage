@@ -98,8 +98,11 @@ def _echo_manifest() -> ComponentManifest:
 
 def _write_pipeline(path: Path) -> None:
     path.write_text(
-        "name: bridge_test\nstages:\n"
-        "  - name: sut\n    mode: simulate\n    impl: dll:echo_stub\n    inputs: {}\n",
+        "name: bridge_test\n"
+        "run_setup:\n  readiness_limit_steps: 8\n  fallback_max_gap: 6\n"
+        "stages:\n"
+        "  - name: sut\n    mode: simulate\n    impl: dll:echo_stub\n    inputs: {}\n"
+        "    trigger: ''\n    buffer_depth: {'*': 16}\n",
         encoding="utf-8",
     )
 
@@ -139,7 +142,7 @@ def test_run_pipeline_via_engine_produces_a_real_recording(tmp_path, monkeypatch
 
     result = run_pipeline_via_engine(
         pipeline, recording_path, run_id="20260823T000000Z-bridge-test", output_path=output_path,
-        simengine_path=engine_path,
+        simengine_path=engine_path, setup_values=pipeline.setup_values(),
     )
 
     assert result.ok, f"simengine exit_code={result.exit_code} stderr={result.stderr!r} stdout={result.stdout!r}"
@@ -208,7 +211,7 @@ def test_backfill_schema_bytes_fills_a_real_output_topic(tmp_path, monkeypatch):
 
     result = run_pipeline_via_engine(
         pipeline, recording_path, run_id="20260826T000000Z-schema-backfill-test", output_path=output_path,
-        simengine_path=engine_path,
+        simengine_path=engine_path, setup_values=pipeline.setup_values(),
     )
     assert result.ok, f"simengine exit_code={result.exit_code} stderr={result.stderr!r} stdout={result.stdout!r}"
 

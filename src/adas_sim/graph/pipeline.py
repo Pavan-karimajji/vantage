@@ -44,6 +44,7 @@ from warnings import warn
 import yaml
 
 from adas_sim.runspec.address import Address, apply_override, parse_address
+from adas_sim.runspec.emit import LiveMeasSpec, RunSetupValues
 from adas_sim.resolve.component import (
     ComponentManifest, CtypesSilComponent, InputMeta, PortSpec, SilComponent, resolve_message_classes,
 )
@@ -123,6 +124,109 @@ class Stage:
     overrides: Mapping[str, Override] = field(default_factory=dict)
     record: Mapping[str, RecordPolicy] = field(default_factory=dict)
     port_modes: Mapping[str, Mode] = field(default_factory=dict)
+    #: The run-setup values this stage's own entry in the run configuration
+    #: gives (`IMP-0052`, `SYS-0048`). `trigger` is `None` when the file
+    #: names none (`""` is a value: a clock starts the stage); `buffer_depth`
+    #: is keyed by port name or `"*"`; `bulk` and `previous_cycle` list port
+    #: names. Nothing here has a default value: `Pipeline.setup_values`
+    #: refuses a run configuration that leaves one out.
+    trigger: str | None = None
+    buffer_depth: Mapping[str, int] = field(default_factory=dict)
+    bulk: tuple[str, ...] = ()
+    previous_cycle: tuple[str, ...] = ()
+
+
+def stage_setup_doc(stage: Stage) -> dict[str, object]:
+    """The run-setup keys of `stage`, as the run configuration spells them --
+    what every writer of a pipeline file adds beside `name`/`mode`/`impl`/
+    `inputs`, so a written file reloads to the same values."""
+    doc: dict[str, object] = {}
+    if stage.trigger is not None:
+        doc["trigger"] = stage.trigger
+    if stage.buffer_depth:
+        doc["buffer_depth"] = dict(stage.buffer_depth)
+    if stage.bulk:
+        doc["bulk"] = list(stage.bulk)
+    if stage.previous_cycle:
+        doc["previous_cycle"] = list(stage.previous_cycle)
+    return doc
+
+
+#: The keys of the `run_setup:` block (`ARCH §2.3`).
+_RUN_SETUP_KEYS = frozenset({"readiness_limit_steps", "fallback_max_gap", "livemeas"})
+_LIVEMEAS_NAME_KEY = "name"
+_LIVEMEAS_INT_KEYS = ("cycle_slot_count", "cycle_slot_size", "bulk_slot_count", "bulk_slot_size")
+
+
+def _is_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _missing_setup_value(key: str, found: str) -> AuthoringError:
+    return AuthoringError(
+        expected=f"a value for '{key}' in the run configuration (a ⊘ value: no default exists)", found=found,
+        where=f"run configuration {key}", hint=f"give '{key}' in the pipeline file; the launcher never picks one",
+    )
+
+
+def _parse_run_setup(raw: object) -> dict[str, object]:
+    """The `run_setup:` block, shape only: a mapping with known keys. Whether
+    each value is present and an integer is `Pipeline.setup_values`'s check,
+    so a file that only loads for a view or a check is not refused here."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, Mapping):
+        raise AuthoringError(
+            expected="run_setup: to be a mapping", found=repr(raw), where="pipeline file 'run_setup:' key",
+            hint=f"keys: {', '.join(sorted(_RUN_SETUP_KEYS))}",
+        )
+    unknown = sorted(set(raw) - _RUN_SETUP_KEYS)
+    if unknown:
+        raise AuthoringError(
+            expected=f"only {sorted(_RUN_SETUP_KEYS)} in run_setup:", found=f"also has: {unknown}",
+            where="pipeline file 'run_setup:' key", hint="a key the run setup does not know is refused, never ignored",
+        )
+    return dict(raw)
+
+
+def _parse_stage_setup(spec: Mapping[str, object]) -> dict[str, object]:
+    """One stage's run-setup keys (`trigger`, `buffer_depth`, `bulk`,
+    `previous_cycle`), shape only; absent keys stay absent."""
+    name = spec["name"]
+    where = f"stage '{name}'"
+    fields: dict[str, object] = {}
+    if "trigger" in spec:
+        trigger = spec["trigger"]
+        if not isinstance(trigger, str):
+            raise AuthoringError(
+                expected="trigger: control, an input port name, or '' (a clock starts the stage)",
+                found=repr(trigger), where=f"{where} trigger", hint="the engine never picks a trigger",
+            )
+        fields["trigger"] = trigger
+    if "buffer_depth" in spec:
+        depth = spec["buffer_depth"]
+        if not isinstance(depth, Mapping) or not all(isinstance(k, str) and _is_int(v) for k, v in depth.items()):
+            raise AuthoringError(
+                expected="buffer_depth: a mapping of port name (or '*') to an integer", found=repr(depth),
+                where=f"{where} buffer_depth", hint="e.g. buffer_depth: {'*': N}",
+            )
+        fields["buffer_depth"] = dict(depth)
+    for key in ("bulk", "previous_cycle"):
+        if key in spec:
+            ports = spec[key]
+            if not isinstance(ports, (list, tuple)) or not all(isinstance(p, str) for p in ports):
+                raise AuthoringError(
+                    expected=f"{key}: a list of port names", found=repr(ports), where=f"{where} {key}",
+                    hint=f"e.g. {key}: [port]",
+                )
+            fields[key] = tuple(ports)
+    undeclared = sorted(set(fields.get("previous_cycle", ())) - set(spec.get("inputs") or {}))
+    if undeclared:
+        raise AuthoringError(
+            expected="previous_cycle: to name only inputs the stage wires", found=f"{undeclared}",
+            where=f"{where} previous_cycle", hint=f"wired inputs: {sorted(spec.get('inputs') or {})}",
+        )
+    return fields
 
 
 @dataclass(frozen=True, slots=True)
@@ -525,11 +629,14 @@ class Pipeline:
         self, *, name: str, stages: tuple[Stage, ...], version: int, components: Mapping[str, SilComponent],
         faults: Sequence[Fault] = (), allow_mixed_projects: bool = False, mixed_projects: bool = False,
         library_paths: Mapping[str, Path | None] | None = None, taps: tuple[Tap, ...] = (),
-        bundle_dirs: Mapping[str, Path | None] | None = None,
+        bundle_dirs: Mapping[str, Path | None] | None = None, run_setup: Mapping[str, object] | None = None,
     ) -> None:
         self.name = name
         self.stages = stages
         self.version = version
+        #: The file's `run_setup:` block as given (`IMP-0052`): empty when the
+        #: file has none. `setup_values` is its one reader.
+        self.run_setup: dict[str, object] = dict(run_setup or {})
         #: `IMP-0285` (`SW-0285`): declared `taps: {<stage>: [<port>, ...]}`
         #: -- validated against each stage's real manifest at LOAD (below),
         #: same "never at first tick" discipline this class's own docstring
@@ -689,6 +796,7 @@ class Pipeline:
                 overrides=_parse_overrides(spec.get("overrides", {}), stage_name=spec["name"]),
                 record=_parse_record(spec.get("record", {}), stage_name=spec["name"]),
                 port_modes=dict(spec.get("port_modes", {})),
+                **_parse_stage_setup(spec),
             )
             for spec in raw.get("stages", [])
         )
@@ -724,6 +832,7 @@ class Pipeline:
         mixed_projects = _validate_cross_component_agreement(
             bundle_dirs, resolved, allow_mixed_projects=allow_mixed_projects,
         )
+        run_setup = _parse_run_setup(raw.get("run_setup"))
         taps = parse_taps(raw.get("taps", {}))
         if taps:
             # `IMP-0285`: validated at LOAD, same discipline every other
@@ -751,7 +860,92 @@ class Pipeline:
         return cls(
             name=name, stages=stages, version=version, components=resolved, faults=faults,
             allow_mixed_projects=allow_mixed_projects, mixed_projects=mixed_projects, library_paths=library_paths,
-            taps=taps, bundle_dirs=bundle_dirs,
+            taps=taps, bundle_dirs=bundle_dirs, run_setup=run_setup,
+        )
+
+    def setup_values(self) -> RunSetupValues:
+        """`IMP-0052` (`SYS-0048`): the run-setup values the run configuration
+        gives, as the `RunSetupValues` `emit_run_spec` and the engine bridge
+        take. A value the file leaves out -- `readiness_limit_steps`,
+        `fallback_max_gap`, a simulated stage's `trigger`, a port's
+        `buffer_depth`, a `livemeas` geometry value -- is an `AuthoringError`
+        naming it, raised here, before any setup is written. Nothing is
+        defaulted: `bulk`, `previous_cycle` and `livemeas` are the three
+        that may be absent, and absent means none."""
+        readiness = self._run_setup_int("readiness_limit_steps")
+        fallback = self._run_setup_int("fallback_max_gap")
+        trigger: dict[str, str] = {}
+        buffer_depth: dict[str, int] = {}
+        bulk: set[str] = set()
+        previous_cycle: set[str] = set()
+        for stage in self.stages:
+            if stage.mode == "simulate" and stage.trigger is None:
+                raise _missing_setup_value(f"stages[{stage.name}].trigger", "absent")
+            if stage.trigger is not None:
+                trigger[stage.name] = stage.trigger
+            manifest = self._components[stage.name].manifest
+            ports = [p.name for p in manifest.outputs] + [p.name for p in manifest.inputs]
+            for key, listed in (("buffer_depth", stage.buffer_depth), ("bulk", stage.bulk),
+                                ("previous_cycle", stage.previous_cycle)):
+                unknown = sorted(set(listed) - set(ports) - ({"*"} if key == "buffer_depth" else set()))
+                if unknown:
+                    raise AuthoringError(
+                        expected=f"{key}: to name only ports the stage declares", found=f"{unknown}",
+                        where=f"stages[{stage.name}].{key}", hint=f"declared ports: {sorted(ports)}",
+                    )
+            for port in ports:
+                if port in stage.buffer_depth:
+                    buffer_depth[f"{stage.name}.{port}"] = stage.buffer_depth[port]
+                elif "*" in stage.buffer_depth:
+                    buffer_depth[f"{stage.name}.{port}"] = stage.buffer_depth["*"]
+                else:
+                    raise _missing_setup_value(f"stages[{stage.name}].ports[{port}].buffer_depth", "absent")
+            bulk.update(f"{stage.name}.{port}" for port in stage.bulk)
+            previous_cycle.update(f"{stage.name}.{port}" for port in stage.previous_cycle)
+        return RunSetupValues(
+            readiness_limit_steps=readiness, fallback_max_gap=fallback, trigger=trigger,
+            buffer_depth=buffer_depth, previous_cycle=frozenset(previous_cycle), bulk=frozenset(bulk),
+            livemeas=self._livemeas(),
+        )
+
+    def _run_setup_int(self, key: str) -> int:
+        if key not in self.run_setup:
+            raise _missing_setup_value(f"run_setup.{key}", "absent")
+        value = self.run_setup[key]
+        if not _is_int(value):
+            raise AuthoringError(
+                expected=f"an integer value for 'run_setup.{key}' (a ⊘ value: no default exists)",
+                found=repr(value), where=f"run configuration run_setup.{key}", hint=f"give an integer '{key}'",
+            )
+        return value
+
+    def _livemeas(self) -> LiveMeasSpec | None:
+        raw = self.run_setup.get("livemeas")
+        if raw is None:
+            return None
+        where = "run_setup.livemeas"
+        if not isinstance(raw, Mapping):
+            raise AuthoringError(
+                expected="livemeas: a mapping (or leave it out for no live measurement)", found=repr(raw),
+                where=f"run configuration {where}", hint=f"keys: {_LIVEMEAS_NAME_KEY}, {', '.join(_LIVEMEAS_INT_KEYS)}",
+            )
+        unknown = sorted(set(raw) - {_LIVEMEAS_NAME_KEY, *_LIVEMEAS_INT_KEYS})
+        if unknown:
+            raise AuthoringError(
+                expected="only the five live measurement keys", found=f"also has: {unknown}",
+                where=f"run configuration {where}", hint=f"keys: {_LIVEMEAS_NAME_KEY}, {', '.join(_LIVEMEAS_INT_KEYS)}",
+            )
+        for key in (_LIVEMEAS_NAME_KEY, *_LIVEMEAS_INT_KEYS):
+            if key not in raw:
+                raise _missing_setup_value(f"{where}.{key}", "absent")
+            ok = isinstance(raw[key], str) if key == _LIVEMEAS_NAME_KEY else _is_int(raw[key])
+            if not ok:
+                raise AuthoringError(
+                    expected=f"'{where}.{key}' of its type (a ⊘ value: no default exists)", found=repr(raw[key]),
+                    where=f"run configuration {where}.{key}", hint=f"give '{key}'",
+                )
+        return LiveMeasSpec(
+            name=raw[_LIVEMEAS_NAME_KEY], **{key: raw[key] for key in _LIVEMEAS_INT_KEYS},
         )
 
     def _message_classes_for(self, stage_name: str) -> Mapping[str, type]:
@@ -1094,6 +1288,7 @@ class Pipeline:
         data = {
             "version": self.version,
             "name": self.name,
+            **({"run_setup": dict(self.run_setup)} if self.run_setup else {}),
             **({"taps": self._taps_by_stage()} if self.taps else {}),
             "stages": [
                 {
@@ -1113,6 +1308,7 @@ class Pipeline:
                         if s.record else {}
                     ),
                     **({"port_modes": dict(s.port_modes)} if s.port_modes else {}),
+                    **stage_setup_doc(s),
                 }
                 for s in self.stages
             ],
