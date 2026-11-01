@@ -27,6 +27,7 @@ PortValue MakeValue(std::vector<std::uint8_t> payload) {
 // value, updated and age.
 TEST(UtBusPortBus14, HeldValueReportsExactElapsedNanoseconds) {
   PortBus bus;
+  bus.DeclarePort("p", 1, nullptr);
   ASSERT_TRUE(bus.Publish("p", MakeValue({1, 2, 3}), /*now_ns=*/1000).ok());
 
   PortValue fresh = bus.Get("p", 1000);
@@ -58,6 +59,7 @@ TEST(UtBusPortBus14, NeverPublishedPortIsUnknownNeverAbsent) {
 TEST(UtBusPortBus15, SetForReturnsTheFullDeclaredSetRegardlessOfMode) {
   PortBus bus;
   std::vector<PortId> declared = {"a", "b", "c"};
+  for (const PortId& port : declared) bus.DeclarePort(port, 1, nullptr);
 
   // "simulate": all three published this tick.
   bus.Publish("a", MakeValue({1}), 100);
@@ -88,6 +90,7 @@ TEST(UtBusPortBus15, SetForReturnsTheFullDeclaredSetRegardlessOfMode) {
 // bytes; read a view taken before reuse.
 TEST(UtBusPortBus16, ReuseCountAndHighWaterBytesAreTracked) {
   PortBus bus;
+  bus.DeclarePort("p", 1, nullptr);
   ASSERT_TRUE(bus.Publish("p", MakeValue({1, 2, 3, 4}), 0).ok());
   PortValue firstView = bus.Get("p", 0);  // taken before the next Publish reuses the buffer
   EXPECT_EQ(firstView.payload, (std::vector<std::uint8_t>{1, 2, 3, 4}));
@@ -103,11 +106,24 @@ TEST(UtBusPortBus16, ReuseCountAndHighWaterBytesAreTracked) {
 
 TEST(UtBusPortBus16, ExceedingTheDeclaredBudgetIsRefusedNamingThePort) {
   PortBus bus(/*byte_budget=*/4);
+  bus.DeclarePort("small", 1, nullptr);
+  bus.DeclarePort("big", 1, nullptr);
   ASSERT_TRUE(bus.Publish("small", MakeValue({1, 2}), 0).ok());
   auto result = bus.Publish("big", MakeValue({1, 2, 3, 4, 5}), 0);
   ASSERT_FALSE(result.ok());
   EXPECT_EQ(result.error().kind, Kind::Contract);
   EXPECT_EQ(result.error().where, "big");
+}
+
+// `WP-05`: declaration is mandatory -- a sample for a port nobody declared is
+// refused, naming the port, and no buffer appears for it.
+TEST(UtBusPortBus17, PublishingAnUndeclaredPortIsRefusedNamingIt) {
+  PortBus bus;
+  auto result = bus.Publish("ghost", MakeValue({1}), 0);
+  ASSERT_FALSE(result.ok());
+  EXPECT_EQ(result.error().kind, Kind::Contract);
+  EXPECT_NE(result.error().found.find("ghost"), std::string::npos);
+  EXPECT_EQ(bus.Buffer("ghost"), nullptr);
 }
 
 }  // namespace

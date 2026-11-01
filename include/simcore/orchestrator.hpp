@@ -15,13 +15,10 @@
 ///   open no file and read no wall clock; the runner feeds them recorded
 ///   messages and reports each run's outputs.
 ///
-///   **Not wired yet.** Neither `BuildGraph` nor the `Orchestrator` is called
-///   by `simEngineCreate` (`abi/simcore.cpp`): the call, with `PlanText`
-///   printed before any library loads and each refusal returned as a load
-///   error, and the step loop driven by `Orchestrator`, go into
-///   `Runner::Construct` / `StepOnce` in `WP-05` (`IMP-0028`).
-///   `scheduler.hpp` stays beside this header until `WP-05` replaces the loop
-///   that uses it (`IMP-0024`).
+///   `WP-05` wires them: `Runner::Preflight` calls `BuildGraph` and `PlanText`
+///   before any library loads, and `Runner::StepOnce` drives the
+///   `Orchestrator` (`IMP-0028`, `IMP-0029`). `ControlWriter` (`RCT:IMP-0032`)
+///   writes the control message of a run.
 /// @author Pavan Karimajji
 
 #pragma once
@@ -37,6 +34,10 @@
 #include "simcore/bus.hpp"
 #include "simcore/errors.hpp"
 #include "simcore/runspec.hpp"
+
+namespace google::protobuf {
+class Descriptor;
+}  // namespace google::protobuf
 
 namespace simcore::orchestrator {
 
@@ -202,6 +203,11 @@ class EventQueue {
   // clock to its first tick at or after `from_ns`.
   void Reset(std::int64_t from_ns);
 
+  // The last instant a clock may tick at. The runner learns the recording's
+  // last reception time only when the read-ahead reaches the end of the
+  // streams, and sets it then (`WP-05`).
+  void SetClockEnd(std::int64_t end_ns);
+
  private:
   struct Clock {
     std::string stage;
@@ -331,6 +337,9 @@ class Orchestrator {
   // `IMP-0020`: see `StepEnd`.
   StepEnd EndStep();
 
+  // Moves the end of every clock (see `EventQueue::SetClockEnd`).
+  void SetEnd(std::int64_t end_ns) { queue_.SetClockEnd(end_ns); }
+
   // `IMP-0021`: empties every buffer, the read-ahead and every open ticket,
   // forgets the last trigger sample of each stage, calls `seek` (the runner's
   // reader seek), and makes every stage's next run a restart. The step number
@@ -380,6 +389,35 @@ class Orchestrator {
   std::uint64_t step_ = 0;
   std::int64_t now_ns_ = 0;
   std::uint64_t next_ticket_id_ = 1;
+};
+
+// `RCT:IMP-0032` (`ARCH §3.2`): the control message of a run. A recorded
+// control gives its `measurement_counter` and `source_timestamp_us` and, when
+// the run is not a restart, its `op_mode`; a trigger sample gives its header; a
+// clock tick is numbered `k + 1` from the recording's first reception time with
+// the tick's instant as its time. The `cycle_counter` is the stage's own count
+// of runs from 1, the sticker is OK, and `op_mode` is RESTART on the first run
+// and after a jump. `compState` is never read (`RCT:SYS-0012`).
+struct ControlHeader {
+  std::uint32_t measurement_counter = 0;  // 0: unknown
+  std::uint64_t source_timestamp_us = 0;  // 0: unknown
+};
+
+class ControlWriter {
+ public:
+  explicit ControlWriter(std::int64_t first_reception_ns) : first_reception_ns_(first_reception_ns) {}
+
+  // What starts the run, as the two header fields. `trigger_descriptor` types
+  // the trigger sample of a `kInput` ticket (null: its header is unknown).
+  ControlHeader HeaderOf(const Ticket& ticket, const GraphStage& stage,
+                         const google::protobuf::Descriptor* trigger_descriptor) const;
+
+  // The serialized `adas.common.CycleControl` for the run.
+  std::vector<std::uint8_t> Write(const Ticket& ticket, const GraphStage& stage,
+                                  const google::protobuf::Descriptor* trigger_descriptor) const;
+
+ private:
+  std::int64_t first_reception_ns_ = 0;
 };
 
 }  // namespace simcore::orchestrator

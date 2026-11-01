@@ -66,11 +66,15 @@
 extern "C" {
 #endif
 
-/* Bumped on any incompatible change to the functions/enum values below --
+/* `ABI_VERSION 3` (VANTAGE `c1`, `WP-05`): `simEngineSeek` is new and
+ * `simEngineStepOnce` runs one engine step, not one grid cycle. No function
+ * was removed or changed in signature.
+ *
+ * Bumped on any incompatible change to the functions/enum values below --
  * `simEngineAbiVersion()` is this host's own version-check hook, the same
  * two-call discovery shape `module_abi.h`'s `adasAbiVersion()` uses one
  * layer down. */
-#define SIMCORE_ABI_VERSION 2
+#define SIMCORE_ABI_VERSION 3
 
 typedef struct SimEngine SimEngine;
 
@@ -125,7 +129,8 @@ SimExitCode simEngineRun(SimEngine* engine, char* err_buf, size_t err_buf_cap);
  * `ABI_VERSION 1` behaviour). */
 void simEngineAttachTransport(SimEngine* engine, void* transport_publisher);
 
-/* `ABI_VERSION 2`. One `runner::Runner::StepOnce()` -- the same body
+/* `ABI_VERSION 2`; since `ABI_VERSION 3` one ENGINE STEP (`ARCH §7`): all
+ * processing at one simulation instant. One `runner::Runner::StepOnce()` -- the same body
  * `simEngineRun`'s own internal loop calls repeatedly (`ANL-SW-17`: no
  * second loop exists behind either entry point), exposed so an in-process
  * host can pump a renderer between cycles (this header's own top note).
@@ -136,6 +141,13 @@ void simEngineAttachTransport(SimEngine* engine, void* transport_publisher);
  * `simEngineRun`'s internal loop already uses. Calling this after the
  * source is exhausted is a config-kind refusal, never a crash. */
 SimExitCode simEngineStepOnce(SimEngine* engine, char* err_buf, size_t err_buf_cap, int32_t* out_continue);
+
+/* `ABI_VERSION 3`. Moves the engine to `to_ns` (integer nanoseconds of the
+ * recording's reception time): `Orchestrator::Jump`. Buffers and open tickets
+ * are emptied, every reader seeks, every stage's next run is a RESTART, and
+ * step numbers continue. It keeps the live measurement open (one run id per
+ * engine run). A failure is returned as for `simEngineStepOnce`. */
+SimExitCode simEngineSeek(SimEngine* engine, int64_t to_ns, char* err_buf, size_t err_buf_cap);
 
 /* Shuts down every loaded component and releases the engine. Safe to call
  * exactly once per handle returned by `simEngineCreate`; `engine` may be

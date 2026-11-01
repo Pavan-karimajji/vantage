@@ -51,9 +51,6 @@ add_library(simcore STATIC
     # modules/interfaces' ITransport contract.
     transport/inproc.cpp
     transport/shm.cpp
-    # WP-09 (SI-03): the multi-rate scheduler core. `scheduler/reconcile.cpp`
-    # is gone (IMP-0025); `due.cpp` goes with the loop that uses it (WP-05, IMP-0024).
-    scheduler/due.cpp
     # WP-10 (SI-04): module_host -- component load/lifecycle/exec, ported
     # from sil_host/src/{sil_component,exec_timeout}.cpp and
     # library_loader.cpp's open half.
@@ -81,6 +78,11 @@ add_library(simcore STATIC
     runner/checkpoint.cpp
     runner/slice.cpp
     runner/cycle_loop.cpp
+    # WP-05 (VANTAGE, C1): the read-ahead, the input selection, one run --
+    # IMP-0026, IMP-0027, RCT:IMP-0033.
+    runner/read_ahead.cpp
+    runner/select_inputs.cpp
+    runner/run_stage.cpp
     # WP-14 (SI-09): module_host/isolate.cpp -- R-SIM-19's per-stage
     # `mode: isolated` bisection primitive, out-of-process (DD-09: the
     # isolated stage is a second simengine). abi/simcore.cpp -- simcore's
@@ -98,6 +100,8 @@ add_library(simcore STATIC
     orchestrator/orchestrator.cpp
     orchestrator/readiness.cpp
     orchestrator/event_log.cpp
+    # WP-05 (VANTAGE, C1): the control message of a run -- RCT:IMP-0032.
+    orchestrator/control.cpp
     # WP-15 (SI-08): engine diagnostics -- IMP-0131..0140.
     diagnostics/graph_dump.cpp
     diagnostics/trace.cpp

@@ -182,17 +182,18 @@ TEST(UtBusSignalHeader, AZeroHeaderSampleInADeclaredPortIsNotFoundByCounterOrTim
   EXPECT_EQ(bus.Identity().Counts("p").identity_broken + bus.Identity().Counts("p").resets, 0u);
 }
 
-TEST(UtBusSignalHeader, APortNeverDeclaredKeepsOneSampleAndReadsNoHeader) {
+TEST(UtBusSignalHeader, ADeclaredPortWithANullDescriptorKeepsItsDepthAndReadsNoHeader) {
   PortBus bus;
+  bus.DeclarePort("opaque", 1, nullptr);
   PortValue value;
   value.payload = BsdBytes(9, 9, 9, 1);
-  ASSERT_TRUE(bus.Publish("undeclared", value, 10).ok());
-  ASSERT_TRUE(bus.Publish("undeclared", value, 20).ok());
-  const SampleBuffer* buffer = bus.Buffer("undeclared");
+  ASSERT_TRUE(bus.Publish("opaque", value, 10).ok());
+  ASSERT_TRUE(bus.Publish("opaque", value, 20).ok());
+  const SampleBuffer* buffer = bus.Buffer("opaque");
   ASSERT_NE(buffer, nullptr);
   EXPECT_EQ(buffer->Size(), 1u);
   EXPECT_FALSE(buffer->Newest()->sig.present);
-  EXPECT_EQ(bus.Identity().Counts("undeclared").samples, 0u);
+  EXPECT_EQ(bus.Identity().Counts("opaque").samples, 0u);
   EXPECT_EQ(bus.Buffer("nowhere"), nullptr);
 }
 

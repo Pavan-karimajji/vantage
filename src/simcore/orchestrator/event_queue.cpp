@@ -106,4 +106,8 @@ void EventQueue::Reset(std::int64_t from_ns) {
   for (Clock& clock : clocks_) clock.next_ns = FirstTickAtOrAfter(clock, from_ns);
 }
 
+void EventQueue::SetClockEnd(std::int64_t end_ns) {
+  for (Clock& clock : clocks_) clock.end_ns = end_ns;
+}
+
 }  // namespace simcore::orchestrator

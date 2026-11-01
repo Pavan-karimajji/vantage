@@ -5,7 +5,7 @@
 /// @brief
 ///   `simEngineCreate`/`simEngineRun`/`simEngineDestroy` (`IMP-0144`,
 ///   `WP-14`): the implementation behind `abi/simcore.h`. This is the ONE
-///   place a Resolved Run Spec is turned into a live `Scheduler` + `PortBus`
+///   place a Resolved Run Spec is turned into a live `PortBus` + `Runner`
 ///   + `Reader` + loaded `module_host::Component`s + `runner::Runner` --
 ///   `simengine/main.cpp` calls exactly these three functions and nothing
 ///   else (`SW-0141`), and `IT-11` calls them from a second, non-`simengine`
@@ -30,10 +30,12 @@
 
 #include <cstring>
 #include <fstream>
+#include <iostream>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -49,7 +51,6 @@
 #include "simcore/mutate.hpp"
 #include "simcore/runner.hpp"
 #include "simcore/runspec.hpp"
-#include "simcore/scheduler.hpp"
 #include "simcore/transport_publisher.hpp"
 
 namespace {
@@ -252,15 +253,6 @@ void PopulateDescriptorPoolFromTopics(const std::map<std::string, simcore::io::T
   }
 }
 
-// The run setup carries no grid step and no execution order since schema
-// 2.0; the scheduler still takes both until `WP-04` replaces it. The grid
-// step is 0 and the order is the setup's own stage order, never derived.
-std::vector<std::string> SetupStageOrder(const simcore::RunSpec& spec) {
-  std::vector<std::string> order;
-  for (const simcore::SpecStage& stage : spec.stages) order.push_back(stage.name);
-  return order;
-}
-
 }  // namespace
 
 // One constructed engine: the spec plus every live object the cycle loop
@@ -270,9 +262,11 @@ std::vector<std::string> SetupStageOrder(const simcore::RunSpec& spec) {
 // descriptor pool and the mutator it only borrows.
 struct SimEngine {
   simcore::RunSpec spec;
-  simcore::scheduler::Scheduler scheduler;
   simcore::bus::PortBus bus;
-  std::unique_ptr<simcore::io::Reader> reader;
+  // One reader per `sources[]` entry: together they are one recording.
+  std::vector<std::unique_ptr<simcore::io::Reader>> readers;
+  // The union of the readers' topic indexes, kept for the mutation resolver.
+  std::map<std::string, simcore::io::TopicInfo> topics;
   std::vector<std::unique_ptr<simcore::module_host::Component>> owned_components;
   std::map<std::string, simcore::module_host::Component*> component_ptrs;
   // IMP-0426: the underlying codec `Writer`, and the `WriterBase` wrapping
@@ -295,7 +289,7 @@ struct SimEngine {
   std::optional<simcore::runner::Checkpoint> checkpoint;
   std::optional<simcore::runner::Runner> runner;
 
-  explicit SimEngine(simcore::RunSpec s) : spec(std::move(s)), scheduler(spec, 0, SetupStageOrder(spec)), bus(0) {}
+  explicit SimEngine(simcore::RunSpec s) : spec(std::move(s)), bus(0) {}
 };
 
 int32_t simEngineAbiVersion() { return SIMCORE_ABI_VERSION; }
@@ -332,27 +326,51 @@ SimEngine* simEngineCreate(const char* run_spec_json_path, const char* config_pa
   auto engine = std::make_unique<SimEngine>(std::move(spec_result).value());
 
   EnsureCodecsRegistered();
-  Result<std::unique_ptr<simcore::io::Reader>> reader_result =
-      simcore::io::CodecRegistry::Instance().OpenRead(engine->spec.sources.front().path);
-  if (!reader_result.ok()) {
-    WriteErr(err_buf, err_buf_cap, reader_result.error().Format());
-    if (out_exit_code != nullptr) *out_exit_code = ToC(simcore::DefaultExitCode(reader_result.error().kind));
-    return nullptr;
+  for (const simcore::SpecSource& source : engine->spec.sources) {
+    Result<std::unique_ptr<simcore::io::Reader>> reader_result =
+        simcore::io::CodecRegistry::Instance().OpenRead(source.path);
+    if (!reader_result.ok()) {
+      WriteErr(err_buf, err_buf_cap, reader_result.error().Format());
+      if (out_exit_code != nullptr) *out_exit_code = ToC(simcore::DefaultExitCode(reader_result.error().kind));
+      return nullptr;
+    }
+    std::unique_ptr<simcore::io::Reader> reader = std::move(reader_result).value();
+    // `WP-12`'s ingest table, applied (2026-08-28, `F-4`/`#5`). Wrapped ONLY
+    // when the source actually carries rows, so a recording this framework
+    // produced -- whose topics already are port names -- takes the identical
+    // path it always did, with no decorator in it at all.
+    if (!source.ingest.empty()) {
+      reader = std::make_unique<simcore::io::TranslatingReader>(std::move(reader), simcore::io::Translator(source.ingest));
+    }
+    const Result<bool> open_result = reader->Open(source.path);
+    if (!open_result.ok()) {
+      WriteErr(err_buf, err_buf_cap, open_result.error().Format());
+      if (out_exit_code != nullptr) *out_exit_code = ToC(simcore::DefaultExitCode(open_result.error().kind));
+      return nullptr;
+    }
+    engine->readers.push_back(std::move(reader));
   }
-  engine->reader = std::move(reader_result).value();
-  // `WP-12`'s ingest table, applied (2026-08-28, `F-4`/`#5`). Wrapped ONLY
-  // when the spec actually carries rows, so a recording this framework
-  // produced -- whose topics already are port names -- takes the identical
-  // path it always did, with no decorator in it at all.
-  if (!engine->spec.sources.front().ingest.empty()) {
-    engine->reader = std::make_unique<simcore::io::TranslatingReader>(
-        std::move(engine->reader), simcore::io::Translator(engine->spec.sources.front().ingest));
+
+  // `IMP-0028`: the graph, the ranks and the plan from the setup and the
+  // recording's topic index alone, before any library loads. The plan and the
+  // boundary line go to stderr; a refusal is a load error.
+  std::set<std::string> topic_index;
+  for (const auto& reader : engine->readers) {
+    for (const auto& [topic, info] : reader->Describe()) {
+      topic_index.insert(topic);
+      engine->topics.emplace(topic, info);
+    }
   }
-  const Result<bool> open_result = engine->reader->Open(engine->spec.sources.front().path);
-  if (!open_result.ok()) {
-    WriteErr(err_buf, err_buf_cap, open_result.error().Format());
-    if (out_exit_code != nullptr) *out_exit_code = ToC(simcore::DefaultExitCode(open_result.error().kind));
-    return nullptr;
+  {
+    const Result<simcore::runner::PreflightResult> preflight =
+        simcore::runner::Runner::Preflight(engine->spec, topic_index);
+    if (!preflight.ok()) {
+      WriteErr(err_buf, err_buf_cap, preflight.error().Format());
+      if (out_exit_code != nullptr) *out_exit_code = ToC(simcore::DefaultExitCode(preflight.error().kind));
+      return nullptr;
+    }
+    std::cerr << preflight.value().plan_text;
+    std::cerr << simcore::runner::ComputeInjectionBoundary(engine->spec).FormatEvent(engine->spec.run_id) << "\n";
   }
 
   for (const simcore::SpecStage& stage : engine->spec.stages) {
@@ -393,7 +411,7 @@ SimEngine* simEngineCreate(const char* run_spec_json_path, const char* config_pa
     // opened above), which is what lets a fed topic carry its real grade
     // forward instead of being labelled `measured` by direction (F-2).
     const Result<bool> writer_open_result = engine->writer_impl->Open(
-        engine->spec.outputs.path, BuildOutputTopics(engine->spec, engine->reader->Describe()));
+        engine->spec.outputs.path, BuildOutputTopics(engine->spec, engine->topics));
     if (!writer_open_result.ok()) {
       WriteErr(err_buf, err_buf_cap, writer_open_result.error().Format());
       if (out_exit_code != nullptr) *out_exit_code = ToC(simcore::DefaultExitCode(writer_open_result.error().kind));
@@ -412,19 +430,10 @@ SimEngine* simEngineCreate(const char* run_spec_json_path, const char* config_pa
   // resolve a `Descriptor` too -- a source port has no `SpecStage` manifest
   // to draw one from otherwise (this file's own note on `PopulateDescriptor
   // PoolFromTopics`).
-  PopulateDescriptorPoolFromTopics(engine->reader->Describe(), engine->descriptor_pool);
+  PopulateDescriptorPoolFromTopics(engine->topics, engine->descriptor_pool);
   engine->message_factory = std::make_unique<google::protobuf::DynamicMessageFactory>(&engine->descriptor_pool);
-  // IMP-0007: every declared stage port gets a sample buffer of its
-  // `buffer_depth`, reading `sig_header` from its message type. Source-fed
-  // ports are not stage ports and stay undeclared until `WP-05`.
-  for (const simcore::SpecStage& declared_stage : engine->spec.stages) {
-    for (const simcore::SpecPort& declared_port : declared_stage.ports) {
-      engine->bus.DeclarePort(declared_stage.name + "." + declared_port.name, declared_port.buffer_depth,
-                              engine->descriptor_pool.FindMessageTypeByName(declared_port.proto_type));
-    }
-  }
   simcore::mutate::Mutator::PortResolver resolve_port =
-      [&spec = engine->spec, &pool = engine->descriptor_pool, &reader = *engine->reader](
+      [&spec = engine->spec, &pool = engine->descriptor_pool, &topics = engine->topics](
           const std::string& stage, const std::string& port) -> std::optional<simcore::mutate::PortInfo> {
     for (const simcore::SpecStage& candidate : spec.stages) {
       if (candidate.name != stage) continue;
@@ -436,7 +445,6 @@ SimEngine* simEngineCreate(const char* run_spec_json_path, const char* config_pa
       }
     }
     if (stage == "source") {
-      const std::map<std::string, simcore::io::TopicInfo> topics = reader.Describe();
       const auto it = topics.find(simcore::runner::PortNameToTopic(stage + "." + port));
       if (it == topics.end() || it->second.schema_name.empty()) return std::nullopt;
       const google::protobuf::Descriptor* descriptor = pool.FindMessageTypeByName(it->second.schema_name);
@@ -453,12 +461,18 @@ SimEngine* simEngineCreate(const char* run_spec_json_path, const char* config_pa
   };
   engine->mutator.emplace(engine->spec.mutations, std::move(resolve_port));
 
+  // `limits.exec_timeout_ms` of the setup is the default; the argument overrides it when above 0.
   simcore::runner::RunnerOptions options;
+  if (engine->spec.limits_exec_timeout_ms > 0) {
+    options.exec_timeout = std::chrono::milliseconds(engine->spec.limits_exec_timeout_ms);
+  }
   if (exec_timeout_ms > 0) {
     options.exec_timeout = std::chrono::milliseconds(exec_timeout_ms);
   }
+  std::vector<simcore::io::Reader*> reader_ptrs;
+  for (const auto& reader : engine->readers) reader_ptrs.push_back(reader.get());
   Result<simcore::runner::Runner> runner_result = simcore::runner::Runner::Construct(
-      engine->spec, engine->scheduler, engine->bus, *engine->reader, engine->component_ptrs,
+      engine->spec, engine->bus, std::move(reader_ptrs), engine->component_ptrs, &engine->descriptor_pool,
       engine->writer_base.has_value() ? &*engine->writer_base : nullptr, &*engine->mutator, options);
   if (!runner_result.ok()) {
     WriteErr(err_buf, err_buf_cap, runner_result.error().Format());
@@ -510,6 +524,19 @@ SimExitCode simEngineStepOnce(SimEngine* engine, char* err_buf, std::size_t err_
     return ToC(simcore::DefaultExitCode(step.error().kind));
   }
   if (out_continue != nullptr) *out_continue = step.value() ? 1 : 0;
+  return kSimExitOk;
+}
+
+SimExitCode simEngineSeek(SimEngine* engine, int64_t to_ns, char* err_buf, std::size_t err_buf_cap) {
+  if (engine == nullptr || !engine->runner.has_value()) {
+    WriteErr(err_buf, err_buf_cap, "simEngineSeek called with no constructed engine");
+    return kSimExitConfig;
+  }
+  const Result<bool> jumped = engine->runner->Seek(to_ns);
+  if (!jumped.ok()) {
+    WriteErr(err_buf, err_buf_cap, jumped.error().Format());
+    return ToC(simcore::DefaultExitCode(jumped.error().kind));
+  }
   return kSimExitOk;
 }
 

@@ -224,6 +224,7 @@ RunSpec MakeSpec() {
   SpecStage sut;
   sut.name = "sut";
   sut.mode = "simulate";
+  sut.clock_period_ns = kDtNs;  // the stage starts on its own clock: one run per recorded instant
   sut.ports.push_back(make_port("objects", "req"));
   sut.ports.push_back(make_port("outputs", "pro"));
   SpecInput from_measured;
@@ -280,11 +281,10 @@ class StubComponent {
 
 struct Harness {
   explicit Harness(std::size_t cycles)
-      : spec(MakeSpec()), reader(MakeRecording(cycles), MakeTopics()), scheduler(spec, kDtNs, {"meas", "sut"}), writer_base(sink) {}
+      : spec(MakeSpec()), reader(MakeRecording(cycles), MakeTopics()), writer_base(sink) {}
 
   RunSpec spec;
   VectorReader reader;
-  simcore::scheduler::Scheduler scheduler;
   simcore::bus::PortBus bus;
   NullWriter sink;
   simcore::io::WriterBase writer_base;
@@ -321,7 +321,7 @@ TEST(ItTrn01Transport, InProcessAndSharedMemoryConsumersObserveTheIdenticalStrea
   uint32_t engine_version = 0;
   ASSERT_EQ(transport_a.attach(simcore::transport::InProcessTransport::kProtocolVersion, &engine_version),
             adas::transport::AttachResult::kOk);
-  auto runner_a = Runner::Construct(a.spec, a.scheduler, a.bus, a.reader, {{"sut", stub_a.get()}}, &a.writer_base);
+  auto runner_a = Runner::Construct(a.spec, a.bus, {&a.reader}, {{"sut", stub_a.get()}}, nullptr, &a.writer_base);
   ASSERT_TRUE(runner_a.ok()) << runner_a.error().Format();
   Runner r_a = std::move(runner_a).value();
   r_a.SetTransportPublisher(&transport_a);
@@ -342,7 +342,7 @@ TEST(ItTrn01Transport, InProcessAndSharedMemoryConsumersObserveTheIdenticalStrea
       "it_trn01_shm", simcore::transport::SharedMemoryTransport::Role::kClient, kDepth);
   ASSERT_EQ(client_side.attach(simcore::transport::SharedMemoryTransport::kProtocolVersion, &engine_version),
             adas::transport::AttachResult::kOk);
-  auto runner_b = Runner::Construct(b.spec, b.scheduler, b.bus, b.reader, {{"sut", stub_b.get()}}, &b.writer_base);
+  auto runner_b = Runner::Construct(b.spec, b.bus, {&b.reader}, {{"sut", stub_b.get()}}, nullptr, &b.writer_base);
   ASSERT_TRUE(runner_b.ok()) << runner_b.error().Format();
   Runner r_b = std::move(runner_b).value();
   r_b.SetTransportPublisher(&engine_side);
@@ -382,7 +382,7 @@ TEST(ItTrn01Transport, AbsentPublisherLeavesTheRunUnaffected) {
   StubComponent stub("it_trn01_none");
   ASSERT_TRUE(stub.ok());
   Harness h(3);
-  auto constructed = Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base);
+  auto constructed = Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}}, nullptr, &h.writer_base);
   ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
   auto outcome = std::move(constructed).value().Run();
   ASSERT_TRUE(outcome.ok()) << outcome.error().Format();
@@ -405,8 +405,8 @@ TEST(ItTrn03SlowReader, EngineWallTimeIsUnaffectedAndDropCountIsExact) {
   ASSERT_TRUE(stub_baseline.ok());
   Harness baseline(kCycles);
   auto runner_baseline =
-      Runner::Construct(baseline.spec, baseline.scheduler, baseline.bus, baseline.reader,
-                        {{"sut", stub_baseline.get()}}, &baseline.writer_base);
+      Runner::Construct(baseline.spec, baseline.bus, {&baseline.reader},
+                        {{"sut", stub_baseline.get()}}, nullptr, &baseline.writer_base);
   ASSERT_TRUE(runner_baseline.ok()) << runner_baseline.error().Format();
   const auto t0 = std::chrono::steady_clock::now();
   auto outcome_baseline = std::move(runner_baseline).value().Run();
@@ -419,8 +419,8 @@ TEST(ItTrn03SlowReader, EngineWallTimeIsUnaffectedAndDropCountIsExact) {
   ASSERT_TRUE(stub_inproc.ok());
   Harness h_inproc(kCycles);
   simcore::transport::InProcessTransport transport_inproc(kDepth);
-  auto runner_inproc = Runner::Construct(h_inproc.spec, h_inproc.scheduler, h_inproc.bus, h_inproc.reader,
-                                         {{"sut", stub_inproc.get()}}, &h_inproc.writer_base);
+  auto runner_inproc = Runner::Construct(h_inproc.spec, h_inproc.bus, {&h_inproc.reader},
+                                         {{"sut", stub_inproc.get()}}, nullptr, &h_inproc.writer_base);
   ASSERT_TRUE(runner_inproc.ok()) << runner_inproc.error().Format();
   Runner r_inproc = std::move(runner_inproc).value();
   r_inproc.SetTransportPublisher(&transport_inproc);
@@ -434,8 +434,8 @@ TEST(ItTrn03SlowReader, EngineWallTimeIsUnaffectedAndDropCountIsExact) {
   Harness h_shm(kCycles);
   simcore::transport::SharedMemoryTransport engine_side(
       "it_trn03_shm", simcore::transport::SharedMemoryTransport::Role::kEngine, kDepth);
-  auto runner_shm = Runner::Construct(h_shm.spec, h_shm.scheduler, h_shm.bus, h_shm.reader,
-                                      {{"sut", stub_shm.get()}}, &h_shm.writer_base);
+  auto runner_shm = Runner::Construct(h_shm.spec, h_shm.bus, {&h_shm.reader},
+                                      {{"sut", stub_shm.get()}}, nullptr, &h_shm.writer_base);
   ASSERT_TRUE(runner_shm.ok()) << runner_shm.error().Format();
   Runner r_shm = std::move(runner_shm).value();
   r_shm.SetTransportPublisher(&engine_side);
@@ -507,7 +507,6 @@ TEST(ItTrn02Bulk, BulkPayloadCrossesIntactThroughTheMappedSegment) {
 
   RunSpec spec = MakeSpec();
   VectorReader reader(MakeBulkRecording(kCycles, kPayloadBytes), MakeTopics());
-  simcore::scheduler::Scheduler scheduler(spec, kDtNs, {"meas", "sut"});
   simcore::bus::PortBus bus;
   NullWriter sink;
   simcore::io::WriterBase writer_base(sink);
@@ -520,7 +519,7 @@ TEST(ItTrn02Bulk, BulkPayloadCrossesIntactThroughTheMappedSegment) {
   ASSERT_EQ(client_side.attach(simcore::transport::SharedMemoryTransport::kProtocolVersion, &engine_version),
             adas::transport::AttachResult::kOk);
 
-  auto constructed = Runner::Construct(spec, scheduler, bus, reader, {{"sut", stub.get()}}, &writer_base);
+  auto constructed = Runner::Construct(spec, bus, {&reader}, {{"sut", stub.get()}}, nullptr, &writer_base);
   ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
   Runner runner = std::move(constructed).value();
   runner.SetTransportPublisher(&engine_side);
@@ -571,12 +570,11 @@ TEST(ItTrn19MidRunAttach, AttachAndDetachDuringARunProduceIdenticalValuesAndDoNo
   ASSERT_TRUE(stub_ctrl.ok());
   RunSpec spec_ctrl = MakeSpec();
   VectorReader reader_ctrl(MakeRecording(kCycles), MakeTopics());
-  simcore::scheduler::Scheduler scheduler_ctrl(spec_ctrl, kDtNs, {"meas", "sut"});
   simcore::bus::PortBus bus_ctrl;
   CapturingWriter sink_ctrl;
   simcore::io::WriterBase writer_base_ctrl(sink_ctrl);
   auto constructed_ctrl =
-      Runner::Construct(spec_ctrl, scheduler_ctrl, bus_ctrl, reader_ctrl, {{"sut", stub_ctrl.get()}}, &writer_base_ctrl);
+      Runner::Construct(spec_ctrl, bus_ctrl, {&reader_ctrl}, {{"sut", stub_ctrl.get()}}, nullptr, &writer_base_ctrl);
   ASSERT_TRUE(constructed_ctrl.ok()) << constructed_ctrl.error().Format();
   auto outcome_ctrl = std::move(constructed_ctrl).value().Run();
   ASSERT_TRUE(outcome_ctrl.ok()) << outcome_ctrl.error().Format();
@@ -588,7 +586,6 @@ TEST(ItTrn19MidRunAttach, AttachAndDetachDuringARunProduceIdenticalValuesAndDoNo
   ASSERT_TRUE(stub_live.ok());
   RunSpec spec_live = MakeSpec();
   VectorReader reader_live(MakeRecording(kCycles), MakeTopics());
-  simcore::scheduler::Scheduler scheduler_live(spec_live, kDtNs, {"meas", "sut"});
   simcore::bus::PortBus bus_live;
   CapturingWriter sink_live;
   simcore::io::WriterBase writer_base_live(sink_live);
@@ -596,7 +593,7 @@ TEST(ItTrn19MidRunAttach, AttachAndDetachDuringARunProduceIdenticalValuesAndDoNo
       "it_trn19_shm", simcore::transport::SharedMemoryTransport::Role::kEngine, kDepth);
 
   auto constructed_live =
-      Runner::Construct(spec_live, scheduler_live, bus_live, reader_live, {{"sut", stub_live.get()}}, &writer_base_live);
+      Runner::Construct(spec_live, bus_live, {&reader_live}, {{"sut", stub_live.get()}}, nullptr, &writer_base_live);
   ASSERT_TRUE(constructed_live.ok()) << constructed_live.error().Format();
   Runner runner_live = std::move(constructed_live).value();
   runner_live.SetTransportPublisher(&engine_side);

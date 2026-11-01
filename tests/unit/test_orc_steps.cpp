@@ -85,6 +85,16 @@ struct Rig {
     const Result<Graph> built = BuildGraph(spec, topics);
     if (!built.ok()) throw std::runtime_error(built.error().Format());
     graph = built.value();
+    // Every port a test publishes on is declared (`WP-05`): the controls and
+    // the wired producers by default, with no header type.
+    for (const SpecStage& stage : spec.stages) {
+      bus.DeclarePort(stage.name + ".control", static_cast<std::int64_t>(depth), nullptr);
+      for (const SpecInput& input : stage.inputs) {
+        bus.DeclarePort(input.producer + "." + input.producer_port, static_cast<std::int64_t>(depth), nullptr);
+      }
+    }
+    // The recorded source ports some tests push on directly.
+    for (const char* port : {"X.measured", "X.m", "X.noise"}) bus.DeclarePort(port, static_cast<std::int64_t>(depth), nullptr);
     for (const std::string& port : declared_ports) bus.DeclarePort(port, static_cast<std::int64_t>(depth), Descriptor());
     orc = std::make_unique<Orchestrator>(spec, graph, bus, log, options);
   }
@@ -737,7 +747,7 @@ TEST(OrcLog, ACounterGapAndAResetAreWrittenWithTheirStep) {
   EXPECT_EQ(rig.log.Count(EntryKind::kCounterReset), 1u);
 }
 
-TEST(OrcLog, AnUndeclaredPortIsNotJudgedAndLogsNothing) {
+TEST(OrcLog, APortDeclaredWithNoMessageTypeIsNotJudgedAndLogsNothing) {
   Rig rig(Spec({Stage("A", "control")}, 0), {"A.control"});
   rig.orc->Queue().PushRecorded("X.m", 100, 0, Bytes(1, 1));
   rig.orc->Queue().PushRecorded("X.m", 200, 0, Bytes(9, 2));

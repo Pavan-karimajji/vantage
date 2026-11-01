@@ -128,6 +128,7 @@ simcore::RunSpec MakeSpec() {
   simcore::SpecStage sut;
   sut.name = "sut";
   sut.mode = "simulate";
+  sut.clock_period_ns = kDtNs;  // one run per recorded instant
   sut.ports.push_back(make_port("objects", "req"));
   sut.ports.push_back(make_port("outputs", "pro"));
   simcore::SpecInput from_measured;
@@ -187,7 +188,6 @@ int main(int argc, char** argv) {
 
   simcore::RunSpec spec = MakeSpec();
   VectorReader reader(MakeRecording(cycles), MakeTopics());
-  simcore::scheduler::Scheduler scheduler(spec, kDtNs, {"meas", "sut"});
   simcore::bus::PortBus bus;
   NullWriter sink;
   simcore::io::WriterBase writer_base(sink);
@@ -196,7 +196,7 @@ int main(int argc, char** argv) {
       shm_name, simcore::transport::SharedMemoryTransport::Role::kEngine, /*depth=*/64);
 
   auto constructed =
-      simcore::runner::Runner::Construct(spec, scheduler, bus, reader, {{"sut", &component}}, &writer_base);
+      simcore::runner::Runner::Construct(spec, bus, {&reader}, {{"sut", &component}}, nullptr, &writer_base);
   if (!constructed.ok()) {
     std::cerr << "Runner::Construct failed: " << constructed.error().Format() << "\n";
     return 1;

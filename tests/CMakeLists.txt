@@ -77,7 +77,6 @@ set(SIM_TEST_SOURCES
     unit/test_ut_bus_identity.cpp
     # WP-09 (SI-02 bus / SI-03 scheduler): PortBus + Scheduler core.
     unit/test_ut_bus_port_bus.cpp
-    unit/test_ut_sch_core.cpp
     # SM-06 (SI-25, D-5): InProcessTransport's own class-level contract.
     unit/test_transport_inproc.cpp
     # SM-06 (SI-25, D-5): SharedMemoryTransport's own class-level contract.
@@ -112,6 +111,12 @@ set(SIM_TEST_SOURCES
     unit/test_orc_steps.cpp
     unit/test_orc_readiness.cpp
     unit/test_orc_event_log.cpp
+    # WP-05 (VANTAGE, C1): RCT:IMP-0032, IMP-0026, RCT:IMP-0033, IMP-0027, IMP-0028..0030.
+    unit/test_orc_control.cpp
+    unit/test_run_read_ahead.cpp
+    unit/test_run_select_inputs.cpp
+    unit/test_run_stage.cpp
+    unit/test_run_step.cpp
     # WP-15 (SI-08): engine diagnostics -- IMP-0131..0140.
     unit/test_diag_graph_dump.cpp
     unit/test_diag_trace.cpp
@@ -146,7 +151,7 @@ target_link_libraries(simcore_tests PRIVATE
 # internal io/codecs/ helper, deliberately not part of simcore's own
 # public include/ surface -- to build its OWN independent DescriptorPool
 # from the fixture's manifest sidecar (never reusing ErgReader's state).
-target_include_directories(simcore_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/simcore)
+target_include_directories(simcore_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/simcore ${CMAKE_CURRENT_SOURCE_DIR}/support)
 # WP-10: a stage's own build directory, known at configure time -- lets a
 # test resolve echo_stub's real path without a copy-next-to-exe step
 # (sil_host/tests/CMakeLists.txt's identical ADAS_SIL_TEST_FIXTURE_DIR

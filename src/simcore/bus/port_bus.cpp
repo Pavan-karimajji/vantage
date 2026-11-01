@@ -43,7 +43,12 @@ void PortBus::ClearSamples() {
 }
 
 Result<bool> PortBus::Publish(const PortId& port, PortValue value, std::int64_t now_ns, const PublishInfo& info) {
-  Slot& slot = slots_[port];
+  const auto declared = slots_.find(port);
+  if (declared == slots_.end()) {
+    return Result<bool>::Fail(Error{Kind::Contract, "a port declared with DeclarePort before its first sample", "'" + port + "' is not declared",
+                                    "PortBus::Publish", "every port the engine publishes on is declared from the run setup"});
+  }
+  Slot& slot = declared->second;
   const Sample* previous = slot.buffer.Newest();
   const bool reused = previous != nullptr && previous->payload().capacity() >= value.payload.size();
 

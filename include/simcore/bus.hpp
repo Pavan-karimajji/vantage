@@ -352,10 +352,9 @@ class PortBus {
   // null descriptor keeps the depth and reads no header. Declaring again
   // replaces the declaration and keeps no earlier sample.
   //
-  // A port that is published without being declared keeps one sample and
-  // reads no header. That fallback exists only so tests that default-
-  // construct a `PortBus` stay unchanged; `WP-05` makes declaration
-  // mandatory on the engine path.
+  // Declaration is mandatory: `Publish` on a port never declared is refused
+  // (`Kind::Contract`), so no sample enters a buffer whose depth or header
+  // type nobody chose (`WP-05`).
   void DeclarePort(const PortId& port, std::int64_t buffer_depth, const google::protobuf::Descriptor* descriptor);
 
   // `IMP-0021`: empties every port's buffer and the identity tracker; every

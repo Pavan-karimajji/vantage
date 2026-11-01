@@ -203,6 +203,40 @@ TEST_F(It11EmbedHost, AttachTransportThenStepOnceDeliversRealFramesBetweenTicks)
   simEngineDestroy(engine);
 }
 
+// `ABI_VERSION 3` (`WP-05`, `IMP-0031`): `simEngineSeek` calls
+// `Orchestrator::Jump`. The step the engine takes next is at the new position
+// and the instants between are not run; the step count after it is the
+// recording's remainder, not the whole recording again.
+TEST_F(It11EmbedHost, SeekMovesTheEngineToThePositionAndSteppingContinuesFromThere) {
+  EXPECT_EQ(simEngineAbiVersion(), 3);
+
+  char err_buf[512] = {0};
+  SimExitCode create_exit = kSimExitOk;
+  SimEngine* engine =
+      simEngineCreate(spec_.string().c_str(), nullptr, 2000, err_buf, sizeof(err_buf), &create_exit);
+  ASSERT_NE(engine, nullptr) << "simEngineCreate failed: " << err_buf;
+
+  char step_err[512] = {0};
+  int32_t keep_going = 0;
+  ASSERT_EQ(simEngineStepOnce(engine, step_err, sizeof(step_err), &keep_going), kSimExitOk) << step_err;
+  ASSERT_EQ(keep_going, 1);  // the instant at 0 ms
+
+  char seek_err[512] = {0};
+  ASSERT_EQ(simEngineSeek(engine, 20'000'000, seek_err, sizeof(seek_err)), kSimExitOk) << seek_err;
+  ASSERT_EQ(simEngineStepOnce(engine, step_err, sizeof(step_err), &keep_going), kSimExitOk) << step_err;
+  EXPECT_EQ(keep_going, 1);  // the instant at 20 ms; the one at 10 ms was jumped over
+  ASSERT_EQ(simEngineStepOnce(engine, step_err, sizeof(step_err), &keep_going), kSimExitOk) << step_err;
+  EXPECT_EQ(keep_going, 0);  // nothing is left
+
+  simEngineDestroy(engine);
+}
+
+TEST_F(It11EmbedHost, SeekWithNoConstructedEngineIsAConfigExitNotACrash) {
+  char err_buf[512] = {0};
+  EXPECT_EQ(simEngineSeek(nullptr, 0, err_buf, sizeof(err_buf)), kSimExitConfig);
+  EXPECT_NE(err_buf[0], '\0');
+}
+
 TEST_F(It11EmbedHost, StepOnceWithNoConstructedEngineIsAConfigExitNotACrash) {
   char err_buf[512] = {0};
   int32_t keep_going = 1;

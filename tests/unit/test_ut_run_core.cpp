@@ -156,6 +156,7 @@ RunSpec MakeSpec(const std::string& sut_output_port, const std::string& sut_reco
   SpecStage sut;
   sut.name = "sut";
   sut.mode = "simulate";
+  sut.clock_period_ns = kDtNs;  // the stage starts on its own clock: one run per recorded instant
   sut.ports.push_back(MakePort("objects", "req"));
   sut.ports.push_back(MakePort(sut_output_port, "pro", sut_record));
   SpecInput from_measured;
@@ -241,12 +242,10 @@ struct Harness {
                    const std::string& sut_record = "full")
       : spec(MakeSpec("outputs", sut_record)),
         reader(MakeRecording(cycles, "/sut/outputs", recorded_sut_output), MakeTopics("/sut/outputs")),
-        scheduler(spec, kDtNs, {"meas", "sut", "dark"}),
         writer_base(sink) {}
 
   RunSpec spec;
   VectorReader reader;
-  simcore::scheduler::Scheduler scheduler;
   simcore::bus::PortBus bus;
   CapturingWriter sink;
   simcore::io::WriterBase writer_base;
@@ -261,7 +260,7 @@ TEST(UtRun01OneLoop, RunAndManualSteppingProduceByteIdenticalRuns) {
   StubComponent stub_a("outputs");
   ASSERT_TRUE(stub_a.ok());
   Harness a(5);
-  auto runner_a = Runner::Construct(a.spec, a.scheduler, a.bus, a.reader, {{"sut", stub_a.get()}}, &a.writer_base);
+  auto runner_a = Runner::Construct(a.spec, a.bus, {&a.reader}, {{"sut", stub_a.get()}}, nullptr, &a.writer_base);
   ASSERT_TRUE(runner_a.ok()) << runner_a.error().Format();
   auto outcome_a = std::move(runner_a).value().Run();
   ASSERT_TRUE(outcome_a.ok()) << outcome_a.error().Format();
@@ -269,7 +268,7 @@ TEST(UtRun01OneLoop, RunAndManualSteppingProduceByteIdenticalRuns) {
   StubComponent stub_b("outputs");
   ASSERT_TRUE(stub_b.ok());
   Harness b(5);
-  auto runner_b = Runner::Construct(b.spec, b.scheduler, b.bus, b.reader, {{"sut", stub_b.get()}}, &b.writer_base);
+  auto runner_b = Runner::Construct(b.spec, b.bus, {&b.reader}, {{"sut", stub_b.get()}}, nullptr, &b.writer_base);
   ASSERT_TRUE(runner_b.ok()) << runner_b.error().Format();
   Runner stepped = std::move(runner_b).value();
   std::uint64_t steps = 0;
@@ -299,7 +298,7 @@ TEST(UtRun02MeasuredStage, PublishesItsDeclaredOutputsFromTheRecordingAndIsNever
   StubComponent stub("outputs");
   ASSERT_TRUE(stub.ok());
   Harness h(3);
-  auto constructed = Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base);
+  auto constructed = Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}}, nullptr, &h.writer_base);
   ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
   Runner runner = std::move(constructed).value();
   auto step = runner.StepOnce();
@@ -307,7 +306,10 @@ TEST(UtRun02MeasuredStage, PublishesItsDeclaredOutputsFromTheRecordingAndIsNever
 
   // Its declared `pro` port carries the recording's bytes, tagged with the
   // recording's own provenance -- never re-derived, never executed.
-  const simcore::bus::PortValue value = h.bus.Get("meas.objects", h.scheduler.now_ns());
+  const simcore::bus::SampleBuffer* buffer = h.bus.Buffer("meas.objects");
+  ASSERT_NE(buffer, nullptr);
+  ASSERT_NE(buffer->Newest(), nullptr);
+  const simcore::bus::PortValue value = buffer->Newest()->value;
   EXPECT_EQ(value.origin, simcore::bus::Origin::Measured);
   EXPECT_EQ(value.header.producer, "meas");
   ASSERT_EQ(value.payload.size(), 2u);
@@ -319,7 +321,7 @@ TEST(UtRun02MeasuredStage, HandingAMeasuredStageALoadedComponentIsRefusedAtConst
   ASSERT_TRUE(stub.ok());
   Harness h(2);
   auto constructed =
-      Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}, {"meas", stub.get()}});
+      Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}, {"meas", stub.get()}});
   ASSERT_FALSE(constructed.ok());
   EXPECT_EQ(constructed.error().kind, simcore::Kind::Authoring);
   EXPECT_NE(constructed.error().found.find("meas"), std::string::npos);
@@ -332,7 +334,7 @@ TEST(UtRun03OffStage, ContributesNoPortsAndIsIndistinguishableFromAnUnmappedInpu
   StubComponent stub("outputs");
   ASSERT_TRUE(stub.ok());
   Harness h(3);
-  auto constructed = Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base);
+  auto constructed = Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}}, nullptr, &h.writer_base);
   ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
   Runner runner = std::move(constructed).value();
   auto outcome = runner.Run();
@@ -364,17 +366,19 @@ TEST(UtRun04InjectionBoundary, ComputedFromTheSpecAndLoggedOnceBeforeTheFirstCyc
   StubComponent stub("outputs");
   ASSERT_TRUE(stub.ok());
   Harness h(4);
-  auto constructed = Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base);
+  auto constructed = Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}}, nullptr, &h.writer_base);
   ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
   Runner runner = std::move(constructed).value();
   ASSERT_TRUE(runner.Prepare().ok());
 
-  // Before tick 0: nothing has executed yet.
+  // Before the first step: nothing has executed yet. The boundary is the
+  // `event=run_start` line the engine prints with the plan; it is not an entry
+  // of the event log (`WP-05`, decision of 2026-11-01).
   EXPECT_EQ(runner.outcome().cycles_executed, 0u);
-  ASSERT_EQ(runner.EventLog().size(), 1u);
-  EXPECT_NE(runner.EventLog()[0].find("event=run_start"), std::string::npos);
-  EXPECT_NE(runner.EventLog()[0].find("inject=meas.objects->sut.objects"), std::string::npos);
-  EXPECT_NE(runner.EventLog()[0].find("source=stimulus"), std::string::npos);
+  EXPECT_NE(runner.BoundaryLine().find("event=run_start"), std::string::npos);
+  EXPECT_NE(runner.BoundaryLine().find("inject=meas.objects->sut.objects"), std::string::npos);
+  EXPECT_NE(runner.BoundaryLine().find("source=stimulus"), std::string::npos);
+  EXPECT_TRUE(runner.EventLogLines().empty());
 
   ASSERT_EQ(runner.Boundary().ports.size(), 1u);
   EXPECT_EQ(runner.Boundary().ports[0].producer, "meas");
@@ -382,9 +386,9 @@ TEST(UtRun04InjectionBoundary, ComputedFromTheSpecAndLoggedOnceBeforeTheFirstCyc
   ASSERT_EQ(runner.Boundary().source_ports.size(), 1u);
   EXPECT_EQ(runner.Boundary().source_ports[0], "stimulus");
 
-  // Running the whole run adds no second boundary event -- once, not per cycle.
+  // Running the whole run adds no boundary entry to the event log.
   ASSERT_TRUE(runner.Run().ok());
-  EXPECT_EQ(runner.EventLog().size(), 1u);
+  for (const std::string& line : runner.EventLogLines()) EXPECT_EQ(line.find("event=run_start"), std::string::npos);
 }
 
 // ---------------------------------------------------------------------------
@@ -397,7 +401,7 @@ TEST(UtRun05Divergence, FirstDivergenceIsLatchedAndIsIdenticalAcrossReRuns) {
     StubComponent stub("outputs");
     EXPECT_TRUE(stub.ok());
     Harness h(cycles, {0x01, 0x02});
-    auto constructed = Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base);
+    auto constructed = Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}}, nullptr, &h.writer_base);
     EXPECT_TRUE(constructed.ok());
     Runner runner = std::move(constructed).value();
     EXPECT_TRUE(runner.Run().ok());
@@ -445,7 +449,7 @@ TEST(UtRun06InformationalOnly, EveryMessageWrittenPastTheGraceWindowCarriesTheFl
   Runner::Options options;
   options.grace_ticks = 3;
   auto constructed =
-      Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base, nullptr, options);
+      Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}}, nullptr, &h.writer_base, nullptr, options);
   ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
   Runner runner = std::move(constructed).value();
   ASSERT_TRUE(runner.Run().ok());
@@ -474,7 +478,7 @@ TEST(UtRun06InformationalOnly, ARunThatNeverDivergesNeverFlagsAMessage) {
   StubComponent stub("outputs");
   ASSERT_TRUE(stub.ok());
   Harness h(5);  // the recording carries exactly what the stub produces
-  auto constructed = Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base);
+  auto constructed = Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}}, nullptr, &h.writer_base);
   ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
   Runner runner = std::move(constructed).value();
   ASSERT_TRUE(runner.Run().ok());
@@ -497,7 +501,7 @@ TEST(UtRun07Checkpoint, AnAbortedRunLeavesACheckpointAgreeingWithTheLastCycleInT
   std::filesystem::remove(progress);
 
   Checkpoint checkpoint(progress, h.spec.run_id);
-  auto constructed = Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base);
+  auto constructed = Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}}, nullptr, &h.writer_base);
   ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
   Runner runner = std::move(constructed).value();
   runner.SetCheckpoint(&checkpoint);
@@ -543,7 +547,7 @@ TEST(UtRun07Checkpoint, ProgressJsonCarriesTheFirstDivergenceOnceLatched) {
   std::filesystem::remove(progress);
 
   Checkpoint checkpoint(progress, h.spec.run_id);
-  auto constructed = Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base);
+  auto constructed = Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}}, nullptr, &h.writer_base);
   ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
   Runner runner = std::move(constructed).value();
   runner.SetCheckpoint(&checkpoint);
@@ -569,7 +573,7 @@ TEST(UtRun07Checkpoint, ProgressJsonHasNoDivergenceFieldWhenNothingEverDiverged)
   std::filesystem::remove(progress);
 
   Checkpoint checkpoint(progress, h.spec.run_id);
-  auto constructed = Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base);
+  auto constructed = Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}}, nullptr, &h.writer_base);
   ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
   Runner runner = std::move(constructed).value();
   runner.SetCheckpoint(&checkpoint);
@@ -596,7 +600,7 @@ TEST(UtRun07Checkpoint, InputCaptureNamesTheSameCycleAsProgressJsonAndSurvivesAn
   std::filesystem::remove_all(std::filesystem::path(progress).concat("_input_capture"));
 
   Checkpoint checkpoint(progress, h.spec.run_id);
-  auto constructed = Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base);
+  auto constructed = Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}}, nullptr, &h.writer_base);
   ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
   Runner runner = std::move(constructed).value();
   runner.SetCheckpoint(&checkpoint);
@@ -657,7 +661,7 @@ TEST(UtRun08Slice, ExecutesOnlyTheRequestedRangeAndReadsFarLessThanTheWholeRecor
     Harness h(100);
     Runner::Options options;
     options.read_bounds.max_messages = 8;
-    auto constructed = Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base,
+    auto constructed = Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}}, nullptr, &h.writer_base,
                                          nullptr, options);
     ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
     auto outcome = std::move(constructed).value().Run();
@@ -674,7 +678,7 @@ TEST(UtRun08Slice, ExecutesOnlyTheRequestedRangeAndReadsFarLessThanTheWholeRecor
   options.slice.start_log_time_ns = 50 * kDtNs;
   options.slice.end_log_time_ns = 60 * kDtNs;
   auto constructed =
-      Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base, nullptr, options);
+      Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}}, nullptr, &h.writer_base, nullptr, options);
   ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
   auto outcome = std::move(constructed).value().Run();
   ASSERT_TRUE(outcome.ok()) << outcome.error().Format();
@@ -697,7 +701,7 @@ TEST(UtRun15ByteCounter, PerTopicAndTotalMatchWhatWasActuallyReadNeverEstimated)
   ASSERT_TRUE(stub.ok());
   Harness h(5);
   diagnostics::ByteCounter counter;
-  auto constructed = Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base);
+  auto constructed = Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}}, nullptr, &h.writer_base);
   ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
   Runner runner = std::move(constructed).value();
   runner.SetByteCounter(&counter);
@@ -723,7 +727,7 @@ TEST(UtRun15ByteCounter, NoCounterAttachedCostsNothingExtraAndChangesNoBehaviour
   StubComponent stub("outputs");
   ASSERT_TRUE(stub.ok());
   Harness h(5);
-  auto constructed = Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base);
+  auto constructed = Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}}, nullptr, &h.writer_base);
   ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
   // Deliberately no SetByteCounter call -- the nullable-pointer default.
   auto outcome = std::move(constructed).value().Run();
@@ -738,7 +742,7 @@ TEST(UtRun14RecordPolicy, EveryDeclaredPortOfANonOffStageBecomesATopicAndCarries
   StubComponent stub("outputs");
   ASSERT_TRUE(stub.ok());
   Harness h(4);
-  auto constructed = Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base);
+  auto constructed = Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}}, nullptr, &h.writer_base);
   ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
   Runner runner = std::move(constructed).value();
   // meas: objects (pro) + stimulus (req); sut: objects (req) + outputs (pro).
@@ -765,7 +769,7 @@ TEST(UtRun14RecordPolicy, AnExcludedPortIsNeverWrittenAndADecimatedOneIsWrittenE
     StubComponent stub("outputs");
     ASSERT_TRUE(stub.ok());
     Harness h(6, {kStubPayload}, "excluded");
-    auto constructed = Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base);
+    auto constructed = Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}}, nullptr, &h.writer_base);
     ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
     ASSERT_TRUE(std::move(constructed).value().Run().ok());
     for (const RawMessage& message : h.sink.written) {
@@ -776,7 +780,7 @@ TEST(UtRun14RecordPolicy, AnExcludedPortIsNeverWrittenAndADecimatedOneIsWrittenE
   StubComponent stub("outputs");
   ASSERT_TRUE(stub.ok());
   Harness h(6, {kStubPayload}, "decimate:3");
-  auto constructed = Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base);
+  auto constructed = Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}}, nullptr, &h.writer_base);
   ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
   ASSERT_TRUE(std::move(constructed).value().Run().ok());
   std::size_t decimated = 0;
@@ -811,7 +815,7 @@ TEST(UtRun14RecordPolicy, EveryDeclaredInputPortIsAlsoWritten) {
   StubComponent stub("outputs");
   ASSERT_TRUE(stub.ok());
   Harness h(2);
-  auto constructed = Runner::Construct(h.spec, h.scheduler, h.bus, h.reader, {{"sut", stub.get()}}, &h.writer_base);
+  auto constructed = Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}}, nullptr, &h.writer_base);
   ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
   ASSERT_TRUE(std::move(constructed).value().Run().ok());
 
