@@ -159,5 +159,39 @@ TEST(UtBusIdentity, AZeroMeasurementCounterIsNeitherAResetNorBrokenNorAGap) {
   EXPECT_EQ(tracker.Observe("p", Header(101, 12)).verdict, IdentityVerdict::kOk);
 }
 
+// `IMP-0050`: the caller knows the bytes differ from a sample of the same counter.
+TEST(UtBusIdentity, TheSameCountersWithOtherContentIsIdentityBrokenOnlyWhenTheCallerSaysSo) {
+  IdentityTracker without_content;
+  without_content.Observe("p", Header(8, 8));
+  // Same counters, nothing said about content: not judged broken (a plain repeat).
+  EXPECT_EQ(without_content.Observe("p", Header(8, 8)).verdict, IdentityVerdict::kOk);
+
+  IdentityTracker with_content;
+  with_content.Observe("p", Header(8, 8));
+  const IdentityResult result = with_content.Observe("p", Header(8, 8), /*content_differs=*/true);
+  EXPECT_EQ(result.verdict, IdentityVerdict::kIdentityBroken);  // whatever the cycle counter does
+  EXPECT_EQ(result.measurement_distance, 0);
+  EXPECT_EQ(result.cycle_distance, 0);
+  EXPECT_EQ(with_content.Counts("p").identity_broken, 1u);
+}
+
+TEST(UtBusIdentity, ContentDiffersChangesNothingAtAnotherMeasurementDistance) {
+  IdentityTracker tracker;
+  tracker.Observe("p", Header(8, 8));
+  EXPECT_EQ(tracker.Observe("p", Header(9, 9), /*content_differs=*/true).verdict, IdentityVerdict::kOk);
+  EXPECT_EQ(tracker.Observe("p", Header(20, 10), true).verdict, IdentityVerdict::kCounterGap);
+  EXPECT_EQ(tracker.Observe("p", Header(3, 2), true).verdict, IdentityVerdict::kCounterReset);
+  EXPECT_EQ(tracker.Counts("p").identity_broken, 0u);
+}
+
+TEST(UtBusIdentity, ContentDiffersOnASampleWithAnUnknownCounterIsNotJudged) {
+  IdentityTracker tracker;
+  tracker.Observe("p", Header(8, 8));
+  SignalHeader unknown;
+  unknown.cycle_counter = 9u;
+  unknown.present = true;
+  EXPECT_EQ(tracker.Observe("p", unknown, true).verdict, IdentityVerdict::kNotComparable);
+}
+
 }  // namespace
 }  // namespace simcore::bus

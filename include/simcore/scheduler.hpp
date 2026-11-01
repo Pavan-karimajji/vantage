@@ -10,7 +10,7 @@
 ///   wall clock (`SW-0077`).
 ///
 ///   **Scope note, this slice (2026-08-21):** the core (`IsDue`,
-///   `Advance`, `Order`, `ReconcileModuleFlag`) is built and tested
+///   `Advance`, `Order`) is built and tested
 ///   against real behaviour, ported from `sil_host/src/pipeline.cpp`'s
 ///   own `Step()` (the `DEDUPE`/`MOVE` source `WP-09`'s own plan row
 ///   names). Explicitly **not** attempted here, named rather than
@@ -22,8 +22,9 @@
 ///   measured-rate reconciliation against a real recording (`SW-0414`).
 ///
 ///   **Retiring (VANTAGE `c1`).** This header stays only because the runner and
-///   `simEngineCreate` still drive a `Scheduler`; `WP-04` deletes it (`IMP-0024`,
-///   `IMP-0025`) in favour of `orchestrator.hpp`. The schedule dump
+///   `simEngineCreate` still drive a `Scheduler`; `WP-05` deletes it with that
+///   loop (`IMP-0024`) in favour of `orchestrator.hpp`. `ReconcileModuleFlag`
+///   and `ScheduleFinding` are gone (`IMP-0025`, `WP-04`). The schedule dump
 ///   (`PredictSchedule`, `ScheduleDumpText`) is gone (`WP-03`, `IMP-0015`): its
 ///   successor is `orchestrator::PlanText`.
 /// @author Pavan Karimajji
@@ -31,23 +32,12 @@
 #pragma once
 
 #include <cstdint>
-#include <optional>
 #include <string>
 #include <vector>
 
 #include "simcore/runspec.hpp"
 
 namespace simcore::scheduler {
-
-// SW-0066: a module's own reported update flag disagreeing with the
-// predicted schedule is a named finding, never a silently-overwritten
-// value -- the module's flag wins either way (its internal gating is the
-// ground truth for what it actually did).
-struct ScheduleFinding {
-  std::string stage;
-  bool predicted_due = false;
-  bool reported_updated = false;
-};
 
 // SW-0061/0062/0064/0072/0075/0077/0413: consumes the grid step and
 // execution order it is given (the run setup carries neither since schema
@@ -82,13 +72,6 @@ class Scheduler {
   // construction, never recomputed. This class trusts it, the same way
   // `PortCatalogue::Resolve` trusts the spec's own declared port set.
   const std::vector<std::string>& Order() const { return order_; }
-
-  // SW-0066: compares a module's own reported update flag against the
-  // schedule this class predicted for it at the CURRENT tick -- returns
-  // a finding only on disagreement, `std::nullopt` when they agree
-  // (never a finding for agreement, which would flood the manifest with
-  // noise on the overwhelmingly common case).
-  std::optional<ScheduleFinding> ReconcileModuleFlag(const std::string& stage_name, bool reported_updated) const;
 
  private:
   RunSpec spec_;

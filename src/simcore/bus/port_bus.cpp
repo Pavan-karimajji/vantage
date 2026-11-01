@@ -28,7 +28,21 @@ const SampleBuffer* PortBus::Buffer(const PortId& port) const {
   return it == slots_.end() ? nullptr : &it->second.buffer;
 }
 
-Result<bool> PortBus::Publish(const PortId& port, PortValue value, std::int64_t now_ns) {
+const google::protobuf::Descriptor* PortBus::Descriptor(const PortId& port) const {
+  const auto it = slots_.find(port);
+  return it == slots_.end() ? nullptr : it->second.descriptor;
+}
+
+void PortBus::ClearSamples() {
+  for (auto& [id, slot] : slots_) {
+    slot.buffer = SampleBuffer(slot.buffer.Depth());
+    slot.last_produced_ns = 0;
+  }
+  identity_ = IdentityTracker{};
+  stats_.total_bytes = 0;
+}
+
+Result<bool> PortBus::Publish(const PortId& port, PortValue value, std::int64_t now_ns, const PublishInfo& info) {
   Slot& slot = slots_[port];
   const Sample* previous = slot.buffer.Newest();
   const bool reused = previous != nullptr && previous->payload().capacity() >= value.payload.size();
@@ -41,7 +55,8 @@ Result<bool> PortBus::Publish(const PortId& port, PortValue value, std::int64_t 
   sample.sig = ReadSignalHeader(value.payload, slot.descriptor);
   sample.arrival_ns = now_ns;
   sample.value = std::move(value);
-  if (slot.descriptor != nullptr) identity_.Observe(port, sample.sig);
+  sample.committed_step = info.committed_step;
+  if (slot.descriptor != nullptr) identity_.Observe(port, sample.sig, info.content_differs);
   slot.buffer.Push(std::move(sample));
   slot.last_produced_ns = now_ns;
 

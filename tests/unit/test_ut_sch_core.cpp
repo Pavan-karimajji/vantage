@@ -2,11 +2,12 @@
 // Proprietary and Confidential.
 // COMPONENT: SIM
 /// @file
-/// @brief `UT-SCH-01`/`02`/`04`/`09`/`13` (`WP-09`, `SI-03` `scheduler`):
-///   `Scheduler`'s core -- one execution path, integer due-ness, the
-///   module-flag reconciliation, the consumed (never recomputed)
-///   execution order, and simulation time as the grid-step arithmetic
-///   sequence.
+/// @brief `UT-SCH-01`/`02`/`09`/`13` (`WP-09`, `SI-03` `scheduler`):
+///   `Scheduler`'s core -- one execution path, integer due-ness, the consumed
+///   (never recomputed) execution order, and simulation time as the grid-step
+///   arithmetic sequence. `UT-SCH-04` (the module-flag reconciliation) went with
+///   `ReconcileModuleFlag` (`IMP-0025`, register row
+///   `src/simcore/scheduler/reconcile.cpp`, retired).
 /// @author Pavan Karimajji
 
 #include <gtest/gtest.h>
@@ -82,29 +83,6 @@ TEST(UtSch02IntegerDueNess, ZeroPeriodStageIsAlwaysDue) {
     sched.Advance();
     EXPECT_TRUE(sched.IsDue("aperiodic"));
   }
-}
-
-// UT-SCH-04: a stub whose internal gating has drifted from its declared
-// period -- read the finding, never a silent value; agreement produces no
-// finding at all.
-TEST(UtSch04ModuleFlagAuthoritative, DisagreementProducesANamedFinding) {
-  RunSpec spec = MakeSpec({{"a", 30'000'000}});
-  Scheduler sched(spec, 10'000'000, OrderOf(spec));
-  sched.Advance();  // 10ms -- not due
-  auto finding = sched.ReconcileModuleFlag("a", /*reported_updated=*/true);  // module ran anyway
-  ASSERT_TRUE(finding.has_value());
-  EXPECT_EQ(finding->stage, "a");
-  EXPECT_FALSE(finding->predicted_due);
-  EXPECT_TRUE(finding->reported_updated);
-}
-
-TEST(UtSch04ModuleFlagAuthoritative, AgreementProducesNoFinding) {
-  RunSpec spec = MakeSpec({{"a", 30'000'000}});
-  Scheduler sched(spec, 10'000'000, OrderOf(spec));
-  sched.Advance();
-  sched.Advance();
-  sched.Advance();  // 30ms -- due
-  EXPECT_FALSE(sched.ReconcileModuleFlag("a", /*reported_updated=*/true).has_value());
 }
 
 // UT-SCH-09: run one spec twice; compare the order -- identical, because

@@ -108,6 +108,10 @@ set(SIM_TEST_SOURCES
     # test_sch_dump.cpp with the schedule dump).
     unit/test_orc_graph.cpp
     unit/test_orc_plan.cpp
+    # WP-04 (VANTAGE, C1): IMP-0016..IMP-0023, IMP-0050.
+    unit/test_orc_steps.cpp
+    unit/test_orc_readiness.cpp
+    unit/test_orc_event_log.cpp
     # WP-15 (SI-08): engine diagnostics -- IMP-0131..0140.
     unit/test_diag_graph_dump.cpp
     unit/test_diag_trace.cpp

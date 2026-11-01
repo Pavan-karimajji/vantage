@@ -51,9 +51,9 @@ add_library(simcore STATIC
     # modules/interfaces' ITransport contract.
     transport/inproc.cpp
     transport/shm.cpp
-    # WP-09 (SI-03): the multi-rate scheduler core.
+    # WP-09 (SI-03): the multi-rate scheduler core. `scheduler/reconcile.cpp`
+    # is gone (IMP-0025); `due.cpp` goes with the loop that uses it (WP-05, IMP-0024).
     scheduler/due.cpp
-    scheduler/reconcile.cpp
     # WP-10 (SI-04): module_host -- component load/lifecycle/exec, ported
     # from sil_host/src/{sil_component,exec_timeout}.cpp and
     # library_loader.cpp's open half.
@@ -92,6 +92,12 @@ add_library(simcore STATIC
     # IMP-0012..IMP-0015 (IMP-0015 replaced scheduler/dump.cpp).
     orchestrator/graph.cpp
     orchestrator/plan_dump.cpp
+    # WP-04 (VANTAGE, C1): events, steps, readiness, the event log --
+    # IMP-0016..IMP-0023, IMP-0050.
+    orchestrator/event_queue.cpp
+    orchestrator/orchestrator.cpp
+    orchestrator/readiness.cpp
+    orchestrator/event_log.cpp
     # WP-15 (SI-08): engine diagnostics -- IMP-0131..0140.
     diagnostics/graph_dump.cpp
     diagnostics/trace.cpp

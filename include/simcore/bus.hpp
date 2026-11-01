@@ -193,6 +193,10 @@ struct Sample {
   SignalHeader sig;
   std::int64_t arrival_ns = 0;
   PortValue value;
+  // `IMP-0019`: the step whose commit made this sample. Empty for a recorded
+  // sample. A previous-cycle input takes only samples with a step before the
+  // reader's own.
+  std::optional<std::uint64_t> committed_step;
 
   Origin origin() const { return value.origin; }
   const std::vector<std::uint8_t>& payload() const { return value.payload; }
@@ -277,7 +281,11 @@ struct IdentityCounts {
 
 class IdentityTracker {
  public:
-  IdentityResult Observe(const PortId& port, const SignalHeader& header);
+  // `content_differs` (`IMP-0050`): the caller knows this sample's bytes differ
+  // from those of a sample with the same `measurement_counter`. At a
+  // measurement distance of 0 that is identity broken whatever the cycle
+  // counter does (`D17 (3)`); at any other distance it changes nothing.
+  IdentityResult Observe(const PortId& port, const SignalHeader& header, bool content_differs = false);
 
   // Zero counts for a port never observed.
   IdentityCounts Counts(const PortId& port) const;
@@ -304,6 +312,14 @@ class IdentityTracker {
 // with a stage's FULL declared port set regardless of any producer's
 // due-ness or mode, so a consumer cannot tell `simulate` from `measured`
 // (R-SIM-10).
+// What the orchestrator knows about a sample the bus cannot: that its bytes
+// differ from an earlier sample of the same counter (`IMP-0050`), and the step
+// that committed it (`IMP-0019`).
+struct PublishInfo {
+  bool content_differs = false;
+  std::optional<std::uint64_t> committed_step;
+};
+
 class PortBus {
  public:
   struct BufferStats {
@@ -321,7 +337,7 @@ class PortBus {
   // bytes across every port would exceed a declared budget -- the value
   // is still stored (an over-budget Publish is a reported condition, not
   // a dropped one; the scheduler decides what to do with the refusal).
-  Result<bool> Publish(const PortId& port, PortValue value, std::int64_t now_ns);
+  Result<bool> Publish(const PortId& port, PortValue value, std::int64_t now_ns, const PublishInfo& info = PublishInfo{});
 
   // SW-0056: never absent -- a port never published returns an
   // `Origin::Unknown`, `updated=false` value naming the port, not a
@@ -341,6 +357,13 @@ class PortBus {
   // construct a `PortBus` stay unchanged; `WP-05` makes declaration
   // mandatory on the engine path.
   void DeclarePort(const PortId& port, std::int64_t buffer_depth, const google::protobuf::Descriptor* descriptor);
+
+  // `IMP-0021`: empties every port's buffer and the identity tracker; every
+  // declaration (depth, descriptor) stays.
+  void ClearSamples();
+
+  // The descriptor a port was declared with; null for an undeclared port.
+  const google::protobuf::Descriptor* Descriptor(const PortId& port) const;
 
   // Null for a port never declared or published.
   const SampleBuffer* Buffer(const PortId& port) const;

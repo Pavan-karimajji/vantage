@@ -14,7 +14,7 @@
 
 namespace simcore::bus {
 
-IdentityResult IdentityTracker::Observe(const PortId& port, const SignalHeader& header) {
+IdentityResult IdentityTracker::Observe(const PortId& port, const SignalHeader& header, bool content_differs) {
   PortState& state = state_[port];
   IdentityResult result;
 
@@ -36,7 +36,12 @@ IdentityResult IdentityTracker::Observe(const PortId& port, const SignalHeader& 
   } else {
     result.measurement_distance = adas::common::counterDistance(state.measurement, measurement);
     result.cycle_distance = adas::common::counterDistance(state.cycle, cycle);
-    if (result.measurement_distance < 0 && result.cycle_distance < 0) {
+    if (result.measurement_distance == 0 && content_differs) {
+      // The same counter with other bytes: identity is broken whatever the
+      // cycle counter does (`IMP-0050`).
+      result.verdict = IdentityVerdict::kIdentityBroken;
+      ++state.counts.identity_broken;
+    } else if (result.measurement_distance < 0 && result.cycle_distance < 0) {
       result.verdict = IdentityVerdict::kCounterReset;
       ++state.counts.resets;
     } else if (result.measurement_distance <= 0 && result.cycle_distance > 0) {
