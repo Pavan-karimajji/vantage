@@ -506,6 +506,19 @@ SimExitCode simEngineRun(SimEngine* engine, char* err_buf, std::size_t err_buf_c
   return kSimExitOk;
 }
 
+SimExitCode simEngineSetThreads(SimEngine* engine, int32_t threads, char* err_buf, std::size_t err_buf_cap) {
+  if (engine == nullptr || !engine->runner.has_value()) {
+    WriteErr(err_buf, err_buf_cap, "simEngineSetThreads called with no constructed engine");
+    return kSimExitConfig;
+  }
+  if (threads < 1) {
+    WriteErr(err_buf, err_buf_cap, "threads must be at least 1, got " + std::to_string(threads));
+    return kSimExitConfig;
+  }
+  engine->runner->SetThreads(threads);
+  return kSimExitOk;
+}
+
 void simEngineAttachTransport(SimEngine* engine, void* transport_publisher) {
   if (engine == nullptr || !engine->runner.has_value()) return;
   engine->runner->SetTransportPublisher(

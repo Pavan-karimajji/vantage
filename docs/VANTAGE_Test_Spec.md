@@ -317,19 +317,20 @@ in `tests/system/test_vnt_gate_g3.py`.
 
 ## 8. Analysis — `ANL`
 
-**`ANL-01`** · A · fixture `F-SRC` — Decisions read no clock and no payload
+**`ANL-01`** · A · fixture `F-SRC` — Decisions read no clock and no other payload
 **Serves.** `SYS-0017`
-**Steps.** Run `scripts/check_engine_decisions.py` over the tree; then over a copy with a planted `std::chrono::steady_clock::now()` call in `src/simcore/orchestrator/orchestrator.cpp`, and over a copy with a planted `ParseFromArray` in `src/simcore/runner/select_inputs.cpp`.
+**Steps.** Run `scripts/check_engine_decisions.py` over the tree; then over a copy with a planted `std::chrono::steady_clock::now()` call in `src/simcore/orchestrator/orchestrator.cpp`, and over a copy with a planted `ParseFromArray` on an `adas::common::VehDyn` in `src/simcore/runner/select_inputs.cpp`.
 - `.c1` **PASS:** no finding, per `SYS-0017` Accept. **FAIL:** any finding.
 - `.c2` **PASS:** the planted clock call is reported with file and line. **FAIL:** the copy passes.
 - `.c3` **PASS:** the planted payload parse is reported with file and line. **FAIL:** the copy passes.
 
 **`ANL-02`** · A · fixture `F-SRC` — Counters compared only by `counterDistance`
 **Serves.** `SYS-0031`
-**Steps.** Run `scripts/check_counter_compare.py` over the tree; then over a copy with a planted `a.measurement_counter < b.measurement_counter` in `src/simcore/bus/sample_buffer.cpp`, and over a copy with a planted `a.measurement_counter == b.measurement_counter` in `src/simcore/orchestrator/orchestrator.cpp`.
+**Steps.** Run `scripts/check_counter_compare.py` over the tree; then over a copy with a planted `a.measurement_counter < b.measurement_counter` in `src/simcore/bus/sample_buffer.cpp`, over a copy with a planted `a.measurement_counter == b.measurement_counter` in `src/simcore/orchestrator/orchestrator.cpp`, and over a copy with a planted `header.cycle_counter != 0` in `src/simcore/runner/run_stage.cpp`.
 - `.c1` **PASS:** no finding, per `SYS-0031` Accept. **FAIL:** any finding.
 - `.c2` **PASS:** the planted `<` is reported with file and line. **FAIL:** the copy passes.
 - `.c3` **PASS:** the planted `==` is reported with file and line. **FAIL:** the copy passes.
+- `.c4` **PASS:** the planted comparison with 0 is reported with file and line. **FAIL:** the copy passes.
 
 **`ANL-03`** · A · fixture `F-SRC` — No floating-point time in the engine
 **Serves.** `SYS-0038`

@@ -69,7 +69,7 @@ bus::Sample SampleOf(const SelectContext& context, const std::string& port, cons
 // the control's, found in the arrived recorded messages and then ahead.
 std::optional<adas::common::RefSync> RecordedRefSync(const SelectContext& context,
                                                      const orchestrator::ControlHeader& header) {
-  if (header.measurement_counter == 0) return std::nullopt;
+  if (bus::IsUnknownMeasurementCounter(header.measurement_counter)) return std::nullopt;
   const std::string port = context.stage->name + ".refSync";
   const std::vector<std::uint8_t>* payload =
       context.reference == nullptr ? nullptr : context.reference->Find(port, header.measurement_counter);
@@ -157,7 +157,7 @@ Selection SelectInputs(const SelectContext& context, const orchestrator::Ticket&
       selection.inputs.push_back(std::move(input));
       continue;
     }
-    if (entry->measurement_counter() == 0) {  // the car read nothing for this input
+    if (bus::IsUnknownMeasurementCounter(entry->measurement_counter())) {  // the car read nothing for this input
       selection.inputs.push_back(std::move(input));
       continue;
     }

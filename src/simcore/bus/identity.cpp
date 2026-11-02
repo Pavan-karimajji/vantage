@@ -24,6 +24,8 @@ std::int32_t MeasurementCounterDistance(std::uint32_t from, std::uint32_t to) {
   return distance;
 }
 
+bool IsUnknownMeasurementCounter(std::uint32_t counter) { return counter == 0; }
+
 IdentityResult IdentityTracker::Observe(const PortId& port, const SignalHeader& header, bool content_differs) {
   PortState& state = state_[port];
   IdentityResult result;

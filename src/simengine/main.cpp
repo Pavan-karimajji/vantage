@@ -64,7 +64,7 @@ struct Args {
   std::string config_path;
   std::int64_t exec_timeout_ms = 0;
   bool wait_for_attach = false;
-  int threads = 1;                  // IMP-0005: `--threads N`; takes effect in WP-07
+  int threads = 1;                  // IMP-0005, IMP-0034: `--threads N`
   int max_restarts = 0;             // SW-0147: off by default
   std::int64_t attempt_timeout_ms = 0;
   bool worker = false;              // internal: this process IS a supervised child
@@ -196,7 +196,8 @@ SimExitCode RunOnce(const Args& args, char* err_buf, std::size_t cap) {
     std::cerr << "[simengine] error: " << err_buf << "\n";
     return exit_code;
   }
-  exit_code = simEngineRun(engine, err_buf, cap);
+  exit_code = simEngineSetThreads(engine, args.threads, err_buf, cap);
+  if (exit_code == kSimExitOk) exit_code = simEngineRun(engine, err_buf, cap);
   if (exit_code != kSimExitOk) std::cerr << "[simengine] error: " << err_buf << "\n";
   simEngineDestroy(engine);
   return exit_code;

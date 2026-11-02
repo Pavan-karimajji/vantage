@@ -280,6 +280,10 @@ struct IdentityCounts {
 // two. The identity check and the counter fallback's gap both use it.
 std::int32_t MeasurementCounterDistance(std::uint32_t from, std::uint32_t to);
 
+// `IMP-0057` (`SYS-0031`): the one test for an unknown `measurement_counter`
+// (0, `RCT:SYS-0004`). There is none for `cycle_counter`: its 0 is a real value.
+bool IsUnknownMeasurementCounter(std::uint32_t counter);
+
 class IdentityTracker {
  public:
   // `content_differs` (`IMP-0050`): the caller knows this sample's bytes differ

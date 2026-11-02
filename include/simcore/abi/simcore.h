@@ -149,6 +149,14 @@ SimExitCode simEngineStepOnce(SimEngine* engine, char* err_buf, size_t err_buf_c
  * engine run). A failure is returned as for `simEngineStepOnce`. */
 SimExitCode simEngineSeek(SimEngine* engine, int64_t to_ns, char* err_buf, size_t err_buf_cap);
 
+/* `--threads N` (`WP-07`, `IMP-0034`; `ARCH §8`). Sets how many worker threads
+ * may call `Component::Exec` side by side; 1 (the default of a new engine)
+ * calls every component on the engine's own thread. The engine run's
+ * outputs are the same for every N. Call before the first `simEngineStepOnce`
+ * or `simEngineRun`; the run setup never carries a thread count. `threads` below 1
+ * is a config-kind refusal. Additive: no function changed, `SIMCORE_ABI_VERSION` unchanged. */
+SimExitCode simEngineSetThreads(SimEngine* engine, int32_t threads, char* err_buf, size_t err_buf_cap);
+
 /* Shuts down every loaded component and releases the engine. Safe to call
  * exactly once per handle returned by `simEngineCreate`; `engine` may be
  * NULL (no-op), matching `adasShutdown`'s own null-tolerant convention one

@@ -150,9 +150,9 @@ never does: `ARCH §3.2`. Ranks: `ARCH §2.2`.
 **Binds.** `recording`, `control`, `stepRecord`
 **Verify.** T · `SYT-ORC-08`   **Trace.** —
 
-**`SYS-0017`** · `P0` · `R1` — Decisions come from the run setup and the headers alone
-**Shall.** The orchestrator and input selection shall decide from the run setup and the samples' `sig_header` only, reading no clock, thread id, execution time or other payload field.
-**Accept.** The source check over their files finds no clock, thread-id or timer call and no payload parse except `ReadSignalHeader`; with one such call planted, it fails.
+**`SYS-0017`** · `P0` · `R1` — Decisions come from the run setup, the headers and the two messages that drive them
+**Shall.** The orchestrator and input selection shall decide only from the run setup, `sig_header`s and the two contract messages that drive them: the recorded `refSync` (C3) for selection, the recorded control (C2) for RESTART.
+**Accept.** Their source check finds no clock, thread-id or timer call and parses no type but `RefSync` and `CycleControl` besides `ReadSignalHeader`; a planted call or parse fails.
 **Binds.** `runSetup`, `control`, `stageIn`
 **Verify.** A · `ANL-01`   **Trace.** —
 
@@ -252,9 +252,9 @@ The order of the rules and the table of outcomes: `ARCH §6`, `D18 (1)`. Matchin
 **Binds.** `recording`, `eventLog`
 **Verify.** T · `SYT-SEL-11`   **Trace.** —
 
-**`SYS-0031`** · `P1` · `R1` — Counters are compared only by `counterDistance`
-**Shall.** The engine shall compare `measurement_counter` and `cycle_counter` values only through `counterDistance` (`RCT:SYS-0005`).
-**Accept.** The source check over the engine finds no `==`, `!=`, `<`, `>`, `<=` or `>=` applied to either counter; with one planted comparison, it fails.
+**`SYS-0031`** · `P1` · `R1` — Counters are compared only by `counterDistance`; unknown is tested by one helper
+**Shall.** The engine shall compare `measurement_counter` and `cycle_counter` values only through `counterDistance` (`RCT:SYS-0005`), and test a `measurement_counter` for unknown (0) only through `bus::IsUnknownMeasurementCounter`.
+**Accept.** The source check over the engine finds no `==`, `!=`, `<`, `>`, `<=` or `>=` applied to either counter, a comparison with 0 included; with one planted comparison, it fails.
 **Binds.** `stageIn`
 **Verify.** A · `ANL-02`   **Trace.** —
 

@@ -18,7 +18,13 @@
 ///   `RCT:IMP-0032`), calls the component (`RunStage`) and reports the outputs
 ///   for commit.
 ///
-///   Named gaps, closed by a later package: threads (`WP-07`), the live measurement
+///   **`WP-07` (`IMP-0034`..`IMP-0036`, `ARCH §8`).** With `RunnerOptions::threads`
+///   above 1, the tickets of one rank that have no wiring between them and
+///   come from different library paths call `Component::Exec` on worker
+///   threads; everything else stays on the orchestrator's thread, in stage
+///   declaration order.
+///
+///   Named gaps, closed by a later package: the live measurement
 ///   writer (`8b`; `SetLiveMeasurement` takes a sink the writer will fill),
 ///   `informational_only` on the wire (the `.mcap` codec has no per-message
 ///   slot, `SI-01`).
@@ -586,6 +592,20 @@ struct RunStageResult {
 // from `exec` is returned as it came.
 Result<RunStageResult> RunStage(const RunStageArgs& args, const ExecFn& exec);
 
+// `IMP-0035`: `RunStage` in its two halves, so a worker thread can make the one
+// call in the middle. `PrepareRun` builds the port set (copies of the selected
+// samples) and applies the overrides; `FinishRun` takes what `exec` returned.
+// Both run on the orchestrator's thread; `RunStage` is these two around `exec`.
+struct PreparedRun {
+  module_host::PortMap inputs;
+  module_host::InputMetaMap input_meta;
+  std::map<std::string, bus::PortValue> delivered;  // "<stage>.<port>" -> exactly what the component is handed
+};
+
+Result<PreparedRun> PrepareRun(const RunStageArgs& args);
+Result<RunStageResult> FinishRun(const RunStageArgs& args, PreparedRun&& prepared,
+                                 const module_host::PortMap& executed);
+
 // ---------------------------------------------------------------------------
 // The step tap (IMP-0030)
 // ---------------------------------------------------------------------------
@@ -636,6 +656,10 @@ struct RunnerOptions {
   Slice slice;
   std::uint64_t grace_ticks = kDefaultGraceTicks;
   std::optional<std::chrono::milliseconds> exec_timeout;
+  // `IMP-0034`: how many worker threads may call `Component::Exec` side by
+  // side (`ARCH §8`). 1 calls every component on the orchestrator's thread.
+  // Set only from `--threads`, never from the run setup.
+  int threads = 1;
   // `Construct` prints `PlanText` here when set. `simEngineCreate` prints it
   // itself, before any library loads.
   std::ostream* plan_out = nullptr;
@@ -708,6 +732,9 @@ class Runner {
 
   void SetCheckpoint(Checkpoint* checkpoint) { checkpoint_ = checkpoint; }
 
+  // `--threads N` (`IMP-0034`) for a runner already constructed; before the first step.
+  void SetThreads(int threads) { options_.threads = threads < 1 ? 1 : threads; }
+
   // `IMP-0135`: optional; `ReadAhead` is the one place bytes are read off the wire.
   void SetByteCounter(diagnostics::ByteCounter* byte_counter);
 
@@ -727,7 +754,13 @@ class Runner {
   struct Impl;
 
   void TopUp();
-  Result<bool> RunTicket(const orchestrator::Ticket& ticket, std::vector<orchestrator::CommitReport>& reports);
+  // `IMP-0035`: one ticket in three parts. `PrepareTicket` (selection, control, port set) and
+  // `FinishTicket` (event log, divergence latch, warming badge, the report) run on the
+  // orchestrator's thread; `ExecTicket` is the one call a worker makes.
+  struct PendingRun;
+  void PrepareTicket(const orchestrator::Ticket& ticket, PendingRun& pending);
+  void ExecTicket(PendingRun& pending) const;
+  Result<bool> FinishTicket(PendingRun& pending, std::vector<orchestrator::CommitReport>& reports);
   // Offers this step's values to the writer, the publisher; returns the bytes written.
   Result<std::size_t> WriteStep(std::uint64_t step, std::int64_t now_ns);
 

@@ -95,3 +95,18 @@ def test_check_time_units_ignores_a_float_member_with_an_unrelated_name(tmp_path
         encoding="utf-8",
     )
     assert check_time_units(roots=(tmp_path,)) == []
+
+
+def test_anl_03_c2_a_planted_double_step_time_in_a_copy_of_event_queue_is_reported(tmp_path):
+    """ANL-03 .c2 (SYS-0038): the real ``event_queue.cpp`` is clean; a copy with ``double step_time = 0;`` is not."""
+    source = _SCRIPTS_DIR.parent / "src" / "simcore" / "orchestrator" / "event_queue.cpp"
+    copy = tmp_path / "src" / "simcore" / "orchestrator" / "event_queue.cpp"
+    copy.parent.mkdir(parents=True)
+    copy.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    assert check_time_units(roots=(tmp_path,)) == []
+
+    with copy.open("a", encoding="utf-8", newline="\n") as handle:
+        handle.write("\ndouble step_time = 0;\n")
+    findings = check_time_units(roots=(tmp_path,))
+    assert len(findings) == 1
+    assert "event_queue.cpp" in findings[0] and "step_time" in findings[0]

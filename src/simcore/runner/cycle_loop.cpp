@@ -44,6 +44,7 @@
 
 #include "common/cycle_control.pb.h"
 #include "common/ref_sync.pb.h"
+#include "rank_dispatch.hpp"
 #include "simcore/runner.hpp"
 
 namespace simcore::runner {
@@ -222,6 +223,9 @@ struct Runner::Impl {
   std::map<std::pair<BadgeKind, std::string>, std::uint64_t> badges;
   std::map<std::string, std::size_t> identity_seen;
 
+  // `IMP-0036`: which `simulate` stages never run at the same time, decided once from the setup.
+  ConflictTable conflicts;
+
   // One step's own state.
   std::set<std::string> touched;                     // ports that got a sample this step
   std::map<std::string, bus::PortValue> delivered;   // what each run was handed this step
@@ -296,6 +300,7 @@ Result<Runner> Runner::Construct(const RunSpec& spec, bus::PortBus& bus, std::ve
   runner.impl_ = std::make_unique<Impl>();
   Impl& impl = *runner.impl_;
   impl.spec = spec;
+  impl.conflicts = ConflictTable::FromSpec(spec);
   impl.bus = &bus;
   runner.bus_ = &bus;
   runner.writer_ = writer;
@@ -586,21 +591,35 @@ Result<bool> Runner::Seek(std::int64_t to_ns) {
   return jumped;
 }
 
-Result<bool> Runner::RunTicket(const orchestrator::Ticket& ticket, std::vector<orchestrator::CommitReport>& reports) {
+// One ticket of a rank between `NextRunnable` and `Commit` (`IMP-0035`). Nothing in it is
+// shared with another ticket: the worker that runs it touches `component`, `prepared` and
+// `executed` and nothing else.
+struct Runner::PendingRun {
+  orchestrator::Ticket ticket;
+  const SpecStage* stage = nullptr;
+  orchestrator::ControlHeader header;
+  Selection selection;
+  RunStageArgs args;
+  module_host::Component* component = nullptr;
+  // What selecting the inputs found, entered into the event log and the badges by `FinishTicket`,
+  // so the log keeps its order: this ticket's selection, then its run, then the next ticket's.
+  std::vector<orchestrator::LogEntry> selection_entries;
+  std::vector<std::pair<BadgeKind, std::string>> selection_badges;
+  std::optional<Error> prepare_error;
+  PreparedRun prepared;
+  std::optional<Result<module_host::PortMap>> executed;
+};
+
+void Runner::PrepareTicket(const orchestrator::Ticket& ticket, PendingRun& pending) {
   Impl& impl = *impl_;
   const std::uint64_t step = impl.orchestrator->StepNumber();
   const std::int64_t now_ns = impl.orchestrator->Now();
-  orchestrator::ControlHeader header;
-  const SpecStage* stage = nullptr;
-  const Selection selection = impl.SelectFor(ticket, step, now_ns, header, stage);
+  pending.ticket = ticket;
+  pending.selection = impl.SelectFor(ticket, step, now_ns, pending.header, pending.stage);
   const orchestrator::GraphStage* graph_stage = impl.graph.Find(ticket.stage);
-  module_host::Component* component = components_.at(ticket.stage);
+  pending.component = components_.at(ticket.stage);
 
-  const auto add = [&](orchestrator::LogEntry entry) -> Result<bool> {
-    entry.step = step;
-    return impl.log.Add(entry);
-  };
-  for (const InputSelection& input : selection.inputs) {
+  for (const InputSelection& input : pending.selection.inputs) {
     const std::string subject = ticket.stage + "." + input.port;
     if (input.eviction_miss) {
       orchestrator::LogEntry entry;
@@ -608,8 +627,7 @@ Result<bool> Runner::RunTicket(const orchestrator::Ticket& ticket, std::vector<o
       entry.stage = ticket.stage;
       entry.port = input.port;
       entry.wanted = input.wanted;
-      const Result<bool> added = add(entry);
-      if (!added.ok()) return added;
+      pending.selection_entries.push_back(std::move(entry));
     }
     if (input.beyond_gap) {
       orchestrator::LogEntry entry;
@@ -619,38 +637,68 @@ Result<bool> Runner::RunTicket(const orchestrator::Ticket& ticket, std::vector<o
       entry.wanted = input.wanted;
       entry.found = input.found;
       entry.gap = input.gap;
-      const Result<bool> added = add(entry);
-      if (!added.ok()) return added;
+      pending.selection_entries.push_back(std::move(entry));
     }
-    if (input.readiness_timeout) impl.Raise(BadgeKind::kReadinessTimeout, subject);
-    if (input.fallback) impl.Raise(BadgeKind::kFallback, subject);
+    if (input.readiness_timeout) pending.selection_badges.emplace_back(BadgeKind::kReadinessTimeout, subject);
+    if (input.fallback) pending.selection_badges.emplace_back(BadgeKind::kFallback, subject);
   }
 
-  RunStageArgs args;
-  args.stage = stage;
-  args.ticket = &ticket;
-  args.selection = &selection;
+  RunStageArgs& args = pending.args;
+  args.stage = pending.stage;
+  args.ticket = &pending.ticket;
+  args.selection = &pending.selection;
   args.bus = bus_;
   args.mutator = mutator_;
   args.now_ns = now_ns;
   const auto last = impl.last_run_ns.find(ticket.stage);
   args.dt_ns = last == impl.last_run_ns.end() ? 0 : now_ns - last->second;
-  if (header.measurement_counter != 0) args.control_counter = header.measurement_counter;
-  const bool declares_control = std::any_of(stage->ports.begin(), stage->ports.end(), [](const SpecPort& port) {
-    return port.dir == "req" && port.name == "control";
-  });
+  if (!bus::IsUnknownMeasurementCounter(pending.header.measurement_counter)) {
+    args.control_counter = pending.header.measurement_counter;
+  }
+  const bool declares_control =
+      std::any_of(pending.stage->ports.begin(), pending.stage->ports.end(),
+                  [](const SpecPort& port) { return port.dir == "req" && port.name == "control"; });
   if (declares_control) {
     const google::protobuf::Descriptor* trigger =
         ticket.start == orchestrator::StartKind::kInput ? bus_->Descriptor(ticket.trigger_port) : nullptr;
     args.control = impl.control->Write(ticket, *graph_stage, trigger);
   }
-  const ExecFn exec = [&](std::int64_t dt_ns, const module_host::PortMap& inputs,
-                          const module_host::InputMetaMap& input_meta) {
-    std::optional<module_host::ExecTimeout> timeout;
-    if (options_.exec_timeout.has_value()) timeout.emplace(*options_.exec_timeout);
-    return component->Exec(dt_ns, inputs, input_meta, timeout);
+  Result<PreparedRun> prepared = PrepareRun(args);
+  if (!prepared.ok()) {
+    pending.prepare_error = prepared.error();
+    return;
+  }
+  pending.prepared = std::move(prepared).value();
+}
+
+// The only call a worker thread makes (`ARCH §8`, fact 4).
+void Runner::ExecTicket(PendingRun& pending) const {
+  std::optional<module_host::ExecTimeout> timeout;
+  if (options_.exec_timeout.has_value()) timeout.emplace(*options_.exec_timeout);
+  pending.executed.emplace(pending.component->Exec(pending.args.dt_ns, pending.prepared.inputs,
+                                                   pending.prepared.input_meta, timeout));
+}
+
+Result<bool> Runner::FinishTicket(PendingRun& pending, std::vector<orchestrator::CommitReport>& reports) {
+  Impl& impl = *impl_;
+  const orchestrator::Ticket& ticket = pending.ticket;
+  const std::uint64_t step = impl.orchestrator->StepNumber();
+  const std::int64_t now_ns = impl.orchestrator->Now();
+  const RunStageArgs& args = pending.args;
+
+  const auto add = [&](orchestrator::LogEntry entry) -> Result<bool> {
+    entry.step = step;
+    return impl.log.Add(entry);
   };
-  Result<RunStageResult> ran = RunStage(args, exec);
+  for (const orchestrator::LogEntry& entry : pending.selection_entries) {
+    const Result<bool> added = add(entry);
+    if (!added.ok()) return added;
+  }
+  for (const auto& [kind, subject] : pending.selection_badges) impl.Raise(kind, subject);
+
+  if (pending.prepare_error.has_value()) return Result<bool>::Fail(*pending.prepare_error);
+  if (!pending.executed->ok()) return Result<bool>::Fail(pending.executed->error());
+  Result<RunStageResult> ran = FinishRun(args, std::move(pending.prepared), pending.executed->value());
   if (!ran.ok()) return Result<bool>::Fail(ran.error());
   RunStageResult result = std::move(ran).value();
   for (orchestrator::LogEntry& entry : result.entries) {
@@ -659,6 +707,7 @@ Result<bool> Runner::RunTicket(const orchestrator::Ticket& ticket, std::vector<o
   }
   impl.last_run_ns[ticket.stage] = now_ns;
   for (auto& [port, value] : result.delivered) impl.delivered[port] = std::move(value);
+
 
   // IMP-0033: against what the recording holds for this same port at this same
   // instant, by `EqualOutputs`. A RESTART run is never offered to the latch
@@ -806,9 +855,24 @@ Result<bool> Runner::StepOnce() {
     for (;;) {
       std::vector<orchestrator::Ticket> tickets = orch.NextRunnable(ready);
       if (tickets.empty()) break;
+      // `IMP-0035`: every input of the rank is fixed here, on this thread, before any
+      // component is called; the barrier is `DispatchRank` returning; then each ticket
+      // is finished in stage declaration order whatever order the workers ended in.
+      std::vector<PendingRun> pending(tickets.size());
+      for (std::size_t i = 0; i < tickets.size(); ++i) PrepareTicket(tickets[i], pending[i]);
+      DispatchRank(
+          pending.size(), options_.threads,
+          [&](std::size_t earlier, std::size_t later) {
+            return impl.conflicts.Conflicts(pending[earlier].ticket.stage, pending[later].ticket.stage);
+          },
+          [&](std::size_t i) {
+            if (pending[i].prepare_error.has_value()) return false;
+            ExecTicket(pending[i]);
+            return pending[i].executed->ok();
+          });
       std::vector<orchestrator::CommitReport> reports;
-      for (const orchestrator::Ticket& ticket : tickets) {
-        const Result<bool> ran = RunTicket(ticket, reports);
+      for (PendingRun& run : pending) {
+        const Result<bool> ran = FinishTicket(run, reports);
         if (!ran.ok()) return ran;
       }
       for (const orchestrator::CommitReport& report : reports) {

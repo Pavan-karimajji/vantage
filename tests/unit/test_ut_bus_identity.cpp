@@ -123,6 +123,13 @@ TEST(UtBusIdentity, MeasurementCounterDistanceCountsTheWrapAsOneStep) {
   EXPECT_EQ(MeasurementCounterDistance(0xFFFFFFFFu, 0xFFFFFFFFu), 0);
 }
 
+// `IMP-0057` (`D24`): 0 is the only unknown `measurement_counter`.
+TEST(UtBusIdentity, OnlyZeroIsAnUnknownMeasurementCounter) {
+  EXPECT_TRUE(IsUnknownMeasurementCounter(0u));
+  EXPECT_FALSE(IsUnknownMeasurementCounter(1u));
+  EXPECT_FALSE(IsUnknownMeasurementCounter(0xFFFFFFFFu));
+}
+
 TEST(UtBusIdentity, ASenderCountingThroughTheWrapHasNoGapResetOrBreak) {
   IdentityTracker tracker;
   const std::uint32_t counters[] = {0xFFFFFFFDu, 0xFFFFFFFEu, 0xFFFFFFFFu, 1u, 2u};

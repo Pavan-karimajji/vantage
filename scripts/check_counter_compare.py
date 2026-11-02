@@ -8,18 +8,24 @@
 ``include/simcore/`` and ``src/simcore/`` for ``==``, ``!=``, ``<``, ``>``, ``<=``
 or ``>=`` with an operand that names either counter.
 
-An operand that is the result of ``counterDistance(...)`` or
-``MeasurementCounterDistance(...)`` is a distance, not a counter: those calls (and
-the counters inside their arguments) are taken out of the operand before it is
-looked at, so comparing a distance is allowed.
+A comparison with 0 is a comparison like any other: ``x.measurement_counter != 0``
+is a finding, and so is the same on ``cycle_counter`` (whose 0 is a real value).
+A ``measurement_counter`` is tested for unknown only through
+``bus::IsUnknownMeasurementCounter(...)`` (``IMP-0057``).
+
+An operand that is the result of ``counterDistance(...)``,
+``MeasurementCounterDistance(...)`` or ``IsUnknownMeasurementCounter(...)`` is a
+distance or a truth value, not a counter: those calls (and the counters inside
+their arguments) are taken out of the operand before it is looked at.
 
     check_counter_compare.py [--root <dir>] [--selftest]
 
 One line per finding, ``<file>:<line>: <operator> on <counter>: <source line>``;
 exit 1 on any. ``--selftest`` plants ANL-02 .c2 (a ``<`` in
-``src/simcore/bus/sample_buffer.cpp``) and .c3 (a ``==`` in
-``src/simcore/orchestrator/orchestrator.cpp``) in a temporary copy and exits 1
-unless each is reported with its file and line.
+``src/simcore/bus/sample_buffer.cpp``), .c3 (a ``==`` in
+``src/simcore/orchestrator/orchestrator.cpp``) and .c4 (a ``header.cycle_counter != 0``
+in ``src/simcore/runner/run_stage.cpp``) in a temporary copy and exits 1 unless
+each is reported with its file and line.
 
 A comparison operator is read as one with whitespace on both sides (the shared
 ``.clang-format`` writes every comparison so and every template bracket without),
@@ -44,7 +50,9 @@ _SUFFIXES = (".hpp", ".h", ".cpp")
 
 _COUNTER = re.compile(r"\b(measurement_counter|cycle_counter)\b")
 _COMPARE = re.compile(r"(?<=\s)(==|!=|<=|>=|<|>)(?=\s)")
-_DISTANCE_CALL = re.compile(r"\b(?:[A-Za-z_]\w*::)*(?:counterDistance|MeasurementCounterDistance)\s*\(")
+_DISTANCE_CALL = re.compile(
+    r"\b(?:[A-Za-z_]\w*::)*(?:counterDistance|MeasurementCounterDistance|IsUnknownMeasurementCounter)\s*\("
+)
 
 # Where an operand ends: at depth 0, one of these.
 _STOPS = ";{},?"
@@ -133,7 +141,8 @@ def _right_operand(text: str, start: int) -> str:
 
 
 def _without_distances(operand: str) -> str:
-    """The operand with every ``counterDistance(...)`` / ``MeasurementCounterDistance(...)`` call removed."""
+    """The operand with every ``counterDistance(...)`` / ``MeasurementCounterDistance(...)`` /
+    ``IsUnknownMeasurementCounter(...)`` call removed."""
     while True:
         match = _DISTANCE_CALL.search(operand)
         if match is None:
@@ -173,7 +182,7 @@ def check_counter_compare(root: Path = SIM_ROOT, roots: tuple[str, ...] = DEFAUL
     return findings
 
 
-#: ANL-02 .c2 and .c3: (case, file, text appended to a copy of it).
+#: ANL-02 .c2, .c3 and .c4: (case, file, text appended to a copy of it).
 PLANTS: tuple[tuple[str, str, str], ...] = (
     (
         "ANL-02 .c2 (<)",
@@ -186,6 +195,12 @@ PLANTS: tuple[tuple[str, str, str], ...] = (
         "src/simcore/orchestrator/orchestrator.cpp",
         "\nstatic bool PlantedSame(const Sample& a, const Sample& b) {\n"
         "  return a.measurement_counter == b.measurement_counter;\n}\n",
+    ),
+    (
+        "ANL-02 .c4 (comparison with 0)",
+        "src/simcore/runner/run_stage.cpp",
+        "\nstatic bool PlantedZero(const SignalHeader& header) {\n"
+        "  return header.cycle_counter != 0;\n}\n",
     ),
 )
 
@@ -222,7 +237,7 @@ def selftest(root: Path = SIM_ROOT) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="ANL-02: counters are compared only through a distance.")
     parser.add_argument("--root", type=Path, default=SIM_ROOT, help="the vantage module root (default: this one)")
-    parser.add_argument("--selftest", action="store_true", help="plant ANL-02 .c2 and .c3 in a copy and prove each is reported")
+    parser.add_argument("--selftest", action="store_true", help="plant ANL-02 .c2, .c3 and .c4 in a copy and prove each is reported")
     args = parser.parse_args(argv)
     if args.selftest:
         return selftest(args.root)
