@@ -237,6 +237,12 @@ in `tests/system/test_vnt_gate_g3.py`.
 - `.c1` **PASS:** no gap and no reset on `source.X`, and no `KIND_IDENTITY_BROKEN`, per `SYS-0049` Accept. **FAIL:** any entry or badge, in particular a gap of 1 at the wrap.
 - `.c2` **PASS:** the edited copy shows one gap on `source.X`. **FAIL:** none, so the check could not have failed.
 
+**`SYT-SEL-13`** · T · fixture `F-CASE`, `F-REC-EDIT`, `F-SETUP-EDIT`, `F-ENGINE` — The counter fallback's gap counts the wrap as one step
+**Serves.** `SYS-0051`
+**Steps.** From `running_example` `counter_wrap`'s recording remove `source.X`'s samples with `measurement_counter` `0xFFFFFFFF`, 1 and 2 (`F-REC-EDIT`). Run `all_simulated` on it on `F-ENGINE` twice, its setup's `fallback_max_gap` set to 1 and then to 3 (`F-SETUP-EDIT`). For every run whose recorded entry names `source.X` counter 1 or 2, read its re-run entry and the event log's `fallback_beyond_gap` entries for it.
+- `.c1` **PASS:** at 1, each such run has one entry, found `0xFFFFFFFE`, gap 2 when it wants 1 and 3 when it wants 2, per `SYS-0051` Accept. **FAIL:** a gap of 3 for 1 or of 4 for 2, a missing entry, or no such run at all.
+- `.c2` **PASS:** at 3, no such run has an entry and each re-run entry names `0xFFFFFFFE`. **FAIL:** an entry (a run wanting 2 at gap 4), or another sample.
+
 ## 5. The engine step — `STP`
 
 **`SYT-STP-01`** · T · fixture `F-CASE`, `F-SETUP-EDIT`, `F-TAP` — One step per instant

@@ -264,6 +264,12 @@ The order of the rules and the table of outcomes: `ARCH §6`, `D18 (1)`. Matchin
 **Binds.** `recording`, `eventLog`, `stepRecord`
 **Verify.** T · `SYT-SEL-12`   **Trace.** —
 
+**`SYS-0051`** · `P1` · `R1` — A counter fallback's gap counts `0xFFFFFFFF` → 1 as one step
+**Shall.** The engine shall count the counter fallback's gap by `SYS-0049`'s distance, `0xFFFFFFFF` → 1 being one step (`D24`).
+**Accept.** On `running_example` `counter_wrap` with `source.X`'s `0xFFFFFFFF`, 1 and 2 removed, a run wanting 1 or 2 falls back to `0xFFFFFFFE` at gap 2 or 3: logged beyond `fallback_max_gap` 1, not logged within 3; a gap one larger fails.
+**Binds.** `recording`, `stageIn`, `eventLog`
+**Verify.** T · `SYT-SEL-13`   **Trace.** —
+
 ## 4. The engine step (`STP`)
 
 What one step is, the jump and warming up: `ARCH §7`. The word "tick" is retired; the step

@@ -132,7 +132,7 @@ snake_case, the same spelling as the structs. `new` marks a key this design adds
 | `outputs.path`, `outputs.codec` | kept | the recording this engine run writes, if any |
 | `outputs.livemeas` | new | name and geometry of the live measurement: `name`, `cycle_slot_count`, `cycle_slot_size`, `bulk_slot_count`, `bulk_slot_size` (`RCT:Q1`, `RCT:Q2`, values `⊘`). Absent: no live measurement |
 | `readiness_limit_steps` | new | the readiness limit; value `⊘`; becomes `MeasDescription.readiness_limit_steps` |
-| `fallback_max_gap` | new | the counter fallback's maximum gap, in counter steps by `counterDistance`; value `⊘` (`D18 (1)`) |
+| `fallback_max_gap` | new | the counter fallback's maximum gap, in `measurement_counter` steps by the identity check's distance, `0xFFFFFFFF` → 1 being one step (`D24`); value `⊘` (`D18 (1)`) |
 | `checkpoint.path`, `limits.exec_timeout_ms`, `limits.severity_exit` | kept | as today |
 | `coherence_verdict` | kept | the launcher's own classification, recorded |
 | `grid_step_ns`, `order` | gone | no grid; the order is derived at load (§5) |
@@ -229,7 +229,7 @@ newest sample (the held value shown in the live measurement, with its age). Read
 header of every sample as it enters, and check identity: it tells a counter reset
 from identity broken by the `counterDistance` of both counters, as `D17 (3)` defines
 them, reading a `measurement_counter` that goes from `0xFFFFFFFF` to 1 as consecutive
-through `counterDistance` alone (`D24`). Identity broken raises `KIND_IDENTITY_BROKEN`;
+through one distance on `measurement_counter`, built on `counterDistance` alone, which the counter fallback's gap uses too (`D24`). Identity broken raises `KIND_IDENTITY_BROKEN`;
 gaps and resets are counted in the event log (§6).
 
 *Never.* Interpret a payload beyond its `sig_header`. Block a writer. Grow beyond
@@ -368,7 +368,7 @@ the component receives. The control message is added to it. Nothing else is.
    one, by `counterDistance` (`D18 (1)`). It searches every sample in the port's
    buffer, read-ahead included: a sample whose counter is not after the wanted one was
    made before it, so the counter keeps the choice causal even if it was logged late.
-   Beyond `fallback_max_gap` the counter fallback takes nothing and the time rule picks
+   Beyond `fallback_max_gap`, counted in the identity check's steps (`D24`), the counter fallback takes nothing and the time rule picks
    the sample (`D18 (1)`); the event log records stage, port, wanted counter, found
    counter and gap.
 4. **Time rule.** Only for a stage with no recorded refSync, or beyond the maximum
