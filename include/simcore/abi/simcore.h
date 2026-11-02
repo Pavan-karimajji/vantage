@@ -66,7 +66,8 @@
 extern "C" {
 #endif
 
-/* `ABI_VERSION 3` (VANTAGE `c1`, `WP-05`): `simEngineSeek` is new and
+/* `ABI_VERSION 4` (VANTAGE `c1`, `WP-07`): `simEngineSetThreads` is new.
+ * `ABI_VERSION 3` (`WP-05`): `simEngineSeek` is new and
  * `simEngineStepOnce` runs one engine step, not one grid cycle. No function
  * was removed or changed in signature.
  *
@@ -74,7 +75,7 @@ extern "C" {
  * `simEngineAbiVersion()` is this host's own version-check hook, the same
  * two-call discovery shape `module_abi.h`'s `adasAbiVersion()` uses one
  * layer down. */
-#define SIMCORE_ABI_VERSION 3
+#define SIMCORE_ABI_VERSION 4
 
 typedef struct SimEngine SimEngine;
 
@@ -154,7 +155,7 @@ SimExitCode simEngineSeek(SimEngine* engine, int64_t to_ns, char* err_buf, size_
  * calls every component on the engine's own thread. The engine run's
  * outputs are the same for every N. Call before the first `simEngineStepOnce`
  * or `simEngineRun`; the run setup never carries a thread count. `threads` below 1
- * is a config-kind refusal. Additive: no function changed, `SIMCORE_ABI_VERSION` unchanged. */
+ * is a config-kind refusal. Additive: no function changed; `SIMCORE_ABI_VERSION` 4. */
 SimExitCode simEngineSetThreads(SimEngine* engine, int32_t threads, char* err_buf, size_t err_buf_cap);
 
 /* Shuts down every loaded component and releases the engine. Safe to call

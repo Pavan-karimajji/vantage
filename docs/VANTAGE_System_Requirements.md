@@ -86,7 +86,7 @@ recordings are a batch of engine runs (`R-SIM-19`).
 **Verify.** T · `SYT-RUN-08`   **Trace.** —
 
 **`SYS-0046`** · `P1` · `R1` — Retired and unknown run setup keys are refused at load
-**Shall.** The engine shall refuse at load a run setup carrying `delay_steps`, `grid_step_ns`, `order` or any key its schema does not name.
+**Shall.** The engine shall refuse at load a run setup carrying `delay_steps`, `grid_step_ns`, `order`, `impl.pattern`, `impl.search` or any key its schema does not name.
 **Accept.** A lab setup with any one such key added ends with a load error naming the key and where it is (top level, stage, port or input), before the first step; a run that starts fails.
 **Binds.** `runSetup`, `exitStatus`
 **Verify.** T · `SYT-RUN-09`   **Trace.** —

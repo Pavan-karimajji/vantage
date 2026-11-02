@@ -57,12 +57,10 @@
           "mode": {"enum": ["simulate", "measured", "off"]},
           "impl": {
             "type": "object", "additionalProperties": false,
-            "required": ["kind", "path", "pattern", "search"],
+            "required": ["kind", "path"],
             "properties": {
               "kind": {"enum": ["dll", "stubdll"]},
-              "path": {"type": "string"},
-              "pattern": {"type": "string"},
-              "search": {"type": "array", "items": {"type": "string"}}
+              "path": {"type": "string"}
             }
           },
           "trigger": {"type": "string"},

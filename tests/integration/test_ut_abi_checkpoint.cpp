@@ -105,7 +105,7 @@ std::string BuildRunSpecJson(const std::filesystem::path& recording, const std::
     "stages": [{
       "name": "sut", "mode": "simulate",
       "impl": {"kind": "dll", "path": ")"
-      << JsonEscape(stub) << R"(", "pattern": "", "search": []},
+      << JsonEscape(stub) << R"("},
       "trigger": "", "clock_period_ns": 10000000, "abi_version": 1, "config_bundle_sha256": "",
       "ports": [{"name": "outputs", "dir": "pro", "kind": "data", "proto_type": "test.Echo",
                  "record": "full", "fixed_slots": null, "bulk": false, "buffer_depth": 16}],

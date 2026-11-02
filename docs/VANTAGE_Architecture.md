@@ -119,6 +119,7 @@ snake_case, the same spelling as the structs. `new` marks a key this design adds
 | `schema`, `run_id`, `spec_sha256` | kept | identity of the setup; `schema` moves to a new version string. `run_id` is the setup's id and is not the engine run's `runId` |
 | `sources[]` (`path`, `sha256`, `codec`, `ingest`, `absent`) | kept | the files of the one recording this engine run reads, several files of one measurement, each with its ingest map (`R-SIM-23`); many recordings are a batch of engine runs, never one setup |
 | `stages[].name`, `mode`, `impl`, `abi_version`, `config_bundle_sha256` | kept | as in `R-SIM-10`; become `MeasStage.name`, `mode`, `impl` |
+| `stages[].impl.pattern`, `impl.search` | gone | the library is found before the setup is written, so `impl` is `kind` and `path` only (§4); refused at load if present |
 | `stages[].trigger` | new | `control`, an input port name, or empty when a clock starts the stage |
 | `stages[].clock_period_ns` | changed | was `period_ns`, the grid period; now the period of the clock that starts a stage with no recorded trigger; 0 when none |
 | `stages[].ports[]` (`name`, `dir`, `kind`, `proto_type`, `record`, `fixed_slots`) | kept | declared ports; `record` is `full`, `excluded` or `decimate:<n>` (`R-SIM-6`) |

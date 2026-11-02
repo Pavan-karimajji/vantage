@@ -229,18 +229,14 @@ def _stage_impl_dict(pipeline: Pipeline, stage) -> dict:
     literal fixture `BuildAbi02RunSpecJson`'s own `meas` stage in
     `tests/integration/test_ut_abi_writer_and_resolver.cpp` uses
     (`"impl": {"kind": "dll", "path": "", ...}`)."""
-    empty = {"kind": "dll", "path": "", "pattern": "", "search": []}
+    empty = {"kind": "dll", "path": ""}
     if stage.impl is None:
         return empty
     kind, _, _stem = stage.impl.partition(":")
     lib_path = pipeline.library_paths.get(stage.name)
     if kind not in ("dll", "stubdll") or lib_path is None:
         return empty
-    return {
-        "kind": kind, "path": str(lib_path),
-        "pattern": "{stem}.dll" if lib_path.suffix == ".dll" else f"{{stem}}{lib_path.suffix}",
-        "search": [],
-    }
+    return {"kind": kind, "path": str(lib_path)}
 
 
 def _fault_mutations(faults: Sequence, *, grid_step_ns: int) -> list[dict]:

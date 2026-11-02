@@ -74,13 +74,13 @@ std::string BuildRunSpecJson(const std::string& stage_b_impl_path) {
   "stages": [
     {
       "name": "a", "mode": "simulate",
-      "impl": {"kind": "dll", "path": ")" << stub_path << R"(", "pattern": "", "search": []},
+      "impl": {"kind": "dll", "path": ")" << stub_path << R"("},
       "trigger": "", "clock_period_ns": 0, "abi_version": 1, "config_bundle_sha256": "",
       "ports": [], "inputs": []
     },
     {
       "name": "b", "mode": "simulate",
-      "impl": {"kind": "dll", "path": ")" << EscapeForJson(stage_b_impl_path) << R"(", "pattern": "", "search": []},
+      "impl": {"kind": "dll", "path": ")" << EscapeForJson(stage_b_impl_path) << R"("},
       "trigger": "", "clock_period_ns": 0, "abi_version": 1, "config_bundle_sha256": "",
       "ports": [],
       "inputs": [{"port": "in", "producer": "a", "producer_port": "out", "previous_cycle": false}]

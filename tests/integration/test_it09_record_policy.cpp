@@ -162,7 +162,7 @@ std::string BuildRunSpecJson(const std::filesystem::path& recording, const std::
     "stages": [
       {
         "name": "meas", "mode": "measured",
-        "impl": {"kind": "dll", "path": "", "pattern": "", "search": []},
+        "impl": {"kind": "dll", "path": ""},
         "trigger": "", "clock_period_ns": )"
       << step_ns << R"(, "abi_version": 1, "config_bundle_sha256": "",
         "ports": [{"name": "objects", "dir": "pro", "kind": "data", "proto_type": "test.Echo",
@@ -172,7 +172,7 @@ std::string BuildRunSpecJson(const std::filesystem::path& recording, const std::
       {
         "name": "sut", "mode": "simulate",
         "impl": {"kind": "dll", "path": ")"
-      << JsonEscape(stub) << R"(", "pattern": "", "search": []},
+      << JsonEscape(stub) << R"("},
         "trigger": "", "clock_period_ns": )"
       << step_ns << R"(, "abi_version": 1, "config_bundle_sha256": "",
         "ports": [{"name": "objects", "dir": "req", "kind": "data", "proto_type": "test.Echo",

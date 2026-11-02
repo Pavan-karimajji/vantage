@@ -126,7 +126,7 @@ std::filesystem::path WriteStubRunSpec(const std::filesystem::path& spec_path, c
     "stages": [{
       "name": "sut", "mode": "simulate",
       "impl": {"kind": "dll", "path": ")"
-      << JsonEscape(EchoStubPath()) << R"(", "pattern": "", "search": []},
+      << JsonEscape(EchoStubPath()) << R"("},
       "trigger": "", "clock_period_ns": 10000000, "abi_version": 1, "config_bundle_sha256": "",
       "ports": [], "inputs": []
     }],

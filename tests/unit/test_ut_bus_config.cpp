@@ -34,7 +34,7 @@ std::string MinimalRunSpecJson(const std::string& clock_period_ns_literal) {
       {
         "name": "echo_stub",
         "mode": "simulate",
-        "impl": {"kind": "dll", "path": "/abs/echo_stub.dll", "pattern": "", "search": []},
+        "impl": {"kind": "dll", "path": "/abs/echo_stub.dll"},
         "trigger": "",
         "clock_period_ns": )" + clock_period_ns_literal + R"(,
         "abi_version": 1,

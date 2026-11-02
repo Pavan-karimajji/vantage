@@ -213,7 +213,7 @@ std::string BuildAbi01RunSpecJson(const std::filesystem::path& recording, const 
     "stages": [{
       "name": "sut", "mode": "simulate",
       "impl": {"kind": "dll", "path": ")"
-      << JsonEscape(stub) << R"(", "pattern": "", "search": []},
+      << JsonEscape(stub) << R"("},
       "trigger": "", "clock_period_ns": 10000000, "abi_version": 1, "config_bundle_sha256": "",
       "ports": [{"name": "outputs", "dir": "pro", "kind": "data", "proto_type": "test.Echo",
                  "record": "full", "fixed_slots": null, "bulk": false, "buffer_depth": 16}],
@@ -246,7 +246,7 @@ std::string BuildAbi02RunSpecJson(const std::filesystem::path& recording, const 
     "stages": [
       {
         "name": "meas", "mode": "measured",
-        "impl": {"kind": "dll", "path": "", "pattern": "", "search": []},
+        "impl": {"kind": "dll", "path": ""},
         "trigger": "", "clock_period_ns": 10000000, "abi_version": 1, "config_bundle_sha256": "",
         "ports": [{"name": "objects", "dir": "pro", "kind": "data", "proto_type": "abi_test.AbiPort",
                    "record": "full", "fixed_slots": null, "bulk": false, "buffer_depth": 16}],
@@ -255,7 +255,7 @@ std::string BuildAbi02RunSpecJson(const std::filesystem::path& recording, const 
       {
         "name": "sut", "mode": "simulate",
         "impl": {"kind": "dll", "path": ")"
-      << JsonEscape(stub) << R"(", "pattern": "", "search": []},
+      << JsonEscape(stub) << R"("},
         "trigger": "", "clock_period_ns": 10000000, "abi_version": 1, "config_bundle_sha256": "",
         "ports": [{"name": "objects", "dir": "req", "kind": "data", "proto_type": "abi_test.AbiPort",
                    "record": "full", "fixed_slots": null, "bulk": false, "buffer_depth": 16}],

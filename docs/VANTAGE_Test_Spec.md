@@ -91,9 +91,10 @@ in `tests/system/test_vnt_gate_g3.py`.
 
 **`SYT-RUN-09`** · T · fixture `F-SETUP-EDIT`, `F-ENGINE` — Retired and unknown keys refused
 **Serves.** `SYS-0046`
-**Steps.** To copies of `running_example` `cut_c`'s setup add, one per copy, `delay_steps` to one input, `grid_step_ns` and `order` at the top level, and an unknown key `colour` to one stage; run each.
+**Steps.** To copies of `running_example` `cut_c`'s setup add, one per copy, `delay_steps` to one input, `grid_step_ns` and `order` at the top level, `pattern` to one stage's `impl`, and an unknown key `colour` to one stage; run each.
 - `.c1` **PASS:** each retired key gives a load error naming the key and where it is, per `SYS-0046` Accept. **FAIL:** a run starts, or the message lacks the key or its place.
 - `.c2` **PASS:** `colour` gives a load error naming it and its stage. **FAIL:** a run starts, or the key is ignored.
+- `.c3` **PASS:** `impl.pattern` gives a load error naming it and its stage. **FAIL:** a run starts, or the key is ignored.
 
 **`SYT-RUN-10`** · T · fixture `F-RUN-CONFIG` — The launcher refuses a missing run-setup value
 **Serves.** `SYS-0048`

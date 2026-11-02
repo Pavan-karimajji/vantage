@@ -35,7 +35,7 @@ GraphView BuildGraphView(const RunSpec& spec, const std::vector<std::string>& lo
     // `loaded_stages`) is reported as "unloaded", never as the spec's own
     // (possibly stale) `impl.path` re-printed as if it were live.
     if (stage.mode == "simulate" && loaded.count(stage.name) != 0) {
-      out.impl = stage.impl.path.empty() ? stage.impl.pattern : stage.impl.path;
+      out.impl = stage.impl.path.empty() ? stage.impl.kind : stage.impl.path;
     } else if (stage.mode == "simulate") {
       out.impl = "unloaded";
     } else {

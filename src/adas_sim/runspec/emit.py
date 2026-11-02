@@ -185,9 +185,9 @@ def _require_absolute(path: Path, *, where: str) -> str:
 
 
 def _resolve_impl(impl_raw: str, *, stage: str, search: Sequence[Path]) -> dict:
-    """`IMP-0003`: `stages[].impl` carries a resolved `{kind, path, pattern,
-    search}` -- never a bare stem the engine would have to expand
-    (`IMP-0079`). Bridges through today's `resolve_library`, exactly as
+    """`IMP-0003`, `IMP-0058`: `stages[].impl` carries a resolved `{kind, path}`
+    -- never a bare stem the engine would have to expand (`IMP-0079`); the
+    library is found here, before the setup is written. Bridges through today's `resolve_library`, exactly as
     `IMP-0003`'s own design note names, until `WP-21` re-homes probing to
     `resolve/probe.py` and this call is replaced by `IMP-0204`'s
     `Resolution`."""
@@ -199,11 +199,7 @@ def _resolve_impl(impl_raw: str, *, stage: str, search: Sequence[Path]) -> dict:
             hint="only a real library has a path for the spec to carry",
         )
     lib_path = resolve_library(stem, search=search)
-    return {
-        "kind": kind, "path": _require_absolute(lib_path, where=f"stage '{stage}' impl.path"),
-        "pattern": "{stem}.dll" if lib_path.suffix == ".dll" else f"{{stem}}{lib_path.suffix}",
-        "search": [str(p) for p in search],
-    }
+    return {"kind": kind, "path": _require_absolute(lib_path, where=f"stage '{stage}' impl.path")}
 
 
 def _compute_grid_step_ns(period_ns_by_stage: Mapping[str, int]) -> int:
@@ -268,7 +264,7 @@ def unresolved(spec: RunSpec) -> list[str]:
         if isinstance(node, Mapping):
             for key, value in node.items():
                 child_where = f"{where}.{key}"
-                if key in ("path", "search") and isinstance(value, str):
+                if key == "path" and isinstance(value, str):
                     # An empty path is the closed-vocabulary sentinel for
                     # "no file" (a measured/off stage's `ImplRef`, same
                     # literal shape `BuildAbi02RunSpecJson`'s own `meas`

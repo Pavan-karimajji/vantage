@@ -36,7 +36,7 @@ Json ValidSetup() {
     "stages": [
       {
         "name": "meas", "mode": "measured",
-        "impl": {"kind": "dll", "path": "", "pattern": "", "search": []},
+        "impl": {"kind": "dll", "path": ""},
         "trigger": "", "clock_period_ns": 0, "abi_version": 1, "config_bundle_sha256": "",
         "ports": [{"name": "objects", "dir": "pro", "kind": "data", "proto_type": "test.Echo",
                    "record": "full", "fixed_slots": null, "bulk": false, "buffer_depth": 8}],
@@ -44,7 +44,7 @@ Json ValidSetup() {
       },
       {
         "name": "sut", "mode": "simulate",
-        "impl": {"kind": "dll", "path": "/abs/sut.dll", "pattern": "", "search": []},
+        "impl": {"kind": "dll", "path": "/abs/sut.dll"},
         "trigger": "control", "clock_period_ns": 0, "abi_version": 1, "config_bundle_sha256": "",
         "ports": [{"name": "objects", "dir": "req", "kind": "data", "proto_type": "test.Echo",
                    "record": "full", "fixed_slots": null, "bulk": true, "buffer_depth": 16}],
@@ -223,6 +223,33 @@ TEST(UtRunSpecLoad05RetiredAndUnknownKeys, AStagePeriodNsIsRefusedBecauseTheKeyI
   const std::string text = RefusalOf(setup);
   EXPECT_TRUE(Mentions(text, "period_ns")) << text;
   EXPECT_TRUE(Mentions(text, "stages[meas]")) << text;
+}
+
+// IMP-0058 (SYT-RUN-09 .c3's unit-level twin): `impl` is `kind` and `path` only.
+TEST(UtRunSpecLoad05RetiredAndUnknownKeys, ImplPatternIsRefusedNamingTheKeyAndTheStage) {
+  Json setup = ValidSetup();
+  setup["stages"][1]["impl"]["pattern"] = "{stem}.dll";
+  const std::string text = RefusalOf(setup);
+  EXPECT_TRUE(Mentions(text, "pattern")) << text;
+  EXPECT_TRUE(Mentions(text, "stages[sut]")) << text;
+  EXPECT_TRUE(Mentions(text, "retired")) << text;
+}
+
+TEST(UtRunSpecLoad05RetiredAndUnknownKeys, ImplSearchIsRefusedNamingTheKeyAndTheStage) {
+  Json setup = ValidSetup();
+  setup["stages"][1]["impl"]["search"] = Json::array();
+  const std::string text = RefusalOf(setup);
+  EXPECT_TRUE(Mentions(text, "search")) << text;
+  EXPECT_TRUE(Mentions(text, "stages[sut]")) << text;
+  EXPECT_TRUE(Mentions(text, "retired")) << text;
+}
+
+TEST(UtRunSpecLoad05RetiredAndUnknownKeys, AnImplWithKindAndPathOnlyLoads) {
+  const Json setup = ValidSetup();
+  ASSERT_FALSE(setup["stages"][1]["impl"].contains("pattern"));
+  ASSERT_FALSE(setup["stages"][1]["impl"].contains("search"));
+  const auto loaded = Load(setup);
+  EXPECT_TRUE(loaded.ok()) << (loaded.ok() ? "" : loaded.error().Format());
 }
 
 TEST(UtRunSpecLoad05RetiredAndUnknownKeys, AnUnknownKeyIsRefusedNamingTheKeyAndWhereItIs) {

@@ -49,7 +49,7 @@ struct LoadFailure {
 // refused, never read and ignored (`D18 (4)`).
 bool IsRetiredKey(const std::string& key) {
   return key == "sampling" || key == "on_missing" || key == "delay_steps" || key == "grid_step_ns" ||
-         key == "order" || key == "grid" || key == "period_ns";
+         key == "order" || key == "grid" || key == "period_ns" || key == "pattern" || key == "search";
 }
 
 // IMP-0002, IMP-0049: every key of `node` must be one the schema names. The
@@ -115,14 +115,10 @@ ParsedIndex ParseMutationIndex(const Json& node) {
 }
 
 ImplRef ParseImpl(const Json& node, const std::string& where) {
-  RequireKnownKeys(node, {"kind", "path", "pattern", "search"}, where);
+  RequireKnownKeys(node, {"kind", "path"}, where);
   ImplRef impl;
   impl.kind = node.at("kind").get<std::string>();
   impl.path = node.at("path").get<std::string>();
-  impl.pattern = node.at("pattern").get<std::string>();
-  for (const auto& entry : node.at("search")) {
-    impl.search.push_back(entry.get<std::string>());
-  }
   return impl;
 }
 

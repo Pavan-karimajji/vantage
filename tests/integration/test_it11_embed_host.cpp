@@ -96,7 +96,7 @@ std::filesystem::path WriteRunSpec(const std::filesystem::path& spec_path, const
     "stages": [{
       "name": "sut", "mode": "simulate",
       "impl": {"kind": "dll", "path": ")"
-      << JsonEscape(stub) << R"(", "pattern": "", "search": []},
+      << JsonEscape(stub) << R"("},
       "trigger": "", "clock_period_ns": 10000000, "abi_version": 1, "config_bundle_sha256": "",
       "ports": [{"name": "outputs", "dir": "pro", "kind": "data", "proto_type": "test.Echo",
                  "record": "full", "fixed_slots": null, "bulk": false, "buffer_depth": 16}],
@@ -208,7 +208,7 @@ TEST_F(It11EmbedHost, AttachTransportThenStepOnceDeliversRealFramesBetweenTicks)
 // and the instants between are not run; the step count after it is the
 // recording's remainder, not the whole recording again.
 TEST_F(It11EmbedHost, SeekMovesTheEngineToThePositionAndSteppingContinuesFromThere) {
-  EXPECT_EQ(simEngineAbiVersion(), 3);
+  EXPECT_EQ(simEngineAbiVersion(), 4);
 
   char err_buf[512] = {0};
   SimExitCode create_exit = kSimExitOk;

@@ -32,13 +32,12 @@
 namespace simcore {
 
 // design §3.1 -- stages[].impl. No search_path/stem interpretation lives
-// here: `path` is already absolute, `search` is an audit trail only
-// (SW-0003, SW-0018).
+// here: `path` is already absolute (SW-0003, SW-0018). `pattern` and `search`
+// are retired keys (`IMP-0058`): the library is found before the setup is
+// written.
 struct ImplRef {
   std::string kind;    // "dll" | "stubdll"
   std::string path;    // absolute, always
-  std::string pattern;
-  std::vector<std::string> search;
 };
 
 // design §3.1 -- stages[].ports[]. `record` is ALWAYS present (SW-0009) --
