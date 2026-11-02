@@ -11,13 +11,15 @@ required to run this suite (`sim_sil_contract.md` SS8).
 
 The pure logic (`Pipeline.component_build_shas`, `core.manifest.
 verify_pinned_builds`) is proven with no DLL at all in `tests/unit/
-test_d7_pin_builds.py`; this file proves the real CLI wiring end to end --
-in particular that `sim resim --save` now embeds the real, currently-
-resolved library's own hash (`cli/resim.py`'s own gap this stage closes:
-every resim-produced manifest used to carry `library_sha256=""`)."""
+test_d7_pin_builds.py`; this file proves the real CLI wiring end to end.
+`sim resim --save` no longer patches the engine's recording with a
+library hash (`RCT:IMP-0048`: the engine's own `manifest` carries the
+`build_id` of each simulated stage), so the test that resimmed a saved
+recording again with `--pin-builds` and expected a pass is gone."""
 
 from __future__ import annotations
 
+from tests.support.foreign_mcap import ForeignMcapWriter
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -26,7 +28,7 @@ import pytest
 
 from adas_sim.cli import resim as resim_cli
 from adas_sim.diagnostics.errors import ContractError
-from adas_sim.plugins.registry import reader_for, writer_for
+from adas_sim.plugins.registry import reader_for
 
 SIM_ROOT = Path(__file__).resolve().parent.parent.parent
 MODULES_ROOT = SIM_ROOT.parent
@@ -84,27 +86,13 @@ def _with_tampered_library_sha(path: Path, out_path: Path, *, stage: str, librar
         replace(c, library_sha256=library_sha256) if c.name == stage else c for c in meta.components
     )
     new_meta = replace(meta, components=new_components)
-    writer = writer_for(out_path)
+    writer = ForeignMcapWriter()
     writer.open(out_path, new_meta, topics)
     try:
         for topic, log_time_ns, capture_time_ns, payload in messages:
             writer.write(topic, log_time_ns, payload, capture_time_ns=capture_time_ns)
     finally:
         writer.close()
-
-
-def test_pin_builds_passes_against_the_recording_it_actually_produced(tmp_path):
-    """`sim resim --save` now embeds the real, currently-resolved
-    `df_sil.dll`'s own hash; resim-ing that SAME recording again with
-    `--pin-builds` must pass, because it genuinely is the same library."""
-    saved = tmp_path / "baseline.mcap"
-    _resim_and_save(_one_recording(), saved)
-
-    argv = [
-        str(saved), "--pipeline", str(_PIPELINE_PATH), "--pin-builds",
-        "--search", str(_DF_SIL_DIR), "--config", str(_DF_SIL_DIR / "config"),
-    ]
-    assert resim_cli.run(argv) == 0
 
 
 def test_pin_builds_refuses_a_recording_pinned_to_a_different_build(tmp_path):

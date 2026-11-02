@@ -38,6 +38,13 @@
 ///   coverage, not a new requirement" shape `test_ut_io_erg_negative.cpp`'s
 ///   own top note already uses for a defect found outside the `WP` that
 ///   built the code it fixes.
+///
+///   **Recording conventions (`RCT_Architecture.md` section 6a, `IMP-0052`,
+///   `IMP-0059`).** A topic is written under its port's name (`A.out`,
+///   `source.X`), which `CanonicalTopic` turns back into the engine's
+///   spelling on reading, so nothing above `io` sees the change. `manifest`
+///   is one `yaml` entry and `config_bundle` one entry per file, written by
+///   `WriteMetaBlock`; `GetMeta` reads a `yaml` entry as it reads `bytes`.
 /// @author Pavan Karimajji
 
 #define MCAP_IMPLEMENTATION
@@ -132,16 +139,19 @@ class McapWriter final : public Writer {
     // Sorted topic order (P-8, SW-0040): deterministic channel numbering is
     // part of what makes two writes of the same messages byte-identical --
     // `topics` is a `std::map`, already iterated in sorted key order.
+    std::map<std::string, std::pair<std::string, const TopicInfo*>> by_wire_name;  // sorted by the name written
+    for (const auto& [topic, info] : topics) by_wire_name.emplace(PortNameOfTopic(topic), std::make_pair(topic, &info));
     mcap::KeyValueMap provenance;
-    for (const auto& [topic, info] : topics) {
+    for (const auto& [wire, entry] : by_wire_name) {
+      const TopicInfo& info = *entry.second;
       mcap::Schema schema(
-          info.schema_name.empty() ? topic : info.schema_name, info.schema_bytes.empty() ? "" : "protobuf",
+          info.schema_name.empty() ? wire : info.schema_name, info.schema_bytes.empty() ? "" : "protobuf",
           FromBytes(info.schema_bytes));
       writer_.addSchema(schema);
-      mcap::Channel channel(topic, "protobuf", schema.id);
+      mcap::Channel channel(wire, "protobuf", schema.id);
       writer_.addChannel(channel);
-      channel_ids_[topic] = channel.id;
-      provenance[topic] = ToString(info.provenance);
+      channel_ids_[entry.first] = channel.id;
+      provenance[wire] = ToString(info.provenance);
     }
     mcap::Metadata provenance_meta;
     provenance_meta.name = kTopicProvenanceMetaName;
@@ -157,7 +167,7 @@ class McapWriter final : public Writer {
       // R-SIM-14's `arbitrary_topics` capability: a topic not declared at
       // `Open()` still gets a channel, schema-less -- registered on demand
       // rather than dropped, since this codec declares that capability true.
-      mcap::Channel channel(message.topic, "protobuf", 0);
+      mcap::Channel channel(PortNameOfTopic(message.topic), "protobuf", 0);
       writer_.addChannel(channel);
       it = channel_ids_.emplace(message.topic, channel.id).first;
     }
@@ -189,6 +199,13 @@ class McapWriter final : public Writer {
     (void)writer_.write(meta);
   }
 
+  void WriteMetaBlock(const std::string& name, const std::map<std::string, std::string>& block) override {
+    mcap::Metadata meta;
+    meta.name = name;
+    for (const auto& [key, text] : block) meta.metadata[key] = text;
+    (void)writer_.write(meta);
+  }
+
   void Close() override { writer_.close(); }
 
  private:
@@ -215,6 +232,7 @@ class McapReader final : public Reader {
       return Result<bool>::Fail(MakeError(
           Kind::Environment, "a readable .mcap summary", summary_status.message, path.string()));
     }
+    ReadMetaBlocks();
     ReadTopicProvenance();
     ReadInformationalOnly();
     DetermineCaptureTimeAwareness();
@@ -244,19 +262,22 @@ class McapReader final : public Reader {
     }
   }
 
+  // Served from what `Open` read once, never by a fresh read of the file: the message iterator `Open` leaves
+  // behind holds a pointer into the file reader's buffer, which another read through the same source would
+  // overwrite (the first message would then read back as someone else's bytes).
   std::optional<std::vector<std::uint8_t>> GetMeta(const std::string& kind_name) const override {
-    const auto range = reader_.metadataIndexes().equal_range(kind_name);
-    if (range.first == range.second) return std::nullopt;
-    mcap::Record record;
-    if (!mcap::McapReader::ReadRecord(*const_cast<McapReader*>(this)->reader_.dataSource(), range.first->second.offset, &record)
-             .ok()) {
-      return std::nullopt;
-    }
-    mcap::Metadata metadata;
-    if (!mcap::McapReader::ParseMetadata(record, &metadata).ok()) return std::nullopt;
-    const auto value_it = metadata.metadata.find("bytes");
-    if (value_it == metadata.metadata.end()) return std::nullopt;
+    const auto block = meta_blocks_.find(kind_name);
+    if (block == meta_blocks_.end()) return std::nullopt;
+    auto value_it = block->second.find("bytes");
+    if (value_it == block->second.end()) value_it = block->second.find("yaml");  // section 6a's `manifest`
+    if (value_it == block->second.end()) return std::nullopt;
     return std::vector<std::uint8_t>(value_it->second.begin(), value_it->second.end());
+  }
+
+  std::optional<std::map<std::string, std::string>> GetMetaBlock(const std::string& name) const override {
+    const auto block = meta_blocks_.find(name);
+    if (block == meta_blocks_.end()) return std::nullopt;
+    return block->second;
   }
 
  private:
@@ -284,6 +305,19 @@ class McapReader final : public Reader {
       info.provenance = OriginOrUnknown(raw);
       info.schema_bytes = schema ? ToBytes(schema->data) : std::vector<std::uint8_t>{};
       topics_.emplace(CanonicalTopic(channel->topic), std::move(info));
+    }
+  }
+
+  // The first record of every metadata name, read once (see `GetMeta`).
+  void ReadMetaBlocks() {
+    meta_blocks_.clear();
+    for (const auto& [name, index] : reader_.metadataIndexes()) {
+      if (meta_blocks_.count(name) != 0) continue;
+      mcap::Record record;
+      if (!mcap::McapReader::ReadRecord(*reader_.dataSource(), index.offset, &record).ok()) continue;
+      mcap::Metadata metadata;
+      if (!mcap::McapReader::ParseMetadata(record, &metadata).ok()) continue;
+      meta_blocks_.emplace(name, std::map<std::string, std::string>(metadata.metadata.begin(), metadata.metadata.end()));
     }
   }
 
@@ -382,6 +416,7 @@ class McapReader final : public Reader {
   std::optional<mcap::LinearMessageView::Iterator> iterator_;
   std::optional<RawMessage> lookahead_;
   std::map<std::string, std::string> provenance_by_topic_;
+  std::map<std::string, std::map<std::string, std::string>> meta_blocks_;
   std::set<std::pair<std::string, std::int64_t>> informational_only_;
   // Canonicalised once in `Open`; see `BuildTopicIndex`.
   std::map<std::string, TopicInfo> topics_;

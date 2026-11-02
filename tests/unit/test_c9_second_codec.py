@@ -20,6 +20,7 @@ from pathlib import Path
 from adas_sim.io.base import Provenance, RunManifest, TopicInfo
 from adas_sim.ingest.map import IngestMap, IngestRecordingReader, ProvidedPort
 from adas_sim.plugins.registry import reader_for, writer_for
+from tests.support.foreign_mcap import ForeignMcapWriter
 
 import adas_sim.io.jsonl  # noqa: E402,F401 -- registers the ".jsonl" codec
 import adas_sim.io.mcap  # noqa: E402,F401 -- registers the ".mcap" codec
@@ -29,8 +30,13 @@ _RAW_TOPIC = "legacy_family/raw_objects"
 _MESSAGES = [(_RAW_TOPIC, 1_000, b"\x01"), (_RAW_TOPIC, 2_000, b"\x02"), (_RAW_TOPIC, 3_000, b"\x03")]
 
 
+def _writer_for(path: Path):
+    """`.mcap` is read-only in this package: its test file is built by the foreign-shape builder."""
+    return ForeignMcapWriter() if path.suffix == ".mcap" else writer_for(path)
+
+
 def _write_equivalent_recording(path: Path) -> None:
-    writer = writer_for(path)
+    writer = _writer_for(path)
     writer.open(path, RunManifest(manifest_version=2, run_id="st-c9-3"), {
         _RAW_TOPIC: TopicInfo(schema_name=_PROTO_TYPE, provenance=Provenance.UNKNOWN),
     })
@@ -97,7 +103,7 @@ def test_a_raw_topic_the_ingest_map_does_not_claim_passes_through_unchanged_on_b
     mcap_path = tmp_path / "unclaimed.mcap"
     jsonl_path = tmp_path / "unclaimed.jsonl"
     for path in (mcap_path, jsonl_path):
-        writer = writer_for(path)
+        writer = _writer_for(path)
         writer.open(path, RunManifest(), {
             "totally/unrelated": TopicInfo(schema_name="test.Other", provenance=Provenance.UNKNOWN),
         })

@@ -102,6 +102,12 @@ in `tests/system/test_vnt_gate_g3.py`.
 - `.c1` **PASS:** each removal gives an error naming the value and no run setup file, per `SYS-0048` Accept. **FAIL:** a setup is written, or the error names another value.
 - `.c2` **PASS:** each of the three paths writes a setup carrying exactly the configured values. **FAIL:** a value missing, changed or filled by a default.
 
+**`SYT-RUN-11`** · T · fixture `F-CASE`, `F-ENGINE` — An engine-run recording embeds the simulated stages' bundles
+**Serves.** `SYS-0052`
+**Steps.** Run `running_example` `cut_c` on `F-ENGINE`. Read the engine-run recording's `config_bundle` block, each stage's bundle folder (`config/` beside its library) and each stage's `config_bundle_sha256` in the setup.
+- `.c1` **PASS:** the block names exactly the simulated stages, each with its folder's files and text, per `SYS-0052` Accept. **FAIL:** a stage missing or extra (`C` is `measured`), or a file missing, extra or different.
+- `.c2` **PASS:** each stage's `bundle.sha256` text equals the setup's hash for it. **FAIL:** any differs.
+
 ## 3. The orchestrator — `ORC`
 
 **`SYT-ORC-01`** · T · fixture `F-CASE`, `F-ENGINE` — Rank order inside a step

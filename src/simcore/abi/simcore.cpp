@@ -29,6 +29,9 @@
 #include "simcore/abi/simcore.h"
 #include "engine_access.hpp"
 
+#include <algorithm>
+#include <atomic>
+#include <cctype>
 #include <cstring>
 #include <fstream>
 #include <iostream>
@@ -70,6 +73,25 @@ void WriteErr(char* buf, std::size_t cap, const std::string& msg) {
 
 SimExitCode ToC(ExitCode code) { return static_cast<SimExitCode>(code); }
 
+// `IMP-0060`: set when a run ends with the timeout outcome. The call that timed out may still be inside
+// the component's library, and a second run in this process could load that library again beside it, so
+// the process refuses engine runs from then on (batch runs one process per recording).
+std::atomic<bool> g_timeout_abandoned{false};
+
+SimExitCode EndedBy(const Error& error) {
+  const ExitCode code = simcore::ExitCodeFor(error);
+  if (code == ExitCode::Timeout) g_timeout_abandoned = true;
+  return ToC(code);
+}
+
+bool RefusedAfterTimeout(char* err_buf, std::size_t err_buf_cap) {
+  if (!g_timeout_abandoned) return false;
+  WriteErr(err_buf, err_buf_cap,
+           "expected an engine run in a process whose earlier run did not time out; found a component call that "
+           "did not return within limits.exec_timeout_ms and may still be running -> restart the process");
+  return true;
+}
+
 // Every registered-once-per-process codec this host knows how to read.
 // `CodecRegistry::Register` fails a SECOND registration of one extension
 // (IMP-0023), so this must run exactly once per process regardless of how
@@ -95,80 +117,248 @@ Result<std::string> ReadFile(const std::filesystem::path& path) {
   return Result<std::string>::Ok(buf.str());
 }
 
-// IMP-0426: the topics `Writer::Open` declares up front -- one per
+// One input recording, as `simEngineCreate` has it open: its path (for an error to name) and its topic index.
+struct InputIndex {
+  std::string path;
+  std::map<std::string, simcore::io::TopicInfo> topics;
+};
+
+// What the engine's writer is given besides the messages: the declared channels, and every recorded
+// port's `record` policy (`manifest` `record_policies`, section 6a).
+struct RecordingPlan {
+  std::map<std::string, simcore::io::TopicInfo> topics;
+  std::map<std::string, std::string> policies;  // port name -> full | excluded | decimate:<n>
+};
+
+std::string PolicyText(const simcore::runner::RecordPolicy& policy) {
+  switch (policy.verb) {
+    case simcore::runner::RecordVerb::kExcluded:
+      return "excluded";
+    case simcore::runner::RecordVerb::kDecimate:
+      return "decimate:" + std::to_string(policy.decimate_n);
+    case simcore::runner::RecordVerb::kFull:
+      break;
+  }
+  return "full";
+}
+
+std::vector<std::uint8_t> ToByteVector(const std::string& text) {
+  return std::vector<std::uint8_t>(text.begin(), text.end());
+}
+
+// IMP-0426, IMP-0052: the topics `Writer::Open` declares up front -- one per
 // declared port of every non-`off` stage, the same "stage.port" universe
 // `runner::Runner::Construct` derives its own `recorded_topics_` from
-// (`cycle_loop.cpp`). Computed here rather than reused from that accessor
-// because it is only available AFTER `Runner::Construct`, which itself
-// needs an already-open `WriterBase` -- `Writer::Open` must run first. A
-// port this map omits is not lost: `.mcap`'s `arbitrary_topics`
-// capability (`R-SIM-14`) registers an unknown topic schema-less on first
-// `Write`, so this is a completeness/labelling improvement, not a
-// correctness dependency.
-// `source_topics` is the INPUT recording's own index (`Reader::Describe()`),
-// so a fed port's evidence grade can be carried forward rather than guessed
-// -- see the `F-2` note inside.
-std::map<std::string, simcore::io::TopicInfo> BuildOutputTopics(
-    const simcore::RunSpec& spec, const std::map<std::string, simcore::io::TopicInfo>& source_topics) {
-  std::map<std::string, simcore::io::TopicInfo> topics;
-  const auto carried_provenance = [&source_topics](const std::string& producing_topic) {
-    // F-2: carry the source topic's OWN grade. Absent from the index means
-    // nobody established one, which is `kUnknown` -- never `kMeasured`
-    // (`SW-0039`, and `OriginOrUnknown`'s own rule one layer down).
-    const auto it = source_topics.find(producing_topic);
-    if (it == source_topics.end()) return simcore::io::Provenance::kUnknown;
-    return it->second.provenance;
+// (`cycle_loop.cpp`) -- and each one's `record` policy. A port whose policy is
+// `excluded` has no topic (section 6a). Computed here rather than reused from
+// that accessor because it is only available AFTER `Runner::Construct`, which
+// itself needs an already-open `WriterBase` -- `Writer::Open` must run first.
+//
+// The origin of a topic a `simulate` stage computes is `simulated`. Every other
+// topic is FED: its origin is the input recording's own (F-2), and an input
+// that holds the topic without stating an origin is refused, naming it
+// (`IMP-0052`, no default). A topic no input holds is one the engine itself
+// writes for the run (a control it makes from the setup), and is `simulated`.
+// The schema bytes are the component's own `FileDescriptorSet` for what it
+// computes, the input's for what it carries.
+simcore::Result<RecordingPlan> PlanRecording(
+    const simcore::RunSpec& spec, const std::vector<InputIndex>& inputs,
+    const std::map<std::string, simcore::module_host::Component*>& components) {
+  RecordingPlan plan;
+  std::set<std::string> claimed;
+  const auto input_holding = [&inputs](const std::string& topic) -> const InputIndex* {
+    for (const InputIndex& input : inputs) {
+      if (input.topics.count(topic) != 0) return &input;
+    }
+    return nullptr;
+  };
+  const auto component_schema = [&components](const std::string& stage) -> std::vector<std::uint8_t> {
+    const auto it = components.find(stage);
+    return it == components.end() ? std::vector<std::uint8_t>{} : ToByteVector(it->second->manifest().descriptor_set());
   };
 
   // `pro` before `req`, for the reason `Runner::Construct` states at length:
   // a `req` port recorded under its producing address can resolve onto a
   // topic a `pro` port owns, and the producer must claim it first.
   for (const std::string& want_dir : {std::string("pro"), std::string("req")}) {
-  for (const simcore::SpecStage& stage : spec.stages) {
-    if (stage.mode == "off") continue;
-    for (const simcore::SpecPort& port : stage.ports) {
-      if (port.dir != want_dir) continue;
-      const std::string qualified = stage.name + "." + port.name;
-      // The SAME derivation `Runner::Construct` uses to name the messages it
-      // writes (`RecordedTopicFor`) -- index and stream cannot disagree.
-      const std::string topic = simcore::runner::RecordedTopicFor(spec, stage.name, port.name, port.dir);
-      simcore::io::TopicInfo info;
-      info.schema_name = port.proto_type;
-      if (port.dir == "pro" && stage.mode == "simulate") {
-        // Freshly computed by this run -- the one grade this engine is
-        // entitled to assert on its own authority.
-        info.provenance = simcore::io::Provenance::kSimulated;
-      } else {
-        // F-2: everything else is FED, and "fed" is a direction, not an
-        // evidence grade. Tagging it `kMeasured` unconditionally -- what
-        // this did until 2026-08-28 -- reports mocked CARLA stimulus as a
-        // measurement, which is exactly what `R-SIM-12` exists to forbid:
-        // *"a report must never let 'perception was measured' mean
-        // 'perception was a mock'."* The closed set has four values; the
-        // old expression could only ever emit two.
-        info.provenance = carried_provenance(topic);
-      }
-      // First writer wins, mirroring `Runner::Construct`'s own claim rule:
-      // a `pro` port owns its topic, and a `req` port that resolves onto it
-      // must not overwrite the producer's grade with a carried one.
-      topics.emplace(topic, info);
+    for (const simcore::SpecStage& stage : spec.stages) {
+      if (stage.mode == "off") continue;
+      for (const simcore::SpecPort& port : stage.ports) {
+        if (port.dir != want_dir) continue;
+        const std::string qualified = stage.name + "." + port.name;
+        const simcore::Result<simcore::runner::RecordPolicy> policy =
+            simcore::runner::ParseRecordPolicy(port.record, "port '" + qualified + "'");
+        if (!policy.ok()) return simcore::Result<RecordingPlan>::Fail(policy.error());
+        // The SAME derivation `Runner::Construct` uses to name the messages it
+        // writes (`RecordedTopicFor`) -- index and stream cannot disagree.
+        const std::string topic = simcore::runner::RecordedTopicFor(spec, stage.name, port.name, port.dir);
+        if (claimed.insert(topic).second) {
+          plan.policies.emplace(simcore::io::PortNameOfTopic(topic), PolicyText(policy.value()));
+          if (policy.value().verb != simcore::runner::RecordVerb::kExcluded) {
+            simcore::io::TopicInfo info;
+            info.schema_name = port.proto_type;
+            if (port.dir == "pro" && stage.mode == "simulate") {
+              info.provenance = simcore::io::Provenance::kSimulated;
+              info.schema_bytes = component_schema(stage.name);
+            } else if (const InputIndex* held = input_holding(topic)) {
+              const simcore::io::TopicInfo& carried = held->topics.at(topic);
+              if (carried.provenance == simcore::io::Provenance::kUnknown) {
+                return simcore::Result<RecordingPlan>::Fail(simcore::Error{
+                    simcore::Kind::Authoring, "the input recording to state an origin for topic '" + topic + "'",
+                    "none in topic_provenance", held->path,
+                    "write the recording with an origin for every topic (measured, truth, mocked, simulated or "
+                    "overridden); the engine has no default"});
+              }
+              info.provenance = carried.provenance;
+              info.schema_bytes = carried.schema_bytes;
+              if (!carried.schema_name.empty()) info.schema_name = carried.schema_name;
+            } else {
+              info.provenance = simcore::io::Provenance::kSimulated;
+              info.schema_bytes = component_schema(stage.name);
+            }
+            plan.topics.emplace(topic, std::move(info));
+          }
+        }
 
-      // The post-mutation twin (`R-SIM-15`), declared here so the index says
-      // `overridden` rather than leaving a reader to infer it.
-      if (port.dir != "req") continue;
-      const std::optional<std::string> producer =
-          simcore::runner::ProducerAddressOf(spec, stage.name, port.name);
-      if (!producer.has_value()) continue;
-      const std::size_t dot = producer->find('.');
-      if (dot == std::string::npos) continue;
-      if (!simcore::runner::MutationTouches(spec, producer->substr(0, dot), producer->substr(dot + 1))) continue;
-      simcore::io::TopicInfo overridden = info;
-      overridden.provenance = simcore::io::Provenance::kOverridden;
-      topics.emplace(simcore::runner::PortNameToTopic(qualified), overridden);
+        // The post-mutation twin (`R-SIM-15`), declared here so the index says
+        // `overridden` rather than leaving a reader to infer it.
+        if (port.dir != "req") continue;
+        const std::optional<std::string> producer =
+            simcore::runner::ProducerAddressOf(spec, stage.name, port.name);
+        if (!producer.has_value()) continue;
+        const std::size_t dot = producer->find('.');
+        if (dot == std::string::npos) continue;
+        if (!simcore::runner::MutationTouches(spec, producer->substr(0, dot), producer->substr(dot + 1))) continue;
+        const std::string twin = simcore::runner::PortNameToTopic(qualified);
+        if (!claimed.insert(twin).second) continue;
+        plan.policies.emplace(simcore::io::PortNameOfTopic(twin), PolicyText(policy.value()));
+        if (policy.value().verb == simcore::runner::RecordVerb::kExcluded) continue;
+        const auto source = plan.topics.find(topic);
+        simcore::io::TopicInfo overridden;
+        if (source != plan.topics.end()) {
+          overridden = source->second;
+        } else {
+          overridden.schema_name = port.proto_type;
+        }
+        overridden.provenance = simcore::io::Provenance::kOverridden;
+        plan.topics.emplace(twin, std::move(overridden));
+      }
     }
   }
+  return simcore::Result<RecordingPlan>::Ok(std::move(plan));
+}
+
+// The text of a top-level `key: value` line of a `manifest` block's YAML; `std::nullopt` when there is none.
+// Not a YAML parser: the producers write `key: value` lines, quoted or plain, one per line, and this reads
+// exactly one such scalar (the same narrow read `ParseManifestVersion` makes of `manifest_version`).
+std::optional<std::string> TopLevelScalar(const std::string& yaml, const std::string& key) {
+  const std::string prefix = key + ":";
+  std::size_t start = 0;
+  while (start < yaml.size()) {
+    std::size_t end = yaml.find('\n', start);
+    if (end == std::string::npos) end = yaml.size();
+    const std::string line = yaml.substr(start, end - start);
+    start = end + 1;
+    if (line.rfind(prefix, 0) != 0) continue;
+    std::string value = line.substr(prefix.size());
+    const std::size_t first = value.find_first_not_of(" \t");
+    const std::size_t last = value.find_last_not_of(" \t\r");
+    if (first == std::string::npos) return std::nullopt;
+    value = value.substr(first, last - first + 1);
+    if (value.size() >= 2 && (value.front() == '\'' || value.front() == '"') && value.back() == value.front()) {
+      value = value.substr(1, value.size() - 2);
+    }
+    if (value.empty()) return std::nullopt;
+    return value;
   }
-  return topics;
+  return std::nullopt;
+}
+
+// A YAML scalar for `text`: single-quoted, so no value (a hex build id that reads as a number) changes type.
+std::string YamlQuoted(const std::string& text) {
+  std::string out = "'";
+  for (const char c : text) out += c == '\'' ? std::string("''") : std::string(1, c);
+  return out + "'";
+}
+
+// A YAML mapping key: plain when it is made of name characters, else quoted.
+std::string YamlKey(const std::string& key) {
+  const bool plain = !key.empty() && std::all_of(key.begin(), key.end(), [](unsigned char c) {
+                       return std::isalnum(c) != 0 || c == '_' || c == '.' || c == '-';
+                     });
+  return plain ? key : YamlQuoted(key);
+}
+
+// `IMP-0052`: the `source_kind` the run's inputs state. Every input must state one, and they must agree.
+simcore::Result<std::string> InputSourceKind(const simcore::RunSpec& spec,
+                                             const std::vector<std::unique_ptr<simcore::io::Reader>>& readers) {
+  std::optional<std::string> kind;
+  std::string kind_from;
+  for (std::size_t i = 0; i < readers.size(); ++i) {
+    const std::string& path = spec.sources[i].path;
+    const auto block = readers[i]->GetMeta(simcore::io::ToString(simcore::io::MetaKind::kRunManifest));
+    const std::optional<std::string> stated =
+        block.has_value() ? TopLevelScalar(std::string(block->begin(), block->end()), "source_kind") : std::nullopt;
+    if (!stated.has_value()) {
+      return simcore::Result<std::string>::Fail(simcore::Error{
+          simcore::Kind::Authoring, "the input recording to state source_kind in its manifest", "none", path,
+          "write the recording with a source_kind; the engine has no default"});
+    }
+    if (kind.has_value() && *kind != *stated) {
+      return simcore::Result<std::string>::Fail(simcore::Error{
+          simcore::Kind::Authoring, "the input recordings to state one source_kind",
+          "'" + kind_from + "' and '" + *stated + "'", path,
+          "a run with inputs of two kinds has no single kind to record"});
+    }
+    if (!kind.has_value()) {
+      kind = stated;
+      kind_from = *stated;
+    }
+  }
+  return simcore::Result<std::string>::Ok(*kind);
+}
+
+// `IMP-0052`: the `manifest` entry of `RCT_Architecture.md` section 6a for an engine run -- `run_kind: resim`, the
+// input's `source_kind`, the simulated stages with their `build_id`, each port's policy. Keys sorted, as the Python
+// writer's are; no clock, so two runs write the same text.
+std::string ManifestYaml(const std::string& source_kind,
+                         const std::vector<std::pair<std::string, std::string>>& components,
+                         const std::map<std::string, std::string>& policies) {
+  std::string yaml = components.empty() ? "components: []\n" : "components:\n";
+  for (const auto& [name, build_id] : components) {
+    yaml += "- build_id: " + YamlQuoted(build_id) + "\n  name: " + YamlQuoted(name) + "\n";
+  }
+  yaml += "manifest_version: 1\nrecord_policies:\n";
+  for (const auto& [port, policy] : policies) yaml += "  " + YamlKey(port) + ": " + YamlQuoted(policy) + "\n";
+  yaml += "run_kind: resim\nsource_kind: " + YamlQuoted(source_kind) + "\n";
+  return yaml;
+}
+
+// `IMP-0059`: each simulated stage's bundle folder -- `config_path` when given, else `config/` beside its library,
+// as `adasInit` resolves it -- as `<stage>/<relative POSIX path>` -> the file's exact text. A stage with no such
+// folder gives no key.
+std::map<std::string, std::string> ReadConfigBundles(
+    const simcore::RunSpec& spec, const std::map<std::string, simcore::module_host::Component*>& components,
+    const char* config_path) {
+  std::map<std::string, std::string> bundle;
+  for (const simcore::SpecStage& stage : spec.stages) {
+    if (stage.mode != "simulate") continue;
+    const auto it = components.find(stage.name);
+    if (it == components.end()) continue;
+    const std::filesystem::path folder = config_path != nullptr ? std::filesystem::path(config_path)
+                                                                 : it->second->library_path().parent_path() / "config";
+    std::error_code ec;
+    if (!std::filesystem::is_directory(folder, ec)) continue;
+    for (std::filesystem::recursive_directory_iterator entry(folder, ec), end; !ec && entry != end;
+         entry.increment(ec)) {
+      if (!entry->is_regular_file()) continue;
+      std::ifstream in(entry->path(), std::ios::binary);
+      std::ostringstream text;
+      text << in.rdbuf();
+      bundle[stage.name + "/" + std::filesystem::relative(entry->path(), folder).generic_string()] = text.str();
+    }
+  }
+  return bundle;
 }
 
 // IMP-0427: builds a real `DescriptorPool` from every loaded component's
@@ -297,6 +487,8 @@ simcore::runner::Runner* SimEngineRunner(SimEngine* engine) {
   return engine != nullptr && engine->runner.has_value() ? &*engine->runner : nullptr;
 }
 
+void SimEngineClearTimeoutRefusalForTest() { g_timeout_abandoned = false; }
+
 int32_t simEngineAbiVersion() { return SIMCORE_ABI_VERSION; }
 
 SimEngine* simEngineCreate(const char* run_spec_json_path, const char* config_path, int64_t exec_timeout_ms,
@@ -305,6 +497,10 @@ SimEngine* simEngineCreate(const char* run_spec_json_path, const char* config_pa
   if (run_spec_json_path == nullptr) {
     WriteErr(err_buf, err_buf_cap, "run_spec_json_path is NULL");
     if (out_exit_code != nullptr) *out_exit_code = kSimExitConfig;
+    return nullptr;
+  }
+  if (RefusedAfterTimeout(err_buf, err_buf_cap)) {
+    if (out_exit_code != nullptr) *out_exit_code = kSimExitInfra;
     return nullptr;
   }
 
@@ -360,11 +556,14 @@ SimEngine* simEngineCreate(const char* run_spec_json_path, const char* config_pa
   // recording's topic index alone, before any library loads. The plan and the
   // boundary line go to stderr; a refusal is a load error.
   std::set<std::string> topic_index;
-  for (const auto& reader : engine->readers) {
-    for (const auto& [topic, info] : reader->Describe()) {
+  std::vector<InputIndex> input_indexes;
+  for (std::size_t i = 0; i < engine->readers.size(); ++i) {
+    InputIndex input{engine->spec.sources[i].path, engine->readers[i]->Describe()};
+    for (const auto& [topic, info] : input.topics) {
       topic_index.insert(topic);
       engine->topics.emplace(topic, info);
     }
+    input_indexes.push_back(std::move(input));
   }
   {
     const Result<simcore::runner::PreflightResult> preflight =
@@ -415,12 +614,38 @@ SimEngine* simEngineCreate(const char* run_spec_json_path, const char* config_pa
     // The input recording's own index is already available (the reader was
     // opened above), which is what lets a fed topic carry its real grade
     // forward instead of being labelled `measured` by direction (F-2).
-    const Result<bool> writer_open_result = engine->writer_impl->Open(
-        engine->spec.outputs.path, BuildOutputTopics(engine->spec, engine->topics));
+    Result<RecordingPlan> plan = PlanRecording(engine->spec, input_indexes, engine->component_ptrs);
+    if (!plan.ok()) {
+      WriteErr(err_buf, err_buf_cap, plan.error().Format());
+      if (out_exit_code != nullptr) *out_exit_code = ToC(simcore::DefaultExitCode(plan.error().kind));
+      return nullptr;
+    }
+    Result<std::string> source_kind = InputSourceKind(engine->spec, engine->readers);
+    if (!source_kind.ok()) {
+      WriteErr(err_buf, err_buf_cap, source_kind.error().Format());
+      if (out_exit_code != nullptr) *out_exit_code = ToC(simcore::DefaultExitCode(source_kind.error().kind));
+      return nullptr;
+    }
+    const Result<bool> writer_open_result = engine->writer_impl->Open(engine->spec.outputs.path, plan.value().topics);
     if (!writer_open_result.ok()) {
       WriteErr(err_buf, err_buf_cap, writer_open_result.error().Format());
       if (out_exit_code != nullptr) *out_exit_code = ToC(simcore::DefaultExitCode(writer_open_result.error().kind));
       return nullptr;
+    }
+    std::vector<std::pair<std::string, std::string>> built;
+    for (const simcore::SpecStage& stage : engine->spec.stages) {
+      const auto component = engine->component_ptrs.find(stage.name);
+      if (stage.mode == "simulate" && component != engine->component_ptrs.end()) {
+        built.emplace_back(stage.name, component->second->manifest().build_id());
+      }
+    }
+    engine->writer_impl->WriteMetaBlock(
+        simcore::io::ToString(simcore::io::MetaKind::kRunManifest),
+        {{"yaml", ManifestYaml(source_kind.value(), built, plan.value().policies)}});
+    const std::map<std::string, std::string> bundles =
+        ReadConfigBundles(engine->spec, engine->component_ptrs, config_path);
+    if (!bundles.empty()) {
+      engine->writer_impl->WriteMetaBlock(simcore::io::ToString(simcore::io::MetaKind::kConfigBundle), bundles);
     }
     engine->writer_base.emplace(*engine->writer_impl);
   }
@@ -503,10 +728,11 @@ SimExitCode simEngineRun(SimEngine* engine, char* err_buf, std::size_t err_buf_c
     WriteErr(err_buf, err_buf_cap, "simEngineRun called with no constructed engine");
     return kSimExitConfig;
   }
+  if (RefusedAfterTimeout(err_buf, err_buf_cap)) return kSimExitInfra;
   const Result<simcore::runner::RunOutcome> outcome = engine->runner->Run();
   if (!outcome.ok()) {
     WriteErr(err_buf, err_buf_cap, outcome.error().Format());
-    return ToC(simcore::DefaultExitCode(outcome.error().kind));
+    return EndedBy(outcome.error());
   }
   return kSimExitOk;
 }
@@ -536,10 +762,11 @@ SimExitCode simEngineStepOnce(SimEngine* engine, char* err_buf, std::size_t err_
     WriteErr(err_buf, err_buf_cap, "simEngineStepOnce called with no constructed engine");
     return kSimExitConfig;
   }
+  if (RefusedAfterTimeout(err_buf, err_buf_cap)) return kSimExitInfra;
   const Result<bool> step = engine->runner->StepOnce();
   if (!step.ok()) {
     WriteErr(err_buf, err_buf_cap, step.error().Format());
-    return ToC(simcore::DefaultExitCode(step.error().kind));
+    return EndedBy(step.error());
   }
   if (out_continue != nullptr) *out_continue = step.value() ? 1 : 0;
   return kSimExitOk;

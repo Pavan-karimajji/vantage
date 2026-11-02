@@ -11,13 +11,13 @@ naming where)."""
 
 from __future__ import annotations
 
+from tests.support.foreign_mcap import ForeignMcapWriter
 from pathlib import Path
 
 import pytest
 
 from adas_sim.cli.determinism import run as determinism_run
 from adas_sim.io.base import ComponentBuildInfo, Provenance, RunManifest, TopicInfo
-from adas_sim.io.mcap import McapWriter
 
 
 def _write_recording(path: Path, *, host: str, nonce: str, library_sha: str, payload: bytes) -> None:
@@ -25,7 +25,7 @@ def _write_recording(path: Path, *, host: str, nonce: str, library_sha: str, pay
         manifest_version=2, host=host, process_nonce=nonce,
         components=(ComponentBuildInfo(name="df", library_sha256=library_sha, config_bundle_sha256="cfg1"),),
     )
-    writer = McapWriter()
+    writer = ForeignMcapWriter()
     writer.open(path, meta, {"a": TopicInfo(schema_name="a", provenance=Provenance.SIMULATED)})
     writer.write("a", 0, payload)
     writer.close()

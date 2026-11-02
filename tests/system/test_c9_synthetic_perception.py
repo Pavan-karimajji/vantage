@@ -29,6 +29,7 @@ to write one for."""
 
 from __future__ import annotations
 
+from tests.support.foreign_mcap import ForeignMcapWriter
 from pathlib import Path
 
 import pytest
@@ -51,7 +52,7 @@ def _write_synthetic_perception_recording(path: Path, *, tick_count: int) -> Non
     shaped like `<stage>.<port>` (the ingest map's whole job is closing
     that gap). Each tick's payload is a distinct byte, so a test can tell
     "the recorded value for THIS tick" apart from any other tick's."""
-    writer = writer_for(path)
+    writer = ForeignMcapWriter()
     writer.open(path, RunManifest(), {
         "perception/raw_objects": TopicInfo(schema_name=_PROTO_TYPE, provenance=Provenance.UNKNOWN),
     })

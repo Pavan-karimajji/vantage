@@ -76,6 +76,11 @@ Provenance OriginOrUnknown(const std::optional<std::string>& raw);
 // declared data). It only makes one topic's two spellings compare equal.
 std::string CanonicalTopic(const std::string& raw_topic);
 
+// The port a canonical topic names, which is how a recording spells its topics
+// (`RCT_Architecture.md` section 6a): `/A/out` -> `A.out`, `/p/fn.out` -> `p.fn.out`. A name that is
+// not in the canonical spelling is returned as it is. `CanonicalTopic(PortNameOfTopic(t)) == t`.
+std::string PortNameOfTopic(const std::string& topic);
+
 // SW-0022: six `bool`s, a value the registry reads without opening a file --
 // never a method a codec instance could answer differently per file.
 struct Capabilities {
@@ -191,6 +196,13 @@ class Reader {
   // `config_bundle_bytes()` helpers, generalised to any declared kind).
   // `std::nullopt` when this recording carries no block of that kind.
   virtual std::optional<std::vector<std::uint8_t>> GetMeta(const std::string& kind_name) const = 0;
+  // `IMP-0052`, `IMP-0059`: a metadata block as the recording holds it, key to text (`RCT_Architecture.md`
+  // section 6a: `manifest` is one `yaml` entry, `config_bundle` one entry per file). Non-pure, default none:
+  // a codec with no keyed blocks has nothing to return. `std::nullopt` when there is no such block.
+  virtual std::optional<std::map<std::string, std::string>> GetMetaBlock(const std::string& name) const {
+    (void)name;
+    return std::nullopt;
+  }
 };
 
 // SW-0021: four pure virtuals on the write side.
@@ -205,6 +217,12 @@ class Writer {
   // primitive it calls through to.
   virtual void Write(const RawMessage& message) = 0;
   virtual void WriteMeta(const std::string& kind_name, const std::vector<std::uint8_t>& bytes) = 0;
+  // `IMP-0052`, `IMP-0059`: one metadata block with its own keys, as section 6a lays out `manifest` and
+  // `config_bundle`. Non-pure, default no-op, like `Flush`: a codec without keyed blocks drops it.
+  virtual void WriteMetaBlock(const std::string& name, const std::map<std::string, std::string>& block) {
+    (void)name;
+    (void)block;
+  }
   virtual void Close() = 0;
   // Non-pure, default no-op: a codec whose own buffering needs an explicit
   // commit point (so a mid-run crash still leaves a readable file up to the
@@ -386,6 +404,7 @@ class TranslatingReader final : public Reader {
   Batch ReadRange(const ReadBounds& bounds) override;
   void Close() override;
   std::optional<std::vector<std::uint8_t>> GetMeta(const std::string& kind_name) const override;
+  std::optional<std::map<std::string, std::string>> GetMetaBlock(const std::string& name) const override;
 
  private:
   std::unique_ptr<Reader> inner_;

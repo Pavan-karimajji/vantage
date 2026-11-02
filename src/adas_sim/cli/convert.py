@@ -7,7 +7,9 @@
 
 Reads with the codec registered for the input extension and writes with the
 output's. Refuses a target that cannot round-trip, by capability rather than by
-convention.
+convention. `.mcap` is a source only: that format is written through the one
+Python recording writer or the engine's own writer, never through a codec here
+(`RCT:IMP-0048`).
 """
 
 # Design refs: `GT-9` · `R-SIM-14` a recording is a model, a format is a codec

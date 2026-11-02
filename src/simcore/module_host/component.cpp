@@ -215,7 +215,8 @@ Result<PortMap> Component::Exec(std::int64_t dt_ns, const PortMap& inputs, const
       return Result<PortMap>::Fail(Error{Kind::Internal, "adasExec() to return within the configured timeout",
                                           watchdog.error, name_ + ".exec",
                                           "component quarantined (R-SIM-19); it refuses further exec() calls "
-                                          "this session"});
+                                          "this session",
+                                          /*timed_out=*/true});
     case ExecOutcome::kException:
       quarantine_.Trip(QuarantineReason::kCrashed, watchdog.error);
       return Result<PortMap>::Fail(Error{Kind::Internal, "adasExec() to complete without throwing", watchdog.error,

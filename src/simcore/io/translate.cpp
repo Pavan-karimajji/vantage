@@ -116,6 +116,10 @@ std::optional<std::vector<std::uint8_t>> TranslatingReader::GetMeta(const std::s
   return inner_->GetMeta(kind_name);
 }
 
+std::optional<std::map<std::string, std::string>> TranslatingReader::GetMetaBlock(const std::string& name) const {
+  return inner_->GetMetaBlock(name);
+}
+
 std::map<std::string, TopicInfo> TranslatingReader::Describe() const {
   std::map<std::string, TopicInfo> translated;
   for (const auto& [raw_topic, info] : inner_->Describe()) {

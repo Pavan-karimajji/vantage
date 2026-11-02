@@ -67,6 +67,11 @@ add_executable(step_tap support/step_tap.cpp)
 target_link_libraries(step_tap PRIVATE simcore)
 target_include_directories(step_tap PRIVATE ${CMAKE_SOURCE_DIR}/src/simcore)
 
+# VNT-WP-09a-R1: RCT:SYT-REC-04 .c3 -- what Vantage's own C++ reader returns for a recording
+# (topics, schemas, origins, the manifest and config_bundle blocks, every message), as JSON lines.
+add_executable(recording_dump support/recording_dump.cpp)
+target_link_libraries(recording_dump PRIVATE simcore)
+
 # WP-06: modules/sim's first C++ test binary (WP-03's own scoping note: "no
 # gtest target, no C++ tests exist yet"). UT-IO-01..21 (io codec contract).
 set(SIM_TEST_SOURCES
@@ -159,6 +164,9 @@ set(SIM_TEST_SOURCES
     # WP-13's own IT-09 (IMP-0114): mixed record policies proved through
     # the real C ABI, closing this row's last remaining gap.
     integration/test_it09_record_policy.cpp
+    # RCT:WP-13 / WP-12 / WP-07 (VNT-WP-09a-R1): the engine's manifest (IMP-0052), its
+    # config_bundle block (IMP-0059) and the call thread (IMP-0060), through the real C ABI.
+    integration/test_wp13_engine_recording.cpp
     # WP-27 (SI-25 transport): UT-TRN-01, a real Runner wired to both
     # transports, diffing the consumer's observed stream.
     integration/test_it_transport.cpp
@@ -196,7 +204,7 @@ target_compile_definitions(simcore_tests PRIVATE
     # WP-27: UT-TRN-05 spawns this real "engine" process and kills it.
     TRN_ENGINE_HOST_EXECUTABLE="$<TARGET_FILE:sim_test_fixture_trn_engine_host>"
 )
-add_dependencies(simcore_tests sim_test_fixture_echo_stub simengine sim_test_fixture_trn_engine_host)
+add_dependencies(simcore_tests sim_test_fixture_echo_stub sim_test_fixture_exec_probe simengine sim_test_fixture_trn_engine_host)
 
 include(GoogleTest)
 gtest_discover_tests(simcore_tests)

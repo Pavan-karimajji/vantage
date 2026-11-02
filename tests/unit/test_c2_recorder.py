@@ -109,7 +109,7 @@ def test_topic_list_equals_the_declared_ports_including_the_source_port(tmp_path
     topics = set(reader.topics())
     reader.close()
 
-    assert topics == {"/source/veh_dyn", "/under_test/verdict"}  # UT-C2-6, UT-C2-7
+    assert topics == {"source.veh_dyn", "under_test.verdict"}  # UT-C2-6, UT-C2-7
 
 
 # ---------------------------------------------------------------------------
@@ -136,8 +136,8 @@ def test_provenance_tags_source_and_stage_output_ports(tmp_path):
     topics = reader.topics()
     reader.close()
 
-    assert topics["/source/veh_dyn"].provenance is Provenance.TRUTH
-    assert topics["/under_test/verdict"].provenance is Provenance.SIMULATED
+    assert topics["source.veh_dyn"].provenance is Provenance.TRUTH
+    assert topics["under_test.verdict"].provenance is Provenance.SIMULATED
 
 
 def test_provenance_can_be_tagged_per_source_port(tmp_path):
@@ -158,15 +158,17 @@ def test_provenance_can_be_tagged_per_source_port(tmp_path):
     topics = reader.topics()
     reader.close()
 
-    assert topics["/source/veh_dyn"].provenance is Provenance.MOCKED
+    assert topics["source.veh_dyn"].provenance is Provenance.MOCKED
 
 
 # ---------------------------------------------------------------------------
-# UT-C2-13 -- capture and reception time are both written
+# UT-C2-13 -- one time per message: the recording is written through the one
+# Python writer (`RCT_Architecture.md` section 6a, D22), so a message has its
+# reception time and no capture time
 # ---------------------------------------------------------------------------
 
 
-def test_capture_and_reception_time_are_both_written(tmp_path):
+def test_a_message_has_one_time_its_reception_time_and_no_capture_time(tmp_path):
     pipeline_path = tmp_path / "pipeline.yaml"
     pipeline = _pipeline(tmp_path)
     source = SyntheticSource([{"veh_dyn": b"vd0"}])
@@ -183,7 +185,8 @@ def test_capture_and_reception_time_are_both_written(tmp_path):
 
     assert messages  # something was written
     for _topic, log_time_ns, capture_time_ns, _payload in messages:
-        assert capture_time_ns == log_time_ns  # known, not defaulted -- see Recorder._write_one
+        assert log_time_ns == 50_000_000
+        assert capture_time_ns is None  # manifest_version 1: publish_time is not a capture time
 
 
 # ---------------------------------------------------------------------------
@@ -207,8 +210,8 @@ def test_excluded_output_port_is_never_a_topic(tmp_path):
     topics = set(reader.topics())
     reader.close()
 
-    assert "/under_test/verdict" not in topics
-    assert topics == {"/source/veh_dyn"}
+    assert "under_test.verdict" not in topics
+    assert topics == {"source.veh_dyn"}
 
 
 def test_a_tap_recovers_an_excluded_output_port(tmp_path):
@@ -229,17 +232,17 @@ def test_a_tap_recovers_an_excluded_output_port(tmp_path):
 
     reader = McapReader(out_path)
     topics = set(reader.topics())
-    messages = [m for m in reader.messages() if m[0] == "/under_test/verdict"]
+    messages = [m for m in reader.messages() if m[0] == "under_test.verdict"]
     reader.close()
 
-    assert "/under_test/verdict" in topics
+    assert "under_test.verdict" in topics
     assert len(messages) == 1
 
 
 def test_removing_the_tap_leaves_the_rest_of_the_run_unchanged(tmp_path):
     """`tap.py`'s own docstring claim, checked at the recorder layer:
     removing a tap has no effect beyond the tapped port's own topic --
-    `/source/veh_dyn` is identical with or without `taps:` declared."""
+    `source.veh_dyn` is identical with or without `taps:` declared."""
     with_tap = _pipeline(tmp_path, record={"verdict": "excluded"}, taps={"under_test": ["verdict"]})
     stage = {
         "name": "under_test", "mode": "simulate", "impl": "stub:under_test",
@@ -259,7 +262,7 @@ def test_removing_the_tap_leaves_the_rest_of_the_run_unchanged(tmp_path):
         recorder.tick(50_000_000)
         recorder.close()
         reader = McapReader(out_path)
-        source_topics[label] = {m[0]: m[3] for m in reader.messages() if m[0] == "/source/veh_dyn"}
+        source_topics[label] = {m[0]: m[3] for m in reader.messages() if m[0] == "source.veh_dyn"}
         reader.close()
 
     assert source_topics["with"] == source_topics["without"]
@@ -278,7 +281,7 @@ def test_decimated_output_port_keeps_only_every_nth_tick(tmp_path):
     recorder.close()
 
     reader = McapReader(out_path)
-    verdict_messages = [m for m in reader.messages() if m[0] == "/under_test/verdict"]
+    verdict_messages = [m for m in reader.messages() if m[0] == "under_test.verdict"]
     reader.close()
 
     assert len(verdict_messages) == 2  # ticks 0 and 3 of 6 (index % 3 == 0)
@@ -294,7 +297,7 @@ def test_decimated_output_port_keeps_only_every_nth_tick(tmp_path):
 def test_pipeline_none_records_every_emitted_source_port_and_nothing_else(tmp_path):
     source = SyntheticSource([{"veh_dyn": b"vd0", "gen_object_list": b"gol0"}])
     out_path = tmp_path / "out.mcap"
-    meta = RunManifest(manifest_version=CAPTURE_TIME_MANIFEST_VERSION, run_id="20260101T000000Z-deadbeef", source_kind="synthetic")
+    meta = RunManifest(manifest_version=1, run_id="20260101T000000Z-deadbeef", run_kind="sim", source_kind="synthetic")
     recorder = Recorder(None, source, out_path, meta=meta)
 
     recorder.open(_scenario())
@@ -305,7 +308,7 @@ def test_pipeline_none_records_every_emitted_source_port_and_nothing_else(tmp_pa
     topics = set(reader.topics())
     reader.close()
 
-    assert topics == {"/source/veh_dyn", "/source/gen_object_list"}
+    assert topics == {"source.veh_dyn", "source.gen_object_list"}
 
 
 # ---------------------------------------------------------------------------

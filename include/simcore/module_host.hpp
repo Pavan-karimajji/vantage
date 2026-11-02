@@ -61,6 +61,7 @@
 #include <filesystem>
 #include <functional>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -209,20 +210,25 @@ struct ExecResult {
 
 ExecResult RunWithTimeout(const std::function<void()>& fn, std::chrono::milliseconds timeout);
 
-// IMP-0093: `RunWithTimeout` as a configured object, new this slice --
-// `Component::Exec` carries its own per-call budget without a caller
-// re-threading a `std::chrono::milliseconds` argument through every call
-// site.
+// IMP-0093, IMP-0060: a configured budget and the caller's own call thread.
+// `Run` hands `fn` to ONE long-lived thread (started on the first call) and
+// waits for it up to the budget, so a caller that makes many calls is seen by
+// the component on one thread id, as without a timeout. Copies share that
+// thread; a caller makes its calls one at a time. On a timeout the thread is
+// abandoned (it may be inside the component's library for good) and the
+// `ExecResult` says `kTimeout`; the object makes no further call.
 class ExecTimeout {
  public:
-  explicit ExecTimeout(std::chrono::milliseconds timeout) : timeout_(timeout) {}
+  explicit ExecTimeout(std::chrono::milliseconds timeout);
 
-  ExecResult Run(const std::function<void()>& fn) const { return RunWithTimeout(fn, timeout_); }
+  ExecResult Run(const std::function<void()>& fn) const;
 
   std::chrono::milliseconds timeout() const { return timeout_; }
 
  private:
+  struct CallThread;
   std::chrono::milliseconds timeout_;
+  std::shared_ptr<CallThread> call_thread_;
 };
 
 // IMP-0088/0089: the `PortMap` <-> `AdasPortSet` marshalling

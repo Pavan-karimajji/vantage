@@ -226,6 +226,9 @@ struct Runner::Impl {
   // `IMP-0036`: which `simulate` stages never run at the same time, decided once from the setup.
   ConflictTable conflicts;
 
+  // `IMP-0060`: under `limits.exec_timeout_ms`, one call thread per caller (see `ExecTimeout`), kept for the run.
+  std::vector<std::optional<module_host::ExecTimeout>> exec_slots;
+
   // One step's own state.
   std::set<std::string> touched;                     // ports that got a sample this step
   std::map<std::string, bus::PortValue> delivered;   // what each run was handed this step
@@ -672,9 +675,9 @@ void Runner::PrepareTicket(const orchestrator::Ticket& ticket, PendingRun& pendi
 }
 
 // The only call a worker thread makes (`ARCH §8`, fact 4).
-void Runner::ExecTicket(PendingRun& pending) const {
+void Runner::ExecTicket(PendingRun& pending, std::size_t worker) const {
   std::optional<module_host::ExecTimeout> timeout;
-  if (options_.exec_timeout.has_value()) timeout.emplace(*options_.exec_timeout);
+  if (options_.exec_timeout.has_value()) timeout = impl_->exec_slots.at(worker);
   pending.executed.emplace(pending.component->Exec(pending.args.dt_ns, pending.prepared.inputs,
                                                    pending.prepared.input_meta, timeout));
 }
@@ -860,14 +863,18 @@ Result<bool> Runner::StepOnce() {
       // is finished in stage declaration order whatever order the workers ended in.
       std::vector<PendingRun> pending(tickets.size());
       for (std::size_t i = 0; i < tickets.size(); ++i) PrepareTicket(tickets[i], pending[i]);
+      if (options_.exec_timeout.has_value()) {
+        const std::size_t callers = std::max<std::size_t>(1, std::min<std::size_t>(options_.threads, pending.size()));
+        while (impl.exec_slots.size() < callers) impl.exec_slots.emplace_back(module_host::ExecTimeout(*options_.exec_timeout));
+      }
       DispatchRank(
           pending.size(), options_.threads,
           [&](std::size_t earlier, std::size_t later) {
             return impl.conflicts.Conflicts(pending[earlier].ticket.stage, pending[later].ticket.stage);
           },
-          [&](std::size_t i) {
+          [&](std::size_t i, std::size_t worker) {
             if (pending[i].prepare_error.has_value()) return false;
-            ExecTicket(pending[i]);
+            ExecTicket(pending[i], worker);
             return pending[i].executed->ok();
           });
       std::vector<orchestrator::CommitReport> reports;

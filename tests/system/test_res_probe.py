@@ -12,6 +12,7 @@ bridge.py`/`test_c3_check.py` already use.
 
 from __future__ import annotations
 
+from tests.support.foreign_mcap import ForeignMcapWriter
 import sys
 from pathlib import Path
 
@@ -77,7 +78,7 @@ def test_ut_res_11_probes_a_recording_and_a_module_with_no_handle_surviving(tmp_
     assert manifest.outputs == ()
 
     recording_path = tmp_path / "recording.mcap"
-    writer = writer_for(recording_path)
+    writer = ForeignMcapWriter()
     writer.open(
         recording_path, meta=RunManifest(),
         topics={"/dummy/heartbeat": TopicInfo(schema_name="test.Heartbeat", provenance=Provenance.MEASURED)},

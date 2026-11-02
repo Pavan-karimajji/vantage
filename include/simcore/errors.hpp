@@ -31,6 +31,10 @@ struct Error {
   std::string found;
   std::string where;
   std::string hint;
+  // `IMP-0060`, `R-SIM-19`: set when a component call did not return within
+  // `limits.exec_timeout_ms`; the run then ends with `ExitCode::Timeout`, not
+  // the `Internal` default (`ExitCodeFor`).
+  bool timed_out = false;
 
   std::string Format() const {
     std::string msg = "expected " + expected + "; found " + found + "; where " + where;
@@ -103,6 +107,12 @@ inline ExitCode DefaultExitCode(Kind kind) {
       return ExitCode::Crash;
   }
   return ExitCode::Crash;  // unreachable for a valid Kind; never guess Ok
+}
+
+// The code a raised `Error` ends a run with: `Timeout` when it says a call timed out, else its
+// kind's default.
+inline ExitCode ExitCodeFor(const Error& error) {
+  return error.timed_out ? ExitCode::Timeout : DefaultExitCode(error.kind);
 }
 
 }  // namespace simcore

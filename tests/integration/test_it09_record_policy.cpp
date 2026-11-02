@@ -125,6 +125,7 @@ std::filesystem::path WriteObjectsRecording(const std::filesystem::path& path, s
   // carries a provenance tag, so this must too.
   info.provenance = simcore::io::Provenance::kMeasured;
   EXPECT_TRUE(writer.value()->Open(path, {{"/meas/objects", info}}).ok());
+  writer.value()->WriteMetaBlock("manifest", {{"yaml", "source_kind: synthetic\n"}});  // the engine records its input's source_kind (IMP-0052)
   for (std::size_t i = 0; i < cycles; ++i) {
     simcore::io::RawMessage msg;
     msg.topic = "/meas/objects";

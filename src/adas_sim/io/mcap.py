@@ -3,15 +3,17 @@
 # COMPONENT: SIM
 # @author Pavan Karimajji
 
-"""`io/mcap.py` -- the default codec; all capabilities true
+"""`io/mcap.py` -- the default codec, READ side only; all capabilities true
 (sim_implementation_plan.md S-A4, sim_resim_and_recording.md §3.1). Protobuf
 message encoding, schemas embedded as a `FileDescriptorSet` per channel.
 
-Three meta blocks ride as native mcap `Metadata` records, each a flat
-`dict[str, str]` (`add_metadata`'s own shape, so no extra encoding is
-invented for them): `manifest` (one YAML blob under key `"yaml"`),
-`config_bundle` (ditto), `topic_provenance` (topic -> provenance value,
-already flat -- no wrapping needed).
+This package's Python code writes a recording only through the one Python writer,
+`adas_recording` of the `adas-interfaces` package (`io/recording_writer.py`,
+`RCT:IMP-0048`); this module reads what that writer and the engine's writer
+make. Meta blocks ride as native mcap `Metadata` records, each a flat
+`dict[str, str]`: `manifest` (one YAML blob under key `"yaml"`),
+`config_bundle` (read here only in its older single-`"yaml"` shape),
+`topic_provenance` (topic -> provenance value).
 """
 
 from __future__ import annotations
@@ -19,14 +21,12 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from types import MappingProxyType
 
 import yaml
 from mcap.data_stream import ReadDataStream
 from mcap.reader import make_reader
 from mcap.records import Chunk
 from mcap.stream_reader import breakup_chunk
-from mcap.writer import Writer as _McapWriter
 
 from adas_sim.io.base import (
     CAPTURE_TIME_MANIFEST_VERSION,
@@ -35,7 +35,6 @@ from adas_sim.io.base import (
     RunManifest,
     TopicInfo,
     manifest_from_dict,
-    manifest_to_dict,
 )
 from adas_sim.plugins.registry import register
 
@@ -65,74 +64,6 @@ _TOPIC_PROVENANCE_META = "topic_provenance"
 _PROVENANCE_VALUES = frozenset(p.value for p in Provenance)
 
 
-class McapWriter:
-    capabilities = CAPABILITIES
-
-    def __init__(self) -> None:
-        self._file = None
-        self._writer: _McapWriter | None = None
-        self._channel_ids: dict[str, int] = {}
-
-    def open(
-        self,
-        path: Path,
-        meta: RunManifest,
-        topics: Mapping[str, TopicInfo],
-        *,
-        config_bundle_bytes: bytes = b"",
-        plugin_bundles_meta: Mapping[str, Mapping[str, object]] = MappingProxyType({}),
-    ) -> None:
-        self._file = path.open("wb")
-        self._writer = _McapWriter(self._file)
-        self._writer.start(profile="", library="adas-sim")
-
-        # Sorted topic order (P-8): deterministic channel numbering is part
-        # of what makes two writes of the same messages byte-identical
-        # (UT-A4-12) -- dict iteration order must never leak into the file.
-        for topic in sorted(topics):
-            info = topics[topic]
-            schema_id = self._writer.register_schema(
-                name=info.schema_name or topic,
-                encoding="protobuf" if info.schema_bytes else "",
-                data=info.schema_bytes,
-            )
-            channel_id = self._writer.register_channel(
-                topic=topic, message_encoding="protobuf", schema_id=schema_id
-            )
-            self._channel_ids[topic] = channel_id
-
-        if meta.known:
-            self._writer.add_metadata(_MANIFEST_META, {"yaml": yaml.safe_dump(manifest_to_dict(meta), sort_keys=True)})
-        if config_bundle_bytes:
-            self._writer.add_metadata(_CONFIG_BUNDLE_META, {"yaml": config_bundle_bytes.decode("utf-8")})
-        if plugin_bundles_meta:
-            # NR-SIM-44: identity + hash only, never bytes -- opening a
-            # colleague's recording must never run their code.
-            self._writer.add_metadata(_PLUGIN_BUNDLES_META, {"yaml": yaml.safe_dump(dict(plugin_bundles_meta), sort_keys=True)})
-        self._writer.add_metadata(
-            _TOPIC_PROVENANCE_META,
-            {topic: topics[topic].provenance.value for topic in sorted(topics)},
-        )
-
-    def write(self, topic: str, log_time_ns: int, payload: bytes, *, capture_time_ns: int | None = None) -> None:
-        # mcap already carries both stamps with exactly these semantics --
-        # `publish_time` is when the producer published (our capture_time_ns),
-        # `log_time` is when it was logged (S-A4Δ, OD-9). A caller that does
-        # not know the capture time falls back to log_time_ns, unchanged from
-        # before this delta.
-        channel_id = self._channel_ids[topic]
-        publish_time = log_time_ns if capture_time_ns is None else capture_time_ns
-        self._writer.add_message(channel_id=channel_id, log_time=log_time_ns, data=payload, publish_time=publish_time)
-
-    def close(self) -> None:
-        if self._writer is not None:
-            self._writer.finish()
-            self._writer = None
-        if self._file is not None:
-            self._file.close()
-            self._file = None
-
-
 class McapReader:
     capabilities = CAPABILITIES
 
@@ -157,7 +88,8 @@ class McapReader:
         reference §11: "internal helpers ... are free") -- the writer-side
         twin of `open()`'s `config_bundle_bytes` keyword."""
         block = self._metadata_by_name.get(_CONFIG_BUNDLE_META)
-        return block["yaml"].encode("utf-8") if block else b""
+        # An engine run's block holds one entry per file (`RCT_Architecture.md` section 6a), not one `yaml` entry.
+        return block["yaml"].encode("utf-8") if block and "yaml" in block else b""
 
     def plugin_bundles_meta(self) -> Mapping[str, Mapping[str, object]]:
         """S-C8: the writer-side twin of `open()`'s `plugin_bundles_meta`
@@ -223,8 +155,4 @@ class McapReader:
         self._file.close()
 
 
-def _new_writer() -> McapWriter:
-    return McapWriter()
-
-
-register(".mcap", reader=McapReader, writer=_new_writer)
+register(".mcap", reader=McapReader)

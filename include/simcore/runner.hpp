@@ -756,10 +756,11 @@ class Runner {
   void TopUp();
   // `IMP-0035`: one ticket in three parts. `PrepareTicket` (selection, control, port set) and
   // `FinishTicket` (event log, divergence latch, warming badge, the report) run on the
-  // orchestrator's thread; `ExecTicket` is the one call a worker makes.
+  // orchestrator's thread; `ExecTicket` is the one call a worker makes. `worker` numbers the caller
+  // (0 on the orchestrator's thread, 0..n-1 among the workers): under an exec timeout each has its own call thread.
   struct PendingRun;
   void PrepareTicket(const orchestrator::Ticket& ticket, PendingRun& pending);
-  void ExecTicket(PendingRun& pending) const;
+  void ExecTicket(PendingRun& pending, std::size_t worker) const;
   Result<bool> FinishTicket(PendingRun& pending, std::vector<orchestrator::CommitReport>& reports);
   // Offers this step's values to the writer, the publisher; returns the bytes written.
   Result<std::size_t> WriteStep(std::uint64_t step, std::int64_t now_ns);

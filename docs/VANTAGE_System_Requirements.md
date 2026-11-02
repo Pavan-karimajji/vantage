@@ -25,7 +25,7 @@ simulated stage writes in the engine run, which names what the engine handed it
 **Test areas**, declared once: `RUN` the run setup · `ORC` the orchestrator and the six rules ·
 `SEL` input selection · `STP` the engine step · `THR` threads · `EQO` equal outputs and the
 first divergence.
-Priority split: 24 `P0`, 26 `P1`, 0 `P2`; all `R1`. Without a `P0` row an engine run is not
+Priority split: 24 `P0`, 28 `P1`, 0 `P2`; all `R1`. Without a `P0` row an engine run is not
 exact against the car; a `P1` row makes a result easier to trust or diagnose.
 
 ---
@@ -96,6 +96,12 @@ recordings are a batch of engine runs (`R-SIM-19`).
 **Accept.** With each such value removed in turn, `sim resim` exits with an error naming it and writes no run setup; with all given, the setup carries exactly the configured values.
 **Binds.** `runSetup`
 **Verify.** T · `SYT-RUN-10`   **Trace.** —
+
+**`SYS-0052`** · `P1` · `R1` — An engine-run recording embeds each simulated stage's config bundle
+**Shall.** An engine run shall write into its recording's `config_bundle` block (`RCT:SYS-0044`) the bundle folder each simulated stage was initialised with (`R-SIM-6`).
+**Accept.** On `running_example` `cut_c` the block names exactly the simulated stages, holds each one's files with their text as on disk, and each stage's `bundle.sha256` equals the setup's `config_bundle_sha256` for it; anything else fails.
+**Binds.** `runSetup`, `runRecording`
+**Verify.** T · `SYT-RUN-11`   **Trace.** —
 
 ## 2. The orchestrator and the six rules (`ORC`)
 
@@ -379,7 +385,7 @@ case (`R-REQ-9`).
 
 | Method | Count | Notes |
 |---|---|---|
-| T | 47 | `simengine` on a lab case, the step tap, the exec probe, or the control tick probe |
+| T | 49 | `simengine` on a lab case, the step tap, the exec probe, or the control tick probe |
 | A | 3 | source checks over the engine |
 
 ## 8. Superseded and retired UIDs

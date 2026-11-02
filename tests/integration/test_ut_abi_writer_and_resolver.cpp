@@ -150,6 +150,7 @@ std::filesystem::path WriteHeartbeatRecording(const std::filesystem::path& path)
   simcore::io::TopicInfo heartbeat;
   heartbeat.schema_name = "test.Heartbeat";
   EXPECT_TRUE(writer.value()->Open(path, {{"/dummy/heartbeat", heartbeat}}).ok());
+  writer.value()->WriteMetaBlock("manifest", {{"yaml", "source_kind: synthetic\n"}});  // the engine records its input's source_kind (IMP-0052)
   for (std::int64_t t_ns : {0, 10'000'000, 20'000'000}) {
     simcore::io::RawMessage msg;
     msg.topic = "/dummy/heartbeat";
@@ -181,6 +182,7 @@ std::filesystem::path WriteAbiPortRecording(const std::filesystem::path& path, d
   // `docs/v2/SIM_Test_Execution_2026-08-28.md`.
   info.provenance = simcore::io::Provenance::kMeasured;
   EXPECT_TRUE(writer.value()->Open(path, {{"/meas/objects", info}}).ok());
+  writer.value()->WriteMetaBlock("manifest", {{"yaml", "source_kind: synthetic\n"}});  // the engine records its input's source_kind (IMP-0052)
   for (std::int64_t t_ns : {0, 10'000'000, 20'000'000}) {
     simcore::io::RawMessage msg;
     msg.topic = "/meas/objects";

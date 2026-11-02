@@ -98,12 +98,14 @@ class ConflictTable {
 // `conflicts(a, b)` takes two ticket indexes of the rank, `a` < `b`. `run(i)`
 // returns false when ticket `i` failed; that only ends the loop on the calling
 // thread. An exception from `run` on a worker is rethrown here, after the
-// barrier, for the lowest ticket index that threw.
+// barrier, for the lowest ticket index that threw. `run(i, worker)` also gets the
+// number of the caller running it: 0 on the calling thread, 0..pool-1 among workers
+// (`IMP-0060`: each caller has its own call thread under an exec timeout).
 inline void DispatchRank(std::size_t count, int threads, const std::function<bool(std::size_t, std::size_t)>& conflicts,
-                         const std::function<bool(std::size_t)>& run) {
+                         const std::function<bool(std::size_t, std::size_t)>& run) {
   if (threads < 2 || count < 2) {
     for (std::size_t i = 0; i < count; ++i) {
-      if (!run(i)) return;
+      if (!run(i, 0)) return;
     }
     return;
   }
@@ -121,7 +123,7 @@ inline void DispatchRank(std::size_t count, int threads, const std::function<boo
   std::vector<std::exception_ptr> thrown(count);
   std::size_t started_count = 0;
 
-  const auto worker = [&]() {
+  const auto worker = [&](std::size_t number) {
     for (;;) {
       std::size_t pick = count;
       {
@@ -141,7 +143,7 @@ inline void DispatchRank(std::size_t count, int threads, const std::function<boo
         ++started_count;
       }
       try {
-        (void)run(pick);
+        (void)run(pick, number);
       } catch (...) {
         thrown[pick] = std::current_exception();
       }
@@ -156,11 +158,18 @@ inline void DispatchRank(std::size_t count, int threads, const std::function<boo
   const std::size_t pool_size = std::min<std::size_t>(static_cast<std::size_t>(threads), count);
   std::vector<std::thread> pool;
   pool.reserve(pool_size);
-  for (std::size_t i = 0; i < pool_size; ++i) pool.emplace_back(worker);
+  for (std::size_t i = 0; i < pool_size; ++i) pool.emplace_back(worker, i);
   for (std::thread& thread : pool) thread.join();
   for (const std::exception_ptr& error : thrown) {
     if (error) std::rethrow_exception(error);
   }
+}
+
+// A `run` that does not need the caller's number.
+inline void DispatchRank(std::size_t count, int threads, const std::function<bool(std::size_t, std::size_t)>& conflicts,
+                         const std::function<bool(std::size_t)>& run) {
+  DispatchRank(count, threads, conflicts,
+               std::function<bool(std::size_t, std::size_t)>([&run](std::size_t i, std::size_t) { return run(i); }));
 }
 
 }  // namespace simcore::runner

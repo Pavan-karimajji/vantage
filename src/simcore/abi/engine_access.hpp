@@ -19,3 +19,8 @@ class Runner;
 
 // C++ linkage on purpose; null when `engine` is null or holds no constructed runner.
 simcore::runner::Runner* SimEngineRunner(SimEngine* engine);
+
+// `IMP-0060`: after a run ended with `kSimExitTimeout` the component's call may still be inside its
+// library, so every later `simEngineCreate`, run or step in this process is refused. For a test that
+// provokes the timeout and has to go on in the same process.
+void SimEngineClearTimeoutRefusalForTest();

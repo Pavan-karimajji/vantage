@@ -24,9 +24,10 @@ import pytest
 
 from mcap.writer import Writer as RawMcapWriter
 
-from adas_sim.io.base import Provenance, RunManifest, TopicInfo
+from adas_sim.io.base import Provenance, TopicInfo
 from adas_sim.ingest.map import IngestRecordingReader, discover_ingest_maps
-from adas_sim.io.mcap import McapReader, McapWriter
+from adas_sim.io.mcap import McapReader
+from tests.support.recordings import write_recording
 
 
 def _write_legacy_shaped_recording(path):
@@ -78,12 +79,9 @@ def test_a_recording_that_matches_no_ingest_map_passes_through_unchanged(tmp_pat
     fires -- a modern recording that already names its own topics correctly
     needs no translation (`io/ingest.py`'s own docstring)."""
     path = tmp_path / "modern.mcap"
-    writer = McapWriter()
-    writer.open(path, RunManifest(), {
+    write_recording(path, {
         "/source/veh_dyn": TopicInfo(schema_name="adas_sim.test.VehDyn", provenance=Provenance.MEASURED),
-    })
-    writer.write("/source/veh_dyn", 0, b"\x00")
-    writer.close()
+    }, [("/source/veh_dyn", 0, b"\x00")])
 
     reader = IngestRecordingReader(McapReader(path), discover_ingest_maps())
     topics = reader.topics()
@@ -100,10 +98,7 @@ def test_no_name_is_translated_outside_a_declared_ingest_map(tmp_path):
         "/source/veh_dyn": TopicInfo(schema_name="adas_sim.test.VehDyn", provenance=Provenance.MEASURED),
         "/df/aeb.outputs": TopicInfo(schema_name="adas_sim.test.AebOutputs", provenance=Provenance.SIMULATED),
     }
-    writer = McapWriter()
-    writer.open(path, RunManifest(), topics)
-    writer.write("/source/veh_dyn", 0, b"\x00")
-    writer.close()
+    write_recording(path, topics, [("/source/veh_dyn", 0, b"\x00")])
 
     reader = McapReader(path)
     read_topics = set(reader.topics())

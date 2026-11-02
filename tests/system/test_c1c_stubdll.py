@@ -39,9 +39,8 @@ import pytest
 from adas_sim.graph.pipeline import Pipeline
 from adas_sim.diagnostics.determinism import compare_exact
 from adas_sim.diagnostics.errors import EnvironmentError_
-from adas_sim.engine.bridge import resolve_simengine_executable, run_pipeline_merged_via_engine
+from adas_sim.engine.bridge import resolve_simengine_executable, run_pipeline_via_engine
 from adas_sim.runspec.emit import RunSetupValues
-from adas_sim.runspec.manifest import build_manifest
 from adas_sim.plugins.registry import reader_for
 
 _FIXTURE_SRC = Path(__file__).resolve().parents[1] / "fixtures" / "echo_stub" / "echo_stub_with_output.c"
@@ -141,12 +140,8 @@ _SETUP_VALUES = RunSetupValues(
 
 def _resim_to(lib_dir: Path, pipeline_path: Path, out_path: Path) -> None:
     pipeline = Pipeline.load(pipeline_path, search=[lib_dir])
-    meta = build_manifest(
-        pipeline=pipeline, pipeline_path=pipeline_path, run_kind="resim",
-        source_kind="mcap", recording_path=_TINY,
-    )
-    result = run_pipeline_merged_via_engine(
-        pipeline, _TINY, out_path, meta=meta, run_id=f"ut-c1c-15a-{out_path.stem}", search=[lib_dir],
+    result = run_pipeline_via_engine(
+        pipeline, _TINY, run_id=f"ut-c1c-15a-{out_path.stem}", output_path=out_path, search=[lib_dir],
         setup_values=_SETUP_VALUES,
     )
     assert result.ok, f"simengine exit_code={result.exit_code} stderr={result.stderr!r}"

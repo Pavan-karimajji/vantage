@@ -22,6 +22,7 @@ via a real `impl: dll:` load.
 
 from __future__ import annotations
 
+from tests.support.foreign_mcap import ForeignMcapWriter
 import hashlib
 from pathlib import Path
 
@@ -61,7 +62,7 @@ def _write_recording(tmp_path: Path, name: str, *, library_sha256: str) -> Path:
         manifest_version=2, run_id="r", run_kind="resim",
         components=(ComponentBuildInfo(name="echo", library_sha256=library_sha256),),
     )
-    writer = writer_for(path)
+    writer = ForeignMcapWriter()
     writer.open(path, meta, {})
     writer.close()
     return path

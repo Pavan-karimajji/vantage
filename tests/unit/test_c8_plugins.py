@@ -14,6 +14,7 @@ collision was about -- no longer exists."""
 
 from __future__ import annotations
 
+from tests.support.foreign_mcap import ForeignMcapWriter
 import sys
 from pathlib import Path
 
@@ -161,16 +162,18 @@ def test_missing_required_key_is_an_authoring_error(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# UT-C8-4 -- a recording carries plug-in identity + hash only, never bytes.
+# UT-C8-4 -- a recording carries plug-in identity + hash only, never bytes. The reader
+# side only: the Recorder no longer writes a plugin_bundles block (RCT:IMP-0048; it
+# waits for the viewer phase), so the file is built by the foreign-shape builder.
 # ---------------------------------------------------------------------------
 
 
-def test_recorder_embeds_plugin_identity_and_hash_never_bytes(tmp_path):
+def test_the_reader_returns_plugin_identity_and_hash_never_bytes(tmp_path):
     from adas_sim.io.base import RunManifest
-    from adas_sim.io.mcap import McapReader, McapWriter
+    from adas_sim.io.mcap import McapReader
 
     path = tmp_path / "rec.mcap"
-    writer = McapWriter()
+    writer = ForeignMcapWriter()
     plugin_meta = {"df": {"api": 1, "sha256": "a" * 64}}
     writer.open(path, RunManifest(), {}, plugin_bundles_meta=plugin_meta)
     writer.close()

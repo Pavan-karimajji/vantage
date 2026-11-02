@@ -23,21 +23,17 @@ import argparse
 import os
 import shutil
 import tempfile
-import uuid
-from dataclasses import replace
 from pathlib import Path
 
 from adas_sim.graph.pipeline import Pipeline
 from adas_sim.diagnostics.errors import AuthoringError
 from adas_sim.runspec.manifest import (
-    build_manifest,
     check_library_provenance,
     load_run_spec,
     resolve_swept_config,
     verify_pinned_builds,
 )
-from adas_sim.engine.bridge import backfill_schema_bytes, count_ticks, overwrite_manifest_meta
-from adas_sim.orchestrate.batch import read_checkpoint_divergence
+from adas_sim.engine.bridge import count_ticks
 from adas_sim.orchestrate.run import invoke_engine
 
 
@@ -48,7 +44,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="a recording to resim against (falls back to --pipeline's own recording: key if omitted)",
     )
     parser.add_argument("--pipeline", type=Path, required=True, help="the pipeline YAML (or run manifest) to execute")
-    parser.add_argument("--save", type=Path, help="write this resim's own freshly-computed tick outputs to a new recording")
+    parser.add_argument("--save", type=Path, help="write this resim's own freshly-computed tick outputs to a new recording "
+                                                  "(the recording simengine itself writes, RCT_Architecture.md section 6a)")
     parser.add_argument(
         "--search", type=Path, action="append", default=[],
         help="a directory to search for a dll:/stubdll: stage's library "
@@ -138,20 +135,11 @@ def run(argv: list[str] | None = None) -> int:
         os.close(fd)  # the writer (a separate simengine process) opens this path itself
         output_path = Path(tmp_name)
         cleanup_output = True
-    # `IMP-0224`: only `--save`'s own manifest reads this back
-    # (`read_checkpoint_divergence` below) -- allocated only in that case,
-    # same "an unsaved run pays for nothing extra" discipline `output_path`
-    # itself already follows.
-    checkpoint_path = None
-    if args.save:
-        checkpoint_fd, checkpoint_name = tempfile.mkstemp(suffix=".json", prefix="sim_resim_progress_")
-        os.close(checkpoint_fd)  # simengine opens this path itself, same as output_path above
-        checkpoint_path = Path(checkpoint_name)
     try:
         run_id = f"resim-{args.pipeline.stem}-{recording.stem}"
         result = invoke_engine(
             pipeline, recording, run_id=run_id, output_path=output_path, config_path=config,
-            checkpoint_path=checkpoint_path, setup_values=setup_values,
+            setup_values=setup_values,
         )
         if not result.ok:
             raise AuthoringError(
@@ -162,44 +150,6 @@ def run(argv: list[str] | None = None) -> int:
             )
         tick_count = count_ticks(output_path)
         if args.save:
-            # NR-SIM-24, engine.bridge.overwrite_manifest_meta's own
-            # docstring: simengine's own writer embeds no run manifest at
-            # all -- a real one (component_build_shas included) is built
-            # here exactly as core/resim.py's own caller used to, and
-            # overwrites the recording's meta. Only a --save'd recording
-            # is patched, matching the pre-WP-15b behavior (a temp/
-            # cleanup-only output is never read again).
-            divergence = read_checkpoint_divergence(checkpoint_path) if checkpoint_path is not None else None
-            meta = build_manifest(
-                pipeline=pipeline, pipeline_path=args.pipeline, run_kind="resim", source_kind="mcap",
-                project=project, recording_path=recording, component_build_shas=pipeline.component_build_shas(),
-                component_bundle_paths=pipeline.component_bundle_paths(),
-                component_bundle_shas=pipeline.component_bundle_shas(),
-                bundle_overrides=spec.overrides, base_bundle_sha=resolved.base_bundle_sha,
-                run_spec_sha256=result.spec_sha256, divergence=divergence if divergence is not None else "unknown",
-            )
-            # build_manifest's own process_nonce is a module-level constant
-            # (runspec/manifest.py::_PROCESS_NONCE) scoped to the PYTHON
-            # CALLER's process -- correct pre-WP-15b, when that process
-            # also did the computing. Now every call launches a genuinely
-            # fresh simengine subprocess to compute the actual result
-            # (R-SIM-24's own same_process/fresh_process axis is about
-            # THAT), so two `sim resim` calls from one Python process (a
-            # script driving several resims, or this same pytest process)
-            # would otherwise share one nonce and read back as
-            # same_process despite two independently-computing engine
-            # processes -- overridden here, per call, to the subprocess
-            # this specific run just launched.
-            meta = replace(meta, process_nonce=uuid.uuid4().hex)
-            overwrite_manifest_meta(output_path, meta)
-            # E2E-07 item 8 (SM-12): simcore's own writer cannot embed a
-            # topic's real FileDescriptorSet (BuildOutputTopics's own
-            # comment -- Writer::Open runs before any component loads);
-            # backfill it now from pipeline's own already-loaded
-            # component manifests, the same "engine writes what it can,
-            # Python patches what it couldn't reach yet" shape this row's
-            # own manifest-meta patch above already uses.
-            backfill_schema_bytes(output_path, pipeline)
             print(f"wrote {args.save}")
     finally:
         if resolved.scratch_dir is not None:
@@ -207,10 +157,6 @@ def run(argv: list[str] | None = None) -> int:
         if cleanup_output:
             output_path.unlink(missing_ok=True)
             output_path.with_suffix(output_path.suffix + ".spec.json").unlink(missing_ok=True)
-        if checkpoint_path is not None:
-            checkpoint_path.unlink(missing_ok=True)
-            capture_dir = checkpoint_path.parent / (checkpoint_path.name + "_input_capture")
-            shutil.rmtree(capture_dir, ignore_errors=True)
 
     print(f"resim complete: {tick_count} tick(s)")
     return 0

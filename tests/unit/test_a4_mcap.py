@@ -4,10 +4,16 @@
 # @author Pavan Karimajji
 
 """S-A4 `io/mcap.py` tests: UT-A4-1, UT-A4-2, UT-A4-3, UT-A4-4, UT-A4-6,
-UT-A4-8, UT-A4-9, UT-A4-12, UT-A4-13, UT-A4-14 (docs/sim_implementation_plan.md)."""
+UT-A4-8, UT-A4-9, UT-A4-13, UT-A4-14 (docs/sim_implementation_plan.md).
+
+`RCT:IMP-0048`: `io/mcap.py` has no writer now, so these test the READER over files built by the
+foreign-shape builder (`tests/support/foreign_mcap.py`). `UT-A4-12` (two writes of the same messages are
+byte-identical) tested the retired `McapWriter`; the one writer's own determinism is `SYT-REC-03` `.c1` in
+`interfaces`, and the engine's `.c3` in `tests/system/test_vnt_wp13_recordings.py`."""
 
 from __future__ import annotations
 
+from tests.support.foreign_mcap import ForeignMcapWriter
 import pytest
 from mcap.writer import Writer as RawMcapWriter
 
@@ -22,7 +28,7 @@ from adas_sim.io.base import (
     TopicInfo,
     group_by_log_time,
 )
-from adas_sim.io.mcap import CAPABILITIES, ChunkFaultResult, McapReader, McapWriter
+from adas_sim.io.mcap import CAPABILITIES, ChunkFaultResult, McapReader
 
 _TOPICS = {
     "/source/veh_dyn": TopicInfo(schema_name="adas_sim.test.VehDyn", provenance=Provenance.MEASURED),
@@ -31,7 +37,7 @@ _TOPICS = {
 
 
 def _write_sample(path, *, manifest=None, config_bundle_bytes=b"", messages=None):
-    writer = McapWriter()
+    writer = ForeignMcapWriter()
     writer.open(path, manifest or RunManifest(), _TOPICS, config_bundle_bytes=config_bundle_bytes)
     for topic, t_ns, payload in (messages or []):
         writer.write(topic, t_ns, payload)
@@ -140,7 +146,7 @@ def test_capabilities_are_declared_and_reported():
     assert CAPABILITIES.round_trips is True
     assert CAPABILITIES.write_only is False
     assert CAPABILITIES.capture_time is True
-    assert McapWriter().capabilities is CAPABILITIES
+    assert McapReader.capabilities is CAPABILITIES
 
 
 def test_dt_s_reconstruction_from_log_time_gaps(tmp_path):
@@ -179,20 +185,6 @@ def test_a_tick_missing_an_expected_topic_is_reported_not_dropped(tmp_path):
     assert groups[1][2] == frozenset({"/df/aeb.outputs"})
 
 
-def test_two_writes_of_the_same_messages_are_byte_identical(tmp_path):
-    """UT-A4-12: topic order sorted, no wall-clock in the payload."""
-    messages = [
-        ("/source/veh_dyn", 0, b"\x01\x02"),
-        ("/df/aeb.outputs", 0, b"\x03"),
-        ("/source/veh_dyn", 50_000_000, b"\x04\x05"),
-    ]
-    path_a = tmp_path / "a.mcap"
-    path_b = tmp_path / "b.mcap"
-    _write_sample(path_a, messages=messages)
-    _write_sample(path_b, messages=messages)
-    assert path_a.read_bytes() == path_b.read_bytes()
-
-
 def test_capture_time_round_trips_as_a_separate_stamp_from_reception(tmp_path):
     """UT-A4-13: a message's capture time and reception time round-trip as
     two distinct integer-ns stamps (S-A4Δ, OD-9) -- an injected latency
@@ -201,7 +193,7 @@ def test_capture_time_round_trips_as_a_separate_stamp_from_reception(tmp_path):
     represent at all."""
     path = tmp_path / "sample.mcap"
     manifest = RunManifest(manifest_version=CAPTURE_TIME_MANIFEST_VERSION, run_id="capture-aware")
-    writer = McapWriter()
+    writer = ForeignMcapWriter()
     writer.open(path, manifest, _TOPICS)
     # Received at t=100ms but describing the world 20ms earlier.
     writer.write("/source/veh_dyn", 100_000_000, b"\x01", capture_time_ns=80_000_000)
@@ -228,7 +220,7 @@ def test_none_capture_time_is_distinguishable_from_a_genuine_equal_stamp(tmp_pat
     _write_sample(old_path, messages=[("/source/veh_dyn", 5_000_000, b"\x00")])  # RunManifest() default: version 0
 
     new_manifest = RunManifest(manifest_version=CAPTURE_TIME_MANIFEST_VERSION, run_id="capture-aware")
-    writer = McapWriter()
+    writer = ForeignMcapWriter()
     writer.open(new_path, new_manifest, _TOPICS)
     writer.write("/source/veh_dyn", 5_000_000, b"\x00", capture_time_ns=5_000_000)  # genuinely simultaneous
     writer.close()

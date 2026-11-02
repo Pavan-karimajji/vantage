@@ -12,6 +12,7 @@ the single stage under test is `widget`, same convention
 
 from __future__ import annotations
 
+from tests.support.foreign_mcap import ForeignMcapWriter
 import json
 import struct
 from pathlib import Path
@@ -304,7 +305,7 @@ def _record_stim_recording(tmp_path: Path, name: str, values: list[float]) -> Pa
     from adas_sim.plugins.registry import writer_for
 
     recording_path = tmp_path / name
-    writer = writer_for(recording_path)
+    writer = ForeignMcapWriter()
     writer.open(
         recording_path, RunManifest(),
         {"/source/stim": TopicInfo(schema_name="abi_test.AbiPort", provenance=Provenance.MEASURED)},

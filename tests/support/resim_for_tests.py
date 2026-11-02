@@ -33,6 +33,7 @@ writing) carries over unchanged into its narrower role.
 
 from __future__ import annotations
 
+from tests.support.foreign_mcap import ForeignMcapWriter
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
@@ -183,7 +184,7 @@ def resim_pipeline_merged(pipeline: Pipeline, recording_path: Path, out_path: Pa
         }
         groups = list(group_by_log_time(messages, expected_topics=topics.keys()))
 
-        writer = writer_for(out_path)
+        writer = ForeignMcapWriter()
         writer.open(out_path, meta, merged_topics)
         try:
             previous_t_ns: int | None = None

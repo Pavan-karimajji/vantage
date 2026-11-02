@@ -17,6 +17,7 @@ no DLL at all in `tests/unit/test_d6_doctor.py`.
 
 from __future__ import annotations
 
+from tests.support.foreign_mcap import ForeignMcapWriter
 import re
 import sys
 from pathlib import Path
@@ -169,7 +170,7 @@ def test_doctor_config_source_embedded_resolves_from_the_recordings_own_bundle(t
     # something genuine to force against and must agree exactly (same
     # bytes, both sides).
     recording = tmp_path / "embedded_bundle.mcap"
-    writer = writer_for(recording)
+    writer = ForeignMcapWriter()
     writer.open(recording, RunManifest(manifest_version=2), {}, config_bundle_bytes=bundle_bytes_for_recording(_DF_SIL_CONFIG))
     writer.close()
 
