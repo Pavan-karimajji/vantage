@@ -230,11 +230,6 @@ class SampleBuffer {
   // The newest sample that arrived at or before `time_ns` (arrival time is
   // always known).
   const Sample* NewestNotAfter(std::int64_t time_ns) const;
-  // The newest sample whose `source_timestamp_us` is not after the wanted
-  // one -- the key of the time rule (`ARCH` section 6). Samples with an
-  // unknown source time are skipped, and a wanted 0 (unknown) finds nothing;
-  // the caller then uses `NewestNotAfter` (the arrival-time half of the rule).
-  const Sample* NewestSourceTimeNotAfter(std::uint64_t source_timestamp_us) const;
   const Sample* Newest() const;
 
   std::size_t Size() const { return samples_.size(); }

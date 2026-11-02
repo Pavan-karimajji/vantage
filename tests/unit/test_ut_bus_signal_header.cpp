@@ -175,8 +175,6 @@ TEST(UtBusSignalHeader, AZeroHeaderSampleInADeclaredPortIsNotFoundByCounterOrTim
   EXPECT_EQ(buffer->FindByCounter(0).sample, nullptr);
   EXPECT_EQ(buffer->NewestCounterNotAfter(0), nullptr);
   EXPECT_EQ(buffer->NewestCounterNotAfter(100)->sig.measurement_counter.value(), 6u);
-  EXPECT_EQ(buffer->NewestSourceTimeNotAfter(4999), nullptr);  // the zero-time sample is not "before" it
-  EXPECT_EQ(buffer->NewestSourceTimeNotAfter(5000)->sig.measurement_counter.value(), 6u);
   EXPECT_EQ(bus.Identity().Counts("p").unknown, 1u);
   EXPECT_EQ(bus.Identity().Counts("p").samples, 1u);
   EXPECT_EQ(bus.Identity().Counts("p").identity_broken + bus.Identity().Counts("p").resets, 0u);

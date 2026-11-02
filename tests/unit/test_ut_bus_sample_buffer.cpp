@@ -166,33 +166,5 @@ TEST(UtBusSampleBuffer, AWantedZeroIsNotAnEvictionMissEvenAfterEvictions) {
   EXPECT_EQ(buffer.EvictionMisses(), 0u);
 }
 
-Sample MakeSampleWithSourceTime(std::uint32_t counter, std::uint64_t source_us) {
-  Sample sample = MakeSample(counter, counter);
-  if (source_us != 0) sample.sig.source_timestamp_us = source_us;
-  return sample;
-}
-
-TEST(UtBusSampleBuffer, NewestSourceTimeNotAfterTakesTheNewestAtOrBeforeTheTime) {
-  SampleBuffer buffer(8);
-  buffer.Push(MakeSampleWithSourceTime(1, 1000));
-  buffer.Push(MakeSampleWithSourceTime(2, 2000));
-  buffer.Push(MakeSampleWithSourceTime(3, 0));  // unknown source time
-  buffer.Push(MakeSampleWithSourceTime(4, 4000));
-  EXPECT_EQ(buffer.NewestSourceTimeNotAfter(3000)->sig.measurement_counter.value(), 2u);  // skips the unknown
-  EXPECT_EQ(buffer.NewestSourceTimeNotAfter(4000)->sig.measurement_counter.value(), 4u);
-  EXPECT_EQ(buffer.NewestSourceTimeNotAfter(5000)->sig.measurement_counter.value(), 4u);
-  EXPECT_EQ(buffer.NewestSourceTimeNotAfter(999), nullptr);
-}
-
-// A naive read keeps the 0 as a time, which is "not after" every wanted time.
-TEST(UtBusSampleBuffer, ASampleWithAnUnknownSourceTimeIsNeverTakenByTimeAndAWantedZeroFindsNothing) {
-  SampleBuffer buffer(4);
-  buffer.Push(MakeSampleWithSourceTime(1, 0));
-  EXPECT_EQ(buffer.NewestSourceTimeNotAfter(1'000'000), nullptr);
-  buffer.Push(MakeSampleWithSourceTime(2, 500));
-  EXPECT_EQ(buffer.NewestSourceTimeNotAfter(0), nullptr);
-  EXPECT_NE(buffer.NewestNotAfter(1), nullptr);  // the arrival-time half still sees the unknown-time sample
-}
-
 }  // namespace
 }  // namespace simcore::bus

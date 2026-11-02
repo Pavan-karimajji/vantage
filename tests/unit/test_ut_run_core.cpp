@@ -396,7 +396,9 @@ TEST(UtRun04InjectionBoundary, ComputedFromTheSpecAndLoggedOnceBeforeTheFirstCyc
 // ---------------------------------------------------------------------------
 TEST(UtRun05Divergence, FirstDivergenceIsLatchedAndIsIdenticalAcrossReRuns) {
   // The recording claims an output the stub never produces, from cycle 0 --
-  // "command an actuation the recording does not contain".
+  // "command an actuation the recording does not contain". Cycle 0 is the
+  // stage's RESTART run, which is never compared (`IMP-0033`): the first
+  // divergence is cycle 1, the first RUN run.
   auto run_once = [](std::size_t cycles) {
     StubComponent stub("outputs");
     EXPECT_TRUE(stub.ok());
@@ -410,8 +412,8 @@ TEST(UtRun05Divergence, FirstDivergenceIsLatchedAndIsIdenticalAcrossReRuns) {
 
   const std::optional<Divergence> first = run_once(6);
   ASSERT_TRUE(first.has_value());
-  EXPECT_EQ(first->tick_index, 0u);
-  EXPECT_EQ(first->log_time_ns, 0);
+  EXPECT_EQ(first->tick_index, 1u);
+  EXPECT_EQ(first->log_time_ns, kDtNs);
   EXPECT_EQ(first->stage, "sut");
   EXPECT_EQ(first->port, "outputs");
   EXPECT_EQ(first->simulated_bytes, 1u);
@@ -445,7 +447,7 @@ TEST(UtRun05Divergence, ALaterAgreementNeverClearsTheLatchAndALaterDifferenceNev
 TEST(UtRun06InformationalOnly, EveryMessageWrittenPastTheGraceWindowCarriesTheFlagAndEarlierOnesDoNot) {
   StubComponent stub("outputs");
   ASSERT_TRUE(stub.ok());
-  Harness h(8, {0x01, 0x02});  // diverges at cycle 0
+  Harness h(8, {0x01, 0x02});  // diverges at cycle 1, the first RUN run (cycle 0 is a RESTART run)
   Runner::Options options;
   options.grace_ticks = 3;
   auto constructed =
@@ -458,7 +460,7 @@ TEST(UtRun06InformationalOnly, EveryMessageWrittenPastTheGraceWindowCarriesTheFl
 
   // An ARBITRARY slice of the export: any message at or after
   // (divergence tick + grace) * dt is flagged; every earlier one is not.
-  const std::int64_t flagged_from_ns = 3 * kDtNs;
+  const std::int64_t flagged_from_ns = (1 + 3) * kDtNs;
   bool saw_flagged = false;
   bool saw_unflagged = false;
   for (const RawMessage& message : h.sink.written) {
@@ -540,7 +542,7 @@ TEST(UtRun07Checkpoint, ProgressJsonCarriesTheFirstDivergenceOnceLatched) {
   StubComponent stub("outputs");
   ASSERT_TRUE(stub.ok());
   // Same fixture UT-RUN-05 uses: the recording claims an output the stub
-  // never produces, from cycle 0.
+  // never produces, from cycle 0; its first RUN run, cycle 1, is the divergence.
   Harness h(4, {0x01, 0x02});
   const std::filesystem::path progress =
       std::filesystem::temp_directory_path() / "simcore_ut_run_07_divergence_progress.json";
@@ -556,8 +558,8 @@ TEST(UtRun07Checkpoint, ProgressJsonCarriesTheFirstDivergenceOnceLatched) {
   auto record = Checkpoint::Read(progress);
   ASSERT_TRUE(record.ok()) << record.error().Format();
   EXPECT_TRUE(record.value().has_divergence);
-  EXPECT_EQ(record.value().divergence_tick_index, 0u);
-  EXPECT_EQ(record.value().divergence_log_time_ns, 0);
+  EXPECT_EQ(record.value().divergence_tick_index, 1u);
+  EXPECT_EQ(record.value().divergence_log_time_ns, kDtNs);
   EXPECT_EQ(record.value().divergence_stage, "sut");
   EXPECT_EQ(record.value().divergence_port, "outputs");
   EXPECT_EQ(record.value().divergence_differing_bytes, 2u);

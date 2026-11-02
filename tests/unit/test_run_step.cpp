@@ -248,14 +248,16 @@ TEST(RunStep, AnOutputThatDoesNotCopyTheControlsCounterIsInTheEventLogAndItsFile
   Runner runner = std::move(built).value();
   ASSERT_TRUE(runner.Run().ok());
 
-  ASSERT_EQ(runner.EventLogLines().size(), 1u);
+  // The same step's output also differs from the recorded one: the first divergence is the second entry.
+  ASSERT_EQ(runner.EventLogLines().size(), 2u);
   EXPECT_EQ(runner.EventLogLines()[0],
             "event=degrade step=2 entry=output_counter_break stage=B port=out wanted=12 found=11");
+  EXPECT_EQ(runner.EventLogLines()[1], "event=degrade step=2 entry=first_divergence stage=B port=out");
   std::ifstream file(dir / "engine_run.events.log");
   ASSERT_TRUE(file.good());
   std::stringstream content;
   content << file.rdbuf();
-  EXPECT_EQ(content.str(), runner.EventLogLines()[0] + "\n");
+  EXPECT_EQ(content.str(), runner.EventLogLines()[0] + "\n" + runner.EventLogLines()[1] + "\n");
 }
 
 TEST(RunStep, TheFirstDivergenceIsTheFirstStepWhoseOutputDiffersFromTheRecordedOne) {
@@ -445,6 +447,91 @@ TEST(RunStep, ASimulatedStageNobodySimulatedConsumesIsBadgedOnceFromTheFirstStep
     seen_each_step = seen_each_step && found;
   }
   EXPECT_TRUE(seen_each_step);
+}
+
+// `IMP-0032`, `IMP-0033` (`WP-06`). The car's controls count 10, 11, 12 and its refSync names each instant's own
+// `A.out` sample, so `B` echoes 10, 11, 12; the recorded `B.out` carries the given counters and cycle counters.
+std::vector<io::RawMessage> EchoRecording(const std::uint32_t (&out_counter)[3], const std::uint32_t (&out_cycle)[3]) {
+  std::vector<io::RawMessage> messages;
+  for (int i = 0; i < 3; ++i) {
+    const std::int64_t t = (i + 1) * 100 * kMs;
+    messages.push_back(Message("/A/out", t, Data(10 + i, (i + 1) * 100'000)));
+    messages.push_back(Message("/B/control", t, Data(10 + i, (i + 1) * 100'000, i + 1)));
+    messages.push_back(Message("/B/refSync", t, RefSyncOf(10 + i, {{"in", static_cast<std::uint32_t>(10 + i)}})));
+    messages.push_back(Message("/B/out", t, Data(out_counter[i], (i + 1) * 100'000, out_cycle[i])));
+  }
+  return messages;
+}
+
+std::size_t CountDivergenceLines(const Runner& runner) {
+  std::size_t count = 0;
+  for (const std::string& line : runner.EventLogLines()) {
+    if (line.find("entry=first_divergence") != std::string::npos) ++count;
+  }
+  return count;
+}
+
+TEST(RunStep, ARestartRunIsNeverOfferedToTheDivergenceLatch) {
+  // Step 0 is the stage's first run, a RESTART run; its output differs from the recorded one, the others do not.
+  Harness h(ControlSpec(), EchoRecording({99, 11, 12}, {1, 1, 1}));
+  ASSERT_TRUE(h.echo.ok());
+  auto built = h.Build();
+  ASSERT_TRUE(built.ok()) << built.error().Format();
+  Runner runner = std::move(built).value();
+  ASSERT_TRUE(runner.Run().ok());
+  EXPECT_FALSE(runner.FirstDivergence().has_value());
+  EXPECT_EQ(CountDivergenceLines(runner), 0u);
+}
+
+TEST(RunStep, TheFirstDivergenceIsLoggedOnceAndTheRunStillSucceedsThroughEveryStep) {
+  Harness h(ControlSpec(), EchoRecording({10, 98, 99}, {1, 1, 1}));  // steps 1 and 2 both differ
+  ASSERT_TRUE(h.echo.ok());
+  auto built = h.Build();
+  ASSERT_TRUE(built.ok()) << built.error().Format();
+  Runner runner = std::move(built).value();
+  const auto outcome = runner.Run();
+  ASSERT_TRUE(outcome.ok()) << outcome.error().Format();
+  EXPECT_EQ(outcome.value().cycles_executed, 3u);
+  ASSERT_TRUE(runner.FirstDivergence().has_value());
+  EXPECT_EQ(runner.FirstDivergence()->tick_index, 1u);
+  ASSERT_EQ(CountDivergenceLines(runner), 1u);
+  EXPECT_EQ(runner.EventLogLines().back(), "event=degrade step=1 entry=first_divergence stage=B port=out");
+}
+
+TEST(RunStep, OutputsDifferingOnlyInCycleCounterAreNotADivergence) {
+  Harness h(ControlSpec(), EchoRecording({10, 11, 12}, {5, 6, 7}));
+  ASSERT_TRUE(h.echo.ok());
+  auto built = h.Build();
+  ASSERT_TRUE(built.ok()) << built.error().Format();
+  Runner runner = std::move(built).value();
+  ASSERT_TRUE(runner.Run().ok());
+  EXPECT_FALSE(runner.FirstDivergence().has_value());
+  EXPECT_EQ(CountDivergenceLines(runner), 0u);
+}
+
+TEST(RunStep, AStagesWarmingUpEndsAtItsFirstEqualOutputNotItsFirstByteEqualOne) {
+  // The recorded 300 ms output differs from the stage's only in cycle_counter: equal outputs, not equal bytes.
+  Harness h(ControlSpec(), EchoRecording({10, 11, 12}, {1, 1, 9}));
+  ASSERT_TRUE(h.echo.ok());
+  auto built = h.Build();
+  ASSERT_TRUE(built.ok()) << built.error().Format();
+  Runner runner = std::move(built).value();
+  Collect tap;
+  runner.SetLiveMeasurement(&tap);
+  ASSERT_TRUE(runner.StepOnce().value());     // 100 ms, step 0: the recording's start, not warming up
+  ASSERT_TRUE(runner.Seek(200 * kMs).ok());
+  ASSERT_TRUE(runner.StepOnce().value());     // 200 ms: the RESTART run after the jump raises the badge
+  ASSERT_TRUE(runner.StepOnce().value());     // 300 ms: the first RUN run, equal outputs, ends it
+  ASSERT_EQ(tap.badges.size(), 3u);
+  EXPECT_TRUE(tap.badges[0].empty());
+  const auto warming = [](const std::vector<StepBadge>& badges) -> std::uint64_t {
+    for (const StepBadge& badge : badges) {
+      if (badge.kind == BadgeKind::kWarmingUp && badge.subject == "B") return badge.count;
+    }
+    return 0;
+  };
+  EXPECT_EQ(warming(tap.badges[1]), 1u);
+  EXPECT_EQ(warming(tap.badges[2]), 1u);  // not raised again: a byte comparison would raise it a second time
 }
 
 }  // namespace

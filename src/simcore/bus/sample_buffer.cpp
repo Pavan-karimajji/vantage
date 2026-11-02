@@ -63,15 +63,6 @@ const Sample* SampleBuffer::NewestNotAfter(std::int64_t time_ns) const {
   return nullptr;
 }
 
-const Sample* SampleBuffer::NewestSourceTimeNotAfter(std::uint64_t source_timestamp_us) const {
-  if (source_timestamp_us == 0) return nullptr;  // 0 is "unknown" in the contract: nothing is wanted
-  for (auto it = samples_.rbegin(); it != samples_.rend(); ++it) {
-    if (!it->sig.source_timestamp_us.has_value()) continue;
-    if (it->sig.source_timestamp_us.value() <= source_timestamp_us) return &*it;
-  }
-  return nullptr;
-}
-
 const Sample* SampleBuffer::Newest() const { return samples_.empty() ? nullptr : &samples_.back(); }
 
 }  // namespace simcore::bus

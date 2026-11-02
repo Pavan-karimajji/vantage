@@ -123,6 +123,8 @@ set(SIM_TEST_SOURCES
     unit/test_run_select_inputs.cpp
     unit/test_run_stage.cpp
     unit/test_run_step.cpp
+    # WP-06 (VANTAGE, C1): IMP-0032, IMP-0033 (EqualOutputs, the divergence latch).
+    unit/test_run_divergence.cpp
     # WP-15 (SI-08): engine diagnostics -- IMP-0131..0140.
     unit/test_diag_graph_dump.cpp
     unit/test_diag_trace.cpp

@@ -18,9 +18,7 @@
 ///   `RCT:IMP-0032`), calls the component (`RunStage`) and reports the outputs
 ///   for commit.
 ///
-///   Named gaps, closed by a later package: header-aware `EqualOutputs`
-///   (`WP-06`; here the divergence latch still compares bytes of the recorded
-///   message of the same instant), threads (`WP-07`), the live measurement
+///   Named gaps, closed by a later package: threads (`WP-07`), the live measurement
 ///   writer (`8b`; `SetLiveMeasurement` takes a sink the writer will fill),
 ///   `informational_only` on the wire (the `.mcap` codec has no per-message
 ///   slot, `SI-01`).
@@ -107,6 +105,16 @@ struct Divergence {
   std::size_t recorded_bytes = 0;
 };
 
+// `IMP-0032` (`WP-06`, `ARCH` section 7 *Where equal outputs apply*): whether a
+// simulated output equals the recorded one. Both payloads' `sig_header`
+// `cycle_counter` is taken as 0 before comparing; a `refSync` is compared only
+// on each entry's `measurement_counter` and `source_timestamp_us`; every other
+// byte is compared exactly. Read by reflection on `descriptor`, as the bus reads
+// headers; a null descriptor, or a payload that does not parse, is compared as
+// bytes.
+bool EqualOutputs(const std::vector<std::uint8_t>& simulated, const std::vector<std::uint8_t>& recorded,
+                  const google::protobuf::Descriptor* descriptor);
+
 // No grace by default: the honest default is that everything from the
 // divergence tick onward is informational. A non-zero window is a
 // deliberate, configured relaxation, never something a caller gets by
@@ -117,22 +125,24 @@ class DivergenceLatch {
  public:
   explicit DivergenceLatch(std::uint64_t grace_ticks = kDefaultGraceTicks) : grace_ticks_(grace_ticks) {}
 
-  // SW-0116: compares one simulated port's bytes against the recording's
-  // bytes for the SAME port at the SAME tick. Latches the first difference
-  // and never re-triggers -- a later tick going back into agreement does
-  // not clear it, and a second, different divergence never replaces the
-  // first (which is what makes the reported tick identical across re-runs).
+  // SW-0116, `IMP-0033`: compares one simulated port's payload against the
+  // recording's for the SAME port at the SAME step, through `EqualOutputs`
+  // (`descriptor` null: bytes). The caller never offers a RESTART run. Latches
+  // the first difference and never re-triggers -- a later step going back into
+  // agreement does not clear it, and a second, different divergence never
+  // replaces the first (which is what makes the reported step identical across
+  // re-runs). A divergence is information: nothing here changes a run's outcome.
   //
-  // **Byte equality, deliberately** (`WP-13`'s own named scope boundary):
+  // The magnitude is bytes, deliberately (`WP-13`'s own named scope boundary):
   // `SW-0116`'s Accept asks for "the magnitude", and a NUMERIC magnitude
   // beyond a declared per-field band needs a per-component tolerance table
   // (`R-SIM-24`, `modules/<name>/sim/tolerance.yaml`) that nothing in this
   // repo emits yet, plus protobuf reflection to read the field. Byte
   // difference is a real, falsifiable magnitude today; the field-level band
   // is closed by `tolerance.yaml` becoming real data.
-  void Observe(std::uint64_t tick_index, std::int64_t log_time_ns, const std::string& stage,
-               const std::string& port, const std::vector<std::uint8_t>& simulated,
-               const std::vector<std::uint8_t>& recorded);
+  void Observe(std::uint64_t step, std::int64_t log_time_ns, const std::string& stage, const std::string& port,
+               const std::vector<std::uint8_t>& simulated, const std::vector<std::uint8_t>& recorded,
+               const google::protobuf::Descriptor* descriptor = nullptr);
 
   bool latched() const { return first_.has_value(); }
   const std::optional<Divergence>& first() const { return first_; }

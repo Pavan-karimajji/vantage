@@ -660,20 +660,39 @@ Result<bool> Runner::RunTicket(const orchestrator::Ticket& ticket, std::vector<o
   impl.last_run_ns[ticket.stage] = now_ns;
   for (auto& [port, value] : result.delivered) impl.delivered[port] = std::move(value);
 
-  // IMP-0116: against what the recording holds for this same port at this same instant.
+  // IMP-0033: against what the recording holds for this same port at this same
+  // instant, by `EqualOutputs`. A RESTART run is never offered to the latch
+  // (`RCT:SYS-0016`): the first difference is logged once, and changes nothing else.
   // KIND_WARMING_UP: a stage restarted mid-recording is badged until its
-  // outputs first equal the recorded ones (byte equality here; `WP-06`
-  // makes the comparison header-aware).
+  // outputs first equal the recorded ones, by the same `EqualOutputs` (IMP-0032).
   if (ticket.warming_up) impl.warming.insert(ticket.stage);
+  bool restart_run = ticket.restart;
+  if (!restart_run && !args.control.empty()) {
+    adas::common::CycleControl control;
+    restart_run = control.ParseFromArray(args.control.data(), static_cast<int>(args.control.size())) &&
+                  control.op_mode() == adas::common::CycleControl::RESTART;
+  }
   bool compared = false;
   bool equal = true;
   for (const orchestrator::CommittedOutput& output : result.report.outputs) {
     const std::vector<std::uint8_t>* recorded = impl.reference.AtTime(output.port, now_ns);
     if (recorded == nullptr) continue;
     const std::string bare = output.port.substr(ticket.stage.size() + 1);
-    latch_.Observe(step, now_ns, ticket.stage, bare, output.payload, *recorded);
+    const google::protobuf::Descriptor* descriptor = bus_->Descriptor(output.port);
+    if (!restart_run) {
+      const bool was_latched = latch_.latched();
+      latch_.Observe(step, now_ns, ticket.stage, bare, output.payload, *recorded, descriptor);
+      if (!was_latched && latch_.latched()) {
+        orchestrator::LogEntry entry;
+        entry.kind = orchestrator::EntryKind::kFirstDivergence;
+        entry.stage = ticket.stage;
+        entry.port = bare;
+        const Result<bool> added = add(entry);
+        if (!added.ok()) return added;
+      }
+    }
     compared = true;
-    if (*recorded != output.payload) equal = false;
+    if (!EqualOutputs(output.payload, *recorded, descriptor)) equal = false;
   }
   if (impl.warming.count(ticket.stage) != 0) {
     if (compared && equal && !ticket.restart) {
