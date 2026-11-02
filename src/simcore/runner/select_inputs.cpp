@@ -206,7 +206,7 @@ Selection SelectInputs(const SelectContext& context, const orchestrator::Ticket&
     std::int32_t best_gap = 0;
     const auto consider = [&](const bus::Sample& candidate) {
       if (!candidate.sig.measurement_counter.has_value()) return;
-      const std::int32_t gap = adas::common::counterDistance(candidate.sig.measurement_counter.value(), wanted);
+      const std::int32_t gap = bus::MeasurementCounterDistance(candidate.sig.measurement_counter.value(), wanted);
       if (gap < 0) return;  // made after the wanted one
       if (!best.has_value() || gap <= best_gap) {
         best = candidate;

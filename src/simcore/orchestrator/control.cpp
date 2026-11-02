@@ -26,7 +26,8 @@ ControlHeader ControlWriter::HeaderOf(const Ticket& ticket, const GraphStage& st
     case StartKind::kClock: {
       const std::int64_t period = stage.clock_period_ns;
       const std::int64_t k = period > 0 ? (ticket.trigger_time_ns - first_reception_ns_) / period : 0;
-      header.measurement_counter = static_cast<std::uint32_t>(k + 1);
+      // 1 to 0xFFFFFFFF and then 1 again, never 0 (`IMP-0054`, `D24`).
+      header.measurement_counter = static_cast<std::uint32_t>(static_cast<std::uint64_t>(k) % 0xFFFFFFFFull) + 1u;
       header.source_timestamp_us = static_cast<std::uint64_t>(ticket.trigger_time_ns / 1000);
       return header;
     }

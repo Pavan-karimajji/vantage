@@ -91,13 +91,13 @@ TEST(UtBusIdentity, ABothCountersRepeatedDeliveryIsNotBroken) {
 
 // A wrap is not a reset: the cycle counter 0xFFFFFFFF -> 0 is distance +1
 // (a cycle_counter of 0 is a real count). The measurement counter has no 0
-// (0 is unknown), so it wraps 0xFFFFFFFF -> 1, a step of 2.
+// (0 is unknown), so it wraps 0xFFFFFFFF -> 1, one step (`D24`).
 TEST(UtBusIdentity, CountersWrappingAtUint32AreNotAReset) {
   IdentityTracker tracker;
   tracker.Observe("p", Header(0xFFFFFFFFu, 0xFFFFFFFFu));
   const IdentityResult result = tracker.Observe("p", Header(1u, 0u));
-  EXPECT_EQ(result.verdict, IdentityVerdict::kCounterGap);  // measurement 0 was skipped
-  EXPECT_EQ(result.measurement_distance, 2);
+  EXPECT_EQ(result.verdict, IdentityVerdict::kOk);  // no sample was skipped
+  EXPECT_EQ(result.measurement_distance, 1);
   EXPECT_EQ(result.cycle_distance, 1);
   EXPECT_EQ(tracker.Counts("p").resets, 0u);
 }
@@ -105,10 +105,43 @@ TEST(UtBusIdentity, CountersWrappingAtUint32AreNotAReset) {
 TEST(UtBusIdentity, AGapAcrossTheWrapIsCountedByDistance) {
   IdentityTracker tracker;
   tracker.Observe("p", Header(0xFFFFFFFEu, 1));
-  const IdentityResult result = tracker.Observe("p", Header(3u, 2));  // 0xFFFFFFFF, 0, 1, 2 missed
+  const IdentityResult result = tracker.Observe("p", Header(3u, 2));  // 0xFFFFFFFF, 1, 2 missed
   EXPECT_EQ(result.verdict, IdentityVerdict::kCounterGap);
-  EXPECT_EQ(result.measurement_distance, 5);
-  EXPECT_EQ(result.missed, 4u);
+  EXPECT_EQ(result.measurement_distance, 4);
+  EXPECT_EQ(result.missed, 3u);
+}
+
+// `IMP-0053` (`D24`): the one distance on `measurement_counter`.
+TEST(UtBusIdentity, MeasurementCounterDistanceCountsTheWrapAsOneStep) {
+  EXPECT_EQ(MeasurementCounterDistance(0xFFFFFFFFu, 1u), 1);
+  EXPECT_EQ(MeasurementCounterDistance(1u, 0xFFFFFFFFu), -1);
+  EXPECT_EQ(MeasurementCounterDistance(0xFFFFFFFEu, 2u), 3);
+  EXPECT_EQ(MeasurementCounterDistance(0xFFFFFFFEu, 0xFFFFFFFFu), 1);
+  EXPECT_EQ(MeasurementCounterDistance(5u, 9u), 4);
+  EXPECT_EQ(MeasurementCounterDistance(9u, 5u), -4);
+  EXPECT_EQ(MeasurementCounterDistance(7u, 7u), 0);
+  EXPECT_EQ(MeasurementCounterDistance(0xFFFFFFFFu, 0xFFFFFFFFu), 0);
+}
+
+TEST(UtBusIdentity, ASenderCountingThroughTheWrapHasNoGapResetOrBreak) {
+  IdentityTracker tracker;
+  const std::uint32_t counters[] = {0xFFFFFFFDu, 0xFFFFFFFEu, 0xFFFFFFFFu, 1u, 2u};
+  std::uint32_t cycle = 10;
+  for (const std::uint32_t counter : counters) {
+    const IdentityResult result = tracker.Observe("p", Header(counter, cycle++));
+    EXPECT_TRUE(result.verdict == IdentityVerdict::kFirst || result.verdict == IdentityVerdict::kOk) << counter;
+  }
+  const IdentityCounts counts = tracker.Counts("p");
+  EXPECT_EQ(counts.gaps + counts.resets + counts.identity_broken, 0u);
+}
+
+TEST(UtBusIdentity, SkippingASampleAcrossTheWrapIsAGapWithOneMissed) {
+  IdentityTracker tracker;
+  tracker.Observe("p", Header(0xFFFFFFFFu, 10));
+  const IdentityResult result = tracker.Observe("p", Header(2u, 11));  // 1 was never made
+  EXPECT_EQ(result.verdict, IdentityVerdict::kCounterGap);
+  EXPECT_EQ(result.measurement_distance, 2);
+  EXPECT_EQ(result.missed, 1u);
 }
 
 // Planted: a plain `current < previous` rule calls this a reset; by distance

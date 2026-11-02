@@ -266,7 +266,7 @@ enum class IdentityVerdict {
 
 struct IdentityResult {
   IdentityVerdict verdict = IdentityVerdict::kFirst;
-  std::int32_t measurement_distance = 0;  // counterDistance(previous, current)
+  std::int32_t measurement_distance = 0;  // MeasurementCounterDistance(previous, current)
   std::int32_t cycle_distance = 0;
   std::uint32_t missed = 0;               // samples skipped, for kCounterGap
 };
@@ -278,6 +278,12 @@ struct IdentityCounts {
   std::size_t resets = 0;
   std::size_t identity_broken = 0;
 };
+
+// `IMP-0053` (`D24`): Vantage's one distance on `measurement_counter`, in
+// samples from `from` to `to`. It is `adas::common::counterDistance` except that
+// the counter has no 0 (0 is unknown), so `0xFFFFFFFF` -> 1 is one step, not
+// two. The identity check and the counter fallback's gap both use it.
+std::int32_t MeasurementCounterDistance(std::uint32_t from, std::uint32_t to);
 
 class IdentityTracker {
  public:

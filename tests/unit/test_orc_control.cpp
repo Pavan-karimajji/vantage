@@ -103,6 +103,19 @@ TEST(OrcControl, AClockTickIsNumberedFromOneOnTheRecordingsFirstInstantAndCarrie
   EXPECT_EQ(third.source_timestamp_us, 23'000u);
 }
 
+// `IMP-0054` (`D24`): a clock-started stage's controls run 1 to 0xFFFFFFFF and
+// then 1 again, never 0.
+TEST(OrcControl, AClockTickCountsFromOneToTheTopAndThenFromOneAgain) {
+  const ControlWriter writer(0);
+  const GraphStage stage = ClockStage(1);
+  const std::int64_t ticks[] = {0, 1, 0xFFFFFFFELL, 0xFFFFFFFFLL, 0x100000000LL};
+  const std::uint32_t counters[] = {1u, 2u, 0xFFFFFFFFu, 1u, 2u};
+  for (int i = 0; i < 5; ++i) {
+    EXPECT_EQ(writer.HeaderOf(TicketOf(StartKind::kClock, ticks[i]), stage, nullptr).measurement_counter, counters[i])
+        << "tick " << ticks[i];
+  }
+}
+
 TEST(OrcControl, AnUnknownTriggerHeaderStaysUnknownAndIsNeverFilledFromTheClock) {
   const ControlWriter writer(0);
   GraphStage stage = ClockStage(0);

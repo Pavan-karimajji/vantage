@@ -212,12 +212,40 @@ TEST(RunSelectInputs, TheCounterFallbackWorksAcrossAWrapOfTheCounter) {
   Rig rig;
   rig.Sample(0xFFFFFFFEu, 1000, 10);
   rig.Sample(0xFFFFFFFFu, 2000, 20);
-  rig.RecordRefSync(100, 2);  // 0, 1 never made: distance from 0xFFFFFFFF to 2 is 3
+  rig.RecordRefSync(100, 2);  // 1 never made: the distance from 0xFFFFFFFF to 2 is 2 (`D24`)
   const Selection selection = rig.Run(100);
   const InputSelection& objects = selection.inputs[0];
   ASSERT_TRUE(objects.sample.has_value());
   EXPECT_EQ(CounterOf(objects), 0xFFFFFFFFu);
-  EXPECT_EQ(objects.gap.value(), 3);
+  EXPECT_EQ(objects.gap.value(), 2);
+}
+
+// `IMP-0056` (`D24`): 0xFFFFFFFF -> 1 is one step in the fallback's gap too, so
+// from 0xFFFFFFFE the wanted 2 is a gap of 3, within a maximum of 3, beyond 2.
+TEST(RunSelectInputs, TheFallbackGapCountsTheWrapAsOneStepAgainstTheMaximum) {
+  for (const std::int64_t maximum : {3, 2}) {
+    Rig rig;
+    rig.Sample(0xFFFFFFFEu, 1000, 10);
+    rig.Sample(3, 2000, 20);  // made after the wanted one
+    rig.RecordRefSync(100, 2);
+    SelectContext context;
+    context.spec = &rig.spec;
+    context.stage = &rig.spec.stages[1];
+    context.bus = &rig.bus;
+    context.reference = &rig.reference;
+    context.fallback_max_gap = maximum;
+    context.now_ns = 1'000'000;
+    context.step = 5;
+    orchestrator::Ticket ticket;
+    ticket.stage = "B";
+    orchestrator::ControlHeader header;
+    header.measurement_counter = 100;
+    const InputSelection& objects = SelectInputs(context, ticket, header).inputs[0];
+    EXPECT_TRUE(objects.fallback);
+    EXPECT_EQ(objects.found.value(), static_cast<std::int64_t>(0xFFFFFFFEu)) << maximum;
+    EXPECT_EQ(objects.gap.value(), 3) << maximum;
+    EXPECT_EQ(objects.beyond_gap, maximum == 2) << maximum;
+  }
 }
 
 TEST(RunSelectInputs, ASimulatedProducersMissingSampleMakesTheTicketWaitUntilTheLimitPasses) {

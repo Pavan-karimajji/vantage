@@ -46,6 +46,12 @@ target_compile_definitions(sim_test_fixture_trn_engine_host PRIVATE
 )
 add_dependencies(sim_test_fixture_trn_engine_host sim_test_fixture_echo_stub)
 
+# WP-11 (VANTAGE, C1): IMP-0055, fixture F-TICK of SYT-ORC-12 -- the
+# measurement_counter of the control a clock-started stage gets at tick k.
+# Runs no stage and loads no library.
+add_executable(control_tick support/control_tick.cpp)
+target_link_libraries(control_tick PRIVATE simcore)
+
 # WP-06: modules/sim's first C++ test binary (WP-03's own scoping note: "no
 # gtest target, no C++ tests exist yet"). UT-IO-01..21 (io codec contract).
 set(SIM_TEST_SOURCES
