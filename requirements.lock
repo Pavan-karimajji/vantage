@@ -1,21 +1,32 @@
 # LOCK -- generated, never hand-edited (python_tool_envs_plan.md D2).
-# env:    sim:sim
+# env:    vantage:sim
 # source: pyproject.toml
 # python: 3.12 (win32)
-# baseline: adas-build-tools/1.0.45 (adas_build_tools-1.0.45-py3-none-any.whl)
-# date:   2026-10-05
-# regenerate: python scripts/lock_python_env.py sim sim
+# baseline: adas-build-tools/1.0.9001 (adas_build_tools-1.0.9001-py3-none-any.whl)
+# date:   2026-11-02
+# regenerate: python scripts/lock_python_env.py vantage sim
 attrs==26.1.0
+colorama==0.4.6
+coverage==7.17.0
+iniconfig==2.3.1
 jsonschema-specifications==2025.9.1
 jsonschema==4.26.0
 lz4==4.4.5
 mcap-protobuf-support==0.5.4
 mcap==1.5.0
 numpy==2.5.3
+packaging==26.3
+pandas==3.1.0
+pluggy==1.7.0
 protobuf==7.36.2
+Pygments==2.21.0
+pytest-cov==7.1.0
+pytest==9.2.0
+python-dateutil==4.0.0
 PyYAML==6.0.3
 referencing==0.37.0
 rpds-py==2026.9.1
 ruamel.yaml==0.19.1
 typing_extensions==4.16.0
+tzdata==2026.6
 zstandard==0.25.0
