@@ -627,7 +627,7 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 - [~] **LAB-WP-08** — Camera, drills and the supervised run · The `G4` drills; needs `LAB-WP-05` and `LAB-WP-06`. Closed by `LAB-53` (`supervise.py`) and the supervised `hang` and `crash` cases passing.
 - [x] **LAB-WP-09** — The recorder on the `interfaces` writer (RCT C6, `D22`) · Needs `RCT:WP-11`; closes before `G2`, so every lab recording follows `RCT_Architecture.md` §6a by construction.
 - [x] **LAB-WP-10** — Cases for gate `G3`: periods with no common divisor, a renumbering library, a repeated trigger sample (owner, 2026-10-31) · Needs `LAB-WP-08`; the cases `VANTAGE_Test_Spec.md` runs for `SYS-0013`, `SYS-0047` and the catalogue of `G3`.
-- [ ] **LAB-WP-11** — The `measurement_counter` wrap (`D24`) · Needs `LAB-WP-10`; the case `VANTAGE_Test_Spec.md` runs for `SYS-0049` and `RCT:SYS-0004` `SYT-HDR-04.c2`.
+- [x] **LAB-WP-11** — The `measurement_counter` wrap (`D24`) · Needs `LAB-WP-10`; the case `VANTAGE_Test_Spec.md` runs for `SYS-0049` and `RCT:SYS-0004` `SYT-HDR-04.c2`.
 
 | Box | ID | WP | Serves (RCT) | Artifact — Design |
 |---|---|---|---|---|
@@ -694,10 +694,10 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 | `[x]` | `LAB-61` | `LAB-WP-10` | — | `catalogue/running_example.yaml` — scenario `renumber_lib`, `expect: diverges`, no `car:` block, resim case `shifted` with `config: {A: {set: {LAB_A_RENUMBER: 1}}}` (`F-RENUMBER-LIB`). |
 | `[x]` | `LAB-62` | `LAB-WP-10` | — | `src/lab_tools/recorder.py::apply_recording_edits` — `recording:` verb `repeat_sample: [{port, counter}]`: that sample is written a second time, byte-identical, 1 ms after the original, and stated in `manifest` with the other edits. |
 | `[x]` | `LAB-63` | `LAB-WP-10` | — | `catalogue/data_triggered.yaml` — scenario `repeat_trigger`: `recording: {repeat_sample: [{port: source.X, counter: 10}]}`, resim case `by_data` with `trigger: {T: in_X}`. |
-| `[ ]` | `LAB-64` | `LAB-WP-11` | `RCT:SYS-0004` | `src/lab_tools/car.py::wrap_counter(n)` — `((n − 1) mod 0xFFFFFFFF) + 1`, so a counter runs 1 to `0xFFFFFFFF` and then 1, never 0. `SourceTask.next_sample` numbers its counter with it, `cycle_counter` staying equal to the counter, and `Car.run` numbers a clock-started control `wrap_counter(k + 1)`. |
-| `[ ]` | `LAB-65` | `LAB-WP-11` | `RCT:SYS-0004` | `src/lab_tools/car.py::CAR_VERBS`, `parse_car_script`, `SourceTask` — the verb `counter_start: [{source, first}]`: the source's first sample carries `first`, a whole number from 1 to `0xFFFFFFFF`, and later ones follow with `LAB-64`'s wrap; an unknown source or another `first` is a `CarError` naming the scenario. |
-| `[ ]` | `LAB-66` | `LAB-WP-11` | — | `catalogue/running_example.yaml` — scenario `counter_wrap` of section 6.2: `car: {counter_start: [{source: X, first: 4294967291}]}`, resim case `all_simulated`, `expect: exact`. |
-| `[ ]` | `LAB-67` | `LAB-WP-11` | `RCT:SYS-0004` | `tests/test_car_counter_wrap.py` — `SYT-HDR-04` `.c2` on `counter_wrap`, and `wrap_counter` called on `0xFFFFFFFE`, `0xFFFFFFFF` and `0x100000000`, which gives `0xFFFFFFFE`, `0xFFFFFFFF` and 1. |
+| `[x]` | `LAB-64` | `LAB-WP-11` | `RCT:SYS-0004` | `src/lab_tools/car.py::wrap_counter(n)` — `((n − 1) mod 0xFFFFFFFF) + 1`, so a counter runs 1 to `0xFFFFFFFF` and then 1, never 0. `SourceTask.next_sample` numbers its counter with it, `cycle_counter` staying equal to the counter, and `Car.run` numbers a clock-started control `wrap_counter(k + 1)`. |
+| `[x]` | `LAB-65` | `LAB-WP-11` | `RCT:SYS-0004` | `src/lab_tools/car.py::CAR_VERBS`, `parse_car_script`, `SourceTask` — the verb `counter_start: [{source, first}]`: the source's first sample carries `first`, a whole number from 1 to `0xFFFFFFFF`, and later ones follow with `LAB-64`'s wrap; an unknown source or another `first` is a `CarError` naming the scenario. |
+| `[x]` | `LAB-66` | `LAB-WP-11` | — | `catalogue/running_example.yaml` — scenario `counter_wrap` of section 6.2: `car: {counter_start: [{source: X, first: 4294967291}]}`, resim case `all_simulated`, `expect: exact`. |
+| `[x]` | `LAB-67` | `LAB-WP-11` | `RCT:SYS-0004` | `tests/test_car_counter_wrap.py` — `SYT-HDR-04` `.c2` on `counter_wrap`, and `wrap_counter` called on `0xFFFFFFFE`, `0xFFFFFFFF` and `0x100000000`, which gives `0xFFFFFFFE`, `0xFFFFFFFF` and 1. |
 
 ## 10. Open questions, decided, rejected options, parked
 
