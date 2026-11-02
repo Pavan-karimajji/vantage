@@ -20,6 +20,7 @@ of `VANTAGE_Lab_Design.md` §6, written topology, scenario (`base` unless named)
 | `F-COMPARE` | The lab's comparator, `lab_tools.compare.equal_outputs` (`VANTAGE_Lab_Design.md` §6.4), over two recordings; independent of Vantage's own comparison |
 | `F-RUN-CONFIG` | A run configuration (a pipeline file) for a stub chain on the generic ABI whose `run_setup:` block and stage keys give every run-setup value, copied by the test with the one change its steps name |
 | `F-SRC` | `include/simcore`, `src/simcore` and `src/simengine` as checked in, and per check a copy with one planted violation |
+| `F-TICK` | `tests/support/control_tick` (`IMP-0055`) run with a clock period and a tick number: the `measurement_counter` of the control `ControlWriter::Write` builds for that tick, with no run and no library |
 | `F-RENUMBER-LIB` | `running_example` `renumber_lib` `shifted` (`VANTAGE_Lab_Design.md` `LAB-WP-10`): `A`'s bundle sets `LAB_A_RENUMBER`, so `A`'s own code writes its data outputs' `measurement_counter` shifted from its control's |
 
 ---
@@ -166,6 +167,11 @@ in `tests/system/test_vnt_gate_g3.py`.
 - `.c1` **PASS:** one `T` control per distinct counter and one `stalled_trigger` entry naming `T` and `in_X`, per `SYS-0047` Accept. **FAIL:** an extra or a missing run, or no entry.
 - `.c2` **PASS:** the planted extra run is reported. **FAIL:** the copy passes.
 
+**`SYT-ORC-12`** · T · fixture `F-TICK` — A clock-started control wraps to 1
+**Serves.** `SYS-0050`
+**Steps.** With a 1 ms clock period, read the `measurement_counter` of the control for ticks 0, 1, `0xFFFFFFFE`, `0xFFFFFFFF` and `0x100000000`.
+- `.c1` **PASS:** 1, 2, `0xFFFFFFFF`, 1 and 2, per `SYS-0050` Accept. **FAIL:** a 0, or `0xFFFFFFFF` followed by anything but 1.
+
 ## 4. Input selection — `SEL`
 
 **`SYT-SEL-01`** · T · fixture `F-CAT`, `F-ENGINE` — Inputs chosen by the recorded refSync
@@ -224,6 +230,12 @@ in `tests/system/test_vnt_gate_g3.py`.
 **Steps.** Run `running_example` `counter_jump` `all_simulated`; read the `counter_gap` and `counter_reset` entries for `source.X`. In `running_example`'s `base` recording restart `source.X`'s `measurement_counter` and `cycle_counter` at 1 from its 100th sample; run `all_simulated` on `F-ENGINE` and `F-TAP`.
 - `.c1` **PASS:** `counter_jump`: one gap and no reset on `source.X`, per `SYS-0030` Accept. **FAIL:** another count.
 - `.c2` **PASS:** restarted: one reset on `source.X` and no `KIND_IDENTITY_BROKEN` on it. **FAIL:** another count, or the badge.
+
+**`SYT-SEL-12`** · T · fixture `F-CASE`, `F-ENGINE`, `F-TAP` — A counter wrap is consecutive
+**Serves.** `SYS-0049`
+**Steps.** Run `running_example` `counter_wrap` `all_simulated` on `F-ENGINE` and `F-TAP`; read the `counter_gap` and `counter_reset` entries for `source.X` and every `KIND_IDENTITY_BROKEN` badge. Then repeat on a copy of its recording whose `source.X` sample after `0xFFFFFFFF` is rewritten to carry 3 (`F-REC-EDIT`).
+- `.c1` **PASS:** no gap and no reset on `source.X`, and no `KIND_IDENTITY_BROKEN`, per `SYS-0049` Accept. **FAIL:** any entry or badge, in particular a gap of 1 at the wrap.
+- `.c2` **PASS:** the edited copy shows one gap on `source.X`. **FAIL:** none, so the check could not have failed.
 
 ## 5. The engine step — `STP`
 

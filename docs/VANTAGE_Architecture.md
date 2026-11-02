@@ -228,8 +228,9 @@ given one (by `counterDistance`), find the newest sample not after a time, give 
 newest sample (the held value shown in the live measurement, with its age). Read the
 header of every sample as it enters, and check identity: it tells a counter reset
 from identity broken by the `counterDistance` of both counters, as `D17 (3)` defines
-them. Identity broken raises `KIND_IDENTITY_BROKEN`; gaps and resets are counted in
-the event log (§6).
+them, reading a `measurement_counter` that goes from `0xFFFFFFFF` to 1 as consecutive
+through `counterDistance` alone (`D24`). Identity broken raises `KIND_IDENTITY_BROKEN`;
+gaps and resets are counted in the event log (§6).
 
 *Never.* Interpret a payload beyond its `sig_header`. Block a writer. Grow beyond
 `buffer_depth`. Compare counters with `>` (distance with wrap-around only,

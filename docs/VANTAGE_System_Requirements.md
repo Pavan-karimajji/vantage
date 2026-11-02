@@ -25,7 +25,7 @@ simulated stage writes in the engine run, which names what the engine handed it
 **Test areas**, declared once: `RUN` the run setup · `ORC` the orchestrator and the six rules ·
 `SEL` input selection · `STP` the engine step · `THR` threads · `EQO` equal outputs and the
 first divergence.
-Priority split: 24 `P0`, 24 `P1`, 0 `P2`; all `R1`. Without a `P0` row an engine run is not
+Priority split: 24 `P0`, 26 `P1`, 0 `P2`; all `R1`. Without a `P0` row an engine run is not
 exact against the car; a `P1` row makes a result easier to trust or diagnose.
 
 ---
@@ -174,6 +174,12 @@ never does: `ARCH §3.2`. Ranks: `ARCH §2.2`.
 **Binds.** `recording`, `control`, `eventLog`
 **Verify.** T · `SYT-ORC-11`   **Trace.** —
 
+**`SYS-0050`** · `P1` · `R1` — A clock-started stage's controls are numbered from 1 and wrap to 1
+**Shall.** The engine shall number the controls of a clock-started stage 1, 2, 3 … from its first tick, `0xFFFFFFFF` being followed by 1 and never 0 (`RCT:SYS-0004`, `D24`).
+**Accept.** The control of tick k carries `measurement_counter` (k mod `0xFFFFFFFF`) + 1: ticks 0, 1, `0xFFFFFFFE` and `0xFFFFFFFF` carry 1, 2, `0xFFFFFFFF` and 1; a 0 or any other value fails.
+**Binds.** `control`
+**Verify.** T · `SYT-ORC-12`   **Trace.** —
+
 ## 3. Input selection (`SEL`)
 
 The order of the rules and the table of outcomes: `ARCH §6`, `D18 (1)`. Matching is by
@@ -251,6 +257,12 @@ The order of the rules and the table of outcomes: `ARCH §6`, `D18 (1)`. Matchin
 **Accept.** The source check over the engine finds no `==`, `!=`, `<`, `>`, `<=` or `>=` applied to either counter; with one planted comparison, it fails.
 **Binds.** `stageIn`
 **Verify.** A · `ANL-02`   **Trace.** —
+
+**`SYS-0049`** · `P1` · `R1` — A measurement counter going from `0xFFFFFFFF` to 1 is consecutive
+**Shall.** The engine shall read a `measurement_counter` going from `0xFFFFFFFF` to 1 as the next one, so it counts no gap, no reset and no identity broken there (`D24`).
+**Accept.** On `running_example` `counter_wrap`, with `source.X`'s counter going `0xFFFFFFFF` then 1, the event log counts no gap and no reset on `source.X` and no `KIND_IDENTITY_BROKEN` is raised; any count or badge fails.
+**Binds.** `recording`, `eventLog`, `stepRecord`
+**Verify.** T · `SYT-SEL-12`   **Trace.** —
 
 ## 4. The engine step (`STP`)
 
@@ -361,7 +373,7 @@ case (`R-REQ-9`).
 
 | Method | Count | Notes |
 |---|---|---|
-| T | 45 | `simengine` on a lab case, the step tap, or the exec probe |
+| T | 47 | `simengine` on a lab case, the step tap, the exec probe, or the control tick probe |
 | A | 3 | source checks over the engine |
 
 ## 8. Superseded and retired UIDs

@@ -349,7 +349,7 @@ The `control` message of the tick:
 
 | Field | Value (`RCT:SYS-0009`..`RCT:SYS-0011`) |
 |---|---|
-| `measurement_counter` | clock-started: k + 1. Input-triggered: the trigger sample's |
+| `measurement_counter` | clock-started: k + 1, and 1 after `0xFFFFFFFF` (section 5.4). Input-triggered: the trigger sample's |
 | `source_timestamp_us` | clock-started: the nominal time. Input-triggered: the trigger sample's |
 | `cycle_counter` | the car's count of runs of this component, from 1 |
 | `sig_status` | OK |
@@ -359,8 +359,8 @@ The car **never reads `compState`** and never changes `op_mode` for any other re
 
 ### 5.4 Sources
 
-Each new sample gets the previous counter plus 1 (the first is 1) and the non-zero nominal
-time (`RCT:IMP-0029`). A `sample` source's `value` is its counter. An `image` source's payload
+Each new sample gets the previous counter plus 1 (the first is 1, or the `counter_start` of section 5.5) and the non-zero nominal
+time (`RCT:IMP-0029`). After `0xFFFFFFFF` the next counter is 1, never 0 (`RCT:SYS-0004`, `D24`); a clock-started control wraps the same way. A `sample` source's `value` is its counter. An `image` source's payload
 is `adas.lab.LabImage` (`width`, `height`, `pixels`; in `interfaces`,
 `modules/interfaces/proto/lab/lab_image.proto`, fields listed in `RCT_Implementation_Design.md`
 *Message fields*) with `pixels[i] = (counter + i) mod 256`; `big_frame` makes one frame that
@@ -379,6 +379,7 @@ closed.
 | `car:` | `invalid: [{source, from_ms, for_ms}]` | samples in the window carry sticker INVALID | `F-LAB-FAULT` |
 | `car:` | `renumber: [component]` | the component's outputs carry its own run count as `measurement_counter` (a break of `RCT:SYS-0001`) | drill: producer renumbers |
 | `car:` | `counter_jump: [{source, at_counter, by}]` | from that counter on, the source's counter is `by` higher | drill: counter jump |
+| `car:` | `counter_start: [{source, first}]` | the source's first sample carries counter `first` (1 to `0xFFFFFFFF`) and the next ones follow, wrapping to 1; no jump, so no gap | drill: counter wrap |
 | `recording:` | `drop_sample: [{port, counter}]` | the sample is not written, though the bus had it and a `refSync` names it | drill: refSync names a missing sample |
 | `recording:` | `drop_ref_sync: all` | no `refSync` topic is written, and every `refSync` port is listed `excluded` in `record_policies` | drill: no refSyncs |
 | `recording:` | `repeat_sample: [{port, counter}]` | the sample is written a second time, byte-identical, 1 ms after the original | drill: a repeated trigger sample |
@@ -497,6 +498,7 @@ Drill scenarios (`G4`; `ARCH §12`), also on the running example:
 | (cases of `base`) `hang`, `crash` | — | `config: {B: {set: {LAB_B_HANG_AFTER_RUNS: 5}}}`, and `LAB_B_CRASH_AFTER_RUNS: 5` | timeout and crash outcomes |
 | (case of `base`) `error` | — | none; the `fault` scenario is the ERROR drill | a component that reports ERROR |
 | `renumber_lib` | — | `shifted`: `config: {A: {set: {LAB_A_RENUMBER: 1}}}` | `A`'s own code shifts its data outputs' counter: each output in the event log |
+| `counter_wrap` | `car: {counter_start: [{source: X, first: 4294967291}]}` (`0xFFFFFFFB`) | `all_simulated`, `expect: exact` | `X`'s fifth sample carries `0xFFFFFFFF` and its sixth 1; no gap, no reset, no identity broken |
 | `repeat_trigger` (in `data_triggered`) | `recording: {repeat_sample: [{port: source.X, counter: 10}]}` | `by_data` | a stalled trigger in the event log, and no extra `T` run |
 
 `renumber` acts only where a component's trigger counter differs from its own run count, so its drill uses an input-triggered component after a counter jump.
@@ -625,6 +627,7 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 - [~] **LAB-WP-08** — Camera, drills and the supervised run · The `G4` drills; needs `LAB-WP-05` and `LAB-WP-06`. Closed by `LAB-53` (`supervise.py`) and the supervised `hang` and `crash` cases passing.
 - [x] **LAB-WP-09** — The recorder on the `interfaces` writer (RCT C6, `D22`) · Needs `RCT:WP-11`; closes before `G2`, so every lab recording follows `RCT_Architecture.md` §6a by construction.
 - [x] **LAB-WP-10** — Cases for gate `G3`: periods with no common divisor, a renumbering library, a repeated trigger sample (owner, 2026-10-31) · Needs `LAB-WP-08`; the cases `VANTAGE_Test_Spec.md` runs for `SYS-0013`, `SYS-0047` and the catalogue of `G3`.
+- [ ] **LAB-WP-11** — The `measurement_counter` wrap (`D24`) · Needs `LAB-WP-10`; the case `VANTAGE_Test_Spec.md` runs for `SYS-0049` and `RCT:SYS-0004` `SYT-HDR-04.c2`.
 
 | Box | ID | WP | Serves (RCT) | Artifact — Design |
 |---|---|---|---|---|
@@ -691,6 +694,10 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 | `[x]` | `LAB-61` | `LAB-WP-10` | — | `catalogue/running_example.yaml` — scenario `renumber_lib`, `expect: diverges`, no `car:` block, resim case `shifted` with `config: {A: {set: {LAB_A_RENUMBER: 1}}}` (`F-RENUMBER-LIB`). |
 | `[x]` | `LAB-62` | `LAB-WP-10` | — | `src/lab_tools/recorder.py::apply_recording_edits` — `recording:` verb `repeat_sample: [{port, counter}]`: that sample is written a second time, byte-identical, 1 ms after the original, and stated in `manifest` with the other edits. |
 | `[x]` | `LAB-63` | `LAB-WP-10` | — | `catalogue/data_triggered.yaml` — scenario `repeat_trigger`: `recording: {repeat_sample: [{port: source.X, counter: 10}]}`, resim case `by_data` with `trigger: {T: in_X}`. |
+| `[ ]` | `LAB-64` | `LAB-WP-11` | `RCT:SYS-0004` | `src/lab_tools/car.py::wrap_counter(n)` — `((n − 1) mod 0xFFFFFFFF) + 1`, so a counter runs 1 to `0xFFFFFFFF` and then 1, never 0. `SourceTask.next_sample` numbers its counter with it, `cycle_counter` staying equal to the counter, and `Car.run` numbers a clock-started control `wrap_counter(k + 1)`. |
+| `[ ]` | `LAB-65` | `LAB-WP-11` | `RCT:SYS-0004` | `src/lab_tools/car.py::CAR_VERBS`, `parse_car_script`, `SourceTask` — the verb `counter_start: [{source, first}]`: the source's first sample carries `first`, a whole number from 1 to `0xFFFFFFFF`, and later ones follow with `LAB-64`'s wrap; an unknown source or another `first` is a `CarError` naming the scenario. |
+| `[ ]` | `LAB-66` | `LAB-WP-11` | — | `catalogue/running_example.yaml` — scenario `counter_wrap` of section 6.2: `car: {counter_start: [{source: X, first: 4294967291}]}`, resim case `all_simulated`, `expect: exact`. |
+| `[ ]` | `LAB-67` | `LAB-WP-11` | `RCT:SYS-0004` | `tests/test_car_counter_wrap.py` — `SYT-HDR-04` `.c2` on `counter_wrap`, and `wrap_counter` called on `0xFFFFFFFE`, `0xFFFFFFFF` and `0x100000000`, which gives `0xFFFFFFFE`, `0xFFFFFFFF` and 1. |
 
 ## 10. Open questions, decided, rejected options, parked
 
