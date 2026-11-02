@@ -34,6 +34,14 @@ target_link_libraries(sim_test_fixture_echo_stub PRIVATE AdasInterfaces::AdasInt
 target_compile_definitions(sim_test_fixture_echo_stub PRIVATE ADAS_SIL_ABI_EXPORTS)
 set_target_properties(sim_test_fixture_echo_stub PROPERTIES OUTPUT_NAME "echo_stub")
 
+# WP-09a (VANTAGE, C1): IMP-0042, fixture F-PROBE -- the exec probe, a component on the generic
+# ABI that logs entry and exit of every adasExec() with its thread id (see
+# fixtures/exec_probe/exec_probe.cpp's own header). One build; a test copies it per path.
+add_library(sim_test_fixture_exec_probe SHARED fixtures/exec_probe/exec_probe.cpp)
+target_link_libraries(sim_test_fixture_exec_probe PRIVATE AdasInterfaces::AdasInterfaces)
+target_compile_definitions(sim_test_fixture_exec_probe PRIVATE ADAS_SIL_ABI_EXPORTS)
+set_target_properties(sim_test_fixture_exec_probe PROPERTIES OUTPUT_NAME "exec_probe")
+
 # WP-27 (SI-25 transport): UT-TRN-05's own real "engine" -- a standalone
 # executable (not a linked-in test body), so the test that spawns it can
 # genuinely kill it, same real-crash shape module_host::RunIsolatedStage's
@@ -51,6 +59,13 @@ add_dependencies(sim_test_fixture_trn_engine_host sim_test_fixture_echo_stub)
 # Runs no stage and loads no library.
 add_executable(control_tick support/control_tick.cpp)
 target_link_libraries(control_tick PRIVATE simcore)
+
+# WP-09a (VANTAGE, C1): IMP-0041, fixture F-TAP -- one JSON line per engine step
+# (step, time, badges), optionally one jump. Built on the simEngine* ABI; reaches
+# the Runner through the internal SimEngineRunner (src/simcore/abi/).
+add_executable(step_tap support/step_tap.cpp)
+target_link_libraries(step_tap PRIVATE simcore)
+target_include_directories(step_tap PRIVATE ${CMAKE_SOURCE_DIR}/src/simcore)
 
 # WP-06: modules/sim's first C++ test binary (WP-03's own scoping note: "no
 # gtest target, no C++ tests exist yet"). UT-IO-01..21 (io codec contract).

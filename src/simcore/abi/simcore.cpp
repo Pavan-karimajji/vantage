@@ -27,6 +27,7 @@
 /// @author Pavan Karimajji
 
 #include "simcore/abi/simcore.h"
+#include "engine_access.hpp"
 
 #include <cstring>
 #include <fstream>
@@ -291,6 +292,10 @@ struct SimEngine {
 
   explicit SimEngine(simcore::RunSpec s) : spec(std::move(s)), bus(0) {}
 };
+
+simcore::runner::Runner* SimEngineRunner(SimEngine* engine) {
+  return engine != nullptr && engine->runner.has_value() ? &*engine->runner : nullptr;
+}
 
 int32_t simEngineAbiVersion() { return SIMCORE_ABI_VERSION; }
 
