@@ -177,7 +177,7 @@ Result<bool> Orchestrator::Enter(const std::string& port, const std::vector<std:
         entry.kind = EntryKind::kStalledTrigger;
         entry.step = step_;
         entry.stage = stage.name;
-        entry.port = port;
+        entry.port = stage.trigger_input;  // the stage's own port (`IMP-0050`), as the other stage entries name it
         entry.counter = counter;
         const Result<bool> added = log_.Add(entry);
         if (!added.ok()) return added;

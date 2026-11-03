@@ -6,7 +6,8 @@
 ///   `ReadAhead` (`IMP-0026`, `WP-05`): every `sources[]` file read through
 ///   `io::Reader::ReadRange`, merged by reception time then `sources[]` order
 ///   (a tie inside one file keeps file order), as far as the readiness limit
-///   past the instant being processed. `Find` searches by
+///   past the instant being processed, and (`D27`) for a run's refSync to its
+///   stage's next recorded `control`. `Find` searches by
 ///   `measurement_counter`; the time rule never calls it. `RecordedReference`
 ///   (below) keeps the recorded messages of the ports a `simulate` stage
 ///   re-produces, for refSync selection and the divergence latch.
@@ -62,6 +63,11 @@ void ReadAhead::SetByteCounter(diagnostics::ByteCounter* byte_counter) {
 }
 
 void ReadAhead::Fill(std::size_t instants) {
+  search_extent_ = instants + 1;
+  ReadUntil(instants);
+}
+
+void ReadAhead::ReadUntil(std::size_t instants) {
   while (instants_.size() <= instants) {
     // Every reader that still can must show its next message before the
     // earliest one is known.
@@ -101,7 +107,9 @@ AheadInstant ReadAhead::TakeFront() {
 
 const AheadMessage* ReadAhead::Find(const std::string& port, std::uint32_t counter,
                                     const google::protobuf::Descriptor* descriptor) const {
+  std::size_t seen = 0;
   for (const AheadInstant& instant : instants_) {
+    if (seen++ >= search_extent_) break;
     for (const AheadMessage& message : instant.messages) {
       if (message.port != port) continue;
       const bus::SignalHeader header = bus::ReadSignalHeader(message.message.payload, descriptor);
@@ -113,9 +121,39 @@ const AheadMessage* ReadAhead::Find(const std::string& port, std::uint32_t count
   return nullptr;
 }
 
+const AheadMessage* ReadAhead::SearchRefSync(const std::string& ref_sync_port, std::uint32_t counter,
+                                             const google::protobuf::Descriptor* ref_sync_descriptor,
+                                             const std::string& control_port,
+                                             const google::protobuf::Descriptor* control_descriptor) {
+  for (;;) {
+    // In reading order: this run's refSync, or another run's control, whichever comes first.
+    for (const AheadInstant& instant : instants_) {
+      for (const AheadMessage& message : instant.messages) {
+        if (message.port == ref_sync_port) {
+          const bus::SignalHeader header = bus::ReadSignalHeader(message.message.payload, ref_sync_descriptor);
+          if (header.measurement_counter.has_value() &&
+              adas::common::counterDistance(counter, header.measurement_counter.value()) == 0) {
+            return &message;
+          }
+        } else if (message.port == control_port) {
+          const bus::SignalHeader header = bus::ReadSignalHeader(message.message.payload, control_descriptor);
+          if (header.measurement_counter.has_value() &&
+              adas::common::counterDistance(counter, header.measurement_counter.value()) != 0) {
+            return nullptr;
+          }
+        }
+      }
+    }
+    if (drained_) return nullptr;
+    ReadUntil(instants_.size());  // one more reception time
+  }
+}
+
 std::vector<const AheadMessage*> ReadAhead::OnPort(const std::string& port) const {
   std::vector<const AheadMessage*> found;
+  std::size_t seen = 0;
   for (const AheadInstant& instant : instants_) {
+    if (seen++ >= search_extent_) break;
     for (const AheadMessage& message : instant.messages) {
       if (message.port == port) found.push_back(&message);
     }

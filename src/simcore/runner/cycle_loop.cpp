@@ -211,6 +211,7 @@ struct Runner::Impl {
   std::map<std::string, bus::Origin> origins;
   std::set<std::string> queue_ports;      // recorded ports that enter a sample buffer
   std::set<std::string> reference_ports;  // recorded ports kept as reference (a `simulate` stage's outputs)
+  std::set<std::string> controls_recorded;  // stages the recording holds a `<stage>.control` topic of (`D27`)
   std::vector<std::string> declared_ports;
   std::string plan_text;
   std::int64_t first_reception_ns = 0;
@@ -233,6 +234,15 @@ struct Runner::Impl {
   std::set<std::string> touched;                     // ports that got a sample this step
   std::map<std::string, bus::PortValue> delivered;   // what each run was handed this step
 
+  // `IMP-0061`: what each run committed this step wrote -- its control, then each output it committed, from
+  // that run's own values -- in commit order, so a stage that runs twice in one step leaves both runs.
+  struct RunWrite {
+    std::string port;  // "<stage>.<port>"
+    std::vector<std::uint8_t> payload;
+    std::optional<std::int64_t> capture_time_ns;
+  };
+  std::vector<RunWrite> run_writes;
+
   std::ofstream event_file;
   std::size_t lines_written = 0;
 
@@ -253,6 +263,7 @@ struct Runner::Impl {
     context.bus = bus;
     context.reference = &reference;
     context.ahead = ahead.get();
+    context.control_recorded = controls_recorded.count(ticket.stage) != 0;
     context.origins = &origins;
     context.fallback_max_gap = spec.fallback_max_gap;
     context.now_ns = now_ns;
@@ -495,6 +506,9 @@ Result<Runner> Runner::Construct(const RunSpec& spec, bus::PortBus& bus, std::ve
     }
     if (graph_stage.computed_not_consumed) impl.Raise(BadgeKind::kComputedNotConsumed, graph_stage.name);
   }
+  for (const SpecStage& stage : spec.stages) {
+    if (described.count(io::CanonicalTopic(stage.name + ".control")) != 0) impl.controls_recorded.insert(stage.name);
+  }
   impl.control.emplace(impl.first_reception_ns);
   impl.orchestrator = std::make_unique<orchestrator::Orchestrator>(impl.spec, impl.graph, bus, impl.log, orch_options);
 
@@ -709,6 +723,10 @@ Result<bool> Runner::FinishTicket(PendingRun& pending, std::vector<orchestrator:
     if (!added.ok()) return added;
   }
   impl.last_run_ns[ticket.stage] = now_ns;
+  if (!args.control.empty()) impl.run_writes.push_back({ticket.stage + ".control", args.control, std::nullopt});
+  for (const orchestrator::CommittedOutput& output : result.report.outputs) {
+    impl.run_writes.push_back({output.port, output.payload, output.capture_time_ns});
+  }
   for (auto& [port, value] : result.delivered) impl.delivered[port] = std::move(value);
 
 
@@ -766,7 +784,43 @@ Result<std::size_t> Runner::WriteStep(std::uint64_t step, std::int64_t now_ns) {
     const bus::SampleBuffer* buffer = bus_->Buffer(port);
     return buffer == nullptr ? nullptr : buffer->Newest();
   };
-  for (const RecordedTopic& topic : recorded_topics_) {
+  const auto emit = [&](const RecordedTopic& topic, const std::vector<std::uint8_t>& payload,
+                        const std::optional<std::int64_t>& capture_time_ns) {
+    if (writer_ != nullptr) {
+      io::RawMessage message;
+      message.topic = topic.topic;
+      message.log_time_ns = now_ns;
+      if (capture_time_ns.has_value()) message.capture_time_ns = capture_time_ns.value();
+      message.payload = payload;
+      message.informational_only = informational;
+      bytes_written += message.payload.size();
+      writer_->WriteMessage(message);
+    }
+    // SI-25 transport (UT-TRN-*): the same value the recorder would have
+    // written, named from the TOPIC (F-3), keyed by the step number.
+    if (transport_publisher_ != nullptr) {
+      transport_publisher_->Publish(step, TopicToPortName(topic.topic), payload.data(), payload.size());
+    }
+  };
+
+  // `IMP-0061`: first each run committed in this step, in commit order -- its control, then each output it
+  // committed, from that run's own values; a topic written here is not written again below.
+  std::set<std::size_t> written_by_a_run;
+  for (const Impl::RunWrite& run_write : impl.run_writes) {
+    for (std::size_t i = 0; i < recorded_topics_.size(); ++i) {
+      const RecordedTopic& topic = recorded_topics_[i];
+      if (topic.post_mutation || topic.qualified_port != run_write.port) continue;
+      if (topic.dir == "req" && ProducerAddressOf(impl.spec, topic.stage, topic.port).has_value()) continue;
+      written_by_a_run.insert(i);
+      if (topic.policy.WritesAt(step)) emit(topic, run_write.payload, run_write.capture_time_ns);
+      break;
+    }
+  }
+
+  // Then the step's other recorded topics, in the topic list's order.
+  for (std::size_t i = 0; i < recorded_topics_.size(); ++i) {
+    const RecordedTopic& topic = recorded_topics_[i];
+    if (written_by_a_run.count(i) != 0) continue;
     if (!topic.policy.WritesAt(step)) continue;
     bus::PortValue value;
     if (topic.dir == "req") {
@@ -791,21 +845,9 @@ Result<std::size_t> Runner::WriteStep(std::uint64_t step, std::int64_t now_ns) {
       if (sample == nullptr) continue;
       value = sample->value;
     }
-    if (writer_ != nullptr) {
-      io::RawMessage message;
-      message.topic = topic.topic;
-      message.log_time_ns = now_ns;
-      if (value.header.t_capture_ns.has_value()) message.capture_time_ns = value.header.t_capture_ns.value();
-      message.payload = value.payload;
-      message.informational_only = informational;
-      bytes_written += message.payload.size();
-      writer_->WriteMessage(message);
-    }
-    // SI-25 transport (UT-TRN-*): the same value the recorder would have
-    // written, named from the TOPIC (F-3), keyed by the step number.
-    if (transport_publisher_ != nullptr) {
-      transport_publisher_->Publish(step, TopicToPortName(topic.topic), value.payload.data(), value.payload.size());
-    }
+    std::optional<std::int64_t> capture;
+    if (value.header.t_capture_ns.has_value()) capture = value.header.t_capture_ns.value();
+    emit(topic, value.payload, capture);
   }
   return Result<std::size_t>::Ok(bytes_written);
 }
@@ -831,6 +873,7 @@ Result<bool> Runner::StepOnce() {
   const std::int64_t now_ns = orch.Now();
   impl.touched.clear();
   impl.delivered.clear();
+  impl.run_writes.clear();
 
   // The recorded instant just entered its buffers: note which ports got a
   // sample, keep a `simulate` stage's recorded outputs as reference, and queue

@@ -3,7 +3,9 @@
 # COMPONENT: VANTAGE
 # @author Pavan Karimajji
 
-"""`ForeignMcapWriter`: test data for the READ side only -- `.mcap` files shaped the way the retired
+"""Legacy shapes for reader tests only: never copy this into `src/`, where `ANL-06` forbids a second writer.
+
+`ForeignMcapWriter`: test data for the READ side only -- `.mcap` files shaped the way the retired
 `adas_sim.io.mcap.McapWriter` wrote them, which a reader must still open: no `source_kind`, an unknown origin, a
 capture time apart from the logging time, a `config_bundle` as one `yaml` entry, a manifest with a `library_sha256`
 and no `build_id`. The one Python recording writer (`adas_recording`, `RCT:IMP-0048`) refuses to make such a file,

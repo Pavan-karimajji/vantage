@@ -150,9 +150,12 @@ def read_recording(path: Path) -> tuple[list[Message], dict, dict, Mapping[str, 
     return messages, manifest, provenance, schemas
 
 
-def edit_recording(case: LabCase, dest: Path, edit: Callable[[list[Message]], Iterable[Message]]) -> Path:
+def edit_recording(case: LabCase, dest: Path, edit: Callable[[list[Message]], Iterable[Message]], *,
+                   drop_topics: Iterable[str] = ()) -> Path:
     """The case's recording with ``edit(messages)`` applied (it returns the messages to write, in order) written to
-    ``dest`` through ``adas_recording``'s writer. A split into files is two calls with complementary edits."""
+    ``dest`` through ``adas_recording``'s writer. A split into files is two calls with complementary edits.
+    ``drop_topics`` leaves a topic out of the file altogether (the writer otherwise declares every topic of the
+    original, so a topic whose messages were all removed would still be in the file's index)."""
     if case.interfaces_python is None:
         pytest.skip("lab not built: the index.json has no interfaces_python entry, so the recording writer cannot be found")
     if str(case.interfaces_python) not in sys.path:
@@ -161,8 +164,12 @@ def edit_recording(case: LabCase, dest: Path, edit: Callable[[list[Message]], It
 
     messages, manifest, provenance, schemas = read_recording(case.recording)
     edited = list(edit(list(messages)))
-    topics = {topic: TopicSpec(name, data, provenance.get(topic)) for topic, (name, data) in schemas.items()}
+    dropped = set(drop_topics)
+    topics = {topic: TopicSpec(name, data, provenance.get(topic)) for topic, (name, data) in schemas.items()
+              if topic not in dropped}
     block = {k: v for k, v in manifest.items() if k != "manifest_version"}
+    if dropped and "record_policies" in block:
+        block["record_policies"] = {k: v for k, v in block["record_policies"].items() if k not in dropped}
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     with McapRecorder(dest, topics, block) as writer:

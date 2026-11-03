@@ -19,6 +19,7 @@
 #include <algorithm>
 
 #include "adas/counter.hpp"
+#include "common/cycle_control.pb.h"
 #include "common/ref_sync.pb.h"
 #include "simcore/runner.hpp"
 
@@ -75,8 +76,13 @@ std::optional<adas::common::RefSync> RecordedRefSync(const SelectContext& contex
       context.reference == nullptr ? nullptr : context.reference->Find(port, header.measurement_counter);
   std::vector<std::uint8_t> ahead_payload;
   if (payload == nullptr && context.ahead != nullptr) {
+    // `D27`: matched by counter, never the first refSync after the control; read ahead past the readiness limit
+    // to the stage's next recorded control, or to the limit for a stage the recording holds no control of.
     const AheadMessage* message =
-        context.ahead->Find(port, header.measurement_counter, adas::common::RefSync::descriptor());
+        context.control_recorded
+            ? context.ahead->SearchRefSync(port, header.measurement_counter, adas::common::RefSync::descriptor(),
+                                           context.stage->name + ".control", adas::common::CycleControl::descriptor())
+            : context.ahead->Find(port, header.measurement_counter, adas::common::RefSync::descriptor());
     if (message != nullptr) {
       ahead_payload = message->message.payload;
       payload = &ahead_payload;
@@ -171,13 +177,15 @@ Selection SelectInputs(const SelectContext& context, const orchestrator::Ticket&
       selection.inputs.push_back(std::move(input));
       continue;
     }
-    if (simulated_producer && !ticket.readiness_expired) {
+    // A sample the buffer reports evicted was committed and is gone: waiting for it cannot help, so it goes
+    // to the counter fallback at once (`ARCH §6`, `RCT:IMP-0033`); only a sample not yet committed parks.
+    if (simulated_producer && !input.eviction_miss && !ticket.readiness_expired) {
       if (!selection.not_ready) selection.waiting_on = input.producer_port;
       selection.not_ready = true;
       selection.inputs.push_back(std::move(input));
       continue;
     }
-    if (simulated_producer) input.readiness_timeout = true;
+    if (simulated_producer && !input.eviction_miss) input.readiness_timeout = true;
 
     // A recorded producer: the car may have logged the sample after the control that names it.
     std::vector<const AheadMessage*> ahead_samples;

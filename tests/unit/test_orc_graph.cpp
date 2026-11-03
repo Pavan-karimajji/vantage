@@ -194,7 +194,8 @@ TEST(OrcStart, ControlWithoutItsTopicInTheIndexIsRefusedNamingStageAndTopic) {
   stage.clock_period_ns = 0;
   const std::string text = Refusal(Spec({stage}), {"/B/control"});  // another stage's control only
   EXPECT_NE(text.find("stage 'A'"), std::string::npos) << text;
-  EXPECT_NE(text.find("/A/control"), std::string::npos) << text;
+  EXPECT_NE(text.find("A.control"), std::string::npos) << text;  // SYT-ORC-03.c1: the spelling of recordings and setups
+  EXPECT_EQ(text.find("/A/control"), std::string::npos) << text;
 }
 
 TEST(OrcStart, ADeclaredInputAsTriggerIsAStart) {

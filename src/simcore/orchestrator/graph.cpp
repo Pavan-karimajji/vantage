@@ -146,7 +146,8 @@ static Result<bool> ResolveStart(const SpecStage& spec_stage, const std::set<std
     const std::string topic = io::CanonicalTopic(spec_stage.name + ".control");
     if (topics.count(topic) == 0) {
       return Result<bool>::Fail(
-          Refusal("'" + topic + "' in the recording's topic index (trigger 'control')", "no such topic", where));
+          Refusal("'" + io::PortNameOfTopic(topic) + "' in the recording's topic index (trigger 'control')", "no such topic",
+                  where));
     }
     out.start = StartKind::kControl;
   } else if (by_input) {

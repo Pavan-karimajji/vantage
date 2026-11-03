@@ -669,7 +669,8 @@ TEST(OrcTrigger, ANewMeasurementCounterStartsARunAndTheSameCounterWithTheSameByt
   EXPECT_EQ(rig->orc->RunsOf("T"), 2u);  // one run per distinct counter
   EXPECT_EQ(rig->log.Count(EntryKind::kStalledTrigger), 1u);
   ASSERT_EQ(rig->log.Lines().size(), 1u);
-  EXPECT_EQ(rig->log.Lines()[0], "event=degrade step=1 entry=stalled_trigger stage=T port=source.in_x counter=1");
+  // IMP-0050: the entry names the stage's own trigger port (`in_x`), not the producer's address (`source.in_x`).
+  EXPECT_EQ(rig->log.Lines()[0], "event=degrade step=1 entry=stalled_trigger stage=T port=in_x counter=1");
   EXPECT_EQ(rig->bus.Identity().Counts("source.in_x").identity_broken, 0u);
 }
 

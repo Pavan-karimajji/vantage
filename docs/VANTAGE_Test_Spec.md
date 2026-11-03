@@ -115,9 +115,9 @@ in `tests/system/test_vnt_gate_g3.py`.
 **Steps.** Run `running_example` `no_ref_sync`; for each step whose controls include both `A` and `B`, read `B`'s re-run refSync entry for `A` and `A`'s output of that step.
 - `.c1` **PASS:** the entry names `A`'s output of that step, per `SYS-0009` Accept. **FAIL:** it names an older sample.
 
-**`SYT-ORC-02`** · T · fixture `F-CASE`, `F-ENGINE` — A loop without a previous-cycle input refused
+**`SYT-ORC-02`** · T · fixture `F-CASE`, `F-SETUP-EDIT`, `F-ENGINE` — A loop without a previous-cycle input refused
 **Serves.** `SYS-0010`
-**Steps.** Run `loop_no_edge`; then `feedback` `all_simulated`.
+**Steps.** Run `loop_no_edge`: the lab writes no run setup for a topology it refuses, so the test copies `feedback` `all_simulated`'s, drops `A`'s `previous_cycle` mark and points every library path at `loop_no_edge`'s build (the same stages, inputs and periods). Then run `feedback` `all_simulated`.
 - `.c1` **PASS:** `loop_no_edge` as `SYS-0010` Accept. **FAIL:** it runs, or the error names another stage or none.
 - `.c2` **PASS:** `feedback` runs to the recording's end. **FAIL:** a load error.
 
@@ -130,10 +130,11 @@ in `tests/system/test_vnt_gate_g3.py`.
 - `.c4` **PASS:** trigger and clock: a load error naming `T`. **FAIL:** the run starts.
 
 **`SYT-ORC-04`** · T · fixture `F-CAT`, `F-ENGINE` — One run per trigger
-**Serves.** `SYS-0012`
-**Steps.** For every exact case count each simulated stage's controls in the engine-run recording and in the recording; on `data_triggered` `by_data`, count `T`'s controls and the `in_X` samples.
+**Serves.** `SYS-0012`, `SYS-0053`
+**Steps.** For every exact case count each simulated stage's controls in the engine-run recording and in the recording; on `data_triggered` `by_data`, count `T`'s controls and the `in_X` samples. In every exact case and in `running_example` `all_simulated` with `buffer_depth` 1 on every port, read each simulated stage's `compState` messages in the engine-run recording.
 - `.c1` **PASS:** equal counts in every exact case, per `SYS-0012` Accept. **FAIL:** any count differs.
 - `.c2` **PASS:** `by_data`: one `T` control per `in_X` sample. **FAIL:** another count.
+- `.c3` **PASS:** each stage's `compState` `cycle_counter`s are consecutive and as many as its controls, per `SYS-0053` Accept. **FAIL:** a gap, or another count.
 
 **`SYT-ORC-05`** · T · fixture `F-RENUMBER-LIB`, `F-ENGINE` — An output not copying its control's counter is logged
 **Serves.** `SYS-0013`
@@ -154,7 +155,7 @@ in `tests/system/test_vnt_gate_g3.py`.
 
 **`SYT-ORC-08`** · T · fixture `F-REC-EDIT`, `F-TAP`, `F-ENGINE` — The recording's end runs every waiting ticket
 **Serves.** `SYS-0016`
-**Steps.** Cut `late_consumer`'s `base` recording just after a `Q` control whose recorded refSync names a `P` sample logged after it; run `all_simulated` on it on `F-TAP` and `F-ENGINE`.
+**Steps.** Cut `late_consumer`'s `base` recording just after a `Q` control whose recorded refSync names a `P` sample logged after it, keeping that run's own refSync (the car logs it after the control); run `all_simulated` on it on `F-TAP` and `F-ENGINE`.
 - `.c1` **PASS:** that `Q` run is in the last step with `KIND_READINESS_TIMEOUT`, per `SYS-0016` Accept. **FAIL:** the run is missing, in another step, or not badged.
 
 **`SYT-ORC-09`** · T · fixture `F-CASE`, `F-TAP` — A simulated stage nobody simulated consumes is badged

@@ -38,6 +38,7 @@
 #include <filesystem>
 #include <functional>
 #include <iosfwd>
+#include <limits>
 #include <map>
 #include <memory>
 #include <optional>
@@ -423,7 +424,8 @@ struct AheadInstant {
 
 // `IMP-0026`: every `sources[]` file read through `io::Reader::ReadRange`,
 // merged by reception time then `sources[]` order, as far as the readiness
-// limit past the instant being processed. `Find` searches by
+// limit past the instant being processed, and for a run's refSync (`D27`) to
+// its stage's next recorded `control`. `Find` searches by
 // `measurement_counter`; the time rule never calls it.
 class ReadAhead {
  public:
@@ -450,9 +452,18 @@ class ReadAhead {
   // The message on `port` whose `measurement_counter` is `counter`, read with
   // `descriptor`; null when none is held. Counters are compared only by
   // `counterDistance` (`RCT:SYS-0005`).
+  // Only the instants `Fill` was asked for are searched (the readiness limit), however far
+  // `SearchRefSync` has read since.
   const AheadMessage* Find(const std::string& port, std::uint32_t counter,
                            const google::protobuf::Descriptor* descriptor) const;
-  // Every held message on `port`, oldest first.
+  // `D27`: the message on `ref_sync_port` whose `measurement_counter` is `counter`, searched past the
+  // readiness limit -- reading further as needed -- until the first message on `control_port` whose
+  // counter is another one, or the end of the recording. Null when the control comes first.
+  const AheadMessage* SearchRefSync(const std::string& ref_sync_port, std::uint32_t counter,
+                                    const google::protobuf::Descriptor* ref_sync_descriptor,
+                                    const std::string& control_port,
+                                    const google::protobuf::Descriptor* control_descriptor);
+  // Every held message on `port` within the instants `Fill` was asked for, oldest first.
   std::vector<const AheadMessage*> OnPort(const std::string& port) const;
 
   // Drops everything held, seeks every reader to `to_ns`, and skips what a
@@ -467,6 +478,8 @@ class ReadAhead {
 
  private:
   void Refill(std::size_t reader);
+  // Reads until `instants` + 1 distinct reception times are held; `Fill` is this plus the extent it records.
+  void ReadUntil(std::size_t instants);
 
   std::vector<io::Reader*> readers_;
   io::ReadBounds bounds_;
@@ -475,6 +488,9 @@ class ReadAhead {
   std::vector<std::deque<io::RawMessage>> carry_;
   std::vector<bool> reader_drained_;
   std::deque<AheadInstant> instants_;
+  // How many instants `Find` and `OnPort` search: what the last `Fill` asked for, so that reading further for a
+  // refSync (`D27`) never widens the look-up of a sample.
+  std::size_t search_extent_ = std::numeric_limits<std::size_t>::max();
   bool drained_ = false;
   std::optional<std::int64_t> floor_ns_;
   std::optional<std::int64_t> first_time_ns_;
@@ -544,7 +560,10 @@ struct SelectContext {
   const SpecStage* stage = nullptr;
   const bus::PortBus* bus = nullptr;
   const RecordedReference* reference = nullptr;
-  const ReadAhead* ahead = nullptr;
+  ReadAhead* ahead = nullptr;  // read further for a run's refSync (`D27`), nothing else
+  // The recording holds a `<stage>.control` topic: the refSync search stops at the stage's next control (`D27`);
+  // otherwise at the readiness limit.
+  bool control_recorded = false;
   const std::map<std::string, bus::Origin>* origins = nullptr;
   std::int64_t fallback_max_gap = 0;
   std::int64_t now_ns = 0;

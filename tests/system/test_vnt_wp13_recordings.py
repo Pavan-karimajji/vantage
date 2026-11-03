@@ -135,8 +135,27 @@ def _engine_topic_order(setup: dict) -> list[str]:
     return order
 
 
+def _in_the_engines_order(topics: list[str], setup: dict) -> bool:
+    """`IMP-0061`: the messages of one instant are, first, each run committed in it -- the stage's `control`, then the
+    outputs it committed -- and then every other recorded topic in the topic list's order
+    (`_engine_topic_order`)."""
+    position = {topic: i for i, topic in enumerate(_engine_topic_order(setup))}
+    outputs = {stage["name"]: {f"{stage['name']}.{p['name']}" for p in stage["ports"] if p["dir"] == "pro"}
+               for stage in setup["stages"] if stage["mode"] == "simulate"}
+    i = 0
+    while i < len(topics) and topics[i].endswith(".control") and topics[i].split(".", 1)[0] in outputs:
+        own = outputs[topics[i].split(".", 1)[0]]
+        i += 1
+        seen: set[str] = set()  # the run's outputs, each once, in the order the run committed them
+        while i < len(topics) and topics[i] in own and topics[i] not in seen:
+            seen.add(topics[i])
+            i += 1
+    rest = [position[t] for t in topics[i:]]
+    return rest == sorted(rest)
+
+
 def test_syt_rec_04_c2_times_never_go_back_and_equal_times_keep_the_engines_order(engine_recording, cut_c):  # SYT-REC-04.c2
-    position = {topic: i for i, topic in enumerate(_engine_topic_order(json.loads(cut_c.setup.read_text(encoding="utf-8"))))}
+    setup = json.loads(cut_c.setup.read_text(encoding="utf-8"))
     with engine_recording.open("rb") as handle:
         messages = [(channel.topic, message.log_time, message.publish_time)
                     for _schema, channel, message in make_reader(handle).iter_messages(log_time_order=False)]
@@ -149,8 +168,8 @@ def test_syt_rec_04_c2_times_never_go_back_and_equal_times_keep_the_engines_orde
         if log_time != previous:
             equal_time_run = []
         equal_time_run.append(topic)
-        in_order = [position[t] for t in equal_time_run]
-        assert in_order == sorted(in_order), f"messages at {log_time} ns are out of the engine's order: {equal_time_run}"
+        assert _in_the_engines_order(equal_time_run, setup), (
+            f"messages at {log_time} ns are out of the engine's order: {equal_time_run}")
         previous = log_time
 
 

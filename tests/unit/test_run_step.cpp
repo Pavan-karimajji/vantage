@@ -237,6 +237,33 @@ TEST(RunStep, TheControlWrittenForEachRunIsRecordedWithTheTriggersCounterAndTheS
   }
 }
 
+// `IMP-0061`, `SYS-0053`: the step writes each run committed in it, in commit order -- its control, then the outputs it
+// committed -- so a stage that runs twice in one step (two controls at one instant) leaves both runs.
+TEST(RunStep, AStageThatRunsTwiceInOneStepLeavesBothRunsEachControlBeforeItsOwnOutputs) {
+  std::vector<io::RawMessage> messages;
+  messages.push_back(Message("/A/out", 100 * kMs, Data(10, 100'000)));
+  messages.push_back(Message("/A/out", 100 * kMs, Data(11, 100'000)));
+  messages.push_back(Message("/B/control", 100 * kMs, Data(10, 100'000, 1)));
+  messages.push_back(Message("/B/control", 100 * kMs, Data(11, 100'000, 2)));
+  messages.push_back(Message("/B/refSync", 100 * kMs, RefSyncOf(10, {{"in", 10}})));
+  messages.push_back(Message("/B/refSync", 100 * kMs, RefSyncOf(11, {{"in", 11}})));
+  Harness h(ControlSpec(), messages, ControlTopics());
+  ASSERT_TRUE(h.echo.ok());
+  auto built = h.Build();
+  ASSERT_TRUE(built.ok()) << built.error().Format();
+  const auto outcome = std::move(built).value().Run();
+  ASSERT_TRUE(outcome.ok()) << outcome.error().Format();
+  EXPECT_EQ(outcome.value().cycles_executed, 1u);  // both runs are in the one step
+
+  std::vector<std::pair<std::string, std::uint32_t>> seen;
+  for (const io::RawMessage& message : h.sink.written) {
+    if (message.topic == "/B/control" || message.topic == "/B/out") seen.emplace_back(message.topic, CounterOf(message));
+  }
+  const std::vector<std::pair<std::string, std::uint32_t>> expected = {
+      {"/B/control", 10u}, {"/B/out", 10u}, {"/B/control", 11u}, {"/B/out", 11u}};
+  EXPECT_EQ(seen, expected);
+}
+
 TEST(RunStep, AnOutputThatDoesNotCopyTheControlsCounterIsInTheEventLogAndItsFile) {
   Harness h;
   ASSERT_TRUE(h.echo.ok());

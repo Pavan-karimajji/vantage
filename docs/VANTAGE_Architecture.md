@@ -100,9 +100,9 @@ reads or writes them.
 | previous-cycle input | an input read from the sender's last run, which breaks a loop | run setup | one input |
 | selection | the samples handed to one run, with the badges they raise | runner | one run |
 | counter fallback | for a named sample that is not found: the newest sample whose `measurement_counter` is not after the wanted one, by `counterDistance` (§6, `D18 (1)`) | runner | one input of one run |
-| time rule | the newest sample not after the trigger time; only for a stage with no recorded refSync, or beyond the counter fallback's maximum gap (§6) | runner | one input of one run |
+| time rule | the newest sample not after the trigger time; only for a run whose recorded refSync is not found (`D27`), or beyond the counter fallback's maximum gap (§6) | runner | one input of one run |
 | readiness limit | how many steps a run may wait for a named sample; value `⊘` (`RCT:Q3`) | run setup | whole engine run |
-| read-ahead | the recording is read this many steps beyond the instant being processed, so a sample or refSync logged later than the control that names it can be found | runner | whole engine run |
+| read-ahead | the recording is read up to the readiness limit, in steps, beyond the instant being processed, so a sample logged later than the control that names it can be found; a run's refSync is searched further, to its stage's next recorded `control` (`D27`) | runner | whole engine run |
 | jump | the engine is moved to another position in the recording; the next run of every stage is RESTART | host calls `simEngineSeek` | whole engine run |
 | outcome | how the engine run ended: pass, fail, crash, timeout (`MeasStatus.outcome`) | worker (pass, fail, timeout); supervisor (crash, timeout) | whole engine run |
 | seal | the writer library's `sealAbandoned`, called by the supervisor once the worker is confirmed dead: it writes `outcome` and `status` of the live measurement and nothing else (§9) | supervisor | whole engine run |
@@ -357,7 +357,11 @@ every declared data input of the stage, in manifest order, and builds the port s
 the component receives. The control message is added to it. Nothing else is.
 
 1. **By refSync.** The runner takes the *recorded* `refSync` of the stage whose
-   `measurement_counter` equals the control's. The sample whose
+   `measurement_counter` equals the control's, never the first one after the control.
+   It is searched in the arrived messages, then ahead, past the readiness limit, up to
+   the stage's next recorded `control` (`D27`); a stage the recording holds no
+   `control` of is searched to the readiness limit. Not found, the run takes the time
+   rule (step 4). The sample whose
    `measurement_counter` equals the entry for that input is handed over. The search
    goes through the arrived samples, then through the read-ahead (the car may have
    logged a sample later than the control that names it). Matching is by
@@ -372,7 +376,7 @@ the component receives. The control message is added to it. Nothing else is.
    Beyond `fallback_max_gap`, counted in the identity check's steps (`D24`), the counter fallback takes nothing and the time rule picks
    the sample (`D18 (1)`); the event log records stage, port, wanted counter, found
    counter and gap.
-4. **Time rule.** Only for a stage with no recorded refSync, or beyond the maximum
+4. **Time rule.** Only for a run whose recorded refSync is not found (step 1), or beyond the maximum
    gap (step 3). The newest arrived
    sample on the port whose `source_timestamp_us` is not after the trigger's. If
    either time is 0 (unknown), the newest sample that arrived at or before this
@@ -390,7 +394,7 @@ the component receives. The control message is added to it. Nothing else is.
 | entry 0 | none | — |
 | entry names a sample, none found (not in the recording, evicted, or never made) | `KIND_FALLBACK` on the port, counter fallback used | per engine run |
 | the counter fallback's best sample is beyond `fallback_max_gap` | `KIND_FALLBACK` on the port, time rule used, event log entry | per engine run |
-| the stage has no recorded refSync at all | `KIND_FALLBACK` on every input, every run, time rule used | per engine run |
+| the run's recorded refSync is not found (step 1); for a stage with none at all, every run | `KIND_FALLBACK` on every input, time rule used | per engine run |
 | waited the limit and the sample did not come | `KIND_READINESS_TIMEOUT` on the port, then the counter fallback is used and `KIND_FALLBACK` is raised too | per engine run |
 | the counter fallback finds no sample (none with a counter not after the wanted one) | the input is empty and `KIND_FALLBACK` is raised | per engine run |
 | the time rule finds no sample | the input is empty and `KIND_FALLBACK` is raised | per engine run |
@@ -755,7 +759,7 @@ for the viewer's own design; they are listed as *moved out*, not changed.
 | 5 | Which stage crashed is not in the live measurement | keep it in the supervisor's manifest; add a badge kind only if a viewer needs it live |
 | 6 | The `⊘` values of §4: readiness limit, `fallback_max_gap`, buffer depth, `MeasCycle` and `MeasBulk` geometry | fixed by measurement on the lab; the engine refuses a setup without them. 0 is a valid readiness limit: it never waits |
 | 8 | After the writer exits, how long does the name stay? On POSIX, unlink at close; on Windows, the region lives while any handle is open | unlink at close and at seal; attached readers keep reading; a dead writer's name is replaced by the next `open` |
-| 11 | Does the recording log a refSync or a late sample after the control that names it, and by how many steps? | the read-ahead is the readiness limit, in steps; confirm on the first car recording |
+| 11 | Does the recording log a refSync or a late sample after the control that names it, and by how many steps? | a sample is read ahead to the readiness limit, in steps; a run's refSync to its stage's next recorded `control`, matched by counter (`D27`); confirm on the first car recording |
 
 ### Closed by the owner
 

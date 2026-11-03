@@ -25,7 +25,7 @@ simulated stage writes in the engine run, which names what the engine handed it
 **Test areas**, declared once: `RUN` the run setup · `ORC` the orchestrator and the six rules ·
 `SEL` input selection · `STP` the engine step · `THR` threads · `EQO` equal outputs and the
 first divergence.
-Priority split: 24 `P0`, 28 `P1`, 0 `P2`; all `R1`. Without a `P0` row an engine run is not
+Priority split: 25 `P0`, 28 `P1`, 0 `P2`; all `R1`. Without a `P0` row an engine run is not
 exact against the car; a `P1` row makes a result easier to trust or diagnose.
 
 ---
@@ -185,6 +185,12 @@ never does: `ARCH §3.2`. Ranks: `ARCH §2.2`.
 **Accept.** The control of tick k carries `measurement_counter` (k mod `0xFFFFFFFF`) + 1: ticks 0, 1, `0xFFFFFFFE` and `0xFFFFFFFF` carry 1, 2, `0xFFFFFFFF` and 1; a 0 or any other value fails.
 **Binds.** `control`
 **Verify.** T · `SYT-ORC-12`   **Trace.** —
+
+**`SYS-0053`** · `P0` · `R1` — Every run's control and outputs are recorded
+**Shall.** An engine run shall write every run's `control` and outputs to its recording, none dropped or overwritten (`R-SIM-6`).
+**Accept.** In every exact case and in `running_example` `all_simulated` with `buffer_depth` 1 on every port, each simulated stage's `compState` messages in the engine-run recording carry consecutive `cycle_counter`s and equal its controls in number.
+**Binds.** `control`, `stageOut`, `runRecording`
+**Verify.** T · `SYT-ORC-04`   **Trace.** —
 
 ## 3. Input selection (`SEL`)
 
@@ -385,7 +391,7 @@ case (`R-REQ-9`).
 
 | Method | Count | Notes |
 |---|---|---|
-| T | 49 | `simengine` on a lab case, the step tap, the exec probe, or the control tick probe |
+| T | 50 | `simengine` on a lab case, the step tap, the exec probe, or the control tick probe |
 | A | 3 | source checks over the engine |
 
 ## 8. Superseded and retired UIDs

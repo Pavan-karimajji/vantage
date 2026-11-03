@@ -77,13 +77,15 @@ struct Rig {
   }
 
   Selection Run(std::uint32_t control_counter, std::uint64_t control_us = 0, std::int64_t now_ns = 1'000'000,
-                bool expired = false, std::uint64_t step = 5, const ReadAhead* ahead = nullptr) {
+                bool expired = false, std::uint64_t step = 5, ReadAhead* ahead = nullptr,
+                bool control_recorded = false) {
     SelectContext context;
     context.spec = &spec;
     context.stage = &spec.stages[1];
     context.bus = &bus;
     context.reference = &reference;
     context.ahead = ahead;
+    context.control_recorded = control_recorded;
     context.fallback_max_gap = 4;
     context.now_ns = now_ns;
     context.step = step;
@@ -307,6 +309,101 @@ TEST(RunSelectInputs, AnOffProducerGivesAnEmptyInputIndistinguishableFromAnUnmap
   EXPECT_TRUE(selection.inputs[0].offered);
   EXPECT_FALSE(selection.inputs[0].sample.has_value());
   EXPECT_FALSE(selection.inputs[0].fallback);
+}
+
+// `ARCH §6`'s table: "not in the recording, evicted, or never made" gives KIND_FALLBACK. A named sample of a
+// simulate producer that the buffer reports evicted was committed and is gone, so waiting cannot help.
+TEST(RunSelectInputs, ASimulatedProducersEvictedSampleIsAFallbackAtOnceAndOnlyANotYetCommittedOneParks) {
+  Rig rig("simulate", false, /*depth=*/2);
+  for (std::uint32_t c = 10; c < 14; ++c) rig.Sample(c, c * 100, c, /*committed_step=*/c);
+  rig.RecordRefSync(100, 10);  // committed, then evicted by 12 and 13
+  const Selection evicted = rig.Run(100);
+  EXPECT_FALSE(evicted.not_ready);                       // no park
+  EXPECT_TRUE(evicted.inputs[0].eviction_miss);
+  EXPECT_TRUE(evicted.inputs[0].fallback);               // KIND_FALLBACK in that run
+  EXPECT_FALSE(evicted.inputs[0].readiness_timeout);     // it did not wait, so it did not time out
+
+  Rig fresh("simulate", false, /*depth=*/2);
+  fresh.Sample(10, 1000, 10, /*committed_step=*/3);
+  fresh.RecordRefSync(100, 11);  // newer than anything committed: not made yet
+  const Selection not_yet = fresh.Run(100);
+  EXPECT_TRUE(not_yet.not_ready);                        // still parks
+  EXPECT_FALSE(not_yet.inputs[0].eviction_miss);
+}
+
+// `D27`. The refSync is matched by `measurement_counter` and searched to the stage's next recorded control, however
+// small the readiness limit is.
+TEST(RunSelectInputs, D27ALimitOfZeroStillFindsARefSyncLoggedThreeInstantsAfterItsControl) {
+  Rig rig;
+  rig.Sample(10, 1000, 10);
+  rig.Sample(11, 2000, 20);
+  VectorReader reader({Message("/A/out", 110'000'000, Data(12, 3000)), Message("/A/out", 120'000'000, Data(13, 4000)),
+                       Message("/B/refSync", 130'000'000, RefSyncOf(100, {{"objects", 11}, {"lone", 0}}))},
+                      {});
+  ReadAhead ahead({&reader});
+  ahead.Fill(1);  // readiness_limit_steps 0: two instants held, the refSync is the third
+  const Selection selection = rig.Run(100, 0, 1'000'000, false, 5, &ahead, /*control_recorded=*/true);
+  EXPECT_FALSE(selection.not_ready);
+  ASSERT_TRUE(selection.inputs[0].sample.has_value());
+  EXPECT_EQ(CounterOf(selection.inputs[0]), 11u);  // the refSync's entry was used
+  EXPECT_FALSE(selection.inputs[0].fallback);
+}
+
+TEST(RunSelectInputs, D27ARefSyncLoggedAfterTheNextControlIsNeverHandedToTheEarlierRun) {
+  // Run 100 overran: its refSync is logged after control 101, the next run's.
+  const auto messages = [] {
+    return std::vector<io::RawMessage>{
+        Message("/B/control", 110'000'000, Data(101, 2000)),
+        Message("/B/refSync", 120'000'000, RefSyncOf(100, {{"objects", 10}, {"lone", 0}})),
+        Message("/B/refSync", 125'000'000, RefSyncOf(101, {{"objects", 11}, {"lone", 0}}))};
+  };
+  Rig first;
+  first.Sample(10, 1000, 10);
+  first.Sample(11, 2000, 2'000'000);  // arrives after the time the run is decided at
+  VectorReader reader_a(messages(), {});
+  ReadAhead ahead_a({&reader_a});
+  ahead_a.Fill(1);
+  const Selection run_k = first.Run(100, 0, 1'000'000, false, 5, &ahead_a, /*control_recorded=*/true);
+  ASSERT_TRUE(run_k.inputs[0].sample.has_value());
+  EXPECT_TRUE(run_k.inputs[0].fallback);  // the time rule, KIND_FALLBACK: run k has no refSync
+  EXPECT_EQ(CounterOf(run_k.inputs[0]), 10u);  // the newest arrived, not record 101's 11
+
+  Rig second;
+  second.Sample(10, 1000, 10);
+  second.Sample(11, 2000, 20);
+  VectorReader reader_b(messages(), {});
+  ReadAhead ahead_b({&reader_b});
+  ahead_b.Fill(1);
+  const Selection run_k1 = second.Run(101, 0, 1'000'000, false, 5, &ahead_b, /*control_recorded=*/true);
+  ASSERT_TRUE(run_k1.inputs[0].sample.has_value());
+  EXPECT_FALSE(run_k1.inputs[0].fallback);  // run k+1 takes its own refSync
+  EXPECT_EQ(CounterOf(run_k1.inputs[0]), 11u);
+}
+
+TEST(RunSelectInputs, D27AStageTheRecordingHoldsNoControlOfIsSearchedOnlyToTheReadinessLimit) {
+  const auto messages = [] {
+    return std::vector<io::RawMessage>{
+        Message("/A/out", 110'000'000, Data(12, 3000)), Message("/A/out", 120'000'000, Data(13, 4000)),
+        Message("/A/out", 130'000'000, Data(14, 5000)), Message("/A/out", 140'000'000, Data(15, 6000)),
+        Message("/B/refSync", 150'000'000, RefSyncOf(100, {{"objects", 11}, {"lone", 0}}))};
+  };
+  Rig no_control;
+  no_control.Sample(10, 1000, 10);
+  no_control.Sample(11, 2000, 20);
+  VectorReader reader_a(messages(), {});
+  ReadAhead ahead_a({&reader_a});
+  ahead_a.Fill(2);  // readiness_limit_steps 1: three instants held, the refSync is the fifth
+  const Selection stopped = no_control.Run(100, 0, 1'000'000, false, 5, &ahead_a, /*control_recorded=*/false);
+  EXPECT_TRUE(stopped.inputs[0].fallback);  // not found by the limit: the time rule
+
+  Rig with_control;
+  with_control.Sample(10, 1000, 10);
+  with_control.Sample(11, 2000, 20);
+  VectorReader reader_b(messages(), {});
+  ReadAhead ahead_b({&reader_b});
+  ahead_b.Fill(2);
+  const Selection found = with_control.Run(100, 0, 1'000'000, false, 5, &ahead_b, /*control_recorded=*/true);
+  EXPECT_FALSE(found.inputs[0].fallback);  // the same ahead, a stage with a recorded control: searched on
 }
 
 }  // namespace
