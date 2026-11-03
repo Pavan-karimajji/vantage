@@ -24,6 +24,7 @@
 #include <string>
 
 #include "abi/engine_access.hpp"
+#include "livemeas/engine_sink.hpp"
 #include "simcore/abi/simcore.h"
 #include "simcore/runner.hpp"
 
@@ -105,7 +106,13 @@ int main(int argc, char** argv) {
   Tap tap;
   simcore::runner::Runner* runner = SimEngineRunner(engine);
   if (code == kSimExitOk && runner != nullptr) {
-    runner->SetLiveMeasurement(&tap);
+    // IMP-0081: with `outputs.livemeas` the runner already feeds the engine's writer sink; the tap
+    // chains behind it, so it gets the same report instead of replacing the writer.
+    if (auto* writer_sink = dynamic_cast<simcore::livemeas::LiveMeasWriterSink*>(runner->LiveMeasurement())) {
+      writer_sink->SetNext(&tap);
+    } else {
+      runner->SetLiveMeasurement(&tap);
+    }
     bool jumped = jump_at_ms < 0;
     int32_t more = 1;
     while (code == kSimExitOk && more != 0) {

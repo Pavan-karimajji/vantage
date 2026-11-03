@@ -42,17 +42,13 @@ target_link_libraries(sim_test_fixture_exec_probe PRIVATE AdasInterfaces::AdasIn
 target_compile_definitions(sim_test_fixture_exec_probe PRIVATE ADAS_SIL_ABI_EXPORTS)
 set_target_properties(sim_test_fixture_exec_probe PROPERTIES OUTPUT_NAME "exec_probe")
 
-# WP-27 (SI-25 transport): UT-TRN-05's own real "engine" -- a standalone
-# executable (not a linked-in test body), so the test that spawns it can
-# genuinely kill it, same real-crash shape module_host::RunIsolatedStage's
-# own spawn/reap already uses. See fixtures/trn_engine_host/trn_engine_host.cpp's
-# own top note.
-add_executable(sim_test_fixture_trn_engine_host fixtures/trn_engine_host/trn_engine_host.cpp)
-target_link_libraries(sim_test_fixture_trn_engine_host PRIVATE simcore)
-target_compile_definitions(sim_test_fixture_trn_engine_host PRIVATE
-    ADAS_SIM_TEST_FIXTURE_DIR="$<TARGET_FILE_DIR:sim_test_fixture_echo_stub>"
-)
-add_dependencies(sim_test_fixture_trn_engine_host sim_test_fixture_echo_stub)
+# WP-15 (VANTAGE, C2): IMP-0088 -- the stage `F-LM-HELD` adds to a lab case: reads and triggers like any stage,
+# is read by nobody, and its first call returns only once a gate file exists
+# (see fixtures/held_probe/held_probe.cpp's own header).
+add_library(sim_test_fixture_held_probe SHARED fixtures/held_probe/held_probe.cpp)
+target_link_libraries(sim_test_fixture_held_probe PRIVATE AdasInterfaces::AdasInterfaces)
+target_compile_definitions(sim_test_fixture_held_probe PRIVATE ADAS_SIL_ABI_EXPORTS)
+set_target_properties(sim_test_fixture_held_probe PROPERTIES OUTPUT_NAME "held_probe")
 
 # WP-11 (VANTAGE, C1): IMP-0055, fixture F-TICK of SYT-ORC-12 -- the
 # measurement_counter of the control a clock-started stage gets at tick k.
@@ -108,10 +104,10 @@ set(SIM_TEST_SOURCES
     unit/test_ut_bus_identity.cpp
     # WP-09 (SI-02 bus / SI-03 scheduler): PortBus + Scheduler core.
     unit/test_ut_bus_port_bus.cpp
-    # SM-06 (SI-25, D-5): InProcessTransport's own class-level contract.
-    unit/test_transport_inproc.cpp
-    # SM-06 (SI-25, D-5): SharedMemoryTransport's own class-level contract.
-    unit/test_transport_shm.cpp
+    # WP-14 (VANTAGE, C2): the live measurement writer library -- IMP-0071..IMP-0074, IMP-0076, IMP-0077.
+    unit/test_livemeas_writer.cpp
+    # WP-15 (VANTAGE, C2): the engine writes it through the C ABI -- IMP-0078..IMP-0084.
+    unit/test_livemeas_engine.cpp
     # WP-10 (SI-04): module_host -- exec_timeout ported unchanged (WP-10's
     # own exit criterion) plus Component/Lifecycle/Quarantine/Dso against
     # the real echo_stub fixture.
@@ -172,24 +168,19 @@ set(SIM_TEST_SOURCES
     # RCT:WP-13 / WP-12 / WP-07 (VNT-WP-09a-R1): the engine's manifest (IMP-0052), its
     # config_bundle block (IMP-0059) and the call thread (IMP-0060), through the real C ABI.
     integration/test_wp13_engine_recording.cpp
-    # WP-27 (SI-25 transport): UT-TRN-01, a real Runner wired to both
-    # transports, diffing the consumer's observed stream.
-    integration/test_it_transport.cpp
-    # WP-27 (SI-25 transport): UT-TRN-05, a real killed engine process
-    # (sim_test_fixture_trn_engine_host) with a player attached.
-    integration/test_it_trn05_crash.cpp
 )
 
 add_executable(simcore_tests ${SIM_TEST_SOURCES})
 target_link_libraries(simcore_tests PRIVATE
     simcore
+    livemeas
     GTest::gtest_main
 )
 # SM-05a: test_ut_io_erg_reconstruct.cpp reaches erg_wire.hpp -- an
 # internal io/codecs/ helper, deliberately not part of simcore's own
 # public include/ surface -- to build its OWN independent DescriptorPool
 # from the fixture's manifest sidecar (never reusing ErgReader's state).
-target_include_directories(simcore_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/simcore ${CMAKE_CURRENT_SOURCE_DIR}/support)
+target_include_directories(simcore_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/simcore ${CMAKE_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/support)
 # WP-10: a stage's own build directory, known at configure time -- lets a
 # test resolve echo_stub's real path without a copy-next-to-exe step
 # (sil_host/tests/CMakeLists.txt's identical ADAS_SIL_TEST_FIXTURE_DIR
@@ -206,10 +197,8 @@ target_compile_definitions(simcore_tests PRIVATE
     # reason ADAS_SIM_TEST_FIXTURE_DIR is: one place, known at configure
     # time, never a relative path a test has to guess at from its own cwd.
     IT10_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/graph_dump"
-    # WP-27: UT-TRN-05 spawns this real "engine" process and kills it.
-    TRN_ENGINE_HOST_EXECUTABLE="$<TARGET_FILE:sim_test_fixture_trn_engine_host>"
 )
-add_dependencies(simcore_tests sim_test_fixture_echo_stub sim_test_fixture_exec_probe simengine sim_test_fixture_trn_engine_host)
+add_dependencies(simcore_tests sim_test_fixture_echo_stub sim_test_fixture_exec_probe sim_test_fixture_held_probe simengine)
 
 include(GoogleTest)
 gtest_discover_tests(simcore_tests)

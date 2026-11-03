@@ -829,7 +829,7 @@ Result<bool> Runner::FinishTicket(PendingRun& pending, std::vector<orchestrator:
 Result<std::size_t> Runner::WriteStep(std::uint64_t step, std::int64_t now_ns) {
   Impl& impl = *impl_;
   std::size_t bytes_written = 0;
-  if (writer_ == nullptr && transport_publisher_ == nullptr) return Result<std::size_t>::Ok(bytes_written);
+  if (writer_ == nullptr) return Result<std::size_t>::Ok(bytes_written);
   const bool informational = latch_.InformationalOnly(step);
   const auto newest = [&](const std::string& port) -> const bus::Sample* {
     const bus::SampleBuffer* buffer = bus_->Buffer(port);
@@ -837,21 +837,14 @@ Result<std::size_t> Runner::WriteStep(std::uint64_t step, std::int64_t now_ns) {
   };
   const auto emit = [&](const RecordedTopic& topic, const std::vector<std::uint8_t>& payload,
                         const std::optional<std::int64_t>& capture_time_ns) {
-    if (writer_ != nullptr) {
-      io::RawMessage message;
-      message.topic = topic.topic;
-      message.log_time_ns = now_ns;
-      if (capture_time_ns.has_value()) message.capture_time_ns = capture_time_ns.value();
-      message.payload = payload;
-      message.informational_only = informational;
-      bytes_written += message.payload.size();
-      writer_->WriteMessage(message);
-    }
-    // SI-25 transport (UT-TRN-*): the same value the recorder would have
-    // written, named from the TOPIC (F-3), keyed by the step number.
-    if (transport_publisher_ != nullptr) {
-      transport_publisher_->Publish(step, TopicToPortName(topic.topic), payload.data(), payload.size());
-    }
+    io::RawMessage message;
+    message.topic = topic.topic;
+    message.log_time_ns = now_ns;
+    if (capture_time_ns.has_value()) message.capture_time_ns = capture_time_ns.value();
+    message.payload = payload;
+    message.informational_only = informational;
+    bytes_written += message.payload.size();
+    writer_->WriteMessage(message);
   };
 
   // `IMP-0061`: first each run committed in this step, in commit order -- its control, then each output it
@@ -1042,21 +1035,78 @@ Result<bool> Runner::StepOnce() {
     impl.event_file.flush();
   }
 
-  // IMP-0030: what the live measurement writer's `liveMeasStep` will be handed.
+  // IMP-0030, IMP-0079, IMP-0080: what the live measurement writer's `liveMeasStep` will be handed. Every
+  // declared port gives its newest sample with its age -- except a port a run of this step wrote (a `control`, a
+  // `refSync` or an output), which gives each run's value in run order, and an input a declared override changed,
+  // which gives the value each run was handed (`D30`): a stage run twice in a step leaves two values on each.
   if (live_sink_ != nullptr) {
     StepReport report;
     report.step = step;
     report.sim_time_ns = now_ns;
+    std::set<std::string> overridden;  // inputs whose post-mutation value is recorded: the overridden ports
+    for (const RecordedTopic& topic : recorded_topics_) {
+      if (topic.post_mutation) overridden.insert(topic.qualified_port);
+    }
+    const auto is_per_run = [&](const Impl::RunWrite& run_write) {
+      return !run_write.handed || overridden.count(run_write.port) != 0;
+    };
+    std::set<std::string> per_run_ports;
+    for (const Impl::RunWrite& run_write : impl.run_writes) {
+      if (is_per_run(run_write)) per_run_ports.insert(run_write.port);
+    }
+    const auto bulk_flag = [&](const std::string& port) {
+      const std::size_t dot = port.find('.');
+      if (dot == std::string::npos) return false;
+      const std::string stage_name = port.substr(0, dot);
+      const std::string port_name = port.substr(dot + 1);
+      for (const SpecStage& stage : impl.spec.stages) {
+        for (const SpecPort& spec_port : stage.ports) {
+          if (stage_name == stage.name && port_name == spec_port.name && spec_port.bulk) return true;
+          // A source port is bulk when a stage input fed from it is.
+          if (stage_name == kSourceProducer) {
+            for (const SpecInput& input : stage.inputs) {
+              if (input.producer == kSourceProducer && input.producer_port == port_name &&
+                  input.port == spec_port.name && spec_port.bulk) {
+                return true;
+              }
+            }
+          }
+        }
+      }
+      return false;
+    };
+    std::map<std::string, std::size_t> runs_of_port;
+    const auto add_run_value = [&](const Impl::RunWrite& run_write, bus::Origin origin) {
+      StepValue value;
+      value.port = run_write.port;
+      value.payload = &run_write.payload;
+      value.origin = origin;
+      value.age_ns = 0;  // written in this step
+      value.run = runs_of_port[run_write.port]++;
+      value.bulk = bulk_flag(run_write.port);
+      report.values.push_back(std::move(value));
+    };
     for (const std::string& port : impl.declared_ports) {
       const bus::SampleBuffer* buffer = bus_->Buffer(port);
       const bus::Sample* sample = buffer == nullptr ? nullptr : buffer->Newest();
+      if (per_run_ports.count(port) != 0) {
+        const bus::Origin origin = sample != nullptr ? sample->value.origin : impl.origins[port];
+        for (const Impl::RunWrite& run_write : impl.run_writes) {
+          if (!run_write.handed && run_write.port == port) add_run_value(run_write, origin);
+        }
+        continue;
+      }
       if (sample == nullptr) continue;
       StepValue value;
       value.port = port;
       value.payload = &sample->value.payload;
       value.origin = sample->value.origin;
       value.age_ns = now_ns - sample->arrival_ns;
+      value.bulk = bulk_flag(port);
       report.values.push_back(std::move(value));
+    }
+    for (const Impl::RunWrite& run_write : impl.run_writes) {
+      if (run_write.handed && overridden.count(run_write.port) != 0) add_run_value(run_write, bus::Origin::Overridden);
     }
     for (const auto& [key, count] : impl.badges) {
       if (count > 0) report.badges.push_back(StepBadge{key.first, key.second, count});

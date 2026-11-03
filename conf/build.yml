@@ -19,7 +19,7 @@ build_includedir: include
 
 recipe:
   type: static-library
-  libs: [simcore]
+  libs: [simcore, livemeas]
   # SM-06, found live publishing this pass: once `components:` exists,
   # Conan's package_info() validates every direct requires() is referenced
   # by SOME cpp_info/component's own `.requires` -- `io`'s below covers
@@ -34,7 +34,10 @@ recipe:
   # component (2026-08-20), one level up (unnamed root here, not a
   # component) because this recipe's root, unlike viz's, has no libs of its
   # own component list to attach it to instead.
-  root_requires: [mcap::mcap, protobuf::libprotobuf, adas-interfaces::adas-interfaces]
+  # WP-15 (VANTAGE, C2, IMP-0089): `simcore`'s engine calls the writer's three functions, so the root
+  # also requires this package's own `livemeas` component (below). The other direction does not exist:
+  # `livemeas` links no `simcore` target (`ARCH §10.2`).
+  root_requires: [mcap::mcap, protobuf::libprotobuf, adas-interfaces::adas-interfaces, livemeas]
   # SM-02 (VIZ_Sync_Plan_v0.1.md, "D-10's only cost"): `io` is separately
   # linkable as the Conan component `adas-sim::io`, so a consumer (the viz
   # player) can read a recording without acquiring the engine. Same
@@ -72,6 +75,13 @@ recipe:
       # first consumer linking bare `AdasSim::io` with nothing else
       # supplying that header path.
       requires: [mcap::mcap, protobuf::libprotobuf, adas-interfaces::adas-interfaces]
+    # WP-14 (VANTAGE, C2, IMP-0077): the live measurement writer, linkable alone -- an engine that is not
+    # the resim engine takes the writer without `simcore` (`ARCH §10.2`). A static library of its own
+    # whose archive is written beside `simcore`'s (src/livemeas/CMakeLists.txt), so this file's one
+    # `build_subdir` serves both.
+    livemeas:
+      libs: [livemeas]
+      requires: [protobuf::libprotobuf, adas-interfaces::adas-interfaces]
 
 variants:
   base:

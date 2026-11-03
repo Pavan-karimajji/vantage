@@ -47,10 +47,10 @@ add_library(simcore STATIC
     bus/signal_header.cpp
     bus/identity.cpp
     bus/port_bus.cpp
-    # SM-06 (SI-25, D-5): the engine-side implementations behind
-    # modules/interfaces' ITransport contract.
-    transport/inproc.cpp
-    transport/shm.cpp
+    # WP-15 (VANTAGE, C2): the description built from the setup and the components, and the sink that hands
+    # each step to the writer -- IMP-0078, IMP-0081. The player transport this replaced is gone (IMP-0085).
+    livemeas/description_builder.cpp
+    livemeas/engine_sink.cpp
     # WP-10 (SI-04): module_host -- component load/lifecycle/exec, ported
     # from sil_host/src/{sil_component,exec_timeout}.cpp and
     # library_loader.cpp's open half.
@@ -123,21 +123,13 @@ target_compile_features(simcore PUBLIC cxx_std_17)
 # `mcap::mcap` is a compiled library a consumer of `simcore.lib` must also
 # link against at the final executable, same reasoning `sil_host`'s own
 # `sil_core` target already applies to this identical dependency.
-target_link_libraries(simcore PUBLIC mcap::mcap protobuf::libprotobuf AdasInterfaces::AdasInterfaces Threads::Threads)
+target_link_libraries(simcore PUBLIC mcap::mcap protobuf::libprotobuf AdasInterfaces::AdasInterfaces Threads::Threads livemeas)
 if(NOT WIN32)
     # WP-10: module_host/dso.cpp's dlopen/dlsym/dlclose.
     target_link_libraries(simcore PUBLIC dl)
 else()
     # IMP-0063: abi/simcore.cpp's host name (gethostname).
     target_link_libraries(simcore PUBLIC ws2_32)
-endif()
-if(UNIX AND NOT APPLE)
-    # SM-06: SharedMemoryTransport's shm_open/shm_unlink -- glibc < 2.34
-    # ships these in librt, not libc; linking it unconditionally on Linux
-    # costs nothing on newer glibc (the symbols are already satisfied) and
-    # is what makes ubuntu_gcc a portable target rather than "whatever
-    # glibc the dev box happens to have".
-    target_link_libraries(simcore PUBLIC rt)
 endif()
 
 include(${PROJECT_SOURCE_DIR}/cmake/FloatingPoint.cmake)

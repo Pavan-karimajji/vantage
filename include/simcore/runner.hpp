@@ -24,9 +24,8 @@
 ///   threads; everything else stays on the orchestrator's thread, in stage
 ///   declaration order.
 ///
-///   Named gaps, closed by a later package: the live measurement
-///   writer (`8b`; `SetLiveMeasurement` takes a sink the writer will fill),
-///   `informational_only` on the wire (the `.mcap` codec has no per-message
+///   The live measurement writer's step is fed through `SetLiveMeasurement` (`WP-15`);
+///   named gap, closed by a later package: `informational_only` on the wire (the `.mcap` codec has no per-message
 ///   slot, `SI-01`).
 /// @author Pavan Karimajji
 
@@ -54,7 +53,6 @@
 #include "simcore/mutate.hpp"
 #include "simcore/orchestrator.hpp"
 #include "simcore/runspec.hpp"
-#include "simcore/transport_publisher.hpp"
 
 namespace google::protobuf {
 class Descriptor;
@@ -654,6 +652,10 @@ struct StepValue {
   const std::vector<std::uint8_t>* payload = nullptr;  // valid during the call
   bus::Origin origin = bus::Origin::Unknown;
   std::optional<std::int64_t> age_ns;
+  // `IMP-0079` (`D30`): the position of this value among the port's values in the step, 0 for a port with
+  // one; a stage run twice in a step has two values on each of its per-run ports, in run order.
+  std::size_t run = 0;
+  bool bulk = false;  // the port's `bulk` flag in the run setup
 };
 
 struct StepReport {
@@ -768,16 +770,14 @@ class Runner {
   // `IMP-0135`: optional; `ReadAhead` is the one place bytes are read off the wire.
   void SetByteCounter(diagnostics::ByteCounter* byte_counter);
 
-  // `SI-25` `transport`: optional; every value written this step is handed to
-  // the publisher, keyed by the step number. Retired with the live
-  // measurement writer (8b).
-  void SetTransportPublisher(transport::TransportPublisher* publisher) { transport_publisher_ = publisher; }
-
   // `IMP-0030`: the sink the live measurement writer's `liveMeasStep` call
   // fills (`ARCH §10.1`). After each step it gets the step number, the
   // simulation time, every port value with origin and age, and the step's
   // badges. With no sink, nothing is built.
   void SetLiveMeasurement(LiveMeasSink* sink) { live_sink_ = sink; }
+  // `IMP-0081`: the sink now set, so a second user (the step tap, `F-TAP`) can chain behind the engine's
+  // own writer sink instead of replacing it.
+  LiveMeasSink* LiveMeasurement() const { return live_sink_; }
 
  private:
   Runner();
@@ -792,7 +792,7 @@ class Runner {
   void PrepareTicket(const orchestrator::Ticket& ticket, PendingRun& pending);
   void ExecTicket(PendingRun& pending, std::size_t worker) const;
   Result<bool> FinishTicket(PendingRun& pending, std::vector<orchestrator::CommitReport>& reports);
-  // Offers this step's values to the writer, the publisher; returns the bytes written.
+  // Offers this step's values to the writer; returns the bytes written.
   Result<std::size_t> WriteStep(std::uint64_t step, std::int64_t now_ns);
 
   std::unique_ptr<Impl> impl_;
@@ -800,7 +800,6 @@ class Runner {
   io::WriterBase* writer_ = nullptr;
   const mutate::Mutator* mutator_ = nullptr;
   Checkpoint* checkpoint_ = nullptr;
-  transport::TransportPublisher* transport_publisher_ = nullptr;
   LiveMeasSink* live_sink_ = nullptr;
   Options options_;
 

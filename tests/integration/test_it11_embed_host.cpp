@@ -26,7 +26,6 @@
 #include <gtest/gtest.h>
 
 #include "simcore/io.hpp"
-#include "simcore/transport.hpp"
 
 namespace {
 
@@ -144,71 +143,12 @@ TEST_F(It11EmbedHost, ConstructsRunsAndDestroysThroughTheCAbiAlone) {
   simEngineDestroy(engine);
 }
 
-// `UT-ABI-04` (`SW-0425`, `ABI_VERSION 2`, `SM-11`/`vantage`): the real
-// mechanism an in-process host needs -- attach a transport, then step tick
-// by tick, draining real frames BETWEEN steps (which `simEngineRun`'s one
-// blocking call cannot offer). `InProcessTransport` is the SAME class the
-// host would really use (zero marshalling, `D-5`); this test IS that
-// host, minus a GL window.
-TEST_F(It11EmbedHost, AttachTransportThenStepOnceDeliversRealFramesBetweenTicks) {
-  char err_buf[512] = {0};
-  SimExitCode create_exit = kSimExitOk;
-  SimEngine* engine =
-      simEngineCreate(spec_.string().c_str(), nullptr, 2000, err_buf, sizeof(err_buf), &create_exit);
-  ASSERT_NE(engine, nullptr) << "simEngineCreate failed: " << err_buf;
-
-  simcore::transport::InProcessTransport transport(/*depth=*/8);
-  // `InProcessTransport` multiply-inherits `ITransport` AND
-  // `TransportPublisher` -- converting to the correct base type HERE
-  // (while the compiler still has both types) lets it apply the base-
-  // class pointer adjustment before the address is erased to `void*`;
-  // erasing straight from `InProcessTransport*` would hand
-  // `simEngineAttachTransport` an address for the WRONG subobject the
-  // instant `TransportPublisher` is not the first base (found live: this
-  // is exactly what happened on the first attempt, silently reaching no
-  // real frames rather than crashing).
-  simcore::transport::TransportPublisher* publisher = &transport;
-  simEngineAttachTransport(engine, publisher);
-
-  uint32_t engine_version = 0;
-  ASSERT_EQ(transport.attach(simcore::transport::InProcessTransport::kProtocolVersion, &engine_version),
-            adas::transport::AttachResult::kOk);
-
-  int cycles_stepped = 0;
-  std::vector<std::vector<uint8_t>> outputs;
-  for (;;) {
-    char step_err[512] = {0};
-    int32_t keep_going = 0;
-    const SimExitCode step_exit = simEngineStepOnce(engine, step_err, sizeof(step_err), &keep_going);
-    ASSERT_EQ(step_exit, kSimExitOk) << "simEngineStepOnce failed: " << step_err;
-    if (keep_going == 0) break;  // exhausted -- no cycle was actually stepped this call
-    ++cycles_stepped;
-
-    // Drain whatever this cycle published BEFORE the next step -- the
-    // real, per-tick pump shape a live renderer would use, proving the
-    // frame is available between steps, not just accumulated and read
-    // back at the end.
-    adas::transport::PortFrame frame{};
-    while (transport.tryReceive(&frame)) {
-      if (std::strcmp(frame.portName, "sut.outputs") == 0) {
-        outputs.emplace_back(frame.data, frame.data + frame.size);
-      }
-    }
-  }
-
-  EXPECT_EQ(cycles_stepped, 3);
-  ASSERT_EQ(outputs.size(), 3u);
-  EXPECT_TRUE(transport.engineAlive());
-
-  simEngineDestroy(engine);
-}
-
 // `ABI_VERSION 3` (`WP-05`, `IMP-0031`): `simEngineSeek` calls
 // `Orchestrator::Jump`. The step the engine takes next is at the new position
 // and the instants between are not run; the step count after it is the
 // recording's remainder, not the whole recording again.
 TEST_F(It11EmbedHost, SeekMovesTheEngineToThePositionAndSteppingContinuesFromThere) {
-  EXPECT_EQ(simEngineAbiVersion(), 4);
+  EXPECT_EQ(simEngineAbiVersion(), 5);
 
   char err_buf[512] = {0};
   SimExitCode create_exit = kSimExitOk;

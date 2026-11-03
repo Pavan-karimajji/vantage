@@ -67,7 +67,9 @@
 #include "simcore/mutate.hpp"
 #include "simcore/runner.hpp"
 #include "simcore/runspec.hpp"
-#include "simcore/transport_publisher.hpp"
+#include "vantage/livemeas_writer.h"
+#include "../livemeas/description_builder.hpp"
+#include "../livemeas/engine_sink.hpp"
 
 namespace {
 
@@ -547,6 +549,22 @@ void PopulateDescriptorPoolFromTopics(const std::map<std::string, simcore::io::T
   }
 }
 
+const char* LiveMeasResultName(LiveMeasResult result) {
+  switch (result) {
+    case kLiveMeasOk: return "kLiveMeasOk";
+    case kLiveMeasNameHeld: return "kLiveMeasNameHeld";
+    case kLiveMeasBadArgument: return "kLiveMeasBadArgument";
+    case kLiveMeasOpenFailed: return "kLiveMeasOpenFailed";
+    case kLiveMeasInternalError: return "kLiveMeasInternalError";
+  }
+  return "unknown";
+}
+
+// `MeasStatus.outcome` numbers: 1 pass, 2 fail, 3 crash, 4 timeout. The engine writes `crash` never (`ARCH §9`).
+constexpr std::uint32_t kLiveOutcomePass = 1;
+constexpr std::uint32_t kLiveOutcomeFail = 2;
+constexpr std::uint32_t kLiveOutcomeTimeout = 4;
+
 }  // namespace
 
 // One constructed engine: the spec plus every live object the cycle loop
@@ -582,6 +600,13 @@ struct SimEngine {
   // order is destruction order, reversed -- this struct's own top note).
   std::optional<simcore::runner::Checkpoint> checkpoint;
   std::optional<simcore::runner::Runner> runner;
+  // `IMP-0082`: the live measurement writer and the sink that feeds it, absent with no `outputs.livemeas` or
+  // when the open failed. Declared AFTER `runner`, so the sink is destroyed before the runner that borrows it.
+  LiveMeasHandle* live_handle = nullptr;
+  std::optional<simcore::livemeas::LiveMeasWriterSink> live_sink;
+  // `IMP-0083`: whether a call timed out, for the close in `simEngineDestroy` of a run a host drove with
+  // `simEngineStepOnce`.
+  bool live_timed_out = false;
   // `IMP-0064`: what the `manifest` block is made of, kept from create until the recording closes.
   struct ManifestParts {
     std::string source_kind;
@@ -831,7 +856,45 @@ SimEngine* simEngineCreate(const char* run_spec_json_path, const char* config_pa
     engine->runner->SetCheckpoint(&*engine->checkpoint);
   }
 
+  // IMP-0082: the live measurement, when the setup names one. A failure to open is one warning and the engine
+  // run goes on with no sink (`SYS-0068`); the geometry is the setup's, never a default.
+  if (engine->spec.outputs.livemeas.has_value()) {
+    const simcore::SpecLiveMeas& live = *engine->spec.outputs.livemeas;
+    const auto in_range = [](std::int64_t v) { return v > 0 && v <= static_cast<std::int64_t>(UINT32_MAX); };
+    LiveMeasResult opened = kLiveMeasBadArgument;
+    LiveMeasHandle* handle = nullptr;
+    const adas::livemeas::MeasDescription description =
+        simcore::livemeas::BuildMeasDescription(engine->spec, engine->component_ptrs, engine->topics);
+    if (in_range(live.cycle_slot_count) && in_range(live.cycle_slot_size) && in_range(live.bulk_slot_count) &&
+        in_range(live.bulk_slot_size)) {
+      const std::string bytes = description.SerializeAsString();
+      const LiveMeasGeometry geometry{static_cast<std::uint32_t>(live.cycle_slot_count),
+                                      static_cast<std::uint32_t>(live.cycle_slot_size),
+                                      static_cast<std::uint32_t>(live.bulk_slot_count),
+                                      static_cast<std::uint32_t>(live.bulk_slot_size)};
+      opened = liveMeasOpen(live.name.c_str(), &geometry, reinterpret_cast<const std::uint8_t*>(bytes.data()),
+                            static_cast<std::uint32_t>(bytes.size()), &handle);
+    }
+    if (opened == kLiveMeasOk) {
+      engine->live_handle = handle;
+      engine->live_sink.emplace(handle, description);
+      engine->runner->SetLiveMeasurement(&*engine->live_sink);
+    } else {
+      std::cerr << "[simengine] warning: live measurement '" << live.name << "' not opened ("
+                << LiveMeasResultName(opened) << " " << static_cast<int>(opened)
+                << "); the engine run goes on without it\n";
+    }
+  }
+
   return engine.release();
+}
+
+// IMP-0083: closes the live measurement, once, with `outcome`; the sink stops calling the writer first.
+static void CloseLiveMeasurement(SimEngine* engine, std::uint32_t outcome) {
+  if (engine->live_handle == nullptr) return;
+  if (engine->live_sink.has_value()) engine->live_sink->Detach();
+  liveMeasClose(engine->live_handle, outcome);
+  engine->live_handle = nullptr;
 }
 
 SimExitCode simEngineRun(SimEngine* engine, char* err_buf, std::size_t err_buf_cap) {
@@ -843,8 +906,11 @@ SimExitCode simEngineRun(SimEngine* engine, char* err_buf, std::size_t err_buf_c
   const Result<simcore::runner::RunOutcome> outcome = engine->runner->Run();
   if (!outcome.ok()) {
     WriteErr(err_buf, err_buf_cap, outcome.error().Format());
-    return EndedBy(outcome.error());
+    const SimExitCode code = EndedBy(outcome.error());
+    CloseLiveMeasurement(engine, code == kSimExitTimeout ? kLiveOutcomeTimeout : kLiveOutcomeFail);
+    return code;
   }
+  CloseLiveMeasurement(engine, kLiveOutcomePass);
   return kSimExitOk;
 }
 
@@ -861,12 +927,6 @@ SimExitCode simEngineSetThreads(SimEngine* engine, int32_t threads, char* err_bu
   return kSimExitOk;
 }
 
-void simEngineAttachTransport(SimEngine* engine, void* transport_publisher) {
-  if (engine == nullptr || !engine->runner.has_value()) return;
-  engine->runner->SetTransportPublisher(
-      static_cast<simcore::transport::TransportPublisher*>(transport_publisher));
-}
-
 SimExitCode simEngineStepOnce(SimEngine* engine, char* err_buf, std::size_t err_buf_cap, int32_t* out_continue) {
   if (out_continue != nullptr) *out_continue = 0;
   if (engine == nullptr || !engine->runner.has_value()) {
@@ -877,7 +937,9 @@ SimExitCode simEngineStepOnce(SimEngine* engine, char* err_buf, std::size_t err_
   const Result<bool> step = engine->runner->StepOnce();
   if (!step.ok()) {
     WriteErr(err_buf, err_buf_cap, step.error().Format());
-    return EndedBy(step.error());
+    const SimExitCode code = EndedBy(step.error());
+    if (code == kSimExitTimeout) engine->live_timed_out = true;
+    return code;
   }
   if (out_continue != nullptr) *out_continue = step.value() ? 1 : 0;
   return kSimExitOk;
@@ -898,6 +960,12 @@ SimExitCode simEngineSeek(SimEngine* engine, int64_t to_ns, char* err_buf, std::
 
 void simEngineDestroy(SimEngine* engine) {
   if (engine == nullptr) return;
+  // IMP-0083: a live measurement still open belongs to a host that drove `simEngineStepOnce`: `pass` when the
+  // last step ended the recording, `timeout` after a call timeout, otherwise `fail`. Never `crash`.
+  if (engine->live_handle != nullptr) {
+    const bool ended = engine->runner.has_value() && engine->runner->exhausted();
+    CloseLiveMeasurement(engine, engine->live_timed_out ? kLiveOutcomeTimeout : ended ? kLiveOutcomePass : kLiveOutcomeFail);
+  }
   // Best-effort: a shutdown failure on one component must not stop the
   // rest from being asked to shut down too (mirrors
   // `sil_host::Pipeline::ShutdownComponents`'s own "every component gets

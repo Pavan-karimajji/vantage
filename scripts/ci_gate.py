@@ -9,7 +9,7 @@ One entry point for the checks a stage already owes: pytest,
 scripts/check_invariants.py, scripts/check_headers.py,
 scripts/check_closed_sets.py, scripts/check_no_duplication.py,
 scripts/check_artifact_kinds.py, scripts/check_time_units.py,
-scripts/check_engine_decisions.py, scripts/check_counter_compare.py,
+scripts/check_engine_decisions.py, scripts/check_counter_compare.py, scripts/check_single_carrier.py,
 scripts/check_no_graphical_toolkit.py, scripts/check_trace.py. Invoked identically
 by hand and by .github/workflows/sim-ci.yml, so "the job passes" and "this
 script exits 0" are the same claim -- there is no second, hand-rolled
@@ -285,6 +285,7 @@ def main(argv: list[str] | None = None) -> int:
             ("scripts/check_time_units.py", "check_time_units.txt"),
             ("scripts/check_engine_decisions.py", "check_engine_decisions.txt"),
             ("scripts/check_counter_compare.py", "check_counter_compare.txt"),
+            ("scripts/check_single_carrier.py", "check_single_carrier.txt"),
             ("scripts/check_no_graphical_toolkit.py", "check_no_graphical_toolkit.txt"),
         ):
             check_ok, check_detail = _run_subprocess_check(
