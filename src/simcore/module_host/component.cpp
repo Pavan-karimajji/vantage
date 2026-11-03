@@ -106,7 +106,7 @@ Result<bool> Component::ReadManifest() {
 void Component::BuildOutBuffers() {
   for (const auto& spec : manifest_.outputs()) {
     const std::size_t cap = spec.max_bytes() != 0 ? spec.max_bytes() : kDefaultOutputCap;
-    out_buffers_[spec.name()] = PortBytes(cap);
+    (*out_buffers_)[spec.name()] = PortBytes(cap);
   }
 }
 
@@ -131,7 +131,8 @@ Result<bool> Component::Shutdown() {
   if (!transitioned.ok()) {
     return transitioned;
   }
-  if (handle_ != nullptr) {
+  // `IMP-0067`: a timed-out call may still be inside the library; its handle is left alone, as the destructor does.
+  if (handle_ != nullptr && quarantine_.reason() != QuarantineReason::kTimedOut) {
     adas_shutdown_fn_(handle_);
     handle_ = nullptr;
   }
@@ -142,7 +143,25 @@ Result<bool> Component::Reset() {
   return lifecycle_.Transition(Phase::Loaded);
 }
 
-Result<PortMap> Component::ExecOnce(std::int64_t dt_ns, const PortMap& inputs, const InputMetaMap& input_meta) {
+struct Component::ExecCall {
+  std::int64_t dt_ns = 0;
+  PortMap inputs;
+  InputMetaMap input_meta;
+  std::shared_ptr<std::map<std::string, PortBytes>> out_buffers;
+  void* handle = nullptr;
+  AdasExecFn exec_fn = nullptr;
+  std::string name;
+  std::optional<Result<PortMap>> result;
+};
+
+Result<PortMap> Component::RunCall(ExecCall& call) {
+  const std::int64_t dt_ns = call.dt_ns;
+  const PortMap& inputs = call.inputs;
+  const InputMetaMap& input_meta = call.input_meta;
+  std::map<std::string, PortBytes>& out_buffers_ = *call.out_buffers;
+  const std::string& name_ = call.name;
+  const auto adas_exec_fn_ = call.exec_fn;
+  void* const handle_ = call.handle;
   const double dt_s = static_cast<double>(dt_ns) / 1'000'000'000.0;  // TIME-BOUNDARY: the component ABI's `exec(dtS)` takes float seconds (R-ARCH-4)
 
   std::vector<std::string> in_names;
@@ -201,15 +220,23 @@ Result<PortMap> Component::Exec(std::int64_t dt_ns, const PortMap& inputs, const
                                         "call init() once before the first exec()"});
   }
 
+  const auto call = std::make_shared<ExecCall>();
+  call->dt_ns = dt_ns;
+  call->inputs = inputs;
+  call->input_meta = input_meta;
+  call->out_buffers = out_buffers_;
+  call->handle = handle_;
+  call->exec_fn = adas_exec_fn_;
+  call->name = name_;
   if (!exec_timeout.has_value()) {
-    return ExecOnce(dt_ns, inputs, input_meta);
+    return RunCall(*call);
   }
 
-  std::optional<Result<PortMap>> inner;
-  const ExecResult watchdog = exec_timeout->Run([&]() { inner = ExecOnce(dt_ns, inputs, input_meta); });
+  // The task holds `call` itself: after a timeout it writes only there (`IMP-0067`, `D29 (2)`).
+  const ExecResult watchdog = exec_timeout->Run([call]() { call->result = RunCall(*call); });
   switch (watchdog.outcome) {
     case ExecOutcome::kOk:
-      return *inner;
+      return *call->result;
     case ExecOutcome::kTimeout:
       quarantine_.Trip(QuarantineReason::kTimedOut, watchdog.error);
       return Result<PortMap>::Fail(Error{Kind::Internal, "adasExec() to return within the configured timeout",

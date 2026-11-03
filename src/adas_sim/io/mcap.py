@@ -18,6 +18,7 @@ make. Meta blocks ride as native mcap `Metadata` records, each a flat
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -81,7 +82,19 @@ class McapReader:
         block = self._metadata_by_name.get(_MANIFEST_META)
         if block is None:
             return RunManifest()
-        return manifest_from_dict(yaml.safe_load(block["yaml"]))
+        manifest = manifest_from_dict(yaml.safe_load(block["yaml"]))
+        # `IMP-0068` (`D29 (1)`): an engine run keeps each stage's bundle hash in the `config_bundle` block
+        # (`<stage>/bundle.sha256`), never in `manifest`; a manifest entry that states one is kept.
+        bundle = self._metadata_by_name.get(_CONFIG_BUNDLE_META)
+        if not bundle:
+            return manifest
+        filled = tuple(
+            dataclasses.replace(c, config_bundle_sha256=bundle[f"{c.name}/bundle.sha256"].strip())
+            if not c.config_bundle_sha256 and f"{c.name}/bundle.sha256" in bundle
+            else c
+            for c in manifest.components
+        )
+        return dataclasses.replace(manifest, components=filled)
 
     def config_bundle_bytes(self) -> bytes:
         """Extra, beyond the `RecordingReader` Protocol's minimum (api

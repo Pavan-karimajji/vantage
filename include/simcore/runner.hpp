@@ -507,7 +507,9 @@ class RecordedReference {
   bool Declared(const std::string& port) const { return held_.count(port) != 0; }
   void Add(const std::string& port, std::int64_t time_ns, const std::vector<std::uint8_t>& payload);
   // The newest held payload on `port` with this `measurement_counter`.
-  const std::vector<std::uint8_t>* Find(const std::string& port, std::uint32_t counter) const;
+  // `time_ns`, when given, receives the payload's reception time (`IMP-0065`).
+  const std::vector<std::uint8_t>* Find(const std::string& port, std::uint32_t counter,
+                                        std::int64_t* time_ns = nullptr) const;
   void Clear();
 
  private:
@@ -553,6 +555,13 @@ struct Selection {
   std::string waiting_on;  // the producer port
 };
 
+// A recorded `control` of a stage as it arrived: its counter and reception time. The runner keeps these per stage beside
+// the stage's sample buffer, which holds only `buffer_depth` samples (`IMP-0065`).
+struct ControlArrival {
+  std::uint32_t counter = 0;
+  std::int64_t arrival_ns = 0;
+};
+
 struct SelectContext {
   const RunSpec* spec = nullptr;
   const SpecStage* stage = nullptr;
@@ -562,6 +571,8 @@ struct SelectContext {
   // The recording holds a `<stage>.control` topic: the refSync search stops at the stage's next control (`D27`);
   // otherwise at the readiness limit.
   bool control_recorded = false;
+  // The stage's recorded controls that have arrived, oldest first (`IMP-0065`); null when the stage has none.
+  const std::deque<ControlArrival>* controls = nullptr;
   const std::map<std::string, bus::Origin>* origins = nullptr;
   std::int64_t fallback_max_gap = 0;
   std::int64_t now_ns = 0;
@@ -746,6 +757,8 @@ class Runner {
   bool exhausted() const { return exhausted_; }
   const RunOutcome& outcome() const { return outcome_; }
   std::optional<Divergence> FirstDivergence() const { return latch_.first(); }
+  // `IMP-0064`: whether any output was offered to the divergence latch (a RUN run's output that met a recorded one).
+  bool OutputsCompared() const { return outputs_compared_; }
 
   void SetCheckpoint(Checkpoint* checkpoint) { checkpoint_ = checkpoint; }
 
@@ -795,6 +808,7 @@ class Runner {
   std::vector<RecordedTopic> recorded_topics_;
   InjectionBoundary boundary_;
   DivergenceLatch latch_;
+  bool outputs_compared_ = false;
   RunOutcome outcome_;
 
   bool prepared_ = false;

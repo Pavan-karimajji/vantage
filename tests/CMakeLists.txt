@@ -72,6 +72,11 @@ target_include_directories(step_tap PRIVATE ${CMAKE_SOURCE_DIR}/src/simcore)
 add_executable(recording_dump support/recording_dump.cpp)
 target_link_libraries(recording_dump PRIVATE simcore)
 
+# VNT-WP-13: IMP-0069, RCT:SYT-REC-03 .c3 -- a recording read through the engine's reader and written again through
+# the engine's writer, so two calls compare two writer calls with the same arguments.
+add_executable(rewrite_recording support/rewrite_recording.cpp)
+target_link_libraries(rewrite_recording PRIVATE simcore)
+
 # WP-06: modules/sim's first C++ test binary (WP-03's own scoping note: "no
 # gtest target, no C++ tests exist yet"). UT-IO-01..21 (io codec contract).
 set(SIM_TEST_SOURCES

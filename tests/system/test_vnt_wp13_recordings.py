@@ -34,6 +34,7 @@ from mcap.reader import make_reader
 from adas_sim.diagnostics.errors import EnvironmentError_
 from adas_sim.engine.bridge import resolve_simengine_executable
 from adas_sim.io.recording_writer import find_recording_package
+from tests.support.engine_runs import tool_path
 from tests.support.lab_cases import edit_setup, lab_case
 
 VANTAGE_ROOT = Path(__file__).resolve().parents[2]
@@ -74,6 +75,11 @@ def dump_exe() -> Path:
 
 
 @pytest.fixture(scope="module")
+def rewrite_exe() -> Path:
+    return tool_path("rewrite_recording")
+
+
+@pytest.fixture(scope="module")
 def cut_c():
     return lab_case("running_example", "cut_c")
 
@@ -102,9 +108,16 @@ def _check(checks_dir: Path, recording: Path) -> subprocess.CompletedProcess:
         [sys.executable, str(checks_dir / "check_recording.py"), str(recording)], capture_output=True, text=True)
 
 
-def test_syt_rec_03_c3_two_engine_runs_are_byte_identical(engine, cut_c, engine_recording, tmp_path):  # SYT-REC-03.c3
-    second = _engine_run(engine, cut_c, tmp_path, "second")
-    assert second.read_bytes() == engine_recording.read_bytes()
+def test_syt_rec_03_c3_the_engines_writer_given_the_same_arguments_gives_the_same_bytes(rewrite_exe, engine_recording, tmp_path):  # SYT-REC-03.c3
+    """`IMP-0069`: the recording is rewritten twice through the engine's reader and writer (`rewrite_recording`); the
+    two files are compared with each other and with the engine's own. Two engine runs are not compared: each states
+    its `process_nonce` (`IMP-0063`), so their `manifest` differs by design."""
+    first, second = tmp_path / "first.mcap", tmp_path / "second.mcap"
+    for target in (first, second):
+        done = subprocess.run([str(rewrite_exe), str(engine_recording), str(target)], capture_output=True, text=True, timeout=300)
+        assert done.returncode == 0, f"rewrite_recording exit {done.returncode}: {done.stderr[-400:]}"
+    assert first.read_bytes() == second.read_bytes(), "SYT-REC-03.c3: any byte differs between two writer calls"
+    assert first.read_bytes() == engine_recording.read_bytes(), "SYT-REC-03.c3: any byte differs from the engine's own file"
 
 
 def test_syt_rec_04_c1_the_conformance_check_finds_nothing_in_the_engine_run_recording(checks_dir, engine_recording):  # SYT-REC-04.c1

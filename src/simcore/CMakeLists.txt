@@ -127,6 +127,9 @@ target_link_libraries(simcore PUBLIC mcap::mcap protobuf::libprotobuf AdasInterf
 if(NOT WIN32)
     # WP-10: module_host/dso.cpp's dlopen/dlsym/dlclose.
     target_link_libraries(simcore PUBLIC dl)
+else()
+    # IMP-0063: abi/simcore.cpp's host name (gethostname).
+    target_link_libraries(simcore PUBLIC ws2_32)
 endif()
 if(UNIX AND NOT APPLE)
     # SM-06: SharedMemoryTransport's shm_open/shm_unlink -- glibc < 2.34

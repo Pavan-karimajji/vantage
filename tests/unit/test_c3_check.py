@@ -12,7 +12,6 @@ the single stage under test is `widget`, same convention
 
 from __future__ import annotations
 
-from tests.support.foreign_mcap import ForeignMcapWriter
 import json
 import struct
 from pathlib import Path
@@ -301,20 +300,14 @@ def _record_stim_recording(tmp_path: Path, name: str, values: list[float]) -> Pa
     `mode: simulate` stage with `inputs: {in: source.stim}` needs, since
     (unlike a `measured` stage) its own output is computed fresh, never
     read back from the recording."""
-    from adas_sim.io.base import Provenance, RunManifest, TopicInfo
-    from adas_sim.plugins.registry import writer_for
+    from adas_sim.io.base import Provenance, TopicInfo
+    from tests.support.recordings import write_recording
 
-    recording_path = tmp_path / name
-    writer = ForeignMcapWriter()
-    writer.open(
-        recording_path, RunManifest(),
-        {"/source/stim": TopicInfo(schema_name="abi_test.AbiPort", provenance=Provenance.MEASURED)},
-    )
-    for i, v in enumerate(values):
-        t_ns = i * 100_000_000
-        writer.write("/source/stim", t_ns, _encode_abi_port(v), capture_time_ns=t_ns)
-    writer.close()
-    return recording_path
+    # VNT-WP-13 (corrected): the engine refuses an input that states no `source_kind` (`RCT:IMP-0052`), so the recording
+    # is written by the one conforming writer; its single clock is the logging time (`D22`).
+    return write_recording(
+        tmp_path / name, {"/source/stim": TopicInfo(schema_name="abi_test.AbiPort", provenance=Provenance.MEASURED)},
+        [("/source/stim", i * 100_000_000, _encode_abi_port(v)) for i, v in enumerate(values)])
 
 
 def test_check_scenario_applies_scenario_faults_during_resim(tmp_path, monkeypatch):

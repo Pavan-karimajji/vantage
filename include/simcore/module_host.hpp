@@ -314,7 +314,10 @@ class Component {
 
   Result<bool> ReadManifest();
   void BuildOutBuffers();
-  Result<PortMap> ExecOnce(std::int64_t dt_ns, const PortMap& inputs, const InputMetaMap& input_meta);
+  // `IMP-0067`: one call's state. A timed-out call may return long after `Exec` has, so everything it touches is
+  // held here, shared between `Exec` and the task, never in `Exec`'s frame or in this `Component`.
+  struct ExecCall;
+  static Result<PortMap> RunCall(ExecCall& call);
 
   using AdasAbiVersionFn = std::int32_t (*)();
   using AdasManifestFn = std::size_t (*)(std::uint8_t*, std::size_t);
@@ -335,7 +338,7 @@ class Component {
   AdasExecFn adas_exec_fn_ = nullptr;
   AdasShutdownFn adas_shutdown_fn_ = nullptr;
 
-  std::map<std::string, PortBytes> out_buffers_;
+  std::shared_ptr<std::map<std::string, PortBytes>> out_buffers_ = std::make_shared<std::map<std::string, PortBytes>>();
 };
 
 // ---------------------------------------------------------------------------

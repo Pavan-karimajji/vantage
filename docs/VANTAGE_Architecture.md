@@ -360,8 +360,9 @@ the component receives. The control message is added to it. Nothing else is.
    `measurement_counter` equals the control's, never the first one after the control.
    It is searched in the arrived messages, then ahead, past the readiness limit, up to
    the stage's next recorded `control` (`D27`); a stage the recording holds no
-   `control` of is searched to the readiness limit. Not found, the run takes the time
-   rule (step 4). The sample whose
+   `control` of is searched to the readiness limit. The bound holds for the arrived
+   messages too: a refSync received after that `control` is not taken (`D29 (3)`).
+   Not found, the run takes the time rule (step 4). The sample whose
    `measurement_counter` equals the entry for that input is handed over. The search
    goes through the arrived samples, then through the read-ahead (the car may have
    logged a sample later than the control that names it). Matching is by

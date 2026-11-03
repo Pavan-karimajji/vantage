@@ -44,8 +44,9 @@ def _echo_pipeline(tmp_path: Path) -> Path:
     reasoning applied here."""
     path = tmp_path / "echo_pipeline.yaml"
     path.write_text(
-        "version: 1\nname: echo_test\nstages:\n"
-        "  - name: echo\n    mode: simulate\n    impl: \"dll:echo_stub\"\n    inputs: {}\n",
+        "version: 1\nname: echo_test\nrun_setup:\n  readiness_limit_steps: 8\n  fallback_max_gap: 6\nstages:\n"
+        "  - name: echo\n    mode: simulate\n    impl: \"dll:echo_stub\"\n    inputs: {}\n"
+        "    trigger: ''\n    buffer_depth: {'*': 16}\n",
         encoding="utf-8",
     )
     return path
@@ -144,8 +145,9 @@ def test_cli_reports_failure_via_exit_code(tmp_path, capsys):
     than core.batch.run_batch directly."""
     missing_dll_pipeline = tmp_path / "unresolvable.yaml"
     missing_dll_pipeline.write_text(
-        "version: 1\nname: unresolvable\nstages:\n"
-        "  - name: nope\n    mode: simulate\n    impl: \"dll:does_not_exist\"\n    inputs: {}\n",
+        "version: 1\nname: unresolvable\nrun_setup:\n  readiness_limit_steps: 8\n  fallback_max_gap: 6\nstages:\n"
+        "  - name: nope\n    mode: simulate\n    impl: \"dll:does_not_exist\"\n    inputs: {}\n"
+        "    trigger: ''\n    buffer_depth: {'*': 16}\n",
         encoding="utf-8",
     )
     recordings = _copy_recordings(tmp_path, 3)

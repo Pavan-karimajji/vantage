@@ -291,7 +291,13 @@ TEST(Wp13Manifest, AnEngineRunStatesItsKindsItsComponentsAndItsPolicies) {
   EXPECT_NE(yaml.find("manifest_version: 1\n"), std::string::npos) << yaml;
   EXPECT_NE(yaml.find("run_kind: resim\n"), std::string::npos) << yaml;
   EXPECT_NE(yaml.find("source_kind: 'synthetic'\n"), std::string::npos) << yaml;
-  EXPECT_NE(yaml.find("- build_id: 'test'\n  name: 'sut'\n"), std::string::npos) << yaml;
+  // `IMP-0063`: the component entry now also carries its library's hash (keys sorted: build_id, library_sha256, name).
+  EXPECT_NE(yaml.find("- build_id: 'test'\n  library_sha256: '"), std::string::npos) << yaml;
+  EXPECT_NE(yaml.find("'\n  name: 'sut'\n"), std::string::npos) << yaml;
+  for (const char* key : {"run_id: '", "host: '", "process_nonce: '", "run_spec_sha256: '", "divergence: '"}) {
+    EXPECT_NE(yaml.find(std::string("\n") + key), std::string::npos) << key << "\n" << yaml;
+  }
+  EXPECT_EQ(yaml.find("config_bundle_sha256"), std::string::npos) << "a bundle hash stays in config_bundle (D29 (1))";
   EXPECT_NE(yaml.find("  meas.objects: 'full'\n"), std::string::npos) << yaml;
   EXPECT_EQ(yaml.find("created_utc"), std::string::npos) << "the engine has no logging time to state:\n" << yaml;
 }

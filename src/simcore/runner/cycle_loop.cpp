@@ -42,6 +42,7 @@
 
 #include <google/protobuf/descriptor.h>
 
+#include "adas/counter.hpp"
 #include "common/cycle_control.pb.h"
 #include "common/ref_sync.pb.h"
 #include "rank_dispatch.hpp"
@@ -212,6 +213,9 @@ struct Runner::Impl {
   std::set<std::string> queue_ports;      // recorded ports that enter a sample buffer
   std::set<std::string> reference_ports;  // recorded ports kept as reference (a `simulate` stage's outputs)
   std::set<std::string> controls_recorded;  // stages the recording holds a `<stage>.control` topic of (`D27`)
+  // `IMP-0065`: per stage, the recorded controls that arrived and are not yet passed by a dispatched run, oldest first.
+  // Kept here, not read from the `control` sample buffer, which holds only `buffer_depth` samples.
+  std::map<std::string, std::deque<ControlArrival>> control_arrivals;
   std::vector<std::string> declared_ports;
   std::string plan_text;
   std::int64_t first_reception_ns = 0;
@@ -240,6 +244,7 @@ struct Runner::Impl {
     std::string port;  // "<stage>.<port>"
     std::vector<std::uint8_t> payload;
     std::optional<std::int64_t> capture_time_ns;
+    bool handed = false;  // an input as the run was handed it (post-mutation), `IMP-0066`
   };
   std::vector<RunWrite> run_writes;
 
@@ -264,6 +269,8 @@ struct Runner::Impl {
     context.reference = &reference;
     context.ahead = ahead.get();
     context.control_recorded = controls_recorded.count(ticket.stage) != 0;
+    const auto arrivals = control_arrivals.find(ticket.stage);
+    context.controls = arrivals == control_arrivals.end() ? nullptr : &arrivals->second;
     context.origins = &origins;
     context.fallback_max_gap = spec.fallback_max_gap;
     context.now_ns = now_ns;
@@ -604,6 +611,7 @@ Result<bool> Runner::Seek(std::int64_t to_ns) {
   const auto reseek = [&](std::int64_t at_ns) -> Result<bool> {
     impl.ahead->Seek(at_ns);
     impl.reference.Clear();
+    impl.control_arrivals.clear();
     impl.queued_instant.reset();
     impl.cut = false;
     impl.last_run_ns.clear();
@@ -645,6 +653,16 @@ void Runner::PrepareTicket(const orchestrator::Ticket& ticket, PendingRun& pendi
   const std::int64_t now_ns = impl.orchestrator->Now();
   pending.ticket = ticket;
   pending.selection = impl.SelectFor(ticket, step, now_ns, pending.header, pending.stage);
+  // `IMP-0065`: the controls before this run's own are no run's bound any more.
+  const auto arrivals = impl.control_arrivals.find(ticket.stage);
+  if (arrivals != impl.control_arrivals.end() && !bus::IsUnknownMeasurementCounter(pending.header.measurement_counter)) {
+    std::deque<ControlArrival>& arrived = arrivals->second;
+    for (std::size_t i = arrived.size(); i-- > 0;) {
+      if (adas::common::counterDistance(pending.header.measurement_counter, arrived[i].counter) != 0) continue;
+      arrived.erase(arrived.begin(), arrived.begin() + static_cast<std::ptrdiff_t>(i));
+      break;
+    }
+  }
   const orchestrator::GraphStage* graph_stage = impl.graph.Find(ticket.stage);
   pending.component = components_.at(ticket.stage);
 
@@ -739,6 +757,12 @@ Result<bool> Runner::FinishTicket(PendingRun& pending, std::vector<orchestrator:
   for (const orchestrator::CommittedOutput& output : result.report.outputs) {
     impl.run_writes.push_back({output.port, output.payload, output.capture_time_ns});
   }
+  // `IMP-0066`: then the inputs this run was handed, so a stage run twice in a step leaves both runs' values.
+  for (const auto& [port, value] : result.delivered) {
+    std::optional<std::int64_t> capture;
+    if (value.header.t_capture_ns.has_value()) capture = value.header.t_capture_ns.value();
+    impl.run_writes.push_back({port, value.payload, capture, true});
+  }
   for (auto& [port, value] : result.delivered) impl.delivered[port] = std::move(value);
 
 
@@ -777,6 +801,7 @@ Result<bool> Runner::FinishTicket(PendingRun& pending, std::vector<orchestrator:
     const std::string bare = output.port.substr(ticket.stage.size() + 1);
     if (!restart_run) {
       const bool was_latched = latch_.latched();
+      outputs_compared_ = true;
       latch_.Observe(step, now_ns, ticket.stage, bare, output.payload, *recorded, descriptor);
       if (!was_latched && latch_.latched()) {
         orchestrator::LogEntry entry;
@@ -835,6 +860,13 @@ Result<std::size_t> Runner::WriteStep(std::uint64_t step, std::int64_t now_ns) {
   for (const Impl::RunWrite& run_write : impl.run_writes) {
     for (std::size_t i = 0; i < recorded_topics_.size(); ++i) {
       const RecordedTopic& topic = recorded_topics_[i];
+      if (run_write.handed) {
+        // `IMP-0066`: the post-mutation input topic carries each run's own value.
+        if (!topic.post_mutation || topic.qualified_port != run_write.port) continue;
+        written_by_a_run.insert(i);
+        if (topic.policy.WritesAt(step)) emit(topic, run_write.payload, run_write.capture_time_ns);
+        break;
+      }
       if (topic.post_mutation || topic.qualified_port != run_write.port) continue;
       if (topic.dir == "req" && ProducerAddressOf(impl.spec, topic.stage, topic.port).has_value()) continue;
       written_by_a_run.insert(i);
@@ -847,11 +879,12 @@ Result<std::size_t> Runner::WriteStep(std::uint64_t step, std::int64_t now_ns) {
   for (std::size_t i = 0; i < recorded_topics_.size(); ++i) {
     const RecordedTopic& topic = recorded_topics_[i];
     if (written_by_a_run.count(i) != 0) continue;
+    if (topic.post_mutation) continue;  // written with the run that was handed it (`IMP-0066`)
     if (!topic.policy.WritesAt(step)) continue;
     bus::PortValue value;
     if (topic.dir == "req") {
       const std::optional<std::string> producer = ProducerAddressOf(impl.spec, topic.stage, topic.port);
-      if (topic.post_mutation || !producer.has_value()) {
+      if (!producer.has_value()) {
         // What the stage was handed this step, post-mutation -- or, for an
         // input nobody wired (its `control`), the message written for it.
         const auto delivered = impl.delivered.find(topic.qualified_port);
@@ -912,6 +945,14 @@ Result<bool> Runner::StepOnce() {
         impl.reference.Add(message.port, instant.time_ns, message.message.payload);
       } else if (impl.queue_ports.count(message.port) != 0) {
         impl.touched.insert(message.port);
+        const std::string stage = message.port.substr(0, message.port.find('.'));
+        if (impl.controls_recorded.count(stage) != 0 && message.port == stage + ".control") {
+          const bus::SignalHeader sig =
+              bus::ReadSignalHeader(message.message.payload, bus_->Descriptor(message.port));
+          if (sig.measurement_counter.has_value()) {
+            impl.control_arrivals[stage].push_back({sig.measurement_counter.value(), instant.time_ns});
+          }
+        }
       }
     }
   }

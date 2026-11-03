@@ -34,6 +34,7 @@
 #include <cctype>
 #include <cstring>
 #include <fstream>
+#include <random>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -44,6 +45,17 @@
 #include <string>
 #include <vector>
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#else
+#include <unistd.h>
+#endif
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/descriptor.pb.h>
 #include <google/protobuf/dynamic_message.h>
@@ -318,19 +330,110 @@ simcore::Result<std::string> InputSourceKind(const simcore::RunSpec& spec,
   return simcore::Result<std::string>::Ok(*kind);
 }
 
-// `IMP-0052`: the `manifest` entry of `RCT_Architecture.md` section 6a for an engine run -- `run_kind: resim`, the
-// input's `source_kind`, the simulated stages with their `build_id`, each port's policy. Keys sorted, as the Python
-// writer's are; no clock, so two runs write the same text.
-std::string ManifestYaml(const std::string& source_kind,
-                         const std::vector<std::pair<std::string, std::string>>& components,
-                         const std::map<std::string, std::string>& policies) {
-  std::string yaml = components.empty() ? "components: []\n" : "components:\n";
-  for (const auto& [name, build_id] : components) {
-    yaml += "- build_id: " + YamlQuoted(build_id) + "\n  name: " + YamlQuoted(name) + "\n";
+// `IMP-0063`: SHA-256 of a byte string, lowercase hex (FIPS 180-4); the engine has no other hash and links no library for it.
+std::string Sha256Hex(const std::string& data) {
+  static const std::uint32_t k[64] = {
+      0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98,
+      0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786,
+      0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8,
+      0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
+      0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819,
+      0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a,
+      0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
+      0xc67178f2};
+  std::uint32_t h[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
+  std::string message = data;
+  const std::uint64_t bits = static_cast<std::uint64_t>(data.size()) * 8;
+  message += static_cast<char>(0x80);
+  while (message.size() % 64 != 56) message += '\0';
+  for (int shift = 56; shift >= 0; shift -= 8) message += static_cast<char>((bits >> shift) & 0xff);
+  const auto rotr = [](std::uint32_t x, int n) { return (x >> n) | (x << (32 - n)); };
+  for (std::size_t block = 0; block < message.size(); block += 64) {
+    std::uint32_t w[64];
+    for (int t = 0; t < 16; ++t) {
+      const unsigned char* b = reinterpret_cast<const unsigned char*>(message.data()) + block + 4 * t;
+      w[t] = (std::uint32_t(b[0]) << 24) | (std::uint32_t(b[1]) << 16) | (std::uint32_t(b[2]) << 8) | b[3];
+    }
+    for (int t = 16; t < 64; ++t) {
+      const std::uint32_t s0 = rotr(w[t - 15], 7) ^ rotr(w[t - 15], 18) ^ (w[t - 15] >> 3);
+      const std::uint32_t s1 = rotr(w[t - 2], 17) ^ rotr(w[t - 2], 19) ^ (w[t - 2] >> 10);
+      w[t] = w[t - 16] + s0 + w[t - 7] + s1;
+    }
+    std::uint32_t a = h[0], b = h[1], c = h[2], d = h[3], e = h[4], f = h[5], g = h[6], hh = h[7];
+    for (int t = 0; t < 64; ++t) {
+      const std::uint32_t t1 = hh + (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)) + ((e & f) ^ (~e & g)) + k[t] + w[t];
+      const std::uint32_t t2 = (rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22)) + ((a & b) ^ (a & c) ^ (b & c));
+      hh = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
+    }
+    h[0] += a; h[1] += b; h[2] += c; h[3] += d; h[4] += e; h[5] += f; h[6] += g; h[7] += hh;
   }
-  yaml += "manifest_version: 1\nrecord_policies:\n";
+  static const char digits[] = "0123456789abcdef";
+  std::string hex;
+  for (const std::uint32_t word : h) {
+    for (int shift = 28; shift >= 0; shift -= 4) hex += digits[(word >> shift) & 0xf];
+  }
+  return hex;
+}
+
+// `IMP-0063`: the library file's bytes hashed, or empty when the file cannot be read.
+std::string FileSha256Hex(const std::filesystem::path& path) {
+  std::ifstream in(path, std::ios::binary);
+  if (!in) return "";
+  std::ostringstream bytes;
+  bytes << in.rdbuf();
+  return Sha256Hex(bytes.str());
+}
+
+// `IMP-0063`: this machine's name, as Python's `socket.gethostname()` gives it.
+std::string HostName() {
+  char name[256] = {0};
+#ifdef _WIN32
+  WSADATA data;
+  const bool started = WSAStartup(MAKEWORD(2, 2), &data) == 0;
+  if (gethostname(name, sizeof(name) - 1) != 0) name[0] = '\0';
+  if (started) WSACleanup();
+#else
+  if (gethostname(name, sizeof(name) - 1) != 0) name[0] = '\0';
+#endif
+  return name;
+}
+
+// `IMP-0063`: random hex, drawn once per process -- two engine runs in one host process share it, two processes never do.
+const std::string& ProcessNonce() {
+  static const std::string nonce = [] {
+    std::random_device device;
+    static const char digits[] = "0123456789abcdef";
+    std::string hex;
+    for (int i = 0; i < 32; ++i) hex += digits[device() & 0xf];
+    return hex;
+  }();
+  return nonce;
+}
+
+// One simulated stage of the `manifest`: its `build_id` and the SHA-256 of the library file it loaded.
+struct ManifestComponent {
+  std::string name;
+  std::string build_id;
+  std::string library_sha256;
+};
+
+// `IMP-0052`, `IMP-0063`, `IMP-0064`: the `manifest` entry of `RCT_Architecture.md` section 6a for an engine run --
+// `run_kind: resim`, the input's `source_kind`, the simulated stages with their `build_id`, each port's policy,
+// and beside C6's keys the engine's own: `run_id`, `host`, `process_nonce`, `run_spec_sha256`, each stage's
+// `library_sha256` and the `divergence` (`D29 (1)`). Keys sorted, as the Python writer's were. Never a bundle hash.
+std::string ManifestYaml(const std::string& source_kind, const std::vector<ManifestComponent>& components,
+                         const std::map<std::string, std::string>& policies, const std::string& run_id,
+                         const std::string& spec_sha256, const std::string& divergence) {
+  std::string yaml = components.empty() ? "components: []\n" : "components:\n";
+  for (const ManifestComponent& component : components) {
+    yaml += "- build_id: " + YamlQuoted(component.build_id) + "\n  library_sha256: " +
+            YamlQuoted(component.library_sha256) + "\n  name: " + YamlQuoted(component.name) + "\n";
+  }
+  yaml += "divergence: " + YamlQuoted(divergence) + "\nhost: " + YamlQuoted(HostName()) + "\nmanifest_version: 1\n" +
+          "process_nonce: " + YamlQuoted(ProcessNonce()) + "\nrecord_policies:\n";
   for (const auto& [port, policy] : policies) yaml += "  " + YamlKey(port) + ": " + YamlQuoted(policy) + "\n";
-  yaml += "run_kind: resim\nsource_kind: " + YamlQuoted(source_kind) + "\n";
+  yaml += "run_id: " + YamlQuoted(run_id) + "\nrun_kind: resim\nrun_spec_sha256: " + YamlQuoted(spec_sha256) +
+          "\nsource_kind: " + YamlQuoted(source_kind) + "\n";
   return yaml;
 }
 
@@ -479,6 +582,13 @@ struct SimEngine {
   // order is destruction order, reversed -- this struct's own top note).
   std::optional<simcore::runner::Checkpoint> checkpoint;
   std::optional<simcore::runner::Runner> runner;
+  // `IMP-0064`: what the `manifest` block is made of, kept from create until the recording closes.
+  struct ManifestParts {
+    std::string source_kind;
+    std::vector<ManifestComponent> components;
+    std::map<std::string, std::string> policies;
+  };
+  std::optional<ManifestParts> manifest_parts;
 
   explicit SimEngine(simcore::RunSpec s) : spec(std::move(s)), bus(0) {}
 };
@@ -632,16 +742,17 @@ SimEngine* simEngineCreate(const char* run_spec_json_path, const char* config_pa
       if (out_exit_code != nullptr) *out_exit_code = ToC(simcore::DefaultExitCode(writer_open_result.error().kind));
       return nullptr;
     }
-    std::vector<std::pair<std::string, std::string>> built;
+    SimEngine::ManifestParts parts;
+    parts.source_kind = source_kind.value();
+    parts.policies = plan.value().policies;
     for (const simcore::SpecStage& stage : engine->spec.stages) {
       const auto component = engine->component_ptrs.find(stage.name);
       if (stage.mode == "simulate" && component != engine->component_ptrs.end()) {
-        built.emplace_back(stage.name, component->second->manifest().build_id());
+        parts.components.push_back({stage.name, component->second->manifest().build_id(),
+                                    FileSha256Hex(component->second->library_path())});
       }
     }
-    engine->writer_impl->WriteMetaBlock(
-        simcore::io::ToString(simcore::io::MetaKind::kRunManifest),
-        {{"yaml", ManifestYaml(source_kind.value(), built, plan.value().policies)}});
+    engine->manifest_parts = std::move(parts);  // written once, when the recording closes (`IMP-0064`)
     const std::map<std::string, std::string> bundles =
         ReadConfigBundles(engine->spec, engine->component_ptrs, config_path);
     if (!bundles.empty()) {
@@ -799,6 +910,25 @@ void simEngineDestroy(SimEngine* engine) {
   // regardless of whether `simEngineRun` was ever called or how it ended,
   // so a partial run still leaves a readable file up to its last completed
   // message.
-  if (engine->writer_impl) engine->writer_impl->Close();
+  if (engine->writer_impl) {
+    if (engine->manifest_parts.has_value()) {
+      // `IMP-0064`: `manifest` is written once, here, for every outcome that closes the recording.
+      std::string divergence = "unknown";
+      if (engine->runner.has_value()) {
+        const std::optional<simcore::runner::Divergence> first = engine->runner->FirstDivergence();
+        if (first.has_value()) {
+          divergence = "step=" + std::to_string(first->tick_index) + " stage=" + first->stage + " port=" + first->port;
+        } else if (engine->runner->OutputsCompared()) {
+          divergence = "none";
+        }
+      }
+      const SimEngine::ManifestParts& parts = *engine->manifest_parts;
+      engine->writer_impl->WriteMetaBlock(
+          simcore::io::ToString(simcore::io::MetaKind::kRunManifest),
+          {{"yaml", ManifestYaml(parts.source_kind, parts.components, parts.policies, engine->spec.run_id,
+                                 engine->spec.spec_sha256, divergence)}});
+    }
+    engine->writer_impl->Close();
+  }
   delete engine;
 }

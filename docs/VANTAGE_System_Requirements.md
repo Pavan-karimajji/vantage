@@ -25,7 +25,7 @@ simulated stage writes in the engine run, which names what the engine handed it
 **Test areas**, declared once: `RUN` the run setup · `ORC` the orchestrator and the six rules ·
 `SEL` input selection · `STP` the engine step · `THR` threads · `EQO` equal outputs and the
 first divergence.
-Priority split: 25 `P0`, 29 `P1`, 0 `P2`; all `R1`. Without a `P0` row an engine run is not
+Priority split: 25 `P0`, 32 `P1`, 0 `P2`; all `R1`. Without a `P0` row an engine run is not
 exact against the car; a `P1` row makes a result easier to trust or diagnose.
 
 ---
@@ -102,6 +102,12 @@ recordings are a batch of engine runs (`R-SIM-19`).
 **Accept.** On `running_example` `cut_c` the block names exactly the simulated stages, holds each one's files with their text as on disk, and each stage's `bundle.sha256` equals the setup's `config_bundle_sha256` for it; anything else fails.
 **Binds.** `runSetup`, `runRecording`
 **Verify.** T · `SYT-RUN-11`   **Trace.** —
+
+**`SYS-0055`** · `P1` · `R1` — The engine-run recording names the run, process, setup and libraries that made it
+**Shall.** An engine run shall write in its recording's `manifest` its `run_id`, `host`, `process_nonce`, `run_spec_sha256` and each simulated stage's `library_sha256` (`R-SIM-6`, `D29 (1)`).
+**Accept.** On `running_example` `cut_c` each `library_sha256` is the SHA-256 of the library loaded and `run_spec_sha256` the setup's `spec_sha256`; a second run's `manifest` differs only in `process_nonce`.
+**Binds.** `runRecording`
+**Verify.** T · `SYT-RUN-12`   **Trace.** —
 
 ## 2. The orchestrator and the six rules (`ORC`)
 
@@ -191,6 +197,12 @@ never does: `ARCH §3.2`. Ranks: `ARCH §2.2`.
 **Accept.** In every exact case and in `running_example` `all_simulated` with `buffer_depth` 1 on every port, each simulated stage's `compState` messages in the engine-run recording carry consecutive `cycle_counter`s and equal its controls in number.
 **Binds.** `control`, `stageOut`, `runRecording`
 **Verify.** T · `SYT-ORC-04`   **Trace.** —
+
+**`SYS-0057`** · `P1` · `R1` — Every run's overridden inputs are recorded
+**Shall.** An engine run shall record each run's overridden inputs as that run was handed them, a stage run twice in one step leaving both (`R-SIM-15`, `D29 (4)`).
+**Accept.** In `running_example` `all_simulated` with `buffer_depth` 1 on every port and an override on `source.Y`, `B`'s `in_Y` topic holds one message per `B` control, each with the counter its run's re-run refSync names.
+**Binds.** `stageIn`, `runRecording`
+**Verify.** T · `SYT-ORC-13`   **Trace.** —
 
 ## 3. Input selection (`SEL`)
 
@@ -373,6 +385,12 @@ Where equal outputs apply: `ARCH §7`. Determinism axes: `R-SIM-24`, with thread
 **Accept.** On `missing_sample` and `missing_run` the first divergence is reported at or after the first run whose recorded refSync names a dropped sample, and that run carries `KIND_FALLBACK` on that input.
 **Binds.** `eventLog`, `stepRecord`
 **Verify.** T · `SYT-EQO-05`   **Trace.** —
+
+**`SYS-0056`** · `P1` · `R1` — The engine-run recording states its first divergence
+**Shall.** An engine run shall write in its recording's `manifest` a `divergence`: the first divergence's step, stage and port; `none` when outputs were compared and none diverged; else `unknown`.
+**Accept.** On `no_ref_sync` it names the event log's `first_divergence` entry; on `cut_c` it is `none`; on `cut_c` with the simulated stages' outputs removed from the recording, `unknown`.
+**Binds.** `runRecording`, `eventLog`
+**Verify.** T · `SYT-EQO-06`   **Trace.** —
 
 **`SYS-0044`** · `P1` · `R1` — A re-run refSync is compared only on counter and time
 **Shall.** The divergence comparison shall compare a re-run `refSync` with the recorded one only on each entry's `measurement_counter` and `source_timestamp_us`.

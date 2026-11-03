@@ -86,6 +86,7 @@ struct Rig {
     context.reference = &reference;
     context.ahead = ahead;
     context.control_recorded = control_recorded;
+    context.controls = &controls;
     context.fallback_max_gap = 4;
     context.now_ns = now_ns;
     context.step = step;
@@ -101,6 +102,7 @@ struct Rig {
   RunSpec spec;
   bus::PortBus bus;
   RecordedReference reference;
+  std::deque<ControlArrival> controls;  // B's recorded controls as they arrived (`IMP-0065`), beside the bus buffer
 };
 
 std::uint32_t CounterOf(const InputSelection& input) {
@@ -404,6 +406,63 @@ TEST(RunSelectInputs, D27AStageTheRecordingHoldsNoControlOfIsSearchedOnlyToTheRe
   ahead_b.Fill(2);
   const Selection found = with_control.Run(100, 0, 1'000'000, false, 5, &ahead_b, /*control_recorded=*/true);
   EXPECT_FALSE(found.inputs[0].fallback);  // the same ahead, a stage with a recorded control: searched on
+}
+
+// `IMP-0065` (`D29 (3)`): run 100 of `B` was held behind an earlier parked run of the stage and dispatches only after its
+// refSync (logged at `refsync_ns`) and the next control (101, logged at 200) both arrived. `A.out` holds 10 and 11, the
+// refSync names 10; a refSync taken wrongly hands over 10, the time rule (control time 0: newest arrived) hands over 11.
+Selection RunHeldBehindAParkedRun(std::int64_t refsync_ns, std::int64_t control_depth = 8) {
+  Rig rig;
+  rig.bus.DeclarePort("B.control", control_depth, DataType());
+  const auto control = [&](std::uint32_t counter, std::int64_t arrival_ns) {
+    rig.controls.push_back({counter, arrival_ns});
+    bus::PortValue value;
+    value.origin = bus::Origin::Measured;
+    value.payload = Data(counter, 0);
+    bus::PublishInfo info;
+    EXPECT_TRUE(rig.bus.Publish("B.control", std::move(value), arrival_ns, info).ok());
+  };
+  rig.Sample(10, 1000, 10);
+  rig.Sample(11, 2000, 20);
+  control(100, 100);
+  control(101, 200);
+  rig.reference.Add("B.refSync", refsync_ns, RefSyncOf(100, {{"objects", 10}, {"lone", 0}}));
+  return rig.Run(100, /*control_us=*/0, /*now_ns=*/1'000'000, /*expired=*/false, /*step=*/5, /*ahead=*/nullptr,
+                 /*control_recorded=*/true);
+}
+
+TEST(RunSelectInputs, IMP_0065_ARefSyncReceivedAfterTheStagesNextControlIsNeverMatchedTheTimeRulePicks) {
+  const Selection selection = RunHeldBehindAParkedRun(/*refsync_ns=*/300);  // after control 101 (200)
+  const InputSelection& objects = selection.inputs[0];
+  ASSERT_TRUE(objects.sample.has_value());
+  EXPECT_TRUE(objects.fallback);
+  EXPECT_EQ(CounterOf(objects), 11u);  // the time rule, not the sample the late refSync names
+}
+
+TEST(RunSelectInputs, IMP_0065_ARefSyncReceivedBeforeTheStagesNextControlIsMatched) {
+  const Selection selection = RunHeldBehindAParkedRun(/*refsync_ns=*/150);  // before control 101 (200)
+  const InputSelection& objects = selection.inputs[0];
+  ASSERT_TRUE(objects.sample.has_value());
+  EXPECT_FALSE(objects.fallback);
+  EXPECT_EQ(CounterOf(objects), 10u);
+}
+
+// The same two cases at `buffer_depth` 1: control 100 is evicted from `B.control` by control 101 (`SYT-RUN-06`), and the
+// bound must hold all the same.
+TEST(RunSelectInputs, IMP_0065_AtControlDepthOneARefSyncReceivedAfterTheNextControlIsNeverMatched) {
+  const Selection selection = RunHeldBehindAParkedRun(/*refsync_ns=*/300, /*control_depth=*/1);
+  const InputSelection& objects = selection.inputs[0];
+  ASSERT_TRUE(objects.sample.has_value());
+  EXPECT_TRUE(objects.fallback);
+  EXPECT_EQ(CounterOf(objects), 11u);
+}
+
+TEST(RunSelectInputs, IMP_0065_AtControlDepthOneARefSyncReceivedAtTheNextControlsInstantIsMatched) {
+  const Selection selection = RunHeldBehindAParkedRun(/*refsync_ns=*/200, /*control_depth=*/1);  // control 101 is at 200
+  const InputSelection& objects = selection.inputs[0];
+  ASSERT_TRUE(objects.sample.has_value());
+  EXPECT_FALSE(objects.fallback);
+  EXPECT_EQ(CounterOf(objects), 10u);
 }
 
 }  // namespace

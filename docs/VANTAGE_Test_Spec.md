@@ -13,7 +13,7 @@ of `VANTAGE_Lab_Design.md` §6, written topology, scenario (`base` unless named)
 | `F-CAT` | Every topology of the lab catalogue built: each scenario's recording, each resim case's run setup, and the libraries, found by `tests/support/lab_cases.py`. An *exact case* is a resim case whose scenario expects `exact` and that is not `hang` or `crash` (they need the supervisor, part 8b) |
 | `F-CASE` | One named lab case of `F-CAT` |
 | `F-SETUP-EDIT` | An `F-CASE` run setup copied by the test with the one change its steps name (`edit_setup`) |
-| `F-REC-EDIT` | An `F-CASE` recording rewritten by the test through the Python writer in `interfaces` with the one edit its steps name: a split into files, messages removed or changed, a cut (`edit_recording`) |
+| `F-REC-EDIT` | An `F-CASE` or `F-RUN-CONFIG` recording rewritten by the test through the Python writer in `interfaces` with the one edit its steps name: a split into files, messages removed or changed, a message's logging time moved, a `manifest` key changed or removed, a cut (`edit_recording`) |
 | `F-ENGINE` | `simengine` run as a process on a setup with `outputs.path` set: the engine-run recording, the event log lines, the printed plan and the exit code |
 | `F-TAP` | `tests/support/step_tap` run on a setup: one line per engine step with its number, simulation time and badges; optionally one jump, at 500 ms to the case's `jump_to_ms` unless the steps say otherwise |
 | `F-PROBE` | The exec probe (`tests/fixtures/exec_probe`) put by the test in place of named stages' libraries, one copy per path the steps name, and its call log |
@@ -108,6 +108,13 @@ in `tests/system/test_vnt_gate_g3.py`.
 - `.c1` **PASS:** the block names exactly the simulated stages, each with its folder's files and text, per `SYS-0052` Accept. **FAIL:** a stage missing or extra (`C` is `measured`), or a file missing, extra or different.
 - `.c2` **PASS:** each stage's `bundle.sha256` text equals the setup's hash for it. **FAIL:** any differs.
 
+**`SYT-RUN-12`** · T · fixture `F-CASE`, `F-ENGINE`, `F-RUN-CONFIG`, `F-REC-EDIT` — An engine-run recording names what made it
+**Serves.** `SYS-0055`
+**Steps.** Run `running_example` `cut_c` on `F-ENGINE` twice; read both recordings' `manifest` through Vantage's recording reader, each simulated stage's library file and the setup. Run `F-RUN-CONFIG` with `sim resim --save`; then run `sim resim --pin-builds` with it on the saved recording, on a copy whose `manifest` gives its stage another `library_sha256`, and on a copy that gives none.
+- `.c1` **PASS:** `run_id` and `run_spec_sha256` are the setup's `run_id` and `spec_sha256`, `host` this machine's name, `process_nonce` not empty, and each simulated stage's `library_sha256` the SHA-256 of its library file, per `SYS-0055` Accept. **FAIL:** a key missing, empty or with another value, or a component entry for `C`.
+- `.c2` **PASS:** the two manifests differ only in `process_nonce`, and `adas_sim.diagnostics.determinism.derive_axis` gives `fresh_process` for them. **FAIL:** another difference, equal nonces, or another axis.
+- `.c3` **PASS:** `--pin-builds` passes on the saved recording, refuses the changed copy as a mismatch and the stripped copy as unpinnable. **FAIL:** a refusal of the saved recording, or a pass on either copy.
+
 ## 3. The orchestrator — `ORC`
 
 **`SYT-ORC-01`** · T · fixture `F-CASE`, `F-ENGINE` — Rank order inside a step
@@ -179,6 +186,11 @@ in `tests/system/test_vnt_gate_g3.py`.
 **Serves.** `SYS-0050`
 **Steps.** With a 1 ms clock period, read the `measurement_counter` of the control for ticks 0, 1, `0xFFFFFFFE`, `0xFFFFFFFF` and `0x100000000`.
 - `.c1` **PASS:** 1, 2, `0xFFFFFFFF`, 1 and 2, per `SYS-0050` Accept. **FAIL:** a 0, or `0xFFFFFFFF` followed by anything but 1.
+
+**`SYT-ORC-13`** · T · fixture `F-CASE`, `F-SETUP-EDIT`, `F-REC-EDIT`, `F-ENGINE` — Every run's overridden input is recorded
+**Serves.** `SYS-0057`
+**Steps.** Run `running_example` `all_simulated` with `buffer_depth` 1 on every port and one declared override on `source.Y` that leaves its `sig_header` unchanged, on a copy of its recording whose `B` controls are taken in pairs, the first of each pair logged at the instant of the second, so a step holds two `B` runs; read `B`'s `control` and re-run `refSync` messages and its `in_Y` topic in the engine-run recording.
+- `.c1` **PASS:** as `SYS-0057` Accept, and at least one step holds two `B` runs. **FAIL:** a count other than the controls', a message carrying another run's counter, or no step with two `B` runs, so the case could not fail.
 
 ## 4. Input selection — `SEL`
 
@@ -327,6 +339,11 @@ in `tests/system/test_vnt_gate_g3.py`.
 **Serves.** `SYS-0054`
 **Steps.** Run `running_example` `missing_sample` and `missing_run` `all_simulated` on `F-TAP` with `outputs.path` set. In each, find the run of `B` or `E` at the earliest step whose recorded refSync names a dropped `source.Y` sample; read the event log's `first_divergence` entry and that step's badges.
 - `.c1` **PASS:** in each, as `SYS-0054` Accept. **FAIL:** no entry, an entry at an earlier step, or no `KIND_FALLBACK` on that run's `in_Y` at its step.
+
+**`SYT-EQO-06`** · T · fixture `F-CASE`, `F-REC-EDIT`, `F-ENGINE` — The engine-run recording states its first divergence
+**Serves.** `SYS-0056`
+**Steps.** Run `running_example` `no_ref_sync` and `cut_c` on `F-ENGINE`; then `cut_c` on a copy of its recording with every topic of `A`, `B`, `D` and `E` except their `control` removed. Read each engine-run recording's `manifest` `divergence` and each event log's `first_divergence` entry.
+- `.c1` **PASS:** as `SYS-0056` Accept, `no_ref_sync`'s value naming the entry's step, stage and port. **FAIL:** another value, `none` or `unknown` where an entry exists, or `none` where no output was compared.
 
 ## 8. Analysis — `ANL`
 

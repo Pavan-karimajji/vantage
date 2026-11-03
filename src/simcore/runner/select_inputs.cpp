@@ -66,14 +66,41 @@ bus::Sample SampleOf(const SelectContext& context, const std::string& port, cons
   return sample;
 }
 
+// `IMP-0065`: the reception time of the stage's next recorded `control` after this run's -- the one after it in the
+// arrived controls, else the first one in the read-ahead. None when this run's control is not among the arrived
+// ones (a clock-started run) or no later control is held. The arrived controls are the runner's own record, not the
+// stage's `control` sample buffer, which has evicted them by then at a small `buffer_depth`.
+std::optional<std::int64_t> NextControlNs(const SelectContext& context, const orchestrator::ControlHeader& header) {
+  const std::string port = context.stage->name + ".control";
+  if (context.controls == nullptr) return std::nullopt;
+  const std::deque<ControlArrival>& arrived = *context.controls;
+  std::size_t own = arrived.size();
+  for (std::size_t i = 0; i < arrived.size(); ++i) {
+    if (adas::common::counterDistance(header.measurement_counter, arrived[i].counter) == 0) own = i;
+  }
+  if (own == arrived.size()) return std::nullopt;
+  if (own + 1 < arrived.size()) return arrived[own + 1].arrival_ns;
+  if (context.ahead != nullptr) {
+    const std::vector<const AheadMessage*> later = context.ahead->OnPort(port);
+    if (!later.empty()) return later.front()->message.log_time_ns;
+  }
+  return std::nullopt;
+}
+
 // The recorded refSync entries of the run: the message whose counter equals
-// the control's, found in the arrived recorded messages and then ahead.
+// the control's, found in the arrived recorded messages and then ahead. One
+// received after the stage's next recorded control is not taken (`D29 (3)`).
 std::optional<adas::common::RefSync> RecordedRefSync(const SelectContext& context,
                                                      const orchestrator::ControlHeader& header) {
   if (bus::IsUnknownMeasurementCounter(header.measurement_counter)) return std::nullopt;
   const std::string port = context.stage->name + ".refSync";
+  std::int64_t received_ns = 0;
   const std::vector<std::uint8_t>* payload =
-      context.reference == nullptr ? nullptr : context.reference->Find(port, header.measurement_counter);
+      context.reference == nullptr ? nullptr : context.reference->Find(port, header.measurement_counter, &received_ns);
+  if (payload != nullptr && context.control_recorded) {
+    const std::optional<std::int64_t> next_control = NextControlNs(context, header);
+    if (next_control.has_value() && received_ns > *next_control) return std::nullopt;
+  }
   std::vector<std::uint8_t> ahead_payload;
   if (payload == nullptr && context.ahead != nullptr) {
     // `D27`: matched by counter, never the first refSync after the control; read ahead past the readiness limit

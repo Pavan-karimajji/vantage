@@ -22,11 +22,9 @@ from adas_sim.io.base import Provenance, RunManifest, TopicInfo
 from adas_sim.plugins.registry import writer_for
 from adas_sim.resolve import probe
 
-_SIM_ROOT = Path(__file__).resolve().parent.parent.parent
-_ECHO_STUB_CANDIDATES = (
-    _SIM_ROOT / "build-gtest-vs2026" / "tests" / "Release" / "echo_stub.dll",
-    _SIM_ROOT / "build-gtest-ubuntu_gcc" / "tests" / "libecho_stub.so",
-)
+from tests.system.test_d15b_engine_bridge import _ECHO_STUB_CANDIDATES_POSIX, _ECHO_STUB_CANDIDATES_WINDOWS
+
+_ECHO_STUB_CANDIDATES = (*_ECHO_STUB_CANDIDATES_WINDOWS, *_ECHO_STUB_CANDIDATES_POSIX)
 
 
 def _find_echo_stub() -> Path | None:

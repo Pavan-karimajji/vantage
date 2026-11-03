@@ -37,8 +37,11 @@ from adas_sim.resolve.component import ComponentManifest, PortSpec
 from adas_sim.resolve.library import resolve_library
 
 _SIM_ROOT = Path(__file__).resolve().parents[2]
-_ECHO_STUB_CANDIDATES_WINDOWS = (_SIM_ROOT / "build-gtest-vs2026" / "tests" / "Release" / "echo_stub.dll",)
-_ECHO_STUB_CANDIDATES_POSIX = (_SIM_ROOT / "build-gtest-ubuntu_gcc" / "tests" / "libecho_stub.so",)
+# VNT-WP-13: the one definition of where the build puts the stub (`conan_workarea/`, as `tests/support/engine_runs.py`
+# looks for the other test tools); every test file that needs the stub imports it from here.
+_ECHO_STUB_CANDIDATES_WINDOWS = (
+    _SIM_ROOT / "conan_workarea" / "build-gtest-vs2026" / "tests" / "Release" / "echo_stub.dll",)
+_ECHO_STUB_CANDIDATES_POSIX = (_SIM_ROOT / "conan_workarea" / "build-gtest-ubuntu_gcc" / "tests" / "libecho_stub.so",)
 
 
 def _echo_stub_path(engine_path: Path) -> Path | None:

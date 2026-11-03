@@ -625,6 +625,27 @@ TEST(RunStep, IMP0033OnlyTheSecondOfTwoRunsInOneStepDifferingIsReportedTheSameWa
             "entry=first_divergence stage=B port=out");
 }
 
+// `IMP-0066`: `B` runs twice in the 100 ms step under an override declared on `A.out`; the post-mutation input topic
+// `/B/in` holds one message per run, each that run's value, each written after that run's outputs.
+TEST(RunStep, IMP_0066_AStageRunTwiceInOneStepUnderAnOverrideLeavesBothRunsInputs) {
+  RunSpec spec = ControlSpec();
+  SpecMutation mutation;
+  mutation.verb = "hold";
+  mutation.address.stage = "A";
+  mutation.address.port = "out";
+  spec.mutations = {mutation};
+  Harness h(spec, TwoRunsInOneStep(100'000, 100'000));
+  Runner runner = RunToTheEnd(h);
+  std::vector<std::pair<std::string, std::uint32_t>> at_100;  // (topic, counter) in file order, 100 ms
+  for (const io::RawMessage& message : h.sink.written) {
+    if (message.log_time_ns != 100 * kMs) continue;
+    if (message.topic == "/B/in" || message.topic == "/B/out") at_100.emplace_back(message.topic, CounterOf(message));
+  }
+  const std::vector<std::pair<std::string, std::uint32_t>> expected{
+      {"/B/out", 10u}, {"/B/in", 10u}, {"/B/out", 11u}, {"/B/in", 11u}};
+  EXPECT_EQ(at_100, expected);
+}
+
 // `C` reads `B`'s output; the car ran `C` at 100 ms on `B`'s sample 10, which `B` made at 200 ms. So `C`'s run waits
 // (`B.out` 10 is not committed), and runs in the 200 ms step, a step after its recorded run.
 struct WaitingRun {

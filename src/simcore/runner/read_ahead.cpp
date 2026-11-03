@@ -201,13 +201,17 @@ void RecordedReference::Add(const std::string& port, std::int64_t time_ns, const
   while (slot.held.size() > slot.depth) slot.held.pop_front();
 }
 
-const std::vector<std::uint8_t>* RecordedReference::Find(const std::string& port, std::uint32_t counter) const {
+const std::vector<std::uint8_t>* RecordedReference::Find(const std::string& port, std::uint32_t counter,
+                                                         std::int64_t* time_ns) const {
   const auto it = held_.find(port);
   if (it == held_.end()) return nullptr;
   for (auto held = it->second.held.rbegin(); held != it->second.held.rend(); ++held) {
     if (!held->counter.has_value()) continue;
     const std::int32_t distance = adas::common::counterDistance(counter, held->counter.value());
-    if (distance == 0) return &held->payload;
+    if (distance == 0) {
+      if (time_ns != nullptr) *time_ns = held->time_ns;
+      return &held->payload;
+    }
   }
   return nullptr;
 }
