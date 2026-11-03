@@ -349,7 +349,7 @@ The `control` message of the tick:
 
 | Field | Value (`RCT:SYS-0009`..`RCT:SYS-0011`) |
 |---|---|
-| `measurement_counter` | clock-started: k + 1. Input-triggered: the trigger sample's |
+| `measurement_counter` | clock-started: k + 1, and 1 after `0xFFFFFFFF` (section 5.4). Input-triggered: the trigger sample's |
 | `source_timestamp_us` | clock-started: the nominal time. Input-triggered: the trigger sample's |
 | `cycle_counter` | the car's count of runs of this component, from 1 |
 | `sig_status` | OK |
@@ -359,8 +359,8 @@ The car **never reads `compState`** and never changes `op_mode` for any other re
 
 ### 5.4 Sources
 
-Each new sample gets the previous counter plus 1 (the first is 1) and the non-zero nominal
-time (`RCT:IMP-0029`). A `sample` source's `value` is its counter. An `image` source's payload
+Each new sample gets the previous counter plus 1 (the first is 1, or the `counter_start` of section 5.5) and the non-zero nominal
+time (`RCT:IMP-0029`). After `0xFFFFFFFF` the next counter is 1, never 0 (`RCT:SYS-0004`, `D24`); a clock-started control wraps the same way. A `sample` source's `value` is its counter. An `image` source's payload
 is `adas.lab.LabImage` (`width`, `height`, `pixels`; in `interfaces`,
 `modules/interfaces/proto/lab/lab_image.proto`, fields listed in `RCT_Implementation_Design.md`
 *Message fields*) with `pixels[i] = (counter + i) mod 256`; `big_frame` makes one frame that
@@ -379,8 +379,10 @@ closed.
 | `car:` | `invalid: [{source, from_ms, for_ms}]` | samples in the window carry sticker INVALID | `F-LAB-FAULT` |
 | `car:` | `renumber: [component]` | the component's outputs carry its own run count as `measurement_counter` (a break of `RCT:SYS-0001`) | drill: producer renumbers |
 | `car:` | `counter_jump: [{source, at_counter, by}]` | from that counter on, the source's counter is `by` higher | drill: counter jump |
+| `car:` | `counter_start: [{source, first}]` | the source's first sample carries counter `first` (1 to `0xFFFFFFFF`) and the next ones follow, wrapping to 1; no jump, so no gap | drill: counter wrap |
 | `recording:` | `drop_sample: [{port, counter}]` | the sample is not written, though the bus had it and a `refSync` names it | drill: refSync names a missing sample |
 | `recording:` | `drop_ref_sync: all` | no `refSync` topic is written, and every `refSync` port is listed `excluded` in `record_policies` | drill: no refSyncs |
+| `recording:` | `repeat_sample: [{port, counter}]` | the sample is written a second time, byte-identical, 1 ms after the original | drill: a repeated trigger sample |
 
 The `silent` and `invalid` windows are half-open, `[from, from+for)`, on a sample's nominal (source) time, so jitter never moves a sample across an edge.
 
@@ -419,6 +421,7 @@ One YAML file each, added one corner case at a time. The first milestone is the 
 | `data_triggered` | `X` 30; `Y` 20; `T` reads `X`,`Y`, `trigger: in_X` | a run started by an input, not by its own clock |
 | `loop_no_edge` | `X` 10; `A` 20 reads `X`,`B`; `B` 20 reads `A`; `expect: refused_at_load` | a loop with no previous-cycle input; Vantage must refuse it at load |
 | `camera` | `X` 30; `Cam` image 64 x 48, 50; `A` 20 reads `X` | a bulk source for the live measurement (`F-CAM`); the contract's fixture needs it |
+| `coprime_periods` | `X` 7; `A` 11 reads `X`; `B` 13 reads `A`,`X` | periods with no common divisor above 1 ms: no stage shares a grid with another |
 
 `camera` is not in the list the program fixed for the catalogue; `F-CAM` of the contract's test
 specification requires it, so it is added and flagged.
@@ -487,13 +490,16 @@ Drill scenarios (`G4`; `ARCH §12`), also on the running example:
 
 | Scenario | Block | Resim case adds | Expected |
 |---|---|---|---|
-| `missing_sample` | `recording: {drop_sample: [{port: source.Y, counter: 20}, {port: source.Y, counter: 21}, {port: source.Y, counter: 22}]}` | `all_simulated` | fallback by counter, inside `fallback_max_gap` (3 missing) |
-| `missing_run` | ten consecutive counters of `source.Y` dropped | `all_simulated` | gap beyond `fallback_max_gap`: the time rule picks |
+| `missing_sample` | `recording: {drop_sample: [{port: source.Y, counter: 20}, {port: source.Y, counter: 21}, {port: source.Y, counter: 22}]}` | `all_simulated` | `expect: diverges`: fallback by counter, inside `fallback_max_gap` (3 missing); the first divergence is not before the first run that lost an input, which carries `KIND_FALLBACK` (`SYS-0054`) |
+| `missing_run` | ten consecutive counters of `source.Y` dropped | `all_simulated` | `expect: diverges`: gap beyond `fallback_max_gap`: the time rule picks; the first divergence as for `missing_sample` |
 | `no_ref_sync` | `recording: {drop_ref_sync: all}` | `all_simulated` | `expect: diverges` (mismatches are counted, not zero) |
-| `renumber` (in `data_triggered`) | `car: {counter_jump: [{source: X, at_counter: 10, by: 1000}], renumber: [T]}` | `by_data` | identity broken on `T`'s output |
+| `renumber` (in `data_triggered`) | `car: {counter_jump: [{source: X, at_counter: 10, by: 1000}], renumber: [T]}` | `by_data` | `expect: diverges`: `T`'s outputs carry its run count, an output not copying its control's counter (`RCT:SYS-0001`); the engine's check of that break is `SYT-ORC-05`, on `renumber_lib`. Never identity broken (`D17 (3)`): a run count never goes back |
 | `counter_jump` | `car: {counter_jump: [{source: X, at_counter: 50, by: 1000}]}` | `all_simulated` | a counter jump in the event log |
 | (cases of `base`) `hang`, `crash` | — | `config: {B: {set: {LAB_B_HANG_AFTER_RUNS: 5}}}`, and `LAB_B_CRASH_AFTER_RUNS: 5` | timeout and crash outcomes |
 | (case of `base`) `error` | — | none; the `fault` scenario is the ERROR drill | a component that reports ERROR |
+| `renumber_lib` | — | `shifted`: `config: {A: {set: {LAB_A_RENUMBER: 1}}}` | `A`'s own code shifts its data outputs' counter: each output in the event log |
+| `counter_wrap` | `car: {counter_start: [{source: X, first: 4294967291}]}` (`0xFFFFFFFB`) | `all_simulated`, `expect: exact` | `X`'s fifth sample carries `0xFFFFFFFF` and its sixth 1; no gap, no reset, no identity broken |
+| `repeat_trigger` (in `data_triggered`) | `recording: {repeat_sample: [{port: source.X, counter: 10}]}` | `by_data` | a stalled trigger in the event log, and no extra `T` run |
 
 `renumber` acts only where a component's trigger counter differs from its own run count, so its drill uses an input-triggered component after a counter jump.
 
@@ -620,7 +626,8 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 - [x] **LAB-WP-07** — The other topologies, one file each · Added after the milestone, one corner case at a time
 - [~] **LAB-WP-08** — Camera, drills and the supervised run · The `G4` drills; needs `LAB-WP-05` and `LAB-WP-06`. Closed by `LAB-53` (`supervise.py`) and the supervised `hang` and `crash` cases passing.
 - [x] **LAB-WP-09** — The recorder on the `interfaces` writer (RCT C6, `D22`) · Needs `RCT:WP-11`; closes before `G2`, so every lab recording follows `RCT_Architecture.md` §6a by construction.
-- [ ] **LAB-WP-10** — Cases for gate `G3`: periods with no common divisor, a renumbering library, a repeated trigger sample (owner, 2026-10-31) · Needs `LAB-WP-08`; the cases `VANTAGE_Test_Spec.md` runs for `SYS-0013`, `SYS-0047` and the catalogue of `G3`.
+- [x] **LAB-WP-10** — Cases for gate `G3`: periods with no common divisor, a renumbering library, a repeated trigger sample (owner, 2026-10-31) · Needs `LAB-WP-08`; the cases `VANTAGE_Test_Spec.md` runs for `SYS-0013`, `SYS-0047` and the catalogue of `G3`.
+- [x] **LAB-WP-11** — The `measurement_counter` wrap (`D24`) · Needs `LAB-WP-10`; the case `VANTAGE_Test_Spec.md` runs for `SYS-0049` and `RCT:SYS-0004` `SYT-HDR-04.c2`.
 
 | Box | ID | WP | Serves (RCT) | Artifact — Design |
 |---|---|---|---|---|
@@ -680,13 +687,17 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 | `[ ]` | `LAB-53` | `LAB-WP-08` | — | `src/lab_tools/supervise.py::run_under_supervisor` — starts `simengine --supervise`, returns exit code and the sealed `outcome`. |
 | `[x]` | `LAB-55` | `LAB-WP-09` | `RCT:IMP-0047` | `src/lab_tools/recorder.py::McapRecorder` — writes through the `interfaces` writer, found through `index.json`: `generate.py::write_index` adds the `interfaces` package's `python/` folder, which `lab_add_topology` passes in; the recording edits stay here. |
 | `[x]` | `LAB-56` | `LAB-WP-09` | `RCT:SYS-0037`, `RCT:SYS-0038`, `RCT:SYS-0039`, `RCT:SYS-0040`, `RCT:SYS-0041`, `RCT:SYS-0043` | `tests/test_recording.py` — `SYT-REC-01`, `SYT-REC-02`, `SYT-REC-03` `.c1` and `.c2`, and `ANL-06` `.c1` and `.c3`, the second writer planted in a copy of `src/`. |
-| `[ ]` | `LAB-57` | `LAB-WP-10` | `RCT:SYS-0016` | `catalogue/coprime_periods.yaml` — source `X` 7 ms; `A` 11 ms reads `X`; `B` 13 ms reads `A` and `X`; no jitter; periods with no common divisor above 1 ms, so no stage shares a grid with another; resim cases `cut_a` (`A` measured) and `all_simulated`. |
-| `[ ]` | `LAB-58` | `LAB-WP-10` | — | `catalogue/provisional.yaml` — `LAB_<C>_MAX_AGE_US` and `LAB_<C>_RECOVERY_RUNS` for `A` and `B` of `coprime_periods`, derived by the rule of section 7, each with `status: provisional`. |
-| `[ ]` | `LAB-59` | `LAB-WP-10` | `RCT:SYS-0001` | `template/lab_sil.cpp.in::loadCalibration` — reads `LAB_<C>_RENUMBER`; absent means 0 and is never a calibration error; not a provisional value, so the generator does not write it and only a bundle variant sets it. |
-| `[ ]` | `LAB-60` | `LAB-WP-10` | `RCT:SYS-0001` | `template/lab_component.hpp.in::LabComponent::publish` — with `LAB_<C>_RENUMBER` not 0, every data output's `measurement_counter` is the control's plus that value, modulo 2³² (a break of `RCT:SYS-0001` by the component's own code, for the drill only); `refSync` and `compState` keep the control's. |
-| `[ ]` | `LAB-61` | `LAB-WP-10` | — | `catalogue/running_example.yaml` — scenario `renumber_lib`, `expect: diverges`, no `car:` block, resim case `shifted` with `config: {A: {set: {LAB_A_RENUMBER: 1}}}` (`F-RENUMBER-LIB`). |
-| `[ ]` | `LAB-62` | `LAB-WP-10` | — | `src/lab_tools/recorder.py::apply_recording_edits` — `recording:` verb `repeat_sample: [{port, counter}]`: that sample is written a second time, byte-identical, 1 ms after the original, and stated in `manifest` with the other edits. |
-| `[ ]` | `LAB-63` | `LAB-WP-10` | — | `catalogue/data_triggered.yaml` — scenario `repeat_trigger`: `recording: {repeat_sample: [{port: source.X, counter: 10}]}`, resim case `by_data` with `trigger: {T: in_X}`. |
+| `[x]` | `LAB-57` | `LAB-WP-10` | `RCT:SYS-0016` | `catalogue/coprime_periods.yaml` — source `X` 7 ms; `A` 11 ms reads `X`; `B` 13 ms reads `A` and `X`; no jitter; periods with no common divisor above 1 ms, so no stage shares a grid with another; resim cases `cut_a` (`A` measured) and `all_simulated`. |
+| `[x]` | `LAB-58` | `LAB-WP-10` | — | `catalogue/provisional.yaml` — `LAB_<C>_MAX_AGE_US` and `LAB_<C>_RECOVERY_RUNS` for `A` and `B` of `coprime_periods`, derived by the rule of section 7, each with `status: provisional`. |
+| `[x]` | `LAB-59` | `LAB-WP-10` | `RCT:SYS-0001` | `template/lab_sil.cpp.in::loadCalibration` — reads `LAB_<C>_RENUMBER`; absent means 0 and is never a calibration error; not a provisional value, so the generator does not write it and only a bundle variant sets it. |
+| `[x]` | `LAB-60` | `LAB-WP-10` | `RCT:SYS-0001` | `template/lab_component.hpp.in::LabComponent::publish` — with `LAB_<C>_RENUMBER` not 0, every data output's `measurement_counter` is the control's plus that value, modulo 2³² (a break of `RCT:SYS-0001` by the component's own code, for the drill only); `refSync` and `compState` keep the control's. |
+| `[x]` | `LAB-61` | `LAB-WP-10` | — | `catalogue/running_example.yaml` — scenario `renumber_lib`, `expect: diverges`, no `car:` block, resim case `shifted` with `config: {A: {set: {LAB_A_RENUMBER: 1}}}` (`F-RENUMBER-LIB`). |
+| `[x]` | `LAB-62` | `LAB-WP-10` | — | `src/lab_tools/recorder.py::apply_recording_edits` — `recording:` verb `repeat_sample: [{port, counter}]`: that sample is written a second time, byte-identical, 1 ms after the original, and stated in `manifest` with the other edits. |
+| `[x]` | `LAB-63` | `LAB-WP-10` | — | `catalogue/data_triggered.yaml` — scenario `repeat_trigger`: `recording: {repeat_sample: [{port: source.X, counter: 10}]}`, resim case `by_data` with `trigger: {T: in_X}`. |
+| `[x]` | `LAB-64` | `LAB-WP-11` | `RCT:SYS-0004` | `src/lab_tools/car.py::wrap_counter(n)` — `((n − 1) mod 0xFFFFFFFF) + 1`, so a counter runs 1 to `0xFFFFFFFF` and then 1, never 0. `SourceTask.next_sample` numbers its counter with it, `cycle_counter` staying equal to the counter, and `Car.run` numbers a clock-started control `wrap_counter(k + 1)`. |
+| `[x]` | `LAB-65` | `LAB-WP-11` | `RCT:SYS-0004` | `src/lab_tools/car.py::CAR_VERBS`, `parse_car_script`, `SourceTask` — the verb `counter_start: [{source, first}]`: the source's first sample carries `first`, a whole number from 1 to `0xFFFFFFFF`, and later ones follow with `LAB-64`'s wrap; an unknown source or another `first` is a `CarError` naming the scenario. |
+| `[x]` | `LAB-66` | `LAB-WP-11` | — | `catalogue/running_example.yaml` — scenario `counter_wrap` of section 6.2: `car: {counter_start: [{source: X, first: 4294967291}]}`, resim case `all_simulated`, `expect: exact`. |
+| `[x]` | `LAB-67` | `LAB-WP-11` | `RCT:SYS-0004` | `tests/test_car_counter_wrap.py` — `SYT-HDR-04` `.c2` on `counter_wrap`, and `wrap_counter` called on `0xFFFFFFFE`, `0xFFFFFFFF` and `0x100000000`, which gives `0xFFFFFFFE`, `0xFFFFFFFF` and 1. |
 
 ## 10. Open questions, decided, rejected options, parked
 
@@ -704,7 +715,7 @@ The owner's decisions of 2026-10-30, recorded as `D20` in `VANTAGE_DEV_PLAN.md`.
 - `Q-L5` — the component description stays inside the topology file (`D20` (3)).
 - `Q-L6` — `LAB_<C>_HANG_AFTER_RUNS` and `LAB_<C>_CRASH_AFTER_RUNS` are kept (`D20` (3)).
 - `Q-L7` — maximum input age and recovery runs have no code default; provisional calibration values, the generator refuses a component without them (`D20` (2)).
-- `Q-L8` — the seven scenario verbs of section 5.5, a closed list (`D20` (3)).
+- `Q-L8` — the scenario verbs of section 5.5, a closed list (`D20` (3)); amended 2026-10-31: eight verbs (`D20 (3)`).
 - `Q-L9` — the provisional values of section 7, for the lab's tests only (`D20` (3)).
 - `Q-L4` — closed by the RCT recording contract C6 (`D22`, 2026-10-31): the conventions are `RCT_Architecture.md` §6a, and the recorder writes through the `interfaces` writer (`LAB-WP-09`).
 

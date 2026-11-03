@@ -596,8 +596,6 @@ TEST_F(MutateFixture, UtMut11ADeclaredOverrideAppliesThroughARealRunnerCycleWith
   objects_port.kind = "data";
   objects_port.proto_type = "mutate_test.TestPort";
   objects_port.record = "full";
-  objects_port.sampling = "latest";
-  objects_port.on_missing = "hold";
 
   SpecPort meas_port = objects_port;
   meas_port.dir = "pro";
@@ -615,14 +613,13 @@ TEST_F(MutateFixture, UtMut11ADeclaredOverrideAppliesThroughARealRunnerCycleWith
   SpecStage sut;
   sut.name = "sut";
   sut.mode = "simulate";
+  sut.clock_period_ns = 10'000'000;
   sut.ports = {sut_port};
   sut.inputs = {from_meas};
 
   RunSpec spec;
   spec.run_id = "ut-mut-11";
-  spec.grid_step_ns = 10'000'000;
   spec.stages = {meas, sut};
-  spec.order = {"meas", "sut"};
 
   // The declared override: `meas.objects.x := 42.0` -- the same address
   // shape a real Resolved Run Spec's `mutations[]` carries.
@@ -646,12 +643,11 @@ TEST_F(MutateFixture, UtMut11ADeclaredOverrideAppliesThroughARealRunnerCycleWith
   recorded_message.payload = Encode(*recorded_port);
 
   Ut11Reader reader({recorded_message}, {{topic, topic_info}});
-  scheduler::Scheduler sched(spec);
   bus::PortBus bus;
   CapturingWriter sink;
   io::WriterBase writer_base(sink);
 
-  auto constructed = runner::Runner::Construct(spec, sched, bus, reader, {{"sut", &component}}, &writer_base, &mutator);
+  auto constructed = runner::Runner::Construct(spec, bus, {&reader}, {{"sut", &component}}, nullptr, &writer_base, &mutator);
   ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
   runner::Runner run = std::move(constructed).value();
   Result<bool> step = run.StepOnce();

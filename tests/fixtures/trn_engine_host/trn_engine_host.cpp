@@ -109,7 +109,6 @@ class NullWriter final : public simcore::io::Writer {
 simcore::RunSpec MakeSpec() {
   simcore::RunSpec spec;
   spec.run_id = "20260824T000000Z-it-trn-05";
-  spec.grid_step_ns = kDtNs;
 
   auto make_port = [](const std::string& name, const std::string& dir) {
     simcore::SpecPort port;
@@ -118,8 +117,6 @@ simcore::RunSpec MakeSpec() {
     port.kind = "data";
     port.proto_type = "test.Bytes";
     port.record = "full";
-    port.sampling = "latest";
-    port.on_missing = "hold";
     return port;
   };
 
@@ -131,6 +128,7 @@ simcore::RunSpec MakeSpec() {
   simcore::SpecStage sut;
   sut.name = "sut";
   sut.mode = "simulate";
+  sut.clock_period_ns = kDtNs;  // one run per recorded instant
   sut.ports.push_back(make_port("objects", "req"));
   sut.ports.push_back(make_port("outputs", "pro"));
   simcore::SpecInput from_measured;
@@ -140,7 +138,6 @@ simcore::RunSpec MakeSpec() {
   sut.inputs.push_back(from_measured);
 
   spec.stages = {measured, sut};
-  spec.order = {"meas", "sut"};
   return spec;
 }
 
@@ -191,7 +188,6 @@ int main(int argc, char** argv) {
 
   simcore::RunSpec spec = MakeSpec();
   VectorReader reader(MakeRecording(cycles), MakeTopics());
-  simcore::scheduler::Scheduler scheduler(spec);
   simcore::bus::PortBus bus;
   NullWriter sink;
   simcore::io::WriterBase writer_base(sink);
@@ -200,7 +196,7 @@ int main(int argc, char** argv) {
       shm_name, simcore::transport::SharedMemoryTransport::Role::kEngine, /*depth=*/64);
 
   auto constructed =
-      simcore::runner::Runner::Construct(spec, scheduler, bus, reader, {{"sut", &component}}, &writer_base);
+      simcore::runner::Runner::Construct(spec, bus, {&reader}, {{"sut", &component}}, nullptr, &writer_base);
   if (!constructed.ok()) {
     std::cerr << "Runner::Construct failed: " << constructed.error().Format() << "\n";
     return 1;

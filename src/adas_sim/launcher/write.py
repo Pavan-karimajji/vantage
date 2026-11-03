@@ -23,7 +23,7 @@ import os
 from pathlib import Path
 
 from adas_sim.config.roundtrip import dump
-from adas_sim.graph.pipeline import Pipeline
+from adas_sim.graph.pipeline import Pipeline, stage_setup_doc
 from adas_sim.graph.waiver import Waiver
 from adas_sim.launcher.classify import LaunchBlocked, classify
 from adas_sim.launcher.model import Selection
@@ -54,11 +54,14 @@ def to_run_config(selection: Selection, path: Path) -> Path:
                 "name": s.name, "mode": s.mode,
                 **({"impl": s.impl} if s.impl is not None else {}),
                 "inputs": dict(s.inputs),
+                **stage_setup_doc(s),
             }
             for s in pipeline.stages
         ],
         "project": selection.project,
     }
+    if pipeline.run_setup:
+        data["run_setup"] = dict(pipeline.run_setup)
     if selection.selected_recording is not None:
         data["recording"] = _relative(selection.selected_recording, to=path.parent)
     if selection.config is not None:

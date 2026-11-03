@@ -3,58 +3,46 @@
 // COMPONENT: SIM
 /// @file
 /// @brief
-///   `SI-06` -- `runner` (`WP-13`): the cycle loop. ONE loop, constructed
-///   from the Resolved Run Spec (`SW-0109`); `Run()` reaches the run only
-///   through `StepOnce()`, so a stepped run and a continuous one cannot
-///   diverge (`ANL-SW-17`).
+///   `SI-06` -- `runner`: the step loop. ONE loop, constructed from the run
+///   setup (`SW-0109`); `Run()` reaches the run only through `StepOnce()`, so a
+///   stepped run and a continuous one cannot diverge (`ANL-SW-17`).
 ///
-///   **Ported from `sil_host/src/resim_runner.cpp::RunResim` and
-///   `adas_sim/core/resim.py::resim_pipeline`** -- the two existing,
-///   working twins of this loop (`SW-0109`'s own `DONE.TWICE`), read
-///   directly rather than reinvented, exactly the discipline `WP-09`/
-///   `WP-10`/`WP-11` used. **The accumulation is deliberately NOT
-///   ported:** both sources materialise the whole recording
-///   (`RecordingReader::ticks()`, `list(reader.messages())`) and the whole
-///   result (`TickOutputs`, `results.append`), which is the defect
-///   `SW-0025`/`SW-0041` and `io.hpp`'s streaming contract exist to fix.
-///   This runner holds at most one cycle's messages plus one `io::Batch`
-///   at a time, and hands every produced message to `io::WriterBase` as it
-///   is produced.
+///   **VANTAGE `c1` (`WP-05`, `IMP-0024`, `IMP-0026`..`IMP-0031`).** The cycle
+///   loop of `sil_host`/`resim.py`, which grouped a recording by `log_time_ns`
+///   and ran every stage on a grid, is gone with `Scheduler`. `StepOnce` is one
+///   engine step (`ARCH §7`): `Orchestrator::BeginStep`; per rank
+///   `NextRunnable`, `RunStage` for each ticket, `Commit`; until `EndStep`. The
+///   runner never decides when a run happens or in which order: it reads the
+///   recording ahead (`ReadAhead`), selects a run's inputs (`SelectInputs`,
+///   `RCT:IMP-0033`), builds its control message (`ControlWriter`,
+///   `RCT:IMP-0032`), calls the component (`RunStage`) and reports the outputs
+///   for commit.
 ///
-///   **Honestly out of scope this slice** (named rather than discovered by
-///   failing):
-///   1. **Cycle grouping is by `log_time_ns`**, the same key both ported
-///      sources use -- NOT `bus::CycleReconstructor`'s recovery ladder.
-///      `WP-08`'s own plan row already names the wire-level decode that
-///      would feed the ladder (`t_source_ns`/`counter` out of raw payload
-///      bytes) as a follow-on it did not attempt; without it the ladder has
-///      nothing above rung 4 to select on, so wiring it here would change
-///      the mechanism without changing the answer. Closed by that decode
-///      landing.
-///   2. **`informational_only` (`IMP-0117`) is set on the model, not yet on
-///      the wire.** `io::RawMessage` carries the flag (beside `translated`,
-///      the existing per-message producer-set bool) and every message the
-///      runner writes carries it, which is what makes "per message, not per
-///      file" real for anything reading through the model. Persisting it
-///      through the `.mcap` codec needs a per-message metadata slot mcap
-///      does not have; that is a codec design decision (`SI-01`), not a
-///      runner one. Closed by a codec-level carrier being designed.
-///   3. **The slice's cost claim (`ANL-SW-26`) is not measured**, because
-///      the byte counter it asserts against is `IMP-0135` (`WP-15`,
-///      `cost.cpp`, not started) and offset-based `Reader::Seek` is
-///      `IMP-0030` (`WP-17`, `index.cpp`, not started). `Slice` seeks
-///      through the EXISTING `Reader::Seek` primitive and stops at the
-///      slice end -- correct, and re-assertable against the counter the
-///      day it exists, with no change here.
+///   **`WP-07` (`IMP-0034`..`IMP-0036`, `ARCH §8`).** With `RunnerOptions::threads`
+///   above 1, the tickets of one rank that have no wiring between them and
+///   come from different library paths call `Component::Exec` on worker
+///   threads; everything else stays on the orchestrator's thread, in stage
+///   declaration order.
+///
+///   Named gaps, closed by a later package: the live measurement
+///   writer (`8b`; `SetLiveMeasurement` takes a sink the writer will fill),
+///   `informational_only` on the wire (the `.mcap` codec has no per-message
+///   slot, `SI-01`).
 /// @author Pavan Karimajji
 
 #pragma once
 
 #include <chrono>
 #include <cstdint>
+#include <deque>
 #include <filesystem>
+#include <functional>
+#include <iosfwd>
+#include <limits>
 #include <map>
+#include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -64,9 +52,14 @@
 #include "simcore/io.hpp"
 #include "simcore/module_host.hpp"
 #include "simcore/mutate.hpp"
+#include "simcore/orchestrator.hpp"
 #include "simcore/runspec.hpp"
-#include "simcore/scheduler.hpp"
 #include "simcore/transport_publisher.hpp"
+
+namespace google::protobuf {
+class Descriptor;
+class DescriptorPool;
+}  // namespace google::protobuf
 
 namespace simcore::runner {
 
@@ -119,6 +112,16 @@ struct Divergence {
   std::size_t recorded_bytes = 0;
 };
 
+// `IMP-0032` (`WP-06`, `ARCH` section 7 *Where equal outputs apply*): whether a
+// simulated output equals the recorded one. Both payloads' `sig_header`
+// `cycle_counter` is taken as 0 before comparing; a `refSync` is compared only
+// on each entry's `measurement_counter` and `source_timestamp_us`; every other
+// byte is compared exactly. Read by reflection on `descriptor`, as the bus reads
+// headers; a null descriptor, or a payload that does not parse, is compared as
+// bytes.
+bool EqualOutputs(const std::vector<std::uint8_t>& simulated, const std::vector<std::uint8_t>& recorded,
+                  const google::protobuf::Descriptor* descriptor);
+
 // No grace by default: the honest default is that everything from the
 // divergence tick onward is informational. A non-zero window is a
 // deliberate, configured relaxation, never something a caller gets by
@@ -129,22 +132,24 @@ class DivergenceLatch {
  public:
   explicit DivergenceLatch(std::uint64_t grace_ticks = kDefaultGraceTicks) : grace_ticks_(grace_ticks) {}
 
-  // SW-0116: compares one simulated port's bytes against the recording's
-  // bytes for the SAME port at the SAME tick. Latches the first difference
-  // and never re-triggers -- a later tick going back into agreement does
-  // not clear it, and a second, different divergence never replaces the
-  // first (which is what makes the reported tick identical across re-runs).
+  // SW-0116, `IMP-0033`: compares one simulated port's payload against the
+  // recording's for the SAME port at the SAME step, through `EqualOutputs`
+  // (`descriptor` null: bytes). The caller never offers a RESTART run. Latches
+  // the first difference and never re-triggers -- a later step going back into
+  // agreement does not clear it, and a second, different divergence never
+  // replaces the first (which is what makes the reported step identical across
+  // re-runs). A divergence is information: nothing here changes a run's outcome.
   //
-  // **Byte equality, deliberately** (`WP-13`'s own named scope boundary):
+  // The magnitude is bytes, deliberately (`WP-13`'s own named scope boundary):
   // `SW-0116`'s Accept asks for "the magnitude", and a NUMERIC magnitude
   // beyond a declared per-field band needs a per-component tolerance table
   // (`R-SIM-24`, `modules/<name>/sim/tolerance.yaml`) that nothing in this
   // repo emits yet, plus protobuf reflection to read the field. Byte
   // difference is a real, falsifiable magnitude today; the field-level band
   // is closed by `tolerance.yaml` becoming real data.
-  void Observe(std::uint64_t tick_index, std::int64_t log_time_ns, const std::string& stage,
-               const std::string& port, const std::vector<std::uint8_t>& simulated,
-               const std::vector<std::uint8_t>& recorded);
+  void Observe(std::uint64_t step, std::int64_t log_time_ns, const std::string& stage, const std::string& port,
+               const std::vector<std::uint8_t>& simulated, const std::vector<std::uint8_t>& recorded,
+               const google::protobuf::Descriptor* descriptor = nullptr);
 
   bool latched() const { return first_.has_value(); }
   const std::optional<Divergence>& first() const { return first_; }
@@ -399,6 +404,272 @@ bool MutationTouches(const RunSpec& spec, const std::string& stage, const std::s
 std::string RecordedTopicFor(
     const RunSpec& spec, const std::string& stage, const std::string& port, const std::string& dir);
 
+// ---------------------------------------------------------------------------
+// read_ahead.cpp -- IMP-0026 (WP-05)
+// ---------------------------------------------------------------------------
+
+// One recorded message read ahead, with the port its topic names and the
+// index of the `sources[]` file it came from.
+struct AheadMessage {
+  std::string port;  // "<producer>.<port>"
+  std::size_t source_index = 0;
+  io::RawMessage message;
+};
+
+// All the messages of one reception time, `sources[]` order then file order.
+struct AheadInstant {
+  std::int64_t time_ns = 0;
+  std::vector<AheadMessage> messages;
+};
+
+// `IMP-0026`: every `sources[]` file read through `io::Reader::ReadRange`,
+// merged by reception time then `sources[]` order, as far as the readiness
+// limit past the instant being processed, and for a run's refSync (`D27`) to
+// its stage's next recorded `control`. `Find` searches by
+// `measurement_counter`; the time rule never calls it.
+class ReadAhead {
+ public:
+  // `bounds` bounds ONE `ReadRange` batch; all zeros reads a default batch.
+  explicit ReadAhead(std::vector<io::Reader*> readers, io::ReadBounds bounds = io::ReadBounds{});
+
+  // Bytes read before the counter was attached are reported to it at once.
+  void SetByteCounter(diagnostics::ByteCounter* byte_counter);
+
+  // Reads until `instants` + 1 distinct reception times are held (the last may
+  // be incomplete) or every reader is drained.
+  void Fill(std::size_t instants);
+
+  // True once every reader has nothing more to deliver.
+  bool Drained() const { return drained_; }
+  bool Empty() const { return instants_.empty(); }
+  std::size_t Instants() const { return instants_.size(); }
+  // The first instant holds all its messages: a later instant was seen, or
+  // nothing more will come.
+  bool FrontComplete() const { return !instants_.empty() && (instants_.size() > 1 || drained_); }
+  const AheadInstant* Front() const { return instants_.empty() ? nullptr : &instants_.front(); }
+  AheadInstant TakeFront();
+
+  // The message on `port` whose `measurement_counter` is `counter`, read with
+  // `descriptor`; null when none is held. Counters are compared only by
+  // `counterDistance` (`RCT:SYS-0005`).
+  // Only the instants `Fill` was asked for are searched (the readiness limit), however far
+  // `SearchRefSync` has read since.
+  const AheadMessage* Find(const std::string& port, std::uint32_t counter,
+                           const google::protobuf::Descriptor* descriptor) const;
+  // `D27`: the message on `ref_sync_port` whose `measurement_counter` is `counter`, searched past the
+  // readiness limit -- reading further as needed -- until the first message on `control_port` whose
+  // counter is another one, or the end of the recording. Null when the control comes first.
+  const AheadMessage* SearchRefSync(const std::string& ref_sync_port, std::uint32_t counter,
+                                    const google::protobuf::Descriptor* ref_sync_descriptor,
+                                    const std::string& control_port,
+                                    const google::protobuf::Descriptor* control_descriptor);
+  // Every held message on `port` within the instants `Fill` was asked for, oldest first.
+  std::vector<const AheadMessage*> OnPort(const std::string& port) const;
+
+  // Drops everything held, seeks every reader to `to_ns`, and skips what a
+  // codec without a real `Seek` still delivers before it.
+  void Seek(std::int64_t to_ns);
+  // Drops everything held and reads no more (the slice end).
+  void Stop();
+
+  // The reception time of the first and of the latest message read.
+  std::optional<std::int64_t> FirstTimeNs() const { return first_time_ns_; }
+  std::optional<std::int64_t> LastTimeNs() const { return last_time_ns_; }
+
+ private:
+  void Refill(std::size_t reader);
+  // Reads until `instants` + 1 distinct reception times are held; `Fill` is this plus the extent it records.
+  void ReadUntil(std::size_t instants);
+
+  std::vector<io::Reader*> readers_;
+  io::ReadBounds bounds_;
+  diagnostics::ByteCounter* byte_counter_ = nullptr;
+  std::map<std::string, std::size_t> read_before_counter_;
+  std::vector<std::deque<io::RawMessage>> carry_;
+  std::vector<bool> reader_drained_;
+  std::deque<AheadInstant> instants_;
+  // How many instants `Find` and `OnPort` search: what the last `Fill` asked for, so that reading further for a
+  // refSync (`D27`) never widens the look-up of a sample.
+  std::size_t search_extent_ = std::numeric_limits<std::size_t>::max();
+  bool drained_ = false;
+  std::optional<std::int64_t> floor_ns_;
+  std::optional<std::int64_t> first_time_ns_;
+  std::optional<std::int64_t> last_time_ns_;
+};
+
+// The recorded messages of the ports a `simulate` stage re-produces
+// (`refSync`, `compState`, data outputs), kept to select inputs by the
+// recorded refSync and to compare simulated outputs with. They never enter the
+// sample buffers: the buffers hold what the engine itself produced.
+class RecordedReference {
+ public:
+  void Declare(const std::string& port, std::size_t depth, const google::protobuf::Descriptor* descriptor);
+  bool Declared(const std::string& port) const { return held_.count(port) != 0; }
+  void Add(const std::string& port, std::int64_t time_ns, const std::vector<std::uint8_t>& payload);
+  // The newest held payload on `port` with this `measurement_counter`.
+  // `time_ns`, when given, receives the payload's reception time (`IMP-0065`).
+  const std::vector<std::uint8_t>* Find(const std::string& port, std::uint32_t counter,
+                                        std::int64_t* time_ns = nullptr) const;
+  void Clear();
+
+ private:
+  struct Held {
+    std::int64_t time_ns = 0;
+    std::vector<std::uint8_t> payload;
+    bus::Unknown<std::uint32_t> counter;
+  };
+  struct Port {
+    std::size_t depth = 1;
+    const google::protobuf::Descriptor* descriptor = nullptr;
+    std::deque<Held> held;
+  };
+  std::map<std::string, Port> held_;
+};
+
+// ---------------------------------------------------------------------------
+// select_inputs.cpp -- RCT:IMP-0033 (WP-05)
+// ---------------------------------------------------------------------------
+
+// One declared data input of a stage, as the runner hands it over.
+struct InputSelection {
+  std::string port;           // the stage's input name
+  std::string producer_port;  // "<producer>.<port>"; empty when the input is unwired
+  bool offered = true;        // false: nothing is handed over for this input
+  std::optional<bus::Sample> sample;  // empty: an empty input
+  bool fallback = false;           // KIND_FALLBACK
+  bool readiness_timeout = false;  // KIND_READINESS_TIMEOUT
+  bool eviction_miss = false;      // the wanted sample may have been evicted
+  // The counter fallback's numbers (`D18 (1)`); `beyond_gap` when the best
+  // sample was too far and the time rule picked instead.
+  bool beyond_gap = false;
+  std::optional<std::int64_t> wanted;
+  std::optional<std::int64_t> found;
+  std::optional<std::int64_t> gap;
+};
+
+struct Selection {
+  std::vector<InputSelection> inputs;  // manifest order
+  // A named sample from a `simulate` producer is not committed yet: the
+  // orchestrator parks the ticket (`ARCH §6` rule 5).
+  bool not_ready = false;
+  std::string waiting_on;  // the producer port
+};
+
+// A recorded `control` of a stage as it arrived: its counter and reception time. The runner keeps these per stage beside
+// the stage's sample buffer, which holds only `buffer_depth` samples (`IMP-0065`).
+struct ControlArrival {
+  std::uint32_t counter = 0;
+  std::int64_t arrival_ns = 0;
+};
+
+struct SelectContext {
+  const RunSpec* spec = nullptr;
+  const SpecStage* stage = nullptr;
+  const bus::PortBus* bus = nullptr;
+  const RecordedReference* reference = nullptr;
+  ReadAhead* ahead = nullptr;  // read further for a run's refSync (`D27`), nothing else
+  // The recording holds a `<stage>.control` topic: the refSync search stops at the stage's next control (`D27`);
+  // otherwise at the readiness limit.
+  bool control_recorded = false;
+  // The stage's recorded controls that have arrived, oldest first (`IMP-0065`); null when the stage has none.
+  const std::deque<ControlArrival>* controls = nullptr;
+  const std::map<std::string, bus::Origin>* origins = nullptr;
+  std::int64_t fallback_max_gap = 0;
+  std::int64_t now_ns = 0;
+  std::uint64_t step = 0;
+};
+
+// `ARCH §6`: runs when a ticket is dispatched, for every declared data input
+// of the stage in manifest order. `header` is the control's: the recorded
+// refSync entry is the one whose `measurement_counter` equals it. A pure
+// function of the buffers, the read-ahead and the ticket: it logs and raises
+// nothing; the caller does, from the fields of `Selection`.
+Selection SelectInputs(const SelectContext& context, const orchestrator::Ticket& ticket,
+                       const orchestrator::ControlHeader& header);
+
+// ---------------------------------------------------------------------------
+// run_stage.cpp -- IMP-0027 (WP-05)
+// ---------------------------------------------------------------------------
+
+using ExecFn = std::function<Result<module_host::PortMap>(std::int64_t dt_ns, const module_host::PortMap& inputs,
+                                                          const module_host::InputMetaMap& input_meta)>;
+
+struct RunStageArgs {
+  const SpecStage* stage = nullptr;
+  const orchestrator::Ticket* ticket = nullptr;
+  const Selection* selection = nullptr;
+  std::vector<std::uint8_t> control;  // empty: the stage declares no `control` input
+  const bus::PortBus* bus = nullptr;  // the descriptors of the stage's outputs
+  const mutate::Mutator* mutator = nullptr;
+  std::int64_t now_ns = 0;
+  std::int64_t dt_ns = 0;  // simulation time since this stage's previous run; 0 for its first
+  // The control's `measurement_counter`; empty when unknown.
+  std::optional<std::uint32_t> control_counter;
+};
+
+struct RunStageResult {
+  orchestrator::CommitReport report;                   // the stage's updated outputs, for `Commit`
+  std::map<std::string, bus::PortValue> delivered;     // "<stage>.<port>" -> exactly what the component was handed
+  std::vector<orchestrator::LogEntry> entries;         // `output_counter_break` (step left for the caller to fill)
+};
+
+// `IMP-0027`: builds the port set from the control and the selection (an
+// input with no sample is handed over empty, an unwired input is not offered),
+// applies the declared overrides, calls `exec`, and reports each output whose
+// `measurement_counter` differs from the control's. Never retries: an error
+// from `exec` is returned as it came.
+Result<RunStageResult> RunStage(const RunStageArgs& args, const ExecFn& exec);
+
+// `IMP-0035`: `RunStage` in its two halves, so a worker thread can make the one
+// call in the middle. `PrepareRun` builds the port set (copies of the selected
+// samples) and applies the overrides; `FinishRun` takes what `exec` returned.
+// Both run on the orchestrator's thread; `RunStage` is these two around `exec`.
+struct PreparedRun {
+  module_host::PortMap inputs;
+  module_host::InputMetaMap input_meta;
+  std::map<std::string, bus::PortValue> delivered;  // "<stage>.<port>" -> exactly what the component is handed
+};
+
+Result<PreparedRun> PrepareRun(const RunStageArgs& args);
+Result<RunStageResult> FinishRun(const RunStageArgs& args, PreparedRun&& prepared,
+                                 const module_host::PortMap& executed);
+
+// ---------------------------------------------------------------------------
+// The step tap (IMP-0030)
+// ---------------------------------------------------------------------------
+
+enum class BadgeKind { kFallback, kReadinessTimeout, kIdentityBroken, kComputedNotConsumed, kWarmingUp };
+
+// `MeasBadge.Kind`'s names: `KIND_FALLBACK` and so on.
+const char* ToString(BadgeKind kind);
+
+struct StepBadge {
+  BadgeKind kind = BadgeKind::kFallback;
+  std::string subject;       // the stage or port it is about
+  std::uint64_t count = 0;   // since the engine run started
+};
+
+struct StepValue {
+  std::string port;
+  const std::vector<std::uint8_t>* payload = nullptr;  // valid during the call
+  bus::Origin origin = bus::Origin::Unknown;
+  std::optional<std::int64_t> age_ns;
+};
+
+struct StepReport {
+  std::uint64_t step = 0;
+  std::int64_t sim_time_ns = 0;
+  std::vector<StepValue> values;   // every declared port with a sample
+  std::vector<StepBadge> badges;   // every badge with a count above 0
+};
+
+// What the live measurement writer's `liveMeasStep` call fills (`ARCH §10.1`).
+class LiveMeasSink {
+ public:
+  virtual ~LiveMeasSink() = default;
+  virtual void OnStep(const StepReport& report) = 0;
+};
+
 // Declared OUTSIDE `Runner` (and aliased back in as `Runner::Options`)
 // because a nested class's default member initialisers are not complete
 // until its enclosing class is, so `Options options = Options{}` as a
@@ -413,105 +684,135 @@ struct RunnerOptions {
   Slice slice;
   std::uint64_t grace_ticks = kDefaultGraceTicks;
   std::optional<std::chrono::milliseconds> exec_timeout;
+  // `IMP-0034`: how many worker threads may call `Component::Exec` side by
+  // side (`ARCH §8`). 1 calls every component on the orchestrator's thread.
+  // Set only from `--threads`, never from the run setup.
+  int threads = 1;
+  // `Construct` prints `PlanText` here when set. `simEngineCreate` prints it
+  // itself, before any library loads.
+  std::ostream* plan_out = nullptr;
+};
+
+// `IMP-0028`: what is decided from the run setup and the recording's topic
+// index alone, before any library loads.
+struct PreflightResult {
+  orchestrator::Graph graph;
+  std::string plan_text;  // `PlanText`
 };
 
 class Runner {
  public:
   using Options = RunnerOptions;
 
+  // `IMP-0028`: builds the graph and the ranks, checks every `simulate` stage
+  // has exactly one start (`BuildGraph`), and refuses a `measured` stage
+  // whose outputs the topic index lacks, naming the stage and the ports. A
+  // pure function: it loads nothing and opens nothing.
+  static Result<PreflightResult> Preflight(const RunSpec& spec, const std::set<std::string>& topic_index);
+
   // `components` is keyed by stage name and holds a NON-OWNING pointer per
-  // stage the runner may execute. A stage in `mode: "measured"` or
-  // `mode: "off"` has no entry -- `SW-0110`'s "shall not be executed" is
-  // therefore not a runtime check the loop could forget, it is the absence
-  // of anything to call. `writer` and `mutator` are both optional: a
-  // read-only resim (`check/`) has no writer, and a spec with no mutations
-  // needs no `Mutator`.
+  // `simulate` stage; a stage in `mode: "measured"` or `"off"` has none.
+  // `readers` holds one reader per `sources[]` entry, in order; together they
+  // are one recording. Every port the run publishes on is declared on `bus`
+  // here, from the setup. `pool` resolves each port's message type (a null
+  // pool, or a type it lacks, declares the port with no header).
   //
-  // `Result::Fail(Kind::Authoring)` when a `simulate` stage has no loaded
-  // component, when a `measured`/`off` stage was handed one anyway, or when
-  // a port's `record` policy string does not parse -- each naming the stage.
-  static Result<Runner> Construct(const RunSpec& spec, scheduler::Scheduler& scheduler, bus::PortBus& bus,
-                                  io::Reader& reader, std::map<std::string, module_host::Component*> components,
+  // `Result::Fail(Kind::Authoring)` for everything `Preflight` refuses, when a
+  // `simulate` stage has no loaded component, when a `measured`/`off` stage
+  // was handed one anyway, or when a record policy string does not parse.
+  static Result<Runner> Construct(const RunSpec& spec, bus::PortBus& bus, std::vector<io::Reader*> readers,
+                                  std::map<std::string, module_host::Component*> components,
+                                  const google::protobuf::DescriptorPool* pool = nullptr,
                                   io::WriterBase* writer = nullptr, const mutate::Mutator* mutator = nullptr,
                                   Options options = Options{});
 
-  Runner(Runner&&) noexcept = default;
-  Runner& operator=(Runner&&) noexcept = default;
+  Runner(Runner&&) noexcept;
+  Runner& operator=(Runner&&) noexcept;
   Runner(const Runner&) = delete;
   Runner& operator=(const Runner&) = delete;
+  ~Runner();
 
-  // Computed before tick 0: the injection boundary event and the seek to
-  // the slice start. Idempotent; `StepOnce` calls it if a caller did not.
+  // The seek to the slice start. Idempotent; `StepOnce` calls it if a caller did not.
   Result<bool> Prepare();
 
   const InjectionBoundary& Boundary() const { return boundary_; }
   const std::vector<RecordedTopic>& RecordedTopics() const { return recorded_topics_; }
-  const std::vector<std::string>& EventLog() const { return event_log_; }
+  // The `event=run_start` line (`SW-0113`); it is not an event log entry.
+  std::string BoundaryLine() const;
+  // The event log's lines so far (`orchestrator::EventLog`).
+  const std::vector<std::string>& EventLogLines() const;
 
-  // ONE cycle. `ANL-SW-17`: this is the only body that advances the run --
-  // `Run()` below calls it in a loop and contains no second copy of it, no
-  // fast path and no mode flag reaching an alternative. A grep for a second
-  // `scheduler_->Advance()` or a second `->Exec(` in
-  // `src/simcore/runner/**` is that check's mechanised form.
+  // ONE engine step (`ARCH §7`). `ANL-SW-17`: this is the only body that
+  // advances the run -- `Run()` calls it in a loop and has no second copy of
+  // it. Ok(false): no step was left to run.
   Result<bool> StepOnce();
 
-  // Drives to the end of the recording or the end of the slice, whichever
-  // comes first, by calling `StepOnce()` -- never by a second loop body.
+  // Drives to the end of the recording or the end of the slice by calling
+  // `StepOnce()` -- never by a second loop body.
   Result<RunOutcome> Run();
+
+  // `simEngineSeek`: the engine is moved to `to_ns` (`Orchestrator::Jump`).
+  Result<bool> Seek(std::int64_t to_ns);
 
   bool exhausted() const { return exhausted_; }
   const RunOutcome& outcome() const { return outcome_; }
   std::optional<Divergence> FirstDivergence() const { return latch_.first(); }
+  // `IMP-0064`: whether any output was offered to the divergence latch (a RUN run's output that met a recorded one).
+  bool OutputsCompared() const { return outputs_compared_; }
 
   void SetCheckpoint(Checkpoint* checkpoint) { checkpoint_ = checkpoint; }
 
-  // `IMP-0135`: optional, same nullable-pointer shape as `SetCheckpoint`
-  // above -- a run with no counter attached costs nothing extra. `PullCycle`
-  // is the one place bytes are read off the wire, so it is the one place
-  // `Observe` is called, once per message actually placed into a cycle.
-  void SetByteCounter(diagnostics::ByteCounter* byte_counter) { byte_counter_ = byte_counter; }
+  // `--threads N` (`IMP-0034`) for a runner already constructed; before the first step.
+  void SetThreads(int threads) { options_.threads = threads < 1 ? 1 : threads; }
 
-  // `SI-25` `transport` (`UT-TRN-*`, `WP-27`): optional, same nullable-
-  // pointer shape as `SetCheckpoint`/`SetByteCounter` above -- a run with
-  // no publisher attached costs nothing extra and behaves identically
-  // (`SW-0352`'s non-perturbing guarantee, structural here rather than
-  // tested per call). Every port value the write pass already resolves for
-  // recording is also handed to the publisher, once, same tick.
+  // `IMP-0135`: optional; `ReadAhead` is the one place bytes are read off the wire.
+  void SetByteCounter(diagnostics::ByteCounter* byte_counter);
+
+  // `SI-25` `transport`: optional; every value written this step is handed to
+  // the publisher, keyed by the step number. Retired with the live
+  // measurement writer (8b).
   void SetTransportPublisher(transport::TransportPublisher* publisher) { transport_publisher_ = publisher; }
 
+  // `IMP-0030`: the sink the live measurement writer's `liveMeasStep` call
+  // fills (`ARCH §10.1`). After each step it gets the step number, the
+  // simulation time, every port value with origin and age, and the step's
+  // badges. With no sink, nothing is built.
+  void SetLiveMeasurement(LiveMeasSink* sink) { live_sink_ = sink; }
+
  private:
-  Runner() = default;
+  Runner();
+  struct Impl;
 
-  // Streams exactly one cycle's messages -- everything sharing the lowest
-  // remaining `log_time_ns`. Never materialises more than one cycle plus
-  // whatever a single `io::Batch` carried.
-  bool PullCycle(std::map<std::string, RecordedMessage>& payloads_by_port, std::int64_t& log_time_ns);
+  void TopUp();
+  // `IMP-0035`: one ticket in three parts. `PrepareTicket` (selection, control, port set) and
+  // `FinishTicket` (event log, divergence latch, warming badge, the report) run on the
+  // orchestrator's thread; `ExecTicket` is the one call a worker makes. `worker` numbers the caller
+  // (0 on the orchestrator's thread, 0..n-1 among the workers): under an exec timeout each has its own call thread.
+  struct PendingRun;
+  void PrepareTicket(const orchestrator::Ticket& ticket, PendingRun& pending);
+  void ExecTicket(PendingRun& pending, std::size_t worker) const;
+  Result<bool> FinishTicket(PendingRun& pending, std::vector<orchestrator::CommitReport>& reports);
+  // Offers this step's values to the writer, the publisher; returns the bytes written.
+  Result<std::size_t> WriteStep(std::uint64_t step, std::int64_t now_ns);
 
-  RunSpec spec_;
-  scheduler::Scheduler* scheduler_ = nullptr;
+  std::unique_ptr<Impl> impl_;
   bus::PortBus* bus_ = nullptr;
-  io::Reader* reader_ = nullptr;
   io::WriterBase* writer_ = nullptr;
   const mutate::Mutator* mutator_ = nullptr;
   Checkpoint* checkpoint_ = nullptr;
-  diagnostics::ByteCounter* byte_counter_ = nullptr;
   transport::TransportPublisher* transport_publisher_ = nullptr;
+  LiveMeasSink* live_sink_ = nullptr;
   Options options_;
 
   std::map<std::string, module_host::Component*> components_;
-  std::vector<std::string> execute_stages_;  // simulate, and only simulate
-  std::vector<std::string> inject_stages_;   // measured, and only measured
   std::vector<RecordedTopic> recorded_topics_;
   InjectionBoundary boundary_;
   DivergenceLatch latch_;
+  bool outputs_compared_ = false;
   RunOutcome outcome_;
 
-  std::vector<io::RawMessage> carry_;  // at most one batch's leftover
-  std::vector<std::string> event_log_;
-  std::optional<std::int64_t> previous_log_time_ns_;
   bool prepared_ = false;
   bool exhausted_ = false;
-  bool reader_drained_ = false;
 };
 
 }  // namespace simcore::runner

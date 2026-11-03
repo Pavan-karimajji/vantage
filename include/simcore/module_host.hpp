@@ -61,6 +61,7 @@
 #include <filesystem>
 #include <functional>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -209,20 +210,25 @@ struct ExecResult {
 
 ExecResult RunWithTimeout(const std::function<void()>& fn, std::chrono::milliseconds timeout);
 
-// IMP-0093: `RunWithTimeout` as a configured object, new this slice --
-// `Component::Exec` carries its own per-call budget without a caller
-// re-threading a `std::chrono::milliseconds` argument through every call
-// site.
+// IMP-0093, IMP-0060: a configured budget and the caller's own call thread.
+// `Run` hands `fn` to ONE long-lived thread (started on the first call) and
+// waits for it up to the budget, so a caller that makes many calls is seen by
+// the component on one thread id, as without a timeout. Copies share that
+// thread; a caller makes its calls one at a time. On a timeout the thread is
+// abandoned (it may be inside the component's library for good) and the
+// `ExecResult` says `kTimeout`; the object makes no further call.
 class ExecTimeout {
  public:
-  explicit ExecTimeout(std::chrono::milliseconds timeout) : timeout_(timeout) {}
+  explicit ExecTimeout(std::chrono::milliseconds timeout);
 
-  ExecResult Run(const std::function<void()>& fn) const { return RunWithTimeout(fn, timeout_); }
+  ExecResult Run(const std::function<void()>& fn) const;
 
   std::chrono::milliseconds timeout() const { return timeout_; }
 
  private:
+  struct CallThread;
   std::chrono::milliseconds timeout_;
+  std::shared_ptr<CallThread> call_thread_;
 };
 
 // IMP-0088/0089: the `PortMap` <-> `AdasPortSet` marshalling
@@ -308,7 +314,10 @@ class Component {
 
   Result<bool> ReadManifest();
   void BuildOutBuffers();
-  Result<PortMap> ExecOnce(std::int64_t dt_ns, const PortMap& inputs, const InputMetaMap& input_meta);
+  // `IMP-0067`: one call's state. A timed-out call may return long after `Exec` has, so everything it touches is
+  // held here, shared between `Exec` and the task, never in `Exec`'s frame or in this `Component`.
+  struct ExecCall;
+  static Result<PortMap> RunCall(ExecCall& call);
 
   using AdasAbiVersionFn = std::int32_t (*)();
   using AdasManifestFn = std::size_t (*)(std::uint8_t*, std::size_t);
@@ -329,7 +338,7 @@ class Component {
   AdasExecFn adas_exec_fn_ = nullptr;
   AdasShutdownFn adas_shutdown_fn_ = nullptr;
 
-  std::map<std::string, PortBytes> out_buffers_;
+  std::shared_ptr<std::map<std::string, PortBytes>> out_buffers_ = std::make_shared<std::map<std::string, PortBytes>>();
 };
 
 // ---------------------------------------------------------------------------

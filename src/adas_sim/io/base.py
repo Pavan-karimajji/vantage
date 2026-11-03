@@ -488,6 +488,21 @@ def manifest_to_dict(manifest: RunManifest) -> dict:
     }
 
 
+def _record_policies_from(raw: object) -> tuple[RecordPolicyRecord, ...]:
+    """Both shapes a manifest carries them in: a list of `{port, verb, decimate_n}` (this module's own
+    `manifest_to_dict`), and the recording convention's mapping `port -> full | excluded | decimate:<n>`
+    (`RCT_Architecture.md` section 6a, what the Python writer and the engine's writer write)."""
+    if isinstance(raw, dict):
+        records = []
+        for port, text in sorted(raw.items(), key=lambda item: str(item[0])):
+            verb, _, count = str(text).partition(":")
+            records.append(RecordPolicyRecord(port=str(port), verb=verb, decimate_n=int(count) if count else 0))
+        return tuple(records)
+    return tuple(
+        RecordPolicyRecord(port=r["port"], verb=r["verb"], decimate_n=r.get("decimate_n", 0)) for r in raw
+    )
+
+
 def manifest_from_dict(data: dict) -> RunManifest:
     """The inverse of `manifest_to_dict` -- every field defaulted the same
     "degrades and says so" way `RunManifest()`'s own defaults do, so a
@@ -519,10 +534,7 @@ def manifest_from_dict(data: dict) -> RunManifest:
         OverrideRecord(stage=o["stage"], address=o["address"], verb=o["verb"], value=o.get("value"))
         for o in data.get("overrides", ())
     )
-    record_policies = tuple(
-        RecordPolicyRecord(port=r["port"], verb=r["verb"], decimate_n=r.get("decimate_n", 0))
-        for r in data.get("record_policies", ())
-    )
+    record_policies = _record_policies_from(data.get("record_policies", ()))
     faults = tuple(
         FaultRecord(
             verb=f["verb"], address=f["address"], value=f.get("value"),

@@ -5,16 +5,16 @@
 /// @brief
 ///   `SI-02` -- `bus` (design doc §5, `WP-07`'s slice of it): the eight-field
 ///   signal header, the closed `Origin` set, `Unknown<T>`, a port value's
-///   derived age, bulk-array references and the port catalogue. Cycle
-///   reconstruction (`CycleReconstructor`, `PortBus`) is `WP-08`/`WP-09` --
-///   deliberately not declared here yet (no speculative forward-declares
-///   for a class this WP does not implement).
+///   derived age, bulk-array references and the port catalogue. `WP-02`
+///   (VANTAGE): per-port sample buffers, the header read at the door and
+///   the identity checks; the old cycle reconstructor is gone (`IMP-0010`).
 /// @author Pavan Karimajji
 
 #pragma once
 
 #include <cstdint>
 #include <cstddef>
+#include <deque>
 #include <map>
 #include <optional>
  
@@ -25,6 +25,10 @@
 
 #include "simcore/errors.hpp"
 #include "simcore/runspec.hpp"
+
+namespace google::protobuf {
+class Descriptor;
+}  // namespace google::protobuf
 
 namespace simcore::bus {
 
@@ -140,26 +144,6 @@ Result<bool> CheckBulkBudget(const PortId& port, std::size_t actual_bytes);
 // (`value.cpp`) already computed; this only overrides it for `Static`.
 Unknown<std::int64_t> AgeForKind(PortKind kind, Unknown<std::int64_t> derived);
 
-// SW-0050: the recovery ladder's own order, ascending strength -- the
-// enum's declaration order IS the ladder (design skeleton's own words).
-// `SourceCycleId` is currently always demoted to a weaker rung in
-// practice: no source/format in this codebase supplies an out-of-band
-// cycle identifier yet (`OQ-01`'s own "changing the answer makes rung 1
-// inert, not wrong") -- the mechanism exists and is tested (a synthetic
-// rung-1 fixture), even though no real recording exercises it today.
-// Declared here, ahead of `PortValue`, because `SW-0052` puts it and
-// `Quality` directly on that value (`IMP-0052`, `WP-08`) -- not a side
-// report a consumer must separately query.
-enum class Rung : std::uint8_t { SourceCycleId, HeaderCounter, SourceTime, ReceptionTime };
-std::string ToString(Rung rung);
-
-// SW-0052: travels on the value, never a side report -- HeaderCounter/
-// SourceCycleId are identity markers (Exact); SourceTime is a time-based
-// inference (Derived); ReceptionTime is the weakest available proxy
-// (Approximated).
-enum class Quality : std::uint8_t { Exact, Derived, Approximated };
-std::string ToString(Quality quality);
-
 // The port value every module entry point receives.
 struct PortValue {
   PortId port;
@@ -170,8 +154,6 @@ struct PortValue {
   Unknown<std::int64_t> hold_ns;           // set by the bus when held (WP-09's own hold schedule)
   std::vector<std::uint8_t> payload;       // raw bytes; structured/lazy decode wiring lands with module_host (WP-10)
   BulkRef bulk;                            // never inlined (SW-0059)
-  Rung rung = Rung::ReceptionTime;         // SW-0052/WP-08 -- travels on the value itself
-  Quality quality = Quality::Approximated; // ditto
 
   // SW-0045: derived, never stored. Capture time when known; else the
   // hold schedule; else a genuine, known zero (just produced this tick,
@@ -180,132 +162,149 @@ struct PortValue {
   Unknown<std::int64_t> age_ns() const;
 };
 
-// One port's message, decoded far enough to carry the ladder's own
-// candidate fields. **Scope note (WP-08's own explicit first-slice
-// decision, 2026-08-21):** decoding these out of raw wire bytes via
-// protobuf reflection (the same technique the `.erg` codec already uses)
-// is a named follow-on, not this slice -- `CycleReconstructor` below
-// takes an already-decoded `PortMessage`, so the ladder/gap/repeat/
-// measured-rate logic is built and tested against real behaviour before
-// the wire-decode integration is attempted.
-struct PortMessage {
-  PortId port;
-  Unknown<std::uint64_t> source_cycle_id;  // rung 1 -- format-specific, out-of-band
-  Unknown<std::uint64_t> counter;          // rung 2 -- the signal header's own cycle counter
-  Unknown<std::int64_t> t_source_ns;       // rung 3
-  Unknown<std::int64_t> t_capture_ns;      // carried through, not itself a rung
-  std::int64_t t_recv_ns = 0;              // rung 4 -- always known (the recording envelope's own stamp)
-  std::vector<std::uint8_t> payload;
-
-  // SW-0052/IMP-0052: set by `CycleReconstructor::Ingest` for THIS message
-  // (never a later side lookup, which could drift from what actually
-  // produced it) -- `ToPortValue` below copies these straight across.
-  Rung rung = Rung::ReceptionTime;
-  Quality quality = Quality::Approximated;
-  bool is_repeat = false;
+// `WP-02` (`VANTAGE_Architecture.md` section 3.4). The four header fields
+// every sample carries, read once at the door of a port's buffer. Each is
+// `Unknown` when the message has no `sig_header` (`R-IFACE-4`: an unfilled
+// header is an explicit unknown, never a default). In the contract a 0
+// `measurement_counter` or `source_timestamp_us` means unknown, so it is read
+// as `Unknown`; a 0 `cycle_counter` or `sig_status` is a real value. The
+// counters are
+// `uint32` as on the wire and are compared only through
+// `adas::common::counterDistance` (`RCT:SYS-0005`).
+struct SignalHeader {
+  Unknown<std::uint64_t> source_timestamp_us;
+  Unknown<std::uint32_t> measurement_counter;
+  Unknown<std::uint32_t> cycle_counter;
+  Unknown<std::uint32_t> sig_status;
+  bool present = false;  // the message carried a `sig_header` that parsed
 };
 
-// SW-0052's own Accept, made concrete: the completed message's rung/
-// quality/repeat state travels onto the `PortValue` a module actually
-// receives, with no separate join back to `CycleReconstructor`.
-PortValue ToPortValue(const PortMessage& msg);
+// `IMP-0008`: reads the four fields by reflection on the field named
+// `sig_header` (found by that name only) -- the only payload read behind a
+// decision. A descriptor without the field, a message without it set, or
+// bytes that do not parse give a header with every field `Unknown`.
+SignalHeader ReadSignalHeader(const std::vector<std::uint8_t>& payload,
+                              const google::protobuf::Descriptor* descriptor);
 
-// SW-0051: a port may be forced to a WORSE rung than the ladder would
-// pick naturally; never a better one than the data can support (that is
-// an Authoring error, named at `Ingest` time).
-struct LadderFloor {
-  PortId port;
-  Rung floor = Rung::ReceptionTime;
+// One sample in a port's buffer: its header, the simulation time it arrived
+// at, and the value (the origin and payload are on it, read through
+// `origin()` and `payload()`).
+struct Sample {
+  SignalHeader sig;
+  std::int64_t arrival_ns = 0;
+  PortValue value;
+  // `IMP-0019`: the step whose commit made this sample. Empty for a recorded
+  // sample. A previous-cycle input takes only samples with a step before the
+  // reader's own.
+  std::optional<std::uint64_t> committed_step;
+
+  Origin origin() const { return value.origin; }
+  const std::vector<std::uint8_t>& payload() const { return value.payload; }
 };
 
-// SW-0053: a counter discontinuity, reported once per port per run --
-// the missing cycles are never synthesised.
-struct Gap {
-  PortId port;
-  std::uint64_t from = 0;
-  std::uint64_t to = 0;
-  std::uint64_t missed = 0;
+// What `SampleBuffer::FindByCounter` found. `eviction_miss` is true when the
+// wanted counter is older than every sample still held and this buffer has
+// already dropped samples -- the sample may have existed and been evicted.
+struct CounterLookup {
+  const Sample* sample = nullptr;
+  bool eviction_miss = false;
 };
 
-// SW-0050's own "reported with the offending pair of stamps" -- a port
-// whose source time was not monotonic, demoted for that one message.
-struct Demotion {
-  PortId port;
-  Rung from = Rung::SourceTime;
-  Rung to = Rung::ReceptionTime;
-  std::int64_t previous_t_source_ns = 0;
-  std::int64_t offending_t_source_ns = 0;
-};
-
-// SW-0055: a running mean/jitter for one port, compared against its
-// declared period. `mismatch` is true once the measured mean falls
-// outside a declared band of the declared period.
-struct RateReport {
-  bool has_data = false;
-  double mean_period_ns = 0.0;
-  double jitter_ns = 0.0;
-  bool mismatch = false;
-};
-
-// SW-0049: one reconstructed cycle carries every expected port's message
-// keyed by port name -- "multi-port input sets", never "one port each"
-// (the exact defect this class exists to fix).
-struct Cycle {
-  std::map<PortId, PortMessage> ports;
-};
-
-// SW-0049/0050/0051/0053/0054/0055/0387: the per-port recovery ladder,
-// counter-gap and repeat detection, and measured-rate tracking. Cross-
-// port grouping (SW-0049's own fix) joins messages sharing the same
-// cycle KEY -- the value the selected rung actually produced for that
-// message -- never by equality of file/reception timestamps
-// (`io/base.py::group_by_log_time`'s and `recording_reader.cpp`'s own
-// defect, ported nowhere).
-class CycleReconstructor {
+// `IMP-0006`: the last `depth` samples of one port, oldest first. Never
+// grows beyond `depth`; a push past it evicts the oldest. Counters are
+// compared only with `counterDistance`.
+class SampleBuffer {
  public:
-  CycleReconstructor(std::vector<PortId> expected_ports, std::vector<LadderFloor> floors = {});
+  // A depth below 1 is held as 1: the newest sample is what `PortBus::Get`
+  // answers with, so a buffer always keeps one.
+  explicit SampleBuffer(std::size_t depth = 1);
 
-  // Selects this message's rung/quality per the ladder (demoted if its
-  // source time is non-monotonic for this port), buckets it into the
-  // cycle sharing its key, and updates gap/repeat/rate tracking.
-  // `Result::Fail` only for SW-0051's Authoring case: a floor demanding a
-  // rung stronger than this port's data has ever supported.
-  Result<bool> Ingest(const PortMessage& msg);
+  void Push(Sample sample);
 
-  // The oldest cycle holding every expected port, in ascending key order
-  // -- `std::nullopt` while any expected port is still missing from it.
-  std::optional<Cycle> TakeCompleteCycle();
+  // The sample whose `measurement_counter` equals `counter`. A sample whose
+  // counter is unknown never matches, and a wanted 0 (unknown) finds nothing.
+  CounterLookup FindByCounter(std::uint32_t counter) const;  // counts an eviction miss, hence `mutable` below
+  // The newest sample whose counter is not after `counter`. Samples with an
+  // unknown counter are skipped; a wanted 0 (unknown) finds nothing.
+  const Sample* NewestCounterNotAfter(std::uint32_t counter) const;
+  // The newest sample that arrived at or before `time_ns` (arrival time is
+  // always known).
+  const Sample* NewestNotAfter(std::int64_t time_ns) const;
+  const Sample* Newest() const;
 
-  Rung RungUsed(const PortId& port) const;
-  Quality QualityUsed(const PortId& port) const;
-  const std::vector<Gap>& Gaps() const;
-  const std::vector<Demotion>& Demotions() const;
-  bool IsRepeat(const PortId& port) const;
-  RateReport MeasuredRate(const PortId& port, std::int64_t declared_period_ns, double band = 0.2) const;
+  std::size_t Size() const { return samples_.size(); }
+  std::size_t Depth() const { return depth_; }
+  std::size_t Evicted() const { return evicted_; }
+  std::size_t EvictionMisses() const { return eviction_misses_; }
+  const std::deque<Sample>& Samples() const { return samples_; }
+
+ private:
+  std::size_t depth_ = 1;
+  std::deque<Sample> samples_;
+  std::size_t evicted_ = 0;
+  mutable std::size_t eviction_misses_ = 0;
+};
+
+// `IMP-0009`: per port, what the two counters of a sample say against the
+// previous one (`D17 (3)`). Reported as a returned value and as counts; the
+// event log that records gaps and resets is `WP-04`'s (`IMP-0023`), and the
+// badge `KIND_IDENTITY_BROKEN` is raised from `kIdentityBroken` by whoever
+// owns the badge then.
+enum class IdentityVerdict {
+  kFirst,            // no earlier sample on this port
+  kNotComparable,    // this sample's measurement_counter is unknown: it is not judged and nothing changes
+  kOk,
+  kCounterGap,       // measurement_counter moved forward by more than one
+  kCounterReset,     // both counters went back: the sender restarted
+  kIdentityBroken,   // measurement_counter went back or repeated while cycle_counter counted up
+};
+
+struct IdentityResult {
+  IdentityVerdict verdict = IdentityVerdict::kFirst;
+  std::int32_t measurement_distance = 0;  // MeasurementCounterDistance(previous, current)
+  std::int32_t cycle_distance = 0;
+  std::uint32_t missed = 0;               // samples skipped, for kCounterGap
+};
+
+struct IdentityCounts {
+  std::size_t samples = 0;   // samples judged (known measurement_counter)
+  std::size_t unknown = 0;   // samples not judged because the measurement_counter is unknown
+  std::size_t gaps = 0;
+  std::size_t resets = 0;
+  std::size_t identity_broken = 0;
+};
+
+// `IMP-0053` (`D24`): Vantage's one distance on `measurement_counter`, in
+// samples from `from` to `to`. It is `adas::common::counterDistance` except that
+// the counter has no 0 (0 is unknown), so `0xFFFFFFFF` -> 1 is one step, not
+// two. The identity check and the counter fallback's gap both use it.
+std::int32_t MeasurementCounterDistance(std::uint32_t from, std::uint32_t to);
+
+// `IMP-0057` (`SYS-0031`): the one test for an unknown `measurement_counter`
+// (0, `RCT:SYS-0004`). There is none for `cycle_counter`: its 0 is a real value.
+bool IsUnknownMeasurementCounter(std::uint32_t counter);
+
+class IdentityTracker {
+ public:
+  // `content_differs` (`IMP-0050`): the caller knows this sample's bytes differ
+  // from those of a sample with the same `measurement_counter`. At a
+  // measurement distance of 0 that is identity broken whatever the cycle
+  // counter does (`D17 (3)`); at any other distance it changes nothing.
+  IdentityResult Observe(const PortId& port, const SignalHeader& header, bool content_differs = false);
+
+  // Zero counts for a port never observed.
+  IdentityCounts Counts(const PortId& port) const;
+  IdentityResult Last(const PortId& port) const;
 
  private:
   struct PortState {
-    Rung last_rung = Rung::ReceptionTime;
-    Quality last_quality = Quality::Approximated;
-    bool is_repeat = false;
-    Unknown<std::int64_t> last_t_source_ns;
-    Unknown<std::uint64_t> last_counter;
-    Unknown<std::uint64_t> last_freshness_counter;
-    Unknown<std::int64_t> last_freshness_source_ns;
-    Unknown<std::int64_t> last_rate_ns;
-    std::size_t rate_samples = 0;
-    double rate_sum_ns = 0.0;
-    double rate_sum_sq_ns = 0.0;
+    bool has_previous = false;
+    std::uint32_t measurement = 0;
+    std::uint32_t cycle = 0;
+    IdentityCounts counts;
+    IdentityResult last;
   };
-
-  std::vector<PortId> expected_ports_;
-  std::vector<LadderFloor> floors_;
   std::map<PortId, PortState> state_;
-  std::map<std::int64_t, Cycle> pending_;  // keyed by cycle key, ascending
-  std::vector<Gap> gaps_;
-  std::vector<Demotion> demotions_;
-
-  const LadderFloor* FindFloor(const PortId& port) const;
 };
 
 // SW-0056/0057/0058 (`WP-09`): the bus buffers, held-value cache and
@@ -318,6 +317,14 @@ class CycleReconstructor {
 // with a stage's FULL declared port set regardless of any producer's
 // due-ness or mode, so a consumer cannot tell `simulate` from `measured`
 // (R-SIM-10).
+// What the orchestrator knows about a sample the bus cannot: that its bytes
+// differ from an earlier sample of the same counter (`IMP-0050`), and the step
+// that committed it (`IMP-0019`).
+struct PublishInfo {
+  bool content_differs = false;
+  std::optional<std::uint64_t> committed_step;
+};
+
 class PortBus {
  public:
   struct BufferStats {
@@ -335,7 +342,7 @@ class PortBus {
   // bytes across every port would exceed a declared budget -- the value
   // is still stored (an over-budget Publish is a reported condition, not
   // a dropped one; the scheduler decides what to do with the refusal).
-  Result<bool> Publish(const PortId& port, PortValue value, std::int64_t now_ns);
+  Result<bool> Publish(const PortId& port, PortValue value, std::int64_t now_ns, const PublishInfo& info = PublishInfo{});
 
   // SW-0056: never absent -- a port never published returns an
   // `Origin::Unknown`, `updated=false` value naming the port, not a
@@ -345,16 +352,39 @@ class PortBus {
   // SW-0057.
   std::vector<PortValue> SetFor(const std::vector<PortId>& declared_ports, std::int64_t now_ns) const;
 
+  // `IMP-0007`: sizes the port's buffer by its `buffer_depth` and names the
+  // message type whose `sig_header` is read for every sample entering it. A
+  // null descriptor keeps the depth and reads no header. Declaring again
+  // replaces the declaration and keeps no earlier sample.
+  //
+  // Declaration is mandatory: `Publish` on a port never declared is refused
+  // (`Kind::Contract`), so no sample enters a buffer whose depth or header
+  // type nobody chose (`WP-05`).
+  void DeclarePort(const PortId& port, std::int64_t buffer_depth, const google::protobuf::Descriptor* descriptor);
+
+  // `IMP-0021`: empties every port's buffer and the identity tracker; every
+  // declaration (depth, descriptor) stays.
+  void ClearSamples();
+
+  // The descriptor a port was declared with; null for an undeclared port.
+  const google::protobuf::Descriptor* Descriptor(const PortId& port) const;
+
+  // Null for a port never declared or published.
+  const SampleBuffer* Buffer(const PortId& port) const;
+
+  const IdentityTracker& Identity() const { return identity_; }
+
   BufferStats Stats() const { return stats_; }
 
  private:
   struct Slot {
-    PortValue value;
+    SampleBuffer buffer;
+    const google::protobuf::Descriptor* descriptor = nullptr;
     std::int64_t last_produced_ns = 0;
-    bool has_value = false;
   };
 
   std::map<PortId, Slot> slots_;
+  IdentityTracker identity_;
   std::size_t byte_budget_ = 0;
   BufferStats stats_;
 };

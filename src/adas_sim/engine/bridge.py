@@ -44,17 +44,20 @@ from adas_sim.config.fault import FaultVerb
 from adas_sim.config.paths import sim_root
 from adas_sim.diagnostics.errors import EnvironmentError_, InternalError
 from adas_sim.graph.pipeline import Pipeline, _split_ref
-from adas_sim.io.base import Provenance, RunManifest, TopicInfo, group_by_log_time
-from adas_sim.plugins.registry import reader_for, writer_for
+from adas_sim.io.base import TopicInfo, group_by_log_time
+from adas_sim.plugins.registry import reader_for
 from adas_sim.resolve.component import ComponentManifest
 from adas_sim.runspec.address import resolve_address
 from adas_sim.runspec.canon import RunSpec, write_run_spec
 from adas_sim.runspec.emit import (
     RUN_SPEC_SCHEMA,
+    RunSetupValues,
     _compute_grid_step_ns,
+    _livemeas_dict,
     _port_dict,
     _record_verb_for,
-    _topological_order,
+    _require_setup_integer,
+    _trigger_for,
     unresolved,
     validate_run_spec,
 )
@@ -226,18 +229,14 @@ def _stage_impl_dict(pipeline: Pipeline, stage) -> dict:
     literal fixture `BuildAbi02RunSpecJson`'s own `meas` stage in
     `tests/integration/test_ut_abi_writer_and_resolver.cpp` uses
     (`"impl": {"kind": "dll", "path": "", ...}`)."""
-    empty = {"kind": "dll", "path": "", "pattern": "", "search": []}
+    empty = {"kind": "dll", "path": ""}
     if stage.impl is None:
         return empty
     kind, _, _stem = stage.impl.partition(":")
     lib_path = pipeline.library_paths.get(stage.name)
     if kind not in ("dll", "stubdll") or lib_path is None:
         return empty
-    return {
-        "kind": kind, "path": str(lib_path),
-        "pattern": "{stem}.dll" if lib_path.suffix == ".dll" else f"{{stem}}{lib_path.suffix}",
-        "search": [],
-    }
+    return {"kind": kind, "path": str(lib_path)}
 
 
 def _fault_mutations(faults: Sequence, *, grid_step_ns: int) -> list[dict]:
@@ -272,7 +271,8 @@ def _fault_mutations(faults: Sequence, *, grid_step_ns: int) -> list[dict]:
     AT `to_s` would stop one nanosecond early. `after_tick` (open-ended)
     becomes `[after_tick * grid_step_ns, None]` -- the same base grid
     `Pipeline._tick_index` counts against (`R-SIM-18`), already computed
-    once for this same spec's own `grid.step_ns`, never re-derived."""
+    from the stages' own periods and used only for this window -- schema 2.0
+    has no grid, so it is never written into the setup."""
     mutations: list[dict] = []
     for fault in faults:
         if fault.verb is not FaultVerb.CORRUPT:
@@ -373,8 +373,9 @@ def _ingest_for(recording_path: Path) -> dict[str, list]:
 
 
 def pipeline_to_run_spec(
-    pipeline: Pipeline, *, run_id: str, recording_path: Path, recording_sha256: str = "",
-    output_path: Path | None = None, exec_timeout_ms: int = 250, checkpoint_path: Path | None = None,
+    pipeline: Pipeline, *, run_id: str, recording_path: Path, setup_values: RunSetupValues,
+    recording_sha256: str = "", output_path: Path | None = None, exec_timeout_ms: int = 250,
+    checkpoint_path: Path | None = None,
 ) -> RunSpec:
     """Builds a Resolved Run Spec (`IF-09`) directly from an already-loaded
     `Pipeline` -- the Python-object twin of `runspec.emit.emit_run_spec`,
@@ -383,6 +384,10 @@ def pipeline_to_run_spec(
     `Pipeline`). Reuses `emit.py`'s already-proven per-port/grid/order
     helpers rather than a second implementation of them (`R-BUILD`'s
     no-second-implementation principle applied at function granularity).
+
+    `setup_values` carries the `⊘` values and the per-stage triggers no
+    pipeline file holds yet (`emit.RunSetupValues`); nothing here defaults
+    any of them (`IMP-0051`).
 
     `output_path=None` means no recording output declared -- the engine
     still runs, but nothing downstream can read results back (`SW-0013`'s
@@ -398,29 +403,30 @@ def pipeline_to_run_spec(
     manifests: dict[str, ComponentManifest] = {stage.name: pipeline.manifest_for(stage.name) for stage in pipeline.stages}
     period_ns_by_stage = {name: m.period_ns for name, m in manifests.items()}
 
-    depends_on: dict[str, set[str]] = {stage.name: set() for stage in pipeline.stages}
     stages: list[dict] = []
     for stage in pipeline.stages:
         manifest = manifests[stage.name]
         inputs: list[dict] = []
         for port, ref in stage.inputs.items():
             producer, producer_port = _split_ref(ref)
-            if producer != "source":
-                depends_on[stage.name].add(producer)
-            inputs.append({"port": port, "producer": producer, "producer_port": producer_port, "delay_steps": 0})
+            inputs.append({
+                "port": port, "producer": producer, "producer_port": producer_port,
+                "previous_cycle": f"{stage.name}.{port}" in setup_values.previous_cycle,
+            })
         ports = [
-            _port_dict(p, direction="pro", record=_record_verb_for(stage.name, p.name, {}),
-                       sampling_defaults={}, on_missing_defaults={})
+            _port_dict(p, stage=stage.name, direction="pro", record=_record_verb_for(stage.name, p.name, {}),
+                       values=setup_values)
             for p in manifest.outputs
         ] + [
-            _port_dict(p, direction="req", record=_record_verb_for(stage.name, p.name, {}),
-                       sampling_defaults={}, on_missing_defaults={})
+            _port_dict(p, stage=stage.name, direction="req", record=_record_verb_for(stage.name, p.name, {}),
+                       values=setup_values)
             for p in manifest.inputs
         ]
         stages.append({
             "name": stage.name, "mode": stage.mode,
             "impl": _stage_impl_dict(pipeline, stage),
-            "period_ns": manifest.period_ns, "abi_version": manifest.abi_version,
+            "trigger": _trigger_for(setup_values, stage.name, stage.mode),
+            "clock_period_ns": manifest.period_ns, "abi_version": manifest.abi_version,
             "config_bundle_sha256": manifest.config_bundle_sha256,
             "ports": ports, "inputs": inputs,
         })
@@ -444,23 +450,24 @@ def pipeline_to_run_spec(
     mutations.extend(_fault_mutations(pipeline.faults, grid_step_ns=grid_step_ns))
 
     outputs = {"path": str(output_path), "codec": "mcap"} if output_path is not None else {}
+    if setup_values.livemeas is not None:
+        outputs["livemeas"] = _livemeas_dict(setup_values.livemeas)
 
     data: dict[str, object] = {
         "schema": RUN_SPEC_SCHEMA,
         "run_id": run_id,
         "spec_sha256": "",
-        "grid": {"step_ns": grid_step_ns},
         "sources": [{
             "path": str(recording_path), "sha256": recording_sha256, "codec": "mcap",
             **_ingest_for(recording_path),
         }],
         "stages": stages,
         "mutations": mutations,
-        "order": list(_topological_order([s.name for s in pipeline.stages], depends_on)),
-        "coherence": {"verdict": "unknown", "stale": [], "waiver": None},
+        "coherence_verdict": "unknown",
         "outputs": outputs,
         "limits": {"exec_timeout_ms": exec_timeout_ms, "severity_exit": "error"},
-        "diagnostics": {"cycle_trace": False, "graph_dump": False},
+        "readiness_limit_steps": _require_setup_integer(setup_values.readiness_limit_steps, key="readiness_limit_steps"),
+        "fallback_max_gap": _require_setup_integer(setup_values.fallback_max_gap, key="fallback_max_gap"),
     }
     if checkpoint_path is not None:
         data["checkpoint"] = {"path": str(checkpoint_path)}
@@ -479,7 +486,7 @@ def pipeline_to_run_spec(
 
 
 def run_pipeline_via_engine(
-    pipeline: Pipeline, recording_path: Path, *, run_id: str, output_path: Path,
+    pipeline: Pipeline, recording_path: Path, *, run_id: str, output_path: Path, setup_values: RunSetupValues,
     config_path: Path | None = None, exec_timeout_ms: int = 250,
     spec_json_path: Path | None = None, simengine_path: Path | None = None, search: Sequence[Path] = (),
     checkpoint_path: Path | None = None,
@@ -491,10 +498,11 @@ def run_pipeline_via_engine(
     (`<output_path>.spec.json`) so a caller inspecting a failed run finds
     the exact spec that failed next to the (possibly partial) recording.
     `checkpoint_path` is forwarded to `pipeline_to_run_spec` unchanged --
-    `None` means no checkpointing, matching that function's own default."""
+    `None` means no checkpointing, matching that function's own default.
+    `setup_values` is forwarded unchanged too (`IMP-0051`)."""
     spec = pipeline_to_run_spec(
         pipeline, run_id=run_id, recording_path=recording_path, output_path=output_path,
-        exec_timeout_ms=exec_timeout_ms, checkpoint_path=checkpoint_path,
+        exec_timeout_ms=exec_timeout_ms, checkpoint_path=checkpoint_path, setup_values=setup_values,
     )
     spec_path = spec_json_path if spec_json_path is not None else output_path.with_suffix(output_path.suffix + ".spec.json")
     spec_sha256 = write_run_spec(spec, spec_path)
@@ -517,10 +525,9 @@ def topic_to_port_name(topic: str) -> str:
 
 
 def _port_name_to_topic(name: str) -> str:
-    """Matches `sources.recorder.topic_for`'s convention (`WP-15b` follow-on:
-    leading slash, only the first dot turned into a slash) -- this function's
-    output is compared for exact equality against `Recorder`-written topics
-    in `merge_engine_output_with_recording` below, so the two must agree."""
+    """The canonical topic spelling (`simcore`'s `PortNameToTopic`: leading slash,
+    only the first dot turned into a slash) -- the form `simcore`'s reader
+    gives every topic of a recording, whichever way the file spells it."""
     stage, sep, rest = name.partition(".")
     return f"/{stage}/{rest}" if sep else f"/{name}"
 
@@ -600,200 +607,3 @@ def decode_ticks(output_path: Path) -> list[tuple[int, dict[str, dict[str, bytes
         return results
     finally:
         reader.close()
-
-
-def merge_engine_output_with_recording(
-    pipeline: Pipeline, recording_path: Path, engine_output_path: Path, out_path: Path, *, meta: RunManifest,
-) -> None:
-    """The Python-object twin of `core.resim.resim_pipeline_merged`
-    (`S-D3`, `ST-D3-1`): a full, directly-viewable recording at `out_path`
-    -- every topic `recording_path` originally carried, passed through
-    unchanged, except each `mode: simulate` stage's own declared output
-    ports, overwritten with `engine_output_path`'s freshly-computed bytes
-    (`R-SIM-13` -- the viewer's only input is a `Session`, built from a
-    complete recording, never assembled from two files at load time).
-
-    Unlike `resim_pipeline_merged`, TICK EXECUTION already happened
-    (`simengine`, via `run_pipeline_via_engine`) -- this function only
-    merges two already-written recordings, so no Python frame runs per
-    message the engine already produced (`ANL-SW-05`)."""
-    simulate_stages = [stage for stage in pipeline.stages if stage.mode == "simulate"]
-    simulate_topics: dict[str, TopicInfo] = {}
-    for stage in simulate_stages:
-        manifest = pipeline.manifest_for(stage.name)
-        for port_spec in manifest.outputs:
-            topic = _port_name_to_topic(f"{stage.name}.{port_spec.name}")
-            simulate_topics[topic] = TopicInfo(
-                schema_name=port_spec.proto_type or f"{stage.name}.{port_spec.name}",
-                schema_bytes=manifest.descriptor_set, provenance=Provenance.SIMULATED,
-            )
-
-    src_reader = reader_for(recording_path)
-    try:
-        src_topics = src_reader.topics()
-        merged_topics = {topic: info for topic, info in src_topics.items() if topic not in simulate_topics}
-        merged_topics.update(simulate_topics)
-
-        src_messages = list(src_reader.messages())
-        capture_by_topic_time = {
-            (topic, log_time_ns): capture_time_ns for topic, log_time_ns, capture_time_ns, _payload in src_messages
-        }
-        src_groups = list(group_by_log_time(src_messages, expected_topics=src_topics.keys()))
-    finally:
-        src_reader.close()
-
-    engine_ticks = dict(decode_ticks(engine_output_path))  # t_ns -> {stage: {port: bytes}}
-
-    writer = writer_for(out_path)
-    writer.open(out_path, meta, merged_topics)
-    try:
-        for t_ns, payloads, _missing in src_groups:
-            for topic, payload in payloads.items():
-                if topic in simulate_topics:
-                    continue
-                writer.write(topic, t_ns, payload, capture_time_ns=capture_by_topic_time.get((topic, t_ns)))
-
-            outputs_by_stage = engine_ticks.get(t_ns, {})
-            for stage in simulate_stages:
-                for port_name, payload in outputs_by_stage.get(stage.name, {}).items():
-                    # Freshly computed this tick by simengine -- reception
-                    # and validity coincide, same reasoning
-                    # `resim_pipeline_merged`'s own comment gives.
-                    writer.write(_port_name_to_topic(f"{stage.name}.{port_name}"), t_ns, payload, capture_time_ns=t_ns)
-    finally:
-        writer.close()
-
-
-def run_pipeline_merged_via_engine(
-    pipeline: Pipeline, recording_path: Path, out_path: Path, *, meta: RunManifest, run_id: str,
-    config_path: Path | None = None, exec_timeout_ms: int = 250, simengine_path: Path | None = None,
-    search: Sequence[Path] = (),
-) -> EngineRunResult:
-    """The retiring Python GUI's "Run" button was rewired onto this
-    (`WP-15b`; the GUI itself, `player/shell/qt_window.py`, is deleted --
-    `SM-12`, `modules/viz/docs/VIZ_Sync_Plan_v0.1.md`): runs `pipeline`
-    through `simengine`, then merges the fresh
-    output back into a full copy of `recording_path` at `out_path` --
-    the out-of-process twin of `core.resim.resim_pipeline_merged`, same
-    contract, same caller-visible result (a complete `out_path` recording,
-    `build_session_from_recording`-loadable with no other input)."""
-    engine_output_path = out_path.with_suffix(out_path.suffix + ".engine.mcap")
-    result = run_pipeline_via_engine(
-        pipeline, recording_path, run_id=run_id, output_path=engine_output_path, config_path=config_path,
-        exec_timeout_ms=exec_timeout_ms, simengine_path=simengine_path, search=search,
-    )
-    if not result.ok:
-        return result
-    merge_engine_output_with_recording(pipeline, recording_path, engine_output_path, out_path, meta=meta)
-    return result
-
-
-def overwrite_manifest_meta(output_path: Path, meta: RunManifest) -> None:
-    """**Found live, fixed live (`WP-15b`):** `simengine`'s own writer
-    (`simcore::abi::simcore.cpp`) embeds NO `_MANIFEST_META` metadata
-    record at all today (`io.mcap.McapWriter.open`'s own `if meta.known`
-    guard never fires against anything the engine wrote) — every field
-    `runspec.manifest.build_manifest` used to populate in Python,
-    in-process, before `core/resim.py`'s own writer ran (`run_id`, host,
-    timestamps, and — `NR-SIM-24`'s own guarantee —
-    `component_build_shas`) is simply absent from a recording produced
-    through the new bridge. `verify_pinned_builds` then reports every
-    stage **unpinnable** (a real regression from the pre-`WP-15b`
-    behaviour `test_d7_pin_builds_cli.py`'s own round trip depends on,
-    not a wrong hash — the field is missing outright). Closing this
-    inside `simcore` itself (a real `MetaKind::run_manifest` writer,
-    `IMP-0038`'s own note) is `simcore`'s job, out of this Python-wiring
-    package's own scope — this function is the caller-side answer until
-    then: build a real `RunManifest` (`runspec.manifest.build_manifest`,
-    unchanged, same call `core/resim.py`'s own caller used to make) and
-    overwrite the recording's ENTIRE meta block with it, read-everything/
-    rewrite (`sim convert`'s own pattern, the same one
-    `test_d7_pin_builds_cli.py::_with_tampered_library_sha` already uses
-    for the opposite direction — writing a WRONG hash to prove refusal).
-    A targeted single-field patch was tried first and found insufficient
-    live: `RunManifest.known` gates the whole write on `manifest_version
-    > 0`, so patching only `components` into an otherwise-still-default
-    (`manifest_version=0`) meta silently wrote nothing at all — the caller
-    must supply a genuinely complete, real manifest."""
-    reader = reader_for(output_path)
-    try:
-        topics = reader.topics()
-        messages = list(reader.messages())
-    finally:
-        reader.close()
-    tmp_path = output_path.with_name(output_path.stem + ".manifesttmp" + output_path.suffix)
-    writer = writer_for(tmp_path)
-    writer.open(tmp_path, meta, topics)
-    try:
-        for topic, log_time_ns, capture_time_ns, payload in messages:
-            writer.write(topic, log_time_ns, payload, capture_time_ns=capture_time_ns)
-    finally:
-        writer.close()
-    tmp_path.replace(output_path)
-
-
-def backfill_schema_bytes(output_path: Path, pipeline: Pipeline) -> None:
-    """**Found live, fixed live, 2026-08-26 (`SM-12`'s own `E2E-07` item
-    8):** `simcore::abi::BuildOutputTopics` (`simcore.cpp`) sets every
-    topic's `schema_name` from `RunSpec`'s own `proto_type` but never its
-    `schema_bytes` — a real `FileDescriptorSet` is only available AFTER a
-    component loads, and `Writer::Open` must run before that (that
-    function's own comment states this explicitly; not an oversight).
-    `.mcap`'s `arbitrary_topics` capability degrades this to a
-    schema-less registration, so the recording is still fully readable —
-    but `PortValue.message`'s own lazy decode (`session/tick.py`) then
-    degrades too (`decode_message`'s documented `if not schema_bytes:
-    return payload`), and nothing downstream expected raw bytes back: a
-    real component's own layer provider, found live against a real
-    output port, calls `.message` assuming a parsed protobuf object
-    always comes back.
-
-    Same read-everything/rewrite pattern `overwrite_manifest_meta`
-    (immediately above) already uses, run as its own separate pass
-    (kept independent rather than folded into that function's own
-    signature, since it needs `pipeline` — a different input, for a
-    different, unrelated field): for every topic whose `TopicInfo`
-    carries a `schema_name` but empty `schema_bytes`, find which stage
-    produced it (`topic_to_port_name`'s own qualified form, split on the
-    first `.`) and patch in that stage's own already-loaded
-    `ComponentManifest.descriptor_set` — the real bytes `simcore` could
-    not reach at write time but `pipeline` (built for provenance checks,
-    never `init_components`'d or `exec()`'d, `cli/resim.py`'s own note)
-    already has, cheaply, with no engine re-run. A topic naming a stage
-    this pipeline does not declare (should not occur for anything
-    `simengine` itself wrote) is left unpatched rather than raising —
-    this function only ever adds information, never required to
-    succeed for every topic to be worth running once."""
-    reader = reader_for(output_path)
-    try:
-        meta = reader.meta()
-        topics = dict(reader.topics())
-        messages = list(reader.messages())
-    finally:
-        reader.close()
-
-    stage_names = {stage.name for stage in pipeline.stages}
-    patched = False
-    for topic, info in list(topics.items()):
-        if info.schema_bytes or not info.schema_name:
-            continue
-        stage_name, sep, _port = topic_to_port_name(topic).partition(".")
-        if not sep or stage_name not in stage_names:
-            continue
-        descriptor_set = pipeline.manifest_for(stage_name).descriptor_set
-        if not descriptor_set:
-            continue
-        topics[topic] = replace(info, schema_bytes=descriptor_set)
-        patched = True
-    if not patched:
-        return  # nothing to do -- every topic already had real bytes or none to source
-
-    tmp_path = output_path.with_name(output_path.stem + ".schematmp" + output_path.suffix)
-    writer = writer_for(tmp_path)
-    writer.open(tmp_path, meta, topics)
-    try:
-        for topic, log_time_ns, capture_time_ns, payload in messages:
-            writer.write(topic, log_time_ns, payload, capture_time_ns=capture_time_ns)
-    finally:
-        writer.close()
-    tmp_path.replace(output_path)

@@ -80,7 +80,9 @@ def test_launch_reaches_a_real_run_only_through_the_written_path(tmp_path, monke
 def _write_pipeline_file(tmp_path: Path) -> Path:
     path = tmp_path / "base_pipeline.yaml"
     path.write_text(
-        "name: launcher_it21\nstages:\n  - name: sut\n    mode: simulate\n    impl: dll:echo_stub\n    inputs: {}\n",
+        "name: launcher_it21\nrun_setup:\n  readiness_limit_steps: 8\n  fallback_max_gap: 6\nstages:\n"
+        "  - name: sut\n    mode: simulate\n    impl: dll:echo_stub\n    inputs: {}\n"
+        "    trigger: ''\n    buffer_depth: {'*': 16}\n",
         encoding="utf-8",
     )
     return path

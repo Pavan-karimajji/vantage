@@ -25,20 +25,23 @@ from pathlib import Path
 import pytest
 
 from adas_sim.engine.bridge import (
-    backfill_schema_bytes,
     resolve_simengine_executable,
     run_pipeline_via_engine,
 )
 from adas_sim.diagnostics.errors import EnvironmentError_
 from adas_sim.graph.pipeline import Pipeline
 from adas_sim.io.base import Provenance, TopicInfo
-from adas_sim.plugins.registry import reader_for, writer_for
+from adas_sim.plugins.registry import reader_for
+from tests.support.recordings import write_recording
 from adas_sim.resolve.component import ComponentManifest, PortSpec
 from adas_sim.resolve.library import resolve_library
 
 _SIM_ROOT = Path(__file__).resolve().parents[2]
-_ECHO_STUB_CANDIDATES_WINDOWS = (_SIM_ROOT / "build-gtest-vs2026" / "tests" / "Release" / "echo_stub.dll",)
-_ECHO_STUB_CANDIDATES_POSIX = (_SIM_ROOT / "build-gtest-ubuntu_gcc" / "tests" / "libecho_stub.so",)
+# VNT-WP-13: the one definition of where the build puts the stub (`conan_workarea/`, as `tests/support/engine_runs.py`
+# looks for the other test tools); every test file that needs the stub imports it from here.
+_ECHO_STUB_CANDIDATES_WINDOWS = (
+    _SIM_ROOT / "conan_workarea" / "build-gtest-vs2026" / "tests" / "Release" / "echo_stub.dll",)
+_ECHO_STUB_CANDIDATES_POSIX = (_SIM_ROOT / "conan_workarea" / "build-gtest-ubuntu_gcc" / "tests" / "libecho_stub.so",)
 
 
 def _echo_stub_path(engine_path: Path) -> Path | None:
@@ -80,12 +83,10 @@ def _write_heartbeat_recording(path: Path) -> None:
     same shape `test_ut_abi_writer_and_resolver.cpp::WriteHeartbeatRecording`
     uses for `UT-ABI-01`: it only sets the cycle grid `echo_stub`'s own
     `simulate` stage runs against."""
-    writer = writer_for(path)
-    writer.open(path, meta=__import__("adas_sim.io.base", fromlist=["RunManifest"]).RunManifest(),
-                topics={"/dummy/heartbeat": TopicInfo(schema_name="test.Heartbeat", provenance=Provenance.MEASURED)})
-    for t_ns in (0, 10_000_000, 20_000_000):
-        writer.write("/dummy/heartbeat", t_ns, b"\x01", capture_time_ns=t_ns)
-    writer.close()
+    write_recording(
+        path, {"/dummy/heartbeat": TopicInfo(schema_name="test.Heartbeat", provenance=Provenance.MEASURED)},
+        [("/dummy/heartbeat", t_ns, b"\x01") for t_ns in (0, 10_000_000, 20_000_000)],
+    )
 
 
 def _echo_manifest() -> ComponentManifest:
@@ -98,8 +99,11 @@ def _echo_manifest() -> ComponentManifest:
 
 def _write_pipeline(path: Path) -> None:
     path.write_text(
-        "name: bridge_test\nstages:\n"
-        "  - name: sut\n    mode: simulate\n    impl: dll:echo_stub\n    inputs: {}\n",
+        "name: bridge_test\n"
+        "run_setup:\n  readiness_limit_steps: 8\n  fallback_max_gap: 6\n"
+        "stages:\n"
+        "  - name: sut\n    mode: simulate\n    impl: dll:echo_stub\n    inputs: {}\n"
+        "    trigger: ''\n    buffer_depth: {'*': 16}\n",
         encoding="utf-8",
     )
 
@@ -139,7 +143,7 @@ def test_run_pipeline_via_engine_produces_a_real_recording(tmp_path, monkeypatch
 
     result = run_pipeline_via_engine(
         pipeline, recording_path, run_id="20260823T000000Z-bridge-test", output_path=output_path,
-        simengine_path=engine_path,
+        simengine_path=engine_path, setup_values=pipeline.setup_values(),
     )
 
     assert result.ok, f"simengine exit_code={result.exit_code} stderr={result.stderr!r} stdout={result.stdout!r}"
@@ -158,40 +162,23 @@ def test_run_pipeline_via_engine_produces_a_real_recording(tmp_path, monkeypatch
     reader = reader_for(output_path)
     try:
         topics = reader.topics()
-        assert "/sut/outputs" in topics, f"expected /sut/outputs among {sorted(topics)}"
+        assert "sut.outputs" in topics, f"expected sut.outputs among {sorted(topics)}"
         messages = list(reader.messages())
         assert len(messages) >= 1, "echo_stub's own declared output port produced zero messages"
     finally:
         reader.close()
 
 
-def test_backfill_schema_bytes_fills_a_real_output_topic(tmp_path, monkeypatch):
-    """`E2E-07` item 8 (`SM-12`): `simengine`'s own writer cannot embed a
-    topic's real `FileDescriptorSet` -- `BuildOutputTopics` (`simcore.cpp`)
-    only ever sets `schema_name`, never `schema_bytes` (`Writer::Open` runs
-    before any component loads, that function's own comment). Found live
-    against a real `sim resim --save` recording: `PortValue.message`'s own
-    documented degrade (`session/tick.py`, `decode_message`'s `if not
-    schema_bytes: return payload`) then handed a real layer provider raw
-    bytes where it expected a parsed message, crashing (`warning_layer`,
-    `AttributeError: 'bytes' object has no attribute 'left'`).
-
-    Same real engine/`echo_stub` fixture as the smoke test immediately
-    above -- this test only adds the missing assertion neither that test
-    nor any other in this file made: whether a written topic's own
-    `schema_bytes` is ever non-empty. Robust to `echo_stub`'s own real
-    manifest carrying no real descriptor set (a minimal test fixture, not
-    guaranteed to embed one) -- the mechanism under test is "does
-    `backfill_schema_bytes` reach and apply whatever `pipeline` already
-    has," not "does `echo_stub` happen to have real protobuf schema
-    bytes today."""
+def test_the_engine_embeds_the_components_descriptor_set_in_its_output_topic(tmp_path, monkeypatch):
+    """`RCT:IMP-0052` (replaces the old `backfill_schema_bytes` test, `E2E-07` item 8): `simengine`'s own writer
+    gives a topic a component computes that component's own `FileDescriptorSet` (`R-SIM-11`), so
+    `PortValue.message` decodes with no patch pass over the file afterwards."""
     engine_path, stub_path = _require_engine_and_stub()
 
     monkeypatch.setenv("ADAS_SIL_TEST_STUB_NAME", "echo_stub")
     monkeypatch.setenv("ADAS_SIL_TEST_STUB_PERIOD_NS", "10000000")
     monkeypatch.setenv("ADAS_SIL_TEST_STUB_OUTPUT_PORT", "outputs")
-    monkeypatch.setenv("ADAS_SIL_TEST_STUB_OUTPUT_PROTO_TYPE", "test.Echo")
-    monkeypatch.setenv("ADAS_SIL_TEST_STUB_OUTPUT_MAX_BYTES", "64")
+    monkeypatch.setenv("ADAS_SIL_TEST_STUB_OUTPUT_REAL_SCHEMA", "1")
 
     lib_dir = tmp_path / "lib"
     lib_dir.mkdir()
@@ -207,49 +194,22 @@ def test_backfill_schema_bytes_fills_a_real_output_topic(tmp_path, monkeypatch):
     output_path = tmp_path / "out.mcap"
 
     result = run_pipeline_via_engine(
-        pipeline, recording_path, run_id="20260826T000000Z-schema-backfill-test", output_path=output_path,
-        simengine_path=engine_path,
+        pipeline, recording_path, run_id="20260826T000000Z-schema-test", output_path=output_path,
+        simengine_path=engine_path, setup_values=pipeline.setup_values(),
     )
     assert result.ok, f"simengine exit_code={result.exit_code} stderr={result.stderr!r} stdout={result.stdout!r}"
 
     reader = reader_for(output_path)
     try:
-        before = reader.topics()["/sut/outputs"]
-    finally:
-        reader.close()
-    # The real defect, asserted directly rather than assumed: simengine's
-    # own writer really does leave this empty today. If this ever starts
-    # failing, BuildOutputTopics has been fixed at the source and this
-    # function -- and this test's own reason to exist -- should be
-    # retired, not patched to expect the new behaviour silently.
-    assert before.schema_bytes == b"", (
-        "simengine's own writer unexpectedly embedded real schema bytes -- "
-        "BuildOutputTopics may have been fixed; backfill_schema_bytes's own "
-        "reason to exist should be re-examined, not this assertion loosened"
-    )
-
-    backfill_schema_bytes(output_path, pipeline)
-
-    reader = reader_for(output_path)
-    try:
-        after = reader.topics()["/sut/outputs"]
-        messages_after = list(reader.messages())
+        topic = reader.topics()["sut.outputs"]
+        messages = list(reader.messages())
     finally:
         reader.close()
 
     real_descriptor_set = pipeline.manifest_for("sut").descriptor_set
-    if real_descriptor_set:
-        assert after.schema_bytes == real_descriptor_set, (
-            "backfill_schema_bytes did not apply the real component manifest's own descriptor_set"
-        )
-    else:
-        assert after.schema_bytes == b"", (
-            "backfill_schema_bytes invented schema bytes with nothing real to source them from"
-        )
-    # Whichever branch above held, the payloads themselves must be
-    # byte-identical to before the patch -- this function only ever adds
-    # topic-level schema metadata, never touches a single message.
-    assert len(messages_after) >= 1
+    assert real_descriptor_set, "echo_stub with ADAS_SIL_TEST_STUB_OUTPUT_REAL_SCHEMA reports a real descriptor set"
+    assert topic.schema_bytes == real_descriptor_set
+    assert len(messages) >= 1
 
 
 def test_resolve_simengine_executable_names_every_candidate_when_missing(monkeypatch):

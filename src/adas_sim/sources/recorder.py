@@ -20,25 +20,18 @@ everything the SUT reads" only needs what the pipeline actually wires.
 
 Topics are derived from the pipeline's own declared port manifests
 (`R-SIM-6` -- "did we record everything the SUT reads" true by
-construction) and named `"/<stage>/<port>"` -- a leading slash, then only
-the FIRST dot of the qualified port name turned into a slash (a port name
-may itself contain dots, `R-SIM-4`'s `<function>.<port>`, and stays
-dotted): `"source.gen_object_list"` -> `"/source/gen_object_list"`,
-`"widget.outputs"` -> `"/widget/outputs"`, `"df.fn.outputs"` ->
-`"/df/fn.outputs"`. This is `simcore`'s own `PortNameToTopic`
-(`src/simcore/runner/cycle_loop.cpp`) convention, required for a
-`mode: measured` stage to match a recorded topic by exact string equality
-(found live, `WP-15b`) -- **not** a plain dot-to-slash inverse of
-`core.runner._topic_to_port_name`/`engine.bridge.topic_to_port_name`,
-though both tolerate it fine (they `strip("/")` before splitting, and
-collapsing one or two slashes into dots gives the same dotted result
-either way), so a recording this class writes still needs no ingest map
-(`S-C9`) to read back.
+construction). A `.mcap` is written through the one Python recording writer
+(`io/recording_writer.py`, `RCT:IMP-0048`, `RCT_Architecture.md` section 6a)
+and its topics are the port names (`"source.gen_object_list"`,
+`"df.fn.outputs"`); `simcore`'s reader turns them into its own canonical
+spelling (`"/source/gen_object_list"`, `PortNameToTopic`) on reading, so a
+`mode: measured` stage still matches by exact string and the recording needs
+no ingest map (`S-C9`). Any other registered writer (`.jsonl`) is given the
+canonical spelling `topic_for` makes.
 """
 
 from __future__ import annotations
 
-import inspect
 from collections.abc import Mapping
 from pathlib import Path
 from types import MappingProxyType
@@ -47,7 +40,8 @@ from adas_sim.graph.pipeline import Pipeline, RecordVerb, _split_ref, record_pol
 from adas_sim.config.scenario import Scenario
 from adas_sim.diagnostics.errors import InternalError
 from adas_sim.diagnostics.tap import resolve_taps
-from adas_sim.io.base import Provenance, RunManifest, TopicInfo
+from adas_sim.io.base import Provenance, RunManifest, TopicInfo, manifest_to_dict
+from adas_sim.io.recording_writer import recording_writer
 from adas_sim.plugins.registry import writer_for
 from adas_sim.runspec import volume
 from adas_sim.sources.base import Source
@@ -72,6 +66,10 @@ def topic_for(qualified_port_name: str) -> str:
     return f"/{stage}/{rest}" if sep else f"/{qualified_port_name}"
 
 
+def _record_policy_text(policy) -> str:
+    return f"decimate:{policy.decimate_n}" if policy.verb is RecordVerb.DECIMATE else str(policy.verb.value)
+
+
 class Recorder:
     """One recording, `open()` to `close()`. `source_provenance` tags every
     `source.*` topic (`R-SIM-12`): a single `Provenance` applies to every
@@ -85,8 +83,6 @@ class Recorder:
     def __init__(
         self, pipeline: Pipeline | None, source: Source, path: Path, *, meta: RunManifest,
         source_provenance: Provenance | Mapping[str, Provenance] = Provenance.MOCKED,
-        config_bundle_bytes: bytes = b"",
-        plugin_bundles_meta: Mapping[str, Mapping[str, object]] = MappingProxyType({}),
         source_proto_types: Mapping[str, str] = MappingProxyType({}),
         source_descriptor_set: bytes = b"",
     ) -> None:
@@ -106,24 +102,16 @@ class Recorder:
         # to fall back to silently.
         self._source_proto_types = source_proto_types
         self._source_descriptor_set = source_descriptor_set
-        # S-C5, R-SIM-6: the SUT's config bundle, embedded once at open() on
-        # /meta/config_bundle -- empty when the caller has no real component
-        # bundle to embed (e.g. a pure-synthetic-source `sim record` run
-        # with no `dll:`/`stubdll:` stage), the honest "nothing to embed"
-        # rather than a placeholder.
-        self._config_bundle_bytes = config_bundle_bytes
-        # S-C8, NR-SIM-44: per-component plug-in IDENTITY and HASH only --
-        # `{component: {"api": int, "sha256": str}}` -- never bytes. The
-        # asymmetry with config_bundle_bytes above is deliberate:
-        # configuration is data, a plug-in is code, and a recording must
-        # never become a way to run someone else's code.
-        self._plugin_bundles_meta = plugin_bundles_meta
-        self._writer = writer_for(path)
+        # A `.mcap` goes through the one Python recording writer (opened in `open()`);
+        # any other registered format keeps its own writer.
+        self._mcap = path.suffix == ".mcap"
+        self._writer = None if self._mcap else writer_for(path)
         self._elapsed_ns = 0
         self._tick_index = 0
         self._ticks_written = 0
         self._bytes_written = 0
         self._opened = False
+        self._recorder = None
 
     def __repr__(self) -> str:
         return f"<Recorder path={self._path} ticks_written={self._ticks_written}>"
@@ -184,12 +172,15 @@ class Recorder:
         resolved_ports = resolve_taps(self._pipeline.taps, manifests)
         return list(zip((stage_by_name[t.stage] for t in self._pipeline.taps), resolved_ports))
 
+    def _topic(self, qualified_port_name: str) -> str:
+        return qualified_port_name if self._mcap else topic_for(qualified_port_name)
+
     def _topics(self) -> dict[str, TopicInfo]:
         topics: dict[str, TopicInfo] = {}
         for port in self._wired_source_ports():
             name = _qualified("source", port)
             proto_type = self._source_proto_types.get(port)
-            topics[topic_for(name)] = TopicInfo(
+            topics[self._topic(name)] = TopicInfo(
                 schema_name=proto_type or name, provenance=self._provenance_for_source_port(port),
                 schema_bytes=self._source_descriptor_set if proto_type else b"",
             )
@@ -198,15 +189,15 @@ class Recorder:
             # R-SIM-11: the component's own adasManifest() descriptor_set,
             # so a stage's recorded output decodes on replay instead of
             # staying raw bytes forever (previously never wired in here).
-            topics[topic_for(name)] = TopicInfo(
+            topics[self._topic(name)] = TopicInfo(
                 schema_name=port_spec.proto_type or name, provenance=Provenance.SIMULATED,
                 schema_bytes=self._pipeline.manifest_for(stage.name).descriptor_set,
             )
         for stage, port_spec in self._tapped_output_ports():
             name = _qualified(stage.name, port_spec.name)
-            if topic_for(name) in topics:
+            if self._topic(name) in topics:
                 continue  # already recorded via normal output wiring -- the tap is a redundant no-op, not an error
-            topics[topic_for(name)] = TopicInfo(
+            topics[self._topic(name)] = TopicInfo(
                 schema_name=port_spec.proto_type or name, provenance=Provenance.SIMULATED,
                 schema_bytes=self._pipeline.manifest_for(stage.name).descriptor_set,
             )
@@ -235,21 +226,46 @@ class Recorder:
         revised_estimate_bytes`."""
         return volume.revised_estimate_bytes(self._bytes_written, self._ticks_written, total_ticks)
 
+    def _record_policies(self) -> dict[str, str]:
+        """Every declared port the recording is about, with its `record` policy (section 6a): the wired source
+        ports and recorded stage outputs as they are written, and an `excluded` output as excluded -- it has no
+        topic."""
+        policies = {_qualified("source", port): "full" for port in self._wired_source_ports()}
+        for stage, port_spec, policy in self._recorded_stage_output_ports():
+            policies[_qualified(stage.name, port_spec.name)] = _record_policy_text(policy)
+        for stage, port_spec in self._tapped_output_ports():
+            policies.setdefault(_qualified(stage.name, port_spec.name), "full")
+        if self._pipeline is not None:
+            for stage in self._pipeline.stages:
+                if stage.mode == "off":
+                    continue
+                for port_spec in self._pipeline.manifest_for(stage.name).outputs:
+                    if record_policy_for(stage, port_spec.name).verb is RecordVerb.EXCLUDED:
+                        policies[_qualified(stage.name, port_spec.name)] = "excluded"
+        return policies
+
+    def _open_mcap(self) -> None:
+        """Opens the one Python recording writer with the provenance this recording states (`RCT:IMP-0048`): the
+        manifest's `source_kind`, `run_kind` and components, each topic's origin, every port's policy. The writer
+        has no default for any of them and refuses an unstated one before it opens the file."""
+        module = recording_writer()
+        topics = self._topics()
+        specs = {topic: module.TopicSpec(info.schema_name, info.schema_bytes, info.provenance.value) for topic, info in topics.items()}
+        manifest = manifest_to_dict(self._meta)
+        if not self._meta.created_utc:
+            del manifest["created_utc"]  # the writer adds a logging time only when the caller has one to state
+        for component in manifest["components"]:
+            if not component["build_id"] and self._pipeline is not None:
+                component["build_id"] = self._pipeline.manifest_for(component["name"]).build_id  # the library's own
+        manifest["record_policies"] = self._record_policies()
+        self._recorder = module.McapRecorder(self._path, specs, manifest)
+
     def open(self, scenario: Scenario) -> None:
         self._source.start(scenario)
-        # `config_bundle_bytes` is an extra beyond RecordingWriter's minimal
-        # Protocol (`io/base.py`, mirrors `cli/convert.py`'s own comment) --
-        # not every registered writer accepts it (`CsvWriter.open()` does
-        # not), so it is only ever passed when the concrete writer's own
-        # signature declares it, never assumed and never silently dropped
-        # when it's actually supported.
-        open_kwargs: dict[str, object] = {}
-        open_params = inspect.signature(self._writer.open).parameters
-        if self._config_bundle_bytes and "config_bundle_bytes" in open_params:
-            open_kwargs["config_bundle_bytes"] = self._config_bundle_bytes
-        if self._plugin_bundles_meta and "plugin_bundles_meta" in open_params:
-            open_kwargs["plugin_bundles_meta"] = self._plugin_bundles_meta
-        self._writer.open(self._path, self._meta, self._topics(), **open_kwargs)
+        if self._mcap:
+            self._open_mcap()
+        else:
+            self._writer.open(self._path, self._meta, self._topics())
         self._opened = True
 
     def _write_one(self, qualified_port_name: str, payload: bytes, log_time_ns: int) -> None:
@@ -260,7 +276,16 @@ class Recorder:
         # error model exists yet, R-SIM-9) -- so reception and validity
         # genuinely coincide, and the manifest declares that fact
         # structurally via CAPTURE_TIME_MANIFEST_VERSION (core/manifest.py).
-        self._writer.write(topic_for(qualified_port_name), log_time_ns, payload, capture_time_ns=log_time_ns)
+        if self._mcap:
+            # One time per message (`RCT_Architecture.md` section 6a); the writer's unit is the microsecond.
+            if log_time_ns % 1000:
+                raise InternalError(
+                    expected="a logging time that is a whole number of microseconds", found=f"{log_time_ns} ns",
+                    where="Recorder._write_one", hint="the recording writer's unit is the microsecond; use a tick that divides evenly",
+                )
+            self._recorder.write(self._topic(qualified_port_name), log_time_ns // 1000, payload)
+        else:
+            self._writer.write(topic_for(qualified_port_name), log_time_ns, payload, capture_time_ns=log_time_ns)
         self._bytes_written += len(payload)
 
     def tick(self, dt_ns: int) -> None:
@@ -305,5 +330,8 @@ class Recorder:
 
     def close(self) -> None:
         self._source.stop()
-        self._writer.close()
+        if self._mcap:
+            self._recorder.close()
+        else:
+            self._writer.close()
         self._opened = False

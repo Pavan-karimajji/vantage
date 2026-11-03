@@ -88,24 +88,22 @@ std::filesystem::path WriteRunSpec(const std::filesystem::path& spec_path, const
                                    const std::filesystem::path& stub) {
   std::ofstream out(spec_path);
   out << R"({
-    "schema": "adas.sim.runspec/1.0",
+    "schema": "adas.sim.runspec/2.0",
     "run_id": "20260822T000000Z-it11",
     "spec_sha256": "0000000000000000000000000000000000000000000000000000000000000",
-    "grid": {"step_ns": 10000000},
     "sources": [{"path": ")"
       << JsonEscape(recording) << R"(", "sha256": "0", "codec": "mcap"}],
     "stages": [{
       "name": "sut", "mode": "simulate",
       "impl": {"kind": "dll", "path": ")"
-      << JsonEscape(stub) << R"(", "pattern": "", "search": []},
-      "period_ns": 10000000, "abi_version": 1, "config_bundle_sha256": "",
+      << JsonEscape(stub) << R"("},
+      "trigger": "", "clock_period_ns": 10000000, "abi_version": 1, "config_bundle_sha256": "",
       "ports": [{"name": "outputs", "dir": "pro", "kind": "data", "proto_type": "test.Echo",
-                 "record": "full", "sampling": "latest", "on_missing": "hold", "fixed_slots": null}],
+                 "record": "full", "fixed_slots": null, "bulk": false, "buffer_depth": 16}],
       "inputs": []
     }],
     "mutations": [],
-    "order": ["sut"],
-    "coherence": {"verdict": "clean"},
+    "coherence_verdict": "clean", "readiness_limit_steps": 4, "fallback_max_gap": 4,
     "limits": {"exec_timeout_ms": 2000, "severity_exit": "crash"}
   })";
   out.close();
@@ -203,6 +201,40 @@ TEST_F(It11EmbedHost, AttachTransportThenStepOnceDeliversRealFramesBetweenTicks)
   EXPECT_TRUE(transport.engineAlive());
 
   simEngineDestroy(engine);
+}
+
+// `ABI_VERSION 3` (`WP-05`, `IMP-0031`): `simEngineSeek` calls
+// `Orchestrator::Jump`. The step the engine takes next is at the new position
+// and the instants between are not run; the step count after it is the
+// recording's remainder, not the whole recording again.
+TEST_F(It11EmbedHost, SeekMovesTheEngineToThePositionAndSteppingContinuesFromThere) {
+  EXPECT_EQ(simEngineAbiVersion(), 4);
+
+  char err_buf[512] = {0};
+  SimExitCode create_exit = kSimExitOk;
+  SimEngine* engine =
+      simEngineCreate(spec_.string().c_str(), nullptr, 2000, err_buf, sizeof(err_buf), &create_exit);
+  ASSERT_NE(engine, nullptr) << "simEngineCreate failed: " << err_buf;
+
+  char step_err[512] = {0};
+  int32_t keep_going = 0;
+  ASSERT_EQ(simEngineStepOnce(engine, step_err, sizeof(step_err), &keep_going), kSimExitOk) << step_err;
+  ASSERT_EQ(keep_going, 1);  // the instant at 0 ms
+
+  char seek_err[512] = {0};
+  ASSERT_EQ(simEngineSeek(engine, 20'000'000, seek_err, sizeof(seek_err)), kSimExitOk) << seek_err;
+  ASSERT_EQ(simEngineStepOnce(engine, step_err, sizeof(step_err), &keep_going), kSimExitOk) << step_err;
+  EXPECT_EQ(keep_going, 1);  // the instant at 20 ms; the one at 10 ms was jumped over
+  ASSERT_EQ(simEngineStepOnce(engine, step_err, sizeof(step_err), &keep_going), kSimExitOk) << step_err;
+  EXPECT_EQ(keep_going, 0);  // nothing is left
+
+  simEngineDestroy(engine);
+}
+
+TEST_F(It11EmbedHost, SeekWithNoConstructedEngineIsAConfigExitNotACrash) {
+  char err_buf[512] = {0};
+  EXPECT_EQ(simEngineSeek(nullptr, 0, err_buf, sizeof(err_buf)), kSimExitConfig);
+  EXPECT_NE(err_buf[0], '\0');
 }
 
 TEST_F(It11EmbedHost, StepOnceWithNoConstructedEngineIsAConfigExitNotACrash) {

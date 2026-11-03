@@ -48,8 +48,9 @@ def _echo_pipeline(tmp_path: Path, stage_name: str = "echo") -> Path:
     `search=` against `_echo_stub_lib_dir`'s copy)."""
     path = tmp_path / f"{stage_name}_pipeline.yaml"
     path.write_text(
-        f"version: 1\nname: {stage_name}_test\nstages:\n"
-        f"  - name: {stage_name}\n    mode: simulate\n    impl: \"dll:echo_stub\"\n    inputs: {{}}\n",
+        f"version: 1\nname: {stage_name}_test\nrun_setup:\n  readiness_limit_steps: 8\n  fallback_max_gap: 6\nstages:\n"
+        f"  - name: {stage_name}\n    mode: simulate\n    impl: \"dll:echo_stub\"\n    inputs: {{}}\n"
+        "    trigger: ''\n    buffer_depth: {'*': 16}\n",
         encoding="utf-8",
     )
     return path

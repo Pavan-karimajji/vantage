@@ -14,6 +14,8 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <thread>
 
 #include <gtest/gtest.h>
 
@@ -156,4 +158,38 @@ TEST(MhComponent, HungExecTripsTheQuarantineAndRefusesFurtherCalls) {
   auto second = component.Exec(50'000'000, PortMap{}, {}, budget);
   ASSERT_FALSE(second.ok());
   EXPECT_NE(second.error().found.find("quarantined"), std::string::npos) << second.error().Format();
+}
+
+TEST(MhComponent, IMP_0067_ACallReturningAfterItsTimeoutReturnsIntoStateItsTaskStillHolds) {
+  // The instance sleeps 400 ms in every adasExec() (a config file starting with the integer, echo_stub's own note).
+  const std::filesystem::path config = std::filesystem::temp_directory_path() / "imp_0067_sleep.cfg";
+  {
+    std::ofstream file(config);
+    file << "400\n";
+  }
+  {
+    auto loaded = Component::Load(EchoStubPath());
+    ASSERT_TRUE(loaded.ok()) << loaded.error().Format();
+    auto component = std::make_unique<Component>(std::move(loaded).value());
+    ASSERT_TRUE(component->Init(config).ok());
+    ExecTimeout budget(std::chrono::milliseconds(100));
+    {
+      // The caller's inputs and metadata go out of scope with this block, long before the call returns.
+      PortMap inputs;
+      inputs["in"] = std::vector<std::uint8_t>(4096, 7);
+      simcore::module_host::InputMetaMap meta;
+      meta["in"] = simcore::module_host::InputMeta{};
+      const auto timed_out = component->Exec(50'000'000, inputs, meta, budget);
+      ASSERT_FALSE(timed_out.ok());
+      EXPECT_TRUE(component->IsQuarantined());
+    }
+    // The component is destroyed while its call is still inside the library: the library stays loaded, and
+    // adasShutdown is not called into it.
+    component.reset();
+  }
+  // The late call finishes now, into the state its task shares -- the process goes on.
+  std::this_thread::sleep_for(std::chrono::milliseconds(700));
+  SUCCEED();
+  std::error_code ignored;
+  std::filesystem::remove(config, ignored);
 }

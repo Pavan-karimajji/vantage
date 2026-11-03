@@ -40,6 +40,13 @@ from tests.system.test_d15b_engine_bridge import _echo_stub_path
 from adas_sim.engine.bridge import resolve_simengine_executable
 
 
+# The run-setup values `sim check` writes come from the run configuration
+# (`IMP-0052`): the pipeline files below give them, as test values (marked as
+# such -- the lab's provisional numbers, never a default in code).
+_RUN_SETUP = {"readiness_limit_steps": 4, "fallback_max_gap": 4}
+_STAGE_SETUP = {"trigger": "", "buffer_depth": {"*": 16}}
+
+
 # ---------------------------------------------------------------------------
 # default_recording_for / discover_pipelines -- pure path helpers
 # ---------------------------------------------------------------------------
@@ -152,8 +159,11 @@ def _widget_manifest(descriptor_set: bytes) -> ComponentManifest:
 
 
 def _write_widget_pipeline(path: Path, *, mode: str, component: InProcessSilComponent) -> Pipeline:
-    stages = [{"name": "widget", "mode": mode, "impl": "stub:widget", "inputs": {}}]
-    path.write_text(yaml.safe_dump({"name": "widget_only", "stages": stages}, sort_keys=False), encoding="utf-8")
+    stages = [{"name": "widget", "mode": mode, "impl": "stub:widget", "inputs": {}, **_STAGE_SETUP}]
+    path.write_text(
+        yaml.safe_dump({"name": "widget_only", "run_setup": _RUN_SETUP, "stages": stages}, sort_keys=False),
+        encoding="utf-8",
+    )
     return Pipeline.load(path, components={"widget": component})
 
 
@@ -275,8 +285,14 @@ def _configure_real_echo_stub(monkeypatch, *, lib_dir: Path, stub_path) -> None:
 
 
 def _write_real_echo_pipeline(path: Path) -> None:
-    stages = [{"name": "widget", "mode": "simulate", "impl": "dll:echo_stub", "inputs": {"in": "source.stim"}}]
-    path.write_text(yaml.safe_dump({"name": "widget_only", "stages": stages}, sort_keys=False), encoding="utf-8")
+    stages = [{
+        "name": "widget", "mode": "simulate", "impl": "dll:echo_stub", "inputs": {"in": "source.stim"},
+        **_STAGE_SETUP,
+    }]
+    path.write_text(
+        yaml.safe_dump({"name": "widget_only", "run_setup": _RUN_SETUP, "stages": stages}, sort_keys=False),
+        encoding="utf-8",
+    )
 
 
 def _record_stim_recording(tmp_path: Path, name: str, values: list[float]) -> Path:
@@ -284,20 +300,14 @@ def _record_stim_recording(tmp_path: Path, name: str, values: list[float]) -> Pa
     `mode: simulate` stage with `inputs: {in: source.stim}` needs, since
     (unlike a `measured` stage) its own output is computed fresh, never
     read back from the recording."""
-    from adas_sim.io.base import Provenance, RunManifest, TopicInfo
-    from adas_sim.plugins.registry import writer_for
+    from adas_sim.io.base import Provenance, TopicInfo
+    from tests.support.recordings import write_recording
 
-    recording_path = tmp_path / name
-    writer = writer_for(recording_path)
-    writer.open(
-        recording_path, RunManifest(),
-        {"/source/stim": TopicInfo(schema_name="abi_test.AbiPort", provenance=Provenance.MEASURED)},
-    )
-    for i, v in enumerate(values):
-        t_ns = i * 100_000_000
-        writer.write("/source/stim", t_ns, _encode_abi_port(v), capture_time_ns=t_ns)
-    writer.close()
-    return recording_path
+    # VNT-WP-13 (corrected): the engine refuses an input that states no `source_kind` (`RCT:IMP-0052`), so the recording
+    # is written by the one conforming writer; its single clock is the logging time (`D22`).
+    return write_recording(
+        tmp_path / name, {"/source/stim": TopicInfo(schema_name="abi_test.AbiPort", provenance=Provenance.MEASURED)},
+        [("/source/stim", i * 100_000_000, _encode_abi_port(v)) for i, v in enumerate(values)])
 
 
 def test_check_scenario_applies_scenario_faults_during_resim(tmp_path, monkeypatch):

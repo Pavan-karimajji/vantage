@@ -98,4 +98,13 @@ std::string CanonicalTopic(const std::string& raw_topic) {
   return out;
 }
 
+std::string PortNameOfTopic(const std::string& topic) {
+  std::size_t begin = 0;
+  while (begin < topic.size() && topic[begin] == '/') ++begin;
+  std::string port = topic.substr(begin);
+  const std::size_t slash = port.find('/');
+  if (slash != std::string::npos) port[slash] = '.';
+  return port;
+}
+
 }  // namespace simcore::io

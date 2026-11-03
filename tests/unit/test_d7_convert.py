@@ -4,10 +4,11 @@
 # @author Pavan Karimajji
 
 """S-D7 `cli/convert.py` tests: `UT-D7-6` (docs/sim_implementation_plan.md).
-`tiny.mcap` (`tests/fixtures/`, S-A4's own self-contained fixture) round-
-trips through `.mcap` twice -- the only registered `round_trips=True`
-codec this session adds no second one of, so "convert to a genuinely
-different format and back" stays a named gap, not silently claimed."""
+`tiny.mcap` (`tests/fixtures/`, S-A4's own self-contained fixture) is
+converted to `.jsonl` and `.jsonl` to `.jsonl`: `.mcap` is a source only now
+(`RCT:IMP-0048`: it is written through the one Python recording writer or the
+engine's writer, never by a codec here), and `.jsonl` is the other
+registered `round_trips=True` codec."""
 
 from __future__ import annotations
 
@@ -26,12 +27,12 @@ _TINY = Path(__file__).resolve().parent.parent / "fixtures" / "tiny.mcap"
 
 def test_convert_round_trips_topics_schemas_provenance_and_message_bytes(tmp_path):
     """UT-D7-6."""
-    once = tmp_path / "once.mcap"
-    twice = tmp_path / "twice.mcap"
+    once = tmp_path / "once.jsonl"
+    twice = tmp_path / "twice.jsonl"
     assert run([str(_TINY), str(once)]) == 0
     assert run([str(once), str(twice)]) == 0
 
-    original = reader_for(_TINY)
+    original = reader_for(once)
     roundtripped = reader_for(twice)
     try:
         assert original.topics() == roundtripped.topics()
@@ -40,6 +41,13 @@ def test_convert_round_trips_topics_schemas_provenance_and_message_bytes(tmp_pat
     finally:
         original.close()
         roundtripped.close()
+
+
+def test_convert_does_not_write_mcap(tmp_path):
+    """`RCT:IMP-0048`: no codec here writes `.mcap`; the refusal names the extension."""
+    with pytest.raises(AuthoringError, match="read-only"):
+        run([str(_TINY), str(tmp_path / "out.mcap")])
+    assert not (tmp_path / "out.mcap").exists()
 
 
 def test_convert_refuses_a_write_only_destination(tmp_path):

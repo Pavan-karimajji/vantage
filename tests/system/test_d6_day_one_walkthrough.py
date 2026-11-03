@@ -38,9 +38,8 @@ import pytest
 
 from adas_sim.cli.probe import run as probe_run
 from adas_sim.diagnostics.errors import EnvironmentError_
-from adas_sim.engine.bridge import resolve_simengine_executable, run_pipeline_merged_via_engine
+from adas_sim.engine.bridge import resolve_simengine_executable, run_pipeline_via_engine
 from adas_sim.graph.pipeline import Pipeline
-from adas_sim.runspec.manifest import build_manifest
 from adas_sim.session.session import Session
 from adas_sim.plugins.registry import reader_for
 
@@ -80,11 +79,16 @@ def _five_line_pipeline(path: Path) -> None:
     path.write_text(
         "version: 1\n"
         "name: day_one\n"
+        "run_setup:\n"
+        "  readiness_limit_steps: 8\n"
+        "  fallback_max_gap: 6\n"
         "stages:\n"
         "  - name: echo_stub_with_output\n"
         "    mode: simulate\n"
         '    impl: "dll:echo_stub_with_output"\n'
-        "    inputs: {}\n",
+        "    inputs: {}\n"
+        "    trigger: ''\n"
+        "    buffer_depth: {'*': 16}\n",
         encoding="utf-8",
     )
 
@@ -105,20 +109,17 @@ def test_day_one_walkthrough_probe_pipeline_resim_recording(tmp_path, capsys):
     _five_line_pipeline(pipeline_path)
     pipeline = Pipeline.load(pipeline_path, search=[tmp_path])
 
-    # Step 3: run against tiny.mcap, through the real simengine, writing a
-    # full merged recording -- this IS "outputs appear in a recording"
-    # (engine.bridge.run_pipeline_merged_via_engine, R-SIM-6/R-SIM-13's one
+    # Step 3: run against tiny.mcap, through the real simengine, which writes
+    # the recording itself -- this IS "outputs appear in a recording"
+    # (engine.bridge.run_pipeline_via_engine, R-SIM-6/R-SIM-13's one
     # way a Session is ever built). No init_components/shutdown_components
     # here: nothing executes in this process any more (WP-15b) -- the
     # stub's own adasInit, ignoring configPath entirely, runs inside
     # simengine's own subprocess instead.
     out_path = tmp_path / "day_one_result.mcap"
-    meta = build_manifest(
-        pipeline=pipeline, pipeline_path=pipeline_path, run_kind="resim",
-        source_kind="mcap", recording_path=_TINY,
-    )
-    result = run_pipeline_merged_via_engine(
-        pipeline, _TINY, out_path, meta=meta, run_id="day-one-walkthrough", search=[tmp_path],
+    result = run_pipeline_via_engine(
+        pipeline, _TINY, run_id="day-one-walkthrough", output_path=out_path, search=[tmp_path],
+        setup_values=pipeline.setup_values(),
     )
     assert result.ok, f"simengine exit_code={result.exit_code} stderr={result.stderr!r}"
 
@@ -128,10 +129,10 @@ def test_day_one_walkthrough_probe_pipeline_resim_recording(tmp_path, capsys):
     reader = reader_for(out_path)
     try:
         topics = reader.topics()
-        assert "/echo_stub_with_output/echo" in topics
+        assert "echo_stub_with_output.echo" in topics
         # messages() yields (topic, log_time_ns, capture_time_ns, payload).
         payloads = [payload for topic, _log_ns, _cap_ns, payload in reader.messages()
-                    if topic == "/echo_stub_with_output/echo"]
+                    if topic == "echo_stub_with_output.echo"]
     finally:
         reader.close()
     assert payloads, "the echo port's bytes never reached the recording"

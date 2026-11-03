@@ -13,12 +13,14 @@ of `VANTAGE_Lab_Design.md` §6, written topology, scenario (`base` unless named)
 | `F-CAT` | Every topology of the lab catalogue built: each scenario's recording, each resim case's run setup, and the libraries, found by `tests/support/lab_cases.py`. An *exact case* is a resim case whose scenario expects `exact` and that is not `hang` or `crash` (they need the supervisor, part 8b) |
 | `F-CASE` | One named lab case of `F-CAT` |
 | `F-SETUP-EDIT` | An `F-CASE` run setup copied by the test with the one change its steps name (`edit_setup`) |
-| `F-REC-EDIT` | An `F-CASE` recording rewritten by the test through the Python writer in `interfaces` with the one edit its steps name: a split into files, messages removed or changed, a cut (`edit_recording`) |
+| `F-REC-EDIT` | An `F-CASE` or `F-RUN-CONFIG` recording rewritten by the test through the Python writer in `interfaces` with the one edit its steps name: a split into files, messages removed or changed, a message's logging time moved, a `manifest` key changed or removed, a cut (`edit_recording`) |
 | `F-ENGINE` | `simengine` run as a process on a setup with `outputs.path` set: the engine-run recording, the event log lines, the printed plan and the exit code |
 | `F-TAP` | `tests/support/step_tap` run on a setup: one line per engine step with its number, simulation time and badges; optionally one jump, at 500 ms to the case's `jump_to_ms` unless the steps say otherwise |
 | `F-PROBE` | The exec probe (`tests/fixtures/exec_probe`) put by the test in place of named stages' libraries, one copy per path the steps name, and its call log |
 | `F-COMPARE` | The lab's comparator, `lab_tools.compare.equal_outputs` (`VANTAGE_Lab_Design.md` §6.4), over two recordings; independent of Vantage's own comparison |
+| `F-RUN-CONFIG` | A run configuration (a pipeline file) for a stub chain on the generic ABI whose `run_setup:` block and stage keys give every run-setup value, copied by the test with the one change its steps name |
 | `F-SRC` | `include/simcore`, `src/simcore` and `src/simengine` as checked in, and per check a copy with one planted violation |
+| `F-TICK` | `tests/support/control_tick` (`IMP-0055`) run with a clock period and a tick number: the `measurement_counter` of the control `ControlWriter::Write` builds for that tick, with no run and no library |
 | `F-RENUMBER-LIB` | `running_example` `renumber_lib` `shifted` (`VANTAGE_Lab_Design.md` `LAB-WP-10`): `A`'s bundle sets `LAB_A_RENUMBER`, so `A`'s own code writes its data outputs' `measurement_counter` shifted from its control's |
 
 ---
@@ -89,9 +91,29 @@ in `tests/system/test_vnt_gate_g3.py`.
 
 **`SYT-RUN-09`** · T · fixture `F-SETUP-EDIT`, `F-ENGINE` — Retired and unknown keys refused
 **Serves.** `SYS-0046`
-**Steps.** To copies of `running_example` `cut_c`'s setup add, one per copy, `delay_steps` to one input, `grid_step_ns` and `order` at the top level, and an unknown key `colour` to one stage; run each.
+**Steps.** To copies of `running_example` `cut_c`'s setup add, one per copy, `delay_steps` to one input, `grid_step_ns` and `order` at the top level, `pattern` to one stage's `impl`, and an unknown key `colour` to one stage; run each.
 - `.c1` **PASS:** each retired key gives a load error naming the key and where it is, per `SYS-0046` Accept. **FAIL:** a run starts, or the message lacks the key or its place.
 - `.c2` **PASS:** `colour` gives a load error naming it and its stage. **FAIL:** a run starts, or the key is ignored.
+- `.c3` **PASS:** `impl.pattern` gives a load error naming it and its stage. **FAIL:** a run starts, or the key is ignored.
+
+**`SYT-RUN-10`** · T · fixture `F-RUN-CONFIG` — The launcher refuses a missing run-setup value
+**Serves.** `SYS-0048`
+**Steps.** Remove in turn `readiness_limit_steps`, `fallback_max_gap`, one simulated stage's `trigger` and one port's `buffer_depth`, and run `sim resim` on each copy. Then, with every value given, start the run through `sim resim`, the batch worker (`orchestrate/worker.py`) and `sim check`, and read each run setup written.
+- `.c1` **PASS:** each removal gives an error naming the value and no run setup file, per `SYS-0048` Accept. **FAIL:** a setup is written, or the error names another value.
+- `.c2` **PASS:** each of the three paths writes a setup carrying exactly the configured values. **FAIL:** a value missing, changed or filled by a default.
+
+**`SYT-RUN-11`** · T · fixture `F-CASE`, `F-ENGINE` — An engine-run recording embeds the simulated stages' bundles
+**Serves.** `SYS-0052`
+**Steps.** Run `running_example` `cut_c` on `F-ENGINE`. Read the engine-run recording's `config_bundle` block, each stage's bundle folder (`config/` beside its library) and each stage's `config_bundle_sha256` in the setup.
+- `.c1` **PASS:** the block names exactly the simulated stages, each with its folder's files and text, per `SYS-0052` Accept. **FAIL:** a stage missing or extra (`C` is `measured`), or a file missing, extra or different.
+- `.c2` **PASS:** each stage's `bundle.sha256` text equals the setup's hash for it. **FAIL:** any differs.
+
+**`SYT-RUN-12`** · T · fixture `F-CASE`, `F-ENGINE`, `F-RUN-CONFIG`, `F-REC-EDIT` — An engine-run recording names what made it
+**Serves.** `SYS-0055`
+**Steps.** Run `running_example` `cut_c` on `F-ENGINE` twice; read both recordings' `manifest` through Vantage's recording reader, each simulated stage's library file and the setup. Run `F-RUN-CONFIG` with `sim resim --save`; then run `sim resim --pin-builds` with it on the saved recording, on a copy whose `manifest` gives its stage another `library_sha256`, and on a copy that gives none.
+- `.c1` **PASS:** `run_id` and `run_spec_sha256` are the setup's `run_id` and `spec_sha256`, `host` this machine's name, `process_nonce` not empty, and each simulated stage's `library_sha256` the SHA-256 of its library file, per `SYS-0055` Accept. **FAIL:** a key missing, empty or with another value, or a component entry for `C`.
+- `.c2` **PASS:** the two manifests differ only in `process_nonce`, and `adas_sim.diagnostics.determinism.derive_axis` gives `fresh_process` for them. **FAIL:** another difference, equal nonces, or another axis.
+- `.c3` **PASS:** `--pin-builds` passes on the saved recording, refuses the changed copy as a mismatch and the stripped copy as unpinnable. **FAIL:** a refusal of the saved recording, or a pass on either copy.
 
 ## 3. The orchestrator — `ORC`
 
@@ -100,9 +122,9 @@ in `tests/system/test_vnt_gate_g3.py`.
 **Steps.** Run `running_example` `no_ref_sync`; for each step whose controls include both `A` and `B`, read `B`'s re-run refSync entry for `A` and `A`'s output of that step.
 - `.c1` **PASS:** the entry names `A`'s output of that step, per `SYS-0009` Accept. **FAIL:** it names an older sample.
 
-**`SYT-ORC-02`** · T · fixture `F-CASE`, `F-ENGINE` — A loop without a previous-cycle input refused
+**`SYT-ORC-02`** · T · fixture `F-CASE`, `F-SETUP-EDIT`, `F-ENGINE` — A loop without a previous-cycle input refused
 **Serves.** `SYS-0010`
-**Steps.** Run `loop_no_edge`; then `feedback` `all_simulated`.
+**Steps.** Run `loop_no_edge`: the lab writes no run setup for a topology it refuses, so the test copies `feedback` `all_simulated`'s, drops `A`'s `previous_cycle` mark and points every library path at `loop_no_edge`'s build (the same stages, inputs and periods). Then run `feedback` `all_simulated`.
 - `.c1` **PASS:** `loop_no_edge` as `SYS-0010` Accept. **FAIL:** it runs, or the error names another stage or none.
 - `.c2` **PASS:** `feedback` runs to the recording's end. **FAIL:** a load error.
 
@@ -115,10 +137,11 @@ in `tests/system/test_vnt_gate_g3.py`.
 - `.c4` **PASS:** trigger and clock: a load error naming `T`. **FAIL:** the run starts.
 
 **`SYT-ORC-04`** · T · fixture `F-CAT`, `F-ENGINE` — One run per trigger
-**Serves.** `SYS-0012`
-**Steps.** For every exact case count each simulated stage's controls in the engine-run recording and in the recording; on `data_triggered` `by_data`, count `T`'s controls and the `in_X` samples.
+**Serves.** `SYS-0012`, `SYS-0053`
+**Steps.** For every exact case count each simulated stage's controls in the engine-run recording and in the recording; on `data_triggered` `by_data`, count `T`'s controls and the `in_X` samples. In every exact case and in `running_example` `all_simulated` with `buffer_depth` 1 on every port, read each simulated stage's `compState` messages in the engine-run recording.
 - `.c1` **PASS:** equal counts in every exact case, per `SYS-0012` Accept. **FAIL:** any count differs.
 - `.c2` **PASS:** `by_data`: one `T` control per `in_X` sample. **FAIL:** another count.
+- `.c3` **PASS:** each stage's `compState` `cycle_counter`s are consecutive and as many as its controls, per `SYS-0053` Accept. **FAIL:** a gap, or another count.
 
 **`SYT-ORC-05`** · T · fixture `F-RENUMBER-LIB`, `F-ENGINE` — An output not copying its control's counter is logged
 **Serves.** `SYS-0013`
@@ -139,7 +162,7 @@ in `tests/system/test_vnt_gate_g3.py`.
 
 **`SYT-ORC-08`** · T · fixture `F-REC-EDIT`, `F-TAP`, `F-ENGINE` — The recording's end runs every waiting ticket
 **Serves.** `SYS-0016`
-**Steps.** Cut `late_consumer`'s `base` recording just after a `Q` control whose recorded refSync names a `P` sample logged after it; run `all_simulated` on it on `F-TAP` and `F-ENGINE`.
+**Steps.** Cut `late_consumer`'s `base` recording just after a `Q` control whose recorded refSync names a `P` sample logged after it, keeping that run's own refSync (the car logs it after the control); run `all_simulated` on it on `F-TAP` and `F-ENGINE`.
 - `.c1` **PASS:** that `Q` run is in the last step with `KIND_READINESS_TIMEOUT`, per `SYS-0016` Accept. **FAIL:** the run is missing, in another step, or not badged.
 
 **`SYT-ORC-09`** · T · fixture `F-CASE`, `F-TAP` — A simulated stage nobody simulated consumes is badged
@@ -158,6 +181,16 @@ in `tests/system/test_vnt_gate_g3.py`.
 **Steps.** Run `data_triggered` `repeat_trigger` `by_data`; count `T`'s controls in the engine-run recording and the distinct `in_X` counters in the recording; read the event log's `stalled_trigger` entries. Then give the same count check a copy of the engine-run recording with one more `T` control at the repeat's reception time.
 - `.c1` **PASS:** one `T` control per distinct counter and one `stalled_trigger` entry naming `T` and `in_X`, per `SYS-0047` Accept. **FAIL:** an extra or a missing run, or no entry.
 - `.c2` **PASS:** the planted extra run is reported. **FAIL:** the copy passes.
+
+**`SYT-ORC-12`** · T · fixture `F-TICK` — A clock-started control wraps to 1
+**Serves.** `SYS-0050`
+**Steps.** With a 1 ms clock period, read the `measurement_counter` of the control for ticks 0, 1, `0xFFFFFFFE`, `0xFFFFFFFF` and `0x100000000`.
+- `.c1` **PASS:** 1, 2, `0xFFFFFFFF`, 1 and 2, per `SYS-0050` Accept. **FAIL:** a 0, or `0xFFFFFFFF` followed by anything but 1.
+
+**`SYT-ORC-13`** · T · fixture `F-CASE`, `F-SETUP-EDIT`, `F-REC-EDIT`, `F-ENGINE` — Every run's overridden input is recorded
+**Serves.** `SYS-0057`
+**Steps.** Run `running_example` `all_simulated` with `buffer_depth` 1 on every port and one declared override on `source.Y` that leaves its `sig_header` unchanged, on a copy of its recording whose `B` controls are taken in pairs, the first of each pair logged at the instant of the second, so a step holds two `B` runs; read `B`'s `control` and re-run `refSync` messages and its `in_Y` topic in the engine-run recording.
+- `.c1` **PASS:** as `SYS-0057` Accept, and at least one step holds two `B` runs. **FAIL:** a count other than the controls', a message carrying another run's counter, or no step with two `B` runs, so the case could not fail.
 
 ## 4. Input selection — `SEL`
 
@@ -198,7 +231,7 @@ in `tests/system/test_vnt_gate_g3.py`.
 
 **`SYT-SEL-08`** · T · fixture `F-REC-EDIT`, `F-ENGINE` — No sample found gives an empty input
 **Serves.** `SYS-0027`
-**Steps.** Remove the first five `source.Y` samples from `running_example`'s `base` recording; run `all_simulated`; read the re-run entries for `Y` of every run before the first remaining `source.Y` sample.
+**Steps.** Remove the first five `source.Y` samples from `running_example`'s `base` recording; run `all_simulated`; read the re-run entry for `Y` of every run whose recorded entry for `Y` names a removed sample.
 - `.c1` **PASS:** every entry 0, per `SYS-0027` Accept. **FAIL:** a non-zero entry.
 
 **`SYT-SEL-09`** · T · fixture `F-CAT`, `F-SETUP-EDIT`, `F-TAP` — Selection outcomes raise their badges
@@ -206,10 +239,10 @@ in `tests/system/test_vnt_gate_g3.py`.
 **Steps.** Run `running_example` `missing_sample`, `missing_run` and `no_ref_sync`, `late_consumer` `all_simulated` with `readiness_limit_steps` 0, and every exact case; for each step derive the `KIND_FALLBACK` and `KIND_READINESS_TIMEOUT` badges the table of `VANTAGE_Architecture.md` §6 gives for its selections; compare with the step's badges.
 - `.c1` **PASS:** equal in every step, per `SYS-0028` Accept. **FAIL:** a missing, extra or misplaced badge, naming case, step and port.
 
-**`SYT-SEL-10`** · T · fixture `F-CAT`, `F-TAP` — Identity broken is badged
+**`SYT-SEL-10`** · T · fixture `F-CAT`, `F-REC-EDIT`, `F-TAP` — Identity broken is badged
 **Serves.** `SYS-0029`
-**Steps.** Run `data_triggered` `renumber` `by_data` and every exact case; read every `KIND_IDENTITY_BROKEN` badge.
-- `.c1` **PASS:** `renumber`: raised on `T`'s output port, per `SYS-0029` Accept. **FAIL:** not raised, or raised on another port.
+**Steps.** In `running_example`'s `base` recording lower `source.X`'s `measurement_counter` by 5 from its 100th sample on, its `cycle_counter` unchanged; run `all_simulated` on it on `F-TAP`. Run every exact case on `F-TAP`. Read every `KIND_IDENTITY_BROKEN` badge.
+- `.c1` **PASS:** edited: one badge, on `source.X` at the step of its 100th sample, per `SYS-0029` Accept. **FAIL:** none, more than one, another step, or a badge on any other port (a downstream stage's input or output).
 - `.c2` **PASS:** exact cases: never raised. **FAIL:** any.
 
 **`SYT-SEL-11`** · T · fixture `F-CASE`, `F-REC-EDIT`, `F-ENGINE`, `F-TAP` — Gaps and resets are counted
@@ -218,11 +251,23 @@ in `tests/system/test_vnt_gate_g3.py`.
 - `.c1` **PASS:** `counter_jump`: one gap and no reset on `source.X`, per `SYS-0030` Accept. **FAIL:** another count.
 - `.c2` **PASS:** restarted: one reset on `source.X` and no `KIND_IDENTITY_BROKEN` on it. **FAIL:** another count, or the badge.
 
+**`SYT-SEL-12`** · T · fixture `F-CASE`, `F-ENGINE`, `F-TAP` — A counter wrap is consecutive
+**Serves.** `SYS-0049`
+**Steps.** Run `running_example` `counter_wrap` `all_simulated` on `F-ENGINE` and `F-TAP`; read the `counter_gap` and `counter_reset` entries for `source.X` and every `KIND_IDENTITY_BROKEN` badge. Then repeat on a copy of its recording whose `source.X` sample after `0xFFFFFFFF` is rewritten to carry 3 (`F-REC-EDIT`).
+- `.c1` **PASS:** no gap and no reset on `source.X`, and no `KIND_IDENTITY_BROKEN`, per `SYS-0049` Accept. **FAIL:** any entry or badge, in particular a gap of 1 at the wrap.
+- `.c2` **PASS:** the edited copy shows one gap on `source.X`. **FAIL:** none, so the check could not have failed.
+
+**`SYT-SEL-13`** · T · fixture `F-CASE`, `F-REC-EDIT`, `F-SETUP-EDIT`, `F-ENGINE` — The counter fallback's gap counts the wrap as one step
+**Serves.** `SYS-0051`
+**Steps.** From `running_example` `counter_wrap`'s recording remove `source.X`'s samples with `measurement_counter` `0xFFFFFFFF`, 1 and 2 (`F-REC-EDIT`). Run `all_simulated` on it on `F-ENGINE` twice, its setup's `fallback_max_gap` set to 1 and then to 3 (`F-SETUP-EDIT`). For every run whose recorded entry names `source.X` counter 1 or 2, read its re-run entry and the event log's `fallback_beyond_gap` entries for it.
+- `.c1` **PASS:** at 1, each such run has one entry, found `0xFFFFFFFE`, gap 2 when it wants 1 and 3 when it wants 2, per `SYS-0051` Accept. **FAIL:** a gap of 3 for 1 or of 4 for 2, a missing entry, or no such run at all.
+- `.c2` **PASS:** at 3, no such run has an entry and each re-run entry names `0xFFFFFFFE`. **FAIL:** an entry (a run wanting 2 at gap 4), or another sample.
+
 ## 5. The engine step — `STP`
 
 **`SYT-STP-01`** · T · fixture `F-CASE`, `F-SETUP-EDIT`, `F-TAP` — One step per instant
 **Serves.** `SYS-0032`
-**Steps.** Run `running_example` `cut_c` on `F-TAP`; list the recording's distinct reception times. Then set `E`'s trigger empty and `clock_period_ns` to 7 ms, and run again.
+**Steps.** Run `running_example` `cut_c` on `F-TAP`; list the distinct reception times of the recording's step-starting messages (`VANTAGE_Architecture.md` §7): here `source.X`, `source.Y`, `source.Z`, `C`'s `out`, `refSync` and `compState`, and the `control` of `A`, `B`, `D` and `E`. Then set `E`'s trigger empty and `clock_period_ns` to 7 ms, and run again.
 - `.c1` **PASS:** steps are those times, numbered from 0 without a gap, per `SYS-0032` Accept. **FAIL:** a missing or extra step, a gap, or a wrong time.
 - `.c2` **PASS:** with the clock, the steps are the union of those times and `E`'s ticks. **FAIL:** a tick instant without its step.
 
@@ -288,23 +333,34 @@ in `tests/system/test_vnt_gate_g3.py`.
 **`SYT-EQO-04`** · T · fixture `F-CASE`, `F-ENGINE` — A divergence does not fail the engine run
 **Serves.** `SYS-0045`
 **Steps.** Run `running_example` `no_ref_sync` and `cut_c`; read each exit code and step count.
-- `.c1` **PASS:** as `SYS-0045` Accept, `no_ref_sync`'s step count equal to the recording's distinct reception times. **FAIL:** a fail outcome, or fewer steps.
+- `.c1` **PASS:** as `SYS-0045` Accept, `no_ref_sync`'s step count equal to the number of distinct reception times of its recording's step-starting messages (`VANTAGE_Architecture.md` §7). **FAIL:** a fail outcome, or another number of steps.
+
+**`SYT-EQO-05`** · T · fixture `F-CASE`, `F-TAP` — A lost input's divergence comes no earlier than the loss
+**Serves.** `SYS-0054`
+**Steps.** Run `running_example` `missing_sample` and `missing_run` `all_simulated` on `F-TAP` with `outputs.path` set. In each, find the run of `B` or `E` at the earliest step whose recorded refSync names a dropped `source.Y` sample; read the event log's `first_divergence` entry and that step's badges.
+- `.c1` **PASS:** in each, as `SYS-0054` Accept. **FAIL:** no entry, an entry at an earlier step, or no `KIND_FALLBACK` on that run's `in_Y` at its step.
+
+**`SYT-EQO-06`** · T · fixture `F-CASE`, `F-REC-EDIT`, `F-ENGINE` — The engine-run recording states its first divergence
+**Serves.** `SYS-0056`
+**Steps.** Run `running_example` `no_ref_sync` and `cut_c` on `F-ENGINE`; then `cut_c` on a copy of its recording with every topic of `A`, `B`, `D` and `E` except their `control` removed. Read each engine-run recording's `manifest` `divergence` and each event log's `first_divergence` entry.
+- `.c1` **PASS:** as `SYS-0056` Accept, `no_ref_sync`'s value naming the entry's step, stage and port. **FAIL:** another value, `none` or `unknown` where an entry exists, or `none` where no output was compared.
 
 ## 8. Analysis — `ANL`
 
-**`ANL-01`** · A · fixture `F-SRC` — Decisions read no clock and no payload
+**`ANL-01`** · A · fixture `F-SRC` — Decisions read no clock and no other payload
 **Serves.** `SYS-0017`
-**Steps.** Run `scripts/check_engine_decisions.py` over the tree; then over a copy with a planted `std::chrono::steady_clock::now()` call in `src/simcore/orchestrator/orchestrator.cpp`, and over a copy with a planted `ParseFromArray` in `src/simcore/runner/select_inputs.cpp`.
+**Steps.** Run `scripts/check_engine_decisions.py` over the tree; then over a copy with a planted `std::chrono::steady_clock::now()` call in `src/simcore/orchestrator/orchestrator.cpp`, and over a copy with a planted `ParseFromArray` on an `adas::common::VehDyn` in `src/simcore/runner/select_inputs.cpp`.
 - `.c1` **PASS:** no finding, per `SYS-0017` Accept. **FAIL:** any finding.
 - `.c2` **PASS:** the planted clock call is reported with file and line. **FAIL:** the copy passes.
 - `.c3` **PASS:** the planted payload parse is reported with file and line. **FAIL:** the copy passes.
 
 **`ANL-02`** · A · fixture `F-SRC` — Counters compared only by `counterDistance`
 **Serves.** `SYS-0031`
-**Steps.** Run `scripts/check_counter_compare.py` over the tree; then over a copy with a planted `a.measurement_counter < b.measurement_counter` in `src/simcore/bus/sample_buffer.cpp`, and over a copy with a planted `a.measurement_counter == b.measurement_counter` in `src/simcore/orchestrator/orchestrator.cpp`.
+**Steps.** Run `scripts/check_counter_compare.py` over the tree; then over a copy with a planted `a.measurement_counter < b.measurement_counter` in `src/simcore/bus/sample_buffer.cpp`, over a copy with a planted `a.measurement_counter == b.measurement_counter` in `src/simcore/orchestrator/orchestrator.cpp`, and over a copy with a planted `header.cycle_counter != 0` in `src/simcore/runner/run_stage.cpp`.
 - `.c1` **PASS:** no finding, per `SYS-0031` Accept. **FAIL:** any finding.
 - `.c2` **PASS:** the planted `<` is reported with file and line. **FAIL:** the copy passes.
 - `.c3` **PASS:** the planted `==` is reported with file and line. **FAIL:** the copy passes.
+- `.c4` **PASS:** the planted comparison with 0 is reported with file and line. **FAIL:** the copy passes.
 
 **`ANL-03`** · A · fixture `F-SRC` — No floating-point time in the engine
 **Serves.** `SYS-0038`

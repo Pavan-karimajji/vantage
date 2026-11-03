@@ -42,15 +42,15 @@ add_library(simcore STATIC
     bus/static_data.cpp
     bus/bulk.cpp
     bus/catalogue.cpp
-    bus/cycle.cpp
+    # WP-02 (VANTAGE, C1): sample buffers, the header read at the door, identity checks.
+    bus/sample_buffer.cpp
+    bus/signal_header.cpp
+    bus/identity.cpp
     bus/port_bus.cpp
     # SM-06 (SI-25, D-5): the engine-side implementations behind
     # modules/interfaces' ITransport contract.
     transport/inproc.cpp
     transport/shm.cpp
-    # WP-09 (SI-03): the multi-rate scheduler core.
-    scheduler/due.cpp
-    scheduler/reconcile.cpp
     # WP-10 (SI-04): module_host -- component load/lifecycle/exec, ported
     # from sil_host/src/{sil_component,exec_timeout}.cpp and
     # library_loader.cpp's open half.
@@ -78,6 +78,11 @@ add_library(simcore STATIC
     runner/checkpoint.cpp
     runner/slice.cpp
     runner/cycle_loop.cpp
+    # WP-05 (VANTAGE, C1): the read-ahead, the input selection, one run --
+    # IMP-0026, IMP-0027, RCT:IMP-0033.
+    runner/read_ahead.cpp
+    runner/select_inputs.cpp
+    runner/run_stage.cpp
     # WP-14 (SI-09): module_host/isolate.cpp -- R-SIM-19's per-stage
     # `mode: isolated` bisection primitive, out-of-process (DD-09: the
     # isolated stage is a second simengine). abi/simcore.cpp -- simcore's
@@ -85,10 +90,19 @@ add_library(simcore STATIC
     # and IT-11's non-simengine test harness both link against.
     module_host/isolate.cpp
     abi/simcore.cpp
-    # WP-15 (SI-08): engine diagnostics -- IMP-0076/0131..0140. dump.cpp
-    # sits beside `Scheduler` itself (EXTEND, scheduler.hpp); the rest is
-    # the new diagnostics/ facility.
-    scheduler/dump.cpp
+    # WP-03 (VANTAGE, C1): the orchestrator's graph, ranks and plan --
+    # IMP-0012..IMP-0015 (IMP-0015 replaced scheduler/dump.cpp).
+    orchestrator/graph.cpp
+    orchestrator/plan_dump.cpp
+    # WP-04 (VANTAGE, C1): events, steps, readiness, the event log --
+    # IMP-0016..IMP-0023, IMP-0050.
+    orchestrator/event_queue.cpp
+    orchestrator/orchestrator.cpp
+    orchestrator/readiness.cpp
+    orchestrator/event_log.cpp
+    # WP-05 (VANTAGE, C1): the control message of a run -- RCT:IMP-0032.
+    orchestrator/control.cpp
+    # WP-15 (SI-08): engine diagnostics -- IMP-0131..0140.
     diagnostics/graph_dump.cpp
     diagnostics/trace.cpp
     diagnostics/cost.cpp
@@ -113,6 +127,9 @@ target_link_libraries(simcore PUBLIC mcap::mcap protobuf::libprotobuf AdasInterf
 if(NOT WIN32)
     # WP-10: module_host/dso.cpp's dlopen/dlsym/dlclose.
     target_link_libraries(simcore PUBLIC dl)
+else()
+    # IMP-0063: abi/simcore.cpp's host name (gethostname).
+    target_link_libraries(simcore PUBLIC ws2_32)
 endif()
 if(UNIX AND NOT APPLE)
     # SM-06: SharedMemoryTransport's shm_open/shm_unlink -- glibc < 2.34

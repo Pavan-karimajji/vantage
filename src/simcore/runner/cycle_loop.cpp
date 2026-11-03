@@ -3,52 +3,49 @@
 // COMPONENT: SIM
 /// @file
 /// @brief
-///   `IMP-0109`/`0110`/`0112`/`0114`/`0118` -- the cycle loop.
+///   `IMP-0028`/`0029`/`0030`/`0114`/`0118` -- the step loop.
 ///
-///   **ONE loop** (`SW-0109`, `ANL-SW-17`): `StepOnce()` is the only body
-///   that advances the run, and `Run()` is a `while` around it. There is no
-///   second `Advance()` and no second `->Exec(` anywhere in
-///   `src/simcore/runner/**`; a grep for either is that check's mechanised
-///   form, and this comment is where it is pointed.
+///   **ONE loop** (`SW-0109`, `ANL-SW-17`): `StepOnce()` is the only body that
+///   advances the run, and `Run()` is a `while` around it. There is no second
+///   `->Exec(` anywhere in `src/simcore/runner/**`; a grep for it is that
+///   check's mechanised form, and this comment is where it is pointed.
 ///
-///   **Ported from `sil_host/src/resim_runner.cpp::RunResim` and
-///   `adas_sim/core/resim.py::resim_pipeline`**, read directly: the
-///   per-cycle stimulus extraction, the per-measured-stage recorded-output
-///   extraction, the `dt_ns` from consecutive log times and the
-///   `Exec`-under-a-timeout are all theirs. **The accumulation is not**:
-///   both sources build the whole recording and the whole result in memory
-///   first (`recording.ticks()` / `list(reader.messages())`, then
-///   `results.emplace_back` / `results.append`). This file holds one
-///   cycle's messages plus whatever a single `io::Batch` carried, and hands
+///   **VANTAGE `c1` (`WP-05`).** The loop of `sil_host/src/resim_runner.cpp` and
+///   `adas_sim/core/resim.py`, which grouped a recording by `log_time_ns` and
+///   ran every stage on a grid, is replaced by one engine step (`ARCH §7`): the
+///   `Orchestrator` decides when a run happens and in which order, this file
+///   reads the recording ahead, selects a run's inputs, calls the component and
+///   reports what it made. A `measured` or `off` stage has no component, so
+///   nothing is ever called for it; its outputs reach the buffers as recorded
+///   messages. The accumulation of the two ported sources is still not ported:
+///   this file holds the read-ahead and one `io::Batch` per reader, and hands
 ///   each produced message to `io::WriterBase` as it is produced
 ///   (`SW-0025`, `SW-0041`).
 ///
-///   **`IMP-0110`/`IMP-0112` are the SAME mechanism, not two branches.**
-///   A stage is executed iff a loaded `module_host::Component` exists for
-///   it. A `measured` stage has none -- its declared outputs are published
-///   onto the bus straight from this cycle's recorded bytes -- and an `off`
-///   stage has none and publishes nothing. Nowhere in this file is there an
-///   `if (mode == "off")`: an `off` stage's ports are absent, and
-///   `PortBus::Get` already answers for an absent port exactly as it
-///   answers for an input nothing ever wired (`Origin::Unknown`,
-///   `updated=false`, empty payload). That is `CN-0320`'s "no code path
-///   distinguishes absent-because-off from absent-because-unmapped", and it
-///   is true here by not writing the branch rather than by testing for it.
-///
-///   **`IMP-0118` (`KEEP`)**: `reader_` is read-only in this file. Nothing
-///   the bus, the writer or a component produces is ever handed back to it
-///   -- the only calls made on it are `Seek`, `ReadRange` and `Describe`.
-///   `ANL-SW-25` is a static check over that fact.
+///   **`IMP-0118` (`KEEP`)**: the readers are read-only in `read_ahead.cpp`.
+///   Nothing the bus, the writer or a component produces is ever handed back
+///   to them -- the only calls made on them are `Seek`, `ReadRange` and
+///   `Describe`. `ANL-SW-25` is a static check over that fact.
 /// @author Pavan Karimajji
 
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
+#include <fstream>
+#include <limits>
 #include <map>
+#include <ostream>
 #include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include <google/protobuf/descriptor.h>
+
+#include "adas/counter.hpp"
+#include "common/cycle_control.pb.h"
+#include "common/ref_sync.pb.h"
+#include "rank_dispatch.hpp"
 #include "simcore/runner.hpp"
 
 namespace simcore::runner {
@@ -185,22 +182,153 @@ Result<RecordPolicy> ParseRecordPolicy(const std::string& raw, const std::string
 // Runner
 // ---------------------------------------------------------------------------
 
-Result<Runner> Runner::Construct(const RunSpec& spec, scheduler::Scheduler& scheduler, bus::PortBus& bus,
-                                 io::Reader& reader, std::map<std::string, module_host::Component*> components,
-                                 io::WriterBase* writer, const mutate::Mutator* mutator, Options options) {
+const char* ToString(BadgeKind kind) {
+  switch (kind) {
+    case BadgeKind::kFallback:
+      return "KIND_FALLBACK";
+    case BadgeKind::kReadinessTimeout:
+      return "KIND_READINESS_TIMEOUT";
+    case BadgeKind::kIdentityBroken:
+      return "KIND_IDENTITY_BROKEN";
+    case BadgeKind::kComputedNotConsumed:
+      return "KIND_COMPUTED_NOT_CONSUMED";
+    case BadgeKind::kWarmingUp:
+      return "KIND_WARMING_UP";
+  }
+  return "KIND_UNKNOWN";
+}
+
+// Everything the step loop owns that the orchestrator and the selection borrow
+// by reference: kept on the heap so a `Runner` can be moved.
+struct Runner::Impl {
+  RunSpec spec;
+  orchestrator::Graph graph;
+  orchestrator::EventLog log;
+  std::unique_ptr<orchestrator::Orchestrator> orchestrator;
+  std::optional<orchestrator::ControlWriter> control;
+  std::unique_ptr<ReadAhead> ahead;
+  RecordedReference reference;
+  bus::PortBus* bus = nullptr;
+  std::map<std::string, bus::Origin> origins;
+  std::set<std::string> queue_ports;      // recorded ports that enter a sample buffer
+  std::set<std::string> reference_ports;  // recorded ports kept as reference (a `simulate` stage's outputs)
+  std::set<std::string> controls_recorded;  // stages the recording holds a `<stage>.control` topic of (`D27`)
+  // `IMP-0065`: per stage, the recorded controls that arrived and are not yet passed by a dispatched run, oldest first.
+  // Kept here, not read from the `control` sample buffer, which holds only `buffer_depth` samples.
+  std::map<std::string, std::deque<ControlArrival>> control_arrivals;
+  std::vector<std::string> declared_ports;
+  std::string plan_text;
+  std::int64_t first_reception_ns = 0;
+  std::size_t readiness_instants = 0;
+  std::optional<std::int64_t> queued_instant;  // the recorded instant pushed to the queue, not yet begun
+  bool cut = false;                            // the slice end was reached
+
+  std::map<std::string, std::int64_t> last_run_ns;
+  std::set<std::string> warming;
+  std::map<std::pair<BadgeKind, std::string>, std::uint64_t> badges;
+  std::map<std::string, std::size_t> identity_seen;
+
+  // `IMP-0036`: which `simulate` stages never run at the same time, decided once from the setup.
+  ConflictTable conflicts;
+
+  // `IMP-0060`: under `limits.exec_timeout_ms`, one call thread per caller (see `ExecTimeout`), kept for the run.
+  std::vector<std::optional<module_host::ExecTimeout>> exec_slots;
+
+  // One step's own state.
+  std::set<std::string> touched;                     // ports that got a sample this step
+  std::map<std::string, bus::PortValue> delivered;   // what each run was handed this step
+
+  // `IMP-0061`: what each run committed this step wrote -- its control, then each output it committed, from
+  // that run's own values -- in commit order, so a stage that runs twice in one step leaves both runs.
+  struct RunWrite {
+    std::string port;  // "<stage>.<port>"
+    std::vector<std::uint8_t> payload;
+    std::optional<std::int64_t> capture_time_ns;
+    bool handed = false;  // an input as the run was handed it (post-mutation), `IMP-0066`
+  };
+  std::vector<RunWrite> run_writes;
+
+  std::ofstream event_file;
+  std::size_t lines_written = 0;
+
+  // The selection for a ticket, with the control header it is keyed by.
+  Selection SelectFor(const orchestrator::Ticket& ticket, std::uint64_t step, std::int64_t now_ns,
+                      orchestrator::ControlHeader& header, const SpecStage*& stage) const {
+    stage = nullptr;
+    for (const SpecStage& candidate : spec.stages) {
+      if (candidate.name == ticket.stage) stage = &candidate;
+    }
+    const orchestrator::GraphStage* graph_stage = graph.Find(ticket.stage);
+    const google::protobuf::Descriptor* trigger =
+        ticket.start == orchestrator::StartKind::kInput ? bus->Descriptor(ticket.trigger_port) : nullptr;
+    header = control->HeaderOf(ticket, *graph_stage, trigger);
+    SelectContext context;
+    context.spec = &spec;
+    context.stage = stage;
+    context.bus = bus;
+    context.reference = &reference;
+    context.ahead = ahead.get();
+    context.control_recorded = controls_recorded.count(ticket.stage) != 0;
+    const auto arrivals = control_arrivals.find(ticket.stage);
+    context.controls = arrivals == control_arrivals.end() ? nullptr : &arrivals->second;
+    context.origins = &origins;
+    context.fallback_max_gap = spec.fallback_max_gap;
+    context.now_ns = now_ns;
+    context.step = step;
+    return SelectInputs(context, ticket, header);
+  }
+
+  void Raise(BadgeKind kind, const std::string& subject) { ++badges[{kind, subject}]; }
+};
+
+Runner::Runner() = default;
+Runner::Runner(Runner&&) noexcept = default;
+Runner& Runner::operator=(Runner&&) noexcept = default;
+Runner::~Runner() = default;
+
+Result<PreflightResult> Runner::Preflight(const RunSpec& spec, const std::set<std::string>& topic_index) {
+  std::set<std::string> canonical;
+  for (const std::string& topic : topic_index) canonical.insert(io::CanonicalTopic(topic));
+  for (const SpecStage& stage : spec.stages) {
+    if (stage.mode != "measured") continue;
+    std::string missing;
+    for (const SpecPort& port : stage.ports) {
+      if (port.dir != "pro") continue;
+      if (canonical.count(io::CanonicalTopic(stage.name + "." + port.name)) != 0) continue;
+      if (!missing.empty()) missing += ", ";
+      missing += port.name;
+    }
+    if (!missing.empty()) {
+      return Result<PreflightResult>::Fail(Error{Kind::Authoring,
+                                                 "every output of a measured stage in the recording's topic index",
+                                                 "stage '" + stage.name + "' lacks: " + missing, "RunSpec::stages",
+                                                 "set the stage to simulate or off, or use a recording that holds them"});
+    }
+  }
+  Result<orchestrator::Graph> graph = orchestrator::BuildGraph(spec, topic_index);
+  if (!graph.ok()) return Result<PreflightResult>::Fail(graph.error());
+  PreflightResult result;
+  result.plan_text = orchestrator::PlanText(spec, graph.value());
+  result.graph = std::move(graph).value();
+  return Result<PreflightResult>::Ok(std::move(result));
+}
+
+Result<Runner> Runner::Construct(const RunSpec& spec, bus::PortBus& bus, std::vector<io::Reader*> readers,
+                                 std::map<std::string, module_host::Component*> components,
+                                 const google::protobuf::DescriptorPool* pool, io::WriterBase* writer,
+                                 const mutate::Mutator* mutator, Options options) {
   Runner runner;
-  runner.spec_ = spec;
-  runner.scheduler_ = &scheduler;
+  runner.impl_ = std::make_unique<Impl>();
+  Impl& impl = *runner.impl_;
+  impl.spec = spec;
+  impl.conflicts = ConflictTable::FromSpec(spec);
+  impl.bus = &bus;
   runner.bus_ = &bus;
-  runner.reader_ = &reader;
   runner.writer_ = writer;
   runner.mutator_ = mutator;
   runner.options_ = options;
   runner.components_ = std::move(components);
   runner.latch_ = DivergenceLatch(options.grace_ticks);
-
-  // Every topic already spoken for this run -- see the two-pass note below.
-  std::set<std::string> claimed_topics;
 
   for (const auto& stage : spec.stages) {
     const bool has_component = runner.components_.count(stage.name) != 0 &&
@@ -211,7 +339,6 @@ Result<Runner> Runner::Construct(const RunSpec& spec, scheduler::Scheduler& sche
                                           "stage '" + stage.name + "' has none", "RunSpec::stages",
                                           "set mode: measured or off, or load its library"});
       }
-      runner.execute_stages_.push_back(stage.name);
     } else if (stage.mode == "measured") {
       if (has_component) {
         // SW-0110's own Accept ("no module entry point is invoked") made
@@ -222,12 +349,26 @@ Result<Runner> Runner::Construct(const RunSpec& spec, scheduler::Scheduler& sche
                                           "stage '" + stage.name + "' was given one", "Runner::Construct",
                                           "a measured stage is fed from the recording and is never executed"});
       }
-      runner.inject_stages_.push_back(stage.name);
     } else if (stage.mode != "off") {
       return Result<Runner>::Fail(Error{Kind::Authoring, "one of: simulate, measured, off",
                                         "'" + stage.mode + "'", "stage '" + stage.name + "'", ""});
     }
   }
+
+  // The topic index of the whole recording: every `sources[]` file is one.
+  std::map<std::string, io::TopicInfo> described;
+  std::set<std::string> topic_index;
+  for (io::Reader* reader : readers) {
+    for (const auto& [topic, info] : reader->Describe()) {
+      topic_index.insert(topic);
+      described.emplace(topic, info);
+    }
+  }
+  Result<PreflightResult> preflight = Preflight(spec, topic_index);
+  if (!preflight.ok()) return Result<Runner>::Fail(preflight.error());
+  impl.graph = std::move(preflight.value().graph);
+  impl.plan_text = std::move(preflight.value().plan_text);
+  if (options.plan_out != nullptr) *options.plan_out << impl.plan_text;
 
   // IMP-0114: derived from the spec's own declared ports -- inputs AND
   // outputs -- never a hand-maintained list.
@@ -240,7 +381,8 @@ Result<Runner> Runner::Construct(const RunSpec& spec, scheduler::Scheduler& sche
   // governs this signal, and letting a consumer's entry claim it first would
   // let a `req` port marked `excluded` suppress a `pro` port marked `full`.
   // Claiming every `pro` topic before any `req` one removes that ordering
-  // hazard rather than relying on `spec.order` happening to be topological.
+  // hazard rather than relying on the setup's stage order happening to be topological.
+  std::set<std::string> claimed_topics;
   const auto build_topics = [&](const std::string& want_dir) -> Result<bool> {
     for (const SpecStage& stage : spec.stages) {
       if (stage.mode == "off") continue;
@@ -258,10 +400,7 @@ Result<Runner> Runner::Construct(const RunSpec& spec, scheduler::Scheduler& sche
         topic.policy = policy.value();
         // Two consumers of one producer also collapse here, to one topic
         // carrying one value -- they read the same bus entry in the same
-        // cycle, so the second entry would be a byte-identical duplicate.
-        // Which port received it stays answerable from the spec's own
-        // wiring, exactly as `df_only.yaml` already resolves
-        // `objects: source.gen_object_list`.
+        // step, so the second entry would be a byte-identical duplicate.
         if (claimed_topics.insert(topic.topic).second) {
           runner.recorded_topics_.push_back(topic);
         }
@@ -293,53 +432,483 @@ Result<Runner> Runner::Construct(const RunSpec& spec, scheduler::Scheduler& sche
   const Result<bool> req_topics = build_topics("req");
   if (!req_topics.ok()) return Result<Runner>::Fail(req_topics.error());
 
+  runner.boundary_ = ComputeInjectionBoundary(spec);
+
+  // Declare every port the run publishes on (`WP-05`: declaration is mandatory).
+  const auto describe = [&](const std::string& type, const std::string& port) -> const google::protobuf::Descriptor* {
+    const google::protobuf::Descriptor* found = pool == nullptr ? nullptr : pool->FindMessageTypeByName(type);
+    if (found == nullptr && port == "control") found = adas::common::CycleControl::descriptor();
+    if (found == nullptr && port == "refSync") found = adas::common::RefSync::descriptor();
+    return found;
+  };
+  const auto origin_of_topic = [&](const std::string& qualified) {
+    const auto it = described.find(io::CanonicalTopic(qualified));
+    return it == described.end() ? bus::Origin::Unknown : OriginOf(it->second.provenance);
+  };
+  for (const SpecStage& stage : spec.stages) {
+    if (stage.mode == "off") continue;
+    std::int64_t deepest = 2;
+    for (const SpecPort& port : stage.ports) deepest = std::max(deepest, port.buffer_depth);
+    for (const SpecPort& port : stage.ports) {
+      const std::string qualified = stage.name + "." + port.name;
+      const bool control_in = stage.mode == "simulate" && port.dir == "req" && port.name == "control";
+      if (port.dir != "pro" && !control_in) continue;
+      const google::protobuf::Descriptor* descriptor = describe(port.proto_type, port.name);
+      bus.DeclarePort(qualified, port.buffer_depth, descriptor);
+      impl.declared_ports.push_back(qualified);
+      impl.origins[qualified] = origin_of_topic(qualified);
+      if (stage.mode == "simulate" && port.dir == "pro") {
+        impl.reference_ports.insert(qualified);
+        impl.reference.Declare(qualified, static_cast<std::size_t>(port.buffer_depth), descriptor);
+      } else {
+        impl.queue_ports.insert(qualified);
+      }
+    }
+    if (stage.mode == "simulate") {
+      const std::string ref_sync = stage.name + ".refSync";
+      if (!impl.reference.Declared(ref_sync)) {
+        impl.reference_ports.insert(ref_sync);
+        impl.reference.Declare(ref_sync, static_cast<std::size_t>(deepest), adas::common::RefSync::descriptor());
+      }
+    }
+  }
+  for (const std::string& source_port : runner.boundary_.source_ports) {
+    const std::string qualified = std::string(kSourceProducer) + "." + source_port;
+    std::int64_t depth = 1;
+    for (const SpecStage& stage : spec.stages) {
+      if (stage.mode == "off") continue;
+      for (const SpecInput& input : stage.inputs) {
+        if (input.producer != kSourceProducer || input.producer_port != source_port) continue;
+        for (const SpecPort& port : stage.ports) {
+          if (port.name == input.port && port.dir == "req") depth = std::max(depth, port.buffer_depth);
+        }
+      }
+    }
+    const auto info = described.find(io::CanonicalTopic(qualified));
+    const google::protobuf::Descriptor* descriptor =
+        (info == described.end() || pool == nullptr) ? nullptr : pool->FindMessageTypeByName(info->second.schema_name);
+    bus.DeclarePort(qualified, depth, descriptor);
+    impl.declared_ports.push_back(qualified);
+    impl.origins[qualified] = origin_of_topic(qualified);
+    impl.queue_ports.insert(qualified);
+  }
+
+  impl.readiness_instants = spec.readiness_limit_steps > 0 ? static_cast<std::size_t>(spec.readiness_limit_steps) : 0;
+  impl.ahead = std::make_unique<ReadAhead>(std::move(readers), options.read_bounds);
+  impl.ahead->Fill(impl.readiness_instants + 1);
+  impl.first_reception_ns = impl.ahead->FirstTimeNs().value_or(0);
+
+  orchestrator::OrchestratorOptions orch_options;
+  orch_options.first_reception_ns = impl.first_reception_ns;
+  orch_options.start_ns = options.slice.start_log_time_ns.value_or(impl.first_reception_ns);
+  orch_options.end_ns = std::numeric_limits<std::int64_t>::max();
+  for (const orchestrator::GraphStage& graph_stage : impl.graph.stages) {
+    for (const SpecStage& stage : spec.stages) {
+      if (stage.name != graph_stage.name) continue;
+      for (const SpecPort& port : stage.ports) {
+        if (port.dir == "pro" && described.count(io::CanonicalTopic(stage.name + "." + port.name)) != 0) {
+          orch_options.stages_with_recorded_outputs.insert(stage.name);
+        }
+      }
+    }
+    if (graph_stage.computed_not_consumed) impl.Raise(BadgeKind::kComputedNotConsumed, graph_stage.name);
+  }
+  for (const SpecStage& stage : spec.stages) {
+    if (described.count(io::CanonicalTopic(stage.name + ".control")) != 0) impl.controls_recorded.insert(stage.name);
+  }
+  impl.control.emplace(impl.first_reception_ns);
+  {
+    ReadAhead* ahead = impl.ahead.get();
+    orch_options.ahead_control_restart = [ahead](const std::string& stage, std::uint32_t counter) -> std::optional<bool> {
+      const AheadMessage* found = ahead->Find(stage + ".control", counter, adas::common::CycleControl::descriptor());
+      if (found == nullptr) return std::nullopt;
+      adas::common::CycleControl control;
+      if (!control.ParseFromArray(found->message.payload.data(), static_cast<int>(found->message.payload.size()))) {
+        return std::nullopt;
+      }
+      return control.op_mode() == adas::common::CycleControl::RESTART;
+    };
+  }
+  impl.orchestrator = std::make_unique<orchestrator::Orchestrator>(impl.spec, impl.graph, bus, impl.log, orch_options);
+
+  if (!spec.outputs.path.empty()) {
+    std::filesystem::path log_path(spec.outputs.path);
+    log_path.replace_extension(".events.log");
+    impl.event_file.open(log_path, std::ios::binary | std::ios::trunc);
+    if (!impl.event_file) {
+      return Result<Runner>::Fail(Error{Kind::Environment, "an event log file that can be created",
+                                        "cannot open '" + log_path.string() + "'", "Runner::Construct",
+                                        "the event log is written beside outputs.path"});
+    }
+  }
+
+  runner.TopUp();
   return Result<Runner>::Ok(std::move(runner));
+}
+
+std::string Runner::BoundaryLine() const { return boundary_.FormatEvent(impl_->spec.run_id); }
+
+const std::vector<std::string>& Runner::EventLogLines() const { return impl_->log.Lines(); }
+
+void Runner::SetByteCounter(diagnostics::ByteCounter* byte_counter) { impl_->ahead->SetByteCounter(byte_counter); }
+
+// Keeps the queue holding the whole next recorded instant, drops instants that
+// only carry reference messages, and tells the clocks where the recording ends.
+void Runner::TopUp() {
+  Impl& impl = *impl_;
+  const auto consume_reference = [&](const AheadInstant& instant) {
+    for (const AheadMessage& message : instant.messages) {
+      if (impl.reference_ports.count(message.port) != 0) {
+        impl.reference.Add(message.port, instant.time_ns, message.message.payload);
+      }
+    }
+  };
+  const auto carries_queue_message = [&](const AheadInstant& instant) {
+    return std::any_of(instant.messages.begin(), instant.messages.end(),
+                       [&](const AheadMessage& message) { return impl.queue_ports.count(message.port) != 0; });
+  };
+  while (!impl.cut) {
+    impl.ahead->Fill(impl.readiness_instants + 1);
+    if (impl.queued_instant.has_value() || !impl.ahead->FrontComplete()) break;
+    const AheadInstant* front = impl.ahead->Front();
+    if (options_.slice.PastEnd(front->time_ns)) {
+      impl.cut = true;
+      impl.ahead->Stop();
+      break;
+    }
+    if (!carries_queue_message(*front)) {  // nothing here starts a step: it is only reference
+      consume_reference(impl.ahead->TakeFront());
+      continue;
+    }
+    for (const AheadMessage& message : front->messages) {
+      if (impl.queue_ports.count(message.port) == 0) continue;
+      const auto origin = impl.origins.find(message.port);
+      impl.orchestrator->Queue().PushRecorded(
+          message.port, front->time_ns, message.source_index, message.message.payload, message.message.capture_time_ns,
+          origin == impl.origins.end() ? bus::Origin::Measured : origin->second);
+    }
+    impl.queued_instant = front->time_ns;
+  }
+
+  const std::size_t held = impl.queued_instant.has_value() ? 1 : 0;
+  if (impl.cut || (impl.ahead->Drained() && impl.ahead->Instants() <= held)) {
+    std::int64_t end = impl.ahead->LastTimeNs().value_or(-1);
+    if (options_.slice.end_log_time_ns.has_value()) end = std::min(end, *options_.slice.end_log_time_ns - 1);
+    if (impl.cut && options_.slice.end_log_time_ns.has_value()) end = *options_.slice.end_log_time_ns - 1;
+    impl.orchestrator->SetEnd(end);
+  }
 }
 
 Result<bool> Runner::Prepare() {
   if (prepared_) return Result<bool>::Ok(true);
-  boundary_ = ComputeInjectionBoundary(spec_);
-  // SW-0113: ONE structured event, before tick 0.
-  event_log_.push_back(boundary_.FormatEvent(spec_.run_id));
-  SeekToSliceStart(*reader_, options_.slice);
   prepared_ = true;
+  if (options_.slice.start_log_time_ns.has_value()) return Seek(*options_.slice.start_log_time_ns);
   return Result<bool>::Ok(true);
 }
 
-bool Runner::PullCycle(std::map<std::string, RecordedMessage>& payloads_by_port, std::int64_t& log_time_ns) {
-  payloads_by_port.clear();
-  bool have_time = false;
-  std::int64_t cycle_time_ns = 0;
+Result<bool> Runner::Seek(std::int64_t to_ns) {
+  Impl& impl = *impl_;
+  const auto reseek = [&](std::int64_t at_ns) -> Result<bool> {
+    impl.ahead->Seek(at_ns);
+    impl.reference.Clear();
+    impl.control_arrivals.clear();
+    impl.queued_instant.reset();
+    impl.cut = false;
+    impl.last_run_ns.clear();
+    impl.warming.clear();
+    impl.identity_seen.clear();
+    impl.orchestrator->SetEnd(std::numeric_limits<std::int64_t>::max());
+    TopUp();
+    return Result<bool>::Ok(true);
+  };
+  const Result<bool> jumped = impl.orchestrator->Jump(to_ns, reseek);
+  if (!jumped.ok()) return jumped;
+  exhausted_ = false;
+  outcome_.exhausted = false;
+  return jumped;
+}
 
-  for (;;) {
-    if (carry_.empty()) {
-      if (reader_drained_) break;
-      io::Batch batch = reader_->ReadRange(options_.read_bounds);
-      if (batch.exhausted) reader_drained_ = true;
-      carry_ = std::move(batch.messages);
-      if (carry_.empty()) break;
+// One ticket of a rank between `NextRunnable` and `Commit` (`IMP-0035`). Nothing in it is
+// shared with another ticket: the worker that runs it touches `component`, `prepared` and
+// `executed` and nothing else.
+struct Runner::PendingRun {
+  orchestrator::Ticket ticket;
+  const SpecStage* stage = nullptr;
+  orchestrator::ControlHeader header;
+  Selection selection;
+  RunStageArgs args;
+  module_host::Component* component = nullptr;
+  // What selecting the inputs found, entered into the event log and the badges by `FinishTicket`,
+  // so the log keeps its order: this ticket's selection, then its run, then the next ticket's.
+  std::vector<orchestrator::LogEntry> selection_entries;
+  std::vector<std::pair<BadgeKind, std::string>> selection_badges;
+  std::optional<Error> prepare_error;
+  PreparedRun prepared;
+  std::optional<Result<module_host::PortMap>> executed;
+};
+
+void Runner::PrepareTicket(const orchestrator::Ticket& ticket, PendingRun& pending) {
+  Impl& impl = *impl_;
+  const std::uint64_t step = impl.orchestrator->StepNumber();
+  const std::int64_t now_ns = impl.orchestrator->Now();
+  pending.ticket = ticket;
+  pending.selection = impl.SelectFor(ticket, step, now_ns, pending.header, pending.stage);
+  // `IMP-0065`: the controls before this run's own are no run's bound any more.
+  const auto arrivals = impl.control_arrivals.find(ticket.stage);
+  if (arrivals != impl.control_arrivals.end() && !bus::IsUnknownMeasurementCounter(pending.header.measurement_counter)) {
+    std::deque<ControlArrival>& arrived = arrivals->second;
+    for (std::size_t i = arrived.size(); i-- > 0;) {
+      if (adas::common::counterDistance(pending.header.measurement_counter, arrived[i].counter) != 0) continue;
+      arrived.erase(arrived.begin(), arrived.begin() + static_cast<std::ptrdiff_t>(i));
+      break;
     }
-    std::size_t consumed = 0;
-    bool boundary_hit = false;
-    for (; consumed < carry_.size(); ++consumed) {
-      const io::RawMessage& msg = carry_[consumed];
-      if (!have_time) {
-        cycle_time_ns = msg.log_time_ns;
-        have_time = true;
-      } else if (msg.log_time_ns != cycle_time_ns) {
-        boundary_hit = true;
-        break;
-      }
-      payloads_by_port[TopicToPortName(msg.topic)] = RecordedMessage{msg.payload, msg.capture_time_ns};
-      if (byte_counter_ != nullptr) byte_counter_->Observe(msg.topic, msg.payload.size());
+  }
+  const orchestrator::GraphStage* graph_stage = impl.graph.Find(ticket.stage);
+  pending.component = components_.at(ticket.stage);
+
+  for (const InputSelection& input : pending.selection.inputs) {
+    const std::string subject = ticket.stage + "." + input.port;
+    if (input.eviction_miss) {
+      orchestrator::LogEntry entry;
+      entry.kind = orchestrator::EntryKind::kEvictionMiss;
+      entry.stage = ticket.stage;
+      entry.port = input.port;
+      entry.wanted = input.wanted;
+      pending.selection_entries.push_back(std::move(entry));
     }
-    carry_.erase(carry_.begin(), carry_.begin() + static_cast<std::ptrdiff_t>(consumed));
-    if (boundary_hit) break;
+    if (input.beyond_gap) {
+      orchestrator::LogEntry entry;
+      entry.kind = orchestrator::EntryKind::kFallbackBeyondGap;
+      entry.stage = ticket.stage;
+      entry.port = input.port;
+      entry.wanted = input.wanted;
+      entry.found = input.found;
+      entry.gap = input.gap;
+      pending.selection_entries.push_back(std::move(entry));
+    }
+    if (input.readiness_timeout) pending.selection_badges.emplace_back(BadgeKind::kReadinessTimeout, subject);
+    if (input.fallback) pending.selection_badges.emplace_back(BadgeKind::kFallback, subject);
   }
 
-  if (!have_time) return false;
-  log_time_ns = cycle_time_ns;
-  return true;
+  RunStageArgs& args = pending.args;
+  args.stage = pending.stage;
+  args.ticket = &pending.ticket;
+  args.selection = &pending.selection;
+  args.bus = bus_;
+  args.mutator = mutator_;
+  args.now_ns = now_ns;
+  const auto last = impl.last_run_ns.find(ticket.stage);
+  args.dt_ns = last == impl.last_run_ns.end() ? 0 : now_ns - last->second;
+  if (!bus::IsUnknownMeasurementCounter(pending.header.measurement_counter)) {
+    args.control_counter = pending.header.measurement_counter;
+  }
+  const bool declares_control =
+      std::any_of(pending.stage->ports.begin(), pending.stage->ports.end(),
+                  [](const SpecPort& port) { return port.dir == "req" && port.name == "control"; });
+  if (declares_control) {
+    const google::protobuf::Descriptor* trigger =
+        ticket.start == orchestrator::StartKind::kInput ? bus_->Descriptor(ticket.trigger_port) : nullptr;
+    args.control = impl.control->Write(ticket, *graph_stage, trigger);
+  }
+  Result<PreparedRun> prepared = PrepareRun(args);
+  if (!prepared.ok()) {
+    pending.prepare_error = prepared.error();
+    return;
+  }
+  pending.prepared = std::move(prepared).value();
+}
+
+// The only call a worker thread makes (`ARCH §8`, fact 4).
+void Runner::ExecTicket(PendingRun& pending, std::size_t worker) const {
+  std::optional<module_host::ExecTimeout> timeout;
+  if (options_.exec_timeout.has_value()) timeout = impl_->exec_slots.at(worker);
+  pending.executed.emplace(pending.component->Exec(pending.args.dt_ns, pending.prepared.inputs,
+                                                   pending.prepared.input_meta, timeout));
+}
+
+Result<bool> Runner::FinishTicket(PendingRun& pending, std::vector<orchestrator::CommitReport>& reports) {
+  Impl& impl = *impl_;
+  const orchestrator::Ticket& ticket = pending.ticket;
+  const std::uint64_t step = impl.orchestrator->StepNumber();
+  const std::int64_t now_ns = impl.orchestrator->Now();
+  const RunStageArgs& args = pending.args;
+
+  const auto add = [&](orchestrator::LogEntry entry) -> Result<bool> {
+    entry.step = step;
+    return impl.log.Add(entry);
+  };
+  for (const orchestrator::LogEntry& entry : pending.selection_entries) {
+    const Result<bool> added = add(entry);
+    if (!added.ok()) return added;
+  }
+  for (const auto& [kind, subject] : pending.selection_badges) impl.Raise(kind, subject);
+
+  if (pending.prepare_error.has_value()) return Result<bool>::Fail(*pending.prepare_error);
+  if (!pending.executed->ok()) return Result<bool>::Fail(pending.executed->error());
+  Result<RunStageResult> ran = FinishRun(args, std::move(pending.prepared), pending.executed->value());
+  if (!ran.ok()) return Result<bool>::Fail(ran.error());
+  RunStageResult result = std::move(ran).value();
+  for (orchestrator::LogEntry& entry : result.entries) {
+    const Result<bool> added = add(entry);
+    if (!added.ok()) return added;
+  }
+  impl.last_run_ns[ticket.stage] = now_ns;
+  if (!args.control.empty()) impl.run_writes.push_back({ticket.stage + ".control", args.control, std::nullopt});
+  for (const orchestrator::CommittedOutput& output : result.report.outputs) {
+    impl.run_writes.push_back({output.port, output.payload, output.capture_time_ns});
+  }
+  // `IMP-0066`: then the inputs this run was handed, so a stage run twice in a step leaves both runs' values.
+  for (const auto& [port, value] : result.delivered) {
+    std::optional<std::int64_t> capture;
+    if (value.header.t_capture_ns.has_value()) capture = value.header.t_capture_ns.value();
+    impl.run_writes.push_back({port, value.payload, capture, true});
+  }
+  for (auto& [port, value] : result.delivered) impl.delivered[port] = std::move(value);
+
+
+  // IMP-0033: against what the recording holds for this same port at this same
+  // instant, by `EqualOutputs`. A RESTART run is never offered to the latch
+  // (`RCT:SYS-0016`): the first difference is logged once, and changes nothing else.
+  // KIND_WARMING_UP: a stage restarted mid-recording is badged until its
+  // outputs first equal the recorded ones, by the same `EqualOutputs` (IMP-0032).
+  if (ticket.warming_up) impl.warming.insert(ticket.stage);
+  bool restart_run = ticket.restart;
+  if (!restart_run && !args.control.empty()) {
+    adas::common::CycleControl control;
+    restart_run = control.ParseFromArray(args.control.data(), static_cast<int>(args.control.size())) &&
+                  control.op_mode() == adas::common::CycleControl::RESTART;
+  }
+  bool compared = false;
+  bool equal = true;
+  for (const orchestrator::CommittedOutput& output : result.report.outputs) {
+    // `IMP-0033`, `ARCH §7`: against the recorded output of the same port and `measurement_counter`, never by
+    // instant -- a run that waited, or a stage's second run in one step, meets its own recorded run. Looked up among
+    // the arrived recorded messages, then in the read-ahead (held to the readiness limit); none found, or an
+    // output whose counter is unknown, is not compared.
+    const google::protobuf::Descriptor* descriptor = bus_->Descriptor(output.port);
+    const bus::SignalHeader output_header = bus::ReadSignalHeader(output.payload, descriptor);
+    if (!output_header.measurement_counter.has_value() ||
+        bus::IsUnknownMeasurementCounter(output_header.measurement_counter.value())) {
+      continue;
+    }
+    const std::uint32_t output_counter = output_header.measurement_counter.value();
+    const std::vector<std::uint8_t>* recorded = impl.reference.Find(output.port, output_counter);
+    if (recorded == nullptr && impl.ahead != nullptr) {
+      const AheadMessage* ahead_message = impl.ahead->Find(output.port, output_counter, descriptor);
+      if (ahead_message != nullptr) recorded = &ahead_message->message.payload;
+    }
+    if (recorded == nullptr) continue;
+    const std::string bare = output.port.substr(ticket.stage.size() + 1);
+    if (!restart_run) {
+      const bool was_latched = latch_.latched();
+      outputs_compared_ = true;
+      latch_.Observe(step, now_ns, ticket.stage, bare, output.payload, *recorded, descriptor);
+      if (!was_latched && latch_.latched()) {
+        orchestrator::LogEntry entry;
+        entry.kind = orchestrator::EntryKind::kFirstDivergence;
+        entry.stage = ticket.stage;
+        entry.port = bare;
+        const Result<bool> added = add(entry);
+        if (!added.ok()) return added;
+      }
+    }
+    compared = true;
+    if (!EqualOutputs(output.payload, *recorded, descriptor)) equal = false;
+  }
+  if (impl.warming.count(ticket.stage) != 0) {
+    if (compared && equal && !ticket.restart) {
+      impl.warming.erase(ticket.stage);
+    } else {
+      impl.Raise(BadgeKind::kWarmingUp, ticket.stage);
+    }
+  }
+  reports.push_back(std::move(result.report));
+  return Result<bool>::Ok(true);
+}
+
+Result<std::size_t> Runner::WriteStep(std::uint64_t step, std::int64_t now_ns) {
+  Impl& impl = *impl_;
+  std::size_t bytes_written = 0;
+  if (writer_ == nullptr && transport_publisher_ == nullptr) return Result<std::size_t>::Ok(bytes_written);
+  const bool informational = latch_.InformationalOnly(step);
+  const auto newest = [&](const std::string& port) -> const bus::Sample* {
+    const bus::SampleBuffer* buffer = bus_->Buffer(port);
+    return buffer == nullptr ? nullptr : buffer->Newest();
+  };
+  const auto emit = [&](const RecordedTopic& topic, const std::vector<std::uint8_t>& payload,
+                        const std::optional<std::int64_t>& capture_time_ns) {
+    if (writer_ != nullptr) {
+      io::RawMessage message;
+      message.topic = topic.topic;
+      message.log_time_ns = now_ns;
+      if (capture_time_ns.has_value()) message.capture_time_ns = capture_time_ns.value();
+      message.payload = payload;
+      message.informational_only = informational;
+      bytes_written += message.payload.size();
+      writer_->WriteMessage(message);
+    }
+    // SI-25 transport (UT-TRN-*): the same value the recorder would have
+    // written, named from the TOPIC (F-3), keyed by the step number.
+    if (transport_publisher_ != nullptr) {
+      transport_publisher_->Publish(step, TopicToPortName(topic.topic), payload.data(), payload.size());
+    }
+  };
+
+  // `IMP-0061`: first each run committed in this step, in commit order -- its control, then each output it
+  // committed, from that run's own values; a topic written here is not written again below.
+  std::set<std::size_t> written_by_a_run;
+  for (const Impl::RunWrite& run_write : impl.run_writes) {
+    for (std::size_t i = 0; i < recorded_topics_.size(); ++i) {
+      const RecordedTopic& topic = recorded_topics_[i];
+      if (run_write.handed) {
+        // `IMP-0066`: the post-mutation input topic carries each run's own value.
+        if (!topic.post_mutation || topic.qualified_port != run_write.port) continue;
+        written_by_a_run.insert(i);
+        if (topic.policy.WritesAt(step)) emit(topic, run_write.payload, run_write.capture_time_ns);
+        break;
+      }
+      if (topic.post_mutation || topic.qualified_port != run_write.port) continue;
+      if (topic.dir == "req" && ProducerAddressOf(impl.spec, topic.stage, topic.port).has_value()) continue;
+      written_by_a_run.insert(i);
+      if (topic.policy.WritesAt(step)) emit(topic, run_write.payload, run_write.capture_time_ns);
+      break;
+    }
+  }
+
+  // Then the step's other recorded topics, in the topic list's order.
+  for (std::size_t i = 0; i < recorded_topics_.size(); ++i) {
+    const RecordedTopic& topic = recorded_topics_[i];
+    if (written_by_a_run.count(i) != 0) continue;
+    if (topic.post_mutation) continue;  // written with the run that was handed it (`IMP-0066`)
+    if (!topic.policy.WritesAt(step)) continue;
+    bus::PortValue value;
+    if (topic.dir == "req") {
+      const std::optional<std::string> producer = ProducerAddressOf(impl.spec, topic.stage, topic.port);
+      if (!producer.has_value()) {
+        // What the stage was handed this step, post-mutation -- or, for an
+        // input nobody wired (its `control`), the message written for it.
+        const auto delivered = impl.delivered.find(topic.qualified_port);
+        if (delivered == impl.delivered.end()) continue;
+        value = delivered->second;
+      } else {
+        // F-3: the producing-name entry takes the upstream value straight off
+        // the buffer, before any override, so this topic means what its name says.
+        if (impl.touched.count(*producer) == 0) continue;
+        const bus::Sample* sample = newest(*producer);
+        if (sample == nullptr) continue;
+        value = sample->value;
+      }
+    } else {
+      if (impl.touched.count(topic.qualified_port) == 0) continue;
+      const bus::Sample* sample = newest(topic.qualified_port);
+      if (sample == nullptr) continue;
+      value = sample->value;
+    }
+    std::optional<std::int64_t> capture;
+    if (value.header.t_capture_ns.has_value()) capture = value.header.t_capture_ns.value();
+    emit(topic, value.payload, capture);
+  }
+  return Result<std::size_t>::Ok(bytes_written);
 }
 
 Result<bool> Runner::StepOnce() {
@@ -348,287 +917,152 @@ Result<bool> Runner::StepOnce() {
     if (!prepared.ok()) return prepared;
   }
   if (exhausted_) return Result<bool>::Ok(false);
+  Impl& impl = *impl_;
+  orchestrator::Orchestrator& orch = *impl.orchestrator;
 
-  std::map<std::string, RecordedMessage> recorded;
-  std::int64_t t_ns = 0;
-  // A codec whose `Seek` is a no-op still yields a correct slice: cycles
-  // before the slice start are skipped here rather than executed. A codec
-  // with a real `Seek` (mcap) simply never delivers them.
-  for (;;) {
-    if (!PullCycle(recorded, t_ns)) {
-      exhausted_ = true;
-      outcome_.exhausted = true;
-      return Result<bool>::Ok(false);
-    }
-    if (options_.slice.PastEnd(t_ns)) {
-      exhausted_ = true;
-      outcome_.exhausted = true;
-      return Result<bool>::Ok(false);
-    }
-    if (options_.slice.Contains(t_ns)) break;
+  TopUp();
+  const Result<bool> begun = orch.BeginStep();
+  if (!begun.ok()) return begun;
+  if (!begun.value()) {
+    exhausted_ = true;
+    outcome_.exhausted = true;
+    return Result<bool>::Ok(false);
   }
+  const std::uint64_t step = orch.StepNumber();
+  const std::int64_t now_ns = orch.Now();
+  impl.touched.clear();
+  impl.delivered.clear();
+  impl.run_writes.clear();
 
-  const std::int64_t dt_ns = previous_log_time_ns_.has_value() ? t_ns - *previous_log_time_ns_ : 0;
-  previous_log_time_ns_ = t_ns;
-  const std::uint64_t tick_index = scheduler_->tick_index();
-  const std::int64_t now_ns = scheduler_->now_ns();
-
-  const std::map<std::string, io::TopicInfo> topics = reader_->Describe();
-  auto origin_for = [&topics](const std::string& qualified_port) {
-    const auto it = topics.find(PortNameToTopic(qualified_port));
-    // SW-0039/R-SIM-12: an origin nobody can establish reads `unknown`,
-    // never a guessed grade -- a topic this recording's own index does not
-    // describe is exactly that case, not evidence it was "measured".
-    if (it == topics.end()) return bus::Origin::Unknown;
-    return OriginOf(it->second.provenance);
-  };
-
-  // ---- IMP-0110: a measured stage, and every source-fed port, publish
-  // from the recording. No component exists for either, so nothing is
-  // executed for them anywhere below.
-  auto publish_recorded = [&](const std::string& qualified_port, const std::string& producer) -> Result<bool> {
-    const auto it = recorded.find(qualified_port);
-    if (it == recorded.end()) return Result<bool>::Ok(false);
-    bus::PortValue value;
-    value.port = qualified_port;
-    value.origin = origin_for(qualified_port);
-    value.updated = true;
-    value.payload = it->second.payload;
-    value.header.t_sim_ns = now_ns;
-    if (it->second.capture_time_ns.has_value()) value.header.t_capture_ns = it->second.capture_time_ns.value();
-    value.header.producer = producer;
-    value.header.mode = bus::Mode::Measured;
-    return bus_->Publish(qualified_port, std::move(value), now_ns);
-  };
-
-  for (const std::string& port : boundary_.source_ports) {
-    Result<bool> published = publish_recorded(std::string(kSourceProducer) + "." + port, kSourceProducer);
-    if (!published.ok()) return published;
-  }
-  for (const std::string& stage_name : inject_stages_) {
-    for (const auto& stage : spec_.stages) {
-      if (stage.name != stage_name) continue;
-      for (const auto& port : stage.ports) {
-        if (port.dir != "pro") continue;
-        Result<bool> published = publish_recorded(stage.name + "." + port.name, stage.name);
-        if (!published.ok()) return published;
-      }
-    }
-  }
-
-  // ---- Execution. `Order()` is the spec's own resolved order (SW-0072);
-  // a stage with no loaded component is simply not in `components_`, which
-  // is what makes measured and off need no branch of their own here.
-  //
-  // IMP-0114's own "every stage's inputs -- not just outputs -- is
-  // recorded" (R-SIM-6) needs the value actually DELIVERED to a `req` port
-  // this cycle, post-mutation: the bus stores a req port's value under its
-  // PRODUCER's own qualified name (e.g. "meas.objects"), never under the
-  // consuming stage's local name ("sut.objects"), so the write pass below
-  // cannot recover it with a second `bus_->Get(topic.qualified_port, ...)`
-  // -- that key was never published under that name. This map is the one
-  // place that delivered value is captured, keyed exactly as
-  // `RecordedTopic::qualified_port` already is for a `req` port
-  // ("<stage>.<port>"), so the write pass can look it up directly.
-  std::map<std::string, bus::PortValue> delivered_req_;
-  for (const std::string& stage_name : scheduler_->Order()) {
-    const auto component_it = components_.find(stage_name);
-    if (component_it == components_.end() || component_it->second == nullptr) continue;
-    if (!scheduler_->IsDue(stage_name)) continue;
-
-    const SpecStage* stage = nullptr;
-    for (const auto& candidate : spec_.stages) {
-      if (candidate.name == stage_name) stage = &candidate;
-    }
-    if (stage == nullptr) continue;
-
-    // SW-0057: the FULL declared req port set, every cycle, regardless of
-    // which producers ran -- so a consumer cannot tell simulate from
-    // measured from absent.
-    module_host::PortMap inputs;
-    module_host::InputMetaMap input_meta;
-    for (const auto& port : stage->ports) {
-      if (port.dir != "req") continue;
-      std::string qualified = port.name;
-      for (const auto& input : stage->inputs) {
-        if (input.port == port.name) qualified = input.producer + "." + input.producer_port;
-      }
-      bus::PortValue value = bus_->Get(qualified, now_ns);
-      if (mutator_ != nullptr) {
-        const std::size_t dot = qualified.find('.');
-        const std::string producer = dot == std::string::npos ? std::string() : qualified.substr(0, dot);
-        const std::string bare = dot == std::string::npos ? qualified : qualified.substr(dot + 1);
-        if (mutator_->Touches(producer, bare)) {
-          Result<bool> applied = mutator_->ApplyTo(value, bare, now_ns);
-          if (!applied.ok()) return applied;
-        }
-      }
-      inputs[port.name] = value.payload;
-      module_host::InputMeta meta;
-      meta.valid = value.origin != bus::Origin::Unknown;
-      meta.age_s = value.age_ns().has_value() ? static_cast<double>(value.age_ns().value()) / 1e9 : 0.0;
-      input_meta[port.name] = meta;
-      // IMP-0114: the exact bytes delivered to this port this cycle,
-      // post-mutation -- what the write pass below records for a `req`
-      // topic (see this loop's own top-of-block note).
-      delivered_req_[stage_name + "." + port.name] = value;
-    }
-
-    std::optional<module_host::ExecTimeout> timeout;
-    if (options_.exec_timeout.has_value()) timeout.emplace(*options_.exec_timeout);
-    Result<module_host::PortMap> executed = component_it->second->Exec(dt_ns, inputs, input_meta, timeout);
-    if (!executed.ok()) return Result<bool>::Fail(executed.error());
-
-    for (const auto& [port_name, payload] : executed.value()) {
-      const std::string qualified = stage_name + "." + port_name;
-      // IMP-0116: compare against what the recording holds for this same
-      // port at this same cycle, before the value is published or written.
-      const auto recorded_it = recorded.find(qualified);
-      if (recorded_it != recorded.end()) {
-        latch_.Observe(tick_index, t_ns, stage_name, port_name, payload, recorded_it->second.payload);
-      }
-      bus::PortValue value;
-      value.port = qualified;
-      value.origin = bus::Origin::Simulated;
-      value.updated = true;
-      value.payload = payload;
-      value.header.t_sim_ns = now_ns;
-      value.header.t_capture_ns = t_ns;
-      value.header.producer = stage_name;
-      value.header.mode = bus::Mode::Simulate;
-      Result<bool> published = bus_->Publish(qualified, std::move(value), now_ns);
-      if (!published.ok()) return published;
-    }
-  }
-
-  // ---- IMP-0114: offer every declared port to the writer, filtered only
-  // by its own declared policy. IMP-0117: every message written from the
-  // divergence point plus the grace window carries the flag.
-  //
-  // A `req` topic's value is never a second `bus_->Get(topic.qualified_port,
-  // ...)` -- the bus never holds anything under a consuming stage's LOCAL
-  // name for its own inputs, so that lookup would always miss and silently
-  // drop every declared input topic (`delivered_req_`'s own top-of-block
-  // note above). Two sources, tried in order: (1) `delivered_req_` -- the
-  // EXACT bytes actually delivered this cycle, post-mutation, for a stage
-  // that executed; (2) for a stage with no loaded component (a `measured`
-  // stage's own declared inputs -- it consumes nothing IN this process, so
-  // nothing is ever "delivered" to it here) the producer-qualified address
-  // resolved from `RunSpec::stages[].inputs`, the same resolution the
-  // execution loop uses, read straight off the bus. A `req` port whose
-  // stage executed but was not due this cycle has no delivered value and
-  // is correctly not written -- there was no delivery to record.
-  auto resolve_producer_qualified = [this](const std::string& stage_name2,
-                                           const std::string& port_name2) -> std::optional<std::string> {
-    for (const auto& candidate : spec_.stages) {
-      if (candidate.name != stage_name2) continue;
-      for (const auto& input : candidate.inputs) {
-        if (input.port == port_name2) return input.producer + "." + input.producer_port;
-      }
-    }
-    return std::nullopt;
-  };
-
-  std::size_t bytes_written_this_cycle = 0;
-  if (writer_ != nullptr || transport_publisher_ != nullptr) {
-    const bool informational = latch_.InformationalOnly(tick_index);
-    for (const RecordedTopic& topic : recorded_topics_) {
-      if (!topic.policy.WritesAt(tick_index)) continue;
-      bus::PortValue value;
-      if (topic.dir == "req") {
-        const std::optional<std::string> producer_qualified = resolve_producer_qualified(topic.stage, topic.port);
-        // F-3: the two `req` entries read DIFFERENT values on purpose.
-        //   - the producing-name entry takes the upstream value straight off
-        //     the bus: the true bytes the producer published, before any
-        //     override, so this topic means what its name says;
-        //   - the `post_mutation` entry (emitted only when an override is
-        //     declared) takes `delivered_req_` -- the exact bytes handed to
-        //     the component, which is the thing an override exists to change.
-        // With no override declared the two are the same value, and only the
-        // producing-name entry is ever emitted.
-        const bool prefer_upstream = !topic.post_mutation && producer_qualified.has_value();
-        const auto delivered_it = delivered_req_.find(topic.qualified_port);
-        if (prefer_upstream) {
-          value = bus_->Get(*producer_qualified, now_ns);
-          // A stage that executed has a delivered value even when the bus
-          // has nothing under the producing address (an injected `measured`
-          // producer that published nothing this cycle); fall back to it
-          // rather than dropping the input topic entirely.
-          if (value.origin == bus::Origin::Unknown) {
-            if (delivered_it == delivered_req_.end()) continue;
-            value = delivered_it->second;
+  // The recorded instant just entered its buffers: note which ports got a
+  // sample, keep a `simulate` stage's recorded outputs as reference, and queue
+  // the next instant.
+  if (impl.queued_instant.has_value() && *impl.queued_instant == now_ns) {
+    const AheadInstant instant = impl.ahead->TakeFront();
+    impl.queued_instant.reset();
+    for (const AheadMessage& message : instant.messages) {
+      if (impl.reference_ports.count(message.port) != 0) {
+        impl.reference.Add(message.port, instant.time_ns, message.message.payload);
+      } else if (impl.queue_ports.count(message.port) != 0) {
+        impl.touched.insert(message.port);
+        const std::string stage = message.port.substr(0, message.port.find('.'));
+        if (impl.controls_recorded.count(stage) != 0 && message.port == stage + ".control") {
+          const bus::SignalHeader sig =
+              bus::ReadSignalHeader(message.message.payload, bus_->Descriptor(message.port));
+          if (sig.measurement_counter.has_value()) {
+            impl.control_arrivals[stage].push_back({sig.measurement_counter.value(), instant.time_ns});
           }
-        } else if (delivered_it != delivered_req_.end()) {
-          // Unchanged from before F-3, `Origin::Unknown` included: an
-          // unwired declared input still records what the stage was handed
-          // (an empty, invalid port), because "this stage received nothing
-          // on vehSig" is itself the fact `R-SIM-6` wants in the file.
-          value = delivered_it->second;
-        } else {
-          if (!producer_qualified.has_value()) continue;  // an unwired input has nothing to record
-          value = bus_->Get(*producer_qualified, now_ns);
-          if (value.origin == bus::Origin::Unknown) continue;
         }
-      } else {
-        value = bus_->Get(topic.qualified_port, now_ns);
-        if (value.origin == bus::Origin::Unknown) continue;  // nothing has ever produced it
-      }
-      if (writer_ != nullptr) {
-        io::RawMessage message;
-        message.topic = topic.topic;
-        message.log_time_ns = t_ns;
-        if (value.header.t_capture_ns.has_value()) message.capture_time_ns = value.header.t_capture_ns.value();
-        message.payload = value.payload;
-        message.informational_only = informational;
-        bytes_written_this_cycle += message.payload.size();
-        writer_->WriteMessage(message);
-      }
-      // SI-25 transport (UT-TRN-*): the same value the recorder would have
-      // written, handed to the live-viewer publisher instead/as well --
-      // independent of whether a writer exists at all (a resim with no
-      // writer can still be watched live).
-      if (transport_publisher_ != nullptr) {
-        // Named from the TOPIC, not from `qualified_port` (F-3): after a
-        // `req` port started borrowing its producing address, publishing
-        // the same bytes under the consuming address would put two names on
-        // one signal again -- and a deduped `req` entry would publish under
-        // a name whose topic nobody wrote. One identity, both channels.
-        transport_publisher_->Publish(
-            tick_index, TopicToPortName(topic.topic), value.payload.data(), value.payload.size());
       }
     }
   }
+  TopUp();
 
-  // ---- IMP-0119: the cycle is complete -- and only now is it recorded as
-  // such (a checkpoint written earlier could name a cycle the output does
-  // not contain).
+  // ---- IMP-0029: per rank the runnable tickets run and commit, until the step ends.
+  const auto ready = [&](const orchestrator::Ticket& ticket) {
+    orchestrator::ControlHeader header;
+    const SpecStage* stage = nullptr;
+    return !impl.SelectFor(ticket, step, now_ns, header, stage).not_ready;
+  };
+  for (;;) {
+    for (;;) {
+      std::vector<orchestrator::Ticket> tickets = orch.NextRunnable(ready);
+      if (tickets.empty()) break;
+      // `IMP-0035`: every input of the rank is fixed here, on this thread, before any
+      // component is called; the barrier is `DispatchRank` returning; then each ticket
+      // is finished in stage declaration order whatever order the workers ended in.
+      std::vector<PendingRun> pending(tickets.size());
+      for (std::size_t i = 0; i < tickets.size(); ++i) PrepareTicket(tickets[i], pending[i]);
+      if (options_.exec_timeout.has_value()) {
+        const std::size_t callers = std::max<std::size_t>(1, std::min<std::size_t>(options_.threads, pending.size()));
+        while (impl.exec_slots.size() < callers) impl.exec_slots.emplace_back(module_host::ExecTimeout(*options_.exec_timeout));
+      }
+      DispatchRank(
+          pending.size(), options_.threads,
+          [&](std::size_t earlier, std::size_t later) {
+            return impl.conflicts.Conflicts(pending[earlier].ticket.stage, pending[later].ticket.stage);
+          },
+          [&](std::size_t i, std::size_t worker) {
+            if (pending[i].prepare_error.has_value()) return false;
+            ExecTicket(pending[i], worker);
+            return pending[i].executed->ok();
+          });
+      std::vector<orchestrator::CommitReport> reports;
+      for (PendingRun& run : pending) {
+        const Result<bool> ran = FinishTicket(run, reports);
+        if (!ran.ok()) return ran;
+      }
+      for (const orchestrator::CommitReport& report : reports) {
+        for (const orchestrator::CommittedOutput& output : report.outputs) impl.touched.insert(output.port);
+      }
+      const Result<bool> committed = orch.Commit(reports);
+      if (!committed.ok()) return committed;
+    }
+    const orchestrator::StepEnd end = orch.EndStep();
+    if (end == orchestrator::StepEnd::kForcedParked) continue;
+    if (end == orchestrator::StepEnd::kRunEnded) {
+      exhausted_ = true;
+      outcome_.exhausted = true;
+    }
+    break;
+  }
+
+  // KIND_IDENTITY_BROKEN: per sample, counted from the bus's tracker.
+  for (const std::string& port : impl.declared_ports) {
+    const std::size_t broken = bus_->Identity().Counts(port).identity_broken;
+    std::size_t& seen = impl.identity_seen[port];
+    if (broken > seen) impl.badges[{BadgeKind::kIdentityBroken, port}] += broken - seen;
+    seen = broken;
+  }
+
+  // ---- IMP-0114: offer every value of this step to the writer; IMP-0117: from the
+  // divergence point plus the grace window each carries the flag.
+  const Result<std::size_t> written = WriteStep(step, now_ns);
+  if (!written.ok()) return Result<bool>::Fail(written.error());
+
+  // ---- IMP-0119: the step is complete -- and only now is it recorded as such.
   outcome_.cycles_executed += 1;
-  outcome_.last_log_time_ns = t_ns;
+  outcome_.last_log_time_ns = now_ns;
   outcome_.divergence = latch_.first();
   if (checkpoint_ != nullptr) {
-    // IMP-0139: the exact bytes delivered to every executing stage's req
-    // port THIS cycle -- the same map IMP-0114's own write pass already
-    // reads from (see `delivered_req_`'s own top-of-block note above).
-    // Set BEFORE RecordCompleted, not after: RecordCompleted's own
-    // unbounded-flush default writes synchronously inside that call, so
-    // recording inputs afterward would flush the PREVIOUS cycle's capture
-    // paired with THIS cycle's progress.json (found live, off by one cycle,
-    // before this ordering was fixed).
-    std::map<std::string, std::vector<std::uint8_t>> inputs_this_cycle;
-    for (const auto& [qualified_port, value] : delivered_req_) inputs_this_cycle[qualified_port] = value.payload;
-    checkpoint_->RecordInputs(inputs_this_cycle);
-    checkpoint_->RecordCompleted(tick_index, t_ns, bytes_written_this_cycle);
-    // IMP-0224: AFTER RecordCompleted, not before -- so if this is the
-    // cycle divergence first latches, the same write that carries it also
-    // carries THIS cycle's own completed tick_index/log_time_ns, not the
-    // previous cycle's (RecordDivergence's own Write() is immediate,
-    // independent of RecordCompleted's bounded flush schedule). A no-op on
-    // every cycle after the first divergence (RecordDivergence's own
-    // idempotence).
+    // IMP-0139: the exact bytes delivered to every executing stage this step.
+    // Set BEFORE RecordCompleted, which may flush synchronously.
+    std::map<std::string, std::vector<std::uint8_t>> inputs_this_step;
+    for (const auto& [qualified_port, value] : impl.delivered) inputs_this_step[qualified_port] = value.payload;
+    checkpoint_->RecordInputs(inputs_this_step);
+    checkpoint_->RecordCompleted(step, now_ns, written.value());
+    // IMP-0224: AFTER RecordCompleted, so one write carries both.
     if (outcome_.divergence.has_value()) checkpoint_->RecordDivergence(*outcome_.divergence);
   }
 
-  scheduler_->Advance();
+  // The event log's file: every line added so far, flushed per step so a crash leaves it.
+  if (impl.event_file.is_open()) {
+    const std::vector<std::string>& lines = impl.log.Lines();
+    for (; impl.lines_written < lines.size(); ++impl.lines_written) impl.event_file << lines[impl.lines_written] << '\n';
+    impl.event_file.flush();
+  }
+
+  // IMP-0030: what the live measurement writer's `liveMeasStep` will be handed.
+  if (live_sink_ != nullptr) {
+    StepReport report;
+    report.step = step;
+    report.sim_time_ns = now_ns;
+    for (const std::string& port : impl.declared_ports) {
+      const bus::SampleBuffer* buffer = bus_->Buffer(port);
+      const bus::Sample* sample = buffer == nullptr ? nullptr : buffer->Newest();
+      if (sample == nullptr) continue;
+      StepValue value;
+      value.port = port;
+      value.payload = &sample->value.payload;
+      value.origin = sample->value.origin;
+      value.age_ns = now_ns - sample->arrival_ns;
+      report.values.push_back(std::move(value));
+    }
+    for (const auto& [key, count] : impl.badges) {
+      if (count > 0) report.badges.push_back(StepBadge{key.first, key.second, count});
+    }
+    live_sink_->OnStep(report);
+  }
   return Result<bool>::Ok(true);
 }
 

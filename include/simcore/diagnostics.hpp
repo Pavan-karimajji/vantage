@@ -19,10 +19,9 @@
 ///   engine's own emission against a second, independently-produced
 ///   prediction rather than eyeballing two strings.
 ///
-///   `IMP-0076` (`ScheduleDump`) lives beside `Scheduler` itself
-///   (`scheduler.hpp`/`scheduler/dump.cpp`, EXTEND) rather than here --
-///   named in this file's own header because `WP-15`'s plan row names it,
-///   but it needs no `Component`/`module_host` type this header pulls in.
+///   `IMP-0076` (`ScheduleDump`) was retired by `WP-03` (`IMP-0015`): the
+///   plan is `orchestrator::PlanText` (`orchestrator.hpp`,
+///   `orchestrator/plan_dump.cpp`).
 /// @author Pavan Karimajji
 
 #pragma once
@@ -58,7 +57,6 @@ struct GraphStageView {
 
 struct GraphView {
   std::string run_id;
-  std::int64_t grid_step_ns = 0;
   std::vector<GraphStageView> stages;  // declaration order, per R-SIM-1's
                                             // sibling discipline (UT-A4-12/P-8)
 };

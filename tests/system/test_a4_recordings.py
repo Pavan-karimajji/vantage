@@ -7,12 +7,13 @@
 
 from __future__ import annotations
 
+from tests.support.foreign_mcap import ForeignMcapWriter
 from pathlib import Path
 
 import pytest
 
 from adas_sim.ingest.map import IngestRecordingReader, discover_ingest_maps
-from adas_sim.io.mcap import McapReader, McapWriter
+from adas_sim.io.mcap import McapReader
 
 SIM_ROOT = Path(__file__).resolve().parent.parent.parent
 MODULES_ROOT = SIM_ROOT.parent
@@ -58,7 +59,7 @@ def test_read_write_read_yields_an_identical_topic_and_message_set(tmp_path):
     first.close()
 
     round_tripped = tmp_path / "round_tripped.mcap"
-    writer = McapWriter()
+    writer = ForeignMcapWriter()
     writer.open(round_tripped, first_manifest, first_topics, config_bundle_bytes=first_bundle)
     for topic, log_time_ns, capture_time_ns, payload in first_messages:
         writer.write(topic, log_time_ns, payload, capture_time_ns=capture_time_ns)

@@ -12,6 +12,7 @@ bridge.py`/`test_c3_check.py` already use.
 
 from __future__ import annotations
 
+from tests.support.foreign_mcap import ForeignMcapWriter
 import sys
 from pathlib import Path
 
@@ -21,11 +22,9 @@ from adas_sim.io.base import Provenance, RunManifest, TopicInfo
 from adas_sim.plugins.registry import writer_for
 from adas_sim.resolve import probe
 
-_SIM_ROOT = Path(__file__).resolve().parent.parent.parent
-_ECHO_STUB_CANDIDATES = (
-    _SIM_ROOT / "build-gtest-vs2026" / "tests" / "Release" / "echo_stub.dll",
-    _SIM_ROOT / "build-gtest-ubuntu_gcc" / "tests" / "libecho_stub.so",
-)
+from tests.system.test_d15b_engine_bridge import _ECHO_STUB_CANDIDATES_POSIX, _ECHO_STUB_CANDIDATES_WINDOWS
+
+_ECHO_STUB_CANDIDATES = (*_ECHO_STUB_CANDIDATES_WINDOWS, *_ECHO_STUB_CANDIDATES_POSIX)
 
 
 def _find_echo_stub() -> Path | None:
@@ -77,7 +76,7 @@ def test_ut_res_11_probes_a_recording_and_a_module_with_no_handle_surviving(tmp_
     assert manifest.outputs == ()
 
     recording_path = tmp_path / "recording.mcap"
-    writer = writer_for(recording_path)
+    writer = ForeignMcapWriter()
     writer.open(
         recording_path, meta=RunManifest(),
         topics={"/dummy/heartbeat": TopicInfo(schema_name="test.Heartbeat", provenance=Provenance.MEASURED)},

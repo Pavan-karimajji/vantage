@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from tests.support.foreign_mcap import ForeignMcapWriter
 import pytest
 from google.protobuf import descriptor_pb2 as _dpb
 from google.protobuf.message import DecodeError
@@ -15,7 +16,6 @@ from google.protobuf.message import DecodeError
 from adas_sim.core.runner import build_session_from_recording
 from adas_sim.session.tick import PortValue
 from adas_sim.io.base import Provenance, RunManifest, TopicInfo
-from adas_sim.io.mcap import McapWriter
 
 
 def test_age_s_is_capture_derived_when_capture_ns_is_known():
@@ -80,7 +80,7 @@ def test_the_resim_path_parses_nothing_until_message_is_read(tmp_path):
         "/df/outer": TopicInfo(schema_name=schema_name, provenance=Provenance.SIMULATED, schema_bytes=schema_bytes),
     }
     path = tmp_path / "unparseable.mcap"
-    writer = McapWriter()
+    writer = ForeignMcapWriter()
     writer.open(path, RunManifest(), topics)
     writer.write("/df/outer", 0, b"\xff\xff\xff\xff\xff")  # not valid protobuf for this schema
     writer.close()

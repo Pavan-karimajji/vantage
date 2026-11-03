@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from tests.support.foreign_mcap import ForeignMcapWriter
 from pathlib import Path
 
 import pandas as pd
@@ -31,7 +32,7 @@ def _write_synthetic_recording(out_path: Path) -> None:
         components=(ComponentBuildInfo(name="test", library_sha256="0" * 64, config_bundle_sha256="c" * 64),),
     )
     topics = {"/test/marker": TopicInfo(schema_name="", provenance=Provenance.MEASURED)}
-    writer = writer_for(out_path)
+    writer = ForeignMcapWriter()
     writer.open(out_path, manifest, topics, config_bundle_bytes=b"")
     for tick in range(_TICK_COUNT):
         writer.write("/test/marker", tick * _DT_NS, bytes([tick % 256]))

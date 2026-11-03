@@ -64,11 +64,19 @@
 ///   in-process). Only fires when BOTH an input and an output port are
 ///   declared; the output-only OUTPUT_VALUE/constant-byte behaviour above
 ///   is unchanged when no input port is set.
+///
+///   `WP-07`: a PER-COMPONENT knob, because the environment variables above are
+///   process-wide and two stages of one test cannot differ by them. When
+///   `adasInit` is given a config path whose file starts with an integer, that
+///   many milliseconds are slept inside every `adasExec()` of THAT instance
+///   (`test_run_threads.cpp`: a first stage that ends after the second). No
+///   config path, or no integer in the file, sleeps nothing.
 /// @author Pavan Karimajji
 
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
+#include <fstream>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -208,15 +216,26 @@ ADAS_SIL_API size_t adasManifest(uint8_t* data, size_t cap) {
   return needed;
 }
 
+namespace {
+int dummyHandle = 0;  // the handle of an instance that sleeps nothing
+}  // namespace
+
 ADAS_SIL_API void* adasInit(const char* configPath) {
-  (void)configPath;  // no real configuration -- always succeeds
-  static int dummyHandle = 0;
+  // No real configuration -- always succeeds. A config file starting with an integer is the
+  // sleep, in milliseconds, of every adasExec() of this instance (see this file's top note).
+  if (configPath != nullptr && *configPath != '\0') {
+    std::ifstream file(configPath);
+    long long sleepMs = 0;
+    if (file >> sleepMs && sleepMs > 0) return new long long(sleepMs);
+  }
   return &dummyHandle;
 }
 
 ADAS_SIL_API int32_t adasExec(void* handle, double dtS, const AdasPortSet* in, AdasPortSet* out) {
-  (void)handle;
   (void)dtS;
+  if (handle != &dummyHandle && handle != nullptr) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(*static_cast<long long*>(handle)));
+  }
   if (EnvOrBool("ADAS_SIL_TEST_STUB_HANG", false)) {
     // Deliberately never returns -- see ADAS_SIL_TEST_STUB_HANG above.
     // sleep_for (not a spin loop) is the real observable side effect that
@@ -271,7 +290,7 @@ ADAS_SIL_API int32_t adasExec(void* handle, double dtS, const AdasPortSet* in, A
 }
 
 ADAS_SIL_API void adasShutdown(void* handle) {
-  (void)handle;
+  if (handle != &dummyHandle && handle != nullptr) delete static_cast<long long*>(handle);
 }
 
 }  // extern "C"

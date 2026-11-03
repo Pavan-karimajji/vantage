@@ -25,7 +25,7 @@ simulated stage writes in the engine run, which names what the engine handed it
 **Test areas**, declared once: `RUN` the run setup · `ORC` the orchestrator and the six rules ·
 `SEL` input selection · `STP` the engine step · `THR` threads · `EQO` equal outputs and the
 first divergence.
-Priority split: 23 `P0`, 24 `P1`, 0 `P2`; all `R1`. Without a `P0` row an engine run is not
+Priority split: 25 `P0`, 32 `P1`, 0 `P2`; all `R1`. Without a `P0` row an engine run is not
 exact against the car; a `P1` row makes a result easier to trust or diagnose.
 
 ---
@@ -86,10 +86,28 @@ recordings are a batch of engine runs (`R-SIM-19`).
 **Verify.** T · `SYT-RUN-08`   **Trace.** —
 
 **`SYS-0046`** · `P1` · `R1` — Retired and unknown run setup keys are refused at load
-**Shall.** The engine shall refuse at load a run setup carrying `delay_steps`, `grid_step_ns`, `order` or any key its schema does not name.
+**Shall.** The engine shall refuse at load a run setup carrying `delay_steps`, `grid_step_ns`, `order`, `impl.pattern`, `impl.search` or any key its schema does not name.
 **Accept.** A lab setup with any one such key added ends with a load error naming the key and where it is (top level, stage, port or input), before the first step; a run that starts fails.
 **Binds.** `runSetup`, `exitStatus`
 **Verify.** T · `SYT-RUN-09`   **Trace.** —
+
+**`SYS-0048`** · `P0` · `R1` — The launcher refuses a run configuration missing a run-setup value
+**Shall.** The launcher shall write a run setup only from a run configuration that gives every `⊘` value of `ARCH §4` and each simulated stage's trigger, supplying no default.
+**Accept.** With each such value removed in turn, `sim resim` exits with an error naming it and writes no run setup; with all given, the setup carries exactly the configured values.
+**Binds.** `runSetup`
+**Verify.** T · `SYT-RUN-10`   **Trace.** —
+
+**`SYS-0052`** · `P1` · `R1` — An engine-run recording embeds each simulated stage's config bundle
+**Shall.** An engine run shall write into its recording's `config_bundle` block (`RCT:SYS-0044`) the bundle folder each simulated stage was initialised with (`R-SIM-6`).
+**Accept.** On `running_example` `cut_c` the block names exactly the simulated stages, holds each one's files with their text as on disk, and each stage's `bundle.sha256` equals the setup's `config_bundle_sha256` for it; anything else fails.
+**Binds.** `runSetup`, `runRecording`
+**Verify.** T · `SYT-RUN-11`   **Trace.** —
+
+**`SYS-0055`** · `P1` · `R1` — The engine-run recording names the run, process, setup and libraries that made it
+**Shall.** An engine run shall write in its recording's `manifest` its `run_id`, `host`, `process_nonce`, `run_spec_sha256` and each simulated stage's `library_sha256` (`R-SIM-6`, `D29 (1)`).
+**Accept.** On `running_example` `cut_c` each `library_sha256` is the SHA-256 of the library loaded and `run_spec_sha256` the setup's `spec_sha256`; a second run's `manifest` differs only in `process_nonce`.
+**Binds.** `runRecording`
+**Verify.** T · `SYT-RUN-12`   **Trace.** —
 
 ## 2. The orchestrator and the six rules (`ORC`)
 
@@ -144,9 +162,9 @@ never does: `ARCH §3.2`. Ranks: `ARCH §2.2`.
 **Binds.** `recording`, `control`, `stepRecord`
 **Verify.** T · `SYT-ORC-08`   **Trace.** —
 
-**`SYS-0017`** · `P0` · `R1` — Decisions come from the run setup and the headers alone
-**Shall.** The orchestrator and input selection shall decide from the run setup and the samples' `sig_header` only, reading no clock, thread id, execution time or other payload field.
-**Accept.** The source check over their files finds no clock, thread-id or timer call and no payload parse except `ReadSignalHeader`; with one such call planted, it fails.
+**`SYS-0017`** · `P0` · `R1` — Decisions come from the run setup, the headers and the two messages that drive them
+**Shall.** The orchestrator and input selection shall decide only from the run setup, `sig_header`s and the two contract messages that drive them: the recorded `refSync` (C3) for selection, the recorded control (C2) for RESTART.
+**Accept.** Their source check finds no clock, thread-id or timer call and parses no type but `RefSync` and `CycleControl` besides `ReadSignalHeader`; a planted call or parse fails.
 **Binds.** `runSetup`, `control`, `stageIn`
 **Verify.** A · `ANL-01`   **Trace.** —
 
@@ -167,6 +185,24 @@ never does: `ARCH §3.2`. Ranks: `ARCH §2.2`.
 **Accept.** On `data_triggered` `repeat_trigger` `by_data`, `T` runs once per distinct `in_X` counter and the event log counts one stalled trigger on `T`; an extra `T` run fails.
 **Binds.** `recording`, `control`, `eventLog`
 **Verify.** T · `SYT-ORC-11`   **Trace.** —
+
+**`SYS-0050`** · `P1` · `R1` — A clock-started stage's controls are numbered from 1 and wrap to 1
+**Shall.** The engine shall number the controls of a clock-started stage 1, 2, 3 … from its first tick, `0xFFFFFFFF` being followed by 1 and never 0 (`RCT:SYS-0004`, `D24`).
+**Accept.** The control of tick k carries `measurement_counter` (k mod `0xFFFFFFFF`) + 1: ticks 0, 1, `0xFFFFFFFE` and `0xFFFFFFFF` carry 1, 2, `0xFFFFFFFF` and 1; a 0 or any other value fails.
+**Binds.** `control`
+**Verify.** T · `SYT-ORC-12`   **Trace.** —
+
+**`SYS-0053`** · `P0` · `R1` — Every run's control and outputs are recorded
+**Shall.** An engine run shall write every run's `control` and outputs to its recording, none dropped or overwritten (`R-SIM-6`).
+**Accept.** In every exact case and in `running_example` `all_simulated` with `buffer_depth` 1 on every port, each simulated stage's `compState` messages in the engine-run recording carry consecutive `cycle_counter`s and equal its controls in number.
+**Binds.** `control`, `stageOut`, `runRecording`
+**Verify.** T · `SYT-ORC-04`   **Trace.** —
+
+**`SYS-0057`** · `P1` · `R1` — Every run's overridden inputs are recorded
+**Shall.** An engine run shall record each run's overridden inputs as that run was handed them, a stage run twice in one step leaving both (`R-SIM-15`, `D29 (4)`).
+**Accept.** In `running_example` `all_simulated` with `buffer_depth` 1 on every port and an override on `source.Y`, `B`'s `in_Y` topic holds one message per `B` control, each with the counter its run's re-run refSync names.
+**Binds.** `stageIn`, `runRecording`
+**Verify.** T · `SYT-ORC-13`   **Trace.** —
 
 ## 3. Input selection (`SEL`)
 
@@ -218,7 +254,7 @@ The order of the rules and the table of outcomes: `ARCH §6`, `D18 (1)`. Matchin
 
 **`SYS-0027`** · `P1` · `R1` — No sample found gives an empty input
 **Shall.** When neither the counter fallback nor the time rule finds a sample, the engine shall hand the input empty.
-**Accept.** With the first five `source.Y` samples removed from `running_example`'s `base` recording, every run before the first remaining one has re-run entry 0 for `Y`; a non-zero entry fails.
+**Accept.** With the first five `source.Y` samples removed from `running_example`'s `base` recording, every run whose recorded entry for `Y` names a removed sample has re-run entry 0 for `Y`; a non-zero entry fails.
 **Binds.** `recording`, `stageIn`
 **Verify.** T · `SYT-SEL-08`   **Trace.** —
 
@@ -230,7 +266,7 @@ The order of the rules and the table of outcomes: `ARCH §6`, `D18 (1)`. Matchin
 
 **`SYS-0029`** · `P1` · `R1` — Identity broken is badged on the port
 **Shall.** The engine shall raise `KIND_IDENTITY_BROKEN` on a port whose samples break identity as `D17 (3)` defines it.
-**Accept.** On `data_triggered` `renumber`, the badge is raised on `T`'s output port as `VANTAGE_Lab_Design.md` §6.2 expects; in every exact case it is never raised.
+**Accept.** On `running_example` `base` with `source.X`'s `measurement_counter` lowered by 5 from its 100th sample on, its `cycle_counter` unchanged, the badge is raised once, on `source.X` and no other port; in every exact case it is never raised.
 **Binds.** `recording`, `stepRecord`
 **Verify.** T · `SYT-SEL-10`   **Trace.** —
 
@@ -240,20 +276,32 @@ The order of the rules and the table of outcomes: `ARCH §6`, `D18 (1)`. Matchin
 **Binds.** `recording`, `eventLog`
 **Verify.** T · `SYT-SEL-11`   **Trace.** —
 
-**`SYS-0031`** · `P1` · `R1` — Counters are compared only by `counterDistance`
-**Shall.** The engine shall compare `measurement_counter` and `cycle_counter` values only through `counterDistance` (`RCT:SYS-0005`).
-**Accept.** The source check over the engine finds no `==`, `!=`, `<`, `>`, `<=` or `>=` applied to either counter; with one planted comparison, it fails.
+**`SYS-0031`** · `P1` · `R1` — Counters are compared only by `counterDistance`; unknown is tested by one helper
+**Shall.** The engine shall compare `measurement_counter` and `cycle_counter` values only through `counterDistance` (`RCT:SYS-0005`), and test a `measurement_counter` for unknown (0) only through `bus::IsUnknownMeasurementCounter`.
+**Accept.** The source check over the engine finds no `==`, `!=`, `<`, `>`, `<=` or `>=` applied to either counter, a comparison with 0 included; with one planted comparison, it fails.
 **Binds.** `stageIn`
 **Verify.** A · `ANL-02`   **Trace.** —
+
+**`SYS-0049`** · `P1` · `R1` — A measurement counter going from `0xFFFFFFFF` to 1 is consecutive
+**Shall.** The engine shall read a `measurement_counter` going from `0xFFFFFFFF` to 1 as the next one, so it counts no gap, no reset and no identity broken there (`D24`).
+**Accept.** On `running_example` `counter_wrap`, with `source.X`'s counter going `0xFFFFFFFF` then 1, the event log counts no gap and no reset on `source.X` and no `KIND_IDENTITY_BROKEN` is raised; any count or badge fails.
+**Binds.** `recording`, `eventLog`, `stepRecord`
+**Verify.** T · `SYT-SEL-12`   **Trace.** —
+
+**`SYS-0051`** · `P1` · `R1` — A counter fallback's gap counts `0xFFFFFFFF` → 1 as one step
+**Shall.** The engine shall count the counter fallback's gap by `SYS-0049`'s distance, `0xFFFFFFFF` → 1 being one step (`D24`).
+**Accept.** On `running_example` `counter_wrap` with `source.X`'s `0xFFFFFFFF`, 1 and 2 removed, a run wanting 1 or 2 falls back to `0xFFFFFFFE` at gap 2 or 3: logged beyond `fallback_max_gap` 1, not logged within 3; a gap one larger fails.
+**Binds.** `recording`, `stageIn`, `eventLog`
+**Verify.** T · `SYT-SEL-13`   **Trace.** —
 
 ## 4. The engine step (`STP`)
 
 What one step is, the jump and warming up: `ARCH §7`. The word "tick" is retired; the step
 number takes its place.
 
-**`SYS-0032`** · `P0` · `R1` — One engine step per instant at which anything happens
-**Shall.** The engine shall make one engine step for each instant at which a recorded message arrives or a clock ticks, numbered from 0 without a gap.
-**Accept.** On `running_example` `cut_c`, the steps are the recording's distinct reception times, numbered consecutively from 0; with `E` started by a 7 ms clock instead, each tick instant adds its step.
+**`SYS-0032`** · `P0` · `R1` — One engine step per instant a step-starting message arrives or a clock ticks
+**Shall.** The engine shall make one step per instant at which a step-starting message (`ARCH §7`) arrives or a clock ticks, numbered from 0 without a gap.
+**Accept.** On `running_example` `cut_c`, the steps are its step-starting messages' distinct reception times, numbered from 0 without a gap; with `E` on a 7 ms clock instead, each tick instant adds its step.
 **Binds.** `recording`, `stepRecord`
 **Verify.** T · `SYT-STP-01`   **Trace.** —
 
@@ -332,6 +380,18 @@ Where equal outputs apply: `ARCH §7`. Determinism axes: `R-SIM-24`, with thread
 **Binds.** `eventLog`
 **Verify.** T · `SYT-EQO-02`   **Trace.** —
 
+**`SYS-0054`** · `P1` · `R1` — A lost input's divergence comes no earlier than the run that lost it
+**Shall.** The engine shall report no divergence before the first run that lost an input the recording lacks.
+**Accept.** On `missing_sample` and `missing_run` the first divergence is reported at or after the first run whose recorded refSync names a dropped sample, and that run carries `KIND_FALLBACK` on that input.
+**Binds.** `eventLog`, `stepRecord`
+**Verify.** T · `SYT-EQO-05`   **Trace.** —
+
+**`SYS-0056`** · `P1` · `R1` — The engine-run recording states its first divergence
+**Shall.** An engine run shall write in its recording's `manifest` a `divergence`: the first divergence's step, stage and port; `none` when outputs were compared and none diverged; else `unknown`.
+**Accept.** On `no_ref_sync` it names the event log's `first_divergence` entry; on `cut_c` it is `none`; on `cut_c` with the simulated stages' outputs removed from the recording, `unknown`.
+**Binds.** `runRecording`, `eventLog`
+**Verify.** T · `SYT-EQO-06`   **Trace.** —
+
 **`SYS-0044`** · `P1` · `R1` — A re-run refSync is compared only on counter and time
 **Shall.** The divergence comparison shall compare a re-run `refSync` with the recorded one only on each entry's `measurement_counter` and `source_timestamp_us`.
 **Accept.** On `diamond` `all_simulated` with a jump to its middle, no divergence is reported; on `running_example` `cut_c` with one recorded entry's `source_timestamp_us` changed, it is reported on that `refSync`.
@@ -355,7 +415,7 @@ case (`R-REQ-9`).
 
 | Method | Count | Notes |
 |---|---|---|
-| T | 44 | `simengine` on a lab case, the step tap, or the exec probe |
+| T | 50 | `simengine` on a lab case, the step tap, the exec probe, or the control tick probe |
 | A | 3 | source checks over the engine |
 
 ## 8. Superseded and retired UIDs

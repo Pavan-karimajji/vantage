@@ -29,6 +29,7 @@ same way the real engine's own writer would.
 
 from __future__ import annotations
 
+from tests.support.foreign_mcap import ForeignMcapWriter
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -45,7 +46,7 @@ from adas_sim.runspec.manifest import write_run_manifest
 
 def _fake_engine_run(pipeline, recording_path, *, run_id, output_path, **kwargs):
     del pipeline, recording_path, run_id, kwargs
-    writer = writer_for(output_path)
+    writer = ForeignMcapWriter()
     writer.open(output_path, RunManifest(), {})
     writer.close()
     return EngineRunResult(exit_code=0, ok=True, stdout="", stderr="", output_path=output_path)

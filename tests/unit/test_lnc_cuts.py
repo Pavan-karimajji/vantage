@@ -16,6 +16,7 @@ these last two cases close."""
 
 from __future__ import annotations
 
+from tests.support.foreign_mcap import ForeignMcapWriter
 from pathlib import Path
 
 import yaml
@@ -132,7 +133,7 @@ def test_the_set_shown_equals_what_is_computed_headlessly(tmp_path):
 def _write_recording(path: Path, topics: dict[str, str]) -> Path:
     """A real file, written through the registered codec -- `topics` maps
     canonical topic to proto type."""
-    writer = writer_for(path)
+    writer = ForeignMcapWriter()
     writer.open(
         path, RunManifest(),
         {t: TopicInfo(schema_name=proto, provenance=Provenance.SIMULATED) for t, proto in topics.items()},

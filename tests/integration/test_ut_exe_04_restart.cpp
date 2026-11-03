@@ -81,12 +81,12 @@ std::filesystem::path WriteMinimalRunSpec(const std::filesystem::path& spec_path
                                           const std::filesystem::path& recording) {
   std::ofstream out(spec_path);
   out << R"({
-    "schema": "adas.sim.runspec/1.0", "run_id": "20260822T000000Z-exe04",
-    "spec_sha256": "0", "grid": {"step_ns": 10000000},
+    "schema": "adas.sim.runspec/2.0", "run_id": "20260822T000000Z-exe04",
+    "spec_sha256": "0",
     "sources": [{"path": ")"
       << JsonEscape(recording) << R"(", "sha256": "0", "codec": "mcap"}],
-    "stages": [], "mutations": [], "order": [],
-    "coherence": {"verdict": "clean"}, "limits": {"exec_timeout_ms": 2000, "severity_exit": "crash"}
+    "stages": [], "mutations": [],
+    "coherence_verdict": "clean", "readiness_limit_steps": 4, "fallback_max_gap": 4, "limits": {"exec_timeout_ms": 2000, "severity_exit": "crash"}
   })";
   return spec_path;
 }

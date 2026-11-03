@@ -24,6 +24,7 @@ hard refusal (`UT-D7-9`).
 
 from __future__ import annotations
 
+from tests.support.foreign_mcap import ForeignMcapWriter
 import warnings
 from pathlib import Path
 
@@ -63,7 +64,7 @@ def _measured_pipeline(tmp_path: Path) -> Pipeline:
 
 def _write_recording(tmp_path: Path, name: str, topics: dict[str, TopicInfo]) -> Path:
     path = tmp_path / f"{name}.mcap"
-    writer = writer_for(path)
+    writer = ForeignMcapWriter()
     writer.open(path, RunManifest(manifest_version=2), topics)
     for topic in topics:
         writer.write(topic, 0, b"", capture_time_ns=0)
@@ -132,7 +133,7 @@ def _write_meta_only_recording(tmp_path: Path, name: str, *, library_sha256: str
     meta = RunManifest(
         manifest_version=2, components=(ComponentBuildInfo(name="df", library_sha256=library_sha256),),
     )
-    writer = writer_for(path)
+    writer = ForeignMcapWriter()
     writer.open(path, meta, {})
     writer.close()
     return path

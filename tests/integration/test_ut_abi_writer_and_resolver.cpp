@@ -150,6 +150,7 @@ std::filesystem::path WriteHeartbeatRecording(const std::filesystem::path& path)
   simcore::io::TopicInfo heartbeat;
   heartbeat.schema_name = "test.Heartbeat";
   EXPECT_TRUE(writer.value()->Open(path, {{"/dummy/heartbeat", heartbeat}}).ok());
+  writer.value()->WriteMetaBlock("manifest", {{"yaml", "source_kind: synthetic\n"}});  // the engine records its input's source_kind (IMP-0052)
   for (std::int64_t t_ns : {0, 10'000'000, 20'000'000}) {
     simcore::io::RawMessage msg;
     msg.topic = "/dummy/heartbeat";
@@ -181,6 +182,7 @@ std::filesystem::path WriteAbiPortRecording(const std::filesystem::path& path, d
   // `docs/v2/SIM_Test_Execution_2026-08-28.md`.
   info.provenance = simcore::io::Provenance::kMeasured;
   EXPECT_TRUE(writer.value()->Open(path, {{"/meas/objects", info}}).ok());
+  writer.value()->WriteMetaBlock("manifest", {{"yaml", "source_kind: synthetic\n"}});  // the engine records its input's source_kind (IMP-0052)
   for (std::int64_t t_ns : {0, 10'000'000, 20'000'000}) {
     simcore::io::RawMessage msg;
     msg.topic = "/meas/objects";
@@ -205,24 +207,22 @@ std::string BuildAbi01RunSpecJson(const std::filesystem::path& recording, const 
                                   const std::filesystem::path& output_path) {
   std::ostringstream out;
   out << R"({
-    "schema": "adas.sim.runspec/1.0",
+    "schema": "adas.sim.runspec/2.0",
     "run_id": "20260822T000000Z-abi01",
     "spec_sha256": "0",
-    "grid": {"step_ns": 10000000},
     "sources": [{"path": ")"
       << JsonEscape(recording) << R"(", "sha256": "0", "codec": "mcap"}],
     "stages": [{
       "name": "sut", "mode": "simulate",
       "impl": {"kind": "dll", "path": ")"
-      << JsonEscape(stub) << R"(", "pattern": "", "search": []},
-      "period_ns": 10000000, "abi_version": 1, "config_bundle_sha256": "",
+      << JsonEscape(stub) << R"("},
+      "trigger": "", "clock_period_ns": 10000000, "abi_version": 1, "config_bundle_sha256": "",
       "ports": [{"name": "outputs", "dir": "pro", "kind": "data", "proto_type": "test.Echo",
-                 "record": "full", "sampling": "latest", "on_missing": "hold", "fixed_slots": null}],
+                 "record": "full", "fixed_slots": null, "bulk": false, "buffer_depth": 16}],
       "inputs": []
     }],
     "mutations": [],
-    "order": ["sut"],
-    "coherence": {"verdict": "clean"},
+    "coherence_verdict": "clean", "readiness_limit_steps": 4, "fallback_max_gap": 4,
     "outputs": {"path": ")"
       << JsonEscape(output_path) << R"(", "codec": "mcap"},
     "limits": {"exec_timeout_ms": 2000, "severity_exit": "crash"}
@@ -240,35 +240,33 @@ std::string BuildAbi02RunSpecJson(const std::filesystem::path& recording, const 
                                   const std::filesystem::path& output_path, const std::string& mutations_json) {
   std::ostringstream out;
   out << R"({
-    "schema": "adas.sim.runspec/1.0",
+    "schema": "adas.sim.runspec/2.0",
     "run_id": "20260822T000000Z-abi02",
     "spec_sha256": "0",
-    "grid": {"step_ns": 10000000},
     "sources": [{"path": ")"
       << JsonEscape(recording) << R"(", "sha256": "0", "codec": "mcap"}],
     "stages": [
       {
         "name": "meas", "mode": "measured",
-        "impl": {"kind": "dll", "path": "", "pattern": "", "search": []},
-        "period_ns": 10000000, "abi_version": 1, "config_bundle_sha256": "",
+        "impl": {"kind": "dll", "path": ""},
+        "trigger": "", "clock_period_ns": 10000000, "abi_version": 1, "config_bundle_sha256": "",
         "ports": [{"name": "objects", "dir": "pro", "kind": "data", "proto_type": "abi_test.AbiPort",
-                   "record": "full", "sampling": "latest", "on_missing": "hold", "fixed_slots": null}],
+                   "record": "full", "fixed_slots": null, "bulk": false, "buffer_depth": 16}],
         "inputs": []
       },
       {
         "name": "sut", "mode": "simulate",
         "impl": {"kind": "dll", "path": ")"
-      << JsonEscape(stub) << R"(", "pattern": "", "search": []},
-        "period_ns": 10000000, "abi_version": 1, "config_bundle_sha256": "",
+      << JsonEscape(stub) << R"("},
+        "trigger": "", "clock_period_ns": 10000000, "abi_version": 1, "config_bundle_sha256": "",
         "ports": [{"name": "objects", "dir": "req", "kind": "data", "proto_type": "abi_test.AbiPort",
-                   "record": "full", "sampling": "latest", "on_missing": "hold", "fixed_slots": null}],
-        "inputs": [{"port": "objects", "producer": "meas", "producer_port": "objects", "delay_steps": 0}]
+                   "record": "full", "fixed_slots": null, "bulk": false, "buffer_depth": 16}],
+        "inputs": [{"port": "objects", "producer": "meas", "producer_port": "objects", "previous_cycle": false}]
       }
     ],
     "mutations": )"
       << mutations_json << R"(,
-    "order": ["meas", "sut"],
-    "coherence": {"verdict": "clean"},
+    "coherence_verdict": "clean", "readiness_limit_steps": 4, "fallback_max_gap": 4,
     "outputs": {"path": ")"
       << JsonEscape(output_path) << R"(", "codec": "mcap"},
     "limits": {"exec_timeout_ms": 2000, "severity_exit": "crash"}

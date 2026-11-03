@@ -135,3 +135,4 @@ python_envs:
     lock: requirements.lock
     default: true
     package: .
+    extras: [dev]

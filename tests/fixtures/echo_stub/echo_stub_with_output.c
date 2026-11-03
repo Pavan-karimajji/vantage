@@ -17,6 +17,10 @@
  *   field 6 (outputs, repeated PortSpec) = [{name: "echo",
  *                                            proto_type: "echo.Echo",
  *                                            max_bytes: 64}]
+ *   field 10 (period_ns, uint64)         = 10000000 -- a clock of 10 ms starts
+ *                                          the stage: the engine starts every
+ *                                          simulated stage by a recorded control, a
+ *                                          trigger input or a clock (`WP-05`).
  * `proto_type` names no real message and `descriptor_set` stays empty
  * (like `echo_stub.c`'s own "everything else defaults absent") -- the
  * claim this fixture proves is that BYTES reach a recording, never that
@@ -43,6 +47,7 @@ size_t adasManifest(uint8_t* data, size_t cap) {
         0x0A, 0x04, 'e', 'c', 'h', 'o',                           /*   PortSpec.name = "echo" */
         0x12, 0x09, 'e', 'c', 'h', 'o', '.', 'E', 'c', 'h', 'o',  /*   PortSpec.proto_type = "echo.Echo" */
         0x18, 0x40,                                               /*   PortSpec.max_bytes = 64 */
+      0x50, 0x80, 0xAD, 0xE2, 0x04, /* field 10: period_ns = 10000000 -- the clock that starts the stage (no recorded control, no trigger input) */
   };
   const size_t needed = sizeof(kManifest);
   if (data == NULL || cap < needed) return needed;
