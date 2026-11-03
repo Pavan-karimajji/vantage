@@ -46,6 +46,18 @@ budget_history:
       buffers) in 45 SYS and 48 IMP rows, about 30 rows per part. The
       expectation assumes the other five parts are of the same size; 8b and 8c
       check it against what they write.
+  - date: 2026-11-03
+    change: "no change to the basis; IMP is 124 against 120, SYS is 105 against 120"
+    why: >-
+      Part 8b states three more parts (live measurement writer, inspector,
+      supervisor) in 48 SYS and 54 IMP rows, about 16 SYS and 18 IMP per part,
+      against 15 and 15 expected; with 8a the six parts hold 105 SYS and 124 IMP.
+      The IMP layer is over because the inspector's five checks and the
+      supervisor's separate reproducer, manifest, seal and supervision-cell symbols are one
+      artifact per row (R-REQ-3), and because the transport publisher's
+      retirement is three rows. Nothing was compressed to fit. Part 8c, two
+      parts, has 15 SYS and none left for IMP under this basis: it is the one to
+      check against it.
 
 limits:
   requirement_words: 60
@@ -89,3 +101,11 @@ ports:
         proto_type: the printed plan of ranks, triggers and clocks
       - name: exitStatus
         proto_type: the engine's exit code and its error message
+      - name: liveMeas
+        proto_type: the live measurement (adas.livemeas - MeasStatus, MeasDescription, the MeasCycle ring, the MeasBulk ring)
+      - name: inspectorReport
+        proto_type: what vantage-inspect prints and its exit code (ARCH §10.3)
+      - name: attemptManifest
+        proto_type: the supervisor's record of each attempt (ARCH §3.7)
+      - name: reproducer
+        proto_type: the package the supervisor writes after a crash (ARCH §3.7)

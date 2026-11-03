@@ -142,7 +142,7 @@ the standard recipe (`ARCH §11`).
 | `src/simcore/transport/` | replaced | `src/livemeas/writer.cpp`, `src/livemeas/shared_region.hpp`, `src/inspector/attach.cpp`, ARCH §10 and §11 | the player transport is replaced by the writer, and its client attach by the inspector |
 | `src/simcore/transport/inproc.cpp` | retired | — | an in-process transport for a viewer; the live measurement is the only carrier (ARCH §14, rejected options) |
 | `src/simengine/CMakeLists.txt` | corrected | Resim engine, ARCH §11 | links the writer library |
-| `src/simengine/main.cpp` | corrected | Supervisor, ARCH §3.7 and §9 | `--supervise`, `--threads` and `--wait-for-attach`; the seal call |
+| `src/simengine/main.cpp` | corrected | Supervisor, ARCH §3.7 and §9 | `--supervise`, `--restart-on-crash`, `--attempt-timeout-ms`, `--threads` and `--wait-for-attach`; the seal call; `--config` and `--timeout-ms` dropped (`D31 (1)`) |
 | `src/adas_sim/__init__.py` | reused | Launcher, ARCH §3.1 | the package root of the Python side |
 | `src/adas_sim/check/` | corrected | Launcher, ARCH §3.1 and §11 | evaluates `expect:` blocks over results; drops its use of `session.tick`, and starts runs only through `engine/bridge.py` |
 | `src/adas_sim/cli/` | reused | Launcher, ARCH §3.1 | the verbs only parse arguments and call the launcher or the batch loop |
@@ -276,12 +276,12 @@ To dispose: 659 rows (389 `CN`, 270 `SYS`).
 | SIM:CN-0094 | superseded | ARCH §4 | who runs when is the trigger of each stage in the run setup |
 | SIM:CN-0095 | superseded | ARCH §3.2 | start and restart reach a component as the op mode of its control message |
 | SIM:CN-0096 | carried | VNT | the component host keeps loading and driving the lifecycle; reset is the RESTART run |
-| SIM:CN-0097 | carried | VNT | a failing component is reported with its stage and step and a reproducer |
+| SIM:CN-0097 | carried | VNT:SYS-0100, VNT:SYS-0101 | a failing component is reported with its stage and step and a reproducer |
 | SIM:CN-0098 | carried | VNT | conversion between port values and structs stays driven by the manifest |
 | SIM:CN-0099 | superseded | ARCH §9 | the isolated stage runs one stage in a second process for bisecting a crash |
 | SIM:CN-0100..0102, SIM:CN-0316 | carried | VNT | §9.4 — the component ABI stays small, versioned and free of clocks and threads |
 | SIM:CN-0103..0106 | carried | VNT | §9.5 — composition and variables stay in the launcher's configuration |
-| SIM:CN-0107 | carried | VNT | outputs stay optional: a recording and a live measurement, each may be absent |
+| SIM:CN-0107 | carried | VNT:SYS-0058 | outputs stay optional: a recording and a live measurement, each may be absent |
 | SIM:CN-0108 | carried | VNT | export formats and the replayable output stay with the recording I/O |
 | SIM:CN-0109 | moved | RCT:SYS-0042 | the contract says Vantage's reader reads an engine-run recording as written |
 | SIM:CN-0110 | carried | VNT | exports are still filtered by port and by time range |
@@ -305,7 +305,7 @@ To dispose: 659 rows (389 `CN`, 270 `SYS`).
 | SIM:CN-0151 | carried | VNT:SYS-0009, VNT:SYS-0019 | runs of one instant go in rank order, and the order is printed |
 | SIM:CN-0152 | superseded | ARCH §2.3 | a previous_cycle input replaces delay_steps, which has no meaning when steps are events |
 | SIM:CN-0153 | carried | VNT:SYS-0010 | a loop with no previous-cycle edge is a load error naming the loop |
-| SIM:CN-0154 | carried | VNT | the previous-cycle inputs are recorded in the description of the live measurement |
+| SIM:CN-0154 | carried | VNT:SYS-0059 | the previous-cycle inputs are recorded in the description of the live measurement |
 | SIM:CN-0155..0158, SIM:CN-0335..0336 | superseded | D13 | §13.1 — the player is a viewer, out of this design; it reads the live measurement later |
 | SIM:CN-0159..0163, SIM:CN-0337..0340 | superseded | D13 | §13.2 — layout, draw layers and primitives are the viewer's design |
 | SIM:CN-0164..0168, SIM:CN-0341..0343 | superseded | D13 | §13.3 — transport, timeline, snapshot, plots and evidence belong to the viewer |
@@ -314,7 +314,7 @@ To dispose: 659 rows (389 `CN`, 270 `SYS`).
 | SIM:CN-0173 | superseded | D13 | lazy decode and marking of display-only data is the viewer's work |
 | SIM:CN-0178..0184, SIM:CN-0345..0347 | carried | VNT | §15.1 — run configuration layers, schema, validation at load and round trip stay with the launcher |
 | SIM:CN-0185 | carried | VNT | a batch is still one run setup over a list of recordings |
-| SIM:CN-0186 | carried | VNT | each recording runs in its own process under a supervisor |
+| SIM:CN-0186 | carried | VNT:SYS-0088 | each recording runs in its own process under a supervisor |
 | SIM:CN-0187 | carried | VNT | each run still writes its own artifact directory |
 | SIM:CN-0188 | carried | VNT | a failing run still does not stop the batch |
 | SIM:CN-0189 | carried | VNT | the batch still reports a status list with reason and duration |
@@ -326,7 +326,7 @@ To dispose: 659 rows (389 `CN`, 270 `SYS`).
 | SIM:CN-0198..0199 | carried | VNT | §16.3 — the read-error policies of a batch stay with the batch loop and the reader |
 | SIM:CN-0200 | carried | VNT | the engine still needs no display or prompt |
 | SIM:CN-0201 | carried | VNT | one engine binary serves the desktop and CI |
-| SIM:CN-0202 | carried | VNT | the exit codes stay distinct and documented |
+| SIM:CN-0202 | carried | VNT:SYS-0091, VNT:SYS-0092 | the exit codes stay distinct and documented |
 | SIM:CN-0203 | carried | VNT | an artifact directory stays self-contained, the config bundle being embedded |
 | SIM:CN-0204 | carried | VNT | the optional watchdog stays as the execution timeout |
 | SIM:CN-0205 | carried | VNT | the watchdog is still off when a debugger is attached |
@@ -347,7 +347,7 @@ To dispose: 659 rows (389 `CN`, 270 `SYS`).
 | SIM:CN-0220 | carried | VNT | symbol resolution is documented and configurable on both platforms |
 | SIM:CN-0221 | carried | VNT | ready-made debugger launch configurations ship for common IDEs |
 | SIM:CN-0222 | retired | — | component state is not exposed by the ABI, the state snapshot is parked (RCT P1) and R-SIM-17 allows only recompute from the start; the checkpoint is progress, not state |
-| SIM:CN-0223 | carried | VNT | a module crash writes a minimal reproducer package |
+| SIM:CN-0223 | carried | VNT:SYS-0101 | a module crash writes a minimal reproducer package |
 | SIM:CN-0224 | carried | VNT | only the ports the active stages need are read |
 | SIM:CN-0225 | carried | VNT | a payload is decoded only when a simulated stage consumes it |
 | SIM:CN-0226 | carried | VNT | the sidecar index is still built once and reused |
@@ -410,12 +410,12 @@ To dispose: 659 rows (389 `CN`, 270 `SYS`).
 | SIM:CN-0310 | carried | VNT | ingest maps are still deployed beside the component library |
 | SIM:CN-0313 | carried | VNT | exports are still bound by name at run time |
 | SIM:CN-0314 | carried | VNT | an undersized output buffer still grows once, then is a contract error |
-| SIM:CN-0315 | carried | VNT | the per-run execution timeout stays as limits.exec_timeout_ms |
+| SIM:CN-0315 | carried | VNT:SYS-0070 | the per-run execution timeout stays as limits.exec_timeout_ms |
 | SIM:CN-0317 | carried | VNT | the record policy and the volume estimate before a run stay with the launcher and the run setup |
 | SIM:CN-0318 | moved | RCT:SYS-0029 | the contract says bulk payloads are referenced, never inline |
 | SIM:CN-0319 | carried | VNT | the merged output is Vantage's metadata on top of C6; step 8 states it |
 | SIM:CN-0322..0323 | carried | VNT | §11.2 — the coherence classification stays with the launcher model, computed without running |
-| SIM:CN-0348 | carried | VNT | ok, fail, crash and timeout stay four outcomes, judged from outside the worker |
+| SIM:CN-0348 | carried | VNT:SYS-0091 | ok, fail, crash and timeout stay four outcomes, judged from outside the worker |
 | SIM:CN-0349 | carried | VNT | the worker still checkpoints progress, now by step number |
 | SIM:CN-0350 | carried | VNT | every capability stays reachable from a short script |
 | SIM:CN-0351 | retired | — | a rule for the order of the sim v2 build; this program's order and gates are in the plan section 5 |
@@ -490,16 +490,16 @@ To dispose: 659 rows (389 `CN`, 270 `SYS`).
 | SIM:SYS-0046 | carried | VNT | a unit is still a self-contained file exposing named ports that a top-level file composes |
 | SIM:SYS-0047 | carried | VNT | paths and environment values still use variables resolved at load |
 | SIM:SYS-0048 | carried | VNT | the component host keeps loading and driving the lifecycle; reset is the RESTART run |
-| SIM:SYS-0049 | carried | VNT | a failing component is reported with its stage and step and a reproducer |
+| SIM:SYS-0049 | carried | VNT:SYS-0100, VNT:SYS-0101 | a failing component is reported with its stage and step and a reproducer |
 | SIM:SYS-0050 | carried | VNT | exports are still bound by name at run time, with no compile-time link |
 | SIM:SYS-0051 | carried | VNT | an undersized output buffer still grows once, then is a contract error |
 | SIM:SYS-0052 | carried | VNT | the host still refuses an unsupported ABI version, naming both |
 | SIM:SYS-0053 | carried | VNT | a port set is still read from the manifest at probe time, with no hand mapping |
 | SIM:SYS-0054 | carried | VNT | components still read no clock; time arrives in the control header and the port headers |
 | SIM:SYS-0055 | carried | VNT | a component that affects determinism still declares it in its manifest |
-| SIM:SYS-0056 | carried | VNT | the per-call execution timeout stays as `limits.exec_timeout_ms`, with outcome timeout |
+| SIM:SYS-0056 | carried | VNT:SYS-0070 | the per-call execution timeout stays as `limits.exec_timeout_ms`, with outcome timeout |
 | SIM:SYS-0057 | carried | VNT | conversion between port values and structs stays driven by the manifest |
-| SIM:SYS-0058 | carried | VNT | the isolated stage hosts one stage in a second process (ARCH §9) |
+| SIM:SYS-0058 | carried | VNT:SYS-0102 | the isolated stage hosts one stage in a second process (ARCH §9) |
 | SIM:SYS-0059 | carried | VNT | source time, simulation time (the orchestrator's alone) and an advisory wall clock stay and the wall clock never decides; SIM:CN-0137 differs because it is about what a component sees |
 | SIM:SYS-0060 | carried | VNT | internal time stays integer nanoseconds |
 | SIM:SYS-0061..0063 | superseded | D10, ARCH §7 | §8.2 — a run is one recorded control message, so cycles and their rate are not reconstructed from a flat recording |
@@ -510,7 +510,7 @@ To dispose: 659 rows (389 `CN`, 270 `SYS`).
 | SIM:SYS-0076 | carried | VNT:SYS-0009, VNT:SYS-0019 | runs of one instant go in rank order and the plan prints the order |
 | SIM:SYS-0077 | superseded | ARCH §2.3 | a `previous_cycle` input replaces the delay counted in steps, which has no meaning when steps are events |
 | SIM:SYS-0078 | carried | VNT:SYS-0010 | a loop with no previous-cycle edge is a load error naming the loop |
-| SIM:SYS-0079 | carried | VNT | the previous-cycle inputs, the only latency left, are recorded in the description of the live measurement |
+| SIM:SYS-0079 | carried | VNT:SYS-0059 | the previous-cycle inputs, the only latency left, are recorded in the description of the live measurement |
 | SIM:SYS-0080..0086 | carried | VNT | §9.1 — mode and implementation per stage stay the two independent fields of a stage |
 | SIM:SYS-0087..0096 | carried | VNT | §9.2 — the launcher model keeps the coherence classification, the broken-chain block, waivers and the closing of gaps |
 | SIM:SYS-0097..0103 | carried | VNT | §9.3 — overrides and faults keep their closed verb lists and run in the mutator |
@@ -520,7 +520,7 @@ To dispose: 659 rows (389 `CN`, 270 `SYS`).
 | SIM:SYS-0107 | carried | VNT | the manifest keeps the coherence verdict and the divergence point |
 | SIM:SYS-0108 | retired | — | `R-SIM-7` puts integrating a signal into a component under test; no part of Vantage does it |
 | SIM:SYS-0109 | carried | VNT | closed-loop work stays out of scope; a world simulator reaches Vantage as a recording |
-| SIM:SYS-0110 | carried | VNT | outputs stay optional: a recording and a live measurement may each be absent |
+| SIM:SYS-0110 | carried | VNT:SYS-0058 | outputs stay optional: a recording and a live measurement may each be absent |
 | SIM:SYS-0111 | carried | VNT | export formats and the replayable output stay with the recording I/O |
 | SIM:SYS-0112 | moved | RCT:SYS-0042 | the contract says Vantage's reader reads an engine-run recording as written |
 | SIM:SYS-0113 | carried | VNT | exports are still filtered by port and by time range |
@@ -535,7 +535,7 @@ To dispose: 659 rows (389 `CN`, 270 `SYS`).
 | SIM:SYS-0122 | carried | VNT | a recording round-trips and an export is lossy and terminal, refused as input by capability |
 | SIM:SYS-0123 | carried | VNT | the run manifest stays; its timing model, reset policy and timing-recovery rung entries go with the grid and the ladder (D10, D17) |
 | SIM:SYS-0124 | carried | VNT | a run is still reproducible from its manifest |
-| SIM:SYS-0125 | carried | VNT | the exit codes stay distinct and documented |
+| SIM:SYS-0125 | carried | VNT:SYS-0091, VNT:SYS-0092 | the exit codes stay distinct and documented |
 | SIM:SYS-0126 | carried | VNT | log lines stay from a closed vocabulary, the step number replacing the tick |
 | SIM:SYS-0127 | carried | VNT | Vantage still reports and never judges whether a run passed |
 | SIM:SYS-0128..0131 | superseded | D13 | §11.1 — the player is a viewer; the engine side of attach and detach is `RCT:SYS-0026` (the writer never waits), which SIM:CN-0053 holds |
@@ -566,12 +566,12 @@ To dispose: 659 rows (389 `CN`, 270 `SYS`).
 | SIM:SYS-0180 | carried | VNT | geometry still comes from per-project configuration, carried in the live measurement's bundles; drawing a fallback differently is the viewer's (open question) |
 | SIM:SYS-0181 | carried | VNT | a batch is still one run setup over a list of recordings |
 | SIM:SYS-0182 | carried | VNT | the runs of a batch stay separate processes; the threads of ARCH §8 live inside one engine run |
-| SIM:SYS-0183 | carried | VNT | the developer face is `simengine` started directly, the batch face one supervised process per recording, plus the isolated stage (ARCH §9) |
+| SIM:SYS-0183 | carried | VNT:SYS-0088, VNT:SYS-0102 | the developer face is `simengine` started directly, the batch face one supervised process per recording, plus the isolated stage (ARCH §9) |
 | SIM:SYS-0184 | carried | VNT | each run still writes its own artifact directory |
 | SIM:SYS-0185 | carried | VNT | a failing run still does not stop the batch |
-| SIM:SYS-0186 | carried | VNT | ok, fail, crash and timeout stay four outcomes, judged from outside the worker |
+| SIM:SYS-0186 | carried | VNT:SYS-0091 | ok, fail, crash and timeout stay four outcomes, judged from outside the worker |
 | SIM:SYS-0187 | carried | VNT | the batch still reports a status list with reason and duration |
-| SIM:SYS-0188 | carried | VNT | a crash still records its recording, setup, last step, stderr and run id, from the worker's checkpoint |
+| SIM:SYS-0188 | carried | VNT:SYS-0101 | a crash still records its recording, setup, last step, stderr and run id, from the worker's supervision cell |
 | SIM:SYS-0189 | carried | VNT | parameter sweeps stay with the batch loop |
 | SIM:SYS-0190 | carried | VNT | a batch is still resumable from the checkpoint files |
 | SIM:SYS-0191 | carried | VNT | per-run timeout and limits stay in the run setup |
@@ -602,7 +602,7 @@ To dispose: 659 rows (389 `CN`, 270 `SYS`).
 | SIM:SYS-0216 | carried | VNT:SYS-0001 | the engine launches without the Python layer from a run setup |
 | SIM:SYS-0217 | carried | VNT | symbol resolution is documented and ready-made debugger configurations ship |
 | SIM:SYS-0218 | retired | — | component state is not exposed by the ABI, the state snapshot is parked (RCT P1) and R-SIM-17 allows only recompute from the start |
-| SIM:SYS-0219 | carried | VNT | a module crash writes a minimal reproducer package |
+| SIM:SYS-0219 | carried | VNT:SYS-0101 | a module crash writes a minimal reproducer package |
 | SIM:SYS-0220 | carried | VNT | the integrity check of a recording stays a check before simulation |
 | SIM:SYS-0221 | carried | VNT | integrity results stay available as a gate |
 | SIM:SYS-0222 | carried | VNT | the content hash stays the recording's identity as `sources[].sha256` |
@@ -784,7 +784,7 @@ To dispose: 377 rows (188 `SW`, 189 `IMP`).
 | SIM:SW-0136 | carried | VNT | no measured duration enters a decision, a value or an output |
 | SIM:SW-0137 | carried | VNT | the engine reports each module's path, versions, build and bundle hash |
 | SIM:SW-0138 | carried | VNT | break conditions at a step, at a time, on module entry and on a port condition stay |
-| SIM:SW-0139 | carried | VNT | a crash writes a minimal reproducer package |
+| SIM:SW-0139 | carried | VNT:SYS-0101 | a crash writes a minimal reproducer package |
 | SIM:SW-0140 | carried | VNT | no diagnostic raises or aborts a run |
 | SIM:SW-0141 | carried | VNT | the executable stays thin; it now also holds the supervisor and the isolated stage (ARCH §3.7, ARCH §11) |
 | SIM:SW-0142 | carried | VNT:SYS-0001 | the executable runs a complete simulation with no interpreter loaded |
@@ -792,8 +792,8 @@ To dispose: 377 rows (188 `SW`, 189 `IMP`).
 | SIM:SW-0144 | carried | VNT | the engine library stays usable without the executable |
 | SIM:SW-0145 | carried | VNT | one engine binary serves desktop, batch and CI |
 | SIM:SW-0146 | carried | VNT | the engine builds and runs with no graphical toolkit and never prompts |
-| SIM:SW-0147 | carried | VNT | a restart after an abnormal end stays explicit, bounded and off by default |
-| SIM:SW-0148 | carried | VNT | the executable returns the taxonomy's exit code, never a raw platform code |
+| SIM:SW-0147 | carried | VNT:SYS-0093, VNT:SYS-0094 | a restart after an abnormal end stays explicit, bounded and off by default |
+| SIM:SW-0148 | carried | VNT:SYS-0092 | the executable returns the taxonomy's exit code, never a raw platform code |
 | SIM:SW-0149 | carried | VNT | the four configuration layers stay, each value keeping its layer |
 | SIM:SW-0150 | carried | VNT | composition, connections and source-signal binding stay separate file kinds; the visual layout file goes with the viewer (D13) |
 | SIM:SW-0151 | carried | VNT | every configuration file is validated against a published schema with locating errors |
@@ -897,12 +897,12 @@ serve them. To dispose: 373 rows (187 `SW`, 186 `IMP`).
 | SIM:SW-0239 | carried | VNT | the scripting API keeps its own version, independent of the recording format and the ABI |
 | SIM:SW-0240 | carried | VNT | no scripted use needs generated bindings or a checkout (`R-SIM-11`) |
 | SIM:SW-0241 | carried | VNT | batch runs stay separate processes; the threads of ARCH §8 live inside one engine run |
-| SIM:SW-0242 | carried | VNT | ok, fail, crash and timeout stay four outcomes, judged from outside the worker |
+| SIM:SW-0242 | carried | VNT:SYS-0091 | ok, fail, crash and timeout stay four outcomes, judged from outside the worker |
 | SIM:SW-0243 | carried | VNT | a failing run still does not stop the batch |
 | SIM:SW-0244 | carried | VNT | the batch aggregate still reconciles with the individual manifests |
-| SIM:SW-0245 | carried | VNT | a crash still records its recording, setup, last step, stderr and run id |
+| SIM:SW-0245 | carried | VNT:SYS-0101 | a crash still records its recording, setup, last step, stderr and run id |
 | SIM:SW-0246 | carried | VNT | the processing watchdog stays as the per-call execution timeout with its own threshold |
-| SIM:SW-0247 | carried | VNT | the supervisor's deadline and the live measurement's heartbeat stay the separate check that the worker still responds (ARCH §9) |
+| SIM:SW-0247 | carried | VNT:SYS-0089 | the supervisor's deadline and the live measurement's heartbeat stay the separate check that the worker still responds (ARCH §9) |
 | SIM:SW-0248 | carried | VNT | per-run wall-time and memory limits stay in the run setup and are reported distinctly |
 | SIM:SW-0249 | carried | VNT | a batch is still resumable and re-executes no completed run |
 | SIM:SW-0250 | carried | VNT | a sweep over N values still gives N runs differing in exactly the swept value |
@@ -910,7 +910,7 @@ serve them. To dispose: 373 rows (187 `SW`, 186 `IMP`).
 | SIM:SW-0252 | carried | VNT | the read-error behaviours of a batch stay a closed set with skipped packages counted |
 | SIM:SW-0253 | carried | VNT | a read retry stays bounded and recorded |
 | SIM:SW-0254 | carried | VNT | an index built for a recording is still reused by every batch entry |
-| SIM:SW-0255 | carried | VNT | the developer face, the supervised batch face and the isolated stage stay (ARCH §9) |
+| SIM:SW-0255 | carried | VNT:SYS-0088, VNT:SYS-0102 | the developer face, the supervised batch face and the isolated stage stay (ARCH §9) |
 | SIM:SW-0256 | carried | VNT | a batch is still one run setup plus a recording list, with no format of its own |
 | SIM:SW-0257 | carried | VNT | a recording's content hash stays its identity as `sources[].sha256` |
 | SIM:SW-0258 | carried | VNT | the file and group identifiers are read by the preparation tools where the format has them; no contract row states them (open question) |
@@ -1005,7 +1005,7 @@ serve them. To dispose: 373 rows (187 `SW`, 186 `IMP`).
 | SIM:SW-0399 | carried | VNT | the SIM team still owns the configuration format and the algorithm team the content |
 | SIM:SW-0400 | carried | VNT | mode stays overridable per output port, a port of a simulate stage being sourced from the recording |
 | SIM:SW-0401 | carried | VNT | a component stays instantiable more than once, with distinct port namespaces per instance |
-| SIM:SW-0402 | carried | VNT | the previous-cycle inputs, the only latency left, stay recorded in the manifest and the description (as SIM:SYS-0079) |
+| SIM:SW-0402 | carried | VNT:SYS-0059 | the previous-cycle inputs, the only latency left, stay recorded in the manifest and the description (as SIM:SYS-0079) |
 | SIM:SW-0403 | superseded | D13 | the provenance query is the evidence producer, which goes with the viewer |
 | SIM:SW-0406 | carried | VNT | a project still pins a package version range and the tool refuses to run outside it |
 | SIM:SW-0407 | carried | VNT | a breaking change still ships a migration guide and, where possible, a migration command |
