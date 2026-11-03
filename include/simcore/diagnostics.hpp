@@ -288,7 +288,11 @@ bool CheckPortLength(const BreakCondition& condition, const std::string& qualifi
 // the intended source), and whatever stderr the crashed process produced.
 struct ReproducerInput {
   std::filesystem::path run_spec_path;
-  std::uint64_t failing_cycle = 0;
+  // `IMP-0110`: the last completed step, or none when no step had completed.
+  std::optional<std::uint64_t> failing_cycle;
+  // The stages marked in a call when the worker ended, and the run's id (`crash.json`; written when either is set).
+  std::vector<std::string> stages;
+  std::string run_id;
   std::map<std::string, std::vector<std::uint8_t>> input_capture;
   std::string module_identity;
   std::string captured_stderr;

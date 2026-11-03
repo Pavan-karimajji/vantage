@@ -26,10 +26,10 @@
 ///   classifies an isolated stage -- the two features share one
 ///   mechanism, per `DD-09`'s own framing ("the isolated stage is a
 ///   second simengine"; a restarted run is a second simengine too).
-///   Default (`--restart-on-crash` absent or `0`): no supervisor, no
-///   child, one process -- identical cost to before this row. Each
-///   attempt is appended to `<run_spec>.manifest.json` (attempt number,
-///   outcome, exit code/signal) -- `SW-0147`'s "identifiable from its
+///   Default (no `--supervise`): no supervisor, no child, one process.
+///   `--supervise` (`WP-17`) starts supervision and needs `--attempt-timeout-ms`; the
+///   worker marks a supervision cell (`D31 (3)`) and each attempt is appended
+///   to `<run_setup>.attempts.jsonl` -- `SW-0147`'s "identifiable from its
 ///   artifacts alone" -- and a restart fires ONLY on `IsolatedOutcome::
 ///   kCrashed` (an OS-level abnormal termination), never on a clean
 ///   nonzero exit, so a self-reported `fail` can never be silently turned
@@ -37,11 +37,15 @@
 /// @author Pavan Karimajji
 
 #include <chrono>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <exception>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -53,9 +57,14 @@
 #include <unistd.h>
 #endif
 
+#include "livemeas/livemeas_layout.hpp"
+#include "livemeas/shared_region.hpp"
 #include "simcore/abi/simcore.h"
 #include "simcore/diagnostics.hpp"
 #include "simcore/module_host.hpp"
+#include "simcore/runspec.hpp"
+#include "supervision_cell.hpp"
+#include "vantage/livemeas_seal.hpp"
 
 namespace {
 
@@ -67,7 +76,11 @@ struct Args {
   int threads = 1;                  // IMP-0005, IMP-0034: `--threads N`
   int max_restarts = 0;             // SW-0147: off by default
   std::int64_t attempt_timeout_ms = 0;
+  bool supervise = false;           // IMP-0103: `--supervise` starts supervision, nothing else does
+  bool restart_given = false;       // `--restart-on-crash` / `--attempt-timeout-ms` need `--supervise`
+  bool attempt_given = false;
   bool worker = false;              // internal: this process IS a supervised child
+  std::string cell_name;            // internal: the supervision cell the worker marks (`--__worker <name>`)
 };
 
 bool ParseArgs(int argc, char** argv, Args& out) {
@@ -90,12 +103,17 @@ bool ParseArgs(int argc, char** argv, Args& out) {
       } catch (const std::exception&) {
         return false;
       }
+    } else if (arg == "--supervise") {
+      out.supervise = true;
     } else if (arg == "--restart-on-crash" && i + 1 < argc) {
       out.max_restarts = std::stoi(argv[++i]);
+      out.restart_given = true;
     } else if (arg == "--attempt-timeout-ms" && i + 1 < argc) {
       out.attempt_timeout_ms = std::stoll(argv[++i]);
-    } else if (arg == "--__worker") {
+      out.attempt_given = true;
+    } else if (arg == "--__worker" && i + 1 < argc) {
       out.worker = true;  // undocumented: set only by this binary's own supervisor
+      out.cell_name = argv[++i];
     } else if (out.run_spec_path.empty()) {
       out.run_spec_path = arg;
     } else {
@@ -165,18 +183,40 @@ std::filesystem::path SelfExecutablePath() {
 #endif
 }
 
-void AppendManifestAttempt(const std::filesystem::path& manifest_path, int attempt,
-                            const simcore::module_host::IsolatedRunResult& result, bool is_final) {
-  std::ofstream out(manifest_path, std::ios::app);
-  out << "{\"attempt\":" << attempt << ",\"outcome\":\"" << simcore::module_host::ToString(result.outcome)
-      << "\",\"exit_or_signal\":" << result.exit_code << ",\"final\":" << (is_final ? "true" : "false") << "}\n";
+// IMP-0108 (`D31 (6)`): one JSON object per line, one line per attempt, in `<run_setup>.attempts.jsonl`:
+// the attempt, its outcome, the exit code or the signal, whether it was the last, and `stages` -- the stages the
+// supervision cell marks in a call, or the string `unknown` when it marks none.
+void AppendManifestAttempt(const std::filesystem::path& attempts_path, int attempt,
+                            const simcore::module_host::IsolatedRunResult& result, bool is_last,
+                            const std::vector<std::string>& stages_in_call) {
+  using simcore::module_host::IsolatedOutcome;
+  std::ofstream out(attempts_path, std::ios::app);
+  out << "{\"attempt\":" << attempt << ",\"outcome\":\"" << simcore::module_host::ToString(result.outcome) << "\"";
+  if (result.outcome == IsolatedOutcome::kCrashed) {
+#if defined(_WIN32)
+    out << ",\"exit_code\":" << result.exit_code;
+#else
+    out << ",\"signal\":" << result.exit_code;
+#endif
+  } else if (result.outcome == IsolatedOutcome::kOk || result.outcome == IsolatedOutcome::kFail) {
+    out << ",\"exit_code\":" << result.exit_code;
+  }
+  out << ",\"last\":" << (is_last ? "true" : "false") << ",\"stages\":";
+  if (stages_in_call.empty()) {
+    out << "\"unknown\"";
+  } else {
+    out << "[";
+    for (std::size_t i = 0; i < stages_in_call.size(); ++i) out << (i == 0 ? "\"" : ",\"") << stages_in_call[i] << "\"";
+    out << "]";
+  }
+  out << "}\n";
 }
 
 // The whole of what `sil_host/main.cpp` did directly: spec load, engine
 // construction, run, exit-code return -- factored out so both the
 // no-restart default path and a supervised child (`--__worker`) call
 // exactly the same body.
-SimExitCode RunOnce(const Args& args, char* err_buf, std::size_t cap) {
+SimExitCode RunOnce(const Args& args, char* err_buf, std::size_t cap) {  // a worker also marks its cell
   // UT-EXE-04/05's own test hook: forces a REAL abnormal termination in
   // the process that is actually about to do the work -- a worker child,
   // or the unsupervised default path -- gated by an env var nobody sets
@@ -197,13 +237,25 @@ SimExitCode RunOnce(const Args& args, char* err_buf, std::size_t cap) {
     return exit_code;
   }
   exit_code = simEngineSetThreads(engine, args.threads, err_buf, cap);
+  // IMP-0124: a worker hands the engine its supervisor's cell before the first step.
+  std::unique_ptr<vantage::simengine::SupervisionCell> cell;
+  if (exit_code == kSimExitOk && args.worker) {
+    cell = vantage::simengine::SupervisionCell::open(args.cell_name);
+    if (cell == nullptr) {
+      std::snprintf(err_buf, cap, "supervision cell '%s' cannot be opened", args.cell_name.c_str());
+      exit_code = kSimExitInfra;
+    } else {
+      exit_code = simEngineSetSupervisionCell(engine, cell->base(), cell->length());
+      if (exit_code != kSimExitOk) std::snprintf(err_buf, cap, "supervision cell '%s' does not match the run setup", args.cell_name.c_str());
+    }
+  }
   if (exit_code == kSimExitOk) exit_code = simEngineRun(engine, err_buf, cap);
   if (exit_code != kSimExitOk) std::cerr << "[simengine] error: " << err_buf << "\n";
   simEngineDestroy(engine);
   return exit_code;
 }
 
-std::vector<std::string> BuildChildArgs(const Args& args) {
+std::vector<std::string> BuildChildArgs(const Args& args, const std::string& cell_name) {
   std::vector<std::string> out{args.run_spec_path};
   if (!args.config_path.empty()) {
     out.push_back("--config");
@@ -216,6 +268,7 @@ std::vector<std::string> BuildChildArgs(const Args& args) {
   out.push_back("--threads");
   out.push_back(std::to_string(args.threads));
   out.push_back("--__worker");
+  out.push_back(cell_name);
   return out;
 }
 
@@ -236,7 +289,9 @@ std::vector<std::string> BuildChildArgs(const Args& args) {
 // which is additive future work, not a reversal of what is built here. The
 // spec, stderr and (when known) module identity are real; the capture
 // directory is simply absent from this package rather than faked.
-void WriteCrashReproducer(const Args& args, const std::filesystem::path& stderr_capture_path, int attempt) {
+void WriteCrashReproducer(const Args& args, const std::filesystem::path& stderr_capture_path, int attempt,
+                          const std::optional<std::uint64_t>& last_step, const std::vector<std::string>& stages,
+                          const std::string& run_id) {
   std::ifstream stderr_in(stderr_capture_path, std::ios::binary);
   std::string captured_stderr;
   if (stderr_in) {
@@ -247,11 +302,12 @@ void WriteCrashReproducer(const Args& args, const std::filesystem::path& stderr_
 
   simcore::diagnostics::ReproducerInput input;
   input.run_spec_path = args.run_spec_path;
-  input.failing_cycle = 0;  // unknown at the supervisor's remove -- see this
-                             // function's own header note
+  input.failing_cycle = last_step;  // IMP-0110: the last completed step, none when no step completed
+  input.stages = stages;
+  input.run_id = run_id;
   input.module_identity =
-      "stage=sut attempt=" + std::to_string(attempt) +
-      " (module identity unavailable to the supervisor -- see the run's own manifest.json for build details)";
+      "attempt=" + std::to_string(attempt) +
+      " (module identity unavailable to the supervisor -- see the run's own manifest for build details)";
   input.captured_stderr = captured_stderr;
 
   const std::filesystem::path output_dir = std::filesystem::path(args.run_spec_path).parent_path() / "reproducers";
@@ -263,42 +319,119 @@ void WriteCrashReproducer(const Args& args, const std::filesystem::path& stderr_
   }
 }
 
-// SW-0147: the supervisor. Restarts ONLY on `kCrashed` (an OS-observed
-// abnormal termination) -- a clean nonzero exit is the child's own
-// self-report and is returned as-is, never retried, never turned into
-// `ok` (`SYS-0186`).
+// IMP-0107: the name of the live measurement the run setup declares (`outputs.livemeas.name`); empty when it
+// declares none, and then there is nothing to hold or seal.
+std::string ReadLiveMeasName(const simcore::RunSpec& spec) {
+  return spec.outputs.livemeas.has_value() ? spec.outputs.livemeas->name : std::string();
+}
+
+// IMP-0075 (`D31 (4)`): called from the supervisor's wait. Maps the live measurement read-write once its magic is
+// valid, writes nothing through it, and keeps the mapping until the supervisor ends, so the region outlives a
+// worker dying (a named region on Windows ends with its last handle).
+struct HeldLiveMeas {
+  std::unique_ptr<vantage::livemeas::SharedRegion> data;
+  std::unique_ptr<vantage::livemeas::SharedRegion> bulk;
+};
+
+void HoldLiveMeas(const std::string& name, HeldLiveMeas& held) {
+  namespace layout = adas::livemeas;
+  using vantage::livemeas::SharedRegion;
+  if (name.empty() || held.data != nullptr) return;
+  std::unique_ptr<SharedRegion> region = SharedRegion::open(name, SharedRegion::Access::kReadWrite);
+  if (region == nullptr || region->size() < sizeof(layout::MeasStatus)) return;
+  if (static_cast<const layout::MeasStatus*>(region->data())->magic != layout::kMagic) return;
+  held.data = std::move(region);
+  held.bulk = SharedRegion::open(name + layout::kBulkSegmentSuffix, SharedRegion::Access::kReadWrite);
+}
+
+// IMP-0107: after a crash or a timeout, once the worker's process is gone, seals the live measurement `crash` (3)
+// or `timeout` (4). Never after a pass or a fail: those the engine closed itself.
+void SealAfterWorker(const std::string& name, simcore::module_host::IsolatedOutcome outcome, std::uint32_t pid) {
+  using simcore::module_host::IsolatedOutcome;
+  if (name.empty()) return;
+  if (outcome != IsolatedOutcome::kCrashed && outcome != IsolatedOutcome::kTimedOut) return;
+  for (int i = 0; i < 200 && vantage::livemeas::SharedRegion::isProcessAlive(pid); ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  vantage::sealAbandoned(name, outcome == IsolatedOutcome::kCrashed ? 3u : 4u);
+}
+
+// IMP-0105: one `SimExitCode` from how the worker ended -- ok 0, the worker's own code on a fail, timeout 7,
+// crash 8, failed to start 6. No raw platform status leaves `main`.
+SimExitCode ClassifyWorkerEnd(const simcore::module_host::IsolatedRunResult& result) {
+  using simcore::module_host::IsolatedOutcome;
+  switch (result.outcome) {
+    case IsolatedOutcome::kOk:
+      return kSimExitOk;
+    case IsolatedOutcome::kFail:
+      return static_cast<SimExitCode>(result.exit_code);
+    case IsolatedOutcome::kTimedOut:
+      return kSimExitTimeout;
+    case IsolatedOutcome::kCrashed:
+      return kSimExitCrash;
+    case IsolatedOutcome::kFailedToStart:
+      return kSimExitInfra;
+  }
+  return kSimExitInfra;
+}
+
+// IMP-0106 (SW-0147): the supervisor. One worker per attempt under the deadline, a supervision cell per attempt,
+// a restart ONLY after a crash and at most `--restart-on-crash` times; a clean nonzero exit is the worker's own
+// report and is returned as-is, never retried (`SYS-0186`). It calls no engine function: it spawns, holds the live
+// measurement, classifies, seals and records.
 SimExitCode RunWithSupervision(const Args& args) {
   using simcore::module_host::IsolatedOutcome;
-  const std::filesystem::path manifest_path = args.run_spec_path + ".manifest.json";
+  std::ifstream setup_in(args.run_spec_path, std::ios::binary);
+  std::ostringstream setup_text;
+  setup_text << setup_in.rdbuf();
+  const simcore::Result<simcore::RunSpec> spec = simcore::LoadRunSpec(setup_text.str());
+  if (!spec.ok()) {
+    std::cerr << "[simengine] error: " << spec.error().Format() << "\n";
+    return kSimExitConfig;
+  }
+  std::vector<std::string> stage_names;
+  for (const simcore::SpecStage& stage : spec.value().stages) stage_names.push_back(stage.name);
+  const std::string live_name = ReadLiveMeasName(spec.value());
+  const std::string run_id = spec.value().run_id;
+
+  const std::filesystem::path attempts_path = args.run_spec_path + ".attempts.jsonl";
   const std::filesystem::path self_path = SelfExecutablePath();
-  const std::vector<std::string> child_args = BuildChildArgs(args);
-  const std::chrono::milliseconds deadline =
-      args.attempt_timeout_ms > 0 ? std::chrono::milliseconds(args.attempt_timeout_ms) : std::chrono::hours(24);
+  const std::chrono::milliseconds deadline(args.attempt_timeout_ms);
+  const std::uint32_t own_pid = vantage::livemeas::SharedRegion::currentProcessId();
+  HeldLiveMeas held;  // kept to the supervisor's end
 
   for (int attempt = 1;; ++attempt) {
+    const std::string cell_name = vantage::simengine::SupervisionCell::nameFor(own_pid, attempt);
+    std::unique_ptr<vantage::simengine::SupervisionCell> cell =
+        vantage::simengine::SupervisionCell::create(cell_name, stage_names.size());
+    if (cell == nullptr) {
+      std::cerr << "[simengine] error: supervision cell '" << cell_name << "' cannot be created\n";
+      return kSimExitInfra;
+    }
     const std::filesystem::path stderr_capture_path =
         args.run_spec_path + ".attempt" + std::to_string(attempt) + ".stderr.txt";
-    const auto result =
-        simcore::module_host::RunIsolatedStage("sut", self_path, child_args, deadline, stderr_capture_path);
+    std::uint32_t worker_pid = 0;
+    const auto result = simcore::module_host::RunIsolatedStage(
+        "sut", self_path, BuildChildArgs(args, cell_name), deadline, stderr_capture_path,
+        [&](std::uint32_t pid) {
+          worker_pid = pid;
+          HoldLiveMeas(live_name, held);
+        });
     const bool exhausted = attempt > args.max_restarts;
-    AppendManifestAttempt(manifest_path, attempt, result, result.outcome != IsolatedOutcome::kCrashed || exhausted);
-    switch (result.outcome) {
-      case IsolatedOutcome::kOk:
-        return kSimExitOk;
-      case IsolatedOutcome::kFail:
-        return static_cast<SimExitCode>(result.exit_code);
-      case IsolatedOutcome::kTimedOut:
-        return kSimExitTimeout;
-      case IsolatedOutcome::kFailedToStart:
-        return kSimExitInfra;
-      case IsolatedOutcome::kCrashed:
-        WriteCrashReproducer(args, stderr_capture_path, attempt);
-        if (!exhausted) {
-          std::cout << "[simengine] restart " << attempt << " of " << args.max_restarts << " after crash\n";
-          continue;
-        }
-        return kSimExitCrash;
+    const bool is_last = result.outcome != IsolatedOutcome::kCrashed || exhausted;
+    const std::optional<std::uint64_t> last_step = cell->lastCompletedStep();
+    const std::vector<std::string> stages_in_call = cell->stagesInCall(stage_names);
+    cell->remove();
+    AppendManifestAttempt(attempts_path, attempt, result, is_last, stages_in_call);
+    SealAfterWorker(live_name, result.outcome, worker_pid);
+    if (result.outcome == IsolatedOutcome::kCrashed) {
+      WriteCrashReproducer(args, stderr_capture_path, attempt, last_step, stages_in_call, run_id);
+      if (!exhausted) {
+        std::cout << "[simengine] restart " << attempt << " of " << args.max_restarts << " after crash\n";
+        continue;
+      }
     }
+    return ClassifyWorkerEnd(result);
   }
 }
 
@@ -311,7 +444,16 @@ int main(int argc, char** argv) {
   if (!ParseArgs(argc, argv, args)) {
     std::cerr << "usage: " << argv[0]
               << " <run_spec.json> [--config PATH] [--timeout-ms N] [--threads N] [--wait-for-attach]"
-                 " [--restart-on-crash N] [--attempt-timeout-ms N]\n";
+                 " [--supervise --attempt-timeout-ms N [--restart-on-crash N]]\n";
+    return static_cast<int>(kSimExitConfig);
+  }
+  // IMP-0103: supervision is asked for by `--supervise` alone, and then the deadline is required.
+  if (!args.worker && !args.supervise && (args.restart_given || args.attempt_given)) {
+    std::cerr << "[simengine] error: --restart-on-crash and --attempt-timeout-ms need --supervise\n";
+    return static_cast<int>(kSimExitConfig);
+  }
+  if (args.supervise && (!args.attempt_given || args.attempt_timeout_ms <= 0)) {
+    std::cerr << "[simengine] error: --supervise needs --attempt-timeout-ms N (N > 0), the deadline of one attempt\n";
     return static_cast<int>(kSimExitConfig);
   }
 
@@ -319,7 +461,7 @@ int main(int argc, char** argv) {
   if (args.wait_for_attach) WaitForAttach();
 
   char err_buf[512];
-  const SimExitCode exit_code = (args.worker || args.max_restarts <= 0) ? RunOnce(args, err_buf, sizeof(err_buf))
-                                                                        : RunWithSupervision(args);
+  const SimExitCode exit_code = (args.worker || !args.supervise) ? RunOnce(args, err_buf, sizeof(err_buf))
+                                                                  : RunWithSupervision(args);
   return static_cast<int>(exit_code);
 }

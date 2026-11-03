@@ -29,6 +29,7 @@
 /// @author Pavan Karimajji
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <filesystem>
 #include <fstream>
@@ -599,6 +600,39 @@ void Runner::TopUp() {
   }
 }
 
+void Runner::SetLiveMeasurement(LiveMeasSink* sink) {
+  live_sink_ = sink;
+  // Computed once here, not at every step: the overridden ports (inputs whose post-mutation value is recorded) and
+  // the ports whose payload is bulk (a source port is bulk when a stage input fed from it is).
+  live_overridden_.clear();
+  live_bulk_ports_.clear();
+  if (sink == nullptr) return;
+  for (const RecordedTopic& topic : recorded_topics_) {
+    if (topic.post_mutation) live_overridden_.insert(topic.qualified_port);
+  }
+  for (const SpecStage& stage : impl_->spec.stages) {
+    for (const SpecPort& spec_port : stage.ports) {
+      if (spec_port.bulk) live_bulk_ports_.insert(stage.name + "." + spec_port.name);
+    }
+    for (const SpecInput& input : stage.inputs) {
+      if (input.producer != kSourceProducer) continue;
+      for (const SpecPort& spec_port : stage.ports) {
+        if (spec_port.bulk && input.port == spec_port.name) {
+          live_bulk_ports_.insert(std::string(kSourceProducer) + "." + input.producer_port);
+        }
+      }
+    }
+  }
+}
+
+void Runner::SetSupervisionCell(std::uint8_t* stage_bytes, std::size_t stage_count, std::uint64_t* last_step,
+                                std::uint64_t* has_step) {
+  cell_stage_bytes_ = stage_bytes;
+  cell_stage_count_ = stage_count;
+  cell_last_step_ = last_step;
+  cell_has_step_ = has_step;
+}
+
 Result<bool> Runner::Prepare() {
   if (prepared_) return Result<bool>::Ok(true);
   prepared_ = true;
@@ -722,6 +756,22 @@ void Runner::PrepareTicket(const orchestrator::Ticket& ticket, PendingRun& pendi
 void Runner::ExecTicket(PendingRun& pending, std::size_t worker) const {
   std::optional<module_host::ExecTimeout> timeout;
   if (options_.exec_timeout.has_value()) timeout = impl_->exec_slots.at(worker);
+  // `IMP-0124`: this stage's byte is 1 for the length of the call, and 0 again however the call ends.
+  struct InCall {
+    std::uint8_t* byte;
+    explicit InCall(std::uint8_t* b) : byte(b) {
+      if (byte != nullptr) reinterpret_cast<std::atomic<std::uint8_t>*>(byte)->store(1, std::memory_order_release);
+    }
+    ~InCall() {
+      if (byte != nullptr) reinterpret_cast<std::atomic<std::uint8_t>*>(byte)->store(0, std::memory_order_release);
+    }
+  };
+  std::uint8_t* stage_byte = nullptr;
+  if (cell_stage_bytes_ != nullptr && pending.args.stage != nullptr) {
+    const std::ptrdiff_t index = pending.args.stage - impl_->spec.stages.data();
+    if (index >= 0 && static_cast<std::size_t>(index) < cell_stage_count_) stage_byte = cell_stage_bytes_ + index;
+  }
+  InCall in_call(stage_byte);
   pending.executed.emplace(pending.component->Exec(pending.args.dt_ns, pending.prepared.inputs,
                                                    pending.prepared.input_meta, timeout));
 }
@@ -1043,10 +1093,7 @@ Result<bool> Runner::StepOnce() {
     StepReport report;
     report.step = step;
     report.sim_time_ns = now_ns;
-    std::set<std::string> overridden;  // inputs whose post-mutation value is recorded: the overridden ports
-    for (const RecordedTopic& topic : recorded_topics_) {
-      if (topic.post_mutation) overridden.insert(topic.qualified_port);
-    }
+    const std::set<std::string>& overridden = live_overridden_;  // `SetLiveMeasurement` computed it
     const auto is_per_run = [&](const Impl::RunWrite& run_write) {
       return !run_write.handed || overridden.count(run_write.port) != 0;
     };
@@ -1054,27 +1101,7 @@ Result<bool> Runner::StepOnce() {
     for (const Impl::RunWrite& run_write : impl.run_writes) {
       if (is_per_run(run_write)) per_run_ports.insert(run_write.port);
     }
-    const auto bulk_flag = [&](const std::string& port) {
-      const std::size_t dot = port.find('.');
-      if (dot == std::string::npos) return false;
-      const std::string stage_name = port.substr(0, dot);
-      const std::string port_name = port.substr(dot + 1);
-      for (const SpecStage& stage : impl.spec.stages) {
-        for (const SpecPort& spec_port : stage.ports) {
-          if (stage_name == stage.name && port_name == spec_port.name && spec_port.bulk) return true;
-          // A source port is bulk when a stage input fed from it is.
-          if (stage_name == kSourceProducer) {
-            for (const SpecInput& input : stage.inputs) {
-              if (input.producer == kSourceProducer && input.producer_port == port_name &&
-                  input.port == spec_port.name && spec_port.bulk) {
-                return true;
-              }
-            }
-          }
-        }
-      }
-      return false;
-    };
+    const auto bulk_flag = [&](const std::string& port) { return live_bulk_ports_.count(port) != 0; };
     std::map<std::string, std::size_t> runs_of_port;
     const auto add_run_value = [&](const Impl::RunWrite& run_write, bus::Origin origin) {
       StepValue value;
@@ -1112,6 +1139,11 @@ Result<bool> Runner::StepOnce() {
       if (count > 0) report.badges.push_back(StepBadge{key.first, key.second, count});
     }
     live_sink_->OnStep(report);
+  }
+  // `IMP-0124`: only now, after the step's report is handed on, is the step recorded as completed in the cell.
+  if (cell_last_step_ != nullptr && cell_has_step_ != nullptr) {
+    reinterpret_cast<std::atomic<std::uint64_t>*>(cell_last_step_)->store(step, std::memory_order_release);
+    reinterpret_cast<std::atomic<std::uint64_t>*>(cell_has_step_)->store(1, std::memory_order_release);
   }
   return Result<bool>::Ok(true);
 }

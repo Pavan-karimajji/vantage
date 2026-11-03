@@ -108,6 +108,12 @@ set(SIM_TEST_SOURCES
     unit/test_livemeas_writer.cpp
     # WP-15 (VANTAGE, C2): the engine writes it through the C ABI -- IMP-0078..IMP-0084.
     unit/test_livemeas_engine.cpp
+    # WP-16 (VANTAGE, C2): the inspector -- IMP-0091..IMP-0101, RCT:IMP-0038, RCT:IMP-0039.
+    unit/test_inspector.cpp
+    # WP-17 (VANTAGE, C2): the supervision cell and the supervisor with its seal -- IMP-0075, IMP-0103..IMP-0111, IMP-0124.
+    unit/test_supervision_cell.cpp
+    ../src/simengine/supervision_cell.cpp
+    integration/test_wp17_supervisor.cpp
     # WP-10 (SI-04): module_host -- exec_timeout ported unchanged (WP-10's
     # own exit criterion) plus Component/Lifecycle/Quarantine/Dso against
     # the real echo_stub fixture.
@@ -174,13 +180,14 @@ add_executable(simcore_tests ${SIM_TEST_SOURCES})
 target_link_libraries(simcore_tests PRIVATE
     simcore
     livemeas
+    inspector_core
     GTest::gtest_main
 )
 # SM-05a: test_ut_io_erg_reconstruct.cpp reaches erg_wire.hpp -- an
 # internal io/codecs/ helper, deliberately not part of simcore's own
 # public include/ surface -- to build its OWN independent DescriptorPool
 # from the fixture's manifest sidecar (never reusing ErgReader's state).
-target_include_directories(simcore_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/simcore ${CMAKE_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/support)
+target_include_directories(simcore_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/simcore ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/inspector ${CMAKE_SOURCE_DIR}/src/simengine ${CMAKE_CURRENT_SOURCE_DIR}/support)
 # WP-10: a stage's own build directory, known at configure time -- lets a
 # test resolve echo_stub's real path without a copy-next-to-exe step
 # (sil_host/tests/CMakeLists.txt's identical ADAS_SIL_TEST_FIXTURE_DIR
@@ -191,6 +198,8 @@ target_compile_definitions(simcore_tests PRIVATE
     # than asserting against its source -- the built executable's own
     # path, known at configure time, same pattern as the fixture dir above.
     SIMENGINE_EXECUTABLE="$<TARGET_FILE:simengine>"
+    # WP-16: the inspector tests run the real `vantage-inspect`, and WP-17 the held_probe fixture beside echo_stub.
+    VANTAGE_INSPECT_EXECUTABLE="$<TARGET_FILE:vantage-inspect>"
     # WP-15: IT-10's own Python-side prediction script
     # (tests/fixtures/graph_dump/predict_graph.py) -- a source-tree path,
     # not a build output, but named as a compile definition for the same
@@ -198,7 +207,7 @@ target_compile_definitions(simcore_tests PRIVATE
     # time, never a relative path a test has to guess at from its own cwd.
     IT10_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/graph_dump"
 )
-add_dependencies(simcore_tests sim_test_fixture_echo_stub sim_test_fixture_exec_probe sim_test_fixture_held_probe simengine)
+add_dependencies(simcore_tests sim_test_fixture_echo_stub sim_test_fixture_exec_probe sim_test_fixture_held_probe simengine vantage-inspect)
 
 include(GoogleTest)
 gtest_discover_tests(simcore_tests)

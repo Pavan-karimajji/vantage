@@ -62,7 +62,8 @@ Result<ReproducerResult> WriteReproducer(const std::filesystem::path& output_dir
                                           const ReproducerInput& input) noexcept {
   std::error_code ec;
   const std::filesystem::path package_dir =
-      output_dir / ("cycle_" + std::to_string(input.failing_cycle));
+      output_dir / (input.failing_cycle.has_value() ? "cycle_" + std::to_string(*input.failing_cycle)
+                                                     : "no_step_" + (input.run_id.empty() ? "run" : input.run_id));
 
   std::filesystem::create_directories(package_dir, ec);
   if (ec) {
@@ -95,6 +96,18 @@ Result<ReproducerResult> WriteReproducer(const std::filesystem::path& output_dir
       if (!written.ok()) return Result<ReproducerResult>::Fail(written.error());
       result.files_written.push_back(dest.string());
     }
+  }
+
+  if (!input.run_id.empty() || !input.stages.empty()) {
+    std::string json = "{\"run_id\":\"" + input.run_id + "\",\"failing_cycle\":";
+    json += input.failing_cycle.has_value() ? std::to_string(*input.failing_cycle) : std::string("null");
+    json += ",\"stages\":[";
+    for (std::size_t i = 0; i < input.stages.size(); ++i) json += (i == 0 ? "\"" : ",\"") + input.stages[i] + "\"";
+    json += "]}\n";
+    const std::filesystem::path crash_path = package_dir / "crash.json";
+    const Result<bool> crash_written = WriteText(crash_path, json, "crash.json");
+    if (!crash_written.ok()) return Result<ReproducerResult>::Fail(crash_written.error());
+    result.files_written.push_back(crash_path.string());
   }
 
   const std::filesystem::path identity_path = package_dir / "module_identity.txt";

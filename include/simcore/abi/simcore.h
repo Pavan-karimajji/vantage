@@ -121,6 +121,25 @@ SimExitCode simEngineSeek(SimEngine* engine, int64_t to_ns, char* err_buf, size_
  * is a config-kind refusal. Additive: no function changed; `SIMCORE_ABI_VERSION` 4. */
 SimExitCode simEngineSetThreads(SimEngine* engine, int32_t threads, char* err_buf, size_t err_buf_cap);
 
+/* The supervision cell (`WP-17`, `IMP-0124`; `D31 (3)`): a region of shared memory the supervisor creates and a
+ * worker engine marks, so a supervisor that finds the worker gone can say which stages were in a call and which
+ * step last completed, with no file written per call. The layout is declared here and nowhere else. Every field
+ * is 8-byte aligned and written with an atomic store; the stage bytes follow the header, one per stage in
+ * run-setup order, 1 while that stage is inside `Component::Exec`, else 0. */
+#define SIMCORE_SUPERVISION_CELL_MAGIC 0x4C4C4353434D4953ULL /* "SIMCSCLL" read little-endian */
+#define SIMCORE_SUPERVISION_CELL_HEADER_BYTES 32
+typedef struct SimSupervisionCellHeader {
+  uint64_t magic;               /* SIMCORE_SUPERVISION_CELL_MAGIC */
+  uint64_t stageCount;          /* the stage bytes that follow the header */
+  uint64_t lastCompletedStep;   /* the last step whose report was handed on; valid when hasStep is 1 */
+  uint64_t hasStep;             /* 0 until one step has completed, then 1 */
+} SimSupervisionCellHeader;
+
+/* Hands the engine the cell it marks. Call before the first step. `base`/`length` are the mapped region; magic,
+ * length and the stage count against the run setup are checked (a mismatch is a config-kind refusal). With no
+ * cell set, the engine stores nothing. Additive: `SIMCORE_ABI_VERSION` stays 5 (one C2 bump). */
+SimExitCode simEngineSetSupervisionCell(SimEngine* engine, void* base, uint64_t length);
+
 /* Shuts down every loaded component and releases the engine. Safe to call
  * exactly once per handle returned by `simEngineCreate`; `engine` may be
  * NULL (no-op), matching `adasShutdown`'s own null-tolerant convention one

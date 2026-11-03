@@ -5,8 +5,10 @@
 # One target, no `-DCI` variant, no headless build flag (SW-0145,
 # ANL-SW-32) -- the same binary serves interactive, batch and CI use
 # unchanged.
-add_executable(simengine main.cpp)
-target_link_libraries(simengine PRIVATE simcore)
+add_executable(simengine main.cpp supervision_cell.cpp)
+# WP-17: the supervisor holds and seals the live measurement and shares the supervision cell through `livemeas`.
+target_link_libraries(simengine PRIVATE simcore livemeas)
+target_include_directories(simengine PRIVATE ${PROJECT_SOURCE_DIR}/src)
 target_compile_features(simengine PUBLIC cxx_std_17)
 
 # RCT:IMP-0051: where the Python side of this target finds the one recording writer. `adas_recording.path`

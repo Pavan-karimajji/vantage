@@ -21,6 +21,7 @@
 #include "simcore/module_host.hpp"
 
 #include <array>
+#include <algorithm>
 #include <chrono>
 #include <thread>
 
@@ -56,7 +57,8 @@ std::string ToString(IsolatedOutcome outcome) {
 
 IsolatedRunResult RunIsolatedStage(const std::string& stage, const std::filesystem::path& executable,
                                     const std::vector<std::string>& args, std::chrono::milliseconds timeout,
-                                    const std::filesystem::path& stderr_capture_path) {
+                                    const std::filesystem::path& stderr_capture_path,
+                                    const std::function<void(std::uint32_t)>& poll) {
   IsolatedRunResult result;
   result.stage = stage;
 
@@ -100,7 +102,17 @@ IsolatedRunResult RunIsolatedStage(const std::string& stage, const std::filesyst
   }
   CloseHandle(process_info.hThread);
 
-  const DWORD wait_result = WaitForSingleObject(process_info.hProcess, static_cast<DWORD>(timeout.count()));
+  // Waits in short steps so `poll` runs while the child runs; without a `poll` it is one wait to the deadline.
+  const auto wait_deadline = std::chrono::steady_clock::now() + timeout;
+  DWORD wait_result = WAIT_TIMEOUT;
+  for (;;) {
+    if (poll) poll(process_info.dwProcessId);
+    const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(wait_deadline - std::chrono::steady_clock::now());
+    if (left.count() <= 0) break;
+    const DWORD step_ms = poll ? static_cast<DWORD>(std::min<long long>(left.count(), 10)) : static_cast<DWORD>(left.count());
+    wait_result = WaitForSingleObject(process_info.hProcess, step_ms);
+    if (wait_result != WAIT_TIMEOUT) break;
+  }
   if (wait_result == WAIT_TIMEOUT) {
     TerminateProcess(process_info.hProcess, 1);
     WaitForSingleObject(process_info.hProcess, INFINITE);
@@ -131,7 +143,8 @@ IsolatedRunResult RunIsolatedStage(const std::string& stage, const std::filesyst
 
 IsolatedRunResult RunIsolatedStage(const std::string& stage, const std::filesystem::path& executable,
                                     const std::vector<std::string>& args, std::chrono::milliseconds timeout,
-                                    const std::filesystem::path& stderr_capture_path) {
+                                    const std::filesystem::path& stderr_capture_path,
+                                    const std::function<void(std::uint32_t)>& poll) {
   IsolatedRunResult result;
   result.stage = stage;
 
@@ -170,6 +183,7 @@ IsolatedRunResult RunIsolatedStage(const std::string& stage, const std::filesyst
   for (;;) {
     const pid_t waited = waitpid(pid, &status, WNOHANG);
     if (waited == pid) break;
+    if (poll) poll(static_cast<std::uint32_t>(pid));
     if (std::chrono::steady_clock::now() >= deadline) {
       kill(pid, SIGKILL);
       waitpid(pid, &status, 0);  // reap -- never leave a zombie behind

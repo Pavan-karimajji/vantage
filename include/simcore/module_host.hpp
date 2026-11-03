@@ -382,8 +382,13 @@ struct IsolatedRunResult {
 // `kCrashed`/`kFail` outcome and fold it into a reproducer package. Empty
 // (the default) preserves the exact inherited-stderr behaviour every
 // existing caller already relies on -- this is purely additive.
+//
+// `poll` (`WP-17`, `IMP-0104`): when set, called at each wait step with the child's process id, while the
+// child runs. The supervisor uses it to hold the live measurement; an empty `poll` (the default) is the
+// behaviour every earlier caller relies on.
 IsolatedRunResult RunIsolatedStage(const std::string& stage, const std::filesystem::path& executable,
                                     const std::vector<std::string>& args, std::chrono::milliseconds timeout,
-                                    const std::filesystem::path& stderr_capture_path = {});
+                                    const std::filesystem::path& stderr_capture_path = {},
+                                    const std::function<void(std::uint32_t)>& poll = {});
 
 }  // namespace simcore::module_host

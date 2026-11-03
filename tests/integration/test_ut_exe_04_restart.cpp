@@ -124,7 +124,7 @@ class UtExe04Restart : public ::testing::Test {
   void SetUp() override {
     recording_ = WriteTinyRecording(TempPath("ut_exe_04_recording.mcap"));
     spec_ = WriteMinimalRunSpec(TempPath("ut_exe_04_spec.json"), recording_);
-    manifest_ = spec_.string() + ".manifest.json";
+    manifest_ = spec_.string() + ".attempts.jsonl";  // WP-17: `D31 (6)`, one line per attempt
     std::filesystem::remove(manifest_);
   }
   void TearDown() override { std::filesystem::remove(manifest_); }
@@ -145,7 +145,8 @@ TEST_F(UtExe04Restart, DefaultRunDoesNotRestartOnARealCrashAndWritesNoManifest) 
 TEST_F(UtExe04Restart, EnabledRunRestartsUpToTheBoundThenReportsCrashAndRecordsEveryAttempt) {
   EnvGuard force_abort("ADAS_SIM_TEST_FORCE_ABORT", "1");
   const auto result = simcore::module_host::RunIsolatedStage(
-      "sut", SimenginePath(), {spec_.string(), "--restart-on-crash", "2"}, std::chrono::seconds(10));
+      "sut", SimenginePath(), {spec_.string(), "--supervise", "--attempt-timeout-ms", "5000", "--restart-on-crash", "2"},
+      std::chrono::seconds(10));
   // The SUPERVISOR itself returns cleanly (exit(kSimExitCrash)) once its
   // own restart bound is exhausted -- it is never itself signalled, only
   // its children are, so THIS call's own outcome is a clean nonzero exit.
@@ -163,7 +164,8 @@ TEST_F(UtExe04Restart, EnabledRunRestartsUpToTheBoundThenReportsCrashAndRecordsE
 
 TEST_F(UtExe04Restart, EnabledRunThatSucceedsRecordsExactlyOneOkAttempt) {
   const auto result = simcore::module_host::RunIsolatedStage(
-      "sut", SimenginePath(), {spec_.string(), "--restart-on-crash", "3"}, std::chrono::seconds(10));
+      "sut", SimenginePath(), {spec_.string(), "--supervise", "--attempt-timeout-ms", "5000", "--restart-on-crash", "3"},
+      std::chrono::seconds(10));
   EXPECT_EQ(result.outcome, simcore::module_host::IsolatedOutcome::kOk);
 
   ASSERT_TRUE(std::filesystem::exists(manifest_));
@@ -172,7 +174,7 @@ TEST_F(UtExe04Restart, EnabledRunThatSucceedsRecordsExactlyOneOkAttempt) {
   std::string line;
   std::getline(in, line);
   EXPECT_NE(line.find("\"outcome\":\"ok\""), std::string::npos);
-  EXPECT_NE(line.find("\"final\":true"), std::string::npos);
+  EXPECT_NE(line.find("\"last\":true"), std::string::npos);
 }
 
 }  // namespace

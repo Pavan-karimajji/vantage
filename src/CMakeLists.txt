@@ -4,3 +4,5 @@ add_subdirectory(livemeas)
 add_subdirectory(simcore)
 # WP-14 (SI-09): simengine -- the thin executable, now that main.cpp exists.
 add_subdirectory(simengine)
+# WP-16 (VANTAGE, C2): vantage-inspect -- the live measurement inspector.
+add_subdirectory(inspector)

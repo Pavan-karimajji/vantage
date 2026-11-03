@@ -958,6 +958,19 @@ SimExitCode simEngineSeek(SimEngine* engine, int64_t to_ns, char* err_buf, std::
   return kSimExitOk;
 }
 
+SimExitCode simEngineSetSupervisionCell(SimEngine* engine, void* base, std::uint64_t length) {
+  if (engine == nullptr || !engine->runner.has_value() || base == nullptr) return kSimExitConfig;
+  if (length < SIMCORE_SUPERVISION_CELL_HEADER_BYTES) return kSimExitConfig;
+  auto* header = static_cast<SimSupervisionCellHeader*>(base);
+  if (header->magic != SIMCORE_SUPERVISION_CELL_MAGIC) return kSimExitConfig;
+  const std::uint64_t stages = engine->spec.stages.size();
+  if (header->stageCount != stages || length < SIMCORE_SUPERVISION_CELL_HEADER_BYTES + stages) return kSimExitConfig;
+  engine->runner->SetSupervisionCell(static_cast<std::uint8_t*>(base) + SIMCORE_SUPERVISION_CELL_HEADER_BYTES,
+                                     static_cast<std::size_t>(stages), &header->lastCompletedStep,
+                                     &header->hasStep);
+  return kSimExitOk;
+}
+
 void simEngineDestroy(SimEngine* engine) {
   if (engine == nullptr) return;
   // IMP-0083: a live measurement still open belongs to a host that drove `simEngineStepOnce`: `pass` when the

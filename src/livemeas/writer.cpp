@@ -68,11 +68,16 @@ constexpr std::uint32_t kMaxOutcome = 4;
 
 std::size_t Align8(std::size_t n) { return (n + 7u) & ~static_cast<std::size_t>(7u); }
 
-// Whether the bytes of an existing region say a live writer holds it.
+constexpr std::uint32_t kStatusFinished = 3;
+
+// Whether the bytes of an existing region say a live writer holds it: a valid magic, a status that is not
+// finished (a closed run is no one's, though its writer's process, and a reader still mapping it, may live on)
+// and a writer process that is alive.
 bool HeldByLiveWriter(const void* base, std::size_t size) {
   if (size < sizeof(layout::MeasStatus)) return false;
   const auto& status = *static_cast<const layout::MeasStatus*>(base);
   if (status.magic != layout::kMagic) return false;
+  if (status.status.load(std::memory_order_acquire) == kStatusFinished) return false;
   return SharedRegion::isProcessAlive(status.writerPid);
 }
 

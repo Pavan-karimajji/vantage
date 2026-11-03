@@ -557,7 +557,7 @@ The three verbs and what each reads: `ARCH §10.3`. The inspector reads and neve
 **Verify.** T · `SYT-INS-05`   **Trace.** —
 
 **`SYS-0080`** · `P0` · `R1` — `check` finds a value or an omission for every declared port at every step
-**Shall.** `check` shall report, for every port the description declares and every step, a missing value not marked omitted, enumerating ports from the description only.
+**Shall.** `check` shall report, for every port the description declares and every step after that port's first value, a missing value not marked omitted, enumerating ports from the description only.
 **Accept.** On a flawed live measurement with one declared port left out of one step, `check` names that step and port; on every lab topology's run it reports none.
 **Binds.** `inspectorReport`, `liveMeas`
 **Verify.** T · `SYT-INS-06`   **Trace.** —

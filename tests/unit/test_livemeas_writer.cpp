@@ -442,3 +442,37 @@ TEST(LiveMeasWriter, IMP_0071_ABadArgumentReturnsItsCodeNeverACrash) {
   EXPECT_EQ(liveMeasClose(open_handle, 5), kLiveMeasBadArgument);
   EXPECT_EQ(liveMeasClose(open_handle, 1), kLiveMeasOk);
 }
+
+// `IMP-0072` (`WP-17` fix): a finished live measurement is not held, even while its writer's process lives and a
+// reader still maps it -- a second engine run by the same process (an in-process host, a test) opens the name again.
+TEST(LiveMeasWriter, IMP_0072_AFinishedMeasurementIsNotHeldWhileAReaderStillMapsItAndOpenGivesANewRunId) {
+  const std::string name = UniqueName("finished");
+  LiveMeasHandle* first = Open(name);
+  ASSERT_NE(first, nullptr);
+  std::unique_ptr<SharedRegion> reader = Attach(name);  // a reader that stays attached to the finished run
+  ASSERT_NE(reader, nullptr);
+  const std::uint64_t first_run_id = StatusOf(*reader).runId;
+  ASSERT_EQ(liveMeasClose(first, 1), kLiveMeasOk);
+  ASSERT_EQ(StatusOf(*reader).status.load(), 3u);
+
+  const LiveMeasGeometry g = Geometry();
+  LiveMeasHandle* second = nullptr;
+  ASSERT_EQ(liveMeasOpen(name.c_str(), &g, kDescription.data(), static_cast<std::uint32_t>(kDescription.size()),
+                         &second),
+            kLiveMeasOk);
+  ASSERT_NE(second, nullptr);
+  std::unique_ptr<SharedRegion> fresh = Attach(name);
+  ASSERT_NE(fresh, nullptr);
+  EXPECT_NE(StatusOf(*fresh).runId, first_run_id);
+  EXPECT_EQ(StatusOf(*fresh).status.load(), 1u) << "the new run is running";
+  EXPECT_EQ(liveMeasClose(second, 1), kLiveMeasOk);
+
+  // A running measurement of a live writer is still held.
+  LiveMeasHandle* held = Open(name);
+  ASSERT_NE(held, nullptr);
+  LiveMeasHandle* refused = nullptr;
+  EXPECT_EQ(liveMeasOpen(name.c_str(), &g, kDescription.data(), static_cast<std::uint32_t>(kDescription.size()),
+                         &refused),
+            kLiveMeasNameHeld);
+  EXPECT_EQ(liveMeasClose(held, 1), kLiveMeasOk);
+}

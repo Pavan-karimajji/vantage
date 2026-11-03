@@ -774,10 +774,15 @@ class Runner {
   // fills (`ARCH §10.1`). After each step it gets the step number, the
   // simulation time, every port value with origin and age, and the step's
   // badges. With no sink, nothing is built.
-  void SetLiveMeasurement(LiveMeasSink* sink) { live_sink_ = sink; }
+  void SetLiveMeasurement(LiveMeasSink* sink);
   // `IMP-0081`: the sink now set, so a second user (the step tap, `F-TAP`) can chain behind the engine's
   // own writer sink instead of replacing it.
   LiveMeasSink* LiveMeasurement() const { return live_sink_; }
+
+  // `IMP-0124`: the supervision cell (`simcore.h`). `stage_bytes` is one byte per stage in run-setup order, the
+  // two words are the cell's `lastCompletedStep` and `hasStep`. Stored with atomic stores; no cell, no store.
+  void SetSupervisionCell(std::uint8_t* stage_bytes, std::size_t stage_count, std::uint64_t* last_step,
+                          std::uint64_t* has_step);
 
  private:
   Runner();
@@ -801,6 +806,12 @@ class Runner {
   const mutate::Mutator* mutator_ = nullptr;
   Checkpoint* checkpoint_ = nullptr;
   LiveMeasSink* live_sink_ = nullptr;
+  std::set<std::string> live_overridden_;   // set with the sink, read at every step
+  std::set<std::string> live_bulk_ports_;
+  std::uint8_t* cell_stage_bytes_ = nullptr;
+  std::size_t cell_stage_count_ = 0;
+  std::uint64_t* cell_last_step_ = nullptr;
+  std::uint64_t* cell_has_step_ = nullptr;
   Options options_;
 
   std::map<std::string, module_host::Component*> components_;

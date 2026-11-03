@@ -208,9 +208,13 @@ TEST(UtExe05ExitCodes, CrashOnARealAbnormalTerminationWithNoRestartConfigured) {
 }
 
 TEST(UtExe05ExitCodes, CrashIsTheSupervisorsOwnExitCodeOnceRestartsAreExhausted) {
+  // WP-17: the supervisor reads the run setup before it starts a worker, so this one is real; the worker aborts
+  // before it builds an engine.
+  const auto recording = WriteTinyRecording(TempPath("ut_exe_05_crash.mcap"));
+  const auto spec = WriteStubRunSpec(TempPath("ut_exe_05_crash.json"), recording);
   EnvGuard force_abort("ADAS_SIM_TEST_FORCE_ABORT", "1");
   const auto result = simcore::module_host::RunIsolatedStage(
-      "sut", SimenginePath(), {TempPath("ut_exe_05_unused.json").string(), "--restart-on-crash", "1"},
+      "sut", SimenginePath(), {spec.string(), "--supervise", "--attempt-timeout-ms", "5000", "--restart-on-crash", "1"},
       std::chrono::seconds(10));
   EXPECT_EQ(result.outcome, simcore::module_host::IsolatedOutcome::kFail);
   EXPECT_EQ(result.exit_code, static_cast<int>(kSimExitCrash));
@@ -228,7 +232,7 @@ TEST(UtExe05ExitCodes, TimeoutWhenASupervisedAttemptNeverReturns) {
   // fabricated one.
   const auto result = simcore::module_host::RunIsolatedStage(
       "sut", SimenginePath(),
-      {spec.string(), "--restart-on-crash", "1", "--attempt-timeout-ms", "300"}, std::chrono::seconds(10));
+      {spec.string(), "--supervise", "--attempt-timeout-ms", "300"}, std::chrono::seconds(10));
   EXPECT_EQ(result.outcome, simcore::module_host::IsolatedOutcome::kFail);
   EXPECT_EQ(result.exit_code, static_cast<int>(kSimExitTimeout));
 }
