@@ -18,6 +18,7 @@
 #include <tuple>
 
 #include "adas/counter.hpp"
+#include "common/cycle_control.pb.h"
 #include "simcore/orchestrator.hpp"
 
 namespace simcore::orchestrator {
@@ -81,6 +82,33 @@ std::vector<std::size_t> Orchestrator::TriggeredBy(const std::string& port) cons
     if (input != nullptr && QualifiedTriggerPort(*input) == port) hit.push_back(i);
   }
   return hit;
+}
+
+bool Orchestrator::RecordedRestart(const Ticket& ticket) const {
+  const auto restart_of = [](const std::vector<std::uint8_t>& payload) {
+    adas::common::CycleControl control;
+    return control.ParseFromArray(payload.data(), static_cast<int>(payload.size())) &&
+           control.op_mode() == adas::common::CycleControl::RESTART;
+  };
+  switch (ticket.start) {
+    case StartKind::kClock:
+      return false;  // nothing recorded says the car's copy was fresh
+    case StartKind::kControl:
+      return restart_of(ticket.trigger_payload);
+    case StartKind::kInput: {
+      const bus::SignalHeader header = bus::ReadSignalHeader(ticket.trigger_payload, bus_.Descriptor(ticket.trigger_port));
+      if (!header.measurement_counter.has_value()) return false;
+      const std::uint32_t counter = header.measurement_counter.value();
+      const bus::SampleBuffer* buffer = bus_.Buffer(ticket.stage + ".control");
+      if (buffer != nullptr) {
+        const bus::CounterLookup found = buffer->FindByCounter(counter);
+        if (found.sample != nullptr) return restart_of(found.sample->value.payload);
+      }
+      if (options_.ahead_control_restart) return options_.ahead_control_restart(ticket.stage, counter).value_or(false);
+      return false;
+    }
+  }
+  return false;
 }
 
 bool Orchestrator::ContentDiffers(const std::string& port, const std::vector<std::uint8_t>& payload) const {
@@ -263,7 +291,7 @@ std::vector<Ticket> Orchestrator::NextRunnable(const ReadyFn& ready) {
       ticket.run_number = state.runs;
       ticket.restart = state.restart_pending;
       ticket.warming_up = ticket.restart && options_.stages_with_recorded_outputs.count(ticket.stage) != 0 &&
-                          ticket.trigger_time_ns != options_.first_reception_ns;
+                          !RecordedRestart(ticket);
       ticket.waited_steps = waited;
       ticket.readiness_expired = expired;
       open.dispatched = true;

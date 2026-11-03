@@ -508,8 +508,6 @@ class RecordedReference {
   void Add(const std::string& port, std::int64_t time_ns, const std::vector<std::uint8_t>& payload);
   // The newest held payload on `port` with this `measurement_counter`.
   const std::vector<std::uint8_t>* Find(const std::string& port, std::uint32_t counter) const;
-  // The payload on `port` received at exactly `time_ns`.
-  const std::vector<std::uint8_t>* AtTime(const std::string& port, std::int64_t time_ns) const;
   void Clear();
 
  private:

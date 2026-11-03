@@ -287,7 +287,8 @@ std::map<std::string, io::TopicInfo> TwoStageTopics() {
 }
 
 // Three instants. Each stage's third refSync names the `A.out` sample 11 although 12 has arrived, so
-// each stage's third output breaks the counter and differs from the recorded one.
+// each stage's third output breaks the counter. It is paired with the recorded output of its own counter (11), which
+// it equals (`IMP-0033`), so no first divergence is logged.
 std::vector<io::RawMessage> TwoStageRecording() {
   std::vector<io::RawMessage> messages;
   const std::uint32_t named[3] = {10, 11, 11};
@@ -352,10 +353,9 @@ TEST(RunThreads, ResultsAreCommittedInStageDeclarationOrderWhateverOrderTheWorke
   // B is declared first and ends last (it sleeps 300 ms, C nothing).
   const Outcome run = RunTwoStages(2, 300);
   ASSERT_TRUE(run.ok) << run.error;
-  ASSERT_EQ(run.event_log.size(), 3u);
+  ASSERT_EQ(run.event_log.size(), 2u);
   EXPECT_EQ(run.event_log[0], "event=degrade step=2 entry=output_counter_break stage=B port=out wanted=12 found=11");
-  EXPECT_EQ(run.event_log[1], "event=degrade step=2 entry=first_divergence stage=B port=out");
-  EXPECT_EQ(run.event_log[2], "event=degrade step=2 entry=output_counter_break stage=C port=out wanted=12 found=11");
+  EXPECT_EQ(run.event_log[1], "event=degrade step=2 entry=output_counter_break stage=C port=out wanted=12 found=11");
 }
 
 TEST(RunThreads, AnEngineRunWithThreeThreadsEqualsTheRunWithOneByteForByte) {

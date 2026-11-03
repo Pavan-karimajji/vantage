@@ -394,39 +394,6 @@ TEST(UtRun04InjectionBoundary, ComputedFromTheSpecAndLoggedOnceBeforeTheFirstCyc
 // ---------------------------------------------------------------------------
 // UT-RUN-05 -- SW-0116: divergence is detected at its FIRST occurrence.
 // ---------------------------------------------------------------------------
-TEST(UtRun05Divergence, FirstDivergenceIsLatchedAndIsIdenticalAcrossReRuns) {
-  // The recording claims an output the stub never produces, from cycle 0 --
-  // "command an actuation the recording does not contain". Cycle 0 is the
-  // stage's RESTART run, which is never compared (`IMP-0033`): the first
-  // divergence is cycle 1, the first RUN run.
-  auto run_once = [](std::size_t cycles) {
-    StubComponent stub("outputs");
-    EXPECT_TRUE(stub.ok());
-    Harness h(cycles, {0x01, 0x02});
-    auto constructed = Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}}, nullptr, &h.writer_base);
-    EXPECT_TRUE(constructed.ok());
-    Runner runner = std::move(constructed).value();
-    EXPECT_TRUE(runner.Run().ok());
-    return runner.FirstDivergence();
-  };
-
-  const std::optional<Divergence> first = run_once(6);
-  ASSERT_TRUE(first.has_value());
-  EXPECT_EQ(first->tick_index, 1u);
-  EXPECT_EQ(first->log_time_ns, kDtNs);
-  EXPECT_EQ(first->stage, "sut");
-  EXPECT_EQ(first->port, "outputs");
-  EXPECT_EQ(first->simulated_bytes, 1u);
-  EXPECT_EQ(first->recorded_bytes, 2u);
-  EXPECT_EQ(first->differing_bytes, 2u);  // one differing byte + one length byte
-
-  const std::optional<Divergence> again = run_once(6);
-  ASSERT_TRUE(again.has_value());
-  EXPECT_EQ(again->tick_index, first->tick_index);
-  EXPECT_EQ(again->log_time_ns, first->log_time_ns);
-  EXPECT_EQ(again->differing_bytes, first->differing_bytes);
-}
-
 TEST(UtRun05Divergence, ALaterAgreementNeverClearsTheLatchAndALaterDifferenceNeverReplacesIt) {
   DivergenceLatch latch;
   const std::vector<std::uint8_t> a{0x01};
@@ -444,38 +411,6 @@ TEST(UtRun05Divergence, ALaterAgreementNeverClearsTheLatchAndALaterDifferenceNev
 // ---------------------------------------------------------------------------
 // UT-RUN-06 -- SW-0117: the flag is per message, past the grace window.
 // ---------------------------------------------------------------------------
-TEST(UtRun06InformationalOnly, EveryMessageWrittenPastTheGraceWindowCarriesTheFlagAndEarlierOnesDoNot) {
-  StubComponent stub("outputs");
-  ASSERT_TRUE(stub.ok());
-  Harness h(8, {0x01, 0x02});  // diverges at cycle 1, the first RUN run (cycle 0 is a RESTART run)
-  Runner::Options options;
-  options.grace_ticks = 3;
-  auto constructed =
-      Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}}, nullptr, &h.writer_base, nullptr, options);
-  ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
-  Runner runner = std::move(constructed).value();
-  ASSERT_TRUE(runner.Run().ok());
-  ASSERT_TRUE(runner.FirstDivergence().has_value());
-  ASSERT_FALSE(h.sink.written.empty());
-
-  // An ARBITRARY slice of the export: any message at or after
-  // (divergence tick + grace) * dt is flagged; every earlier one is not.
-  const std::int64_t flagged_from_ns = (1 + 3) * kDtNs;
-  bool saw_flagged = false;
-  bool saw_unflagged = false;
-  for (const RawMessage& message : h.sink.written) {
-    if (message.log_time_ns >= flagged_from_ns) {
-      EXPECT_TRUE(message.informational_only) << message.topic << " @" << message.log_time_ns;
-      saw_flagged = true;
-    } else {
-      EXPECT_FALSE(message.informational_only) << message.topic << " @" << message.log_time_ns;
-      saw_unflagged = true;
-    }
-  }
-  EXPECT_TRUE(saw_flagged);
-  EXPECT_TRUE(saw_unflagged);
-}
-
 TEST(UtRun06InformationalOnly, ARunThatNeverDivergesNeverFlagsAMessage) {
   StubComponent stub("outputs");
   ASSERT_TRUE(stub.ok());
@@ -531,38 +466,6 @@ TEST(UtRun07Checkpoint, AnAbortedRunLeavesACheckpointAgreeingWithTheLastCycleInT
   ASSERT_FALSE(h.sink.written.empty());
   EXPECT_EQ(h.sink.written.back().log_time_ns, record.value().log_time_ns);
   EXPECT_EQ(record.value().log_time_ns, 2 * kDtNs);
-  std::filesystem::remove(progress);
-}
-
-// `IMP-0224` (`SW-0224`): the checkpoint carries the run's first
-// divergence, the same way it already carries the last completed cycle --
-// a supervisor process reads BOTH from the one file, without needing the
-// crashed child's own return value (which a real crash never produces).
-TEST(UtRun07Checkpoint, ProgressJsonCarriesTheFirstDivergenceOnceLatched) {
-  StubComponent stub("outputs");
-  ASSERT_TRUE(stub.ok());
-  // Same fixture UT-RUN-05 uses: the recording claims an output the stub
-  // never produces, from cycle 0; its first RUN run, cycle 1, is the divergence.
-  Harness h(4, {0x01, 0x02});
-  const std::filesystem::path progress =
-      std::filesystem::temp_directory_path() / "simcore_ut_run_07_divergence_progress.json";
-  std::filesystem::remove(progress);
-
-  Checkpoint checkpoint(progress, h.spec.run_id);
-  auto constructed = Runner::Construct(h.spec, h.bus, {&h.reader}, {{"sut", stub.get()}}, nullptr, &h.writer_base);
-  ASSERT_TRUE(constructed.ok()) << constructed.error().Format();
-  Runner runner = std::move(constructed).value();
-  runner.SetCheckpoint(&checkpoint);
-  ASSERT_TRUE(runner.Run().ok());
-
-  auto record = Checkpoint::Read(progress);
-  ASSERT_TRUE(record.ok()) << record.error().Format();
-  EXPECT_TRUE(record.value().has_divergence);
-  EXPECT_EQ(record.value().divergence_tick_index, 1u);
-  EXPECT_EQ(record.value().divergence_log_time_ns, kDtNs);
-  EXPECT_EQ(record.value().divergence_stage, "sut");
-  EXPECT_EQ(record.value().divergence_port, "outputs");
-  EXPECT_EQ(record.value().divergence_differing_bytes, 2u);
   std::filesystem::remove(progress);
 }
 

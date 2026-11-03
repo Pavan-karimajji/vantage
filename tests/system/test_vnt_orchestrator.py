@@ -22,70 +22,18 @@ import subprocess
 from pathlib import Path
 
 import pytest
-import yaml
 
 from tests.support.engine_runs import (
-    EngineRun, Recording, library_with_bundle, point_at_recording, run_case, run_engine, skip, stage_of,
-    tap_case, tool_path,
+    Recording, case_params, exact_cases, lab_setups, library_with_bundle, point_at_recording, ran, rerun_entries,
+    run_case, run_engine, simulated_names, skip, stage_of, tap_case, tool_path,
 )
-from tests.support.lab_cases import LabCase, edit_recording, lab_case, lab_root
-
-# ---- the cases of the lab ------------------------------------------------------------------------------------------
-
-def _catalogue() -> dict[str, dict]:
-    found = {}
-    for path in sorted((lab_root() / "catalogue").glob("*.yaml")):
-        if path.name != "provisional.yaml":
-            found[path.stem] = yaml.safe_load(path.read_text(encoding="utf-8"))
-    return found
-
-
-def _exact_cases() -> list[tuple[str, str, str]]:
-    """`(topology, scenario, case)` of every exact case: the scenario expects `exact` and the case is not `hang` or
-    `crash`, which need the supervisor (`F-CAT`)."""
-    return [(topology, scenario["name"], case["name"])
-            for topology, declared in _catalogue().items()
-            for scenario in declared.get("scenarios", []) if scenario.get("expect", "exact") == "exact"
-            for case in scenario.get("resim", []) if case["name"] not in ("hang", "crash")]
-
-
-def _case_params(cases: list[tuple[str, str, str]]):
-    if not cases:
-        return [pytest.param(None, None, None, id="no-lab-catalogue",
-                             marks=pytest.mark.skip(reason=f"lab not built: no catalogue under {lab_root() / 'catalogue'}"))]
-    return [pytest.param(*case, id="/".join(case)) for case in cases]
-
-
-def _controls(recording: Recording, stages) -> dict[str, list[int]]:
-    return {stage: recording.counters(f"{stage}.control") for stage in stages}
-
-
-def _simulated(case: LabCase) -> list[str]:
-    setup = json.loads(case.setup.read_text(encoding="utf-8"))
-    return [stage["name"] for stage in setup["stages"] if stage["mode"] == "simulate"]
-
-
-def _ran(case: LabCase, directory: Path, label: str, **kwargs) -> tuple[EngineRun, Recording]:
-    run = run_case(case, directory, label, **kwargs)
-    assert run.returncode == 0, f"{case.topology}/{case.scenario}/{case.case}: the engine run failed: {run.stderr[-400:]}"
-    return run, Recording(run.recording)
-
-
-def _entry(recording: Recording, stage: str, port: str) -> list[tuple[int, int]]:
-    """`(measurement_counter, source_timestamp_us)` of the refSync entry for `port` of every run of `stage`, in file
-    order."""
-    found = []
-    for _i, _t, ref_sync in recording.decoded(f"{stage}.refSync"):
-        entry = next((e for e in ref_sync.inputs if e.port == port), None)
-        found.append((entry.measurement_counter, entry.source_timestamp_us) if entry is not None else (0, 0))
-    return found
-
+from tests.support.lab_cases import edit_recording, lab_case, lab_root
 
 # ---- SYT-ORC-01 .. 03 ----------------------------------------------------------------------------------------------
 
 def test_syt_orc_01_c1_a_higher_rank_run_reads_the_lower_rank_output_of_its_own_step(tmp_path):  # SYT-ORC-01.c1
     case = lab_case("running_example", "all_simulated", "no_ref_sync")
-    _run, produced = _ran(case, tmp_path, "run")
+    _run, produced = ran(case, tmp_path, "run")
     controls_a = {t for _i, t, _m in produced.decoded("A.control")}
     controls_b = {t for _i, t, _m in produced.decoded("B.control")}
     steps = sorted(controls_a & controls_b)
@@ -132,9 +80,9 @@ def test_syt_orc_02_c1_a_loop_without_a_previous_cycle_input_is_refused(tmp_path
 
 def test_syt_orc_02_c2_a_loop_with_a_previous_cycle_input_runs_to_the_recordings_end(tmp_path):  # SYT-ORC-02.c2
     case = lab_case("feedback", "all_simulated")
-    run, produced = _ran(case, tmp_path, "run")
+    run, produced = ran(case, tmp_path, "run")
     recorded = Recording(case.recording)
-    for stage in _simulated(case):
+    for stage in simulated_names(case):
         assert len(produced.of(f"{stage}.control")) == len(recorded.of(f"{stage}.control")) > 0, (
             f"SYT-ORC-02.c2: a load error or an early stop: stage {stage} ran {len(produced.of(f'{stage}.control'))} of "
             f"{len(recorded.of(f'{stage}.control'))} recorded runs")
@@ -178,19 +126,19 @@ def test_syt_orc_03_c4_a_trigger_and_a_clock_is_refused(tmp_path):  # SYT-ORC-03
 
 # ---- SYT-ORC-04 .. 06 ----------------------------------------------------------------------------------------------
 
-@pytest.mark.parametrize(("topology", "scenario", "name"), _case_params(_exact_cases()))
+@pytest.mark.parametrize(("topology", "scenario", "name"), case_params(exact_cases()))
 def test_syt_orc_04_c1_every_exact_case_has_as_many_controls_as_recorded(tmp_path, topology, scenario, name):  # SYT-ORC-04.c1
     case = lab_case(topology, name, scenario)
-    _run, produced = _ran(case, tmp_path, "run")
+    _run, produced = ran(case, tmp_path, "run")
     recorded = Recording(case.recording)
-    for stage in _simulated(case):
+    for stage in simulated_names(case):
         mine, theirs = len(produced.of(f"{stage}.control")), len(recorded.of(f"{stage}.control"))
         assert mine == theirs, f"SYT-ORC-04.c1: {topology}/{scenario}/{name} stage {stage}: {mine} controls in the engine-run recording, {theirs} recorded"
 
 
 def test_syt_orc_04_c2_a_data_triggered_stage_runs_once_per_input_sample(tmp_path):  # SYT-ORC-04.c2
     case = lab_case("data_triggered", "by_data")
-    _run, produced = _ran(case, tmp_path, "run")
+    _run, produced = ran(case, tmp_path, "run")
     samples = len(Recording(case.recording).of("source.X"))
     controls = len(produced.of("T.control"))
     assert samples > 0 and controls == samples, f"SYT-ORC-04.c2: {controls} T controls for {samples} in_X samples"
@@ -209,11 +157,11 @@ def _compstate_problems(recording: Recording, stages: list[str]) -> list[str]:
     return problems
 
 
-@pytest.mark.parametrize(("topology", "scenario", "name"), _case_params(_exact_cases()))
+@pytest.mark.parametrize(("topology", "scenario", "name"), case_params(exact_cases()))
 def test_syt_orc_04_c3_every_exact_case_records_every_runs_compstate(tmp_path, topology, scenario, name):  # SYT-ORC-04.c3
     case = lab_case(topology, name, scenario)
-    _run, produced = _ran(case, tmp_path, "run")
-    problems = _compstate_problems(produced, _simulated(case))
+    _run, produced = ran(case, tmp_path, "run")
+    problems = _compstate_problems(produced, simulated_names(case))
     assert not problems, f"SYT-ORC-04.c3: {topology}/{scenario}/{name}: a gap, or another count: {problems}"
 
 
@@ -225,8 +173,8 @@ def test_syt_orc_04_c3_depth_one_on_every_port_still_records_every_runs_compstat
             for port in stage["ports"]:
                 port["buffer_depth"] = 1
 
-    _run, produced = _ran(case, tmp_path, "run", change=depth_one)
-    problems = _compstate_problems(produced, _simulated(case))
+    _run, produced = ran(case, tmp_path, "run", change=depth_one)
+    problems = _compstate_problems(produced, simulated_names(case))
     assert not problems, f"SYT-ORC-04.c3: running_example all_simulated at depth 1: a gap, or another count: {problems}"
 
 
@@ -236,7 +184,7 @@ def test_syt_orc_05_c1_an_output_not_copying_its_controls_counter_is_logged(tmp_
     if not folder.is_dir():
         skip(f"lab not built: {folder} (the shifted bundle of A) is missing")
     library = library_with_bundle(case, "A", tmp_path / "shifted_A", bundle=folder)
-    run, produced = _ran(case, tmp_path, "run", change=lambda s: stage_of(s, "A")["impl"].update(path=library.as_posix()))
+    run, produced = ran(case, tmp_path, "run", change=lambda s: stage_of(s, "A")["impl"].update(path=library.as_posix()))
 
     control = produced.counters("A.control")
     differing = []  # (port, run index)
@@ -255,9 +203,9 @@ def test_syt_orc_05_c1_an_output_not_copying_its_controls_counter_is_logged(tmp_
 
 def test_syt_orc_06_c1_a_stages_runs_go_strictly_in_order(tmp_path):  # SYT-ORC-06.c1
     case = lab_case("late_consumer", "all_simulated")
-    _run, produced = _ran(case, tmp_path, "run")
+    _run, produced = ran(case, tmp_path, "run")
     recorded = Recording(case.recording)
-    for stage in _simulated(case):
+    for stage in simulated_names(case):
         assert produced.counters(f"{stage}.control") == recorded.counters(f"{stage}.control"), (
             f"SYT-ORC-06.c1: stage {stage}: a control out of trigger order")
         topics = {f"{stage}.control", f"{stage}.out", f"{stage}.refSync", f"{stage}.compState"}
@@ -279,8 +227,8 @@ def test_syt_orc_06_c1_a_stages_runs_go_strictly_in_order(tmp_path):  # SYT-ORC-
 @pytest.mark.parametrize(("case_name", "case_id"), [("all_simulated", "SYT-ORC-07.c1"), ("cut_p", "SYT-ORC-07.c2")])
 def test_syt_orc_07_a_run_waits_for_its_named_sample(tmp_path, case_name, case_id):  # SYT-ORC-07.c1 (all_simulated), SYT-ORC-07.c2 (cut_p)
     case = lab_case("late_consumer", case_name)
-    _run, produced = _ran(case, tmp_path, "run")
-    rerun, recorded = _entry(produced, "Q", "in_P"), _entry(Recording(case.recording), "Q", "in_P")
+    _run, produced = ran(case, tmp_path, "run")
+    rerun, recorded = rerun_entries(produced, "Q", "in_P"), rerun_entries(Recording(case.recording), "Q", "in_P")
     assert rerun and len(rerun) == len(recorded), f"{case_id}: {len(rerun)} Q re-run entries, {len(recorded)} recorded"
     differing = [(k, a, b) for k, (a, b) in enumerate(zip(rerun, recorded)) if a != b]
     assert not differing, f"{case_id}: any difference (run, re-run, recorded): {differing[:3]}"
@@ -314,7 +262,7 @@ def test_syt_orc_08_c1_the_recordings_end_runs_every_waiting_ticket(tmp_path):  
         point_at_recording(setup, cut)
 
     tapped = tap_case(case, tmp_path, "tap", change=use_cut)
-    run, produced = _ran(case, tmp_path, "run", change=use_cut)
+    run, produced = ran(case, tmp_path, "run", change=use_cut)
     assert tapped.returncode == 0 and tapped.steps, f"SYT-ORC-08.c1: the tapped run failed: {tapped.stderr[-300:]}"
     last = len(tapped.steps) - 1
     in_last = tapped.badge_count("KIND_READINESS_TIMEOUT", "Q.in_P") - tapped.badge_count("KIND_READINESS_TIMEOUT", "Q.in_P", step_index=last - 1)
@@ -338,14 +286,6 @@ def test_syt_orc_09_c2_a_simulated_chain_raises_none(tmp_path):  # SYT-ORC-09.c2
     assert tapped.returncode == 0, f"SYT-ORC-09.c2: the run failed: {tapped.stderr[-300:]}"
     assert tapped.steps, "SYT-ORC-09.c2: the tap printed no step"
     assert tapped.badges("KIND_COMPUTED_NOT_CONSUMED") == {}, f"SYT-ORC-09.c2: any: {tapped.badges('KIND_COMPUTED_NOT_CONSUMED')}"
-
-
-def _lab_setups() -> list[tuple[str, str, str]]:
-    found = []
-    for path in sorted((lab_root() / "lab").glob("*/*.run.json")):
-        scenario, _dot, case = path.name[: -len(".run.json")].partition(".")
-        found.append((path.parent.name, scenario, case))
-    return found
 
 
 def _expected_plan(topology_name: str, case_entry: dict, setup: dict) -> dict[str, tuple[int, str, list[str]]]:
@@ -383,7 +323,7 @@ def _printed_plan(text: str) -> dict[str, tuple[int, str, list[str]]]:
     return found
 
 
-@pytest.mark.parametrize(("topology", "scenario", "name"), _case_params(_lab_setups()))
+@pytest.mark.parametrize(("topology", "scenario", "name"), case_params(lab_setups()))
 def test_syt_orc_10_c1_the_plan_is_printed_without_running(tmp_path, topology, scenario, name):  # SYT-ORC-10.c1
     case = lab_case(topology, name, scenario)
     setup = json.loads(case.setup.read_text(encoding="utf-8"))
@@ -415,7 +355,7 @@ def _one_run_per_distinct_counter(produced: Recording, recorded: Recording) -> l
 
 def test_syt_orc_11_c1_a_repeated_trigger_sample_starts_no_run_and_is_logged_stalled(tmp_path):  # SYT-ORC-11.c1
     case = lab_case("data_triggered", "by_data", "repeat_trigger")
-    run, produced = _ran(case, tmp_path, "run")
+    run, produced = ran(case, tmp_path, "run")
     recorded = Recording(case.recording)
     assert len(recorded.of("source.X")) > len(set(recorded.counters("source.X"))), "SYT-ORC-11.c1: the recording holds no repeated sample"
     assert _one_run_per_distinct_counter(produced, recorded) == [], f"SYT-ORC-11.c1: an extra or a missing run: {_one_run_per_distinct_counter(produced, recorded)}"
@@ -425,7 +365,7 @@ def test_syt_orc_11_c1_a_repeated_trigger_sample_starts_no_run_and_is_logged_sta
 
 def test_syt_orc_11_c2_a_planted_extra_run_is_reported(tmp_path):  # SYT-ORC-11.c2
     case = lab_case("data_triggered", "by_data", "repeat_trigger")
-    _run, produced = _ran(case, tmp_path, "run")
+    _run, produced = ran(case, tmp_path, "run")
     recorded = Recording(case.recording)
     seen: set[int] = set()
     repeat_index = None

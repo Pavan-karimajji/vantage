@@ -490,10 +490,10 @@ Drill scenarios (`G4`; `ARCH §12`), also on the running example:
 
 | Scenario | Block | Resim case adds | Expected |
 |---|---|---|---|
-| `missing_sample` | `recording: {drop_sample: [{port: source.Y, counter: 20}, {port: source.Y, counter: 21}, {port: source.Y, counter: 22}]}` | `all_simulated` | fallback by counter, inside `fallback_max_gap` (3 missing) |
-| `missing_run` | ten consecutive counters of `source.Y` dropped | `all_simulated` | gap beyond `fallback_max_gap`: the time rule picks |
+| `missing_sample` | `recording: {drop_sample: [{port: source.Y, counter: 20}, {port: source.Y, counter: 21}, {port: source.Y, counter: 22}]}` | `all_simulated` | `expect: diverges`: fallback by counter, inside `fallback_max_gap` (3 missing); the first divergence is not before the first run that lost an input, which carries `KIND_FALLBACK` (`SYS-0054`) |
+| `missing_run` | ten consecutive counters of `source.Y` dropped | `all_simulated` | `expect: diverges`: gap beyond `fallback_max_gap`: the time rule picks; the first divergence as for `missing_sample` |
 | `no_ref_sync` | `recording: {drop_ref_sync: all}` | `all_simulated` | `expect: diverges` (mismatches are counted, not zero) |
-| `renumber` (in `data_triggered`) | `car: {counter_jump: [{source: X, at_counter: 10, by: 1000}], renumber: [T]}` | `by_data` | identity broken on `T`'s output |
+| `renumber` (in `data_triggered`) | `car: {counter_jump: [{source: X, at_counter: 10, by: 1000}], renumber: [T]}` | `by_data` | `expect: diverges`: `T`'s outputs carry its run count, an output not copying its control's counter (`RCT:SYS-0001`); the engine's check of that break is `SYT-ORC-05`, on `renumber_lib`. Never identity broken (`D17 (3)`): a run count never goes back |
 | `counter_jump` | `car: {counter_jump: [{source: X, at_counter: 50, by: 1000}]}` | `all_simulated` | a counter jump in the event log |
 | (cases of `base`) `hang`, `crash` | — | `config: {B: {set: {LAB_B_HANG_AFTER_RUNS: 5}}}`, and `LAB_B_CRASH_AFTER_RUNS: 5` | timeout and crash outcomes |
 | (case of `base`) `error` | — | none; the `fault` scenario is the ERROR drill | a component that reports ERROR |

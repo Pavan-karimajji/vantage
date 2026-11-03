@@ -134,7 +134,7 @@ std::map<std::string, io::TopicInfo> ControlTopics() {
           {"/B/out", Topic("adas.common.CycleControl", io::Provenance::kSimulated)}};
 }
 
-// Three instants, 100/200/300 ms. The car's controls count 10, 11, 12; its refSync names the `A.out`
+// Three instants, 100/200/300 ms (the first control carries RESTART, `IMP-0062`). The car's controls count 10, 11, 12; its refSync names the `A.out`
 // sample 10, 11 and -- the third time -- 11 although 12 has arrived. Its outputs echo what it read,
 // except the third, which is 12.
 std::vector<io::RawMessage> ControlRecording() {
@@ -145,7 +145,9 @@ std::vector<io::RawMessage> ControlRecording() {
   for (int i = 0; i < 3; ++i) {
     const std::int64_t t = (i + 1) * 100 * kMs;
     messages.push_back(Message("/A/out", t, Data(10 + i, (i + 1) * 100'000)));
-    messages.push_back(Message("/B/control", t, Data(controls[i], (i + 1) * 100'000, i + 1)));
+    messages.push_back(Message("/B/control", t, Data(controls[i], (i + 1) * 100'000, i + 1,
+                                                            i == 0 ? adas::common::CycleControl::RESTART
+                                                                   : adas::common::CycleControl::RUN)));
     messages.push_back(Message("/B/refSync", t, RefSyncOf(controls[i], {{"in", named[i]}})));
     messages.push_back(Message("/B/out", t, Data(recorded_out[i], (i + 1) * 100'000)));
   }
@@ -275,20 +277,22 @@ TEST(RunStep, AnOutputThatDoesNotCopyTheControlsCounterIsInTheEventLogAndItsFile
   Runner runner = std::move(built).value();
   ASSERT_TRUE(runner.Run().ok());
 
-  // The same step's output also differs from the recorded one: the first divergence is the second entry.
-  ASSERT_EQ(runner.EventLogLines().size(), 2u);
+  // Its output (counter 11) is paired with the recorded output of counter 11, which it equals (`IMP-0033`): the
+  // counter break is the only entry.
+  ASSERT_EQ(runner.EventLogLines().size(), 1u);
   EXPECT_EQ(runner.EventLogLines()[0],
             "event=degrade step=2 entry=output_counter_break stage=B port=out wanted=12 found=11");
-  EXPECT_EQ(runner.EventLogLines()[1], "event=degrade step=2 entry=first_divergence stage=B port=out");
   std::ifstream file(dir / "engine_run.events.log");
   ASSERT_TRUE(file.good());
   std::stringstream content;
   content << file.rdbuf();
-  EXPECT_EQ(content.str(), runner.EventLogLines()[0] + "\n" + runner.EventLogLines()[1] + "\n");
+  EXPECT_EQ(content.str(), runner.EventLogLines()[0] + "\n");
 }
 
+std::vector<io::RawMessage> EchoRecording(const std::uint32_t (&out_source_us)[3], const std::uint32_t (&out_cycle)[3]);
+
 TEST(RunStep, TheFirstDivergenceIsTheFirstStepWhoseOutputDiffersFromTheRecordedOne) {
-  Harness h;
+  Harness h(ControlSpec(), EchoRecording({100'000, 200'000, 1}, {1, 1, 1}));  // only the third recorded output differs
   ASSERT_TRUE(h.echo.ok());
   auto built = h.Build();
   ASSERT_TRUE(built.ok()) << built.error().Format();
@@ -477,15 +481,19 @@ TEST(RunStep, ASimulatedStageNobodySimulatedConsumesIsBadgedOnceFromTheFirstStep
 }
 
 // `IMP-0032`, `IMP-0033` (`WP-06`). The car's controls count 10, 11, 12 and its refSync names each instant's own
-// `A.out` sample, so `B` echoes 10, 11, 12; the recorded `B.out` carries the given counters and cycle counters.
-std::vector<io::RawMessage> EchoRecording(const std::uint32_t (&out_counter)[3], const std::uint32_t (&out_cycle)[3]) {
+// `A.out` sample, so `B` echoes 10, 11, 12 with source times 100000, 200000, 300000 us. The recorded `B.out` carries the
+// same counters (`IMP-0033` pairs an output with the recorded output of its own counter), the given source times -- a
+// time other than the echo's is a difference -- and the given cycle counters.
+std::vector<io::RawMessage> EchoRecording(const std::uint32_t (&out_source_us)[3], const std::uint32_t (&out_cycle)[3]) {
   std::vector<io::RawMessage> messages;
   for (int i = 0; i < 3; ++i) {
     const std::int64_t t = (i + 1) * 100 * kMs;
     messages.push_back(Message("/A/out", t, Data(10 + i, (i + 1) * 100'000)));
-    messages.push_back(Message("/B/control", t, Data(10 + i, (i + 1) * 100'000, i + 1)));
+    messages.push_back(Message("/B/control", t, Data(10 + i, (i + 1) * 100'000, i + 1,
+                                                            i == 0 ? adas::common::CycleControl::RESTART
+                                                                   : adas::common::CycleControl::RUN)));
     messages.push_back(Message("/B/refSync", t, RefSyncOf(10 + i, {{"in", static_cast<std::uint32_t>(10 + i)}})));
-    messages.push_back(Message("/B/out", t, Data(out_counter[i], (i + 1) * 100'000, out_cycle[i])));
+    messages.push_back(Message("/B/out", t, Data(10 + i, out_source_us[i], out_cycle[i])));
   }
   return messages;
 }
@@ -500,7 +508,7 @@ std::size_t CountDivergenceLines(const Runner& runner) {
 
 TEST(RunStep, ARestartRunIsNeverOfferedToTheDivergenceLatch) {
   // Step 0 is the stage's first run, a RESTART run; its output differs from the recorded one, the others do not.
-  Harness h(ControlSpec(), EchoRecording({99, 11, 12}, {1, 1, 1}));
+  Harness h(ControlSpec(), EchoRecording({1, 200'000, 300'000}, {1, 1, 1}));
   ASSERT_TRUE(h.echo.ok());
   auto built = h.Build();
   ASSERT_TRUE(built.ok()) << built.error().Format();
@@ -511,7 +519,7 @@ TEST(RunStep, ARestartRunIsNeverOfferedToTheDivergenceLatch) {
 }
 
 TEST(RunStep, TheFirstDivergenceIsLoggedOnceAndTheRunStillSucceedsThroughEveryStep) {
-  Harness h(ControlSpec(), EchoRecording({10, 98, 99}, {1, 1, 1}));  // steps 1 and 2 both differ
+  Harness h(ControlSpec(), EchoRecording({100'000, 1, 1}, {1, 1, 1}));  // steps 1 and 2 both differ
   ASSERT_TRUE(h.echo.ok());
   auto built = h.Build();
   ASSERT_TRUE(built.ok()) << built.error().Format();
@@ -526,7 +534,7 @@ TEST(RunStep, TheFirstDivergenceIsLoggedOnceAndTheRunStillSucceedsThroughEverySt
 }
 
 TEST(RunStep, OutputsDifferingOnlyInCycleCounterAreNotADivergence) {
-  Harness h(ControlSpec(), EchoRecording({10, 11, 12}, {5, 6, 7}));
+  Harness h(ControlSpec(), EchoRecording({100'000, 200'000, 300'000}, {5, 6, 7}));
   ASSERT_TRUE(h.echo.ok());
   auto built = h.Build();
   ASSERT_TRUE(built.ok()) << built.error().Format();
@@ -538,7 +546,7 @@ TEST(RunStep, OutputsDifferingOnlyInCycleCounterAreNotADivergence) {
 
 TEST(RunStep, AStagesWarmingUpEndsAtItsFirstEqualOutputNotItsFirstByteEqualOne) {
   // The recorded 300 ms output differs from the stage's only in cycle_counter: equal outputs, not equal bytes.
-  Harness h(ControlSpec(), EchoRecording({10, 11, 12}, {1, 1, 9}));
+  Harness h(ControlSpec(), EchoRecording({100'000, 200'000, 300'000}, {1, 1, 9}));
   ASSERT_TRUE(h.echo.ok());
   auto built = h.Build();
   ASSERT_TRUE(built.ok()) << built.error().Format();
@@ -559,6 +567,231 @@ TEST(RunStep, AStagesWarmingUpEndsAtItsFirstEqualOutputNotItsFirstByteEqualOne) 
   };
   EXPECT_EQ(warming(tap.badges[1]), 1u);
   EXPECT_EQ(warming(tap.badges[2]), 1u);  // not raised again: a byte comparison would raise it a second time
+}
+
+// `IMP-0033` (`ARCH §7`): an output meets the recorded output of the same port and `measurement_counter`, never the
+// recorded output of the same instant. A stage that runs twice in one step (two controls at 100 ms, counters 10 and
+// 11), after a first run at 50 ms so neither is a RESTART run; `B` echoes what it reads, so its outputs carry the
+// counters 10 and 11. `recorded_source_us` is what each recorded `B.out` says: 100'000 equals the echo.
+std::vector<io::RawMessage> TwoRunsInOneStep(std::uint64_t recorded_10_us, std::uint64_t recorded_11_us) {
+  std::vector<io::RawMessage> messages;
+  messages.push_back(Message("/A/out", 50 * kMs, Data(9, 50'000)));
+  messages.push_back(Message("/B/control", 50 * kMs, Data(9, 50'000, 1)));
+  messages.push_back(Message("/B/refSync", 50 * kMs, RefSyncOf(9, {{"in", 9}})));
+  messages.push_back(Message("/B/out", 50 * kMs, Data(9, 50'000)));
+  messages.push_back(Message("/A/out", 100 * kMs, Data(10, 100'000)));
+  messages.push_back(Message("/A/out", 100 * kMs, Data(11, 100'000)));
+  messages.push_back(Message("/B/control", 100 * kMs, Data(10, 100'000, 2)));
+  messages.push_back(Message("/B/control", 100 * kMs, Data(11, 100'000, 3)));
+  messages.push_back(Message("/B/refSync", 100 * kMs, RefSyncOf(10, {{"in", 10}})));
+  messages.push_back(Message("/B/refSync", 100 * kMs, RefSyncOf(11, {{"in", 11}})));
+  messages.push_back(Message("/B/out", 100 * kMs, Data(10, recorded_10_us)));
+  messages.push_back(Message("/B/out", 100 * kMs, Data(11, recorded_11_us)));
+  return messages;
+}
+
+Runner RunToTheEnd(Harness& h) {
+  EXPECT_TRUE(h.echo.ok());
+  auto built = h.Build();
+  EXPECT_TRUE(built.ok()) << built.error().Format();
+  Runner runner = std::move(built).value();
+  const auto outcome = runner.Run();
+  EXPECT_TRUE(outcome.ok()) << outcome.error().Format();
+  return runner;
+}
+
+TEST(RunStep, IMP0033TwoRunsOfOneStageInOneStepBothEqualToTheirRecordedRunsAreNoDivergence) {
+  Harness h(ControlSpec(), TwoRunsInOneStep(100'000, 100'000));
+  Runner runner = RunToTheEnd(h);
+  EXPECT_FALSE(runner.FirstDivergence().has_value());  // by instant, run 10 met the recorded output of 11
+  EXPECT_EQ(CountDivergenceLines(runner), 0u);
+}
+
+TEST(RunStep, IMP0033TheFirstOfTwoRunsInOneStepDifferingIsReportedOnThatStageAndPort) {
+  Harness h(ControlSpec(), TwoRunsInOneStep(77'000, 100'000));
+  Runner runner = RunToTheEnd(h);
+  ASSERT_TRUE(runner.FirstDivergence().has_value());
+  ASSERT_EQ(CountDivergenceLines(runner), 1u);
+  EXPECT_EQ(runner.EventLogLines().back().substr(runner.EventLogLines().back().find("entry=")),
+            "entry=first_divergence stage=B port=out");
+}
+
+TEST(RunStep, IMP0033OnlyTheSecondOfTwoRunsInOneStepDifferingIsReportedTheSameWay) {
+  Harness h(ControlSpec(), TwoRunsInOneStep(100'000, 77'000));
+  Runner runner = RunToTheEnd(h);
+  ASSERT_TRUE(runner.FirstDivergence().has_value());
+  ASSERT_EQ(CountDivergenceLines(runner), 1u);
+  EXPECT_EQ(runner.EventLogLines().back().substr(runner.EventLogLines().back().find("entry=")),
+            "entry=first_divergence stage=B port=out");
+}
+
+// `C` reads `B`'s output; the car ran `C` at 100 ms on `B`'s sample 10, which `B` made at 200 ms. So `C`'s run waits
+// (`B.out` 10 is not committed), and runs in the 200 ms step, a step after its recorded run.
+struct WaitingRun {
+  explicit WaitingRun(std::uint64_t recorded_c_out_us) {
+    spec = ControlSpec();
+    SpecStage c;
+    c.name = "C";
+    c.mode = "simulate";
+    c.trigger = "control";
+    c.ports = {Port("control", "req"), Port("in", "req"), Port("out", "pro"), Port("refSync", "pro", "adas.common.RefSync")};
+    SpecInput in;
+    in.port = "in";
+    in.producer = "B";
+    in.producer_port = "out";
+    c.inputs = {in};
+    spec.stages.push_back(c);
+    topics = ControlTopics();
+    topics["/C/control"] = Topic("adas.common.CycleControl", io::Provenance::kSimulated);
+    topics["/C/refSync"] = Topic("adas.common.RefSync", io::Provenance::kSimulated);
+    topics["/C/out"] = Topic("adas.common.CycleControl", io::Provenance::kSimulated);
+    // 50 ms: both stages run once (RESTART). 100 ms: `C`'s run names `B.out` 10. 200 ms: `B` makes it.
+    messages.push_back(Message("/A/out", 50 * kMs, Data(9, 50'000)));
+    messages.push_back(Message("/B/control", 50 * kMs, Data(9, 50'000, 1)));
+    messages.push_back(Message("/B/refSync", 50 * kMs, RefSyncOf(9, {{"in", 9}})));
+    messages.push_back(Message("/B/out", 50 * kMs, Data(9, 50'000)));
+    messages.push_back(Message("/C/control", 50 * kMs, Data(1, 50'000, 1)));
+    messages.push_back(Message("/C/refSync", 50 * kMs, RefSyncOf(1, {{"in", 9}})));
+    messages.push_back(Message("/C/out", 50 * kMs, Data(9, 50'000)));
+    messages.push_back(Message("/A/out", 100 * kMs, Data(10, 100'000)));
+    messages.push_back(Message("/C/control", 100 * kMs, Data(2, 100'000, 2)));
+    messages.push_back(Message("/C/refSync", 100 * kMs, RefSyncOf(2, {{"in", 10}})));
+    messages.push_back(Message("/C/out", 100 * kMs, Data(10, recorded_c_out_us)));
+    messages.push_back(Message("/B/control", 200 * kMs, Data(10, 100'000, 2)));
+    messages.push_back(Message("/B/refSync", 200 * kMs, RefSyncOf(10, {{"in", 10}})));
+    messages.push_back(Message("/B/out", 200 * kMs, Data(10, 100'000)));
+  }
+  RunSpec spec;
+  std::map<std::string, io::TopicInfo> topics;
+  std::vector<io::RawMessage> messages;
+};
+
+Result<Runner> BuildWaiting(WaitingRun& w, Echo& b_echo, Echo& c_echo, bus::PortBus& bus, testing::VectorReader& reader,
+                            io::WriterBase& writer) {
+  return Runner::Construct(w.spec, bus, {&reader}, {{"B", b_echo.get()}, {"C", c_echo.get()}},
+                           google::protobuf::DescriptorPool::generated_pool(), &writer, nullptr, Runner::Options{});
+}
+
+TEST(RunStep, IMP0033ARunThatWaitedAndRanStepsAfterItsRecordedRunIsComparedWithItsOwnRecordedOutput) {
+  for (const bool differs : {false, true}) {
+    WaitingRun w(differs ? 77'000 : 100'000);
+    Echo b_echo;
+    Echo c_echo;
+    ASSERT_TRUE(b_echo.ok() && c_echo.ok());
+    bus::PortBus bus;
+    testing::VectorReader reader(w.messages, w.topics);
+    testing::CapturingWriter sink;
+    io::WriterBase writer(sink);
+    auto built = BuildWaiting(w, b_echo, c_echo, bus, reader, writer);
+    ASSERT_TRUE(built.ok()) << built.error().Format();
+    Runner runner = std::move(built).value();
+    ASSERT_TRUE(runner.Run().ok());
+    // C ran in the 200 ms step: its output was written there, after its recorded run at 100 ms.
+    std::int64_t c_ran_at = -1;
+    for (const io::RawMessage& message : sink.written) {
+      if (message.topic == "/C/out" && CounterOf(message) == 10u) c_ran_at = message.log_time_ns;
+    }
+    EXPECT_EQ(c_ran_at, 200 * kMs);
+    if (differs) {
+      ASSERT_TRUE(runner.FirstDivergence().has_value());
+      ASSERT_EQ(CountDivergenceLines(runner), 1u);
+      EXPECT_EQ(runner.EventLogLines().back().substr(runner.EventLogLines().back().find("entry=")),
+                "entry=first_divergence stage=C port=out");
+    } else {
+      EXPECT_FALSE(runner.FirstDivergence().has_value());
+      EXPECT_EQ(CountDivergenceLines(runner), 0u);
+    }
+  }
+}
+
+// The first-divergence tests that used a header-less stub output (`UT-RUN-05`, `UT-RUN-06`, `UT-RUN-07`, `SW-0116`,
+// `SW-0117`, `SW-0224`) now run on the echo stage and real `sig_header` messages: since `IMP-0033` pairs an output with
+// the recorded output of its own `measurement_counter`, an output with no counter is never compared. `n` instants,
+// the recorded `B.out` of every instant from `diverges_from` on carrying another source time than the echo's.
+std::vector<io::RawMessage> LongEchoRecording(int n, int diverges_from) {
+  std::vector<io::RawMessage> messages;
+  for (int i = 0; i < n; ++i) {
+    const std::int64_t t = (i + 1) * 100 * kMs;
+    messages.push_back(Message("/A/out", t, Data(10 + i, (i + 1) * 100'000)));
+    messages.push_back(Message("/B/control", t, Data(10 + i, (i + 1) * 100'000, i + 1,
+                                                            i == 0 ? adas::common::CycleControl::RESTART
+                                                                   : adas::common::CycleControl::RUN)));
+    messages.push_back(Message("/B/refSync", t, RefSyncOf(10 + i, {{"in", static_cast<std::uint32_t>(10 + i)}})));
+    messages.push_back(Message("/B/out", t, Data(10 + i, i >= diverges_from ? 1 : (i + 1) * 100'000)));
+  }
+  return messages;
+}
+
+TEST(RunStep, UtRun05TheFirstDivergenceIsLatchedAndIsIdenticalAcrossReRuns) {
+  // Step 0 is the stage's RESTART run, never compared; step 1 is the first RUN run and the first divergence.
+  const auto run_once = [] {
+    Harness h(ControlSpec(), LongEchoRecording(6, 1));
+    return RunToTheEnd(h).FirstDivergence();
+  };
+  const std::optional<Divergence> first = run_once();
+  ASSERT_TRUE(first.has_value());
+  EXPECT_EQ(first->tick_index, 1u);
+  EXPECT_EQ(first->log_time_ns, 200 * kMs);
+  EXPECT_EQ(first->stage, "B");
+  EXPECT_EQ(first->port, "out");
+  EXPECT_GT(first->differing_bytes, 0u);
+  const std::optional<Divergence> again = run_once();
+  ASSERT_TRUE(again.has_value());
+  EXPECT_EQ(again->tick_index, first->tick_index);
+  EXPECT_EQ(again->log_time_ns, first->log_time_ns);
+  EXPECT_EQ(again->differing_bytes, first->differing_bytes);
+}
+
+TEST(RunStep, UtRun06EveryMessageWrittenPastTheGraceWindowCarriesTheFlagAndEarlierOnesDoNot) {
+  Harness h(ControlSpec(), LongEchoRecording(8, 1));
+  Runner::Options options;
+  options.grace_ticks = 3;
+  ASSERT_TRUE(h.echo.ok());
+  auto built = h.Build(options);
+  ASSERT_TRUE(built.ok()) << built.error().Format();
+  Runner runner = std::move(built).value();
+  ASSERT_TRUE(runner.Run().ok());
+  ASSERT_TRUE(runner.FirstDivergence().has_value());
+  // Any message at or after the divergence step (1) plus the grace window (3) is flagged; every earlier one is not.
+  const std::int64_t flagged_from_ns = (1 + 3 + 1) * 100 * kMs;
+  bool saw_flagged = false;
+  bool saw_unflagged = false;
+  for (const io::RawMessage& message : h.sink.written) {
+    if (message.log_time_ns >= flagged_from_ns) {
+      EXPECT_TRUE(message.informational_only) << message.topic << " @" << message.log_time_ns;
+      saw_flagged = true;
+    } else {
+      EXPECT_FALSE(message.informational_only) << message.topic << " @" << message.log_time_ns;
+      saw_unflagged = true;
+    }
+  }
+  EXPECT_TRUE(saw_flagged);
+  EXPECT_TRUE(saw_unflagged);
+}
+
+TEST(RunStep, UtRun07ProgressJsonCarriesTheFirstDivergenceOnceLatched) {
+  Harness h(ControlSpec(), LongEchoRecording(4, 1));
+  ASSERT_TRUE(h.echo.ok());
+  const std::filesystem::path progress =
+      std::filesystem::temp_directory_path() / "simcore_run_step_divergence_progress.json";
+  std::filesystem::remove(progress);
+  Checkpoint checkpoint(progress, h.spec.run_id);
+  auto built = h.Build();
+  ASSERT_TRUE(built.ok()) << built.error().Format();
+  Runner runner = std::move(built).value();
+  runner.SetCheckpoint(&checkpoint);
+  ASSERT_TRUE(runner.Run().ok());
+  ASSERT_TRUE(runner.FirstDivergence().has_value());
+
+  auto record = Checkpoint::Read(progress);
+  ASSERT_TRUE(record.ok()) << record.error().Format();
+  EXPECT_TRUE(record.value().has_divergence);
+  EXPECT_EQ(record.value().divergence_tick_index, 1u);
+  EXPECT_EQ(record.value().divergence_log_time_ns, 200 * kMs);
+  EXPECT_EQ(record.value().divergence_stage, "B");
+  EXPECT_EQ(record.value().divergence_port, "out");
+  EXPECT_EQ(record.value().divergence_differing_bytes, runner.FirstDivergence()->differing_bytes);
+  std::filesystem::remove(progress);
 }
 
 }  // namespace

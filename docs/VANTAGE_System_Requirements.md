@@ -25,7 +25,7 @@ simulated stage writes in the engine run, which names what the engine handed it
 **Test areas**, declared once: `RUN` the run setup · `ORC` the orchestrator and the six rules ·
 `SEL` input selection · `STP` the engine step · `THR` threads · `EQO` equal outputs and the
 first divergence.
-Priority split: 25 `P0`, 28 `P1`, 0 `P2`; all `R1`. Without a `P0` row an engine run is not
+Priority split: 25 `P0`, 29 `P1`, 0 `P2`; all `R1`. Without a `P0` row an engine run is not
 exact against the car; a `P1` row makes a result easier to trust or diagnose.
 
 ---
@@ -242,7 +242,7 @@ The order of the rules and the table of outcomes: `ARCH §6`, `D18 (1)`. Matchin
 
 **`SYS-0027`** · `P1` · `R1` — No sample found gives an empty input
 **Shall.** When neither the counter fallback nor the time rule finds a sample, the engine shall hand the input empty.
-**Accept.** With the first five `source.Y` samples removed from `running_example`'s `base` recording, every run before the first remaining one has re-run entry 0 for `Y`; a non-zero entry fails.
+**Accept.** With the first five `source.Y` samples removed from `running_example`'s `base` recording, every run whose recorded entry for `Y` names a removed sample has re-run entry 0 for `Y`; a non-zero entry fails.
 **Binds.** `recording`, `stageIn`
 **Verify.** T · `SYT-SEL-08`   **Trace.** —
 
@@ -254,7 +254,7 @@ The order of the rules and the table of outcomes: `ARCH §6`, `D18 (1)`. Matchin
 
 **`SYS-0029`** · `P1` · `R1` — Identity broken is badged on the port
 **Shall.** The engine shall raise `KIND_IDENTITY_BROKEN` on a port whose samples break identity as `D17 (3)` defines it.
-**Accept.** On `data_triggered` `renumber`, the badge is raised on `T`'s output port as `VANTAGE_Lab_Design.md` §6.2 expects; in every exact case it is never raised.
+**Accept.** On `running_example` `base` with `source.X`'s `measurement_counter` lowered by 5 from its 100th sample on, its `cycle_counter` unchanged, the badge is raised once, on `source.X` and no other port; in every exact case it is never raised.
 **Binds.** `recording`, `stepRecord`
 **Verify.** T · `SYT-SEL-10`   **Trace.** —
 
@@ -287,9 +287,9 @@ The order of the rules and the table of outcomes: `ARCH §6`, `D18 (1)`. Matchin
 What one step is, the jump and warming up: `ARCH §7`. The word "tick" is retired; the step
 number takes its place.
 
-**`SYS-0032`** · `P0` · `R1` — One engine step per instant at which anything happens
-**Shall.** The engine shall make one engine step for each instant at which a recorded message arrives or a clock ticks, numbered from 0 without a gap.
-**Accept.** On `running_example` `cut_c`, the steps are the recording's distinct reception times, numbered consecutively from 0; with `E` started by a 7 ms clock instead, each tick instant adds its step.
+**`SYS-0032`** · `P0` · `R1` — One engine step per instant a step-starting message arrives or a clock ticks
+**Shall.** The engine shall make one step per instant at which a step-starting message (`ARCH §7`) arrives or a clock ticks, numbered from 0 without a gap.
+**Accept.** On `running_example` `cut_c`, the steps are its step-starting messages' distinct reception times, numbered from 0 without a gap; with `E` on a 7 ms clock instead, each tick instant adds its step.
 **Binds.** `recording`, `stepRecord`
 **Verify.** T · `SYT-STP-01`   **Trace.** —
 
@@ -367,6 +367,12 @@ Where equal outputs apply: `ARCH §7`. Determinism axes: `R-SIM-24`, with thread
 **Accept.** On `no_ref_sync`, the reported divergence is the first step, stage and port at which the lab's comparator finds a difference; in every exact case without a jump, none is reported.
 **Binds.** `eventLog`
 **Verify.** T · `SYT-EQO-02`   **Trace.** —
+
+**`SYS-0054`** · `P1` · `R1` — A lost input's divergence comes no earlier than the run that lost it
+**Shall.** The engine shall report no divergence before the first run that lost an input the recording lacks.
+**Accept.** On `missing_sample` and `missing_run` the first divergence is reported at or after the first run whose recorded refSync names a dropped sample, and that run carries `KIND_FALLBACK` on that input.
+**Binds.** `eventLog`, `stepRecord`
+**Verify.** T · `SYT-EQO-05`   **Trace.** —
 
 **`SYS-0044`** · `P1` · `R1` — A re-run refSync is compared only on counter and time
 **Shall.** The divergence comparison shall compare a re-run `refSync` with the recorded one only on each entry's `measurement_counter` and `source_timestamp_us`.

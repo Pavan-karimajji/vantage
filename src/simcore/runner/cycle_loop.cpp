@@ -510,6 +510,18 @@ Result<Runner> Runner::Construct(const RunSpec& spec, bus::PortBus& bus, std::ve
     if (described.count(io::CanonicalTopic(stage.name + ".control")) != 0) impl.controls_recorded.insert(stage.name);
   }
   impl.control.emplace(impl.first_reception_ns);
+  {
+    ReadAhead* ahead = impl.ahead.get();
+    orch_options.ahead_control_restart = [ahead](const std::string& stage, std::uint32_t counter) -> std::optional<bool> {
+      const AheadMessage* found = ahead->Find(stage + ".control", counter, adas::common::CycleControl::descriptor());
+      if (found == nullptr) return std::nullopt;
+      adas::common::CycleControl control;
+      if (!control.ParseFromArray(found->message.payload.data(), static_cast<int>(found->message.payload.size()))) {
+        return std::nullopt;
+      }
+      return control.op_mode() == adas::common::CycleControl::RESTART;
+    };
+  }
   impl.orchestrator = std::make_unique<orchestrator::Orchestrator>(impl.spec, impl.graph, bus, impl.log, orch_options);
 
   if (!spec.outputs.path.empty()) {
@@ -745,10 +757,24 @@ Result<bool> Runner::FinishTicket(PendingRun& pending, std::vector<orchestrator:
   bool compared = false;
   bool equal = true;
   for (const orchestrator::CommittedOutput& output : result.report.outputs) {
-    const std::vector<std::uint8_t>* recorded = impl.reference.AtTime(output.port, now_ns);
+    // `IMP-0033`, `ARCH §7`: against the recorded output of the same port and `measurement_counter`, never by
+    // instant -- a run that waited, or a stage's second run in one step, meets its own recorded run. Looked up among
+    // the arrived recorded messages, then in the read-ahead (held to the readiness limit); none found, or an
+    // output whose counter is unknown, is not compared.
+    const google::protobuf::Descriptor* descriptor = bus_->Descriptor(output.port);
+    const bus::SignalHeader output_header = bus::ReadSignalHeader(output.payload, descriptor);
+    if (!output_header.measurement_counter.has_value() ||
+        bus::IsUnknownMeasurementCounter(output_header.measurement_counter.value())) {
+      continue;
+    }
+    const std::uint32_t output_counter = output_header.measurement_counter.value();
+    const std::vector<std::uint8_t>* recorded = impl.reference.Find(output.port, output_counter);
+    if (recorded == nullptr && impl.ahead != nullptr) {
+      const AheadMessage* ahead_message = impl.ahead->Find(output.port, output_counter, descriptor);
+      if (ahead_message != nullptr) recorded = &ahead_message->message.payload;
+    }
     if (recorded == nullptr) continue;
     const std::string bare = output.port.substr(ticket.stage.size() + 1);
-    const google::protobuf::Descriptor* descriptor = bus_->Descriptor(output.port);
     if (!restart_run) {
       const bool was_latched = latch_.latched();
       latch_.Observe(step, now_ns, ticket.stage, bare, output.payload, *recorded, descriptor);

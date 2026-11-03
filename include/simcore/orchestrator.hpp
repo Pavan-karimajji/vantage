@@ -239,7 +239,7 @@ struct Ticket {
   std::uint64_t not_before_step = 0;     // a ticket made through a previous-cycle trigger waits for a later step
   std::uint64_t run_number = 0;          // set at dispatch: runs of this stage before this one
   bool restart = false;                  // set at dispatch: first run of the stage, or first after a jump
-  bool warming_up = false;               // set at dispatch: restart, not at the recording's start, outputs recorded
+  bool warming_up = false;               // set at dispatch: restart, outputs recorded, the car's copy not shown fresh (`IMP-0062`)
   std::uint64_t waited_steps = 0;        // set at dispatch: steps spent parked
   bool readiness_expired = false;        // set at dispatch: the limit passed (or the recording ended) and a named sample is still missing
 };
@@ -290,6 +290,10 @@ struct OrchestratorOptions {
   std::int64_t end_ns = 0;              // the recording's last reception time: clocks stop here
   // Stages the recording holds outputs of: only they are warming up (`D17 (4)`).
   std::set<std::string> stages_with_recorded_outputs;
+  // `IMP-0062`: the stage's recorded `control` with this `measurement_counter` in the read-ahead (held to the
+  // readiness limit), for a run started by a trigger sample; true when it carries RESTART. Empty: not found.
+  // The runner sets it; without it only the controls that already arrived are looked at.
+  std::function<std::optional<bool>(const std::string& stage, std::uint32_t counter)> ahead_control_restart;
 };
 
 enum class StepEnd {
@@ -368,6 +372,8 @@ class Orchestrator {
 
   // The trigger-input stages `port` feeds, as indices into `graph_.stages`.
   std::vector<std::size_t> TriggeredBy(const std::string& port) const;
+  // `IMP-0062`: whether the car's recorded control of this restart run carries RESTART.
+  bool RecordedRestart(const Ticket& ticket) const;
   // Whether `payload` repeats a trigger counter with other bytes.
   bool ContentDiffers(const std::string& port, const std::vector<std::uint8_t>& payload) const;
   // Publishes one sample, logs its counter gap or reset, and creates the

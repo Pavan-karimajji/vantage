@@ -219,7 +219,7 @@ in `tests/system/test_vnt_gate_g3.py`.
 
 **`SYT-SEL-08`** · T · fixture `F-REC-EDIT`, `F-ENGINE` — No sample found gives an empty input
 **Serves.** `SYS-0027`
-**Steps.** Remove the first five `source.Y` samples from `running_example`'s `base` recording; run `all_simulated`; read the re-run entries for `Y` of every run before the first remaining `source.Y` sample.
+**Steps.** Remove the first five `source.Y` samples from `running_example`'s `base` recording; run `all_simulated`; read the re-run entry for `Y` of every run whose recorded entry for `Y` names a removed sample.
 - `.c1` **PASS:** every entry 0, per `SYS-0027` Accept. **FAIL:** a non-zero entry.
 
 **`SYT-SEL-09`** · T · fixture `F-CAT`, `F-SETUP-EDIT`, `F-TAP` — Selection outcomes raise their badges
@@ -227,10 +227,10 @@ in `tests/system/test_vnt_gate_g3.py`.
 **Steps.** Run `running_example` `missing_sample`, `missing_run` and `no_ref_sync`, `late_consumer` `all_simulated` with `readiness_limit_steps` 0, and every exact case; for each step derive the `KIND_FALLBACK` and `KIND_READINESS_TIMEOUT` badges the table of `VANTAGE_Architecture.md` §6 gives for its selections; compare with the step's badges.
 - `.c1` **PASS:** equal in every step, per `SYS-0028` Accept. **FAIL:** a missing, extra or misplaced badge, naming case, step and port.
 
-**`SYT-SEL-10`** · T · fixture `F-CAT`, `F-TAP` — Identity broken is badged
+**`SYT-SEL-10`** · T · fixture `F-CAT`, `F-REC-EDIT`, `F-TAP` — Identity broken is badged
 **Serves.** `SYS-0029`
-**Steps.** Run `data_triggered` `renumber` `by_data` and every exact case; read every `KIND_IDENTITY_BROKEN` badge.
-- `.c1` **PASS:** `renumber`: raised on `T`'s output port, per `SYS-0029` Accept. **FAIL:** not raised, or raised on another port.
+**Steps.** In `running_example`'s `base` recording lower `source.X`'s `measurement_counter` by 5 from its 100th sample on, its `cycle_counter` unchanged; run `all_simulated` on it on `F-TAP`. Run every exact case on `F-TAP`. Read every `KIND_IDENTITY_BROKEN` badge.
+- `.c1` **PASS:** edited: one badge, on `source.X` at the step of its 100th sample, per `SYS-0029` Accept. **FAIL:** none, more than one, another step, or a badge on any other port (a downstream stage's input or output).
 - `.c2` **PASS:** exact cases: never raised. **FAIL:** any.
 
 **`SYT-SEL-11`** · T · fixture `F-CASE`, `F-REC-EDIT`, `F-ENGINE`, `F-TAP` — Gaps and resets are counted
@@ -255,7 +255,7 @@ in `tests/system/test_vnt_gate_g3.py`.
 
 **`SYT-STP-01`** · T · fixture `F-CASE`, `F-SETUP-EDIT`, `F-TAP` — One step per instant
 **Serves.** `SYS-0032`
-**Steps.** Run `running_example` `cut_c` on `F-TAP`; list the recording's distinct reception times. Then set `E`'s trigger empty and `clock_period_ns` to 7 ms, and run again.
+**Steps.** Run `running_example` `cut_c` on `F-TAP`; list the distinct reception times of the recording's step-starting messages (`VANTAGE_Architecture.md` §7): here `source.X`, `source.Y`, `source.Z`, `C`'s `out`, `refSync` and `compState`, and the `control` of `A`, `B`, `D` and `E`. Then set `E`'s trigger empty and `clock_period_ns` to 7 ms, and run again.
 - `.c1` **PASS:** steps are those times, numbered from 0 without a gap, per `SYS-0032` Accept. **FAIL:** a missing or extra step, a gap, or a wrong time.
 - `.c2` **PASS:** with the clock, the steps are the union of those times and `E`'s ticks. **FAIL:** a tick instant without its step.
 
@@ -321,7 +321,12 @@ in `tests/system/test_vnt_gate_g3.py`.
 **`SYT-EQO-04`** · T · fixture `F-CASE`, `F-ENGINE` — A divergence does not fail the engine run
 **Serves.** `SYS-0045`
 **Steps.** Run `running_example` `no_ref_sync` and `cut_c`; read each exit code and step count.
-- `.c1` **PASS:** as `SYS-0045` Accept, `no_ref_sync`'s step count equal to the recording's distinct reception times. **FAIL:** a fail outcome, or fewer steps.
+- `.c1` **PASS:** as `SYS-0045` Accept, `no_ref_sync`'s step count equal to the number of distinct reception times of its recording's step-starting messages (`VANTAGE_Architecture.md` §7). **FAIL:** a fail outcome, or another number of steps.
+
+**`SYT-EQO-05`** · T · fixture `F-CASE`, `F-TAP` — A lost input's divergence comes no earlier than the loss
+**Serves.** `SYS-0054`
+**Steps.** Run `running_example` `missing_sample` and `missing_run` `all_simulated` on `F-TAP` with `outputs.path` set. In each, find the run of `B` or `E` at the earliest step whose recorded refSync names a dropped `source.Y` sample; read the event log's `first_divergence` entry and that step's badges.
+- `.c1` **PASS:** in each, as `SYS-0054` Accept. **FAIL:** no entry, an entry at an earlier step, or no `KIND_FALLBACK` on that run's `in_Y` at its step.
 
 ## 8. Analysis — `ANL`
 

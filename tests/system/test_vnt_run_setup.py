@@ -16,14 +16,13 @@ A test whose lab output, library or tool is missing skips with the reason printe
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 
 import pytest
 
 from tests.support.engine_runs import (
     EngineRun, Recording, bare_environment, compare_recordings, point_at_recording, port_of, run_case, stage_of,
-    tap_case, tool_path,
+    probe_copy, tap_case,
 )
 from tests.support.lab_cases import edit_recording, lab_case
 from tests.system.test_vnt_wp13_recordings import _DUMP_CANDIDATES, _what_vantages_reader_returns
@@ -224,22 +223,9 @@ def test_syt_run_07_c1_a_measured_stage_without_recorded_outputs_is_refused(tmp_
     _refused_at_load(run, "SYT-RUN-07.c1", "C.out removed from the recording", "C", "out")
 
 
-def _probe_copy(directory: Path, stage: str, log: Path) -> Path:
-    """The exec probe's library copied to `directory/probe_<stage>/` with its own `config/` naming the stage and
-    the call log (the probe reads no other input)."""
-    source = tool_path("exec_probe")
-    folder = directory / f"probe_{stage}"
-    (folder / "config").mkdir(parents=True)
-    library = folder / source.name
-    shutil.copyfile(source, library)
-    (folder / "config" / "default.yaml").write_text(
-        f"PROBE_STAGE_NAME: {stage}\nPROBE_LOG_FILE: {log.as_posix()}\nPROBE_SPIN_MS: 0\n", encoding="utf-8")
-    return library
-
-
 def _probe_calls(case, directory: Path, mode: str) -> tuple[EngineRun, int]:
     log = directory / f"{mode}.calls.log"
-    library = _probe_copy(directory / mode, "C", log)
+    library = probe_copy(directory / mode, "C", log)
 
     def put_probe(setup: dict) -> None:
         stage = stage_of(setup, "C")

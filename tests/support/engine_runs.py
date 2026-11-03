@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 import pytest
+import yaml
 
 from adas_sim.diagnostics.errors import EnvironmentError_
 from adas_sim.engine.bridge import resolve_simengine_executable
@@ -298,6 +299,138 @@ def library_with_bundle(case: LabCase, stage: str, directory: Path, bundle: Path
     return target
 
 
+# ---- the cases of the lab ----------------------------------------------------------------------------------------
+
+def catalogue() -> dict[str, dict]:
+    """`{topology: declared catalogue file}` of every topology of the lab catalogue."""
+    found = {}
+    for path in sorted((lab_root() / "catalogue").glob("*.yaml")):
+        if path.name != "provisional.yaml":
+            found[path.stem] = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return found
+
+
+def exact_cases() -> list[tuple[str, str, str]]:
+    """`(topology, scenario, case)` of every exact case: the scenario expects `exact` and the case is not `hang` or
+    `crash`, which need the supervisor (`F-CAT`)."""
+    return [(topology, scenario["name"], case["name"])
+            for topology, declared in catalogue().items()
+            for scenario in declared.get("scenarios", []) if scenario.get("expect", "exact") == "exact"
+            for case in scenario.get("resim", []) if case["name"] not in ("hang", "crash")]
+
+
+def lab_setups() -> list[tuple[str, str, str]]:
+    """`(topology, scenario, case)` of every run setup the lab wrote."""
+    found = []
+    for path in sorted((lab_root() / "lab").glob("*/*.run.json")):
+        scenario, _dot, case = path.name[: -len(".run.json")].partition(".")
+        found.append((path.parent.name, scenario, case))
+    return found
+
+
+def case_params(cases: list[tuple[str, str, str]]):
+    """`pytest.param`s for a test over lab cases, each parameter one case; one skipped parameter, with its reason,
+    when the lab has none."""
+    if not cases:
+        return [pytest.param(None, None, None, id="no-lab-catalogue",
+                             marks=pytest.mark.skip(reason=f"lab not built: no catalogue under {lab_root() / 'catalogue'}"))]
+    return [pytest.param(*case, id="/".join(case)) for case in cases]
+
+
+def simulated_names(case: LabCase) -> list[str]:
+    setup = json.loads(case.setup.read_text(encoding="utf-8"))
+    return [stage["name"] for stage in setup["stages"] if stage["mode"] == "simulate"]
+
+
+def ran(case: LabCase, directory: Path, label: str, **kwargs) -> tuple[EngineRun, Recording]:
+    """`run_case`, asserted to exit 0, with its recording read."""
+    run = run_case(case, directory, label, **kwargs)
+    assert run.returncode == 0, f"{case.topology}/{case.scenario}/{case.case}: the engine run failed: {run.stderr[-400:]}"
+    return run, Recording(run.recording)
+
+
+def rerun_entries(recording: Recording, stage: str, port: str) -> list[tuple[int, int]]:
+    """`(measurement_counter, source_timestamp_us)` of the refSync entry for `port` of every run of `stage`, in file
+    order."""
+    found = []
+    for _i, _t, ref_sync in recording.decoded(f"{stage}.refSync"):
+        entry = next((e for e in ref_sync.inputs if e.port == port), None)
+        found.append((entry.measurement_counter, entry.source_timestamp_us) if entry is not None else (0, 0))
+    return found
+
+
+def event_entries(lines: list[str], kind: str) -> list[dict[str, str]]:
+    """The event log lines of one entry kind as `{key: value}` (`step`, `stage`, `port`, ...)."""
+    found = []
+    for line in lines:
+        fields = dict(part.split("=", 1) for part in line.split() if "=" in part)
+        if fields.get("entry") == kind:
+            found.append(fields)
+    return found
+
+
+def instants(recording: Recording) -> list[int]:
+    """The distinct logging times of a recording, in order."""
+    return sorted({t for _topic, t, _payload in recording.messages})
+
+
+@dataclass(frozen=True)
+class StepStarters:
+    """The topics whose messages start a step, and the engine steps those and the clocks make (`ARCH §7`)."""
+
+    topics: frozenset[str]
+    times: list[int]
+
+
+def step_starting_instants(setup: dict, recording: Recording) -> StepStarters:
+    """The engine steps of a run setup on a recording, from the closed list of step-starting messages (`ARCH §7`,
+    `D28 (2)`): a `source` sample some non-`off` stage's input reads; each output of a `measured` stage (its `pro`
+    ports: data outputs, `refSync`, `compState`); the `control` of a `simulate` stage, whatever its trigger. A
+    `simulate` stage's outputs and `refSync`, a topic the setup does not declare and a `measured` or `off` stage's
+    `control` start nothing. A `simulate` stage with a clock adds a tick at the recording's first reception time
+    plus whole periods, up to its last. Only topics the recording holds are chosen."""
+    chosen: set[str] = set()
+    for stage in setup["stages"]:
+        if stage["mode"] == "off":
+            continue
+        for wired in stage.get("inputs", []):
+            if wired["producer"] == "source":
+                chosen.add(f"source.{wired['producer_port']}")
+        if stage["mode"] == "measured":
+            chosen.update(f"{stage['name']}.{port['name']}" for port in stage["ports"] if port["dir"] == "pro")
+        elif stage["mode"] == "simulate":
+            chosen.add(f"{stage['name']}.control")
+    held = set(recording.topics())
+    chosen &= held
+    times = {t for topic, t, _payload in recording.messages if topic in chosen}
+    everything = instants(recording)
+    for stage in setup["stages"]:
+        period = stage.get("clock_period_ns", 0)
+        if stage["mode"] == "simulate" and period > 0:
+            times.update(range(everything[0], everything[-1] + 1, period))
+    return StepStarters(frozenset(chosen), sorted(times))
+
+
+def edited_payload(recording: Recording, topic: str, payload: bytes, mutate: Callable[[object], None]) -> bytes:
+    """`payload` of `topic` decoded with the schema `recording` carries, changed by `mutate(message)`, encoded again."""
+    message = recording.decode(topic, payload)
+    mutate(message)
+    return message.SerializeToString(deterministic=True)
+
+
+def probe_copy(directory: Path, stage: str, log: Path, spin_ms: int = 0) -> Path:
+    """The exec probe's library copied to `directory/probe_<stage>/` with its own `config/` naming the stage, the call
+    log and how long each call spins (the probe reads no other input)."""
+    source = tool_path("exec_probe")
+    folder = Path(directory) / f"probe_{stage}"
+    (folder / "config").mkdir(parents=True)
+    library = folder / source.name
+    shutil.copyfile(source, library)
+    (folder / "config" / "default.yaml").write_text(
+        f"PROBE_STAGE_NAME: {stage}\nPROBE_LOG_FILE: {Path(log).as_posix()}\nPROBE_SPIN_MS: {spin_ms}\n", encoding="utf-8")
+    return library
+
+
 def split_by_topic(case: LabCase, directory: Path, keep_first: Callable[[str], bool]) -> tuple[Path, Path]:
     """The case's recording written as two files through `edit_recording`: the messages whose topic
     `keep_first` accepts in the first, all others in the second."""
@@ -310,6 +443,8 @@ def split_by_topic(case: LabCase, directory: Path, keep_first: Callable[[str], b
 
 __all__ = [
     "CONTROL_TYPE", "EngineRun", "Message", "Recording", "TapRun", "bare_environment", "compare_recordings",
-    "copy_tree_files", "engine_exe", "library_with_bundle", "lab_compare", "point_at_recording", "port_of", "run_case", "run_engine",
-    "run_tap", "sha256_of", "simulated_stages", "skip", "split_by_topic", "stage_of", "tap_case", "tool_path",
+    "case_params", "catalogue", "copy_tree_files", "edited_payload", "engine_exe", "event_entries", "exact_cases",
+    "instants", "lab_compare", "lab_setups", "library_with_bundle", "point_at_recording", "port_of", "probe_copy",
+    "ran", "rerun_entries", "run_case", "run_engine", "run_tap", "sha256_of", "simulated_names", "simulated_stages",
+    "skip", "split_by_topic", "stage_of", "StepStarters", "step_starting_instants", "tap_case", "tool_path",
 ]

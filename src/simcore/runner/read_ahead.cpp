@@ -212,15 +212,6 @@ const std::vector<std::uint8_t>* RecordedReference::Find(const std::string& port
   return nullptr;
 }
 
-const std::vector<std::uint8_t>* RecordedReference::AtTime(const std::string& port, std::int64_t time_ns) const {
-  const auto it = held_.find(port);
-  if (it == held_.end()) return nullptr;
-  for (auto held = it->second.held.rbegin(); held != it->second.held.rend(); ++held) {
-    if (held->time_ns == time_ns) return &held->payload;
-  }
-  return nullptr;
-}
-
 void RecordedReference::Clear() {
   for (auto& [port, slot] : held_) slot.held.clear();
 }

@@ -398,7 +398,7 @@ the component receives. The control message is added to it. Nothing else is.
 | waited the limit and the sample did not come | `KIND_READINESS_TIMEOUT` on the port, then the counter fallback is used and `KIND_FALLBACK` is raised too | per engine run |
 | the counter fallback finds no sample (none with a counter not after the wanted one) | the input is empty and `KIND_FALLBACK` is raised | per engine run |
 | the time rule finds no sample | the input is empty and `KIND_FALLBACK` is raised | per engine run |
-| the stage's first run after the start or a jump is not at the recording's start, and the recording holds the stage's outputs | `KIND_WARMING_UP` on the stage, until its outputs first equal the recorded outputs, compared as in §7 *Where equal outputs apply* | per engine run |
+| the stage's first run after the start or a jump, unless the car's recorded control of that run carries RESTART (`D28 (4)`; a clock-started run has none), and the recording holds the stage's outputs | `KIND_WARMING_UP` on the stage, until its outputs first equal the recorded outputs, compared as in §7 *Where equal outputs apply* | per engine run |
 | identity broken as `D17 (3)` defines it | `KIND_IDENTITY_BROKEN` on the port | per sample |
 | a simulated stage with consumers, none of them simulated | `KIND_COMPUTED_NOT_CONSUMED` on the stage | once |
 
@@ -434,9 +434,17 @@ run can happen at an instant after its trigger's; its control header keeps the
 trigger's time. The step's time is the instant of processing.
 
 *What "tick" now means.* Nothing. The word is retired. The step number takes its
-place everywhere. A step exists for every instant at which any event is processed,
-including instants at which only measured samples arrive, so a reader sees every
-recorded value at its own instant.
+place everywhere. A step exists for every instant at which a step-starting message
+arrives or a clock ticks. The step-starting messages are a closed list, the recorded
+messages the engine buffers: a `source` sample some stage's input reads; each output
+the run setup declares for a `measured` stage (its data outputs, `refSync`,
+`compState`); a `simulate` stage's recorded `control`, whatever its trigger. Nothing
+else starts a step. A `simulate` stage's recorded data outputs, `refSync` and
+`compState` are reference, read by *Where equal outputs apply* and by input
+selection; a run looks its recorded `refSync` up ahead (`D27`) and never waits for
+it, so a `refSync`'s arrival is not a step. Nor is a topic the run setup does not
+declare, or a `measured` or `off` stage's `control` (`D28 (2)`). So a reader sees
+every value the engine consumed at its own instant.
 
 *Rejected:* a step per run, which would split two runs of one instant into two
 `MeasCycle`s and let a reader see one stage's output without the other's of the
@@ -447,11 +455,16 @@ reader seeks, every stage's next run is RESTART. `simEngineSeek` keeps the live
 measurement writer open: `MeasStatus.runId` does not change (one `runId` per engine
 run) and step numbers continue. There is no state to restore (`RCT:P1`), so
 components warm up, and `KIND_WARMING_UP` is raised on a stage only when the
-recording holds the stage's outputs. The slice start of a batch engine run is a jump
+recording holds the stage's outputs and does not show the car's copy fresh there
+(§6, `D28 (4)`). The slice start of a batch engine run is a jump
 before the first step.
 
 *Where equal outputs apply.* The divergence latch compares each simulated data
-output and `compState` with the recording's. It zeroes both headers'
+output and `compState` with the recorded output of the same port and
+`measurement_counter`, never by instant: a run that waited, or the second run of a
+stage in one step, is compared with its own recorded run. The recorded output is
+looked up among the arrived messages, then in the read-ahead; none found, the
+output is not compared. It zeroes both headers'
 `cycle_counter` first, and it does not compare RESTART runs. Only a RUN run can
 diverge (`RCT:SYS-0016`). A re-run's `refSync` is compared only on each entry's
 `measurement_counter` and `source_timestamp_us`; its other header fields are not

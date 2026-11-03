@@ -26,6 +26,7 @@
 #include <google/protobuf/descriptor.h>
 
 #include "Bsd__Outputs/bsd_outputs.pb.h"
+#include "common/cycle_control.pb.h"
 #include "simcore/io.hpp"
 #include "simcore/orchestrator.hpp"
 
@@ -592,15 +593,105 @@ TEST(OrcJump, TheNextRunOfEveryStageIsARestartAndOnlyTheFirstOfThem) {
   EXPECT_FALSE(rig->orc->NextRunnable(kAllReady)[0].restart);
 }
 
-TEST(OrcJump, OnlyAStageTheRecordingHoldsOutputsOfIsWarmingUpAndNotAtTheRecordingsStart) {
+// `IMP-0062`: a recorded control with the given mode and counter.
+std::vector<std::uint8_t> ControlBytes(adas::common::CycleControl::OpMode mode, std::uint32_t measurement = 1) {
+  adas::common::CycleControl message;
+  message.mutable_sig_header()->set_measurement_counter(measurement);
+  message.set_op_mode(mode);
+  std::vector<std::uint8_t> bytes(message.ByteSizeLong());
+  message.SerializeToArray(bytes.data(), static_cast<int>(bytes.size()));
+  return bytes;
+}
+
+// `IMP-0062`: one stage "A" whose recording holds its outputs, started by a recorded control at 100.
+Ticket FirstRunOfA(adas::common::CycleControl::OpMode mode, std::set<std::string> with_outputs = {"A"}) {
+  OrchestratorOptions options;
+  options.first_reception_ns = 100;
+  options.stages_with_recorded_outputs = std::move(with_outputs);
+  Rig rig(Spec({Stage("A", "control")}, 0), std::set<std::string>{"A.control"}, options);
+  rig.Control("A", 100, ControlBytes(mode));
+  EXPECT_TRUE(rig.Begin().value());
+  return rig.orc->NextRunnable(kAllReady).at(0);
+}
+
+TEST(OrcJump, IMP_0062_ARunReplayingARecordedRestartControlAtTheStartIsNotWarmingUp) {
+  const Ticket t = FirstRunOfA(adas::common::CycleControl::RESTART);
+  EXPECT_TRUE(t.restart);
+  EXPECT_FALSE(t.warming_up);
+}
+
+TEST(OrcJump, IMP_0062_ARunReplayingARecordedRunControlAtTheStartIsWarmingUp) {
+  // A recording that starts mid-drive: the car's copy was not fresh, though it is the recording's start.
+  EXPECT_TRUE(FirstRunOfA(adas::common::CycleControl::RUN).warming_up);
+}
+
+TEST(OrcJump, IMP_0062_AClockStartedStageWhoseOutputsAreRecordedIsWarmingUpAtTheStart) {
+  OrchestratorOptions options;
+  options.first_reception_ns = 100;
+  options.start_ns = 100;
+  options.end_ns = 1000;
+  options.stages_with_recorded_outputs = {"K"};
+  Rig rig(Spec({Stage("K", "", {}, 100)}, 0), {}, options);
+  ASSERT_TRUE(rig.Begin().value());
+  const Ticket t = rig.orc->NextRunnable(kAllReady).at(0);
+  EXPECT_EQ(t.start, StartKind::kClock);
+  EXPECT_TRUE(t.warming_up);
+}
+
+Ticket TriggerRun(Rig& rig, adas::common::CycleControl::OpMode control_mode, std::uint32_t control_counter,
+                  bool with_control) {
+  if (with_control) rig.orc->Queue().PushRecorded("T.control", 100, 0, ControlBytes(control_mode, control_counter));
+  rig.orc->Queue().PushRecorded("source.in_x", 100, 0, Bytes(1, 1));
+  EXPECT_TRUE(rig.Begin().value());
+  return rig.orc->NextRunnable(kAllReady).at(0);
+}
+
+TEST(OrcJump, IMP_0062_ATriggerSampleRunWhoseRecordedControlOfTheSameCounterIsRestartIsNotWarmingUp) {
+  OrchestratorOptions options;
+  options.stages_with_recorded_outputs = {"T"};
+  Rig rig(Spec({Stage("T", "in_x", {In("in_x", "source", "in_x")})}, 0), std::set<std::string>{"T.control"}, options, 8,
+          std::vector<std::string>{"source.in_x"});
+  rig.bus.DeclarePort("T.control", 8, adas::common::CycleControl::descriptor());
+  const Ticket t = TriggerRun(rig, adas::common::CycleControl::RESTART, 1, true);
+  EXPECT_EQ(t.start, StartKind::kInput);
+  EXPECT_FALSE(t.warming_up);
+}
+
+TEST(OrcJump, IMP_0062_ATriggerSampleRunIsWarmingUpWithoutARecordedControlOfItsCounterOrWithARunOne) {
+  OrchestratorOptions options;
+  options.stages_with_recorded_outputs = {"T"};
+  const auto run = [&](adas::common::CycleControl::OpMode mode, std::uint32_t control_counter, bool with_control) {
+    Rig rig(Spec({Stage("T", "in_x", {In("in_x", "source", "in_x")})}, 0), std::set<std::string>{"T.control"}, options,
+            8, std::vector<std::string>{"source.in_x"});
+    rig.bus.DeclarePort("T.control", 8, adas::common::CycleControl::descriptor());
+    return TriggerRun(rig, mode, control_counter, with_control).warming_up;
+  };
+  EXPECT_TRUE(run(adas::common::CycleControl::RESTART, 1, false));  // no such control
+  EXPECT_TRUE(run(adas::common::CycleControl::RESTART, 2, true));   // a control of another counter
+  EXPECT_TRUE(run(adas::common::CycleControl::RUN, 1, true));       // the same counter, not RESTART
+}
+
+TEST(OrcJump, IMP_0062_ATriggerSampleRunFindsItsRecordedControlInTheReadAhead) {
+  OrchestratorOptions options;
+  options.stages_with_recorded_outputs = {"T"};
+  options.ahead_control_restart = [](const std::string& stage, std::uint32_t counter) -> std::optional<bool> {
+    if (stage == "T" && counter == 1) return true;
+    return std::nullopt;
+  };
+  Rig rig(Spec({Stage("T", "in_x", {In("in_x", "source", "in_x")})}, 0), std::set<std::string>{"T.control"}, options, 8,
+          std::vector<std::string>{"source.in_x"});
+  EXPECT_FALSE(TriggerRun(rig, adas::common::CycleControl::RUN, 1, false).warming_up);
+}
+
+TEST(OrcJump, IMP_0062_OnlyAStageTheRecordingHoldsOutputsOfIsWarmingUpAfterAJump) {
   OrchestratorOptions options;
   options.first_reception_ns = 100;
   options.stages_with_recorded_outputs = {"A"};
   auto rig = std::make_unique<Rig>(Spec({Stage("A", "control"), Stage("C", "control")}, 0),
                                    std::set<std::string>{"A.control", "C.control"}, options);
-  // First run at the recording's start: not warming up.
-  rig->Control("A", 100);
-  rig->Control("C", 100);
+  const auto restart = ControlBytes(adas::common::CycleControl::RESTART);
+  rig->Control("A", 100, restart);
+  rig->Control("C", 100, restart);
   ASSERT_TRUE(rig->Begin().value());
   for (const Ticket& t : rig->orc->NextRunnable(kAllReady)) {
     EXPECT_FALSE(t.warming_up) << t.stage;
@@ -608,13 +699,18 @@ TEST(OrcJump, OnlyAStageTheRecordingHoldsOutputsOfIsWarmingUpAndNotAtTheRecordin
   }
   rig->orc->EndStep();
   ASSERT_TRUE(rig->orc->Jump(500, nullptr).ok());
-  rig->Control("A", 500);
-  rig->Control("C", 500);
+  const auto run = ControlBytes(adas::common::CycleControl::RUN, 2);
+  rig->Control("A", 500, run);
+  rig->Control("C", 500, run);
   ASSERT_TRUE(rig->Begin().value());
   for (const Ticket& t : rig->orc->NextRunnable(kAllReady)) {
     EXPECT_TRUE(t.restart);
     EXPECT_EQ(t.warming_up, t.stage == "A") << t.stage;  // C: the recording holds none of its outputs
   }
+}
+
+TEST(OrcJump, IMP_0062_AStageWhoseOutputsTheRecordingLacksIsNeverWarmingUp) {
+  EXPECT_FALSE(FirstRunOfA(adas::common::CycleControl::RUN, {}).warming_up);
 }
 
 TEST(OrcJump, AFailingSeekIsReturnedAndStillLeavesNothingOld) {

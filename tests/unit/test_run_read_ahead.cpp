@@ -135,7 +135,7 @@ TEST(RunReadAhead, StopDropsEverythingAndReadsNoMore) {
   EXPECT_TRUE(ahead.Drained());
 }
 
-TEST(RunRecordedReference, KeepsTheLastDepthMessagesAndFindsByCounterOrByTime) {
+TEST(RunRecordedReference, KeepsTheLastDepthMessagesAndFindsByCounter) {
   RecordedReference reference;
   reference.Declare("s.refSync", 2, DataType());
   reference.Add("s.refSync", 100, Data(1));
@@ -143,9 +143,8 @@ TEST(RunRecordedReference, KeepsTheLastDepthMessagesAndFindsByCounterOrByTime) {
   reference.Add("s.refSync", 300, Data(3));
   EXPECT_EQ(reference.Find("s.refSync", 1), nullptr);  // evicted by depth 2
   EXPECT_NE(reference.Find("s.refSync", 2), nullptr);
-  ASSERT_NE(reference.AtTime("s.refSync", 300), nullptr);
-  EXPECT_EQ(*reference.AtTime("s.refSync", 300), Data(3));
-  EXPECT_EQ(reference.AtTime("s.refSync", 250), nullptr);
+  ASSERT_NE(reference.Find("s.refSync", 3), nullptr);
+  EXPECT_EQ(*reference.Find("s.refSync", 3), Data(3));
   reference.Clear();
   EXPECT_EQ(reference.Find("s.refSync", 3), nullptr);
   reference.Add("undeclared.port", 1, Data(1));
