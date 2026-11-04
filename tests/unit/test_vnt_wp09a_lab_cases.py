@@ -23,8 +23,14 @@ VANTAGE_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _writer_dir() -> Path:
-    """The folder holding ``adas_recording``: the lab build's ``interfaces_python`` if the lab is built here, else the
+    """The folder holding ``adas_recording``: the engine's, else the lab build's ``interfaces_python`` if the lab is built here, else the
     ``interfaces`` source tree beside this repo; a skip with the reason when neither exists."""
+    try:  # the folder the engine was linked with: one `adas_recording` for the process, whichever test imports it first
+        from adas_sim.io.recording_writer import find_recording_package
+
+        return find_recording_package()
+    except Exception:
+        pass
     for index in sorted((VANTAGE_ROOT.parent / "vantage-lab" / "conan_workarea").glob("build-sil-*/lab/*/index.json")):
         found = json.loads(index.read_text(encoding="utf-8")).get("interfaces_python")
         if found and (Path(found) / "adas_recording" / "writer.py").is_file():

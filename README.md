@@ -62,6 +62,8 @@ src/adas_sim/
 tests/
 ```
 
+`scripts/run_tests.py` runs the Python suites (`--python tests/unit tests/system`) and the gtest binary (`--gtest`) in parallel worker processes, nothing skipped, and prints one aggregated result.
+
 No `CMakeLists.txt` and no `build.bat` — this module produces no compiled
 artifact, the same shape `shared_config` uses. It **does** get a `conanfile.py`
 (`adas-sim`, `package_type = "unknown"`) so a component can resolve it without

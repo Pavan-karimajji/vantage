@@ -28,6 +28,7 @@ import copy
 import json
 import os
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Mapping
@@ -77,6 +78,40 @@ def _not_built(reason: str) -> None:
     pytest.skip(message)
 
 
+class _WorkerSetup(type(Path())):
+    """The lab's run setup as one parallel worker reads it (`scripts/run_tests.py` gives each worker
+    `VANTAGE_TEST_WORKER=<n>`). It is the lab's own path -- equal to it, with its folder beside the case's bundles --
+    and `read_text` returns the setup with `_w<n>` appended to `outputs.livemeas.name` (two workers running one case
+    would otherwise meet in `kLiveMeasNameHeld`) and `outputs.path` in the worker's own temporary folder (the lab's
+    names one beside the lab's own). Every test reads the name and the output from `LabCase.setup`, directly or through
+    `edit_setup`, so they all see the worker's. Unset, `lab_case` hands out the plain path and nothing changes."""
+
+    _worker: str | None = None
+
+    def read_text(self, *args, **kwargs) -> str:
+        text = super().read_text(*args, **kwargs)
+        if not self._worker or not self.name.endswith(".run.json"):
+            return text
+        declared = json.loads(text)
+        outputs = declared.get("outputs", {})
+        if isinstance(outputs.get("livemeas"), dict) and "name" in outputs["livemeas"]:
+            outputs["livemeas"]["name"] = f"{outputs['livemeas']['name']}_w{self._worker}"
+        if "path" in outputs:
+            folder = Path(tempfile.gettempdir()) / f"vantage_test_w{self._worker}"
+            folder.mkdir(parents=True, exist_ok=True)
+            outputs["path"] = (folder / Path(outputs["path"]).name).as_posix()
+        return json.dumps(declared, indent=1)
+
+
+def _worker_setup(setup: Path) -> Path:
+    worker = os.environ.get("VANTAGE_TEST_WORKER")
+    if not worker:
+        return setup
+    made = _WorkerSetup(setup)
+    made._worker = worker
+    return made
+
+
 def lab_case(topology: str, case: str, scenario: str = DEFAULT_SCENARIO) -> LabCase:
     """The case's files, or ``pytest.skip`` with the reason when the lab is not built."""
     root = lab_root()
@@ -106,7 +141,7 @@ def lab_case(topology: str, case: str, scenario: str = DEFAULT_SCENARIO) -> LabC
     if missing:
         _not_built(f"{index} names libraries that are not on this machine (built on another operating system?): {missing[0]}")
     python_dir = described.get("interfaces_python")
-    return LabCase(topology, scenario, case, setup, recording, index, libraries,
+    return LabCase(topology, scenario, case, _worker_setup(setup), recording, index, libraries,
                    Path(python_dir) if python_dir else None, entry.get("expect", "exact"), dict(case_entry))
 
 
@@ -161,8 +196,16 @@ def edit_recording(case: LabCase, dest: Path, edit: Callable[[list[Message]], It
     ``manifest_change(manifest)`` changes the manifest block (a dict, ``manifest_version`` left out) before it is written."""
     if case.interfaces_python is None:
         pytest.skip("lab not built: the index.json has no interfaces_python entry, so the recording writer cannot be found")
-    if str(case.interfaces_python) not in sys.path:
-        sys.path.insert(0, str(case.interfaces_python))
+    # One `adas_recording` for every test of a process, whichever test imports it first: the folder the engine was linked
+    # with (`recording_writer`), else the one the lab's index names. The two are different builds of the package, and
+    # the first import stays for the process -- so a worker that ran this test before `write_recording` met the older.
+    try:
+        from adas_sim.io.recording_writer import recording_writer
+
+        recording_writer()
+    except Exception:
+        if str(case.interfaces_python) not in sys.path:
+            sys.path.insert(0, str(case.interfaces_python))
     from adas_recording.writer import McapRecorder, TopicSpec
 
     messages, manifest, provenance, schemas = read_recording(case.recording)
