@@ -151,11 +151,15 @@ int runDump(const Attached& attached, const DumpOptions& options, std::ostream& 
     if (!options.follow) return kInspectOk;
     out.flush();
     if (status.status.load(std::memory_order_acquire) == 3U) {
-      for (const CycleView& view : readCycles(attached, cursor)) PrintCycle(view, *description, decoder, out);
+      const std::vector<CycleView> last = readCycles(attached, cursor);
+      if (const std::uint64_t skipped = cursor.takeSkipped(); skipped > 0) out << skipped << " steps skipped\n";
+      for (const CycleView& view : last) PrintCycle(view, *description, decoder, out);
       return kInspectOk;
     }
     if (writerGone(status)) {
-      for (const CycleView& view : readCycles(attached, cursor)) PrintCycle(view, *description, decoder, out);
+      const std::vector<CycleView> last = readCycles(attached, cursor);
+      if (const std::uint64_t skipped = cursor.takeSkipped(); skipped > 0) out << skipped << " steps skipped\n";
+      for (const CycleView& view : last) PrintCycle(view, *description, decoder, out);
       out << writerGoneLine(cursor.highestStep.value_or(status.heartbeat.load())) << "\n";
       return kInspectOk;
     }

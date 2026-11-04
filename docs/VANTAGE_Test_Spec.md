@@ -450,9 +450,9 @@ They are cited here and never restated (`R-REQ-4`).
 **Steps.** Run `running_example` `cut_c` on `F-LM-HELD`, kill the engine process while it is held, then start a second engine on the same name.
 - `.c1` **PASS:** the second opens, its run id differs from the first's, and a cycle for step 0 is read, per `SYS-0069` Accept. **FAIL:** an open refused, the same run id, or no cycle for step 0.
 
-**`SYT-LMW-12`** · T · fixture `F-LM-HELD`, `F-REC-EDIT`, `F-SETUP-EDIT`, `F-INSPECT` — The worker's own outcomes
+**`SYT-LMW-12`** · T · fixture `F-LM-HELD`, `F-SETUP-EDIT`, `F-INSPECT` — The worker's own outcomes
 **Serves.** `SYS-0070`
-**Steps.** Run `running_example` `cut_c`; run it on a copy of its recording cut mid-message; run `hang` with `limits.exec_timeout_ms` below the hang. Read the attached reader's status and outcome after each.
+**Steps.** Run `running_example` `cut_c`; run it with `held_probe`'s `PROBE_FAIL_AT_CALL: 3`; run `hang` with `limits.exec_timeout_ms` below the hang. Read the attached reader's status and outcome after each.
 - `.c1` **PASS:** finished with `pass`, `fail`, `timeout` in that order, per `SYS-0070` Accept. **FAIL:** any other outcome, or a status other than finished.
 
 **`SYT-LMW-13`** · T · fixture `F-LM-HELD`, `F-TAP`, `F-INSPECT` — A jump keeps one run id

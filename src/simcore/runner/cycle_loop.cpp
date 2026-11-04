@@ -248,6 +248,14 @@ struct Runner::Impl {
     bool handed = false;  // an input as the run was handed it (post-mutation), `IMP-0066`
   };
   std::vector<RunWrite> run_writes;
+  // What the engine itself last wrote on a port that is not on the bus (a `control` it made for a clock- or
+  // input-started stage): the live measurement holds it from then on, so the port keeps a value, with its age, in
+  // the steps the stage does not run (`SYS-0062`).
+  struct HeldWrite {
+    std::vector<std::uint8_t> payload;
+    std::int64_t time_ns = 0;
+  };
+  std::map<std::string, HeldWrite> held_writes;
 
   std::ofstream event_file;
   std::size_t lines_written = 0;
@@ -606,11 +614,19 @@ void Runner::SetLiveMeasurement(LiveMeasSink* sink) {
   // the ports whose payload is bulk (a source port is bulk when a stage input fed from it is).
   live_overridden_.clear();
   live_bulk_ports_.clear();
+  live_simulated_ports_.clear();
   if (sink == nullptr) return;
   for (const RecordedTopic& topic : recorded_topics_) {
     if (topic.post_mutation) live_overridden_.insert(topic.qualified_port);
   }
   for (const SpecStage& stage : impl_->spec.stages) {
+    if (stage.mode == "simulate") {
+      live_simulated_ports_.insert(stage.name + ".control");
+      live_simulated_ports_.insert(stage.name + ".refSync");
+      for (const SpecPort& spec_port : stage.ports) {
+        if (spec_port.dir == "pro") live_simulated_ports_.insert(stage.name + "." + spec_port.name);
+      }
+    }
     for (const SpecPort& spec_port : stage.ports) {
       if (spec_port.bulk) live_bulk_ports_.insert(stage.name + "." + spec_port.name);
     }
@@ -1101,6 +1117,7 @@ Result<bool> Runner::StepOnce() {
     for (const Impl::RunWrite& run_write : impl.run_writes) {
       if (is_per_run(run_write)) per_run_ports.insert(run_write.port);
     }
+    const std::set<std::string>& simulated = live_simulated_ports_;  // never shown from the bus (`R-SIM-26`)
     const auto bulk_flag = [&](const std::string& port) { return live_bulk_ports_.count(port) != 0; };
     std::map<std::string, std::size_t> runs_of_port;
     const auto add_run_value = [&](const Impl::RunWrite& run_write, bus::Origin origin) {
@@ -1115,15 +1132,33 @@ Result<bool> Runner::StepOnce() {
     };
     for (const std::string& port : impl.declared_ports) {
       const bus::SampleBuffer* buffer = bus_->Buffer(port);
-      const bus::Sample* sample = buffer == nullptr ? nullptr : buffer->Newest();
+      const bool simulated_port = simulated.count(port) != 0;
+      const bus::Sample* sample = (buffer == nullptr || simulated_port) ? nullptr : buffer->Newest();
       if (per_run_ports.count(port) != 0) {
-        const bus::Origin origin = sample != nullptr ? sample->value.origin : impl.origins[port];
+        // A value the engine wrote this step with no sample behind it (the `control` it made) is computed in this run.
+        const auto known = impl.origins.find(port);
+        const bus::Origin origin = simulated_port ? bus::Origin::Simulated
+                                   : sample != nullptr ? sample->value.origin
+                                   : (known != impl.origins.end() && known->second != bus::Origin::Unknown) ? known->second
+                                                                                                           : bus::Origin::Simulated;
         for (const Impl::RunWrite& run_write : impl.run_writes) {
           if (!run_write.handed && run_write.port == port) add_run_value(run_write, origin);
         }
         continue;
       }
-      if (sample == nullptr) continue;
+      if (sample == nullptr) {
+        // Not on the bus, not written this step: the engine's own last write there, held, with its age.
+        const auto held = impl.held_writes.find(port);
+        if (held == impl.held_writes.end()) continue;
+        StepValue value;
+        value.port = port;
+        value.payload = &held->second.payload;
+        value.origin = bus::Origin::Simulated;
+        value.age_ns = now_ns - held->second.time_ns;
+        value.bulk = bulk_flag(port);
+        report.values.push_back(std::move(value));
+        continue;
+      }
       StepValue value;
       value.port = port;
       value.payload = &sample->value.payload;
@@ -1139,6 +1174,12 @@ Result<bool> Runner::StepOnce() {
       if (count > 0) report.badges.push_back(StepBadge{key.first, key.second, count});
     }
     live_sink_->OnStep(report);
+    for (const Impl::RunWrite& run_write : impl.run_writes) {
+      const bus::SampleBuffer* on_bus = bus_->Buffer(run_write.port);
+      if (!run_write.handed && (simulated.count(run_write.port) != 0 || on_bus == nullptr || on_bus->Newest() == nullptr)) {
+        impl.held_writes[run_write.port] = Impl::HeldWrite{run_write.payload, now_ns};
+      }
+    }
   }
   // `IMP-0124`: only now, after the step's report is handed on, is the step recorded as completed in the cell.
   if (cell_last_step_ != nullptr && cell_has_step_ != nullptr) {

@@ -624,7 +624,7 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 - [x] **LAB-WP-05** — Running example scenarios: restart, fault, calibration · Makes `F-LAB-RESTART`, `F-LAB-FAULT`, `F-LAB-CAL`
 - [x] **LAB-WP-06** — Run setups, provisional values and the reference re-run · Makes `F-LM` and closes `G2` without Vantage
 - [x] **LAB-WP-07** — The other topologies, one file each · Added after the milestone, one corner case at a time
-- [~] **LAB-WP-08** — Camera, drills and the supervised run · The `G4` drills; needs `LAB-WP-05` and `LAB-WP-06`. Closed by `LAB-53` (`supervise.py`) and the supervised `hang` and `crash` cases passing.
+- [x] **LAB-WP-08** — Camera, drills and the supervised run · The `G4` drills; needs `LAB-WP-05` and `LAB-WP-06`.
 - [x] **LAB-WP-09** — The recorder on the `interfaces` writer (RCT C6, `D22`) · Needs `RCT:WP-11`; closes before `G2`, so every lab recording follows `RCT_Architecture.md` §6a by construction.
 - [x] **LAB-WP-10** — Cases for gate `G3`: periods with no common divisor, a renumbering library, a repeated trigger sample (owner, 2026-10-31) · Needs `LAB-WP-08`; the cases `VANTAGE_Test_Spec.md` runs for `SYS-0013`, `SYS-0047` and the catalogue of `G3`.
 - [x] **LAB-WP-11** — The `measurement_counter` wrap (`D24`) · Needs `LAB-WP-10`; the case `VANTAGE_Test_Spec.md` runs for `SYS-0049` and `RCT:SYS-0004` `SYT-HDR-04.c2`.
@@ -684,7 +684,7 @@ place (`R-REQ-6a`). Every box is `[ ]` until the tests named for the rows pass.
 | `[x]` | `LAB-50` | `LAB-WP-08` | `RCT:SYS-0001` | `src/lab_tools/car.py::Car.startComponent` — `renumber` and `counter_jump`. |
 | `[x]` | `LAB-51` | `LAB-WP-08` | `RCT:SYS-0016` | `src/lab_tools/recorder.py::apply_recording_edits` — `drop_sample`, `drop_ref_sync`. |
 | `[x]` | `LAB-52` | `LAB-WP-08` | — | `catalogue/running_example.yaml` — the drill scenarios and cases `hang`, `crash` of section 6.2. |
-| `[ ]` | `LAB-53` | `LAB-WP-08` | — | `src/lab_tools/supervise.py::run_under_supervisor` — starts `simengine --supervise`, returns exit code and the sealed `outcome`. |
+| `[x]` | `LAB-53` | `LAB-WP-08` | — | `src/lab_tools/supervise.py::run_under_supervisor` — starts `simengine --supervise`, returns exit code and the sealed `outcome`. |
 | `[x]` | `LAB-55` | `LAB-WP-09` | `RCT:IMP-0047` | `src/lab_tools/recorder.py::McapRecorder` — writes through the `interfaces` writer, found through `index.json`: `generate.py::write_index` adds the `interfaces` package's `python/` folder, which `lab_add_topology` passes in; the recording edits stay here. |
 | `[x]` | `LAB-56` | `LAB-WP-09` | `RCT:SYS-0037`, `RCT:SYS-0038`, `RCT:SYS-0039`, `RCT:SYS-0040`, `RCT:SYS-0041`, `RCT:SYS-0043` | `tests/test_recording.py` — `SYT-REC-01`, `SYT-REC-02`, `SYT-REC-03` `.c1` and `.c2`, and `ANL-06` `.c1` and `.c3`, the second writer planted in a copy of `src/`. |
 | `[x]` | `LAB-57` | `LAB-WP-10` | `RCT:SYS-0016` | `catalogue/coprime_periods.yaml` — source `X` 7 ms; `A` 11 ms reads `X`; `B` 13 ms reads `A` and `X`; no jitter; periods with no common divisor above 1 ms, so no stage shares a grid with another; resim cases `cut_a` (`A` measured) and `all_simulated`. |

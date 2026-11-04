@@ -93,9 +93,9 @@ std::vector<std::string> checkSteps(const std::vector<CycleView>& cycles, std::u
   return findings;
 }
 
-// IMP-0097: a simulated stage's runs are the values on its control port; each run leaves a value on the stage's
-// control, refSync and compState ports. A port holding only a value carried from an earlier step (age above 0)
-// counts for every run of this step: the stage wrote nothing new there.
+// IMP-0097: a simulated stage's runs in a step are the control values written in it (`age_ns` 0); each run leaves, in that step, one value
+// on the stage's control, refSync and compState ports (`age_ns` 0, in run order). A value carried from an earlier
+// step counts for no run: it is what a run that published nothing leaves.
 std::vector<std::string> checkRuns(const layout::MeasDescription& description, const std::vector<CycleView>& cycles) {
   std::vector<std::string> findings;
   for (const MeasStage& stage : description.stages()) {
@@ -104,18 +104,17 @@ std::vector<std::string> checkRuns(const layout::MeasDescription& description, c
     if (!control.has_value()) continue;  // nothing identifies this stage's runs
     for (const CycleView& view : cycles) {
       std::size_t runs = 0;
-      for (const MeasPortValue* value : ValuesOf(view, *control)) runs += value->omitted() ? 0 : 1;
+      for (const MeasPortValue* value : ValuesOf(view, *control)) runs += (!value->omitted() && value->age_ns() == 0) ? 1 : 0;
       for (const char* role : {kControlRole, kRefSyncRole, kCompStateRole}) {
         const std::string port = Joined(stage.name(), role);
         const std::optional<std::uint32_t> index = PortIndex(description, port);
         if (!index.has_value()) continue;
-        std::vector<const MeasPortValue*> values;
+        std::size_t written = 0;  // values this step wrote
         for (const MeasPortValue* value : ValuesOf(view, *index)) {
-          if (!value->omitted()) values.push_back(value);
+          if (!value->omitted() && value->age_ns() == 0) ++written;
         }
-        const bool carried = !values.empty() && values.back()->age_ns() > 0;
         for (std::size_t run = 0; run < runs; ++run) {
-          if (run < values.size() || carried) continue;
+          if (run < written) continue;
           findings.push_back("step " + std::to_string(view.step) + ": stage " + stage.name() + " run " +
                              std::to_string(run) + " has no value on port " + port);
         }
@@ -240,6 +239,7 @@ int runCheck(const Attached& attached, const CheckOptions& options, std::ostream
   FollowCursor cursor;
   std::string gone_line;
   const std::vector<CycleView> cycles = readToEnd(attached, cursor, gone_line);
+  if (const std::uint64_t skipped = cursor.takeSkipped(); skipped > 0) out << skipped << " steps skipped\n";
   if (!gone_line.empty()) out << gone_line << "\n";
 
   std::vector<std::string> findings = checkPorts(*description, cycles);

@@ -73,6 +73,21 @@ target_link_libraries(recording_dump PRIVATE simcore)
 add_executable(rewrite_recording support/rewrite_recording.cpp)
 target_link_libraries(rewrite_recording PRIVATE simcore)
 
+# VNT-WP-18 (VANTAGE, C2): the test tools of the live measurement and the supervisor -- IMP-0114 `F-READER`,
+# IMP-0115 `F-FLAWED-LM`, IMP-0116 `F-STRESS`, IMP-0117 `F-ISOLATE`. The reader and the stress tool use the layout
+# header and `SharedRegion` alone; the flawed writer uses the inspector's reader to copy a held run.
+add_executable(lm_reader support/lm_reader.cpp)
+target_link_libraries(lm_reader PRIVATE livemeas)
+target_include_directories(lm_reader PRIVATE ${CMAKE_SOURCE_DIR}/src)
+add_executable(lm_stress support/lm_stress.cpp)
+target_link_libraries(lm_stress PRIVATE livemeas)
+target_include_directories(lm_stress PRIVATE ${CMAKE_SOURCE_DIR}/src)
+add_executable(lm_flawed support/lm_flawed.cpp)
+target_link_libraries(lm_flawed PRIVATE inspector_core livemeas)
+target_include_directories(lm_flawed PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/inspector)
+add_executable(isolate_stage support/isolate_stage.cpp)
+target_link_libraries(isolate_stage PRIVATE simcore)
+
 # WP-06: modules/sim's first C++ test binary (WP-03's own scoping note: "no
 # gtest target, no C++ tests exist yet"). UT-IO-01..21 (io codec contract).
 set(SIM_TEST_SOURCES

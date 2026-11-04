@@ -725,6 +725,44 @@ TEST(RunStep, IMP0033ARunThatWaitedAndRanStepsAfterItsRecordedRunIsComparedWithI
   }
 }
 
+// `IMP-0080` (`R-SIM-26`): `C`'s recorded control arrives at 100 ms and its run waits to the 200 ms step. The report
+// shows no `C.control` value at the arrival step -- the function got nothing -- and one fresh value at the run's step,
+// the recorded arrival: the control the engine handed the run.
+struct ControlsOfC final : LiveMeasSink {
+  void OnStep(const StepReport& report) override {
+    std::vector<std::pair<std::string, std::int64_t>> here;
+    for (const StepValue& value : report.values) {
+      if (value.port == "C.control") here.emplace_back(std::string(value.payload->begin(), value.payload->end()), value.age_ns.value_or(-1));
+    }
+    seen.push_back(here);
+  }
+  std::vector<std::vector<std::pair<std::string, std::int64_t>>> seen;
+};
+
+TEST(RunStep, IMP_0080_ASimulatedStagesControlIsNeverTheRecordedArrivalBeforeItsRun) {
+  WaitingRun w(100'000);
+  Echo b_echo;
+  Echo c_echo;
+  ASSERT_TRUE(b_echo.ok() && c_echo.ok());
+  bus::PortBus bus;
+  testing::VectorReader reader(w.messages, w.topics);
+  testing::CapturingWriter sink;
+  io::WriterBase writer(sink);
+  auto built = BuildWaiting(w, b_echo, c_echo, bus, reader, writer);
+  ASSERT_TRUE(built.ok()) << built.error().Format();
+  Runner runner = std::move(built).value();
+  ControlsOfC controls;
+  runner.SetLiveMeasurement(&controls);
+  ASSERT_TRUE(runner.Run().ok());
+  ASSERT_EQ(controls.seen.size(), 3u);  // 50, 100 and 200 ms
+  EXPECT_EQ(controls.seen[0].size(), 1u);  // its first run
+  EXPECT_TRUE(controls.seen[1].size() == 1u && controls.seen[1][0].second > 0)
+      << "at the arrival step C.control is only the held value of its first run";
+  ASSERT_EQ(controls.seen[2].size(), 1u);  // the run's own control, written in this step
+  EXPECT_EQ(controls.seen[2][0].second, 0);
+  EXPECT_EQ(controls.seen[1][0].first, controls.seen[0][0].first);  // held, not the arrival
+}
+
 // The first-divergence tests that used a header-less stub output (`UT-RUN-05`, `UT-RUN-06`, `UT-RUN-07`, `SW-0116`,
 // `SW-0117`, `SW-0224`) now run on the echo stage and real `sig_header` messages: since `IMP-0033` pairs an output with
 // the recorded output of its own `measurement_counter`, an output with no counter is never compared. `n` instants,

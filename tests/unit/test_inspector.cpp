@@ -450,10 +450,13 @@ TEST(Inspector, IMP_0097_ARunWithNoRefSyncValueNamesStageStepAndPort) {
   const std::vector<std::string> findings = vi::checkRuns(description, planted);
   ASSERT_EQ(findings.size(), 1u);
   EXPECT_EQ(findings[0], "step 0: stage S run 1 has no value on port S.refSync");
-  // A port that only carries an earlier step's value stands for every run of this one.
+  // A value carried from an earlier step counts for no run: both runs lack a refSync value written in this step.
   const std::vector<vi::CycleView> carried = {
       Cycle(0, {V{0, kSeven}, V{0, kSeven}, V{1, kSeven, MeasPortValue::ORIGIN_SIMULATED, 500}, V{2, kSeven}, V{2, kSeven}})};
-  EXPECT_TRUE(vi::checkRuns(description, carried).empty());
+  const std::vector<std::string> strict = vi::checkRuns(description, carried);
+  ASSERT_EQ(strict.size(), 2u);
+  EXPECT_EQ(strict[0], "step 0: stage S run 0 has no value on port S.refSync");
+  EXPECT_EQ(strict[1], "step 0: stage S run 1 has no value on port S.refSync");
 }
 
 TEST(Inspector, IMP_0099_ABadgeCountThatFallsNamesBadgeSubjectAndBothSteps) {

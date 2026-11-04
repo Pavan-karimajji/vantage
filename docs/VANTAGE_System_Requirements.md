@@ -487,7 +487,7 @@ every `Accept` below.
 
 **`SYS-0070`** · `P0` · `R1` — The worker writes the outcome of an engine run that ends itself
 **Shall.** The worker shall close the live measurement with `pass` at the end of the recording or slice, `fail` on its own error, and `timeout` when a call exceeds `limits.exec_timeout_ms` (`ARCH §9`).
-**Accept.** On `running_example` `cut_c`, on a copy of its recording cut mid-message, and on `hang` with `limits.exec_timeout_ms` set, the inspector reads status finished with `pass`, `fail` and `timeout`.
+**Accept.** On `running_example` `cut_c`, on it with `held_probe` failing its third call, and on `hang` with `limits.exec_timeout_ms` set, the inspector reads status finished with `pass`, `fail` and `timeout`.
 **Binds.** `liveMeas`, `exitStatus`
 **Verify.** T · `SYT-LMW-12`   **Trace.** —
 

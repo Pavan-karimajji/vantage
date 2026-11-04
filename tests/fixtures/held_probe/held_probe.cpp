@@ -12,13 +12,16 @@
 ///   (`adas.df.CompState`, RUNNING). Each output's `measurement_counter`, `source_timestamp_us`,
 ///   `cycle_counter` and `sig_status` are copied from its control.
 ///
-///   Its one setting is its bundle's: `adasInit(NULL)` reads `<directory of this library>/config/default.yaml`
-///   (`R-SIM-3a`), a flat `KEY: value` line, with no default (a missing key makes `adasInit` return NULL):
-///     PROBE_GATE_FILE  the file whose existence releases the first call
+///   Its settings are its bundle's: `adasInit(NULL)` reads `<directory of this library>/config/default.yaml`
+///   (`R-SIM-3a`), flat `KEY: value` lines:
+///     PROBE_GATE_FILE     the file whose existence releases the first call; no default (a missing key makes
+///                         `adasInit` return NULL)
+///     PROBE_FAIL_AT_CALL  optional `n`: the n-th `adasExec` call returns 0, an error status; absent, none does
 /// @author Pavan Karimajji
 
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <memory>
@@ -46,6 +49,8 @@ namespace {
 struct Probe {
   std::string gate_file;
   bool released = false;
+  std::uint64_t fail_at_call = 0;  // 0: never
+  std::uint64_t calls = 0;
 };
 
 void* AnchorOfThisLibrary() { return reinterpret_cast<void*>(&AnchorOfThisLibrary); }
@@ -78,14 +83,20 @@ bool ReadBundle(const std::string& file, Probe& probe) {
   std::string line;
   while (std::getline(in, line)) {
     const std::size_t colon = line.find(':');
-    if (colon == std::string::npos || line.substr(0, colon) != "PROBE_GATE_FILE") continue;
+    if (colon == std::string::npos) continue;
+    const std::string key = line.substr(0, colon);
+    if (key != "PROBE_GATE_FILE" && key != "PROBE_FAIL_AT_CALL") continue;
     std::string value = line.substr(colon + 1);
     const std::size_t first = value.find_first_not_of(" \t");
     const std::size_t last = value.find_last_not_of(" \t\r\n");
-    probe.gate_file = first == std::string::npos ? std::string() : value.substr(first, last - first + 1);
-    return !probe.gate_file.empty();
+    value = first == std::string::npos ? std::string() : value.substr(first, last - first + 1);
+    if (key == "PROBE_GATE_FILE") {
+      probe.gate_file = value;
+    } else if (!value.empty()) {
+      probe.fail_at_call = std::strtoull(value.c_str(), nullptr, 10);
+    }
   }
-  return false;
+  return !probe.gate_file.empty();
 }
 
 bool FileExists(const std::string& path) {
@@ -178,6 +189,7 @@ ADAS_SIL_API int32_t adasExec(void* handle, double /*dtS*/, const AdasPortSet* i
       while (!FileExists(probe.gate_file)) std::this_thread::sleep_for(std::chrono::milliseconds(5));
       probe.released = true;
     }
+    if (++probe.calls == probe.fail_at_call) return 0;
     adas::common::CycleControl control;
     const AdasPort* control_port = Find(in, "control");
     if (control_port == nullptr || control_port->data == nullptr ||

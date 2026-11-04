@@ -808,6 +808,7 @@ class Runner {
   LiveMeasSink* live_sink_ = nullptr;
   std::set<std::string> live_overridden_;   // set with the sink, read at every step
   std::set<std::string> live_bulk_ports_;
+  std::set<std::string> live_simulated_ports_;  // a simulated stage's control, refSync and outputs
   std::uint8_t* cell_stage_bytes_ = nullptr;
   std::size_t cell_stage_count_ = 0;
   std::uint64_t* cell_last_step_ = nullptr;
