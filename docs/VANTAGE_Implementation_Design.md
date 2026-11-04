@@ -2,7 +2,7 @@
 
 **One document, not two.** The build order is on top, the design rows at the bottom. Part 8a
 holds the orchestrator (`C1`); part 8b the live measurement writer, the inspector and the
-supervisor (`C2`); part 8c adds its packages and rows after these.
+supervisor (`C2`); part 8c adds `WP-19` to `WP-28` and `IMP-0125` to `IMP-0217` after these.
 
 **Package numbers are ids, not positions.** The order is the order of the list below. **A
 package row says only what it alone knows** — the box, the headline, and why it sits where it
@@ -63,6 +63,16 @@ what the worker's writer left. It unblocks `LAB-53` (`VANTAGE_Lab_Design.md`), t
 `crash` cases, and the supervised run of `lab_tools.supervise`. A test whose lab output is missing
 skips with a printed reason (`R-TEST-3`).
 
+**`WP-20` lands `IMP-0112`.** `IMP-0112` stays `WP-17`'s row; `WP-20` is the package whose rows make it true, and its
+box is ticked with them. `WP-17` stays `[~]` until then.
+
+**`WP-23` and `WP-25` wait on three owner answers.** `IMP-0154` holds for either answer to open question 2 (it checks the hash);
+`IMP-0186` waits on open question 3 (where the grace lives); the recommendations are in `VANTAGE_System_Requirements.md` §21.
+
+**`WP-24` needs the supervisor.** It reads `<setup>.attempts.jsonl` and starts `--supervise`; both exist since `WP-17`.
+
+**`WP-28` is last.** It deletes a path only when no file under `src`, `tests` or `scripts` imports it; `IMP-0216` finds that.
+
 ## Order, and why
 
 The run setup first, because every other part is built from it. Then the sample buffers and the
@@ -72,6 +82,11 @@ readiness and jump of the orchestrator; then the runner that drives them through
 Equal outputs and the first divergence come once a step produces outputs; threads come last,
 after one thread is right and measured (`ARCH §8`, order of work). The source checks follow the
 code they scan, and the test group closes gate **G3** (`VANTAGE_DEV_PLAN.md` §5).
+
+Part 8c, in the order a suite stays green. The scenario script first, because it is new and nothing depends on it. Then the one place
+that starts the engine, so the launcher, the batch and the window all start it the same way. The launcher before its window, which
+only calls it; configuration and diagnostics beside them; the batch on the supervisor; determinism after the batch, whose runs it
+compares. Delivery after the parts it ships, and the retirement of the Python run path last, file by file.
 
 - [x] **WP-01** — Run setup loader · Every other part is built from the `RunSpec` it returns; Vantage's own setup writer changes with it, so every commit on `c1` builds and passes the unit suite.
 - [x] **WP-02** — Sample buffers, the header at the door, identity · The orchestrator decides from headers; selection finds samples by number here.
@@ -91,6 +106,16 @@ code they scan, and the test group closes gate **G3** (`VANTAGE_DEV_PLAN.md` §5
 - [x] **WP-16** — Inspector · Lands `RCT:IMP-0038`, `RCT:IMP-0039` and `check`; needs a writer to read and, for its tests, the engine.
 - [~] **WP-17** — Supervisor, the seal call and the crash record · Needs the writer's seal (`WP-14`) and a worker that writes (`WP-15`); the tests read what the inspector prints, so it follows `WP-16`. Closed by its rows' tests passing (`WP-18`) and `IMP-0112`.
 - [x] **WP-18** — The C2 tests and gate G4 · Needs everything above, the lab and `LAB-53`.
+- [ ] **WP-19** — The scenario-to-recording script · Independent of the engine; first, so a test can feed exactly the values it wants to every later package (`D22`). Needs the Python writer in `interfaces` (`RCT:WP-11`).
+- [ ] **WP-20** — One place starts the engine · Lands `IMP-0112` and the removal of `--config` and `--timeout-ms` (`D31 (1)`): the seven callers of `run_engine` move off `config_path` and `exec_timeout_ms` first, so no suite is red between the steps.
+- [ ] **WP-21** — The launcher · Needs `WP-20`: `launch` starts the engine through the one place.
+- [ ] **WP-22** — The launcher window · Needs `WP-21`: every window action is a call of the model it hardens.
+- [ ] **WP-23** — Configuration · Gives the engine its bundle check and the launcher its remaining load-time checks; the bundle's place is open question 2 (§21), so the check is by hash.
+- [ ] **WP-24** — Batch on the supervisor · Needs `WP-20` and the supervisor (`WP-17`): the loop starts `--supervise` per recording and reads the attempt record; its worker process is retired here.
+- [ ] **WP-25** — Diagnostics · The divergence grace row waits for open question 3 (§21).
+- [ ] **WP-26** — Determinism · Needs `WP-24`: the axes are read from the manifests of runs the batch face made.
+- [ ] **WP-27** — Delivery · After the parts it ships exist; the install tree is what `SYT-DLV-01` lists.
+- [ ] **WP-28** — Retire the Python run path · Last: each file goes in the step after which nothing imports it, with the tests that imported it.
 
 ```mermaid
 flowchart LR
@@ -120,6 +145,20 @@ flowchart LR
     WP16 --> WP17
     WP17 --> WP18["WP-18<br/>tests, G4"]
     LAB53["LAB-53<br/>supervise.py"] --> WP18
+    RCT11["RCT:WP-11<br/>Python writer"] --> WP19["WP-19<br/>scenario script"]
+    WP18 --> WP20["WP-20<br/>one engine start"]
+    WP20 --> WP21["WP-21<br/>launcher"]
+    WP21 --> WP22["WP-22<br/>window"]
+    WP21 --> WP23["WP-23<br/>configuration"]
+    WP21 --> WP25["WP-25<br/>diagnostics"]
+    WP20 --> WP24["WP-24<br/>batch"]
+    WP24 --> WP26["WP-26<br/>determinism"]
+    WP19 --> WP27["WP-27<br/>delivery"]
+    WP22 --> WP27
+    WP23 --> WP27
+    WP25 --> WP27
+    WP26 --> WP27
+    WP27 --> WP28["WP-28<br/>retire Python run path"]
 ```
 
 ---
@@ -259,3 +298,101 @@ the register's code table says.
 | `[x]` | `IMP-0122` | `SYS-0088`, `SYS-0089`, `SYS-0090`, `SYS-0091`, `SYS-0092`, `SYS-0093`, `SYS-0094`, `SYS-0095`, `SYS-0096`, `SYS-0097`, `SYS-0098`, `SYS-0099`, `SYS-0100`, `SYS-0101`, `SYS-0102`, `SYS-0103` | `WP-18` | `NEW` | `tests/system/test_vnt_supervisor.py` — `SYT-SUP-01` to `SYT-SUP-15`. | `SYT-SUP-01`, `SYT-SUP-02`, `SYT-SUP-03`, `SYT-SUP-04`, `SYT-SUP-05`, `SYT-SUP-06`, `SYT-SUP-07`, `SYT-SUP-08`, `SYT-SUP-09`, `SYT-SUP-10`, `SYT-SUP-11`, `SYT-SUP-12`, `SYT-SUP-13`, `SYT-SUP-14`, `SYT-SUP-15` |
 | `[x]` | `IMP-0123` | `SYS-0080` | `WP-18` | `NEW` | `tests/system/test_vnt_gate_g4.py` — gate `G4`: `SYT-INS-06` over every topology and the drill table of `VANTAGE_Test_Spec.md` §1a. | `SYT-INS-06` |
 | `[x]` | `IMP-0124` | `SYS-0100`, `SYS-0101` | `WP-17` | `EXTEND` | `include/simcore/runner.hpp::Runner::SetSupervisionCell`, `simcore.h::simEngineSetSupervisionCell` — `simcore.h` declares the cell's layout once (stage count, last completed step, one byte per stage in setup order); `Runner::ExecTicket` sets its stage's byte before `Component::Exec` and clears it after; `StepOnce` stores each step's number after handing on its report; with no cell, nothing. | `SYT-SUP-12`, `SYT-SUP-13` |
+| `[ ]` | `IMP-0125` | `SYS-0128`, `SYS-0131`, `SYS-0132`, `SYS-0133`, `SYS-0134` | `WP-19` | `NEW` | `src/adas_sim/scenario/record.py::record_scenario`, `main` — reads a scenario file of explicit values, builds each message of the stated interface type from its descriptor, writes them in time order and nothing else; starts no engine and calls no component. | `SYT-SCN-01`, `SYT-SCN-03`, `SYT-SCN-04`, `SYT-SCN-05` |
+| `[ ]` | `IMP-0126` | `SYS-0128`, `SYS-0131` | `WP-19` | `NEW` | `src/adas_sim/scenario/scenario_file.py::load_scenario` — checks every type and field of the scenario against the interface schemas and refuses an unknown one, naming it, before any file is written; a field not listed stays at its default. | `SYT-SCN-01`, `SYT-SCN-03` |
+| `[ ]` | `IMP-0127` | `SYS-0129`, `SYS-0130`, `SYS-0132` | `WP-19` | `NEW` | `src/adas_sim/scenario/write.py::write_scenario_recording` — writes through `adas_recording.writer.McapRecorder`, found by `recording_writer()`, with `source_kind` `synthetic`, each topic's schema and provenance and the scenario's `manifest` keys; calls no other writer. | `ANL-09`, `SYT-SCN-01`, `SYT-SCN-02` |
+| `[ ]` | `IMP-0128` | `SYS-0134` | `WP-19` | `EXTEND` | `src/adas_sim/cli/__init__.py::main` — the `record` verb dispatches to `scenario.record.main`; the verb parses arguments and delegates only. | `SYT-SCN-05` |
+| `[ ]` | `IMP-0129` | `SYS-0134` | `WP-19` | `DROP` | `src/adas_sim/cli/record.py` — deleted with its test files; its scripted source is `sources/`, retired in `WP-28`. | `SYT-SCN-05` |
+| `[ ]` | `IMP-0130` | `SYS-0130` | `WP-19` | `NEW` | `scripts/check_one_recording_writer.py [--root <dir>] [--selftest]` — scans `src/adas_sim/scenario` for a call of any recording writer but `McapRecorder`; one line per finding, exit 1 on any; `--selftest` plants `ANL-09` `.c2`; `ci_gate.py` runs it. | `ANL-09` |
+| `[ ]` | `IMP-0131` | `SYS-0128`, `SYS-0129`, `SYS-0131`, `SYS-0132`, `SYS-0133`, `SYS-0134` | `WP-19` | `NEW` | `tests/system/test_vnt_scenario.py` — `SYT-SCN-01` to `SYT-SCN-05`; every engine run goes through `tests/support/lab_cases.py::edit_setup`, so the parallel runner's per-worker names hold. | `SYT-SCN-01`, `SYT-SCN-02`, `SYT-SCN-03`, `SYT-SCN-04`, `SYT-SCN-05` |
+| `[ ]` | `IMP-0132` | `SYS-0108`, `SYS-0109`, `SYS-0110` | `WP-20` | `EXTEND` | `src/adas_sim/engine/bridge.py::run_engine` — takes `supervise`, `attempt_timeout_ms`, `restart_on_crash` and `threads`; builds one command line with `command_line` (`IMP-0151`); refuses `supervise` without `attempt_timeout_ms`, naming it, before any process starts; loses `config_path` and `exec_timeout_ms`. Lands `IMP-0112`. | `ANL-07`, `SYT-LCH-02` |
+| `[ ]` | `IMP-0133` | `SYS-0110` | `WP-20` | `EXTEND` | `src/simengine/main.cpp::ParseArgs`, the usage text — `--config` and `--timeout-ms` are no longer options (`D31 (1)`); `RunOnce` passes no configuration path and no call timeout to `simEngineCreate`; the tests that pass either are corrected in the same change. | `SYT-LCH-02` |
+| `[ ]` | `IMP-0134` | `SYS-0107`, `SYS-0108` | `WP-20` | `EXTEND` | `src/adas_sim/check/runner.py::check_scenario`, `check_scenarios`, `src/adas_sim/cli/check.py::run` — stop passing `config_path`; start runs only through `run_engine`. | `ANL-07` |
+| `[ ]` | `IMP-0135` | `SYS-0107`, `SYS-0108` | `WP-20` | `EXTEND` | `src/adas_sim/cli/resim.py::run`, `src/adas_sim/orchestrate/run.py::invoke_engine` — stop passing `config_path` and `exec_timeout_ms`; the call timeout is the setup's `limits.exec_timeout_ms`. | `ANL-07` |
+| `[ ]` | `IMP-0136` | `SYS-0107`, `SYS-0108` | `WP-20` | `EXTEND` | `src/adas_sim/orchestrate/worker.py::main` — stops passing `config_path`; the file is deleted in `WP-24`. | `ANL-07` |
+| `[ ]` | `IMP-0137` | `SYS-0107`, `SYS-0108` | `WP-20` | `EXTEND` | `tests/support/engine_runs.py::run_engine`, `tests/system/test_d6_doctor_cli.py`, `tests/system/test_d7_pin_builds_cli.py`, `tests/integration/test_ut_exe_05_exit_codes.cpp` — the engine start passes neither `--config` nor `--timeout-ms`; the setup carries what they carried. | `ANL-07` |
+| `[ ]` | `IMP-0138` | `SYS-0107`, `SYS-0108` | `WP-20` | `NEW` | `scripts/check_one_engine_start.py [--root <dir>] [--selftest]` — finds a process start naming the engine outside `engine/bridge.py`, and a start whose setup is not written in the same function; one line per finding, exit 1 on any; `--selftest` plants `ANL-07` `.c2`, `.c3`; `ci_gate.py` runs it. | `ANL-07` |
+| `[ ]` | `IMP-0139` | `SYS-0107`, `SYS-0108`, `SYS-0109`, `SYS-0110` | `WP-20` | `NEW` | `tests/system/test_vnt_engine_start.py` — `SYT-LCH-02` and `ANL-07`; engine runs go through `edit_setup`. | `ANL-07`, `SYT-LCH-02` |
+| `[ ]` | `IMP-0140` | `SYS-0106`, `SYS-0107`, `SYS-0110`, `SYS-0111`, `SYS-0197` | `WP-21` | `EXTEND` | `src/adas_sim/launcher/write.py::to_run_config`, `launch` — `launch` writes the setup, calls `run_engine` on that path and prints the exit code's meaning; nothing else of a selection survives the call. | `ANL-07`, `SYT-LCH-01`, `SYT-LCH-02`, `SYT-LCH-03` |
+| `[ ]` | `IMP-0141` | `SYS-0111` | `WP-21` | `EXTEND` | `src/adas_sim/diagnostics/errors.py::exit_code_meaning` — the name and one line for each of the eight codes of `SYS-0092`; any other value is `unknown`. | `SYT-LCH-03` |
+| `[ ]` | `IMP-0142` | `SYS-0112`, `SYS-0113` | `WP-21` | `EXTEND` | `src/adas_sim/launcher/cuts.py::cuts_for_recording`, `cuts_for_all` — from the topic index alone: per stage whether its outputs, `control` and `refSync` are present; no payload is opened. | `SYT-LCH-04` |
+| `[ ]` | `IMP-0143` | `SYS-0113`, `SYS-0114`, `SYS-0118` | `WP-21` | `EXTEND` | `src/adas_sim/launcher/model.py::Selection` — `set_mode` refuses `measured` for a stage the cuts mark infeasible, naming stage and ports; `offered_triggers(stage)` returns `control` only with the stage's `control` topic and declared inputs otherwise; every change returns a new `Selection`. | `SYT-LCH-01`, `SYT-LCH-04`, `SYT-LCH-05` |
+| `[ ]` | `IMP-0144` | `SYS-0115`, `SYS-0116`, `SYS-0117` | `WP-21` | `EXTEND` | `src/adas_sim/launcher/classify.py::classify`, `LaunchBlocked`, `src/adas_sim/graph/coherence.py::remedies` — block a broken chain naming path, landing stage and remedies; a waiver needs a flag and a reason and goes to `coherence_verdict`; a policy can forbid waivers; an orphan warns once. | `SYT-LCH-07` |
+| `[ ]` | `IMP-0145` | `SYS-0120` | `WP-21` | `EXTEND` | `src/adas_sim/launcher/availability.py::check_availability` — tells from the file system whether a library for the running platform exists, loads nothing, and gives the reason when it does not. | `SYT-LCH-06` |
+| `[ ]` | `IMP-0146` | `SYS-0119`, `SYS-0193` | `WP-21` | `EXTEND` | `src/adas_sim/runspec/emit.py::emit_run_spec` — writes each simulated stage's `impl.path` as one absolute library path; a stage with no library ends with an error naming the stage and the stem searched, before the file is written. | `SYT-LCH-06` |
+| `[ ]` | `IMP-0147` | `SYS-0121` | `WP-21` | `NEW` | `src/adas_sim/launcher/dry_run.py::dry_run`, `src/adas_sim/cli/explain.py::run` — the `explain` verb prints the resolved setup with each value's layer from `config/layers.py::Provenanced`, calls no component and starts no engine run. | `SYT-LCH-08` |
+| `[ ]` | `IMP-0148` | `SYS-0106`, `SYS-0107`, `SYS-0111`, `SYS-0112`, `SYS-0113`, `SYS-0114`, `SYS-0115`, `SYS-0116`, `SYS-0117`, `SYS-0118`, `SYS-0119`, `SYS-0120`, `SYS-0121`, `SYS-0193`, `SYS-0197`, `SYS-0198` | `WP-21` | `NEW` | `tests/system/test_vnt_launcher.py` — `SYT-LCH-01`, `SYT-LCH-03` to `SYT-LCH-08`. | `ANL-07`, `SYT-LCH-01`, `SYT-LCH-03`, `SYT-LCH-04`, `SYT-LCH-05`, `SYT-LCH-06`, `SYT-LCH-07`, `SYT-LCH-08` |
+| `[ ]` | `IMP-0149` | `SYS-0122`, `SYS-0123`, `SYS-0125`, `SYS-0126`, `SYS-0127` | `WP-22` | `NEW` | `src/adas_sim/launcher/window.py::LauncherWindow` — on `tkinter` only; draws `view.window_state`, and each widget command is one call of the launcher model or of `command.command_line`; adds a `window` verb in `src/adas_sim/cli/__init__.py`. | `ANL-08`, `SYT-WIN-01`, `SYT-WIN-02` |
+| `[ ]` | `IMP-0150` | `SYS-0124`, `SYS-0125` | `WP-22` | `NEW` | `src/adas_sim/launcher/view.py::window_state(selection, index)` — a plain value: each stage's offered modes, its libraries and availability, and the cuts per recording, from `cuts_for_all`, `check_availability` and `Selection`. | `SYT-WIN-02` |
+| `[ ]` | `IMP-0151` | `SYS-0123` | `WP-22` | `NEW` | `src/adas_sim/launcher/command.py::command_line(setup_path, face, deadline, threads)` — the one function that builds the engine's command line, called by `run_engine`, *copy command line* and *start*. | `SYT-WIN-01` |
+| `[ ]` | `IMP-0152` | `SYS-0122`, `SYS-0127` | `WP-22` | `NEW` | `scripts/check_window_boundary.py [--root <dir>] [--selftest]`, `scripts/check_no_graphical_toolkit.py` — the first scans `window.py` for a file access, a process start or a mode comparison; the second admits `tkinter` there and no other graphical import; `--selftest` plants `ANL-08` `.c2`, `.c3`; `ci_gate.py` runs both. | `ANL-08` |
+| `[ ]` | `IMP-0153` | `SYS-0122`, `SYS-0123`, `SYS-0124`, `SYS-0125`, `SYS-0126`, `SYS-0127`, `SYS-0194`, `SYS-0195` | `WP-22` | `NEW` | `tests/system/test_vnt_window.py` — `SYT-WIN-01`, `SYT-WIN-02` and `ANL-08`; ends with a printed reason where no display exists (`R-TEST-3`). | `ANL-08`, `SYT-WIN-01`, `SYT-WIN-02`, `SYT-WIN-03` |
+| `[ ]` | `IMP-0154` | `SYS-0144` | `WP-23` | `NEW` | `src/simcore/abi/simcore.cpp::CheckBundleHashes` — before `Runner::Construct`, recomputes each simulated stage's bundle hash over the folder the stage is initialised with and refuses a hash other than the setup's `config_bundle_sha256` with exit 2, naming the stage and both hashes. | `SYT-CFG-01` |
+| `[ ]` | `IMP-0155` | `SYS-0144`, `SYS-0145` | `WP-23` | `KEEP` | `src/adas_sim/config/bundle.py::BundleWriter`, `BundleReader`, `BundleMismatch`, `interfaces` `scripts/pack_config_bundle.py::bundle_sha256` — one hash function for a bundle, used by the build's pack step and by `CheckBundleHashes`. | `SYT-CFG-01` |
+| `[ ]` | `IMP-0156` | `SYS-0146` | `WP-23` | `EXTEND` | `src/adas_sim/config/project.py::ProjectModel` — compares the projects of the selected stages' bundles and warns once, naming both; `allow_mixed_projects` records the choice in the setup. | `SYT-CFG-02` |
+| `[ ]` | `IMP-0157` | `SYS-0147` | `WP-23` | `EXTEND` | `src/adas_sim/config/ego.py::EgoModel` — compares the bundles' `ego_params.yaml` and refuses a difference, naming both files and the key; there is no escape. | `SYT-CFG-02` |
+| `[ ]` | `IMP-0158` | `SYS-0149` | `WP-23` | `KEEP` | `src/adas_sim/config/layers.py::Layer`, `Provenanced`, `merge` — four layers; each leaf keeps layer, file and line. | `SYT-CFG-04` |
+| `[ ]` | `IMP-0159` | `SYS-0150` | `WP-23` | `KEEP` | `src/adas_sim/config/include.py::expand`, `resolve_vars` — includes and `${var}` resolve at load and each resolution is listed. | `SYT-CFG-04` |
+| `[ ]` | `IMP-0160` | `SYS-0156` | `WP-23` | `KEEP` | `src/adas_sim/config/roundtrip.py::round_trip`, `dump` — a configuration read and written is byte-identical. | `SYT-CFG-04` |
+| `[ ]` | `IMP-0161` | `SYS-0151`, `SYS-0152` | `WP-23` | `KEEP` | `src/adas_sim/config/schema.py::validate`, `check_version`, `src/adas_sim/cli/validate.py::run` — each kind's schema with the file and key path of each error; a missing or unknown version is refused naming both. | `SYT-CFG-05` |
+| `[ ]` | `IMP-0162` | `SYS-0153`, `SYS-0154`, `SYS-0155` | `WP-23` | `EXTEND` | `src/adas_sim/graph/pipeline.py::Pipeline` — refuses two producers of one port naming both, a required input with no producer naming the candidates, a type mismatch and a data port wired to `control`. | `SYT-CFG-06` |
+| `[ ]` | `IMP-0163` | `SYS-0157`, `SYS-0158` | `WP-23` | `KEEP` | `src/adas_sim/config/override.py::parse_override_verb`, `src/adas_sim/runspec/address.py` — the six verbs and the `[i]`, `[*]` grammar; a seventh verb and a predicate are refused when the setup is written. | `SYT-CFG-07` |
+| `[ ]` | `IMP-0164` | `SYS-0157`, `SYS-0158` | `WP-23` | `KEEP` | `include/simcore/mutate.hpp::Mutator`, `src/simcore/mutate/` — the six verbs by name; an unknown verb is a load error naming it; no verb adds an element; a `fixed_slots` port is cleared in place. | `SYT-CFG-07` |
+| `[ ]` | `IMP-0165` | `SYS-0159`, `SYS-0165` | `WP-23` | `EXTEND` | `src/simcore/abi/simcore.cpp::SimEngine::ManifestParts` — adds, beside C6's keys, one record per override and fault in force (address, verb, window as the setup has them) and each port's record policy (`D29 (1)`). | `SYT-CFG-08` |
+| `[ ]` | `IMP-0166` | `SYS-0161`, `SYS-0166` | `WP-23` | `EXTEND` | `src/simcore/runspec/load.cpp::LoadRunSpec` — refuses `excluded` or `decimate` on a port a simulated stage consumes, and a stage that needs a port listed in `sources[].absent`, each naming the port. | `SYT-CFG-08`, `SYT-CFG-09` |
+| `[ ]` | `IMP-0167` | `SYS-0160` | `WP-23` | `KEEP` | `src/adas_sim/ingest/map.py::IngestMap`, `IngestRecordingReader`, `scripts/check_anl_sw36.py` — a map renames and tags and computes nothing; the script takes its id from this set. | `SYT-CFG-09` |
+| `[ ]` | `IMP-0168` | `SYS-0163`, `SYS-0164` | `WP-23` | `KEEP` | `src/adas_sim/ingest/map.py::discover_ingest_maps_from_library_dirs` — resolves a component's map from beside its library only; a port claimed by two maps is an authoring error naming both. | `SYT-CFG-09` |
+| `[ ]` | `IMP-0169` | `SYS-0162` | `WP-23` | `EXTEND` | `src/simcore/io/translate.cpp::TranslatingReader::ReadRange` — a payload whose type is not its port's declared type sets `Batch::error` naming the port and both types, and is never coerced. | `SYT-CFG-09` |
+| `[ ]` | `IMP-0170` | `SYS-0144`, `SYS-0145`, `SYS-0146`, `SYS-0147`, `SYS-0148`, `SYS-0149`, `SYS-0150`, `SYS-0151`, `SYS-0152`, `SYS-0153`, `SYS-0154`, `SYS-0155`, `SYS-0156`, `SYS-0157`, `SYS-0158`, `SYS-0159`, `SYS-0160`, `SYS-0161`, `SYS-0162`, `SYS-0163`, `SYS-0164`, `SYS-0165`, `SYS-0166`, `SYS-0199` | `WP-23` | `NEW` | `tests/system/test_vnt_config.py` — `SYT-CFG-01` to `SYT-CFG-09`; engine runs go through `edit_setup`. | `SYT-CFG-01`, `SYT-CFG-02`, `SYT-CFG-03`, `SYT-CFG-04`, `SYT-CFG-05`, `SYT-CFG-06`, `SYT-CFG-07`, `SYT-CFG-08`, `SYT-CFG-09`, `SYT-CFG-10` |
+| `[ ]` | `IMP-0171` | `SYS-0135`, `SYS-0136`, `SYS-0141` | `WP-24` | `EXTEND` | `src/adas_sim/orchestrate/batch.py::run_batch` — for each recording writes a setup in the entry's own directory and calls `run_engine` with supervision and the deadline; a failed entry never stops the loop; the report's code is the attempt record's last outcome. | `SYT-BAT-01`, `SYT-BAT-02` |
+| `[ ]` | `IMP-0172` | `SYS-0137`, `SYS-0139` | `WP-24` | `NEW` | `src/adas_sim/orchestrate/attempts.py::read_attempts`, `last_outcome` — read `<setup>.attempts.jsonl`; `batch.py::_classify`, `_load_completed` and `reconcile` use it instead of `progress.json`. | `SYT-BAT-02`, `SYT-BAT-03` |
+| `[ ]` | `IMP-0173` | `SYS-0140` | `WP-24` | `KEEP` | `src/adas_sim/orchestrate/batch.py::sweep_configs`, `sweep` — one setup per value, differing in the value and the names derived from it. | `SYT-BAT-04` |
+| `[ ]` | `IMP-0174` | `SYS-0142` | `WP-24` | `EXTEND` | `src/adas_sim/orchestrate/readerror.py::retry`, `src/adas_sim/orchestrate/severity.py` — an entry the engine ends with exit 5 follows `skip`, `abort` or `retry N`; a skip is counted; another name is refused. | `SYT-BAT-05` |
+| `[ ]` | `IMP-0175` | `SYS-0138` | `WP-24` | `EXTEND` | `src/adas_sim/orchestrate/artifacts.py::run_dir`, `is_self_contained` — the entry's directory holds its setup, recording, event log, attempt record and reproducer and shares no file with another. | `SYT-BAT-03` |
+| `[ ]` | `IMP-0176` | `SYS-0143` | `WP-24` | `EXTEND` | `src/adas_sim/diagnostics/estimate.py::estimate_duration`, `src/adas_sim/cli/batch.py::run` — the estimate counts steps from the index and the clocks and prints its factor. | `SYT-BAT-06` |
+| `[ ]` | `IMP-0177` | `SYS-0135` | `WP-24` | `DROP` | `src/adas_sim/orchestrate/worker.py` — deleted with its tests; `batch.py` starts the engine itself. | `SYT-BAT-01` |
+| `[ ]` | `IMP-0178` | `SYS-0135`, `SYS-0136`, `SYS-0137`, `SYS-0138`, `SYS-0139`, `SYS-0140`, `SYS-0141`, `SYS-0142`, `SYS-0143` | `WP-24` | `NEW` | `tests/system/test_vnt_batch.py` — `SYT-BAT-01` to `SYT-BAT-06`; engine runs go through `edit_setup`. | `SYT-BAT-01`, `SYT-BAT-02`, `SYT-BAT-03`, `SYT-BAT-04`, `SYT-BAT-05`, `SYT-BAT-06` |
+| `[ ]` | `IMP-0179` | `SYS-0167` | `WP-25` | `KEEP` | `scripts/check_error_parity.py`, `src/adas_sim/diagnostics/errors.py` — the Python kinds and exit codes equal the C++ set; `ci_gate.py` runs the script. | `ANL-10` |
+| `[ ]` | `IMP-0180` | `SYS-0168` | `WP-25` | `EXTEND` | `src/adas_sim/diagnostics/diagnostics.py::doctor_report`, `src/adas_sim/cli/doctor.py::run` — report the engine, libraries, bundles and versions found, an unknown for any unreadable; the `Session` feasible-cut query and the viewer plug-in report are removed. | `SYT-DIA-01` |
+| `[ ]` | `IMP-0181` | `SYS-0169` | `WP-25` | `KEEP` | `src/adas_sim/diagnostics/suggest.py::near_matches` — the nearest names for a name the launcher does not know. | `SYT-DIA-02` |
+| `[ ]` | `IMP-0182` | `SYS-0170` | `WP-25` | `EXTEND` | `src/adas_sim/diagnostics/logging.py::log`, `src/adas_sim/diagnostics/events.py::Event`, `scripts/check_closed_sets.py` — a line carries `step=` where it had `tick=`; the event names are the C++ set's. | `ANL-10` |
+| `[ ]` | `IMP-0183` | `SYS-0171` | `WP-25` | `KEEP` | `src/adas_sim/diagnostics/summary.py::summarize`, `format_summary` — counts a run's warnings by kind from its own log lines at its end. | `SYT-DIA-03` |
+| `[ ]` | `IMP-0184` | `SYS-0172` | `WP-25` | `NEW` | `src/simcore/diagnostics/run_report.cpp::PrintRunReport` — at the end of an engine run prints steps, wall time, each simulated stage's library path, version, build and bundle hash, and the bytes read per topic from `ByteCounter`. | `SYT-DIA-04` |
+| `[ ]` | `IMP-0185` | `SYS-0173` | `WP-25` | `EXTEND` | `include/simcore/diagnostics.hpp::CycleTrace`, `ByteCounter`, `src/simcore/diagnostics/run_report.cpp` — a failure inside a diagnostic is logged and ends nothing. | `SYT-DIA-05` |
+| `[ ]` | `IMP-0186` | `SYS-0174` | `WP-25` | `NEW` | `src/simcore/runner/divergence.cpp::DivergenceLatch::InformationalFrom` — returns the first divergence's step plus the grace `⊘`; `Runner::WriteStep` sets `RawMessage::informational_only` from it. Blocked on open question 3 for the grace's source. | `SYT-DIA-06` |
+| `[ ]` | `IMP-0187` | `SYS-0175` | `WP-25` | `KEEP` | `src/simengine/main.cpp::PrintPid`, `WaitForAttach` — print the process id before any step and run none until released. | `SYT-DIA-07` |
+| `[ ]` | `IMP-0218` | `SYS-0192` | `WP-25` | `EXTEND` | `include/simcore/diagnostics.hpp::CycleTrace`, `src/simcore/runner/cycle_loop.cpp::Runner::StepOnce` — the trace is off unless asked for, holds one entry per run keyed by the step number and is never read by a decision. | `SYT-DIA-05` |
+| `[ ]` | `IMP-0188` | `SYS-0167`, `SYS-0168`, `SYS-0169`, `SYS-0170`, `SYS-0171`, `SYS-0172`, `SYS-0173`, `SYS-0174`, `SYS-0175`, `SYS-0192`, `SYS-0196` | `WP-25` | `NEW` | `tests/system/test_vnt_diagnostics.py` — `SYT-DIA-01` to `SYT-DIA-07` and `ANL-10`; engine runs go through `edit_setup`. | `ANL-10`, `SYT-DIA-01`, `SYT-DIA-02`, `SYT-DIA-03`, `SYT-DIA-04`, `SYT-DIA-05`, `SYT-DIA-06`, `SYT-DIA-07`, `SYT-DIA-08` |
+| `[ ]` | `IMP-0189` | `SYS-0184`, `SYS-0186`, `SYS-0187` | `WP-26` | `EXTEND` | `src/adas_sim/diagnostics/determinism.py::derive_axis`, `compare_exact` — axes same-process, fresh-process and thread-count, derived from the manifests' `process_nonce`, `library_sha256`, `host` and thread count; a pair differing in more than one dimension says so; the comparison is equal outputs over decoded values. | `SYT-DET-01`, `SYT-DET-03` |
+| `[ ]` | `IMP-0190` | `SYS-0185` | `WP-26` | `EXTEND` | `src/adas_sim/diagnostics/determinism.py::compare_with_tolerance`, `format_report` — rebuilt-binary and other-machine axes report their differences and the tolerance in force and never fail the gate. | `SYT-DET-02` |
+| `[ ]` | `IMP-0191` | `SYS-0188` | `WP-26` | `KEEP` | `src/adas_sim/diagnostics/tolerance.py::load_tolerance`, `ToleranceRow` — one declaration per component and field with a mandatory reason, default exact; its hash is in the manifest of a compared run. | `SYT-DET-02` |
+| `[ ]` | `IMP-0192` | `SYS-0189` | `WP-26` | `EXTEND` | `src/adas_sim/runspec/manifest.py::verify_pinned_builds`, `check_library_provenance` — a re-run is pinned to each `library_sha256` the recording carries; a mismatch names stage and both hashes; a locally built library is unpinnable. | `SYT-DET-04` |
+| `[ ]` | `IMP-0193` | `SYS-0184`, `SYS-0185`, `SYS-0186`, `SYS-0187` | `WP-26` | `EXTEND` | `src/adas_sim/cli/determinism.py::run` — prints the axis and the report of `format_report`; exit 1 only on an exact axis that differs. | `SYT-DET-01`, `SYT-DET-02`, `SYT-DET-03` |
+| `[ ]` | `IMP-0194` | `SYS-0184`, `SYS-0185`, `SYS-0186`, `SYS-0187`, `SYS-0188`, `SYS-0189` | `WP-26` | `NEW` | `tests/system/test_vnt_determinism.py` — `SYT-DET-01` to `SYT-DET-04`; engine runs go through `edit_setup`. | `SYT-DET-01`, `SYT-DET-02`, `SYT-DET-03`, `SYT-DET-04` |
+| `[ ]` | `IMP-0195` | `SYS-0176`, `SYS-0179` | `WP-27` | `EXTEND` | `conf/build.yml`, `CMakeLists.txt` install rules — install `simengine`, `vantage-inspect`, the `livemeas` library with `include/vantage/`, the `adas_sim` package and `versions.json`. | `SYT-DLV-01`, `SYT-DLV-03` |
+| `[ ]` | `IMP-0196` | `SYS-0177`, `SYS-0178` | `WP-27` | `EXTEND` | `src/simengine/CMakeLists.txt`, `src/adas_sim/io/recording_writer.py::find_recording_package` — `adas_recording.path` is installed beside `simengine` and names the `adas-interfaces` package folder; nothing outside the install tree is searched. | `SYT-DLV-02` |
+| `[ ]` | `IMP-0197` | `SYS-0179` | `WP-27` | `NEW` | `src/adas_sim/version.py::package_versions` — the package, port-model and ABI versions, separately, with the compatibility list written to `versions.json`. | `SYT-DLV-03` |
+| `[ ]` | `IMP-0198` | `SYS-0180` | `WP-27` | `NEW` | `src/adas_sim/selftest.py::run_selftest`, the `selftest` verb — runs the engine on a miniature recording shipped in the package and exits 0 or non-zero. | `SYT-DLV-03` |
+| `[ ]` | `IMP-0199` | `SYS-0181`, `SYS-0182`, `SYS-0183` | `WP-27` | `NEW` | `scripts/check_paths_one_place.py [--root <dir>] [--selftest]` — finds a second path join or library load outside the two places that own them; `--selftest` plants `ANL-11` `.c2`; `check_invariants.py` `GT-1` and `check_headers.py` are kept and run with it by `ci_gate.py`. | `ANL-11` |
+| `[ ]` | `IMP-0200` | `SYS-0176`, `SYS-0177`, `SYS-0178`, `SYS-0179`, `SYS-0180`, `SYS-0181`, `SYS-0182`, `SYS-0183` | `WP-27` | `NEW` | `tests/system/test_vnt_delivery.py` — `SYT-DLV-01` to `SYT-DLV-03` and `ANL-11`; engine runs go through `edit_setup`. | `ANL-11`, `SYT-DLV-01`, `SYT-DLV-02`, `SYT-DLV-03` |
+| `[ ]` | `IMP-0201` | `SYS-0190` | `WP-28` | `DROP` | `src/adas_sim/core/` — deleted with the tests that import it (the Python run path); nothing under `src` or `tests` imports it, which `ANL-13` finds. | `ANL-12`, `ANL-13` |
+| `[ ]` | `IMP-0202` | `SYS-0190` | `WP-28` | `DROP` | `src/adas_sim/session/` — deleted with the tests that import it (the Python cycle model and the viewer's `Session`); nothing under `src` or `tests` imports it, which `ANL-13` finds. | `ANL-12`, `ANL-13` |
+| `[ ]` | `IMP-0203` | `SYS-0190` | `WP-28` | `DROP` | `src/adas_sim/sources/` — deleted with the tests that import it (the scripted source; the scenario script replaced its job); nothing under `src` or `tests` imports it, which `ANL-13` finds. | `ANL-12`, `ANL-13` |
+| `[ ]` | `IMP-0204` | `SYS-0190` | `WP-28` | `DROP` | `src/adas_sim/player/` — deleted with the tests that import it (a viewer panel); nothing under `src` or `tests` imports it, which `ANL-13` finds. | `ANL-12`, `ANL-13` |
+| `[ ]` | `IMP-0205` | `SYS-0190` | `WP-28` | `DROP` | `src/adas_sim/io/cycles.py` — deleted with the tests that import it (the Python cycle model); nothing under `src` or `tests` imports it, which `ANL-13` finds. | `ANL-12`, `ANL-13` |
+| `[ ]` | `IMP-0206` | `SYS-0190` | `WP-28` | `DROP` | `src/adas_sim/graph/grid.py` — deleted with the tests that import it (the base grid); nothing under `src` or `tests` imports it, which `ANL-13` finds. | `ANL-12`, `ANL-13` |
+| `[ ]` | `IMP-0207` | `SYS-0190` | `WP-28` | `DROP` | `src/adas_sim/pyapi/engine.py` — deleted with the tests that import it (an alias of the engine bridge); nothing under `src` or `tests` imports it, which `ANL-13` finds. | `ANL-12`, `ANL-13` |
+| `[ ]` | `IMP-0208` | `SYS-0190` | `WP-28` | `DROP` | `src/adas_sim/pyapi/live.py` — deleted with the tests that import it (a socket server of a running `Session`); nothing under `src` or `tests` imports it, which `ANL-13` finds. | `ANL-12`, `ANL-13` |
+| `[ ]` | `IMP-0209` | `SYS-0190` | `WP-28` | `DROP` | `src/adas_sim/engine/refrun.py` — deleted with the tests that import it (a Python two-build comparison per tick); nothing under `src` or `tests` imports it, which `ANL-13` finds. | `ANL-12`, `ANL-13` |
+| `[ ]` | `IMP-0210` | `SYS-0190` | `WP-28` | `DROP` | `src/adas_sim/diagnostics/evidence.py` — deleted with the tests that import it (the evidence panel); nothing under `src` or `tests` imports it, which `ANL-13` finds. | `ANL-12`, `ANL-13` |
+| `[ ]` | `IMP-0211` | `SYS-0190` | `WP-28` | `DROP` | `src/adas_sim/diagnostics/explain.py` — deleted with the tests that import it (`explain` over a `Session`); nothing under `src` or `tests` imports it, which `ANL-13` finds. | `ANL-12`, `ANL-13` |
+| `[ ]` | `IMP-0212` | `SYS-0190` | `WP-28` | `DROP` | `src/adas_sim/resolve/plugins.py` — deleted with the tests that import it (viewer plug-in resolution); nothing under `src` or `tests` imports it, which `ANL-13` finds. | `ANL-12`, `ANL-13` |
+| `[ ]` | `IMP-0213` | `SYS-0190` | `WP-28` | `DROP` | `src/adas_sim/cli/run.py` — deleted with the tests that import it (the in-process `sim run` loop); nothing under `src` or `tests` imports it, which `ANL-13` finds. | `ANL-12`, `ANL-13` |
+| `[ ]` | `IMP-0214` | `SYS-0190` | `WP-28` | `DROP` | `scripts/check_coverage_delta.py`, `scripts/coverage_baseline.json`, `scripts/prove_equal.py`, `scripts/check_evidence_single_producer.py`, `scripts/check_trace.py` — deleted; each guarded a file or a gate that is gone, and `ci_gate.py` no longer names them. | `ANL-12`, `ANL-13` |
+| `[ ]` | `IMP-0215` | `SYS-0190`, `SYS-0191` | `WP-28` | `NEW` | `scripts/check_no_python_run.py [--root <dir>] [--selftest]` — finds an `adasExec` call or component execution under `src/adas_sim`, and a Python include or embedding call under `src/simcore`, `src/simengine`, `src/livemeas` and `src/inspector`; `--selftest` plants `ANL-12` `.c2`, `.c3`; `ci_gate.py` runs it. | `ANL-12`, `ANL-13` |
+| `[ ]` | `IMP-0216` | `SYS-0190` | `WP-28` | `NEW` | `scripts/check_no_retired_imports.py [--root <dir>] [--selftest]` — finds an import of a path `IMP-0201` to `IMP-0214` deleted; `--selftest` plants `ANL-13` `.c2`; `ci_gate.py` runs it. | `ANL-12`, `ANL-13` |
+| `[ ]` | `IMP-0217` | `SYS-0190`, `SYS-0191` | `WP-28` | `NEW` | `tests/system/test_vnt_python_side.py` — `ANL-12` and `ANL-13`. | `ANL-12`, `ANL-13` |
+| `[ ]` | `IMP-0219` | `SYS-0194`, `SYS-0195` | `WP-22` | `KEEP` | `src/adas_sim/launcher/model.py::Selection.isolate`, `group_state`, `group_control_view` — `isolate` sets one stage `simulate` and every other stage with recorded outputs `measured`; a group of stages in different modes is mixed and cannot be assigned a mode. | `SYT-WIN-03` |
+| `[ ]` | `IMP-0220` | `SYS-0196` | `WP-25` | `KEEP` | `src/adas_sim/diagnostics/logging.py::log`, `flush_deduped` — a message above `FLOOD_THRESHOLD` is one counted entry with the total, and one entry says counting began, naming the message and the threshold. | `SYT-DIA-08` |
+| `[ ]` | `IMP-0221` | `SYS-0198` | `WP-21` | `KEEP` | `src/adas_sim/runspec/canon.py::compute_spec_sha256`, `write_run_spec` — `spec_sha256` is the hash of the canonical setup content: unchanged by writing it again, changed by any one field. | `SYT-LCH-01` |
+| `[ ]` | `IMP-0222` | `SYS-0199` | `WP-23` | `NEW` | `src/simcore/abi/simcore.cpp::CheckSourceHashes` — before `Runner::Construct`, hashes each `sources[]` file and refuses a value other than its `sha256` with exit 2, naming the file and both hashes; `LoadRunSpec` still opens no file. | `SYT-CFG-10` |

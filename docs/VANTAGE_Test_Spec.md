@@ -1,10 +1,10 @@
 # VANTAGE — Test Specification
 
 **One file, one layer.** `SYT-<area>-nn` and `ANL-nn` verify `VANTAGE_System_Requirements.md`
-(areas declared there: `RUN`, `ORC`, `SEL`, `STP`, `THR`, `EQO`, `LMW`, `INS`, `SUP`). A test cites its
+(areas declared there: `RUN`, `ORC`, `SEL`, `STP`, `THR`, `EQO`, `LMW`, `INS`, `SUP`, `LCH`, `WIN`, `SCN`, `BAT`, `CFG`, `DIA`, `DLV`, `DET`). A test cites its
 requirement's `Accept` by UID and never restates it (`R-REQ-4`); every case states its FAIL
 side (`R-REQ-5`). Part 8a: the orchestrator (`C1`); part 8b: the live measurement writer, the
-inspector and the supervisor (`C2`). The lab cases named in the steps are those
+inspector and the supervisor (`C2`); part 8c: the launcher and its window, the scenario script, batch, configuration, diagnostics, delivery, determinism and the Python side. The lab cases named in the steps are those
 of `VANTAGE_Lab_Design.md` §6, written topology, scenario (`base` unless named) and resim case.
 
 ## Fixture catalogue
@@ -33,6 +33,15 @@ of `VANTAGE_Lab_Design.md` §6, written topology, scenario (`base` unless named)
 | `F-SUPERVISED` | `simengine --supervise --attempt-timeout-ms D` (optionally `--restart-on-crash N`) run on a lab case through `lab_tools.supervise` (`LAB-53`), with `F-LM-HELD`'s attached reader: the exit code, the attempt manifest, the reproducer folder and the outcome the reader reads after the end |
 | `F-ISOLATE` | `tests/support/isolate_stage.cpp`, a test asker that hosts one stage of a lab case through `RunIsolatedStage` and reports the outcome, the exit code and the stage it names |
 | `F-SRC-LM` | `src/simcore`, `src/simengine`, `src/inspector` and `src/livemeas` as checked in, and per check a copy with one planted violation |
+| `F-LAUNCH` | The launcher model driven from Python (`adas_sim.launcher`) on an `F-CASE`: a `Selection` of the case's stages, recording and libraries, the setup it writes, the command line it builds and the messages it prints; no process starts unless a step says so |
+| `F-SPY` | A process spy: the test replaces the process start of `adas_sim` with a recorder of every command line started and starts none unless the steps allow it |
+| `F-WINDOW` | `LauncherWindow` built on a withdrawn `tkinter` root over an `F-LAUNCH` selection and driven by the test calling the widgets' commands; where no display exists the test ends with a printed reason (`R-TEST-3`) |
+| `F-SCENARIO` | A scenario file of explicit values written by the test (message type, time, header counters, field values) and the recording `sim record` makes from it |
+| `F-BATCH` | `sim batch` run over a list of lab recordings with one run setup, into a fresh output directory: the status list, the attempt records, each entry's directory and the process starts seen by `F-SPY` |
+| `F-BUNDLE-EDIT` | An `F-CASE` whose stage's bundle folder is copied by the test beside a copy of the library with the one change its steps name (`library_with_bundle`) |
+| `F-INSTALL` | The install tree of `adas-vantage` made by `cmake --install` from the `sil` build into a fresh folder, with the source tree and the build tree hidden from the process under test |
+| `F-SRC-ADAS` | `src/adas_sim`, `src/simcore`, `src/simengine`, `src/livemeas`, `src/inspector` and `scripts` as checked in, and per check a copy with one planted violation |
+| `F-RUNS-PAIR` | Two engine-run recordings of one setup made by the steps (same process, fresh process, `--threads N`, a rebuilt library or an edited manifest) and the comparison `sim determinism` prints for them |
 
 ---
 
@@ -628,7 +637,294 @@ They are cited here and never restated (`R-REQ-4`).
 **Steps.** Run every exact case with `--supervise` and started directly; compare the engine-run recordings through `F-COMPARE` and the event logs line by line.
 - `.c1` **PASS:** equal outputs and identical event logs, per `SYS-0103` Accept. **FAIL:** any difference.
 
-## 11. Analysis — `ANL`
+## 11. The launcher — `LCH`
+
+**`SYT-LCH-01`** · T · fixture `F-LAUNCH` — The launcher keeps no state outside the setup
+**Serves.** `SYS-0106`, `SYS-0118`, `SYS-0197`, `SYS-0198`
+**Steps.** For `running_example` `cut_c`: write the setup from a `Selection`, read it back with `Selection.from_spec` and write it again. Then apply each of `set_mode`, `set_impl`, `isolate` and `add_recording` and write the original again.
+- `.c1` **PASS:** the two setups are byte-identical, per `SYS-0106` Accept. **FAIL:** one differing byte.
+- `.c2` **PASS:** after each change the original written as a setup is byte-identical to before, per `SYS-0118` Accept. **FAIL:** a changed original.
+- `.c3` **PASS:** two orders of the same choices write byte-identical setups, per `SYS-0197` Accept. **FAIL:** a difference.
+- `.c4` **PASS:** one `spec_sha256` for two writings and another for each changed field, per `SYS-0198` Accept. **FAIL:** a hash unchanged by a changed field, or changed by a rewrite.
+
+**`SYT-LCH-02`** · T · fixture `F-LAUNCH`, `F-SPY`, `F-ENGINE` — The engine is started from one function with its options
+**Serves.** `SYS-0109`, `SYS-0110`
+**Steps.** Call `run_engine` on `cut_c` with supervision and no deadline, then with a deadline; start the developer face and the batch face on `F-SPY`, then run both for real and compare.
+- `.c1` **PASS:** no deadline: an error naming `attempt_timeout_ms` and no process started; a deadline: `--attempt-timeout-ms` equal to it on the command line, per `SYS-0109` Accept. **FAIL:** a process started without a deadline, or another value.
+- `.c2` **PASS:** the developer command line is the setup path (and `--threads`, `--wait-for-attach` when asked), the batch one adds exactly `--supervise` and the deadline, per `SYS-0110` Accept. **FAIL:** any other option.
+- `.c3` **PASS:** the two runs are equal outputs on every port. **FAIL:** a difference.
+
+**`SYT-LCH-03`** · T · fixture `F-LAUNCH` — The exit code's meaning is printed
+**Serves.** `SYS-0111`
+**Steps.** Ask the launcher to print the meaning of each of the codes 0, 2, 3, 4, 5, 6, 7 and 8, and of 1 and 9.
+- `.c1` **PASS:** each of the eight prints its name and one line; 1 and 9 print as unknown, per `SYS-0111` Accept. **FAIL:** an unlisted code printed as a name, or a listed one printed as unknown.
+
+**`SYT-LCH-04`** · T · fixture `F-LAUNCH`, `F-REC-EDIT` — Feasible cuts come from the index and `measured` is checked against them
+**Serves.** `SYS-0112`, `SYS-0113`
+**Steps.** Report the cuts of each exact case's recording; report them again on a copy with every payload zeroed. On `running_example` `cut_c` select `C` `measured` on the recording with and without `C`'s output topic.
+- `.c1` **PASS:** the report names for each stage its outputs, control and refSync, and the zeroed copy gives the same report, per `SYS-0112` Accept. **FAIL:** a different report, or a payload opened.
+- `.c2` **PASS:** without the topic: an error naming `C` and the port and no file; with it: accepted, per `SYS-0113` Accept. **FAIL:** a setup written, or the stage or port unnamed.
+
+**`SYT-LCH-05`** · T · fixture `F-LAUNCH`, `F-REC-EDIT` — A trigger is offered only as the recording allows
+**Serves.** `SYS-0114`
+**Steps.** On `data_triggered`, list the triggers offered for `T`; list them again on a copy of the recording without `T`'s control topic.
+- `.c1` **PASS:** `in_X`, `in_Y` and, with the topic, `control`; without the topic no `control`, per `SYS-0114` Accept. **FAIL:** `control` offered without its topic, or an undeclared input offered.
+
+**`SYT-LCH-06`** · T · fixture `F-LAUNCH` — Each library is resolved to an absolute path and each source is hashed
+**Serves.** `SYS-0119`, `SYS-0120`, `SYS-0193`
+**Steps.** Write the setup of every lab case and read each simulated stage's `impl.path`; select a stem with no library; point a stage at a file of garbage bytes with a library's name and ask for its availability.
+- `.c1` **PASS:** every `impl.path` is absolute and names an existing file; a missing stem ends naming the stage and the stem, with no file written, per `SYS-0119` Accept. **FAIL:** a relative path, a missing file, or a setup written.
+- `.c2` **PASS:** the garbage file is reported present and no library load is made; a missing one is reported absent with the reason, per `SYS-0120` Accept. **FAIL:** a load attempt (an error naming the file's contents), or a missing file reported present.
+- `.c3` **PASS:** each `sources[].sha256` equals the file's hash; after an edit it no longer does, per `SYS-0193` Accept. **FAIL:** a hash that does not match the file.
+
+**`SYT-LCH-07`** · T · fixture `F-LAUNCH` — Coherence is classified at selection time
+**Serves.** `SYS-0115`, `SYS-0116`, `SYS-0117`
+**Steps.** On `measured_middle` select `A` and `B` `simulate` and `M` `measured`; repeat with a waiver and a reason, with a waiver and no reason, with a policy forbidding waivers, and with `M` `simulate`. Then select `A` `simulate` with `B` `off`, twice.
+- `.c1` **PASS:** the blocked selection ends naming the path `A`, `M`, `B` and a remedy and writes no file; with `M` `simulate` it passes, per `SYS-0115` Accept. **FAIL:** a setup written for the blocked selection, or the path unnamed.
+- `.c2` **PASS:** waiver and reason: the setup's `coherence_verdict` names both; without a reason or under the forbidding policy: refused and no file, per `SYS-0116` Accept. **FAIL:** a waived setup without the reason.
+- `.c3` **PASS:** the orphan prints one warning naming the stage however often validated, per `SYS-0117` Accept. **FAIL:** two warnings, or none.
+
+**`SYT-LCH-08`** · T · fixture `F-LAUNCH`, `F-SPY` — The dry run prints the setup with each value's layer
+**Serves.** `SYS-0121`
+**Steps.** Run the dry run on a lab configuration that sets values in two layers.
+- `.c1` **PASS:** every setup key is printed with its layer and no process starts, per `SYS-0121` Accept. **FAIL:** a key without a layer, or a process started.
+
+## 12. The launcher window — `WIN`
+
+**`SYT-WIN-01`** · T · fixture `F-WINDOW`, `F-SPY`, `F-ENGINE` — Copy command line is start
+**Serves.** `SYS-0123`, `SYS-0126`
+**Steps.** Add two lab recordings in the window, press *copy command line* and read the text; press *start* on `F-SPY` and read the command it starts; run the copied text in a shell and run *start* for real; list the files the window created.
+- `.c1` **PASS:** the copied text equals the started command, and the two real runs are equal outputs on every port, per `SYS-0123` Accept. **FAIL:** a different command line, or a difference in outputs.
+- `.c2` **PASS:** one setup names both recordings in `sources[]` and is the only file the window created, per `SYS-0126` Accept. **FAIL:** another file created or a recording missing.
+
+**`SYT-WIN-02`** · T · fixture `F-WINDOW`, `F-REC-EDIT` — The window shows what the model answers
+**Serves.** `SYS-0124`, `SYS-0125`
+**Steps.** Open the window on `running_example` `cut_c` with `C`'s outputs in the recording and on a copy without them; read each stage's offered modes, the library list and the cuts per recording; read the same from the launcher model.
+- `.c1` **PASS:** without `C`'s outputs the choices for `C` are `simulate` and `off`; with them `measured` too, per `SYS-0124` Accept. **FAIL:** `measured` offered without outputs.
+- `.c2` **PASS:** the libraries, modes and cuts shown equal the model's answers, per `SYS-0125` Accept. **FAIL:** one difference.
+
+**`SYT-WIN-03`** · T · fixture `F-WINDOW` — Isolate and the mixed group
+**Serves.** `SYS-0194`, `SYS-0195`
+**Steps.** On `running_example` `cut_c` press the isolate action on `B`; put `A` `simulate` and `B` `measured` in one group and read the group's state and try to choose it; then put both `simulate`.
+- `.c1` **PASS:** `B` is `simulate`, every other stage with recorded outputs `measured`, and a stage without outputs is not set `measured`, per `SYS-0194` Accept. **FAIL:** another stage set `simulate`, or `measured` without outputs.
+- `.c2` **PASS:** the mixed group shows as mixed and choosing it is refused; both `simulate` shows `simulate`, per `SYS-0195` Accept. **FAIL:** the mixed state chosen.
+
+## 13. The scenario-to-recording script — `SCN`
+
+**`SYT-SCN-01`** · T · fixture `F-SCENARIO` — A scenario's values are written exactly
+**Serves.** `SYS-0128`, `SYS-0132`
+**Steps.** Write a scenario of 12 messages of `adas.lab.LabSample` and `adas.common.CycleControl` with listed counters, times and field values; run `sim record` twice; decode the recording with its own descriptors.
+- `.c1` **PASS:** 12 messages decode to the listed values and every unlisted field is its default, per `SYS-0128` Accept. **FAIL:** an extra, missing or changed value.
+- `.c2` **PASS:** the two recordings have the same count, order and equal messages on every topic, per `SYS-0132` Accept. **FAIL:** a difference.
+
+**`SYT-SCN-02`** · T · fixture `F-SCENARIO` — The recording follows the conventions
+**Serves.** `SYS-0129`
+**Steps.** Run `check_recording.py` on the recording of `SYT-SCN-01`; open it with Vantage's reader and read its `manifest`.
+- `.c1` **PASS:** the check passes and the reader returns the `manifest`, per `SYS-0129` Accept. **FAIL:** either failing.
+
+**`SYT-SCN-03`** · T · fixture `F-SCENARIO` — A value the type does not have is refused
+**Serves.** `SYS-0131`
+**Steps.** Run `sim record` on a scenario naming an unknown type, on one naming an unknown field, and on a valid one.
+- `.c1` **PASS:** the first two end with an error naming the type or the field and no file; the valid one writes, per `SYS-0131` Accept. **FAIL:** a file written for an invalid scenario, or the name missing from the error.
+
+**`SYT-SCN-04`** · T · fixture `F-SCENARIO`, `F-ENGINE` — A scenario's recording is an engine input
+**Serves.** `SYS-0133`
+**Steps.** Make a scenario of `source.X` and `source.Y` samples; run `data_triggered` `by_data` on its recording; count `T`'s controls and the distinct `in_X` counters.
+- `.c1` **PASS:** the run exits 0 and `T` has one control per distinct counter, per `SYS-0133` Accept. **FAIL:** another exit code, or another count.
+
+**`SYT-SCN-05`** · T · fixture `F-SCENARIO`, `F-SPY` — `sim record` does nothing else
+**Serves.** `SYS-0134`
+**Steps.** Run `sim record` on `F-SPY` in an empty folder and list the files and the processes started.
+- `.c1` **PASS:** no process started and one file created, per `SYS-0134` Accept. **FAIL:** any start, or any second file.
+
+## 14. Batch — `BAT`
+
+**`SYT-BAT-01`** · T · fixture `F-BATCH` — One supervised run per recording
+**Serves.** `SYS-0135`
+**Steps.** Run a batch over three lab recordings of one topology and read each entry's setup and attempt record.
+- `.c1` **PASS:** three attempt records, and the three setups differ only in `sources[]`, `outputs.path` and `run_id`, per `SYS-0135` Accept. **FAIL:** a fourth start, or another difference.
+
+**`SYT-BAT-02`** · T · fixture `F-BATCH`, `F-CASE` — A failure never stops the batch
+**Serves.** `SYS-0136`, `SYS-0137`, `SYS-0141`
+**Steps.** Run a batch of `cut_c`, `crash`, `hang` (deadline below the hang) and `cut_c`; read the status list and the totals.
+- `.c1` **PASS:** all four run and report 0, 8, 7 and 0, per `SYS-0136` Accept. **FAIL:** fewer than four entries.
+- `.c2` **PASS:** the totals sum to four and each entry's code equals its attempt record's last outcome, per `SYS-0137` Accept. **FAIL:** a mismatch.
+- `.c3` **PASS:** the `hang` entry reports code 7 and the reason `timeout`, per `SYS-0141` Accept. **FAIL:** any other name.
+
+**`SYT-BAT-03`** · T · fixture `F-BATCH`, `F-SPY` — Each run has its own directory and a batch is resumable
+**Serves.** `SYS-0138`, `SYS-0139`
+**Steps.** Run a batch of three; compare the entries' directories; stop a second batch after one entry and run it again over the same directory.
+- `.c1` **PASS:** no file is shared between two directories and a passed entry opens with no other path, per `SYS-0138` Accept. **FAIL:** a shared file or an outside path.
+- `.c2` **PASS:** the repeat starts only the unfinished recordings, per `SYS-0139` Accept. **FAIL:** one repeated start.
+
+**`SYT-BAT-04`** · T · fixture `F-BATCH` — A sweep gives N runs differing in the value swept
+**Serves.** `SYS-0140`
+**Steps.** Sweep one key over three values on a lab case and diff the three setups.
+- `.c1` **PASS:** the pairwise differences are that key, `run_id` and `outputs.path`, per `SYS-0140` Accept. **FAIL:** another key differing.
+
+**`SYT-BAT-05`** · T · fixture `F-BATCH`, `F-REC-EDIT` — A read error follows a closed policy
+**Serves.** `SYS-0142`
+**Steps.** Run a batch of a cut-off recording and a whole one under `skip`, `abort`, `retry 2` and an unknown policy name.
+- `.c1` **PASS:** `skip` counts the cut-off one and goes on; `abort` ends the batch; `retry 2` records two further attempts; the unknown name is refused, per `SYS-0142` Accept. **FAIL:** a policy not followed, or an uncounted skip.
+
+**`SYT-BAT-06`** · T · fixture `F-BATCH`, `F-TAP` — The duration estimate counts steps
+**Serves.** `SYS-0143`
+**Steps.** Print the dry batch's estimate for each exact lab case and read the step tap's count for it.
+- `.c1` **PASS:** each estimate is a step count within the factor `⊘` of the tap's, and the factor is printed, per `SYS-0143` Accept. **FAIL:** an estimate in seconds, outside the factor, or with no factor.
+
+## 15. Configuration — `CFG`
+
+**`SYT-CFG-01`** · T · fixture `F-CASE`, `F-BUNDLE-EDIT`, `F-ENGINE` — A bundle must be the one the setup names
+**Serves.** `SYS-0144`, `SYS-0145`
+**Steps.** Run `cut_c` with one stage's bundle file edited; run it unedited; recompute each built lab component's `bundle.sha256` with `bundle_sha256`, then change one byte of a copy.
+- `.c1` **PASS:** the edited case ends with exit 2 naming the stage and both hashes before the first step; the unedited one runs, per `SYS-0144` Accept. **FAIL:** a run of the edited case, or a hash unnamed.
+- `.c2` **PASS:** every recomputed hash equals `bundle.sha256` and the changed copy differs, per `SYS-0145` Accept. **FAIL:** a mismatch on an unchanged bundle.
+
+**`SYT-CFG-02`** · T · fixture `F-LAUNCH`, `F-BUNDLE-EDIT` — Agreement between bundles
+**Serves.** `SYS-0146`, `SYS-0147`
+**Steps.** Select two stages whose bundles are for different projects, with and without `allow_mixed_projects`; select two whose `ego_params.yaml` differ in one value, then identical.
+- `.c1` **PASS:** one warning naming both, and with the flag it is recorded in the setup and not raised, per `SYS-0146` Accept. **FAIL:** no warning, or an error.
+- `.c2` **PASS:** the differing files end the launcher naming both files and the key; identical ones pass, per `SYS-0147` Accept. **FAIL:** an escape accepted or the key unnamed.
+
+**`SYT-CFG-03`** · T · fixture `F-CASE`, `F-BUNDLE-EDIT`, `F-ENGINE` — A calibration value changes with no rebuild
+**Serves.** `SYS-0148`
+**Steps.** On `renumber_lib` `shifted` run `A`'s library once with `LAB_A_RENUMBER` 0 and once with 1 in its bundle.
+- `.c1` **PASS:** `A`'s data outputs differ between the two runs from one library file, per `SYS-0148` Accept. **FAIL:** equal outputs, or a rebuild needed.
+
+**`SYT-CFG-04`** · T · fixture `F-LAUNCH` — Layers, includes and round trip
+**Serves.** `SYS-0149`, `SYS-0150`, `SYS-0156`
+**Steps.** Resolve a lab configuration with a key in two layers; resolve a split-by-includes configuration and its unsplit twin; read and write each lab configuration again.
+- `.c1` **PASS:** the later layer wins and the record names both, per `SYS-0149` Accept. **FAIL:** a value with no record.
+- `.c2` **PASS:** the two setups are byte-identical and each variable is listed, per `SYS-0150` Accept. **FAIL:** a difference or an unlisted variable.
+- `.c3` **PASS:** each configuration written equals its input byte for byte, per `SYS-0156` Accept. **FAIL:** one differing byte.
+
+**`SYT-CFG-05`** · T · fixture `F-LAUNCH` — Schema validation locates its errors
+**Serves.** `SYS-0151`, `SYS-0152`
+**Steps.** Run `sim validate` on a configuration with four planted errors, then on files with another schema version and with none, with no recording and no library present.
+- `.c1` **PASS:** each error names the file and the key path, per `SYS-0151` Accept. **FAIL:** an error with no location, or a recording needed.
+- `.c2` **PASS:** both files end with an error naming the version found and those accepted, per `SYS-0152` Accept. **FAIL:** a file accepted.
+
+**`SYT-CFG-06`** · T · fixture `F-LAUNCH` — Wiring is checked at load
+**Serves.** `SYS-0153`, `SYS-0154`, `SYS-0155`
+**Steps.** Wire a second producer to `D.in_C`; leave `D`'s input unwired; wire an output to an input of another type; wire a data port to a `control` port.
+- `.c1` **PASS:** an error naming both producers and the port, per `SYS-0153` Accept. **FAIL:** a wiring accepted.
+- `.c2` **PASS:** an error naming `D.in_C` and the candidates considered, per `SYS-0154` Accept. **FAIL:** a wiring accepted.
+- `.c3` **PASS:** each of the last two ends with an error naming both ports, per `SYS-0155` Accept. **FAIL:** a wiring accepted.
+
+**`SYT-CFG-07`** · T · fixture `F-CASE`, `F-SETUP-EDIT`, `F-ENGINE` — The override verbs are the closed list
+**Serves.** `SYS-0157`, `SYS-0158`
+**Steps.** Apply each of the six verbs to one lab port and compare every other port with an unmodified run; add a seventh verb, a predicate index, and a `drop` on a `fixed_slots` port.
+- `.c1` **PASS:** each verb changes its port and no other; the seventh ends with a load error naming it, per `SYS-0157` Accept. **FAIL:** another port changed, or the verb accepted.
+- `.c2` **PASS:** the predicate is refused at load; the `drop` leaves the element count, per `SYS-0158` Accept. **FAIL:** an element added or a predicate accepted.
+
+**`SYT-CFG-08`** · T · fixture `F-CASE`, `F-SETUP-EDIT`, `F-ENGINE` — The manifest records policies, overrides and faults
+**Serves.** `SYS-0159`, `SYS-0165`, `SYS-0166`
+**Steps.** Run a setup with two overrides and one fault; read the recording's `manifest`; run a setup with `excluded` on a consumed input and on an unconsumed output.
+- `.c1` **PASS:** three records equal to the setup's, windows included, per `SYS-0159` Accept. **FAIL:** a missing or extra record.
+- `.c2` **PASS:** `record_policies` lists every port of every stage with the setup's value, per `SYS-0165` Accept. **FAIL:** a missing port.
+- `.c3` **PASS:** the consumed input ends with a load error naming it; the unconsumed output runs, per `SYS-0166` Accept. **FAIL:** the consumed input accepted.
+
+**`SYT-CFG-09`** · T · fixture `F-CASE`, `F-REC-EDIT`, `F-SETUP-EDIT`, `F-LAUNCH` — Ingest maps and recorded types
+**Serves.** `SYS-0160`, `SYS-0161`, `SYS-0162`, `SYS-0163`, `SYS-0164`
+**Steps.** Read a recording through a map and the same recording renamed by hand; list `C.out` as `absent` on `cut_c`; retype one `A.out` message; give two maps one port; copy a library with its `ingest/` alone to a new folder, then without it.
+- `.c1` **PASS:** the two reads are equal, payload bytes included, per `SYS-0160` Accept. **FAIL:** a changed byte.
+- `.c2` **PASS:** a load error naming `C.out` before the first step; without the entry the case runs, per `SYS-0161` Accept. **FAIL:** a run with the entry.
+- `.c3` **PASS:** an error naming the port and both types, no coercion, per `SYS-0162` Accept. **FAIL:** a coerced value.
+- `.c4` **PASS:** an error naming both maps and the port, per `SYS-0163` Accept. **FAIL:** two maps accepted.
+- `.c5` **PASS:** the map is found beside the library; without it no checkout path is searched, per `SYS-0164` Accept. **FAIL:** a path outside the library's folder read.
+
+**`SYT-CFG-10`** · T · fixture `F-CASE`, `F-REC-EDIT`, `F-ENGINE` — A source file must be the one the setup hashes
+**Serves.** `SYS-0199`
+**Steps.** Run `cut_c`; run it again on a copy of the recording with one byte changed and the setup unchanged.
+- `.c1` **PASS:** the changed copy ends with a load error naming the file and both hashes before the first step; the unchanged case runs, per `SYS-0199` Accept. **FAIL:** a run on the changed copy.
+
+## 16. Diagnostics — `DIA`
+
+**`SYT-DIA-01`** · T · fixture `F-LAUNCH` — The environment report never raises
+**Serves.** `SYS-0168`
+**Steps.** Run `sim doctor` with the engine missing, one library unreadable and one bundle absent.
+- `.c1` **PASS:** exit 0 and each fact named as unknown or absent, per `SYS-0168` Accept. **FAIL:** an exception or a missing fact.
+
+**`SYT-DIA-02`** · T · fixture `F-LAUNCH` — A wrong name gets the nearest names
+**Serves.** `SYS-0169`
+**Steps.** Select a stage named `Dd` on `running_example`, then a name with nothing near it.
+- `.c1` **PASS:** `D` is among the suggestions and the far name gives none, per `SYS-0169` Accept. **FAIL:** no suggestion for `Dd`, or a suggestion for the far name.
+
+**`SYT-DIA-03`** · T · fixture `F-BATCH`, `F-CASE` — A run ends with its warnings counted
+**Serves.** `SYS-0171`
+**Steps.** Run a lab case with two fallbacks and one with none through the launcher and read the last lines.
+- `.c1` **PASS:** the first ends with a summary naming the kind and 2; the second prints none, per `SYS-0171` Accept. **FAIL:** a wrong count or a summary where none is due.
+
+**`SYT-DIA-04`** · T · fixture `F-ENGINE`, `F-TAP` — The run report
+**Serves.** `SYS-0172`
+**Steps.** Run `cut_c`, read the printed report and the step tap, and sum the payload bytes the recording holds per topic.
+- `.c1` **PASS:** steps equal the tap's, bytes per topic equal the bytes read and each simulated stage is listed with path, version, build and bundle hash, per `SYS-0172` Accept. **FAIL:** a count differing or a stage missing.
+
+**`SYT-DIA-05`** · T · fixture `F-CASE`, `F-ENGINE` — No diagnostic ends a run, and the trace changes no value
+**Serves.** `SYS-0173`, `SYS-0192`
+**Steps.** Run `cut_c` with the trace on an unwritable path and with the report and the byte counter made to fail; run it with the trace on a writable path and without it.
+- `.c1` **PASS:** exit 0 and equal outputs to a run without them, per `SYS-0173` Accept. **FAIL:** a changed exit code or output.
+- `.c2` **PASS:** the trace holds one entry per run with its step and the outputs equal the untraced run's, per `SYS-0192` Accept. **FAIL:** a missing or unkeyed entry, or a changed output.
+
+**`SYT-DIA-06`** · T · fixture `F-CASE`, `F-ENGINE` — Data after the first divergence is flagged
+**Serves.** `SYS-0174`
+**Steps.** Run `renumber_lib` `shifted` with the lab's provisional grace and read each recorded message's flag.
+- `.c1` **PASS:** messages from the first divergence plus the grace are flagged informational and earlier ones are not, per `SYS-0174` Accept. **FAIL:** a flag before the point, or none after it.
+
+**`SYT-DIA-07`** · T · fixture `F-ENGINE` — The engine waits when asked
+**Serves.** `SYS-0175`
+**Steps.** Start `cut_c` with `--wait-for-attach`; read the printed process id and the step count; release it; start it without the option.
+- `.c1` **PASS:** the id is printed and no step runs until release; without the option no wait, per `SYS-0175` Accept. **FAIL:** a step before release.
+
+**`SYT-DIA-08`** · T · fixture `F-CASE`, `F-ENGINE` — A flood is one counted entry
+**Serves.** `SYS-0196`
+**Steps.** Run a lab case that raises one warning at every step and read its log with the lab's provisional flood threshold.
+- `.c1` **PASS:** the message is logged once with its total count, one entry says counting began naming message and threshold, and other messages stay visible, per `SYS-0196` Accept. **FAIL:** a line per step, a lost message, or no count.
+
+## 17. Delivery — `DLV`
+
+**`SYT-DLV-01`** · T · fixture `F-INSTALL` — The package holds its four parts
+**Serves.** `SYS-0176`
+**Steps.** List the install tree.
+- `.c1` **PASS:** `simengine`, `vantage-inspect`, the `livemeas` library with its headers and the `adas_sim` package, per `SYS-0176` Accept. **FAIL:** one missing.
+
+**`SYT-DLV-02`** · T · fixture `F-INSTALL`, `F-CASE` — A consumer needs only the package
+**Serves.** `SYS-0177`, `SYS-0178`
+**Steps.** With the source and build trees hidden, start the launcher from the install tree on a lab case; call `recording_writer()`; remove `adas_recording.path` and call it again.
+- `.c1` **PASS:** the engine is found and the case exits 0, per `SYS-0177` Accept. **FAIL:** a path outside the install tree needed.
+- `.c2` **PASS:** the module is under the folder the file names; without the file an error names it, per `SYS-0178` Accept. **FAIL:** a module found by search.
+
+**`SYT-DLV-03`** · T · fixture `F-INSTALL` — Versions and the self-test
+**Serves.** `SYS-0179`, `SYS-0180`
+**Steps.** Read the installed version file; change one of its three versions in a copy; run the self-test, then with the engine's library renamed.
+- `.c1` **PASS:** three separate versions and a compatibility list; the other two unchanged by the edit, per `SYS-0179` Accept. **FAIL:** versions tied together.
+- `.c2` **PASS:** exit 0, and non-zero with the library renamed, per `SYS-0180` Accept. **FAIL:** exit 0 after the rename.
+
+## 18. Determinism — `DET`
+
+**`SYT-DET-01`** · T · fixture `F-CAT`, `F-RUNS-PAIR` — The three exact axes
+**Serves.** `SYS-0184`
+**Steps.** For every exact lab case run it twice in one process, in a fresh process, and with `--threads N` for N from 2 to its simulated stages; compare each pair.
+- `.c1` **PASS:** every pair is equal outputs, per `SYS-0184` Accept. **FAIL:** any difference outside `cycle_counter`, named by port and step.
+
+**`SYT-DET-02`** · T · fixture `F-RUNS-PAIR` — The measured axes and the tolerance file
+**Serves.** `SYS-0185`, `SYS-0188`
+**Steps.** Compare a run with its rebuild (a library differing in `library_sha256`); give a tolerance file with a field and no reason.
+- `.c1` **PASS:** the differences, the axis and the declared tolerance are printed and the exit code is 0, per `SYS-0185` Accept. **FAIL:** a failing exit code.
+- `.c2` **PASS:** the file with no reason is refused naming it; the compared run's manifest carries the hash of the file in force, per `SYS-0188` Accept. **FAIL:** a tolerance accepted without a reason.
+
+**`SYT-DET-03`** · T · fixture `F-RUNS-PAIR` — The axis and the comparison
+**Serves.** `SYS-0186`, `SYS-0187`
+**Steps.** Compare two recordings of one run differing in `process_nonce` only, then in `library_sha256` also; compare two differing in `run_id` and nonce; change one port value in a copy.
+- `.c1` **PASS:** the first pair is the fresh-process axis, the second is reported as more than one dimension, per `SYS-0186` Accept. **FAIL:** a wrong axis or none named.
+- `.c2` **PASS:** the pair differing in `run_id` and nonce is equal; the changed value is reported with port and step, per `SYS-0187` Accept. **FAIL:** a file-byte comparison, or the value unreported.
+
+**`SYT-DET-04`** · T · fixture `F-CASE`, `F-ENGINE` — A re-run is pinned to the recorded libraries
+**Serves.** `SYS-0189`
+**Steps.** Run `cut_c` on a recording whose manifest names each `library_sha256` with `--pin-builds` and with one library replaced by another build.
+- `.c1` **PASS:** the unchanged run passes; the replaced one ends naming the stage and both hashes; a locally built library is reported unpinnable, per `SYS-0189` Accept. **FAIL:** a replaced library accepted.
+
+## 19. Analysis — `ANL`
 
 **`ANL-01`** · A · fixture `F-SRC` — Decisions read no clock and no other payload
 **Serves.** `SYS-0017`
@@ -671,11 +967,57 @@ They are cited here and never restated (`R-REQ-4`).
 - `.c2` **PASS:** the planted `liveMeasStep` is reported with file and line. **FAIL:** the copy passes.
 - `.c3` **PASS:** the planted `Exec` call is reported with file and line. **FAIL:** the copy passes.
 
-## 12. Thresholds not yet supplied
+**`ANL-07`** · A · fixture `F-SRC-ADAS` — One place starts `simengine`, from a file just written
+**Serves.** `SYS-0107`, `SYS-0108`
+**Steps.** Run `scripts/check_one_engine_start.py` over `src/adas_sim`; then over a copy with a planted engine start from a `Selection` argument in `src/adas_sim/launcher/write.py`, and over a copy with a planted process start naming `simengine` in `src/adas_sim/cli/resim.py`.
+- `.c1` **PASS:** no finding, per `SYS-0107` and `SYS-0108` Accept. **FAIL:** any finding.
+- `.c2` **PASS:** the planted start from a selection is reported with file and line. **FAIL:** the copy passes.
+- `.c3` **PASS:** the planted second start is reported with file and line. **FAIL:** the copy passes.
+
+**`ANL-08`** · A · fixture `F-SRC-ADAS` — The window holds no logic and one toolkit
+**Serves.** `SYS-0122`, `SYS-0127`
+**Steps.** Run `scripts/check_window_boundary.py` and `scripts/check_no_graphical_toolkit.py` over `src/adas_sim/launcher/window.py`; then over copies with a planted file read, a planted process start, a planted rule (a comparison of a mode string) and a planted third-party import.
+- `.c1` **PASS:** no finding, per `SYS-0122` and `SYS-0127` Accept. **FAIL:** any finding.
+- `.c2` **PASS:** each of the three planted violations of the first check is reported with file and line. **FAIL:** a copy passes.
+- `.c3` **PASS:** the planted import is reported with file and line. **FAIL:** the copy passes.
+
+**`ANL-09`** · A · fixture `F-SRC-ADAS` — One recording writer in the scenario script
+**Serves.** `SYS-0130`
+**Steps.** Run `scripts/check_one_recording_writer.py` over `src/adas_sim/scenario`; then over a copy with a planted `mcap.McapWriter(` call.
+- `.c1` **PASS:** no finding, per `SYS-0130` Accept. **FAIL:** any finding.
+- `.c2` **PASS:** the planted call is reported with file and line. **FAIL:** the copy passes.
+
+**`ANL-10`** · A · fixture `F-SRC-ADAS` — The closed sets match in both languages
+**Serves.** `SYS-0167`, `SYS-0170`
+**Steps.** Run `scripts/check_error_parity.py` and `scripts/check_closed_sets.py` over the tree; then over a copy with one error kind renamed in `diagnostics/errors.py` and over a copy with an `event=` name added to `diagnostics/events.py` only.
+- `.c1` **PASS:** no finding, per `SYS-0167` and `SYS-0170` Accept. **FAIL:** any finding.
+- `.c2` **PASS:** the renamed kind is reported with file and line. **FAIL:** the copy passes.
+- `.c3` **PASS:** the added event is reported with file and line. **FAIL:** the copy passes.
+
+**`ANL-11`** · A · fixture `F-SRC-ADAS` — Delivery source checks
+**Serves.** `SYS-0181`, `SYS-0182`, `SYS-0183`
+**Steps.** Run `check_invariants.py`'s `GT-1`, `scripts/check_paths_one_place.py` and `scripts/check_headers.py`; then over copies with a planted component name in `src/adas_sim`, a planted second path join in `src/adas_sim/cli`, and a planted file without a header.
+- `.c1` **PASS:** no finding, per `SYS-0181`, `SYS-0182` and `SYS-0183` Accept. **FAIL:** any finding.
+- `.c2` **PASS:** each of the three planted violations is reported with file and line. **FAIL:** a copy passes.
+
+**`ANL-12`** · A · fixture `F-SRC-ADAS` — Python runs no component and the engine calls no Python
+**Serves.** `SYS-0190`, `SYS-0191`
+**Steps.** Run `scripts/check_no_python_run.py` over the tree; then over a copy with a planted `adasExec` call in `src/adas_sim/launcher/model.py` and over a copy with a planted `#include <Python.h>` in `src/simcore/runner/cycle_loop.cpp`.
+- `.c1` **PASS:** no finding, per `SYS-0190` and `SYS-0191` Accept. **FAIL:** any finding.
+- `.c2` **PASS:** the planted call is reported with file and line. **FAIL:** the copy passes.
+- `.c3` **PASS:** the planted include is reported with file and line. **FAIL:** the copy passes.
+
+**`ANL-13`** · A · fixture `F-SRC-ADAS` — Nothing imports a retired module
+**Serves.** `SYS-0190`
+**Steps.** Run `scripts/check_no_retired_imports.py` over `src`, `tests` and `scripts`; then over a copy with a planted `import adas_sim.session` in `src/adas_sim/launcher/model.py`.
+- `.c1` **PASS:** no finding, per `SYS-0190` Accept. **FAIL:** any finding.
+- `.c2` **PASS:** the planted import is reported with file and line. **FAIL:** the copy passes.
+
+## 20. Thresholds not yet supplied
 
 No pass bound here is a `⊘`: every pass is equality with the fake car's recording or a count the
 recording gives. The `⊘` values of the run setup (`VANTAGE_Architecture.md` §4) are run inputs,
-taken from the lab's provisional values (`VANTAGE_Lab_Design.md` §7), never pass bounds.
+taken from the lab's provisional values (`VANTAGE_Lab_Design.md` §7), never pass bounds. Part 8c adds two `⊘` values that are run inputs too: the duration estimate's factor (`SYT-BAT-06`) and the divergence grace (`SYT-DIA-06`); each test prints the value it used.
 
 ---
 

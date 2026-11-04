@@ -58,6 +58,17 @@ budget_history:
       retirement is three rows. Nothing was compressed to fit. Part 8c, two
       parts, has 15 SYS and none left for IMP under this basis: it is the one to
       check against it.
+  - date: 2026-11-04
+    change: "no change to the basis; IMP is 222 against 120, SYS is 199 against 120"
+    why: >-
+      Part 8c states the last two parts (the launcher with its window and the scenario script; batch, configuration,
+      diagnostics, delivery and determinism) and disposes the Python run path, in 94 SYS and 98 IMP rows, about
+      47 SYS and 49 IMP per part against 15 and 15 expected; the whole set holds 199 SYS and 222 IMP. The basis
+      was too small for these parts, not the rows too many: the register carries 769 sim rows that stay with Vantage, which
+      94 system rows now state, and each implementation row names one file and its symbols (R-REQ-3). 16 of the IMP
+      rows are a DROP of a retired path and 10 are a test file, one per area. Nothing was compressed to fit and no
+      obligation was invented to place a register row; the rows no SYS row states are listed in the report of part 8c
+      with a recommendation each.
 
 limits:
   requirement_words: 60
@@ -109,3 +120,19 @@ ports:
         proto_type: the supervisor's record of each attempt (ARCH §3.7)
       - name: reproducer
         proto_type: the package the supervisor writes after a crash (ARCH §3.7)
+      - name: launcherChoice
+        proto_type: what the developer chooses in the launcher - recording, project, each stage's mode and implementation, overrides, triggers
+      - name: commandLine
+        proto_type: the command line that starts an engine run, as built, printed or copied
+      - name: scenarioFile
+        proto_type: a scenario file of explicit values (message type, time, header counters, field values)
+      - name: batchReport
+        proto_type: the batch's status list, totals per exit code and per-entry directories
+      - name: configBundle
+        proto_type: a stage's bundle folder beside its library, with bundle.sha256
+      - name: doctorReport
+        proto_type: what sim doctor prints about the environment
+      - name: compareReport
+        proto_type: what sim determinism prints for two runs - the axis, the differences, the tolerance in force
+      - name: deliveredPackage
+        proto_type: the installed files of adas-vantage and its version file

@@ -5,7 +5,7 @@
 **Layer:** `SYS`, the top declared layer (`layers.yaml`), so every `Trace` is `—`.
 **Status:** Draft for review. Not baselined. Parts 8a and 8b of `VANTAGE_DEV_PLAN.md` §6 step 8:
 the orchestrator (`C1`), then the live measurement writer, the inspector and the supervisor
-(`C2`). Part 8c adds its sections after §9.
+(`C2`). Part 8c, the launcher and its window, the scenario script, batch, configuration, diagnostics, delivery, determinism and the Python side, is §10 to §18.
 **Reader:** anyone holding a run setup, a recording and component libraries, with no source
 access. What each part is for, every name and every rule: `VANTAGE_Architecture.md` (cited as
 `ARCH §n`). What becomes of each sim requirement: `VANTAGE_Migration_Register.md`. The lab
@@ -26,9 +26,16 @@ simulated stage writes in the engine run, which names what the engine handed it
 **Test areas**, declared once: `RUN` the run setup · `ORC` the orchestrator and the six rules ·
 `SEL` input selection · `STP` the engine step · `THR` threads · `EQO` equal outputs and the
 first divergence · `LMW` the live measurement as the engine writes it · `INS` the inspector ·
-`SUP` the supervisor.
-Priority split: 53 `P0`, 52 `P1`, 0 `P2`; all `R1`. Without a `P0` row an engine run is not
+`SUP` the supervisor · `LCH` the launcher · `WIN` the launcher window · `SCN` the scenario script · `BAT` batch · `CFG` configuration · `DIA` diagnostics · `DLV` delivery · `DET` determinism · `PYR` the Python side.
+Priority split: 82 `P0`, 117 `P1`, 0 `P2`; all `R1`. Without a `P0` row an engine run is not
 exact against the car; a `P1` row makes a result easier to trust or diagnose.
+
+
+**What a Vantage result is evidence of.** A Vantage run on a lab case shows that the scheduler, the selection
+and the comparison reproduce a known right answer; on a car recording it shows that the code under test, given
+the samples the car gave it, produced these outputs and whether they equal the car's. It is evidence about the
+code and the recording, not about the function: equal outputs on a lab case are not a validated function, and
+Vantage reports a result and never judges whether it passed (`R-SIM-19`).
 
 ---
 
@@ -714,7 +721,609 @@ are the four of `R-SIM-19` and a fifth, *failed to start*; the exit codes are `S
 
 ---
 
-## 10. Verification strategy
+## 10. The launcher (`LCH`)
+
+What the launcher is and never does: `ARCH §3.1`. The run setup it writes is read by the engine alone (`SYS-0001`); the keys it fills are `ARCH §2.3`.
+
+**`SYS-0106`** · `P0` · `R1` — The launcher writes the run setup and keeps no state outside it
+**Shall.** The launcher shall keep every choice only in the run setup it writes.
+**Accept.** A lab selection written, read back with `Selection.from_spec` and written again gives a byte-identical run setup; one differing byte fails.
+**Binds.** `launcherChoice`, `runSetup`
+**Verify.** T · `SYT-LCH-01`   **Trace.** —
+
+**`SYS-0107`** · `P0` · `R1` — An engine run starts only from a run setup file just written
+**Shall.** Each launcher function that starts an engine run shall write the run setup it starts from, in the same call, before the start.
+**Accept.** `check_one_engine_start.py` finds a write of the setup before every start; with a planted start from a `Selection` argument it reports file and line.
+**Binds.** `commandLine`, `runSetup`
+**Verify.** A · `ANL-07`   **Trace.** —
+
+**`SYS-0108`** · `P0` · `R1` — One place starts `simengine`
+**Shall.** `src/adas_sim/engine/bridge.py::run_engine` shall be the only code in `src/adas_sim` that starts `simengine`.
+**Accept.** `check_one_engine_start.py` finds no other process start naming the engine executable; with a planted second one in `cli/` it reports file and line.
+**Binds.** `commandLine`
+**Verify.** A · `ANL-07`   **Trace.** —
+
+**`SYS-0109`** · `P0` · `R1` — A supervised start with no deadline is refused before any process starts
+**Shall.** `run_engine` shall refuse a supervised start whose caller gave no deadline, naming it, and start no process (`SYS-0090`).
+**Accept.** With supervision and no deadline it raises an error naming `attempt_timeout_ms` and no `simengine` process exists; with one, the command line holds `--attempt-timeout-ms` equal to it.
+**Binds.** `commandLine`, `exitStatus`
+**Verify.** T · `SYT-LCH-02`   **Trace.** —
+
+**`SYS-0110`** · `P1` · `R1` — The developer face starts the engine directly, the batch face under `--supervise`
+**Shall.** The launcher shall start `simengine` with the setup path and `--threads` or `--wait-for-attach` when asked, and add `--supervise` and the deadline only for the batch face.
+**Accept.** On a lab case the two command lines differ exactly so, and the two runs give equal outputs on every port.
+**Binds.** `commandLine`
+**Verify.** T · `SYT-LCH-02`   **Trace.** —
+
+**`SYS-0111`** · `P1` · `R1` — The exit code's meaning is printed from the closed set
+**Shall.** The launcher shall print the name and one line of meaning of an engine run's exit code from the set of `SYS-0092`.
+**Accept.** Each of the eight codes prints its name and meaning; a code outside the set prints as unknown and never as a name.
+**Binds.** `exitStatus`
+**Verify.** T · `SYT-LCH-03`   **Trace.** —
+
+**`SYS-0112`** · `P0` · `R1` — The feasible cuts of a recording are reported from its index alone
+**Shall.** The launcher shall report from a recording's topic index, opening no payload, which stages can be `measured` and which hold a `control` and a `refSync`.
+**Accept.** For each exact lab case the report names every stage's three answers; a copy of the recording with every payload zeroed gives the same report.
+**Binds.** `recording`, `launcherChoice`
+**Verify.** T · `SYT-LCH-04`   **Trace.** —
+
+**`SYS-0113`** · `P0` · `R1` — `measured` is refused for a stage whose outputs the recording lacks
+**Shall.** The launcher shall refuse to set a stage `measured` when the recording lacks its outputs, naming the stage and the ports, and write no setup.
+**Accept.** On `running_example` `cut_c` with `C`'s output topic removed, selecting `C` `measured` ends with an error naming `C` and that port and no file; with the topic present it is accepted.
+**Binds.** `launcherChoice`, `recording`, `runSetup`
+**Verify.** T · `SYT-LCH-04`   **Trace.** —
+
+**`SYS-0114`** · `P1` · `R1` — A trigger is offered only as the recording and the stage allow
+**Shall.** The launcher shall offer `control` as a stage's trigger only when the recording holds that stage's `control` topic, and an input only when the stage declares it.
+**Accept.** On `data_triggered` the offer for `T` is `in_X`, `in_Y` and, with `T`'s control topic in the recording, `control`; with that topic removed, `control` is not offered.
+**Binds.** `launcherChoice`, `recording`
+**Verify.** T · `SYT-LCH-05`   **Trace.** —
+
+**`SYS-0115`** · `P0` · `R1` — A broken chain is blocked
+**Shall.** The launcher shall refuse a selection with a `measured` stage between two `simulate` stages on one data path, naming the path, the landing stage and the remedies.
+**Accept.** On `measured_middle` with `A` and `B` `simulate` and `M` `measured` the error names the path and a remedy; with `M` `simulate` it passes; any setup written for the blocked selection fails.
+**Binds.** `launcherChoice`, `runSetup`
+**Verify.** T · `SYT-LCH-07`   **Trace.** —
+
+**`SYS-0116`** · `P1` · `R1` — A waiver needs a flag and a written reason and marks the setup
+**Shall.** The launcher shall accept a broken chain only with a waiver flag and a written reason, and shall write both into the setup's `coherence_verdict`.
+**Accept.** Waiver and reason: the setup's verdict names the waiver and the reason; either missing, or a policy that forbids waivers: refused and no file.
+**Binds.** `launcherChoice`, `runSetup`
+**Verify.** T · `SYT-LCH-07`   **Trace.** —
+
+**`SYS-0117`** · `P1` · `R1` — An orphan simulation warns once
+**Shall.** The launcher shall warn once, naming the stage, when a `simulate` stage's outputs are read by no simulated stage.
+**Accept.** A selection with an orphan prints one warning naming it however often it is validated; one without prints none.
+**Binds.** `launcherChoice`
+**Verify.** T · `SYT-LCH-07`   **Trace.** —
+
+**`SYS-0118`** · `P1` · `R1` — A change of the selection returns a new selection
+**Shall.** Every change of a selection (`set_mode`, `set_impl`, `isolate`, `add_recording`) shall return a new selection and leave the one it was given unchanged.
+**Accept.** After each change the original written as a setup is byte-identical to before; a mutated original fails.
+**Binds.** `launcherChoice`
+**Verify.** T · `SYT-LCH-01`   **Trace.** —
+
+**`SYS-0119`** · `P0` · `R1` — Each library is resolved to one absolute path before the setup is written
+**Shall.** The launcher shall resolve each simulated stage's implementation to the absolute path of one library file for the running platform and write it as `impl.path`.
+**Accept.** Every written lab setup holds absolute `impl.path` values naming existing files; a stage with no library ends the launcher naming the stage and the stem searched, before a file is written.
+**Binds.** `launcherChoice`, `runSetup`
+**Verify.** T · `SYT-LCH-06`   **Trace.** —
+
+**`SYS-0120`** · `P1` · `R1` — Whether a library exists for the platform is told without loading it
+**Shall.** The launcher shall tell for each stage whether a library exists for the running platform without loading it.
+**Accept.** A file of garbage bytes with a library's name is reported as present and no library load is made; a missing file is reported absent with the reason.
+**Binds.** `launcherChoice`
+**Verify.** T · `SYT-LCH-06`   **Trace.** —
+
+**`SYS-0121`** · `P1` · `R1` — The dry run prints the resolved setup with each value's layer
+**Shall.** The launcher's dry run shall print the resolved run setup with the configuration layer of each value, call no component and start no engine run.
+**Accept.** On a lab configuration it prints every setup key with its layer and no `simengine` process starts; a key printed without a layer fails.
+**Binds.** `launcherChoice`, `runSetup`
+**Verify.** T · `SYT-LCH-08`   **Trace.** —
+
+**`SYS-0193`** · `P1` · `R1` — The setup names each source file by its content hash
+**Shall.** The launcher shall write each `sources[]` entry's `sha256` as the SHA-256 of that file's bytes.
+**Accept.** For each lab case the setup's `sha256` equals the file's computed hash; a recording edited after the setup was written no longer matches it.
+**Binds.** `launcherChoice`, `runSetup`, `recording`
+**Verify.** T · `SYT-LCH-06`   **Trace.** —
+
+**`SYS-0197`** · `P1` · `R1` — The run setup does not depend on the order of the choices
+**Shall.** The launcher shall write the same run setup for the same final choices, whatever order they were made in.
+**Accept.** Two lab selections reaching one state by different orders of `set_mode`, `set_impl` and `add_recording` write byte-identical setups.
+**Binds.** `launcherChoice`, `runSetup`
+**Verify.** T · `SYT-LCH-01`   **Trace.** —
+
+**`SYS-0198`** · `P1` · `R1` — `spec_sha256` is the hash of the setup's content
+**Shall.** The launcher shall write `spec_sha256` as the hash of the setup's content, unchanged by writing it again and changed by any one field.
+**Accept.** Writing a lab setup twice gives one `spec_sha256`; changing any one field of it, in turn, gives another each time.
+**Binds.** `runSetup`
+**Verify.** T · `SYT-LCH-01`   **Trace.** —
+
+## 11. The launcher window (`WIN`)
+
+`D21`: a thin window over the launcher model, on the standard-library toolkit. Nothing here decides; each row is a call of the model.
+
+**`SYS-0122`** · `P0` · `R1` — Every window action is one launcher-model call
+**Shall.** The window shall hold no logic: each action shall be one call of the launcher model.
+**Accept.** `check_window_boundary.py` finds in `window.py` no file access, process start or rule of its own; planted violations of each are reported with file and line.
+**Binds.** `launcherChoice`
+**Verify.** A · `ANL-08`   **Trace.** —
+
+**`SYS-0123`** · `P0` · `R1` — *Copy command line* does exactly what *start* does
+**Shall.** The command line the window copies shall be the one it starts, built by one function from the setup just written.
+**Accept.** On a lab selection the copied text run in a shell and *start* give equal outputs on every port; a different command line fails.
+**Binds.** `commandLine`, `runSetup`
+**Verify.** T · `SYT-WIN-01`   **Trace.** —
+
+**`SYS-0124`** · `P1` · `R1` — The window offers `measured` only where the recording allows it
+**Shall.** The window shall offer `measured` for a stage only when the launcher model finds the recording holds the stage's outputs.
+**Accept.** With `C`'s outputs removed from the recording the window's choices for `C` are `simulate` and `off`; with them present, `measured` is also offered.
+**Binds.** `launcherChoice`, `recording`
+**Verify.** T · `SYT-WIN-02`   **Trace.** —
+
+**`SYS-0125`** · `P1` · `R1` — The window shows each stage's libraries and what the recording can feed
+**Shall.** The window shall show each stage's mode and implementation, which libraries are available for the platform and, per recording, which stages could be `measured`.
+**Accept.** For a lab selection the three lists equal the launcher model's answers for the same selection; one difference fails.
+**Binds.** `launcherChoice`, `recording`
+**Verify.** T · `SYT-WIN-02`   **Trace.** —
+
+**`SYS-0126`** · `P1` · `R1` — The window adds recordings and starts runs
+**Shall.** The window shall let recordings be added and a run be started and shall write no file but the run setup.
+**Accept.** Adding two lab recordings and *start* give one run setup naming both in `sources[]`; the only file the window created is that setup.
+**Binds.** `launcherChoice`, `runSetup`
+**Verify.** T · `SYT-WIN-01`   **Trace.** —
+
+**`SYS-0127`** · `P1` · `R1` — The window uses only the standard-library toolkit
+**Shall.** The window shall import no graphical package but the standard library's toolkit.
+**Accept.** `check_no_graphical_toolkit.py` over `src/adas_sim` finds only `tkinter` in `window.py`; a planted third-party import is reported.
+**Binds.** `launcherChoice`
+**Verify.** A · `ANL-08`   **Trace.** —
+
+**`SYS-0194`** · `P1` · `R1` — The window isolates one stage
+**Shall.** The window shall offer one action that sets a chosen stage `simulate` and every other stage `measured`, as `Selection.isolate` does.
+**Accept.** On `running_example` `cut_c` the action on `B` leaves `B` `simulate` and every other stage whose outputs the recording holds `measured`; a stage without recorded outputs is not set `measured`.
+**Binds.** `launcherChoice`, `recording`
+**Verify.** T · `SYT-WIN-03`   **Trace.** —
+
+**`SYS-0195`** · `P1` · `R1` — A group whose stages disagree shows a mixed state that cannot be chosen
+**Shall.** The window shall show a group whose stages are in different modes as mixed, and refuse to choose the mixed state as a mode.
+**Accept.** With `A` `simulate` and `B` `measured` the group's state is mixed and choosing it is refused; with both `simulate` it shows `simulate`.
+**Binds.** `launcherChoice`
+**Verify.** T · `SYT-WIN-03`   **Trace.** —
+
+## 12. The scenario-to-recording script (`SCN`)
+
+`D22`: a scenario file of explicit values in, a recording of real interface messages out, through the one Python writer in `interfaces`; the conventions are the contract's (`RCT:SYS-0039`, `RCT:SYS-0044`).
+
+**`SYS-0128`** · `P0` · `R1` — A scenario's messages are written with exactly its values
+**Shall.** `sim record` shall write each message a scenario file lists as one message of the stated interface type holding the listed values and no other.
+**Accept.** For a scenario of N messages of two types the recording holds N messages that decode to the listed values, every unlisted field its default; one extra or changed value fails.
+**Binds.** `scenarioFile`, `runRecording`
+**Verify.** T · `SYT-SCN-01`   **Trace.** —
+
+**`SYS-0129`** · `P0` · `R1` — The recording follows the recording conventions
+**Shall.** The recording `sim record` writes shall follow the contract's recording conventions: topics, schemas, order, `manifest` and provenance.
+**Accept.** `check_recording.py` passes it, and Vantage's reader opens it and returns its `manifest`; either failing fails.
+**Binds.** `runRecording`
+**Verify.** T · `SYT-SCN-02`   **Trace.** —
+
+**`SYS-0130`** · `P1` · `R1` — A scenario is written through the one Python writer
+**Shall.** `src/adas_sim/scenario` shall write a recording only through `adas_recording.writer.McapRecorder`.
+**Accept.** `check_one_recording_writer.py` finds no other writer call in `src/adas_sim/scenario`; with a planted `mcap.McapWriter` it reports file and line.
+**Binds.** `runRecording`
+**Verify.** A · `ANL-09`   **Trace.** —
+
+**`SYS-0131`** · `P1` · `R1` — A scenario value the type does not have is refused
+**Shall.** `sim record` shall refuse a scenario naming a type or a field the interface schemas do not have, naming it, and write no file.
+**Accept.** A scenario with an unknown type, and one with an unknown field, each end with an error naming it and no file; a valid one writes.
+**Binds.** `scenarioFile`, `exitStatus`
+**Verify.** T · `SYT-SCN-03`   **Trace.** —
+
+**`SYS-0132`** · `P1` · `R1` — One scenario gives one recording
+**Shall.** `sim record` shall give, for one scenario file, recordings that are equal outputs on every topic, in the same order.
+**Accept.** Two runs on one scenario give the same message count, order and equal messages on every topic; a difference fails.
+**Binds.** `scenarioFile`, `runRecording`
+**Verify.** T · `SYT-SCN-01`   **Trace.** —
+
+**`SYS-0133`** · `P0` · `R1` — A scenario's recording is an engine input like any other
+**Shall.** An engine run shall read a scenario's recording as it reads a car's.
+**Accept.** `data_triggered` `by_data` on a scenario's `source.X` and `source.Y` exits 0 and `T` has one control per distinct `in_X` counter of the scenario.
+**Binds.** `scenarioFile`, `recording`
+**Verify.** T · `SYT-SCN-04`   **Trace.** —
+
+**`SYS-0134`** · `P1` · `R1` — `sim record` produces and executes nothing else
+**Shall.** `sim record` shall start no engine and call no component, and write only the recording.
+**Accept.** A run of the verb with a process spy sees no `simengine` start and creates one file; any other file or start fails.
+**Binds.** `scenarioFile`, `runRecording`
+**Verify.** T · `SYT-SCN-05`   **Trace.** —
+
+## 13. Batch (`BAT`)
+
+A batch is one run setup over a list of recordings: one supervised engine run per recording (`R-SIM-19`, `SYS-0088`). The loop that does it stays Python (`ARCH §11`).
+
+**`SYS-0135`** · `P0` · `R1` — A batch runs one supervised engine run per recording
+**Shall.** A batch shall start one `simengine --supervise` per recording, each from a run setup written for it.
+**Accept.** On three lab recordings three attempt records exist; the three setups differ only in `sources[]`, `outputs.path` and `run_id`.
+**Binds.** `runSetup`, `attemptManifest`, `commandLine`
+**Verify.** T · `SYT-BAT-01`   **Trace.** —
+
+**`SYS-0136`** · `P0` · `R1` — A failing recording never stops the batch
+**Shall.** A crash, a timeout or a failure of one recording shall not stop the batch.
+**Accept.** A batch of `cut_c`, `crash`, `hang` and `cut_c` runs all four and reports 0, 8, 7 and 0; fewer than four entries fails.
+**Binds.** `batchReport`, `exitStatus`
+**Verify.** T · `SYT-BAT-02`   **Trace.** —
+
+**`SYS-0137`** · `P0` · `R1` — The batch tallies the exit codes
+**Shall.** The batch shall report, per recording, the exit code, its name, the reason and the duration, and a total per code.
+**Accept.** The totals sum to the number of recordings and each entry's code equals its attempt record's last outcome; a mismatch fails.
+**Binds.** `batchReport`, `attemptManifest`
+**Verify.** T · `SYT-BAT-02`   **Trace.** —
+
+**`SYS-0138`** · `P1` · `R1` — Each run has its own self-contained directory
+**Shall.** Each recording's run shall write one directory holding its setup, its recording, its event log, its attempt record and any reproducer.
+**Accept.** Two entries' directories share no file; the directory of a passed entry opens with no other path.
+**Binds.** `batchReport`, `runRecording`
+**Verify.** T · `SYT-BAT-03`   **Trace.** —
+
+**`SYS-0139`** · `P1` · `R1` — A batch is resumable and runs no completed recording again
+**Shall.** A batch started again over the same directory shall start no recording whose attempt record is complete.
+**Accept.** After a batch stopped halfway, the second run starts only the unfinished recordings, by process spy; one repeated start fails.
+**Binds.** `batchReport`, `attemptManifest`
+**Verify.** T · `SYT-BAT-03`   **Trace.** —
+
+**`SYS-0140`** · `P1` · `R1` — A sweep of N values gives N runs differing in exactly the value swept
+**Shall.** A sweep shall give one run setup per value, differing from the base only in the swept value and the names derived from it.
+**Accept.** A sweep of three values gives three setups whose pairwise difference is that key, `run_id` and `outputs.path`.
+**Binds.** `runSetup`, `batchReport`
+**Verify.** T · `SYT-BAT-04`   **Trace.** —
+
+**`SYS-0141`** · `P1` · `R1` — A recording that does not finish by its deadline is reported as timeout
+**Shall.** The batch shall pass each recording's deadline to the supervisor and report an overrun as timeout, not as a failure.
+**Accept.** A `hang` entry with a deadline below the hang is reported with code 7 and the reason `timeout`; any other name fails.
+**Binds.** `batchReport`, `exitStatus`
+**Verify.** T · `SYT-BAT-02`   **Trace.** —
+
+**`SYS-0142`** · `P1` · `R1` — A read error follows a closed policy and skipped recordings are counted
+**Shall.** The batch shall treat a recording the engine ends with exit 5 by one policy of `skip`, `abort` or `retry N`, and count each skip.
+**Accept.** A cut-off recording: `skip` counts it and the batch goes on; `abort` ends the batch; `retry 2` makes two further attempts, recorded; another name is refused.
+**Binds.** `batchReport`, `exitStatus`
+**Verify.** T · `SYT-BAT-05`   **Trace.** —
+
+**`SYS-0143`** · `P1` · `R1` — The duration estimate counts steps
+**Shall.** A dry batch shall print the estimated number of engine steps from the recording's index and the clocks, with its factor.
+**Accept.** For each exact lab case the printed estimate lies within the factor `⊘` of the step tap's count, and the factor is printed.
+**Binds.** `batchReport`, `recording`
+**Verify.** T · `SYT-BAT-06`   **Trace.** —
+
+## 14. Configuration (`CFG`)
+
+Configuration is authored in YAML and resolved by the launcher; the engine reads only the run setup. The bundle rules are `R-SIM-3a`, the override rules `R-SIM-15`, the ingest rules `R-SIM-23`. Where the engine finds a stage's bundle is open question 2 (§21); the rows hold for either answer.
+
+**`SYS-0144`** · `P0` · `R1` — A stage's bundle with another hash than the setup names is refused
+**Shall.** The engine shall refuse a run whose bundle for a stage holds another hash than that stage's `config_bundle_sha256`, naming the stage and both hashes.
+**Accept.** A lab case with one bundle file edited ends with exit 2 naming the stage and both hashes, before the first step; the unedited case runs.
+**Binds.** `runSetup`, `configBundle`, `exitStatus`
+**Verify.** T · `SYT-CFG-01`   **Trace.** —
+
+**`SYS-0145`** · `P0` · `R1` — One bundle per component and build is packed beside the library with its hash
+**Shall.** Each component's build shall hold one `config/` folder beside its library with `bundle.sha256` computed by `bundle_sha256`.
+**Accept.** For every built lab component the recomputed hash equals `bundle.sha256`; one changed byte in a bundle file fails.
+**Binds.** `configBundle`
+**Verify.** T · `SYT-CFG-01`   **Trace.** —
+
+**`SYS-0146`** · `P1` · `R1` — A project mismatch between bundles warns
+**Shall.** The launcher shall warn, naming both, when the bundles of the selected stages are for different projects.
+**Accept.** Two bundles of different projects give one warning naming both; with `allow_mixed_projects` it is recorded in the setup, not raised.
+**Binds.** `launcherChoice`, `configBundle`
+**Verify.** T · `SYT-CFG-02`   **Trace.** —
+
+**`SYS-0147`** · `P0` · `R1` — Ego parameters that disagree between bundles are an error
+**Shall.** The launcher shall refuse a selection whose stages' bundles hold different ego parameters, with no escape.
+**Accept.** Two bundles whose `ego_params.yaml` differ in one value end the launcher naming both files and the key; identical files pass.
+**Binds.** `launcherChoice`, `configBundle`
+**Verify.** T · `SYT-CFG-02`   **Trace.** —
+
+**`SYS-0148`** · `P1` · `R1` — A calibration value changes with no rebuild
+**Shall.** A value changed in a bundle file beside a library shall change the stage's output on the next run with no rebuild and no host edit.
+**Accept.** `renumber_lib` `shifted`: with `LAB_A_RENUMBER` 0 and 1 in `A`'s bundle, `A`'s data outputs differ, from the same library file.
+**Binds.** `configBundle`, `runRecording`
+**Verify.** T · `SYT-CFG-03`   **Trace.** —
+
+**`SYS-0149`** · `P1` · `R1` — Each resolved value keeps its layer
+**Shall.** The launcher shall resolve configuration in its four layers and keep for each value the layer, file and line it came from.
+**Accept.** A key given in two layers resolves to the later and its record names both; a value with no record fails.
+**Binds.** `launcherChoice`
+**Verify.** T · `SYT-CFG-04`   **Trace.** —
+
+**`SYS-0150`** · `P1` · `R1` — Includes and variables resolve at load and are reported
+**Shall.** The launcher shall resolve includes and `${var}` at load, identically for equal content, and report every resolution.
+**Accept.** A configuration split by includes writes a byte-identical setup to the same configuration unsplit; each variable resolved is listed.
+**Binds.** `launcherChoice`, `runSetup`
+**Verify.** T · `SYT-CFG-04`   **Trace.** —
+
+**`SYS-0151`** · `P1` · `R1` — A configuration file is validated against its published schema with a location
+**Shall.** The launcher shall validate each configuration file against its kind's schema and name the file and key path of each error.
+**Accept.** Four planted errors each end `sim validate` with an error naming the file and key path, with no recording and no library needed.
+**Binds.** `launcherChoice`, `exitStatus`
+**Verify.** T · `SYT-CFG-05`   **Trace.** —
+
+**`SYS-0152`** · `P1` · `R1` — An unknown or missing schema version is refused
+**Shall.** The launcher shall refuse a configuration file whose schema version is missing or not one it accepts, naming both.
+**Accept.** A file with another version, and one with none, each end with an error naming the version found and those accepted.
+**Binds.** `launcherChoice`, `exitStatus`
+**Verify.** T · `SYT-CFG-05`   **Trace.** —
+
+**`SYS-0153`** · `P1` · `R1` — Two producers for one port are refused
+**Shall.** The launcher shall refuse a wiring in which two stages produce one port, naming both.
+**Accept.** A lab wiring with a second producer of `D.in_C` ends with an error naming both stages and the port.
+**Binds.** `launcherChoice`, `exitStatus`
+**Verify.** T · `SYT-CFG-06`   **Trace.** —
+
+**`SYS-0154`** · `P1` · `R1` — A required input with no producer is refused
+**Shall.** The launcher shall refuse a wiring that leaves a required input with no producer, naming the input and what it considered.
+**Accept.** A lab wiring with `D`'s input unwired ends with an error naming `D.in_C` and the candidates it looked at.
+**Binds.** `launcherChoice`, `exitStatus`
+**Verify.** T · `SYT-CFG-06`   **Trace.** —
+
+**`SYS-0155`** · `P1` · `R1` — Port types are matched and a data port never feeds a control port
+**Shall.** The launcher shall refuse a wiring whose producer and consumer types differ, or that wires a data port to a `control` port.
+**Accept.** A wiring of an output to an input of another type, and one to a `control` port, each end with an error naming both ports.
+**Binds.** `launcherChoice`, `exitStatus`
+**Verify.** T · `SYT-CFG-06`   **Trace.** —
+
+**`SYS-0156`** · `P1` · `R1` — A configuration round-trips to a byte-identical file
+**Shall.** A configuration read and written again by the launcher shall give a byte-identical file.
+**Accept.** For each lab configuration read and written, the output equals the input byte for byte; one differing byte fails.
+**Binds.** `launcherChoice`
+**Verify.** T · `SYT-CFG-04`   **Trace.** —
+
+**`SYS-0157`** · `P0` · `R1` — The override verbs are the closed list of six
+**Shall.** The engine shall accept in `mutations[]` only `const`, `hold`, `offset`, `scale`, `select` and `drop`, and refuse another verb at load, naming it.
+**Accept.** Each verb applied to a lab port changes that port and no other; a seventh verb name ends with a load error naming it.
+**Binds.** `runSetup`, `exitStatus`, `stageIn`
+**Verify.** T · `SYT-CFG-07`   **Trace.** —
+
+**`SYS-0158`** · `P0` · `R1` — An override never creates an entity
+**Shall.** No override shall add an element; an index is `[i]` or `[*]` and never a predicate, and a `fixed_slots` port is cleared in place.
+**Accept.** A predicate index is refused at load; `drop` on a `fixed_slots` port leaves the element count; no override raises it.
+**Binds.** `runSetup`, `exitStatus`, `stageIn`
+**Verify.** T · `SYT-CFG-07`   **Trace.** —
+
+**`SYS-0159`** · `P1` · `R1` — The recording's manifest lists every override and fault in force
+**Shall.** An engine run shall write into its recording's `manifest` one record per override and fault in force, with its address, verb and window.
+**Accept.** A setup with two overrides and one fault gives three records equal to the setup's, windows included; a missing or extra record fails.
+**Binds.** `runSetup`, `runRecording`
+**Verify.** T · `SYT-CFG-08`   **Trace.** —
+
+**`SYS-0160`** · `P0` · `R1` — An ingest map renames and tags and computes nothing
+**Shall.** Applying an ingest map shall change only a message's topic name and origin tag, and create no value, element or entity the source did not carry.
+**Accept.** A recording read through a map equals the same recording renamed by hand, payload bytes included; a changed byte fails.
+**Binds.** `recording`, `runSetup`
+**Verify.** T · `SYT-CFG-09`   **Trace.** —
+
+**`SYS-0161`** · `P1` · `R1` — A port the recording never carried is named and a cut that needs it is refused
+**Shall.** A setup's `absent` list shall name each port its family never recorded, and a stage that needs one shall be refused at load, naming it.
+**Accept.** A `cut_c` setup whose `absent` lists `C.out` ends with a load error naming it before the first step; without the entry the case runs.
+**Binds.** `runSetup`, `recording`, `exitStatus`
+**Verify.** T · `SYT-CFG-09`   **Trace.** —
+
+**`SYS-0162`** · `P1` · `R1` — A payload whose type does not match its port is refused
+**Shall.** The engine shall refuse a recorded payload whose type is not its port's declared type, and never coerce it.
+**Accept.** A lab recording with one `A.out` message retyped ends the run with an error naming the port and both types; a coerced value fails.
+**Binds.** `recording`, `exitStatus`
+**Verify.** T · `SYT-CFG-09`   **Trace.** —
+
+**`SYS-0163`** · `P1` · `R1` — A port claimed by two ingest maps is refused
+**Shall.** The launcher shall refuse two ingest maps that claim one port, naming both maps and the port.
+**Accept.** Two maps claiming `source.X` end the launcher with an error naming both files and the port; one map passes.
+**Binds.** `launcherChoice`, `exitStatus`
+**Verify.** T · `SYT-CFG-09`   **Trace.** —
+
+**`SYS-0164`** · `P1` · `R1` — Ingest maps are resolved from beside the component library
+**Shall.** The launcher shall resolve a component's ingest map from beside its library and never from a source checkout.
+**Accept.** With the library copied alone to a new folder with its `ingest/`, the launcher resolves the map; with the map absent, no checkout path is searched.
+**Binds.** `launcherChoice`
+**Verify.** T · `SYT-CFG-09`   **Trace.** —
+
+**`SYS-0165`** · `P1` · `R1` — The record policy of every port is in the setup and the recording
+**Shall.** Each port's record policy shall be a key of the setup and be written into the recording's `manifest` for every port.
+**Accept.** The manifest's `record_policies` lists every port of every stage with the setup's value; a missing port fails.
+**Binds.** `runSetup`, `runRecording`
+**Verify.** T · `SYT-CFG-08`   **Trace.** —
+
+**`SYS-0166`** · `P1` · `R1` — Excluding or decimating an input a simulated stage consumes is refused
+**Shall.** The engine shall refuse at load a `record` policy of `excluded` or `decimate` on a port a simulated stage consumes.
+**Accept.** A lab setup with `excluded` on `A.in_X` ends with a load error naming the port; on an unconsumed output it runs.
+**Binds.** `runSetup`, `exitStatus`
+**Verify.** T · `SYT-CFG-08`   **Trace.** —
+
+**`SYS-0199`** · `P1` · `R1` — A source file whose hash differs from the setup's is refused
+**Shall.** The engine shall refuse a run whose `sources[]` file hashes to a value other than that entry's `sha256`, naming the file and both hashes.
+**Accept.** A lab case with one recording byte changed ends with a load error naming the file and both hashes before the first step; the unchanged case runs.
+**Binds.** `runSetup`, `recording`, `exitStatus`
+**Verify.** T · `SYT-CFG-10`   **Trace.** —
+
+## 15. Diagnostics (`DIA`)
+
+Errors, the environment report, the log vocabulary and the run report. Vantage reports and never judges (`R-SIM-19`). The divergence rows add to `SYS-0043`; where the grace lives is open question 3 (§21).
+
+**`SYS-0167`** · `P0` · `R1` — The error kinds and exit codes are one set in both languages
+**Shall.** The Python error kinds and exit codes shall be the C++ set, name for name and value for value.
+**Accept.** `check_error_parity.py` finds no difference; with one planted in `diagnostics/errors.py` it reports it.
+**Binds.** `exitStatus`
+**Verify.** A · `ANL-10`   **Trace.** —
+
+**`SYS-0168`** · `P1` · `R1` — The environment report never raises
+**Shall.** `sim doctor` shall report the engine, libraries, bundles and versions found, and an unknown for any it cannot read, and raise nothing.
+**Accept.** With the engine missing, one library unreadable and one bundle absent it exits 0 and names each as unknown or absent.
+**Binds.** `doctorReport`
+**Verify.** T · `SYT-DIA-01`   **Trace.** —
+
+**`SYS-0169`** · `P1` · `R1` — A wrong name is answered with the nearest name
+**Shall.** The launcher shall answer a name it does not know with the nearest known names.
+**Accept.** `sim` with a stage named `Dd` in a lab selection answers with `D` among its suggestions; a name with no near one gives none.
+**Binds.** `launcherChoice`, `exitStatus`
+**Verify.** T · `SYT-DIA-02`   **Trace.** —
+
+**`SYS-0170`** · `P1` · `R1` — The log vocabulary is closed and carries the step number
+**Shall.** Each log line the Python side writes shall use an `event=` name of the closed set the C++ set mirrors, with the step number where it has one.
+**Accept.** `check_closed_sets.py` finds the two sets equal; a line with an unlisted name, or a `tick=` field, is reported.
+**Binds.** `eventLog`
+**Verify.** A · `ANL-10`   **Trace.** —
+
+**`SYS-0171`** · `P1` · `R1` — A run ends with a summary of its warnings
+**Shall.** A run started by the launcher shall end by printing the count of its warnings by kind from its own log lines.
+**Accept.** A lab case with two fallbacks ends with a summary naming that kind and the count 2; a case with none prints none.
+**Binds.** `eventLog`
+**Verify.** T · `SYT-DIA-03`   **Trace.** —
+
+**`SYS-0172`** · `P1` · `R1` — The run report names steps, time, modules and bytes read
+**Shall.** An engine run shall print its steps, wall time, each simulated stage's time, library path, version, build and bundle hash, and bytes read per topic.
+**Accept.** On `cut_c` steps equal the step tap's, bytes per topic equal the payload bytes read, and each simulated stage is listed with its time.
+**Binds.** `eventLog`, `exitStatus`
+**Verify.** T · `SYT-DIA-04`   **Trace.** —
+
+**`SYS-0173`** · `P1` · `R1` — A diagnostic never raises or aborts a run
+**Shall.** No diagnostic of the engine or the launcher shall raise or end an engine run.
+**Accept.** With the trace on an unwritable path, the byte counter and the report each failing, a lab run still exits 0 with equal outputs.
+**Binds.** `eventLog`, `exitStatus`
+**Verify.** T · `SYT-DIA-05`   **Trace.** —
+
+**`SYS-0174`** · `P1` · `R1` — Data after the first divergence and a grace is flagged informational
+**Shall.** The engine shall flag as informational every message it writes after the first divergence plus the grace `⊘`, and none before.
+**Accept.** On a diverging lab case with the lab's provisional grace, messages from the first divergence plus the grace are flagged and earlier ones are not.
+**Binds.** `runRecording`, `eventLog`
+**Verify.** T · `SYT-DIA-06`   **Trace.** —
+
+**`SYS-0175`** · `P1` · `R1` — The engine prints its process id and waits when asked
+**Shall.** With `--wait-for-attach` the engine shall print its process id before any step and run no step until released.
+**Accept.** The id is printed and the engine's step count stays 0 until released; without the option no wait occurs.
+**Binds.** `exitStatus`, `stepRecord`
+**Verify.** T · `SYT-DIA-07`   **Trace.** —
+
+**`SYS-0192`** · `P1` · `R1` — The trace is off by default, keyed by step and changes no value
+**Shall.** The optional trace shall be off by default, write one entry per run keyed by step number, and change no value.
+**Accept.** With the trace on, its entries equal the case's runs, each with its step; the outputs equal those of a run without it.
+**Binds.** `eventLog`, `runRecording`
+**Verify.** T · `SYT-DIA-05`   **Trace.** —
+
+**`SYS-0196`** · `P1` · `R1` — A message repeating every step is logged once with a count
+**Shall.** The log shall write a message that repeats beyond the flood threshold `⊘` as one counted entry, with one entry saying counting began, naming the message and the threshold.
+**Accept.** A lab case repeating one warning every step logs it once with its total count and the entry naming message and threshold; other messages stay visible.
+**Binds.** `eventLog`
+**Verify.** T · `SYT-DIA-08`   **Trace.** —
+
+## 16. Delivery (`DLV`)
+
+What `adas-vantage` ships and how a consumer resolves it (`R-SIM-11`, `R-BUILD-1`).
+
+**`SYS-0176`** · `P0` · `R1` — The package ships the engine, the inspector, the writer library and the Python package
+**Shall.** `adas-vantage` shall ship `simengine`, `vantage-inspect`, the `livemeas` library with its headers, and the `adas_sim` package.
+**Accept.** A fresh install tree holds each of the four; one missing fails.
+**Binds.** `deliveredPackage`
+**Verify.** T · `SYT-DLV-01`   **Trace.** —
+
+**`SYS-0177`** · `P0` · `R1` — A consumer resolves each part from the package alone
+**Shall.** A consumer shall resolve the engine, the inspector, the writer and the Python package from the installed package, with no sibling checkout and no path outside it.
+**Accept.** From the install tree alone, with the source tree hidden, the launcher finds the engine and a lab case runs to exit 0.
+**Binds.** `deliveredPackage`, `commandLine`
+**Verify.** T · `SYT-DLV-02`   **Trace.** —
+
+**`SYS-0178`** · `P1` · `R1` — The recording writer package is the one the engine was linked with
+**Shall.** The Python side shall find the recording writer in the `adas-interfaces` package the engine was linked with, named by a file beside the engine.
+**Accept.** `recording_writer()` returns a module under the folder `adas_recording.path` names; with that file removed it ends naming it.
+**Binds.** `deliveredPackage`
+**Verify.** T · `SYT-DLV-02`   **Trace.** —
+
+**`SYS-0179`** · `P1` · `R1` — The package, port-model and ABI versions are independent and listed
+**Shall.** The package shall state its own version, the port-model version and the ABI version separately, with a compatibility list.
+**Accept.** The installed version file names the three; changing one in a copy does not change the other two.
+**Binds.** `deliveredPackage`
+**Verify.** T · `SYT-DLV-03`   **Trace.** —
+
+**`SYS-0180`** · `P1` · `R1` — A release ships a self-test on a miniature recording
+**Shall.** The package shall ship a self-test that runs the engine on a miniature recording and ends 0 or non-zero.
+**Accept.** The self-test run from the install tree exits 0; with the engine's library renamed it exits non-zero.
+**Binds.** `deliveredPackage`, `exitStatus`
+**Verify.** T · `SYT-DLV-03`   **Trace.** —
+
+**`SYS-0181`** · `P1` · `R1` — The shipped source names no component and no function
+**Shall.** The framework's shipped source shall name no component and no function (`R-SIM-1`).
+**Accept.** `check_invariants.py`'s `GT-1` finds none in `src`; with a planted component name in `src/adas_sim` it reports it.
+**Binds.** `deliveredPackage`
+**Verify.** A · `ANL-11`   **Trace.** —
+
+**`SYS-0182`** · `P1` · `R1` — The same configuration runs on both operating systems
+**Shall.** One configuration and run setup shall run unchanged on Windows and Linux, path handling and library loading each done in one place.
+**Accept.** Every lab setup holds only `/` paths and runs to its expected exit code on the machine under test; `check_paths_one_place.py` finds one place for each.
+**Binds.** `runSetup`, `deliveredPackage`
+**Verify.** A · `ANL-11`   **Trace.** —
+
+**`SYS-0183`** · `P1` · `R1` — Every new source file carries the file header
+**Shall.** Every new source file shall carry the file header block with the token `VANTAGE`.
+**Accept.** `check_headers.py` finds none missing; with a planted file without one it reports it.
+**Binds.** `deliveredPackage`
+**Verify.** A · `ANL-11`   **Trace.** —
+
+## 17. Determinism (`DET`)
+
+`R-SIM-24` as `ARCH §13` amends it. The comparison is over port values, never file bytes.
+
+**`SYS-0184`** · `P0` · `R1` — Same-process, fresh-process and thread-count runs are exact
+**Shall.** Runs of one setup in the same process, a fresh process and with `--threads N` shall be equal outputs on every port, and any difference blocks.
+**Accept.** On every exact lab case the three comparisons are equal; one differing byte outside `cycle_counter` fails and is named by port and step.
+**Binds.** `compareReport`, `runRecording`
+**Verify.** T · `SYT-DET-01`   **Trace.** —
+
+**`SYS-0185`** · `P1` · `R1` — Rebuilt-binary and other-machine runs are measured and declared
+**Shall.** A comparison across a rebuilt binary or another machine shall report its differences and the tolerance in force, and never fail the gate.
+**Accept.** A pair differing in `library_sha256` reports its differences with the declared tolerance and exits 0; the report names the axis.
+**Binds.** `compareReport`
+**Verify.** T · `SYT-DET-02`   **Trace.** —
+
+**`SYS-0186`** · `P0` · `R1` — The comparison axis is derived from the two manifests
+**Shall.** The comparison axis shall be derived from the two recordings' manifests, and a pair differing in more than one dimension shall say so.
+**Accept.** A pair differing in `process_nonce` only is the fresh-process axis; one also differing in `library_sha256` is reported as more than one.
+**Binds.** `compareReport`, `runRecording`
+**Verify.** T · `SYT-DET-03`   **Trace.** —
+
+**`SYS-0187`** · `P0` · `R1` — The comparison is over decoded port values
+**Shall.** The comparison of two runs shall be over decoded port values by equal outputs, never over file bytes.
+**Accept.** Two recordings of one run differing in `run_id` and nonce compare equal; one changed port value is reported with port and step.
+**Binds.** `compareReport`, `runRecording`
+**Verify.** T · `SYT-DET-03`   **Trace.** —
+
+**`SYS-0188`** · `P1` · `R1` — A tolerance is declared once per component and field, with its reason
+**Shall.** A tolerance shall be declared once per component and field in its tolerance file with a written reason, default exact, and its hash recorded.
+**Accept.** A tolerance with no reason is refused naming the file; the manifest of a compared run carries the hash of the file in force.
+**Binds.** `compareReport`, `runRecording`
+**Verify.** T · `SYT-DET-02`   **Trace.** —
+
+**`SYS-0189`** · `P1` · `R1` — A re-run is pinned to the library hash the recording carries
+**Shall.** A re-run shall be pinned to each `library_sha256` the recording carries, and report a library it cannot pin.
+**Accept.** With `--pin-builds` and a different library, the run ends naming the stage and both hashes; a locally built library is reported unpinnable.
+**Binds.** `runSetup`, `runRecording`, `exitStatus`
+**Verify.** T · `SYT-DET-04`   **Trace.** —
+
+## 18. The Python side never runs a component (`PYR`)
+
+The Python run path is retired (`ARCH §11`, the register's code table). Only the obligation that remains is a row.
+
+**`SYS-0190`** · `P0` · `R1` — Python never runs a component
+**Shall.** No Python module of `adas-vantage` shall load a component library for execution or call its `adasExec`.
+**Accept.** `check_no_python_run.py` finds no `adasExec` or component execution in `src/adas_sim`, and `check_no_retired_imports.py` no import of a retired module; a planted one of each is reported.
+**Binds.** `stageIn`
+**Verify.** A · `ANL-12`, `ANL-13`   **Trace.** —
+
+**`SYS-0191`** · `P1` · `R1` — The engine never calls back into Python
+**Shall.** The engine and its libraries shall contain no call into Python.
+**Accept.** `check_no_python_run.py` finds no Python header or embedding call in `src/simcore`, `src/simengine`, `src/livemeas` or `src/inspector`; a planted include is reported.
+**Binds.** `stageIn`
+**Verify.** A · `ANL-12`   **Trace.** —
+
+---
+
+## 19. Verification strategy
 
 Every `T` row runs on **lab cases** (`VANTAGE_Lab_Design.md` §6): the fake car's recording is the
 known right answer, so a pass is equality, not tolerance. **Gate `G3`** (`VANTAGE_DEV_PLAN.md`
@@ -723,14 +1332,14 @@ case (`R-REQ-9`).
 
 | Method | Count | Notes |
 |---|---|---|
-| T | 99 | `simengine` on a lab case, the step tap, the exec probe, the control tick probe, a test reader, a flawed-writer or a supervised run |
-| A | 6 | source checks over the engine, the inspector and the supervisor |
+| T | 181 | `simengine` on a lab case, the step tap, the exec probe, the control tick probe, a test reader, a flawed-writer, a supervised run, the launcher driven from Python, the window, a batch, a scenario, an install tree or a pair of runs |
+| A | 18 | source checks over the engine, the inspector, the supervisor, the launcher, the window, the scenario script, the Python side and the delivery |
 
-## 11. Superseded and retired UIDs
+## 20. Superseded and retired UIDs
 
 None yet.
 
-## 12. Open decisions
+## 21. Open decisions
 
 None in this part. Closed and handed on (owner, 2026-10-31):
 
@@ -740,3 +1349,17 @@ None in this part. Closed and handed on (owner, 2026-10-31):
 | 2 | How the engine finds a stage's bundle built for another configuration when the setup carries only `config_bundle_sha256` | part 8c (configuration) |
 | 3 | Where the grace after the first divergence lives, and how data after it is flagged informational | part 8c (diagnostics) |
 | 4 | Whether the first divergence names the first differing field | part 8c (the comparison of two runs) |
+
+Open after part 8c, each with the recommendation of `VNT-8c` (the owner decides; no row above waits on a
+decision except where it says so):
+
+| # | Question | Recommendation |
+|---|---|---|
+| 2 | How the engine finds a stage's bundle when the setup carries only `config_bundle_sha256` | the setup carries the resolved bundle folder per stage and a hash mismatch is refused (`SYS-0144` holds for either answer) |
+| 3 | Where the grace after the first divergence lives (`SYS-0174`) | one key of the run setup, `divergence_grace_steps`, value `⊘`, read by the engine; no constant in code |
+| 4 | Whether the first divergence names the first differing field | yes: the first divergence names step, stage, port and the first differing field (carried `SIM:SW-0280`) |
+| 5 | Fault windows in steps or in time | in steps: the engine's clock is the step, and `SYS-0159` records the window as the setup states it |
+| 6 | Where a supervised start's deadline comes from | a required key of the batch configuration and a required argument of the launcher; never a default (`SYS-0090`, `SYS-0109`) |
+| 7 | The fate of `progress.json` and the C++ `Checkpoint` | retire both: the batch reads the attempt record and the supervision cell (`D31 (3)`); the setup's `checkpoint.path` goes with them |
+| 8 | A gate before migration | none: `G5` is migration itself; the test groups of `WP-19` to `WP-27` run in the full suite |
+| 9 | The dry run's plan | add the engine option `--plan-only` (amends `SYS-0001`) so the launcher prints the engine's own plan, not a second derivation |
