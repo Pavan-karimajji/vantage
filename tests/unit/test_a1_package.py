@@ -24,6 +24,8 @@ EXPECTED_SUBPACKAGES = {
     "core", "io", "sources", "check", "cli",
     "config", "graph", "ingest", "resolve", "runspec", "orchestrate",
     "diagnostics", "session", "player", "plugins",
+    # VNT-WP-19 (D22): the scenario-to-recording script.
+    "scenario",
     # WP-15b (IMP-0422): the one shared bridge onto simcore/simengine's C
     # ABI every rewired call site (cli/resim.py first) goes through.
     "engine",

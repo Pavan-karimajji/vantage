@@ -67,7 +67,8 @@ class VerbEntry:
 
 @lru_cache(maxsize=None)
 def _module(name: str):  # noqa: ANN202 -- returns a cli submodule, imported on first use only
-    return importlib.import_module(f"adas_sim.cli.{name}")
+    # A dotted name is a module of its own (`sim record` is `adas_sim.scenario.record`, `D22`); a bare one is `adas_sim/cli/<name>.py`.
+    return importlib.import_module(name if "." in name else f"adas_sim.cli.{name}")
 
 
 def _lazy_run(name: str) -> Runner:
@@ -88,7 +89,7 @@ def _lazy_dry_run(name: str) -> Runner:
     return lambda argv=None: _generic_dry_run(name, argv)
 
 
-#: `SW-0232`'s own closed, published set -- 13 verbs today, one row each.
+#: `SW-0232`'s own closed, published set -- 14 verbs today, one row each.
 #: A verb added here without an `IMP`/`SW` row backing it is exactly the
 #: growth `ANL-SW-40` refuses. Module names match `adas_sim/cli/<name>.py`
 #: exactly, except `"list"` -> `list_cmd` (`cli/__init__.py`'s own
@@ -97,7 +98,7 @@ def _lazy_dry_run(name: str) -> Runner:
 #: name at module scope).
 _MODULE_OF = {
     "doctor": "doctor", "explain": "explain", "probe": "probe",
-    "convert": "convert", "export": "export", "record": "record", "run": "run", "resim": "resim",
+    "convert": "convert", "export": "export", "record": "adas_sim.scenario.record", "run": "run", "resim": "resim", "window": "window",
     "check": "check", "determinism": "determinism", "batch": "batch", "list": "list_cmd", "validate": "validate",
 }
 

@@ -99,7 +99,7 @@ def test_sim_resim_reads_recording_project_config_from_the_manifest_alone(tmp_pa
     mock_engine.assert_called_once()
     assert mock_engine.call_args.args[0] is fake_pipeline
     assert mock_engine.call_args.args[1] == recording_path
-    assert mock_engine.call_args.kwargs["config_path"] == config_path
+    assert mock_engine.call_args.kwargs["bundle_dir"] == config_path
 
 
 def test_an_explicit_cli_flag_wins_over_the_manifests_own_value(tmp_path):

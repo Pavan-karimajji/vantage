@@ -528,6 +528,8 @@ def _validate_wiring(
         manifest = components[stage.name].manifest
 
         for input_spec in manifest.inputs:
+            if input_spec.name == "control":  # the conventional port the orchestrator writes (`RCT:SYS-0006`, `D17 (1)`), never wired
+                continue
             ref = stage.inputs.get(input_spec.name)
             if ref is None:
                 if not input_spec.optional and stage.mode == "simulate":
@@ -825,7 +827,11 @@ class Pipeline:
         name = raw.get("name", path.stem)
         allow_mixed_projects = bool(raw.get("allow_mixed_projects", False))
         stages = cls.parse_stages(path)
-        _grid.check_zero_delay_cycles([s.name for s in stages], {s.name: s.inputs for s in stages})
+        # A previous-cycle input reads the sender's last run, so it breaks a loop (`ARCH §2.2`): only the other inputs can close one.
+        _grid.check_zero_delay_cycles(
+            [s.name for s in stages],
+            {s.name: {port: ref for port, ref in s.inputs.items() if port not in s.previous_cycle} for s in stages},
+        )
         resolved, bundle_dirs, library_paths = _resolve_components(stages, search=search, components=components or {})
         _validate_wiring(stages, resolved, recording, source)
         _validate_overrides(stages, resolved)

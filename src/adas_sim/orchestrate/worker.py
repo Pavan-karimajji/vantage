@@ -203,7 +203,7 @@ def main(argv: list[str] | None = None) -> int:
             output_path = Path(tmp_dir) / "out.mcap"
             result = invoke_engine(
                 pipeline, args.recording, run_id=f"batch-{args.recording.stem}", output_path=output_path,
-                config_path=args.config, checkpoint_path=args.checkpoint_json,
+                bundle_dir=args.config, checkpoint_path=args.checkpoint_json,
                 setup_values=setup_values,
             )
             if not result.ok:

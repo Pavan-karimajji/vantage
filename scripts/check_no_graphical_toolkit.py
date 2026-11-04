@@ -27,6 +27,7 @@ check exists to catch.
 from __future__ import annotations
 
 import argparse
+import ast
 import re
 import sys
 from pathlib import Path
@@ -42,8 +43,40 @@ _TOOLKIT_TOKENS = ("PySide6", "PyQt5", "PyQt6", "viewer")
 _TOKEN_RE = re.compile(r"\b(" + "|".join(re.escape(t) for t in _TOOLKIT_TOKENS) + r")\b")
 
 
-def check_no_graphical_toolkit(sim_root: Path = SIM_ROOT) -> list[str]:
+WINDOW = "src/adas_sim/launcher/window.py"
+SOURCE = "src/adas_sim"
+
+
+def _imports(tree: ast.AST):
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                yield node.lineno, alias.name.split(".")[0]
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            yield node.lineno, node.module.split(".")[0]
+
+
+def check_window_toolkit(sim_root: Path) -> list[str]:
+    """`IMP-0152` (`SYS-0127`): the launcher window imports the standard library's `tkinter` and nothing else outside the standard
+    library and `adas_sim`; no other file of `src/adas_sim` imports `tkinter`."""
+    allowed = set(sys.stdlib_module_names) | {"adas_sim"}
     findings: list[str] = []
+    for path in sorted((sim_root / SOURCE).rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        rel = path.relative_to(sim_root).as_posix()
+        is_window = rel == WINDOW
+        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"), filename=str(path))
+        for lineno, module in _imports(tree):
+            if is_window and module not in allowed:
+                findings.append(f"{rel}:{lineno}: imports a graphical or third-party package ({module}); the window uses tkinter only")
+            if not is_window and module == "tkinter":
+                findings.append(f"{rel}:{lineno}: imports tkinter outside {WINDOW}")
+    return findings
+
+
+def check_no_graphical_toolkit(sim_root: Path = SIM_ROOT) -> list[str]:
+    findings: list[str] = check_window_toolkit(sim_root)
     workflows = sorted((sim_root).glob(WORKFLOWS_GLOB))
     for path in workflows:
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):

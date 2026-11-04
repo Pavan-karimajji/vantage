@@ -16,8 +16,8 @@ Where the spec leaves a step open it is chosen so the case can fail:
   (`TerminateProcess(0xC0000005)` on Windows, `SIGKILL` elsewhere): a plain Windows kill gives exit code 1, which no
   supervisor can tell from a clean failure;
 - "the worker binary renamed" (`SYT-SUP-03`): the supervisor starts its own executable, which cannot be renamed under
-  it, so the worker's start is made to fail by giving it a command line longer than the platform allows (a long
-  `--config`, which the supervisor passes on), the same `kFailedToStart`;
+  it, so the worker's start is made to fail by running the supervisor where the system allows no second process (a
+  Windows job object limited to one active process), the same `kFailedToStart`;
 - a setup "refused at load" is `cut_c` on a copy of its recording cut at 30 %, whose measured stage `C` then lacks its
   outputs: the engine refuses it with exit 2 after the supervisor has loaded the setup.
 """
@@ -92,6 +92,39 @@ def _supervised(case, directory, label, *, deadline_ms=60000, restart=0, reader=
                                            restart_on_crash=restart, reader=tool_path("lm_reader") if reader else None,
                                            cwd=setup.parent, env=env, gate_file=gate if reader else None)
     return setup, run
+
+
+def _run_where_no_second_process_may_start(command: list[str], cwd: Path) -> int:
+    """The exit code of `command` run where the system refuses it a second process."""
+    if os.name != "nt":
+        import resource
+
+        def limit() -> None:
+            resource.setrlimit(resource.RLIMIT_NPROC, (1, 1))
+
+        return subprocess.run(command, capture_output=True, text=True, timeout=120, cwd=cwd, preexec_fn=limit).returncode
+    import ctypes
+    import ctypes.wintypes as wt
+
+    kernel, ntdll = ctypes.WinDLL("kernel32", use_last_error=True), ctypes.WinDLL("ntdll")
+    kernel.CreateJobObjectW.restype = wt.HANDLE
+    kernel.AssignProcessToJobObject.argtypes = [wt.HANDLE, wt.HANDLE]
+
+    class BasicLimits(ctypes.Structure):  # JOBOBJECT_BASIC_LIMIT_INFORMATION
+        _fields_ = [("PerProcessUserTimeLimit", ctypes.c_int64), ("PerJobUserTimeLimit", ctypes.c_int64), ("LimitFlags", wt.DWORD),
+                    ("MinimumWorkingSetSize", ctypes.c_size_t), ("MaximumWorkingSetSize", ctypes.c_size_t),
+                    ("ActiveProcessLimit", wt.DWORD), ("Affinity", ctypes.c_size_t), ("PriorityClass", wt.DWORD),
+                    ("SchedulingClass", wt.DWORD)]
+
+    job = kernel.CreateJobObjectW(None, None)
+    limits = BasicLimits(LimitFlags=0x8, ActiveProcessLimit=1)  # JOB_OBJECT_LIMIT_ACTIVE_PROCESS
+    assert kernel.SetInformationJobObject(wt.HANDLE(job), 2, ctypes.byref(limits), ctypes.sizeof(limits))
+    process = subprocess.Popen(command, creationflags=0x4, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=cwd)  # suspended
+    assert kernel.AssignProcessToJobObject(wt.HANDLE(job), wt.HANDLE(int(process._handle)))
+    ntdll.NtResumeProcess(wt.HANDLE(int(process._handle)))
+    process.communicate(timeout=120)
+    kernel.CloseHandle(wt.HANDLE(job))
+    return process.returncode
 
 
 def _cut_recording(case: LabCase, directory: Path) -> Path:
@@ -197,14 +230,13 @@ def test_syt_sup_03_five_outcomes_five_endings(tmp_path):
     codes["crash"] = _supervised(crash_case(), tmp_path, "sup03c")[1].exit_code
     codes["hang"] = _supervised(hang_case(), tmp_path, "sup03d", deadline_ms=2000, hang=True)[1].exit_code
 
-    # a worker that cannot start: a command line longer than the platform allows
+    # a worker that cannot start: the supervisor runs where the system allows it no second process (a Windows job object
+    # with an active-process limit of one; on POSIX `RLIMIT_NPROC` of the current count), so starting its worker is refused.
+    # `--config` is no longer an option of `simengine` (`D31 (1)`), so it can no longer be made too long.
     setup = _prepared(lab, tmp_path, "sup03e")
-    exe = str(engine_exe())
-    base = [exe, str(setup), "--supervise", "--attempt-timeout-ms", "60000", "--config", ""]
-    room = 32760 - len(subprocess.list2cmdline(base))
-    config = "c" * room
-    started = subprocess.run(base[:-1] + [config], capture_output=True, text=True, timeout=120, cwd=setup.parent)
-    codes["no start"] = started.returncode
+    started = _run_where_no_second_process_may_start(
+        [str(engine_exe()), str(setup), "--supervise", "--attempt-timeout-ms", "60000"], setup.parent)
+    codes["no start"] = started
     assert codes["pass"] == 0 and codes["crash"] == 8 and codes["hang"] == 7 and codes["no start"] == 6, f"SYT-SUP-03.c1: {codes}"
     assert codes["refused"] not in (0, 6, 7, 8), f"SYT-SUP-03.c1: the worker's own code {codes['refused']} is not its own"
     assert len(set(codes.values())) == 5, f"SYT-SUP-03.c1: two outcomes share a code: {codes}"

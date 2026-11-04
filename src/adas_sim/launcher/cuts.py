@@ -32,7 +32,10 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from adas_sim.graph.feasible import CutFeasibility, ModuleManifest, RecordingIndex, feasible_cuts
+from dataclasses import dataclass
+
+from adas_sim.graph.feasible import CutFeasibility, ModuleManifest, RecordingIndex, RecordingTopic, feasible_cuts
+from adas_sim.plugins.registry import reader_for
 
 if TYPE_CHECKING:
     from adas_sim.launcher.model import Selection
@@ -87,6 +90,44 @@ def cuts_for_recording(selection: "Selection", index: RecordingIndex) -> tuple[C
             {stage.name: ModuleManifest(name=stage.name, outputs=manifest.outputs)},
         ))
     return tuple(results)
+
+
+def topic_index(path: Path) -> RecordingIndex:
+    """`IMP-0142` (`SYS-0112`): the topic index of the recording at `path` and nothing else -- each topic's declared type and origin from
+    the reader's `topics()`; no message is read, so no payload is opened."""
+    reader = reader_for(path)
+    try:
+        infos = reader.topics()
+    finally:
+        reader.close()
+    topics = {}
+    for name, info in infos.items():
+        canonical = name if name.startswith("/") else "/" + name.replace(".", "/", 1)  # `B.out` is the topic `/B/out`
+        topics[canonical] = RecordingTopic(proto_type=info.schema_name, origin=str(getattr(info.provenance, "value", "")))
+    return RecordingIndex(topics=topics)
+
+
+@dataclass(frozen=True, slots=True)
+class StageFacts:
+    """What a recording's index says of one stage: whether it holds the stage's outputs, its `control` and its `refSync`."""
+
+    stage: str
+    outputs: bool
+    control: bool
+    ref_sync: bool
+    missing: tuple[str, ...] = ()
+
+
+def stage_facts(selection: "Selection", index: RecordingIndex) -> tuple[StageFacts, ...]:
+    """`IMP-0142`: per stage of the working pipeline, from `index` alone, the three answers of `SYS-0112`."""
+    found: list[StageFacts] = []
+    for cut in cuts_for_recording(selection, index):
+        found.append(StageFacts(
+            stage=cut.stage, outputs=cut.feasible, missing=cut.missing,
+            control=f"/{cut.stage}/control" in index.topics or "control" in index.topics,
+            ref_sync=f"/{cut.stage}/refSync" in index.topics or "refSync" in index.topics,
+        ))
+    return tuple(found)
 
 
 def cuts_for_all(

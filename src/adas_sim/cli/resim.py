@@ -138,7 +138,7 @@ def run(argv: list[str] | None = None) -> int:
     try:
         run_id = f"resim-{args.pipeline.stem}-{recording.stem}"
         result = invoke_engine(
-            pipeline, recording, run_id=run_id, output_path=output_path, config_path=config,
+            pipeline, recording, run_id=run_id, output_path=output_path, bundle_dir=config,
             setup_values=setup_values,
         )
         if not result.ok:

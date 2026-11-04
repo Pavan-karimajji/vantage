@@ -107,24 +107,20 @@ def test_adding_a_verb_with_no_dry_run_fails_at_construction():
 _SRC_DIR = Path(__file__).resolve().parents[2] / "src" / "adas_sim"
 
 
-def test_engine_bridge_run_engine_has_exactly_one_call_site():
-    """`ANL-SW-41`: `engine.bridge.run_engine` is the true bottom of the
-    stack -- the one place a `simengine` subprocess is actually launched.
-    Every higher-level helper (`run_pipeline_via_engine`,
-    `run_pipeline_merged_via_engine`, `orchestrate/run.py::invoke_engine`)
-    funnels through it, so asserting exactly one CALL to `run_engine(` (as
-    opposed to its own `def`) across the whole package is the real "one
-    invocation shape" check -- counting callers of the higher-level
-    wrappers would instead penalise having wrappers at all."""
+def test_engine_bridge_run_engine_is_called_from_the_pipeline_helper_and_the_launcher_only():
+    """`ANL-SW-41`, corrected by `VNT-WP-21`: `engine.bridge.run_engine` is the true bottom of the stack -- the one place a `simengine`
+    subprocess is actually launched. It has two callers: `run_pipeline_via_engine` (every higher-level helper funnels through it:
+    `orchestrate/run.py::invoke_engine`, `sim resim`, `sim check`, a batch worker) and `launcher/write.py::launch`, which writes
+    the run setup itself (`IMP-0140`). It was one caller before the launcher started its own runs; `check_one_engine_start.py`
+    (`ANL-07`) is the check that no other place starts the engine."""
     call_sites: list[str] = []
     for path in _SRC_DIR.rglob("*.py"):
         if "__pycache__" in path.parts:
             continue
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-            if "run_engine(" in line and "def run_engine(" not in line:
-                call_sites.append(f"{path}:{lineno}")
-    assert len(call_sites) == 1, call_sites
-    assert call_sites[0].startswith(str(_SRC_DIR / "engine" / "bridge.py"))
+            if "run_engine(" in line and "def run_engine(" not in line and not line.lstrip().startswith(("#", "`")):
+                call_sites.append(f"{path.relative_to(_SRC_DIR).as_posix()}:{lineno}")
+    assert sorted({site.split(":")[0] for site in call_sites}) == ["engine/bridge.py", "launcher/write.py"], call_sites
 
 
 def test_resim_check_and_worker_all_call_invoke_engine_not_the_bridge_directly():

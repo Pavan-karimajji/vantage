@@ -289,6 +289,9 @@ def main(argv: list[str] | None = None) -> int:
             ("scripts/check_inspector_items.py", "check_inspector_items.txt"),
             ("scripts/check_supervisor_boundary.py", "check_supervisor_boundary.txt"),
             ("scripts/check_no_graphical_toolkit.py", "check_no_graphical_toolkit.txt"),
+            ("scripts/check_one_recording_writer.py", "check_one_recording_writer.txt"),
+            ("scripts/check_one_engine_start.py", "check_one_engine_start.txt"),
+            ("scripts/check_window_boundary.py", "check_window_boundary.txt"),
         ):
             check_ok, check_detail = _run_subprocess_check(
                 [sys.executable, script], SIM_ROOT, artifact_dir, log_name

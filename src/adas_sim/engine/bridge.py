@@ -34,6 +34,7 @@ avoid it.
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
@@ -45,6 +46,7 @@ from adas_sim.config.paths import sim_root
 from adas_sim.diagnostics.errors import EnvironmentError_, InternalError
 from adas_sim.graph.pipeline import Pipeline, _split_ref
 from adas_sim.io.base import TopicInfo, group_by_log_time
+from adas_sim.launcher.command import command_line
 from adas_sim.plugins.registry import reader_for
 from adas_sim.resolve.component import ComponentManifest
 from adas_sim.runspec.address import resolve_address
@@ -180,7 +182,8 @@ class EngineRunResult:
 
 
 def run_engine(
-    spec_path: Path, *, config_path: Path | None = None, exec_timeout_ms: int = 0,
+    spec_path: Path, *, supervise: bool = False, attempt_timeout_ms: int | None = None, restart_on_crash: int = 0,
+    threads: int = 1, wait_for_attach: bool = False,
     simengine_path: Path | None = None, search: Sequence[Path] = (), output_path: Path | None = None,
     process_timeout_s: float = _DEFAULT_PROCESS_TIMEOUT_S,
 ) -> EngineRunResult:
@@ -194,13 +197,17 @@ def run_engine(
     (distinct from `exec_timeout_ms`'s per-cycle bound inside the engine,
     R-SIM-19) -- a process that never returns at all (never a plausible
     `fail`/`crash` result) reports `SIM_EXIT_TIMEOUT` here instead of
-    hanging the caller forever."""
+    hanging the caller forever.
+
+    `supervise` starts the batch face (`--supervise`), which needs `attempt_timeout_ms`, the deadline of one attempt: a supervised
+    start without it raises naming it, before any process starts (`SYS-0090`, `SYS-0109`; no default exists). The command line is
+    `launcher.command.command_line`'s. The engine takes no configuration path and no call timeout: the setup carries the bundle
+    beside each library and `limits.exec_timeout_ms` (`D31 (1)`)."""
     binary = simengine_path if simengine_path is not None else resolve_simengine_executable(search)
-    cmd = [str(binary), str(spec_path)]
-    if config_path is not None:
-        cmd += ["--config", str(config_path)]
-    if exec_timeout_ms > 0:
-        cmd += ["--timeout-ms", str(exec_timeout_ms)]
+    cmd = command_line(
+        binary, spec_path, "batch" if supervise else "developer", deadline_ms=attempt_timeout_ms, threads=threads,
+        restart_on_crash=restart_on_crash, wait_for_attach=wait_for_attach,
+    )
     try:
         proc = _run_subprocess(cmd, timeout_s=process_timeout_s)
     except subprocess.TimeoutExpired as exc:
@@ -375,7 +382,7 @@ def _ingest_for(recording_path: Path) -> dict[str, list]:
 def pipeline_to_run_spec(
     pipeline: Pipeline, *, run_id: str, recording_path: Path, setup_values: RunSetupValues,
     recording_sha256: str = "", output_path: Path | None = None, exec_timeout_ms: int = 250,
-    checkpoint_path: Path | None = None,
+    checkpoint_path: Path | None = None, coherence_verdict: str = "unknown",
 ) -> RunSpec:
     """Builds a Resolved Run Spec (`IF-09`) directly from an already-loaded
     `Pipeline` -- the Python-object twin of `runspec.emit.emit_run_spec`,
@@ -463,7 +470,7 @@ def pipeline_to_run_spec(
         }],
         "stages": stages,
         "mutations": mutations,
-        "coherence_verdict": "unknown",
+        "coherence_verdict": coherence_verdict,
         "outputs": outputs,
         "limits": {"exec_timeout_ms": exec_timeout_ms, "severity_exit": "error"},
         "readiness_limit_steps": _require_setup_integer(setup_values.readiness_limit_steps, key="readiness_limit_steps"),
@@ -485,11 +492,30 @@ def pipeline_to_run_spec(
     return spec
 
 
+def _stage_bundles(spec: RunSpec, bundle_dir: Path, scratch: Path) -> None:
+    """The setup, not an engine option, carries an explicit bundle (`D31 (1)`): each simulated stage's library is copied, with
+    the files beside it, into `scratch/<stage>/` and `bundle_dir` becomes the `config/` beside the copy, where the engine looks
+    for it; the stage's `impl.path` names the copy and its `config_bundle_sha256` the bundle's own `bundle.sha256` when it has one."""
+    hash_file = bundle_dir / "bundle.sha256"
+    for stage in spec.data["stages"]:
+        if stage["mode"] != "simulate" or not stage["impl"].get("path"):
+            continue
+        library = Path(stage["impl"]["path"])
+        target = scratch / stage["name"]
+        shutil.rmtree(target, ignore_errors=True)
+        shutil.copytree(library.parent, target, ignore=shutil.ignore_patterns("config", "__pycache__"))
+        shutil.copytree(bundle_dir, target / "config")
+        stage["impl"]["path"] = (target / library.name).as_posix()
+        if hash_file.is_file():
+            stage["config_bundle_sha256"] = hash_file.read_text(encoding="utf-8").strip()
+
+
 def run_pipeline_via_engine(
     pipeline: Pipeline, recording_path: Path, *, run_id: str, output_path: Path, setup_values: RunSetupValues,
-    config_path: Path | None = None, exec_timeout_ms: int = 250,
+    bundle_dir: Path | None = None, exec_timeout_ms: int = 250,
     spec_json_path: Path | None = None, simengine_path: Path | None = None, search: Sequence[Path] = (),
-    checkpoint_path: Path | None = None,
+    checkpoint_path: Path | None = None, supervise: bool = False, attempt_timeout_ms: int | None = None,
+    restart_on_crash: int = 0, threads: int = 1,
 ) -> EngineRunResult:
     """The one call every rewired call site makes: build the spec, write it
     (`runspec.canon.write_run_spec`, the same canonical form
@@ -499,16 +525,20 @@ def run_pipeline_via_engine(
     the exact spec that failed next to the (possibly partial) recording.
     `checkpoint_path` is forwarded to `pipeline_to_run_spec` unchanged --
     `None` means no checkpointing, matching that function's own default.
-    `setup_values` is forwarded unchanged too (`IMP-0051`)."""
+    `setup_values` is forwarded unchanged too (`IMP-0051`). `exec_timeout_ms` is the setup's `limits.exec_timeout_ms` and
+    `bundle_dir`, when given, is staged beside each simulated stage's library (`_stage_bundles`): neither is an engine option
+    (`D31 (1)`). `supervise`, `attempt_timeout_ms` and `restart_on_crash` are `run_engine`'s."""
     spec = pipeline_to_run_spec(
         pipeline, run_id=run_id, recording_path=recording_path, output_path=output_path,
         exec_timeout_ms=exec_timeout_ms, checkpoint_path=checkpoint_path, setup_values=setup_values,
     )
     spec_path = spec_json_path if spec_json_path is not None else output_path.with_suffix(output_path.suffix + ".spec.json")
+    if bundle_dir is not None:
+        _stage_bundles(spec, Path(bundle_dir), spec_path.parent / (spec_path.name + ".bundles"))
     spec_sha256 = write_run_spec(spec, spec_path)
     result = run_engine(
-        spec_path, config_path=config_path, exec_timeout_ms=exec_timeout_ms,
-        simengine_path=simengine_path, search=search, output_path=output_path,
+        spec_path, supervise=supervise, attempt_timeout_ms=attempt_timeout_ms, restart_on_crash=restart_on_crash,
+        threads=threads, simengine_path=simengine_path, search=search, output_path=output_path,
     )
     return replace(result, spec_sha256=spec_sha256)
 

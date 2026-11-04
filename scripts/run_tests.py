@@ -36,8 +36,10 @@ DURATIONS = ROOT / "conan_workarea" / "test_durations.json"
 GTEST_EXE = ROOT / "conan_workarea" / "build-gtest-vs2026" / "tests" / "Release" / "simcore_tests.exe"
 GTEST_CWD = ROOT / "conan_workarea" / "build-gtest-vs2026" / "tests"  # where ctest runs each discovered test
 
-#: Tests that cannot be isolated, node id prefix -> the reason (none today).
-SERIAL: dict[str, str] = {}
+#: Tests that cannot be isolated, node id prefix -> the reason.
+SERIAL: dict[str, str] = {
+    "tests/system/test_vnt_window.py": "tkinter initialisation fails now and then while 16 workers load the machine; four short tests in one quiet process",
+}
 
 
 def _key(classname: str, name: str) -> str:
@@ -154,10 +156,11 @@ def run_python(paths: list[str], workers: int) -> int:
         times.update(part["times"])
         if process.returncode not in (0, 1) or part["failed"] + part["errors"] or not junit.is_file():
             logs.append((n, log))
-    for node in serial:  # the serial tail: one worker, after the parallel part
-        reason = next(why for prefix, why in SERIAL.items() if node.startswith(prefix))
-        print(f"serial tail: {node} ({reason})")
-        process, junit, log = _python_worker(0, [node], scratch)
+    if serial:  # the serial tail: one process, after the parallel part
+        for node in serial:
+            reason = next(why for prefix, why in SERIAL.items() if node.startswith(prefix))
+            print(f"serial tail: {node} ({reason})")
+        process, junit, log = _python_worker(0, serial, scratch)
         process.wait()
         part = _read_junit(junit)
         for field in totals:
@@ -165,6 +168,8 @@ def run_python(paths: list[str], workers: int) -> int:
         failures += part["failures"]
         skips.update(part["skips"])
         times.update(part["times"])
+        if part["failed"] + part["errors"] or not junit.is_file():
+            logs.append((0, log))
     wall = time.monotonic() - started
     total_run = sum(totals.values())
     for key in failures:

@@ -23,17 +23,18 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="sim")
     subparsers = parser.add_subparsers(dest="verb", required=True)
     subparsers.add_parser("doctor", help="report the environment (DG-3)")
-    subparsers.add_parser("explain", help="explain any name in the system (DG-2)", add_help=False)
+    subparsers.add_parser("explain", help="the dry run: the resolved configuration with each value's layer, nothing started (SYS-0121)", add_help=False)
     subparsers.add_parser("probe", help="what a recording provides, and what it doesn't (S-C9)", add_help=False)
     subparsers.add_parser("convert", help="recording -> recording (S-D7)", add_help=False)
     subparsers.add_parser("export", help="recording -> CSV, port-selectable (S-D7)", add_help=False)
-    subparsers.add_parser("record", help="drive a source, execute nothing (S-C2)", add_help=False)
+    subparsers.add_parser("record", help="a recording from a scenario file of explicit values, execute nothing (D22)", add_help=False)
     subparsers.add_parser("run", help="drive a source and execute a pipeline, live (S-C2)", add_help=False)
     subparsers.add_parser("resim", help="execute a pipeline against a recording (S-C2)", add_help=False)
     subparsers.add_parser("check", help="evaluate expect: against a scenario set, headless (S-C3)", add_help=False)
     subparsers.add_parser("determinism", help="compare two recordings, axis derived not flagged (S-C6)", add_help=False)
     subparsers.add_parser("batch", help="run a pipeline over a recording set, isolated per recording (S-D7)", add_help=False)
     subparsers.add_parser("list", help="list ports|topics|signals for a lib/recording/session (S-D6, DG-1)", add_help=False)
+    subparsers.add_parser("window", help="the launcher window (D21)", add_help=False)
     subparsers.add_parser("validate", help="lint a project's config, no recording or binary needed (IMP-0165)", add_help=False)
 
     args, remainder = parser.parse_known_args(argv)
@@ -55,8 +56,8 @@ def main(argv: list[str] | None = None) -> int:
         from adas_sim.cli import export
         return export.run(remainder)
     if args.verb == "record":
-        from adas_sim.cli import record
-        return record.run(remainder)
+        from adas_sim.scenario import record
+        return record.main(remainder)
     if args.verb == "run":
         from adas_sim.cli import run as run_verb
         return run_verb.run(remainder)
@@ -81,6 +82,9 @@ def main(argv: list[str] | None = None) -> int:
         # anything imported `adas_sim.cli.list`).
         from adas_sim.cli import list_cmd
         return list_cmd.run(remainder)
+    if args.verb == "window":
+        from adas_sim.cli import window
+        return window.run(remainder)
     if args.verb == "validate":
         from adas_sim.cli import validate
         return validate.run(remainder)

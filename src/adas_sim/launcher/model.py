@@ -141,19 +141,67 @@ class Selection:
         return pipeline
 
     def set_mode(self, stage: str, mode: Mode) -> Selection:
+        """A new selection with `stage` in `mode`. `measured` for a stage the selected recording cannot feed (`SYS-0113`) is refused
+        naming the stage and its missing ports, and nothing changes. A recording that is not a file on disk is not checked."""
         _require_stage(self.base_pipeline, stage, where="launcher.model.Selection.set_mode")
+        if mode == "measured" and self.selected_recording is not None and Path(self.selected_recording).is_file():
+            from adas_sim.launcher.cuts import cuts_for_recording, topic_index
+
+            try:
+                cuts = cuts_for_recording(self, topic_index(Path(self.selected_recording)))
+            except Exception:  # a file that is no recording has no index to check against: the engine refuses it at load
+                cuts = ()
+            for cut in cuts:
+                if cut.stage == stage and not cut.feasible:
+                    raise AuthoringError(
+                        expected=f"the recording to hold stage '{stage}''s outputs", found="missing: " + "; ".join(cut.missing),
+                        where=f"launcher.model.Selection.set_mode({stage!r}, 'measured')",
+                        hint="record this stage's outputs, or choose simulate or off",
+                    )
         return replace(self, mode_overrides={**self.mode_overrides, stage: mode})
+
+    def offered_triggers(self, stage: str) -> tuple[str, ...]:
+        """`SYS-0114`: the triggers the launcher offers for `stage`: each input the stage declares, and `control` only when the selected
+        recording's index holds the stage's `control` topic."""
+        _require_stage(self.base_pipeline, stage, where="launcher.model.Selection.offered_triggers")
+        manifest = self.working_pipeline.manifest_for(stage)
+        offered = [spec.name for spec in manifest.inputs if spec.name != "control"]
+        if self.selected_recording is not None and Path(self.selected_recording).is_file():
+            from adas_sim.launcher.cuts import topic_index
+
+            try:
+                index = topic_index(Path(self.selected_recording))
+            except Exception:  # a file that is no recording offers no `control`
+                index = None
+            if index is not None and (f"/{stage}/control" in index.topics or "control" in index.topics):
+                offered.append("control")
+        return tuple(offered)
 
     def isolate(self, stage: str) -> Selection:
         """`SW-0017`: one operation setting `stage` to execute (`simulate`)
-        and every other declared stage to replay (`measured`) -- the whole
+        and every other declared stage whose outputs the selected recording holds to replay (`measured`; a stage it cannot feed
+        stays `simulate`, `SYS-0194`) -- the whole
         `mode_overrides` mapping is replaced in one step, so no stage keeps
         a stale mode from before the call, and no other field changes."""
         _require_stage(self.base_pipeline, stage, where="launcher.model.Selection.isolate")
+        feasible = self._measurable()
         modes: dict[str, Mode] = {
-            s.name: ("simulate" if s.name == stage else "measured") for s in self.base_pipeline.stages
+            s.name: ("simulate" if s.name == stage or s.name not in feasible else "measured") for s in self.base_pipeline.stages
         }
         return replace(self, mode_overrides=modes)
+
+    def _measurable(self) -> set[str]:
+        """The stages the selected recording can feed as `measured` (`SYS-0113`); every stage when the recording cannot be read."""
+        names = {s.name for s in self.base_pipeline.stages}
+        if self.selected_recording is None or not Path(self.selected_recording).is_file():
+            return names
+        from adas_sim.launcher.cuts import cuts_for_recording, topic_index
+
+        try:
+            cuts = cuts_for_recording(self, topic_index(Path(self.selected_recording)))
+        except Exception:  # a file that is no recording has no index to check against
+            return names
+        return {cut.stage for cut in cuts if cut.feasible} | (names - {cut.stage for cut in cuts})
 
     def group_state(self, stages: Collection[str]) -> GroupState:
         """`SW-0018`: `stages`' shared mode, or `"mixed"` when they
@@ -165,6 +213,16 @@ class Selection:
         if len(modes) == 1:
             return next(iter(modes))
         return "mixed"
+
+    def set_group_mode(self, stages: Collection[str], mode: str) -> Selection:
+        """`SYS-0195`: every stage of a group in `mode`, one new selection. The mixed state cannot be chosen: `mixed` is what a group shows
+        when its stages disagree, never a mode a stage can be given."""
+        if mode == "mixed":
+            raise ValueError("the mixed state of a group cannot be chosen as a mode")
+        selection = self
+        for stage in stages:
+            selection = selection.set_mode(stage, mode)  # type: ignore[arg-type]
+        return selection
 
     def set_impl(self, stage: str, impl: str) -> Selection:
         _require_stage(self.base_pipeline, stage, where="launcher.model.Selection.set_impl")

@@ -74,7 +74,10 @@ def test_launch_reaches_a_real_run_only_through_the_written_path(tmp_path, monke
 
     assert exit_code == 0
     captured = capsys.readouterr()
-    assert "resim complete:" in captured.out  # reached cli.resim.run, not a second implementation
+    # `launch` writes the engine's run setup beside the run configuration, starts the engine on that file and prints the exit code's
+    # meaning (`IMP-0140`, `VNT-WP-21`); it no longer goes through `cli.resim.run`, which printed "resim complete:".
+    assert "0 ok: the run passed" in captured.out
+    assert config_path.with_suffix(".run.json").is_file()
 
 
 def _write_pipeline_file(tmp_path: Path) -> Path:

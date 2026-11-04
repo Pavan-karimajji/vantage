@@ -35,9 +35,10 @@ from adas_sim.runspec.emit import RunSetupValues
 
 def invoke_engine(
     pipeline: Pipeline, recording_path: Path, *, run_id: str, output_path: Path, setup_values: RunSetupValues,
-    config_path: Path | None = None, exec_timeout_ms: int = 250,
+    bundle_dir: Path | None = None, exec_timeout_ms: int = 250,
     spec_json_path: Path | None = None, simengine_path: Path | None = None, search: Sequence[Path] = (),
-    progress: ProgressSink | None = None, checkpoint_path: Path | None = None,
+    progress: ProgressSink | None = None, checkpoint_path: Path | None = None, supervise: bool = False,
+    attempt_timeout_ms: int | None = None, restart_on_crash: int = 0, threads: int = 1,
 ) -> EngineRunResult:
     """The one call every face makes to drive `simengine` against an
     existing recording (the interactive workspace, `sim resim`, `sim check`,
@@ -64,9 +65,10 @@ def invoke_engine(
     sink.message(f"starting run {run_id}")
     sink.report(0, 0)
     result = run_pipeline_via_engine(
-        pipeline, recording_path, run_id=run_id, output_path=output_path, config_path=config_path,
+        pipeline, recording_path, run_id=run_id, output_path=output_path, bundle_dir=bundle_dir,
         exec_timeout_ms=exec_timeout_ms, spec_json_path=spec_json_path, simengine_path=simengine_path, search=search,
-        checkpoint_path=checkpoint_path, setup_values=setup_values,
+        checkpoint_path=checkpoint_path, setup_values=setup_values, supervise=supervise,
+        attempt_timeout_ms=attempt_timeout_ms, restart_on_crash=restart_on_crash, threads=threads,
     )
     sink.report(1, 1)
     sink.message(f"finished run {run_id}: ok={result.ok}")

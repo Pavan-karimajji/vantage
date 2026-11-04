@@ -265,7 +265,7 @@ def check_scenario(
         output_path = Path(tmp_dir) / f"check_out{DEFAULT_RECORDING_EXT}"
         result = invoke_engine(
             pipeline, resolved_recording, run_id=f"check-{scenario.id}", output_path=output_path,
-            config_path=config_path, setup_values=setup_values,
+            bundle_dir=config_path, setup_values=setup_values,
         )
         if not result.ok:
             raise AuthoringError(

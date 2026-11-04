@@ -13,8 +13,9 @@
 ///   side work (`--dump-graph`, `--search-dir`, `RecordingReader`/
 ///   `Pipeline`/`RunResim` calls) stays behind `simcore`'s own ABI or is
 ///   superseded outright (`impl.path`/`sources[].path` are already
-///   absolute, `D-1`). What survives: one positional path, `--config`, a
-///   timeout, a closed `ExitCode` return (`SW-0148`).
+///   absolute, `D-1`). What survives: one positional path and the options
+///   below, a closed `ExitCode` return (`SW-0148`). `--config` and `--timeout-ms` are gone (`D31 (1)`): the run
+///   setup carries each stage's bundle beside its library and `limits.exec_timeout_ms`.
 ///
 ///   **`SW-0147`, done for real, not faked:** a same-process catch of
 ///   `simEngineRun`'s own `Result::Fail` cannot observe a genuine
@@ -70,8 +71,6 @@ namespace {
 
 struct Args {
   std::string run_spec_path;
-  std::string config_path;
-  std::int64_t exec_timeout_ms = 0;
   bool wait_for_attach = false;
   int threads = 1;                  // IMP-0005, IMP-0034: `--threads N`
   int max_restarts = 0;             // SW-0147: off by default
@@ -86,11 +85,7 @@ struct Args {
 bool ParseArgs(int argc, char** argv, Args& out) {
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
-    if (arg == "--config" && i + 1 < argc) {
-      out.config_path = argv[++i];
-    } else if (arg == "--timeout-ms" && i + 1 < argc) {
-      out.exec_timeout_ms = std::stoll(argv[++i]);
-    } else if (arg == "--wait-for-attach") {
+    if (arg == "--wait-for-attach") {
       out.wait_for_attach = true;
     } else if (arg == "--threads" && i + 1 < argc) {
       // IMP-0005: N >= 1, default 1. A value that is not a whole number, or
@@ -229,9 +224,7 @@ SimExitCode RunOnce(const Args& args, char* err_buf, std::size_t cap) {  // a wo
   if (std::getenv("ADAS_SIM_TEST_FORCE_ABORT") != nullptr) std::abort();
 
   SimExitCode exit_code = kSimExitOk;
-  SimEngine* engine = simEngineCreate(args.run_spec_path.c_str(),
-                                       args.config_path.empty() ? nullptr : args.config_path.c_str(),
-                                       args.exec_timeout_ms, err_buf, cap, &exit_code);
+  SimEngine* engine = simEngineCreate(args.run_spec_path.c_str(), nullptr, 0, err_buf, cap, &exit_code);
   if (engine == nullptr) {
     std::cerr << "[simengine] error: " << err_buf << "\n";
     return exit_code;
@@ -257,14 +250,6 @@ SimExitCode RunOnce(const Args& args, char* err_buf, std::size_t cap) {  // a wo
 
 std::vector<std::string> BuildChildArgs(const Args& args, const std::string& cell_name) {
   std::vector<std::string> out{args.run_spec_path};
-  if (!args.config_path.empty()) {
-    out.push_back("--config");
-    out.push_back(args.config_path);
-  }
-  if (args.exec_timeout_ms > 0) {
-    out.push_back("--timeout-ms");
-    out.push_back(std::to_string(args.exec_timeout_ms));
-  }
   out.push_back("--threads");
   out.push_back(std::to_string(args.threads));
   out.push_back("--__worker");
@@ -443,7 +428,7 @@ int main(int argc, char** argv) {
   Args args;
   if (!ParseArgs(argc, argv, args)) {
     std::cerr << "usage: " << argv[0]
-              << " <run_spec.json> [--config PATH] [--timeout-ms N] [--threads N] [--wait-for-attach]"
+              << " <run_spec.json> [--threads N] [--wait-for-attach]"
                  " [--supervise --attempt-timeout-ms N [--restart-on-crash N]]\n";
     return static_cast<int>(kSimExitConfig);
   }

@@ -200,9 +200,15 @@ ProbeSetup WriteProbeSetup(const std::string& tag) {
   setup.live_name = UniqueName("live");
   setup.gate = TempPath("sup_" + tag + ".gate");
   std::filesystem::remove(setup.gate);
-  setup.config_dir = TempPath("sup_" + tag + "_cfg");
+  // The probe's bundle is beside its own copy of the library, where the engine looks for it: the setup names the copy
+  // (`--config` is no longer an option of `simengine`, `D31 (1)`).
+  const std::filesystem::path library_dir = TempPath("sup_" + tag + "_lib");
+  setup.config_dir = library_dir / "config";
   std::filesystem::create_directories(setup.config_dir);
   std::ofstream(setup.config_dir / "default.yaml") << "PROBE_GATE_FILE: " << setup.gate.string() << "\n";
+  const std::filesystem::path probe_source = FixtureLibrary("held_probe");
+  const std::filesystem::path probe_copy = library_dir / probe_source.filename();
+  std::filesystem::copy_file(probe_source, probe_copy, std::filesystem::copy_options::overwrite_existing);
 
   const std::filesystem::path recording = TempPath("sup_" + tag + ".mcap");
   {
@@ -247,7 +253,7 @@ ProbeSetup WriteProbeSetup(const std::string& tag) {
        "abi_version": 1, "config_bundle_sha256": "", "ports": [)"
       << port("out", "pro", "adas.lab.LabSample") << R"(], "inputs": []},
       {"name": "P", "mode": "simulate", "impl": {"kind": "dll", "path": ")"
-      << JsonEscape(FixtureLibrary("held_probe")) << R"("}, "trigger": "control", "clock_period_ns": 0,
+      << JsonEscape(probe_copy) << R"("}, "trigger": "control", "clock_period_ns": 0,
        "abi_version": 1, "config_bundle_sha256": "",
        "ports": [)"
       << port("control", "req", "adas.common.CycleControl") << "," << port("in", "req", "adas.lab.LabSample") << ","
@@ -407,9 +413,7 @@ TEST(Supervisor, IMP_0107_AKilledWorkersLiveMeasurementIsSealedCrashAndOnlyThatC
   const ProbeSetup setup = WriteProbeSetup("seal");
   Ran ran;
   std::thread supervisor([&] {
-    ran = RunSimengine({setup.spec.string(), "--supervise", "--attempt-timeout-ms", "60000", "--config",
-                        setup.config_dir.string()},
-                       std::chrono::seconds(90));
+    ran = RunSimengine({setup.spec.string(), "--supervise", "--attempt-timeout-ms", "60000"}, std::chrono::seconds(90));
   });
   std::unique_ptr<SharedRegion> data = WaitForLiveMeasurement(setup.live_name, std::chrono::seconds(30));
   ASSERT_NE(data, nullptr) << "the held run never showed its live measurement";
@@ -453,9 +457,7 @@ TEST(Supervisor, IMP_0107_APassingSupervisedRunIsLeftPassAndTheSupervisorSealsNo
   const ProbeSetup setup = WriteProbeSetup("pass");
   Ran ran;
   std::thread supervisor([&] {
-    ran = RunSimengine({setup.spec.string(), "--supervise", "--attempt-timeout-ms", "60000", "--config",
-                        setup.config_dir.string()},
-                       std::chrono::seconds(90));
+    ran = RunSimengine({setup.spec.string(), "--supervise", "--attempt-timeout-ms", "60000"}, std::chrono::seconds(90));
   });
   std::unique_ptr<SharedRegion> data = WaitForLiveMeasurement(setup.live_name, std::chrono::seconds(30));
   ASSERT_NE(data, nullptr);

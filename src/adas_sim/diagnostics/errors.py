@@ -97,6 +97,27 @@ EXIT_CODES: Mapping[str, int] = {
 }
 
 
+#: `IMP-0141` (`SYS-0111`): the name and one line of meaning of each exit code of the closed set, in the words the launcher prints.
+_EXIT_MEANINGS: Mapping[int, str] = {
+    0: "the run passed",
+    2: "the run setup, a configuration file or an option is refused before the first step",
+    3: "the selection is a broken chain and no waiver was given",
+    4: "a component reported an error or broke the contract",
+    5: "a recording is damaged or was cut off",
+    6: "a process, a file or a library could not be started or opened",
+    7: "a component call or the whole run took longer than its limit",
+    8: "the process ended without saying why",
+}
+
+
+def exit_code_meaning(code: int) -> str:
+    """`<code> <name>: <meaning>` for a code of the closed set; any other value reads `<code> unknown`, never a name."""
+    for name, value in EXIT_CODES.items():
+        if value == code and code in _EXIT_MEANINGS:
+            return f"{code} {name}: {_EXIT_MEANINGS[code]}"
+    return f"{code} unknown"
+
+
 class ProvenanceWarning(Warning):
     """A project mismatch or unknown-provenance recording (R-SIM-3a, R-SIM-6).
 

@@ -23,10 +23,11 @@ file), so the two call sites can never classify differently by construction.
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from adas_sim.diagnostics.errors import EXIT_CODES
+from adas_sim.diagnostics.errors import EXIT_CODES, ProvenanceWarning
 from adas_sim.graph import coherence, waiver
 
 if TYPE_CHECKING:
@@ -55,6 +56,24 @@ def classify(pipeline: "Pipeline", waivers: tuple[waiver.Waiver, ...] = ()) -> C
     findings = coherence.classify(pipeline)
     blocking = waiver.still_blocking(findings, waivers)
     return ClassificationResult(findings=findings, blocking=blocking, can_launch=not blocking)
+
+
+_WARNED_ORPHANS: set[tuple[str, ...]] = set()
+
+
+def warn_orphans(result: ClassificationResult) -> None:
+    """`IMP-0144` (`SYS-0117`): one `ProvenanceWarning` naming each orphan simulation -- a `simulate` stage whose outputs only `measured`
+    stages read -- however often the selection is validated: an orphan already warned of is not warned of again in this process."""
+    for finding in result.findings:
+        if finding.verdict is coherence.Verdict.ORPHAN and finding.path not in _WARNED_ORPHANS:
+            _WARNED_ORPHANS.add(finding.path)
+            warnings.warn(ProvenanceWarning(
+                f"stage '{finding.path[0]}' is computed but not consumed: only measured stage(s) {', '.join(finding.stale)} read it"), stacklevel=2)
+
+
+def forget_warned_orphans() -> None:
+    """Forgets every orphan `warn_orphans` has warned of (a new session)."""
+    _WARNED_ORPHANS.clear()
 
 
 def remedies_for(finding: coherence.Finding) -> tuple[coherence.Remedy, ...]:
