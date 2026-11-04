@@ -151,6 +151,9 @@ struct Batch {
   // caller's own loop-termination signal, distinct from `end_reason` (which
   // names why THIS batch ended, not whether another one follows).
   bool exhausted = false;
+  // The first problem the codec met reading the file (a record cut off, a bad length): the messages before it are in
+  // `messages`, and the caller treats the recording as unreadable. `damaged_input` set (exit code `Input`), naming the file and the problem.
+  std::optional<Error> error;
 };
 
 namespace detail {

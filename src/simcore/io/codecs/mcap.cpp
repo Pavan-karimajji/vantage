@@ -220,6 +220,8 @@ class McapReader final : public Reader {
   }
 
   Result<bool> Open(const std::filesystem::path& path) override {
+    path_ = path;
+    problem_.reset();
     const mcap::Status status = reader_.open(path.string());
     if (!status.ok()) {
       return Result<bool>::Fail(MakeError(
@@ -227,7 +229,16 @@ class McapReader final : public Reader {
           "check the file exists and is a valid mcap recording"));
     }
     opened_ = true;
-    const mcap::Status summary_status = reader_.readSummary(mcap::ReadSummaryMethod::AllowFallbackScan);
+    // Only a file whose footer cannot be read is cut off (or its writer died): the fallback scan reads up to the last
+    // whole record and the reading then ends there with no problem to report, so the reason is kept here and handed
+    // on by every `ReadRange`. A valid footer with no summary or statistics (`MissingStatistics`) is a whole file.
+    open_problem_.reset();
+    const mcap::Status strict = reader_.readSummary(mcap::ReadSummaryMethod::NoFallbackScan);
+    if (!strict.ok() && strict.code != mcap::StatusCode::MissingStatistics) {
+      open_problem_ = "no footer or summary (" + strict.message + "): the recording is cut off";
+    }
+    const mcap::Status summary_status =
+        strict.ok() ? strict : reader_.readSummary(mcap::ReadSummaryMethod::AllowFallbackScan);
     if (!summary_status.ok()) {
       return Result<bool>::Fail(MakeError(
           Kind::Environment, "a readable .mcap summary", summary_status.message, path.string()));
@@ -252,7 +263,14 @@ class McapReader final : public Reader {
   void Seek(std::int64_t log_time_ns) override { ResetView(static_cast<mcap::Timestamp>(log_time_ns)); }
 
   Batch ReadRange(const ReadBounds& bounds) override {
-    return detail::AccumulateBatch(bounds, lookahead_, [this]() { return Pull(); });
+    Batch batch = detail::AccumulateBatch(bounds, lookahead_, [this]() { return Pull(); });
+    const std::optional<std::string>& problem = open_problem_.has_value() ? open_problem_ : problem_;
+    if (problem.has_value()) {
+      batch.error = MakeError(Kind::Environment, "a recording that reads to its end", *problem, path_.string(),
+                              "the file is damaged or was cut off; record it again");
+      batch.error->damaged_input = true;  // the run ends with `ExitCode::Input`
+    }
+    return batch;
   }
 
   void Close() override {
@@ -367,6 +385,7 @@ class McapReader final : public Reader {
 
   void ResetView(mcap::Timestamp start_time) {
     lookahead_.reset();
+    problem_.reset();
     mcap::ReadMessageOptions options(start_time, mcap::MaxTime);
     // `LogTimeOrder` silently yields ZERO messages against a file written
     // with `McapWriterOptions::noChunking = true` (SW-0041, McapWriter::Open
@@ -411,7 +430,13 @@ class McapReader final : public Reader {
 
   mcap::McapReader reader_;
   bool opened_ = false;
-  mcap::ProblemCallback on_problem_ = [](const mcap::Status&) {};
+  // The first problem the reader reports while reading is kept, never dropped: `ReadRange` hands it on (`Batch::error`).
+  mcap::ProblemCallback on_problem_ = [this](const mcap::Status& status) {
+    if (!problem_.has_value()) problem_ = status.message;
+  };
+  std::filesystem::path path_;
+  std::optional<std::string> problem_;
+  std::optional<std::string> open_problem_;  // found by `Open`, kept across a `Seek`
   std::optional<mcap::LinearMessageView> view_;
   std::optional<mcap::LinearMessageView::Iterator> iterator_;
   std::optional<RawMessage> lookahead_;

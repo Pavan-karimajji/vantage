@@ -697,6 +697,33 @@ struct Runner::PendingRun {
   std::optional<Result<module_host::PortMap>> executed;
 };
 
+// `IMP-0065`: what a run of the stage can still need is its own control and the one after it. Keep the arrived
+// controls from the oldest open control-started ticket's own control on, or only the newest when the stage has no
+// such ticket (a clock- or input-started run never finds its control among them). The own control is found from the
+// back, where the last of equal counters is the one `NextControlNs` uses.
+void Runner::TrimControlArrivals(const std::string& stage) {
+  Impl& impl = *impl_;
+  std::deque<ControlArrival>& arrived = impl.control_arrivals[stage];
+  std::size_t keep_from = arrived.size() - 1;
+  const std::vector<std::uint8_t>* oldest = impl.orchestrator->OldestOpenControl(stage);
+  if (oldest != nullptr) {
+    const bus::SignalHeader header = bus::ReadSignalHeader(*oldest, bus_->Descriptor(stage + ".control"));
+    if (header.measurement_counter.has_value()) {
+      for (std::size_t i = arrived.size(); i-- > 0;) {
+        if (adas::common::counterDistance(header.measurement_counter.value(), arrived[i].counter) != 0) continue;
+        keep_from = std::min(keep_from, i);
+        break;
+      }
+    }
+  }
+  arrived.erase(arrived.begin(), arrived.begin() + static_cast<std::ptrdiff_t>(keep_from));
+}
+
+std::size_t Runner::ControlArrivalsHeld(const std::string& stage) const {
+  const auto found = impl_->control_arrivals.find(stage);
+  return found == impl_->control_arrivals.end() ? 0 : found->second.size();
+}
+
 void Runner::PrepareTicket(const orchestrator::Ticket& ticket, PendingRun& pending) {
   Impl& impl = *impl_;
   const std::uint64_t step = impl.orchestrator->StepNumber();
@@ -980,6 +1007,8 @@ Result<bool> Runner::StepOnce() {
   orchestrator::Orchestrator& orch = *impl.orchestrator;
 
   TopUp();
+  // A recording the reader found damaged ends the run: what it read before the problem is not a whole recording.
+  if (impl.ahead->Failure().has_value()) return Result<bool>::Fail(*impl.ahead->Failure());
   const Result<bool> begun = orch.BeginStep();
   if (!begun.ok()) return begun;
   if (!begun.value()) {
@@ -1010,6 +1039,7 @@ Result<bool> Runner::StepOnce() {
               bus::ReadSignalHeader(message.message.payload, bus_->Descriptor(message.port));
           if (sig.measurement_counter.has_value()) {
             impl.control_arrivals[stage].push_back({sig.measurement_counter.value(), instant.time_ns});
+            TrimControlArrivals(stage);
           }
         }
       }

@@ -42,6 +42,7 @@ void ReadAhead::Refill(std::size_t reader) {
   if (reader_drained_[reader]) return;
   io::Batch batch = readers_[reader]->ReadRange(bounds_);
   if (batch.exhausted) reader_drained_[reader] = true;
+  if (batch.error.has_value() && !failure_.has_value()) failure_ = batch.error;
   for (io::RawMessage& message : batch.messages) {
     if (floor_ns_.has_value() && message.log_time_ns < *floor_ns_) continue;
     if (byte_counter_ != nullptr) {
@@ -163,6 +164,7 @@ std::vector<const AheadMessage*> ReadAhead::OnPort(const std::string& port) cons
 
 void ReadAhead::Seek(std::int64_t to_ns) {
   instants_.clear();
+  failure_.reset();
   for (std::size_t i = 0; i < readers_.size(); ++i) {
     carry_[i].clear();
     reader_drained_[i] = false;

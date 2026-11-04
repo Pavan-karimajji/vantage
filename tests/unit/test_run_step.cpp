@@ -781,6 +781,31 @@ std::vector<io::RawMessage> LongEchoRecording(int n, int diverges_from) {
   return messages;
 }
 
+// `IMP-0065`: the arrived controls the runner keeps for a stage's refSync lookups are bounded: after a whole recording of
+// 300 runs a stage holds at most `kHeldBound` of them, whether a clock starts it (its own control is never among them,
+// so only the newest is kept) or its control does (the run's own and the next).
+constexpr std::size_t kHeldBound = 2;
+
+TEST(RunStep, IMP_0065_AClockStartedStageWhoseRecordingHoldsItsControlsKeepsAFewArrivedControls) {
+  RunSpec spec = ControlSpec();
+  spec.stages[1].trigger.clear();
+  spec.stages[1].clock_period_ns = 100 * kMs;
+  Harness h(spec, LongEchoRecording(300, 300));
+  Runner runner = RunToTheEnd(h);
+  EXPECT_LE(runner.ControlArrivalsHeld("B"), kHeldBound);
+  EXPECT_GE(h.Written("/B/control").size(), 299u);  // the whole recording ran
+}
+
+TEST(RunStep, IMP_0065_AControlStartedStageKeepsAFewArrivedControlsAndStillFindsItsRecordedRefSync) {
+  Harness h(ControlSpec(), LongEchoRecording(300, 300));
+  Runner runner = RunToTheEnd(h);
+  EXPECT_LE(runner.ControlArrivalsHeld("B"), kHeldBound);
+  EXPECT_FALSE(runner.FirstDivergence().has_value());
+  EXPECT_EQ(h.Written("/B/out").size(), 300u);  // every run ran on its own recorded inputs
+  for (const io::RawMessage& message : h.Written("/B/control")) EXPECT_NE(message.payload.size(), 0u);
+  EXPECT_EQ(CountDivergenceLines(runner), 0u);
+}
+
 TEST(RunStep, UtRun05TheFirstDivergenceIsLatchedAndIsIdenticalAcrossReRuns) {
   // Step 0 is the stage's RESTART run, never compared; step 1 is the first RUN run and the first divergence.
   const auto run_once = [] {

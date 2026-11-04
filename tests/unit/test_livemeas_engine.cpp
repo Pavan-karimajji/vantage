@@ -24,6 +24,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <optional>
@@ -368,6 +369,33 @@ TEST_F(LiveMeasEngine, IMP_0083_DestroyOfARunThatDidNotReachTheEndWritesFail) {
   simEngineDestroy(e.engine);
   EXPECT_EQ(StatusOf(*data).status.load(), 3u);
   EXPECT_EQ(StatusOf(*data).outcome.load(), 2u);
+}
+
+// A recording the reader finds cut off ends the run with exit code `Input` (`VNT-CLEAN-1`), and the live measurement closes
+// `fail`, not `pass`.
+TEST_F(LiveMeasEngine, IMP_0083_ARecordingCutOffEndsTheRunWithInputAndWritesFail) {
+  const std::string name = UniqueName("cutoff");
+  const std::filesystem::path spec = WriteClockSpec("cutoff", LiveMeasJson(name));
+  const std::filesystem::path recording = TempPath("lme_cutoff.mcap");
+  std::string bytes;
+  {
+    std::ifstream in(recording, std::ios::binary);
+    bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+  }
+  {
+    std::ofstream out(recording, std::ios::binary | std::ios::trunc);
+    out.write(bytes.data(), static_cast<std::streamsize>(bytes.size() * 6 / 10));
+  }
+  Engine e = Create(spec);
+  ASSERT_NE(e.engine, nullptr) << e.error;
+  std::unique_ptr<SharedRegion> data = Attach(name);
+  ASSERT_NE(data, nullptr);
+  char err[512] = {0};
+  EXPECT_EQ(simEngineRun(e.engine, err, sizeof(err)), kSimExitInput);
+  EXPECT_NE(std::string(err).find("lme_cutoff.mcap"), std::string::npos) << err;
+  EXPECT_EQ(StatusOf(*data).status.load(), 3u);
+  EXPECT_EQ(StatusOf(*data).outcome.load(), 2u);
+  simEngineDestroy(e.engine);
 }
 
 // `IMP-0080` (`D30`): `B` runs twice in the 100 ms step (two recorded controls at the same instant); each of its

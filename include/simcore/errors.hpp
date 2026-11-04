@@ -35,6 +35,9 @@ struct Error {
   // `limits.exec_timeout_ms`; the run then ends with `ExitCode::Timeout`, not
   // the `Internal` default (`ExitCodeFor`).
   bool timed_out = false;
+  // `VNT-CLEAN-1`: set when a recording the run reads is damaged (a record cut off, a bad length); the run then ends
+  // with `ExitCode::Input`, whatever the kind.
+  bool damaged_input = false;
 
   std::string Format() const {
     std::string msg = "expected " + expected + "; found " + found + "; where " + where;
@@ -109,10 +112,11 @@ inline ExitCode DefaultExitCode(Kind kind) {
   return ExitCode::Crash;  // unreachable for a valid Kind; never guess Ok
 }
 
-// The code a raised `Error` ends a run with: `Timeout` when it says a call timed out, else its
-// kind's default.
+// The code a raised `Error` ends a run with: `Timeout` when it says a call timed out, `Input` when it says a
+// recording is damaged, else its kind's default.
 inline ExitCode ExitCodeFor(const Error& error) {
-  return error.timed_out ? ExitCode::Timeout : DefaultExitCode(error.kind);
+  if (error.timed_out) return ExitCode::Timeout;
+  return error.damaged_input ? ExitCode::Input : DefaultExitCode(error.kind);
 }
 
 }  // namespace simcore

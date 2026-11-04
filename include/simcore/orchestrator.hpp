@@ -355,6 +355,9 @@ class Orchestrator {
   std::size_t OpenTickets() const { return tickets_.size(); }
   std::size_t ParkedTickets() const { return readiness_.ParkedCount(); }
   std::uint64_t RunsOf(const std::string& stage) const;
+  // `IMP-0065`: the recorded control that started the stage's oldest open ticket (parked, handed out or not yet),
+  // or null when the stage has no open ticket started by its control.
+  const std::vector<std::uint8_t>* OldestOpenControl(const std::string& stage) const;
 
  private:
   struct StageState {

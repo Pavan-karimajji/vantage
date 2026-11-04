@@ -437,6 +437,9 @@ class ReadAhead {
   // be incomplete) or every reader is drained.
   void Fill(std::size_t instants);
 
+  // The first read problem a reader reported (`io::Batch::error`); `Seek` forgets it.
+  const std::optional<Error>& Failure() const { return failure_; }
+
   // True once every reader has nothing more to deliver.
   bool Drained() const { return drained_; }
   bool Empty() const { return instants_.empty(); }
@@ -476,6 +479,7 @@ class ReadAhead {
 
  private:
   void Refill(std::size_t reader);
+  std::optional<Error> failure_;
   // Reads until `instants` + 1 distinct reception times are held; `Fill` is this plus the extent it records.
   void ReadUntil(std::size_t instants);
 
@@ -759,6 +763,8 @@ class Runner {
   bool exhausted() const { return exhausted_; }
   const RunOutcome& outcome() const { return outcome_; }
   std::optional<Divergence> FirstDivergence() const { return latch_.first(); }
+  // `IMP-0065`: how many recorded controls of `stage` the runner still holds for its runs' refSync lookups.
+  std::size_t ControlArrivalsHeld(const std::string& stage) const;
   // `IMP-0064`: whether any output was offered to the divergence latch (a RUN run's output that met a recorded one).
   bool OutputsCompared() const { return outputs_compared_; }
 
@@ -794,6 +800,7 @@ class Runner {
   // orchestrator's thread; `ExecTicket` is the one call a worker makes. `worker` numbers the caller
   // (0 on the orchestrator's thread, 0..n-1 among the workers): under an exec timeout each has its own call thread.
   struct PendingRun;
+  void TrimControlArrivals(const std::string& stage);
   void PrepareTicket(const orchestrator::Ticket& ticket, PendingRun& pending);
   void ExecTicket(PendingRun& pending, std::size_t worker) const;
   Result<bool> FinishTicket(PendingRun& pending, std::vector<orchestrator::CommitReport>& reports);

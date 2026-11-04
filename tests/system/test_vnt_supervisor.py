@@ -75,7 +75,7 @@ def _prepared(case: LabCase, directory: Path, label: str, *, change=None, hang: 
     return edit_setup(case, directory, case_change(label, apply), name=label, outputs=directory / f"{label}.mcap")
 
 
-def _supervised(case, directory, label, *, deadline_ms=60000, restart=0, reader=True, change=None, hang=False, env=None):
+def _supervised(case, directory, label, *, deadline_ms=60000, restart=0, reader=False, change=None, hang=False, env=None):
     gate = Path(directory) / label / f"{label}.gate"
     if reader:  # `F-LM-HELD`: the run is held in the stage `H` until the reader is attached
         library = held_library(Path(directory) / label, label, gate)
@@ -277,10 +277,10 @@ def test_syt_sup_07_the_seal(tmp_path):
     """`SYT-SUP-07`, `SYS-0095` Accept. `.c1`: `crash`: the attached reader reads finished with `crash`. FAIL: status
     running, or another outcome. `.c2`: `hang`: finished with `timeout`. FAIL: as `.c1`. `.c3`: the status changes
     only after the worker has ended. FAIL: before."""
-    _s, crashed = _supervised(crash_case(), tmp_path, "sup07a")
+    _s, crashed = _supervised(crash_case(), tmp_path, "sup07a", reader=True)
     assert crashed.exit_code == 8 and crashed.sealed_outcome == 3, \
         f"SYT-SUP-07.c1: exit {crashed.exit_code}, the reader read outcome {crashed.sealed_outcome} (3 is crash)"
-    _s, hung = _supervised(hang_case(), tmp_path, "sup07b", deadline_ms=2000, hang=True)
+    _s, hung = _supervised(hang_case(), tmp_path, "sup07b", deadline_ms=2000, hang=True, reader=True)
     assert hung.exit_code == 7 and hung.sealed_outcome == 4, \
         f"SYT-SUP-07.c2: exit {hung.exit_code}, the reader read outcome {hung.sealed_outcome} (4 is timeout)"
     _s, code, _e, region, pid, samples = _watched(crash_case(), tmp_path, "sup07c")

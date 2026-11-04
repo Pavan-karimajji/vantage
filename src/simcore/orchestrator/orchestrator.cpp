@@ -72,6 +72,13 @@ std::uint64_t Orchestrator::RunsOf(const std::string& stage) const {
   return it == stages_.end() ? 0 : it->second.runs;
 }
 
+const std::vector<std::uint8_t>* Orchestrator::OldestOpenControl(const std::string& stage) const {
+  for (const OpenTicket& open : tickets_) {
+    if (open.ticket.stage == stage && open.ticket.start == StartKind::kControl) return &open.ticket.trigger_payload;
+  }
+  return nullptr;
+}
+
 std::vector<std::size_t> Orchestrator::TriggeredBy(const std::string& port) const {
   std::vector<std::size_t> hit;
   for (std::size_t i = 0; i < graph_.stages.size(); ++i) {

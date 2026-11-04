@@ -26,6 +26,15 @@
 
 #include <gtest/gtest.h>
 
+#include <fstream>
+#include <iterator>
+#include <optional>
+#include <string>
+
+// `mcap::McapWriter` is used directly: the engine's writer cannot leave the summary empty. The implementation is
+// defined once, in `simcore`.
+#include <mcap/writer.hpp>
+
 #include "simcore/io.hpp"
 
 namespace simcore::io {
@@ -246,6 +255,108 @@ TEST(UtIo22McapRoundtrip, CaptureTimeReadsUnknownWhenManifestPredatesTwoClockMod
 
   ASSERT_EQ(batch.messages.size(), 1u);
   EXPECT_FALSE(batch.messages[0].capture_time_ns.has_value());
+}
+
+// `IMP-0027`-side of the reader (`VNT-CLEAN-1`): a problem the mcap library reports while reading is kept, not dropped.
+// A copy of a 200-message recording cut inside a message at 60 % of its bytes reads its whole messages and then hands
+// on an error with exit code `Input` naming the file; the uncut file reads with no error.
+std::filesystem::path WriteLongRecording(const std::string& name) {
+  CodecRegistry registry;
+  EXPECT_TRUE(codecs::RegisterMcap(registry).ok());
+  const std::filesystem::path path = TempPath(name);
+  auto writer = registry.OpenWrite(path);
+  EXPECT_TRUE(writer.ok());
+  TopicInfo topic;
+  topic.schema_name = "a.Schema";
+  EXPECT_TRUE(writer.value()->Open(path, {{"df.a", topic}}).ok());
+  for (std::int64_t i = 1; i <= 200; ++i) {
+    RawMessage message;
+    message.topic = "df.a";
+    message.log_time_ns = i * 1000;
+    message.payload = std::vector<std::uint8_t>(40, static_cast<std::uint8_t>(i));
+    writer.value()->Write(message);
+  }
+  writer.value()->Close();
+  return path;
+}
+
+Batch ReadAll(const std::filesystem::path& path, std::optional<Error>& error) {
+  CodecRegistry registry;
+  EXPECT_TRUE(codecs::RegisterMcap(registry).ok());
+  auto reader = registry.OpenRead(path);
+  EXPECT_TRUE(reader.ok());
+  EXPECT_TRUE(reader.value()->Open(path).ok());
+  ReadBounds bounds;
+  bounds.max_messages = 16;
+  Batch all;
+  for (;;) {
+    Batch batch = reader.value()->ReadRange(bounds);
+    for (RawMessage& message : batch.messages) all.messages.push_back(std::move(message));
+    if (batch.error.has_value() && !error.has_value()) error = batch.error;
+    if (batch.exhausted) break;
+  }
+  return all;
+}
+
+// A whole file with a valid footer and an empty summary is not damaged: written with `noChunking` and, to leave the
+// summary empty, `noRepeatedSchemas`, `noRepeatedChannels`, `noAttachmentIndex`, `noMetadataIndex`, `noChunkIndex`,
+// `noStatistics` and `noSummaryOffsets` (the library then reads it as `MissingStatistics`).
+TEST(UtIo22McapRoundtrip, AWholeRecordingWithNoSummaryReadsEveryMessageAndReportsNoProblem) {
+  const std::filesystem::path path = TempPath("ut_io_22_no_summary.mcap");
+  {
+    mcap::McapWriter writer;
+    mcap::McapWriterOptions options("");
+    options.noChunking = true;
+    options.noRepeatedSchemas = true;
+    options.noRepeatedChannels = true;
+    options.noAttachmentIndex = true;
+    options.noMetadataIndex = true;
+    options.noChunkIndex = true;
+    options.noStatistics = true;
+    options.noSummaryOffsets = true;
+    ASSERT_TRUE(writer.open(path.string(), options).ok());
+    mcap::Schema schema("a.Schema", "", "");
+    writer.addSchema(schema);
+    mcap::Channel channel("df.a", "protobuf", schema.id);
+    writer.addChannel(channel);
+    for (std::int64_t i = 1; i <= 200; ++i) {
+      mcap::Message message;
+      message.channelId = channel.id;
+      message.logTime = static_cast<mcap::Timestamp>(i * 1000);
+      message.publishTime = message.logTime;
+      const std::byte data[1] = {static_cast<std::byte>(i)};
+      message.data = data;
+      message.dataSize = 1;
+      ASSERT_TRUE(writer.write(message).ok());
+    }
+    writer.close();
+  }
+  std::optional<Error> error;
+  EXPECT_EQ(ReadAll(path, error).messages.size(), 200u);
+  EXPECT_FALSE(error.has_value()) << (error.has_value() ? error->Format() : "");
+}
+
+TEST(UtIo22McapRoundtrip, ARecordingCutMidMessageNearItsEndFailsTheReadWithExitCodeInput) {
+  const std::filesystem::path whole = WriteLongRecording("ut_io_22_whole.mcap");
+  std::optional<Error> none;
+  EXPECT_EQ(ReadAll(whole, none).messages.size(), 200u);
+  EXPECT_FALSE(none.has_value());
+
+  std::ifstream in(whole, std::ios::binary);
+  const std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  const std::filesystem::path cut = TempPath("ut_io_22_cut.mcap");
+  {
+    std::ofstream out(cut, std::ios::binary | std::ios::trunc);
+    out.write(bytes.data(), static_cast<std::streamsize>(bytes.size() * 6 / 10));
+  }
+  std::optional<Error> error;
+  const Batch read = ReadAll(cut, error);
+  EXPECT_GT(read.messages.size(), 0u);
+  EXPECT_LT(read.messages.size(), 200u);
+  ASSERT_TRUE(error.has_value());
+  EXPECT_TRUE(error->damaged_input);  // the run ends with `ExitCode::Input`
+  EXPECT_EQ(ExitCodeFor(*error), ExitCode::Input);
+  EXPECT_NE(error->Format().find("ut_io_22_cut.mcap"), std::string::npos);
 }
 
 }  // namespace

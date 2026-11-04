@@ -74,9 +74,14 @@ std::optional<std::int64_t> NextControlNs(const SelectContext& context, const or
   const std::string port = context.stage->name + ".control";
   if (context.controls == nullptr) return std::nullopt;
   const std::deque<ControlArrival>& arrived = *context.controls;
+  // From the back, the first match is the last of equal counters; the runner keeps only a few arrived controls, so a
+  // run's own is near the back and the search does not walk the recording.
   std::size_t own = arrived.size();
-  for (std::size_t i = 0; i < arrived.size(); ++i) {
-    if (adas::common::counterDistance(header.measurement_counter, arrived[i].counter) == 0) own = i;
+  for (std::size_t i = arrived.size(); i-- > 0;) {
+    if (adas::common::counterDistance(header.measurement_counter, arrived[i].counter) == 0) {
+      own = i;
+      break;
+    }
   }
   if (own == arrived.size()) return std::nullopt;
   if (own + 1 < arrived.size()) return arrived[own + 1].arrival_ns;
