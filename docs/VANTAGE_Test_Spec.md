@@ -397,6 +397,11 @@ They are cited here and never restated (`R-REQ-4`).
 **Steps.** Run `running_example` `no_ref_sync` and `cut_c` on `F-ENGINE`; then `cut_c` on a copy of its recording with every topic of `A`, `B`, `D` and `E` except their `control` removed. Read each engine-run recording's `manifest` `divergence` and each event log's `first_divergence` entry.
 - `.c1` **PASS:** as `SYS-0056` Accept, `no_ref_sync`'s value naming the entry's step, stage and port. **FAIL:** another value, `none` or `unknown` where an entry exists, or `none` where no output was compared.
 
+**`SYT-EQO-07`** · T · fixture `F-CASE`, `F-ENGINE` — The first divergence names the first differing field
+**Serves.** `SYS-0202`
+**Steps.** Run `running_example` `no_ref_sync` on `F-ENGINE`; read the event log's `first_divergence` entry; decode the recorded and the re-run message at its step, stage and port and compare them field by field in the message definition's order.
+- `.c1` **PASS:** the entry's field is the first one the comparison finds different and its step, stage and port are those of `SYS-0056`'s `divergence`, per `SYS-0202` Accept. **FAIL:** another field, no field, or a changed step, stage or port.
+
 ## 8. The live measurement as the engine writes it — `LMW`
 
 **`SYT-LMW-01`** · T · fixture `F-LM-HELD`, `F-SETUP-EDIT`, `F-INSPECT` — The setup names the live measurement
@@ -687,7 +692,12 @@ They are cited here and never restated (`R-REQ-4`).
 **`SYT-LCH-08`** · T · fixture `F-LAUNCH`, `F-SPY` — The dry run prints the setup with each value's layer
 **Serves.** `SYS-0121`
 **Steps.** Run the dry run on a lab configuration that sets values in two layers.
-- `.c1` **PASS:** every setup key is printed with its layer and no process starts, per `SYS-0121` Accept. **FAIL:** a key without a layer, or a process started.
+- `.c1` **PASS:** every setup key is printed with its layer and no engine run starts, per `SYS-0121` Accept. **FAIL:** a key without a layer, or an engine run started.
+
+**`SYT-LCH-09`** · T · fixture `F-LAUNCH`, `F-SPY` — The dry run also prints the engine's plan
+**Serves.** `SYS-0205`
+**Steps.** Run the dry run on a lab configuration under the process spy; run `simengine --plan-only` on the setup the dry run resolved.
+- `.c1` **PASS:** the printed plan equals the second output and the spy sees exactly one `--plan-only` start and no other, per `SYS-0205` Accept. **FAIL:** a plan that differs, a second start, or a start without `--plan-only`.
 
 ## 12. The launcher window — `WIN`
 
@@ -772,6 +782,11 @@ They are cited here and never restated (`R-REQ-4`).
 **Steps.** Print the dry batch's estimate for each exact lab case and read the step tap's count for it.
 - `.c1` **PASS:** each estimate is a step count within the factor `⊘` of the tap's, and the factor is printed, per `SYS-0143` Accept. **FAIL:** an estimate in seconds, outside the factor, or with no factor.
 
+**`SYT-BAT-07`** · T · fixture `F-BATCH`, `F-SPY` — A batch needs a deadline
+**Serves.** `SYS-0207`
+**Steps.** Run a batch of `cut_c` with a configuration that has no `attempt_timeout_ms`, then with it.
+- `.c1` **PASS:** without it an error names `attempt_timeout_ms` and no `simengine` process or entry directory exists; with it each command line holds `--attempt-timeout-ms` equal to it, per `SYS-0207` Accept. **FAIL:** a process or directory without the key, or another value.
+
 ## 15. Configuration — `CFG`
 
 **`SYT-CFG-01`** · T · fixture `F-CASE`, `F-BUNDLE-EDIT`, `F-ENGINE` — A bundle must be the one the setup names
@@ -838,6 +853,19 @@ They are cited here and never restated (`R-REQ-4`).
 **Steps.** Run `cut_c`; run it again on a copy of the recording with one byte changed and the setup unchanged.
 - `.c1` **PASS:** the changed copy ends with a load error naming the file and both hashes before the first step; the unchanged case runs, per `SYS-0199` Accept. **FAIL:** a run on the changed copy.
 
+**`SYT-CFG-11`** · T · fixture `F-CASE`, `F-BUNDLE-EDIT`, `F-SETUP-EDIT`, `F-ENGINE` — A stage is initialised from the folder the setup names
+**Serves.** `SYS-0200`, `SYS-0144`
+**Steps.** On `renumber_lib` `shifted`, copy `A`'s `config/` folder to a scratch folder with `LAB_A_RENUMBER` 1; set its `bundle.sha256` as `A`'s `config_bundle_sha256` and the folder as `config_bundle_path`; run with the library unchanged, unkeyed, and with a library copy having that bundle beside it. Change one file of the scratch folder and run again. Run `run_pipeline_via_engine` on `cut_c` and list what it created.
+- `.c1` **PASS:** `A`'s data outputs equal the library copy's and differ from the unkeyed run's, per `SYS-0200` Accept. **FAIL:** equal to the unkeyed run's, or a copy of the library needed.
+- `.c2` **PASS:** the changed-file run ends with exit 2 naming the stage and both hashes before the first step, per `SYS-0144` Accept. **FAIL:** a run, or a hash unnamed.
+- `.c3` **PASS:** the setup `run_pipeline_via_engine` writes names each simulated stage's folder in `config_bundle_path` and it created no library copy. **FAIL:** a stage without the key, or a copied library.
+
+**`SYT-CFG-12`** · T · fixture `F-LAUNCH`, `F-CASE`, `F-ENGINE` — A wiring is ordered by its edges
+**Serves.** `SYS-0206`
+**Steps.** Load `feedback`, and `running_example` with the stages of its pipeline declared in reverse order; write each setup and run it on `F-ENGINE`; load `loop_no_edge`.
+- `.c1` **PASS:** both load and each run's outputs equal the lab case's on every port, per `SYS-0206` Accept. **FAIL:** a refusal naming the declaration order, or a difference.
+- `.c2` **PASS:** `loop_no_edge` is refused naming `A` and `B` and no setup is written. **FAIL:** it loads, or the loop's stages are unnamed.
+
 ## 16. Diagnostics — `DIA`
 
 **`SYT-DIA-01`** · T · fixture `F-LAUNCH` — The environment report never raises
@@ -866,10 +894,11 @@ They are cited here and never restated (`R-REQ-4`).
 - `.c1` **PASS:** exit 0 and equal outputs to a run without them, per `SYS-0173` Accept. **FAIL:** a changed exit code or output.
 - `.c2` **PASS:** the trace holds one entry per run with its step and the outputs equal the untraced run's, per `SYS-0192` Accept. **FAIL:** a missing or unkeyed entry, or a changed output.
 
-**`SYT-DIA-06`** · T · fixture `F-CASE`, `F-ENGINE` — Data after the first divergence is flagged
-**Serves.** `SYS-0174`
-**Steps.** Run `renumber_lib` `shifted` with the lab's provisional grace and read each recorded message's flag.
-- `.c1` **PASS:** messages from the first divergence plus the grace are flagged informational and earlier ones are not, per `SYS-0174` Accept. **FAIL:** a flag before the point, or none after it.
+**`SYT-DIA-06`** · T · fixture `F-CASE`, `F-SETUP-EDIT`, `F-ENGINE` — Data after the first divergence is flagged
+**Serves.** `SYS-0174`, `SYS-0201`
+**Steps.** Run `renumber_lib` `shifted` with the lab's provisional grace N as `divergence_grace_steps`, with N+1, and with the key absent; read each recorded message's flag.
+- `.c1` **PASS:** with N, messages from the first divergence plus the grace are flagged informational and earlier ones are not, per `SYS-0174` Accept. **FAIL:** a flag before the point, or none after it.
+- `.c2` **PASS:** with N+1 the first flagged message is one step later, and with the key absent none is flagged, per `SYS-0201` Accept. **FAIL:** the same step, or a flag with the key absent.
 
 **`SYT-DIA-07`** · T · fixture `F-ENGINE` — The engine waits when asked
 **Serves.** `SYS-0175`
@@ -880,6 +909,12 @@ They are cited here and never restated (`R-REQ-4`).
 **Serves.** `SYS-0196`
 **Steps.** Run a lab case that raises one warning at every step and read its log with the lab's provisional flood threshold.
 - `.c1` **PASS:** the message is logged once with its total count, one entry says counting began naming message and threshold, and other messages stay visible, per `SYS-0196` Accept. **FAIL:** a line per step, a lost message, or no count.
+
+**`SYT-DIA-09`** · T · fixture `F-CAT`, `F-PROBE`, `F-ENGINE` — The engine prints its plan and ends
+**Serves.** `SYS-0203`, `SYS-0204`
+**Steps.** For every lab setup with `outputs.path` and `outputs.livemeas` set, run `simengine --plan-only` and read the plan, the exit code and the directory; run the setup for real under the exec probe and read each step's calls.
+- `.c1` **PASS:** exit 0, no probe call, no recording, event log or live measurement created, per `SYS-0203` Accept. **FAIL:** a call, a created file, or another code.
+- `.c2` **PASS:** the plan's stage order is that of each step's calls, and each input's producer and policy and each limit equal the setup's, per `SYS-0204` Accept. **FAIL:** a difference.
 
 ## 17. Delivery — `DLV`
 

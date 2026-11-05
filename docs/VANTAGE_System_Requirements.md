@@ -27,7 +27,7 @@ simulated stage writes in the engine run, which names what the engine handed it
 `SEL` input selection · `STP` the engine step · `THR` threads · `EQO` equal outputs and the
 first divergence · `LMW` the live measurement as the engine writes it · `INS` the inspector ·
 `SUP` the supervisor · `LCH` the launcher · `WIN` the launcher window · `SCN` the scenario script · `BAT` batch · `CFG` configuration · `DIA` diagnostics · `DLV` delivery · `DET` determinism · `PYR` the Python side.
-Priority split: 82 `P0`, 117 `P1`, 0 `P2`; all `R1`. Without a `P0` row an engine run is not
+Priority split: 82 `P0`, 125 `P1`, 0 `P2`; all `R1`. Without a `P0` row an engine run is not
 exact against the car; a `P1` row makes a result easier to trust or diagnose.
 
 
@@ -47,7 +47,7 @@ The keys and their meaning: `ARCH §2.3`, `§4`. One engine run reads one record
 recordings are a batch of engine runs (`R-SIM-19`).
 
 **`SYS-0001`** · `P0` · `R1` — The run setup is the engine's only input
-**Shall.** The engine shall take every choice of an engine run from the run setup, its recording, `--threads`, `--wait-for-attach`, `--supervise`, `--restart-on-crash` and `--attempt-timeout-ms` only.
+**Shall.** The engine shall take every choice of an engine run from the run setup, its recording, `--threads`, `--wait-for-attach`, `--plan-only`, `--supervise`, `--restart-on-crash` and `--attempt-timeout-ms` only.
 **Accept.** Run from another directory with no Python, YAML, ingest map or library search path reachable, a lab case gives equal outputs, on every port, to the same case run beside its setup.
 **Binds.** `runSetup`, `recording`, `runRecording`
 **Verify.** T · `SYT-RUN-01`   **Trace.** —
@@ -412,6 +412,12 @@ Where equal outputs apply: `ARCH §7`. Determinism axes: `R-SIM-24`, with thread
 **Accept.** `running_example` `no_ref_sync` runs every step and ends with the same exit code as `cut_c`; a fail outcome fails.
 **Binds.** `exitStatus`
 **Verify.** T · `SYT-EQO-04`   **Trace.** —
+
+**`SYS-0202`** · `P1` · `R1` — The first divergence names the first differing field
+**Shall.** The engine's `first_divergence` entry shall also name the first field, in the message definition's order, in which the recorded and the re-run message differ.
+**Accept.** On `no_ref_sync` the entry names the field a field-by-field comparison of the two decoded messages finds first; its step, stage and port are unchanged.
+**Binds.** `eventLog`
+**Verify.** T · `SYT-EQO-07`   **Trace.** —
 
 ## 7. The live measurement as the engine writes it (`LMW`)
 
@@ -817,7 +823,7 @@ What the launcher is and never does: `ARCH §3.1`. The run setup it writes is re
 
 **`SYS-0121`** · `P1` · `R1` — The dry run prints the resolved setup with each value's layer
 **Shall.** The launcher's dry run shall print the resolved run setup with the configuration layer of each value, call no component and start no engine run.
-**Accept.** On a lab configuration it prints every setup key with its layer and no `simengine` process starts; a key printed without a layer fails.
+**Accept.** On a lab configuration it prints every setup key with its layer and no engine run starts; a key printed without a layer fails.
 **Binds.** `launcherChoice`, `runSetup`
 **Verify.** T · `SYT-LCH-08`   **Trace.** —
 
@@ -838,6 +844,12 @@ What the launcher is and never does: `ARCH §3.1`. The run setup it writes is re
 **Accept.** Writing a lab setup twice gives one `spec_sha256`; changing any one field of it, in turn, gives another each time.
 **Binds.** `runSetup`
 **Verify.** T · `SYT-LCH-01`   **Trace.** —
+
+**`SYS-0205`** · `P1` · `R1` — The dry run also prints the engine's plan
+**Shall.** The launcher's dry run shall print, after the resolved setup, the plan `simengine --plan-only` prints for that setup, and start no other engine process.
+**Accept.** On a lab configuration the printed plan equals `simengine --plan-only`'s output on that setup, and by process spy exactly one `--plan-only` process starts.
+**Binds.** `launcherChoice`, `runSetup`, `plan`, `commandLine`
+**Verify.** T · `SYT-LCH-09`   **Trace.** —
 
 ## 11. The launcher window (`WIN`)
 
@@ -995,15 +1007,21 @@ A batch is one run setup over a list of recordings: one supervised engine run pe
 **Binds.** `batchReport`, `recording`
 **Verify.** T · `SYT-BAT-06`   **Trace.** —
 
+**`SYS-0207`** · `P1` · `R1` — A batch without a deadline is refused
+**Shall.** The batch shall refuse a configuration without `attempt_timeout_ms`, naming it, and start nothing; with it, pass that value to each supervised start.
+**Accept.** Without the key no `simengine` process and no entry directory exist; with it each command line holds `--attempt-timeout-ms` equal to it.
+**Binds.** `batchReport`, `commandLine`, `exitStatus`
+**Verify.** T · `SYT-BAT-07`   **Trace.** —
+
 ## 14. Configuration (`CFG`)
 
-Configuration is authored in YAML and resolved by the launcher; the engine reads only the run setup. The bundle rules are `R-SIM-3a`, the override rules `R-SIM-15`, the ingest rules `R-SIM-23`. Where the engine finds a stage's bundle is open question 2 (§21); the rows hold for either answer.
+Configuration is authored in YAML and resolved by the launcher; the engine reads only the run setup. The bundle rules are `R-SIM-3a`, the override rules `R-SIM-15`, the ingest rules `R-SIM-23`. A stage's bundle folder is a key of the run setup (`D32 (2)`, `SYS-0200`).
 
 **`SYS-0144`** · `P0` · `R1` — A stage's bundle with another hash than the setup names is refused
 **Shall.** The engine shall refuse a run whose bundle for a stage holds another hash than that stage's `config_bundle_sha256`, naming the stage and both hashes.
 **Accept.** A lab case with one bundle file edited ends with exit 2 naming the stage and both hashes, before the first step; the unedited case runs.
 **Binds.** `runSetup`, `configBundle`, `exitStatus`
-**Verify.** T · `SYT-CFG-01`   **Trace.** —
+**Verify.** T · `SYT-CFG-01`, `SYT-CFG-11`   **Trace.** —
 
 **`SYS-0145`** · `P0` · `R1` — One bundle per component and build is packed beside the library with its hash
 **Shall.** Each component's build shall hold one `config/` folder beside its library with `bundle.sha256` computed by `bundle_sha256`.
@@ -1090,8 +1108,8 @@ Configuration is authored in YAML and resolved by the launcher; the engine reads
 **Verify.** T · `SYT-CFG-07`   **Trace.** —
 
 **`SYS-0159`** · `P1` · `R1` — The recording's manifest lists every override and fault in force
-**Shall.** An engine run shall write into its recording's `manifest` one record per override and fault in force, with its address, verb and window.
-**Accept.** A setup with two overrides and one fault gives three records equal to the setup's, windows included; a missing or extra record fails.
+**Shall.** An engine run shall write into its recording's `manifest` one record per override and fault in force, with its address, verb and its window in steps.
+**Accept.** A setup with two overrides and one fault gives three records equal to the setup's, windows in steps included; a missing or extra record fails.
 **Binds.** `runSetup`, `runRecording`
 **Verify.** T · `SYT-CFG-08`   **Trace.** —
 
@@ -1143,9 +1161,21 @@ Configuration is authored in YAML and resolved by the launcher; the engine reads
 **Binds.** `runSetup`, `recording`, `exitStatus`
 **Verify.** T · `SYT-CFG-10`   **Trace.** —
 
+**`SYS-0200`** · `P1` · `R1` — A stage is initialised from the bundle folder the setup names
+**Shall.** The engine shall initialise each simulated stage from the folder its optional `config_bundle_path` names, and from `config/` beside its library when the key is absent.
+**Accept.** On `renumber_lib` `shifted`, a folder with `LAB_A_RENUMBER` 1 gives `A` the outputs of a library copy with that bundle beside it; with the key absent, the other outputs.
+**Binds.** `runSetup`, `configBundle`
+**Verify.** T · `SYT-CFG-11`   **Trace.** —
+
+**`SYS-0206`** · `P1` · `R1` — A wiring is ordered by its edges, not by the order the stages are declared
+**Shall.** The launcher shall accept a stage reading a port of a stage declared after it, ordered by the wiring, and refuse a loop without a previous-cycle input, naming its stages.
+**Accept.** `feedback`, and `running_example` declared in reverse, load and run with the lab case's outputs; `loop_no_edge` is refused naming `A` and `B`.
+**Binds.** `launcherChoice`, `exitStatus`
+**Verify.** T · `SYT-CFG-12`   **Trace.** —
+
 ## 15. Diagnostics (`DIA`)
 
-Errors, the environment report, the log vocabulary and the run report. Vantage reports and never judges (`R-SIM-19`). The divergence rows add to `SYS-0043`; where the grace lives is open question 3 (§21).
+Errors, the environment report, the log vocabulary and the run report. Vantage reports and never judges (`R-SIM-19`). The divergence rows add to `SYS-0043`; the grace is a key of the run setup (`D32 (3)`, `SYS-0201`).
 
 **`SYS-0167`** · `P0` · `R1` — The error kinds and exit codes are one set in both languages
 **Shall.** The Python error kinds and exit codes shall be the C++ set, name for name and value for value.
@@ -1212,6 +1242,24 @@ Errors, the environment report, the log vocabulary and the run report. Vantage r
 **Accept.** A lab case repeating one warning every step logs it once with its total count and the entry naming message and threshold; other messages stay visible.
 **Binds.** `eventLog`
 **Verify.** T · `SYT-DIA-08`   **Trace.** —
+
+**`SYS-0201`** · `P1` · `R1` — The grace after the first divergence is a key of the run setup
+**Shall.** The engine shall read the grace of `SYS-0174` from the run setup's optional `divergence_grace_steps` (value `⊘`), flag nothing when it is absent, and hold no default in code.
+**Accept.** On `renumber_lib` `shifted`, changing the key by one moves the first flagged message by one step; with the key absent none is flagged.
+**Binds.** `runSetup`, `runRecording`
+**Verify.** T · `SYT-DIA-06`   **Trace.** —
+
+**`SYS-0203`** · `P1` · `R1` — `--plan-only` prints the plan and ends
+**Shall.** With `--plan-only` the engine shall load the run setup, print its plan, run no stage, write no file and exit 0.
+**Accept.** On every lab setup with `outputs.path` set, the exec probe sees no call, no file is created and the exit code is 0; a call, a file or another code fails.
+**Binds.** `runSetup`, `plan`, `exitStatus`
+**Verify.** T · `SYT-DIA-09`   **Trace.** —
+
+**`SYS-0204`** · `P1` · `R1` — The plan names each input's producer and selection policy and the limits
+**Shall.** The plan shall list the stages in run order, each with its inputs, their producers and selection policy, its trigger or clock, and the setup's limits.
+**Accept.** On every lab setup the order is that of each step's calls in a real run (exec probe), and each producer, policy and limit equals the setup's.
+**Binds.** `runSetup`, `plan`
+**Verify.** T · `SYT-DIA-09`   **Trace.** —
 
 ## 16. Delivery (`DLV`)
 
@@ -1289,7 +1337,7 @@ What `adas-vantage` ships and how a consumer resolves it (`R-SIM-11`, `R-BUILD-1
 
 **`SYS-0187`** · `P0` · `R1` — The comparison is over decoded port values
 **Shall.** The comparison of two runs shall be over decoded port values by equal outputs, never over file bytes.
-**Accept.** Two recordings of one run differing in `run_id` and nonce compare equal; one changed port value is reported with port and step.
+**Accept.** Two recordings of one run differing in `run_id` and nonce compare equal; one changed port value is reported with step, port and first differing field.
 **Binds.** `compareReport`, `runRecording`
 **Verify.** T · `SYT-DET-03`   **Trace.** —
 
@@ -1332,7 +1380,7 @@ case (`R-REQ-9`).
 
 | Method | Count | Notes |
 |---|---|---|
-| T | 181 | `simengine` on a lab case, the step tap, the exec probe, the control tick probe, a test reader, a flawed-writer, a supervised run, the launcher driven from Python, the window, a batch, a scenario, an install tree or a pair of runs |
+| T | 189 | `simengine` on a lab case, the step tap, the exec probe, the control tick probe, a test reader, a flawed-writer, a supervised run, the launcher driven from Python, the window, a batch, a scenario, an install tree or a pair of runs |
 | A | 18 | source checks over the engine, the inspector, the supervisor, the launcher, the window, the scenario script, the Python side and the delivery |
 
 ## 20. Superseded and retired UIDs
@@ -1341,25 +1389,24 @@ None yet.
 
 ## 21. Open decisions
 
-None in this part. Closed and handed on (owner, 2026-10-31):
+None open. Closed and handed on (owner, 2026-10-31):
 
 | # | Question | Answer |
 |---|---|---|
 | 1 | The run setup's schema version string | `adas.sim.runspec/2.0` (`SYS-0004`) |
-| 2 | How the engine finds a stage's bundle built for another configuration when the setup carries only `config_bundle_sha256` | part 8c (configuration) |
-| 3 | Where the grace after the first divergence lives, and how data after it is flagged informational | part 8c (diagnostics) |
-| 4 | Whether the first divergence names the first differing field | part 8c (the comparison of two runs) |
+| 2 | How the engine finds a stage's bundle built for another configuration when the setup carries only `config_bundle_sha256` | `D32 (2)` |
+| 3 | Where the grace after the first divergence lives, and how data after it is flagged informational | `D32 (3)` |
+| 4 | Whether the first divergence names the first differing field | `D32 (4)` |
 
-Open after part 8c, each with the recommendation of `VNT-8c` (the owner decides; no row above waits on a
-decision except where it says so):
+Closed by `D32` (orchestrator, under the owner's latitude, 2026-11-04; the owner may overturn):
 
-| # | Question | Recommendation |
+| # | Question | Answer |
 |---|---|---|
-| 2 | How the engine finds a stage's bundle when the setup carries only `config_bundle_sha256` | the setup carries the resolved bundle folder per stage and a hash mismatch is refused (`SYS-0144` holds for either answer) |
-| 3 | Where the grace after the first divergence lives (`SYS-0174`) | one key of the run setup, `divergence_grace_steps`, value `⊘`, read by the engine; no constant in code |
-| 4 | Whether the first divergence names the first differing field | yes: the first divergence names step, stage, port and the first differing field (carried `SIM:SW-0280`) |
-| 5 | Fault windows in steps or in time | in steps: the engine's clock is the step, and `SYS-0159` records the window as the setup states it |
-| 6 | Where a supervised start's deadline comes from | a required key of the batch configuration and a required argument of the launcher; never a default (`SYS-0090`, `SYS-0109`) |
-| 7 | The fate of `progress.json` and the C++ `Checkpoint` | retire both: the batch reads the attempt record and the supervision cell (`D31 (3)`); the setup's `checkpoint.path` goes with them |
+| 2 | How the engine finds a stage's bundle | the setup carries each stage's resolved bundle folder, `stages[].config_bundle_path`; a hash mismatch is refused (`SYS-0200`, `SYS-0144`) |
+| 3 | Where the grace after the first divergence lives | the setup's optional `divergence_grace_steps`, value `⊘`, read by the engine; no constant in code (`SYS-0201`) |
+| 4 | Whether the first divergence names the first differing field | yes: step, stage, port and the first differing field (`SYS-0202`) |
+| 5 | Fault windows in steps or in time | in steps (`SYS-0159`) |
+| 6 | Where a supervised start's deadline comes from | a required key of the batch configuration and a required argument of the launcher's supervised start; never a default (`SYS-0207`, `SYS-0109`) |
+| 7 | The fate of `progress.json` and the C++ `Checkpoint` | the batch reads the attempt record and the supervision cell, not `progress.json` (`SYS-0137`, `SYS-0139`); the C++ `Checkpoint` and the setup's `checkpoint.path` stay, optional and off by default |
 | 8 | A gate before migration | none: `G5` is migration itself; the test groups of `WP-19` to `WP-27` run in the full suite |
-| 9 | The dry run's plan | add the engine option `--plan-only` (amends `SYS-0001`) so the launcher prints the engine's own plan, not a second derivation |
+| 9 | The dry run's plan | `simengine --plan-only` prints the engine's plan (`SYS-0001` amended, `SYS-0203`, `SYS-0204`); the dry run prints it beside the resolved setup (`SYS-0205`) |

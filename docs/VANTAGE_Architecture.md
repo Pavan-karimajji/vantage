@@ -481,8 +481,8 @@ logic. Only the key and its source change.
 | Schedule dump | `scheduler/dump.cpp` `PredictSchedule`, `ScheduleDumpText`, `horizon_ticks` | a plan of ranks, triggers and clocks from the setup alone, and the first N steps when a recording is given; the schedule can no longer be predicted from the setup alone |
 | Record decimation | `runner/cycle_loop.cpp` `RecordPolicy::WritesAt(tick_index)` | the step number |
 | Run outcome | `RunOutcome::cycles_executed` | `steps_executed` |
-| First divergence | `runner/divergence.cpp` `Divergence::tick_index`, `DivergenceLatch::Observe`, `InformationalOnly`, `kDefaultGraceTicks` | step number; grace counted in steps |
-| Checkpoint | `runner/checkpoint.cpp` `CheckpointRecord::tick_index`, `RecordCompleted`, `RecordDivergence`; the `progress.json` key | step number; the file key is renamed in step with its Python readers (`orchestrate/progress.py`, `orchestrate/reopen.py`) |
+| First divergence | `runner/divergence.cpp` `Divergence::tick_index`, `DivergenceLatch::Observe`, `InformationalOnly` | step number; grace counted in steps, read from the setup's optional `divergence_grace_steps` (`D32 (3)`) |
+| Checkpoint | `runner/checkpoint.cpp` `CheckpointRecord::tick_index`, `RecordCompleted`, `RecordDivergence`; the `progress.json` key | step number; the file key is renamed with it; optional and off by default, and the Python batch reads the attempt record, not this file (`D32 (7)`) |
 | Breakpoints | `diagnostics/breakpoints.cpp` `CheckCycle(condition, tick_index)` | step number |
 | Cycle trace | `diagnostics/trace.cpp` `CycleTrace`, `CycleTraceEntry::tick_index`, `CycleOutcome` | one entry per run, keyed by step; "held" is a property of a port value in the live measurement, not of a stage |
 | Crash reproducer | `diagnostics/reproducer.cpp` `ReproducerInput::failing_cycle` | step number |

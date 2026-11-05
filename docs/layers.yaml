@@ -69,6 +69,13 @@ budget_history:
       rows are a DROP of a retired path and 10 are a test file, one per area. Nothing was compressed to fit and no
       obligation was invented to place a register row; the rows no SYS row states are listed in the report of part 8c
       with a recommendation each.
+  - date: 2026-11-04
+    change: "no change to the basis; IMP is 238 against 120, SYS is 207 against 120"
+    why: >-
+      Writing the answers of D32 into the set (8c-R1) adds 8 SYS and 16 IMP rows: the setup's bundle folder
+      and grace keys, the divergence field, the engine's plan option and its content, the dry run that
+      prints it, the launcher's wiring order and the batch deadline. Each is a new obligation or one
+      artifact (R-REQ-3); nothing was compressed to fit.
 
 limits:
   requirement_words: 60
